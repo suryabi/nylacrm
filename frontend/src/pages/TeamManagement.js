@@ -16,6 +16,82 @@ import { Users, TrendingUp } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
+const OrgNode = ({ node, level }) => {
+  if (!node) return null;
+
+  const marginLeft = level * 40;
+  const getRoleBadgeColor = (role) => {
+    const colors = {
+      ceo: 'bg-purple-100 text-purple-800',
+      director: 'bg-blue-100 text-blue-800',
+      vp: 'bg-cyan-100 text-cyan-800',
+      sales_manager: 'bg-green-100 text-green-800',
+      sales_rep: 'bg-gray-100 text-gray-800',
+    };
+    return colors[role] || 'bg-gray-100 text-gray-800';
+  };
+
+  return (
+    <div className="mb-4">
+      <Card
+        className="p-4 hover:shadow-md transition-shadow"
+        style={{ marginLeft: `${marginLeft}px` }}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-lg">
+              {node.name?.[0]?.toUpperCase() || '?'}
+            </div>
+            <div>
+              <p className="font-semibold text-lg">{node.name}</p>
+              <p className="text-sm text-primary">{node.designation}</p>
+              {node.city && node.state && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {node.city}, {node.state}
+                  {node.territory && ` • ${node.territory}`}
+                </p>
+              )}
+            </div>
+          </div>
+          <Badge className={getRoleBadgeColor(node.role)}>
+            {node.role?.replace('_', ' ')?.toUpperCase()}
+          </Badge>
+        </div>
+      </Card>
+
+      {node.dotted_line_reports?.length > 0 && (
+        <div className="mt-2" style={{ marginLeft: `${marginLeft + 20}px` }}>
+          <p className="text-xs text-muted-foreground mb-2 flex items-center gap-2">
+            <span className="border-t-2 border-dashed border-primary w-6"></span>
+            Dotted Line Reporting
+          </p>
+          {node.dotted_line_reports.map((dr) => (
+            <Card key={`dotted-${dr.id}`} className="p-3 mb-2 bg-muted/30 border-dashed">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-sm">{dr.name}</p>
+                  <p className="text-xs text-muted-foreground">{dr.designation}</p>
+                </div>
+                <Badge variant="outline" className="text-xs">
+                  {dr.role?.replace('_', ' ')}
+                </Badge>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {node.direct_reports?.length > 0 && (
+        <div className="mt-2">
+          {node.direct_reports.map((child) => (
+            <OrgNode key={child.id} node={child} level={level + 1} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function TeamManagement() {
   const [users, setUsers] = useState([]);
   const [orgChart, setOrgChart] = useState(null);
@@ -46,108 +122,23 @@ export default function TeamManagement() {
     return <div className="flex justify-center py-12">Loading team...</div>;
   }
 
-  const getRoleBadgeColor = (role) => {
-    const colors = {
-      ceo: 'bg-purple-100 text-purple-800',
-      director: 'bg-blue-100 text-blue-800',
-      vp: 'bg-cyan-100 text-cyan-800',
-      sales_manager: 'bg-green-100 text-green-800',
-      sales_rep: 'bg-gray-100 text-gray-800',
-    };
-    return colors[role] || 'bg-gray-100 text-gray-800';
-  };
-
-  const renderOrgNode = (node, level = 0, visitedIds = new Set()) => {
-    if (!node || !node.id || visitedIds.has(node.id) || level > 10) return null;
-    
-    // Add current node to visited set to prevent circular references
-    visitedIds.add(node.id);
-    
-    const marginLeft = level * 40;
-    const hasDottedLine = node.dotted_line_reports && node.dotted_line_reports.length > 0;
-    
-    return (
-      <div key={node.id} className="mb-4">
-        {/* Current Node */}
-        <Card
-          className="p-4 hover:shadow-md transition-shadow"
-          style={{ marginLeft: `${marginLeft}px` }}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-lg">
-                {node.name && node.name[0] ? node.name[0].toUpperCase() : '?'}
-              </div>
-              <div>
-                <p className="font-semibold text-lg">{node.name || 'Unknown'}</p>
-                <p className="text-sm text-primary">{node.designation || node.role}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {node.city && node.state ? `${node.city}, ${node.state}` : ''}
-                  {node.territory ? ` • ${node.territory}` : ''}
-                </p>
-              </div>
-            </div>
-            <Badge className={getRoleBadgeColor(node.role)}>
-              {node.role ? node.role.replace('_', ' ').toUpperCase() : 'N/A'}
-            </Badge>
-          </div>
-        </Card>
-
-        {/* Dotted Line Reports (if any) */}
-        {hasDottedLine && (
-          <div className="mt-2" style={{ marginLeft: `${marginLeft + 20}px` }}>
-            <p className="text-xs text-muted-foreground mb-2 flex items-center gap-2">
-              <span className="border-t-2 border-dashed border-primary w-6"></span>
-              Dotted Line Reporting
-            </p>
-            {node.dotted_line_reports.map((dr) => (
-              <Card key={`dotted-${dr.id}`} className="p-3 mb-2 bg-muted/30 border-dashed">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-sm">{dr.name || 'Unknown'}</p>
-                    <p className="text-xs text-muted-foreground">{dr.designation || dr.role}</p>
-                  </div>
-                  <Badge variant="outline" className="text-xs">
-                    {dr.role ? dr.role.replace('_', ' ') : 'N/A'}
-                  </Badge>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {/* Direct Reports */}
-        {node.direct_reports && node.direct_reports.length > 0 && (
-          <div className="mt-2">
-            {node.direct_reports.map((child, index) => 
-              renderOrgNode(child, level + 1, new Set(visitedIds))
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div className="space-y-8" data-testid="team-management-page">
-      {/* Header */}
       <div>
         <h1 className="text-3xl font-semibold">Team Management</h1>
         <p className="text-muted-foreground mt-1">Organizational hierarchy and team members</p>
       </div>
 
-      {/* Organizational Chart */}
       {orgChart && (
         <Card className="p-6">
           <div className="flex items-center gap-2 mb-6">
             <Users className="h-6 w-6 text-primary" />
             <h2 className="text-xl font-semibold">Organizational Hierarchy</h2>
           </div>
-          {renderOrgNode(orgChart)}
+          <OrgNode node={orgChart} level={0} />
         </Card>
       )}
 
-      {/* Full Team Table */}
       <Card className="p-6">
         <div className="flex items-center gap-2 mb-6">
           <TrendingUp className="h-6 w-6 text-primary" />
@@ -170,12 +161,12 @@ export default function TeamManagement() {
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold">
-                      {user.name[0].toUpperCase()}
+                      {user.name?.[0]?.toUpperCase()}
                     </div>
                     <div>
                       <p className="font-medium">{user.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {user.designation || user.role.replace('_', ' ').charAt(0).toUpperCase() + user.role.slice(1)}
+                        {user.designation || user.role.replace('_', ' ')}
                       </p>
                     </div>
                   </div>
@@ -187,14 +178,12 @@ export default function TeamManagement() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  {user.city && user.state && user.country 
-                    ? `${user.city}, ${user.state}`
-                    : user.city || user.state || user.country || '-'}
+                  {user.city && user.state ? `${user.city}, ${user.state}` : '-'}
                 </TableCell>
                 <TableCell>{user.territory || '-'}</TableCell>
                 <TableCell>
                   <Badge variant="outline" className="capitalize">
-                    {user.role.replace('_', ' ')}
+                    {user.role?.replace('_', ' ')}
                   </Badge>
                 </TableCell>
                 <TableCell>
