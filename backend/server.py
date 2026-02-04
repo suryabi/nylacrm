@@ -689,6 +689,121 @@ async def get_location_config():
     }
     return locations
 
+# ============= DAILY STATUS ROUTES =============
+
+@api_router.post("/daily-status", response_model=DailyStatus)
+async def create_daily_status(status_input: DailyStatusCreate, current_user: dict = Depends(get_current_user)):
+    # Check if status already exists for this date
+    existing = await db.daily_status.find_one({
+        'user_id': current_user['id'],
+        'status_date': status_input.status_date
+    }, {'_id': 0})
+    
+    if existing:
+        raise HTTPException(status_code=400, detail='Status already exists for this date')
+    
+    status_data = status_input.model_dump()
+    status_data['user_id'] = current_user['id']
+    status_obj = DailyStatus(**status_data)
+    
+    doc = status_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    
+    await db.daily_status.insert_one(doc)
+    return status_obj
+
+@api_router.get("/daily-status")
+async def get_daily_statuses(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    user_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    query = {}
+    
+    # Leadership can see all statuses, others see only their own
+    if current_user['role'] in ['ceo', 'director', 'vp', 'admin']:
+        if user_id:
+            query['user_id'] = user_id
+    else:
+        query['user_id'] = current_user['id']
+    
+    if start_date:
+        query['status_date'] = {'$gte': start_date}
+    if end_date:
+        if 'status_date' in query:
+            query['status_date']['$lte'] = end_date
+        else:
+            query['status_date'] = {'$lte': end_date}
+    
+    statuses = await db.daily_status.find(query, {'_id': 0}).sort('status_date', -1).to_list(100)
+    
+    for status in statuses:
+        if isinstance(status['created_at'], str):
+            status['created_at'] = datetime.fromisoformat(status['created_at'])
+        if isinstance(status['updated_at'], str):
+            status['updated_at'] = datetime.fromisoformat(status['updated_at'])
+    
+    return statuses
+
+@api_router.put("/daily-status/{status_id}")
+async def update_daily_status(
+    status_id: str,
+    status_update: DailyStatusUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    status = await db.daily_status.find_one({'id': status_id}, {'_id': 0})
+    if not status:
+        raise HTTPException(status_code=404, detail='Status not found')
+    
+    if status['user_id'] != current_user['id']:
+        raise HTTPException(status_code=403, detail='Can only update your own status')
+    
+    update_data = status_update.model_dump()
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.daily_status.update_one({'id': status_id}, {'$set': update_data})
+    
+    updated_status = await db.daily_status.find_one({'id': status_id}, {'_id': 0})
+    if isinstance(updated_status['created_at'], str):
+        updated_status['created_at'] = datetime.fromisoformat(updated_status['created_at'])
+    if isinstance(updated_status['updated_at'], str):
+        updated_status['updated_at'] = datetime.fromisoformat(updated_status['updated_at'])
+    
+    return updated_status
+
+@api_router.post("/daily-status/revise")
+async def revise_status_with_ai(request: dict, current_user: dict = Depends(get_current_user)):
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    
+    original_text = request.get('text', '')
+    if not original_text:
+        raise HTTPException(status_code=400, detail='Text is required')
+    
+    try:
+        # Initialize Claude chat
+        chat = LlmChat(
+            api_key=os.environ['EMERGENT_LLM_KEY'],
+            session_id=f'status-revision-{current_user[\"id\"]}',
+            system_message='You are a professional business writing assistant. Revise sales status updates to be clear, professional, and well-structured while preserving the original meaning. Keep the tone professional but friendly. Do not add information that was not in the original text.'
+        ).with_model('anthropic', 'claude-sonnet-4-5-20250929')
+        
+        user_message = UserMessage(
+            text=f'Please revise and improve this daily sales status update. Make it clear, professional, and well-structured. Keep it concise:\\n\\n{original_text}'
+        )
+        
+        revised_text = await chat.send_message(user_message)
+        
+        return {
+            'original': original_text,
+            'revised': revised_text,
+            'model': 'claude-sonnet-4.5'
+        }
+    except Exception as e:
+        logger.error(f'AI revision error: {str(e)}')
+        raise HTTPException(status_code=500, detail=f'AI revision failed: {str(e)}')
+
 @api_router.post("/users/create", response_model=User)
 async def create_team_member(user_input: UserCreate, current_user: dict = Depends(get_current_user)):
     # Only admin/CEO can create users
