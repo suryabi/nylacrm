@@ -669,7 +669,29 @@ async def get_location_config():
     }
     return locations
 
-@api_router.put("/users/{user_id}")
+@api_router.post("/users/create", response_model=User)
+async def create_team_member(user_input: UserCreate, current_user: dict = Depends(get_current_user)):
+    # Only admin/CEO can create users
+    if current_user['role'] not in ['admin', 'ceo']:
+        raise HTTPException(status_code=403, detail='Only admin can create team members')
+    
+    # Check if user exists
+    existing = await db.users.find_one({'email': user_input.email}, {'_id': 0})
+    if existing:
+        raise HTTPException(status_code=400, detail='Email already registered')
+    
+    # Create user
+    hashed_pw = hash_password(user_input.password)
+    user_data = user_input.model_dump()
+    user_data.pop('password')
+    user_obj = User(**user_data)
+    
+    doc = user_obj.model_dump()
+    doc['password'] = hashed_pw
+    doc['created_at'] = doc['created_at'].isoformat()
+    
+    await db.users.insert_one(doc)
+    return user_obj
 async def update_user(user_id: str, updates: dict, current_user: dict = Depends(get_current_user)):
     if current_user['role'] != 'admin':
         raise HTTPException(status_code=403, detail='Only admins can update users')
