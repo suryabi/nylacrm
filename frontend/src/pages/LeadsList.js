@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
-import { Plus, Search, Trash2 } from 'lucide-react';
+import { Plus, Search, Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Table,
@@ -45,20 +45,23 @@ const statusColors = {
 export default function LeadsList() {
   const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
-  const [filteredLeads, setFilteredLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+  
+  // Sorting state - default to created_at desc
+  const [sortField, setSortField] = useState('created_at');
+  const [sortDirection, setSortDirection] = useState('desc');
 
   useEffect(() => {
     fetchLeads();
   }, []);
-
-  useEffect(() => {
-    filterLeads();
-  }, [leads, searchQuery, statusFilter]);
 
   const fetchLeads = async () => {
     try {
@@ -69,27 +72,6 @@ export default function LeadsList() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const filterLeads = () => {
-    let filtered = leads;
-
-    if (searchQuery) {
-      filtered = filtered.filter(
-        (lead) =>
-          (lead.company && lead.company.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          (lead.contact_person && lead.contact_person.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          (lead.name && lead.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          (lead.email && lead.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          (lead.city && lead.city.toLowerCase().includes(searchQuery.toLowerCase()))
-      );
-    }
-
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter((lead) => lead.status === statusFilter);
-    }
-
-    setFilteredLeads(filtered);
   };
 
   const handleDelete = async () => {
@@ -105,6 +87,74 @@ export default function LeadsList() {
     }
   };
 
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+    setCurrentPage(1);
+  };
+
+  const getSortIcon = (field) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="h-4 w-4 ml-1 text-muted-foreground" />;
+    }
+    return sortDirection === 'asc' 
+      ? <ArrowUp className="h-4 w-4 ml-1 text-primary" />
+      : <ArrowDown className="h-4 w-4 ml-1 text-primary" />;
+  };
+
+  // Filter leads
+  let filteredLeads = leads;
+
+  if (searchQuery) {
+    filteredLeads = filteredLeads.filter(
+      (lead) =>
+        (lead.company && lead.company.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (lead.contact_person && lead.contact_person.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (lead.name && lead.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (lead.email && lead.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (lead.city && lead.city.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
+  }
+
+  if (statusFilter !== 'all') {
+    filteredLeads = filteredLeads.filter((lead) => lead.status === statusFilter);
+  }
+
+  // Sort leads
+  filteredLeads = [...filteredLeads].sort((a, b) => {
+    let aVal = a[sortField];
+    let bVal = b[sortField];
+    
+    if (sortField === 'created_at' || sortField === 'updated_at') {
+      aVal = new Date(aVal).getTime();
+      bVal = new Date(bVal).getTime();
+    } else if (typeof aVal === 'string') {
+      aVal = (aVal || '').toLowerCase();
+      bVal = (bVal || '').toLowerCase();
+    }
+    
+    if (sortDirection === 'asc') {
+      return aVal > bVal ? 1 : -1;
+    } else {
+      return aVal < bVal ? 1 : -1;
+    }
+  });
+
+  // Pagination
+  const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedLeads = filteredLeads.slice(startIndex, endIndex);
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   if (loading) {
     return <div className="flex justify-center py-12">Loading leads...</div>;
   }
@@ -115,7 +165,9 @@ export default function LeadsList() {
       <div className="flex flex-col sm:flex-row justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold">Leads</h1>
-          <p className="text-muted-foreground mt-1">Manage your sales pipeline</p>
+          <p className="text-muted-foreground mt-1">
+            {filteredLeads.length} {filteredLeads.length === 1 ? 'lead' : 'leads'} found
+          </p>
         </div>
         <Button onClick={() => navigate('/leads/new')} data-testid="add-lead-button">
           <Plus className="h-4 w-4 mr-2" />
@@ -130,12 +182,18 @@ export default function LeadsList() {
           <Input
             placeholder="Search leads..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
             className="pl-10"
             data-testid="leads-search-input"
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={(v) => {
+          setStatusFilter(v);
+          setCurrentPage(1);
+        }}>
           <SelectTrigger className="w-full sm:w-[200px]" data-testid="status-filter">
             <SelectValue placeholder="Filter by status" />
           </SelectTrigger>
@@ -161,60 +219,190 @@ export default function LeadsList() {
           </p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Company</TableHead>
-                <TableHead>Contact Person</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Priority</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredLeads.map((lead) => (
-                <TableRow
-                  key={lead.id}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => navigate(`/leads/${lead.id}`)}
-                  data-testid={`lead-row-${lead.id}`}
-                >
-                  <TableCell className="font-medium">{lead.company || lead.name}</TableCell>
-                  <TableCell>{lead.contact_person || '-'}</TableCell>
-                  <TableCell>{lead.city}, {lead.state}</TableCell>
-                  <TableCell>
-                    <Badge className={statusColors[lead.status]}>
-                      {lead.status.replace('_', ' ')}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="capitalize">
-                      {lead.priority}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{format(new Date(lead.created_at), 'MMM d, yyyy')}</TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLeadToDelete(lead);
-                        setDeleteDialogOpen(true);
-                      }}
-                      data-testid={`delete-lead-${lead.id}`}
+        <>
+          <div className="bg-white rounded-lg border border-border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>
+                    <button
+                      onClick={() => handleSort('company')}
+                      className="flex items-center hover:text-foreground font-semibold"
+                      data-testid="sort-company"
                     >
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
-                  </TableCell>
+                      Company
+                      {getSortIcon('company')}
+                    </button>
+                  </TableHead>
+                  <TableHead>
+                    <button
+                      onClick={() => handleSort('contact_person')}
+                      className="flex items-center hover:text-foreground font-semibold"
+                      data-testid="sort-contact"
+                    >
+                      Contact Person
+                      {getSortIcon('contact_person')}
+                    </button>
+                  </TableHead>
+                  <TableHead>
+                    <button
+                      onClick={() => handleSort('city')}
+                      className="flex items-center hover:text-foreground font-semibold"
+                      data-testid="sort-location"
+                    >
+                      Location
+                      {getSortIcon('city')}
+                    </button>
+                  </TableHead>
+                  <TableHead>
+                    <button
+                      onClick={() => handleSort('status')}
+                      className="flex items-center hover:text-foreground font-semibold"
+                      data-testid="sort-status"
+                    >
+                      Status
+                      {getSortIcon('status')}
+                    </button>
+                  </TableHead>
+                  <TableHead>
+                    <button
+                      onClick={() => handleSort('priority')}
+                      className="flex items-center hover:text-foreground font-semibold"
+                      data-testid="sort-priority"
+                    >
+                      Priority
+                      {getSortIcon('priority')}
+                    </button>
+                  </TableHead>
+                  <TableHead>
+                    <button
+                      onClick={() => handleSort('created_at')}
+                      className="flex items-center hover:text-foreground font-semibold"
+                      data-testid="sort-created"
+                    >
+                      Created
+                      {getSortIcon('created_at')}
+                    </button>
+                  </TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {paginatedLeads.map((lead) => (
+                  <TableRow
+                    key={lead.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => navigate(`/leads/${lead.id}`)}
+                    data-testid={`lead-row-${lead.id}`}
+                  >
+                    <TableCell className="font-medium">{lead.company || lead.name}</TableCell>
+                    <TableCell>{lead.contact_person || '-'}</TableCell>
+                    <TableCell>{lead.city}, {lead.state}</TableCell>
+                    <TableCell>
+                      <Badge className={statusColors[lead.status]}>
+                        {lead.status.replace('_', ' ')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="capitalize">
+                        {lead.priority}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{format(new Date(lead.created_at), 'MMM d, yyyy')}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLeadToDelete(lead);
+                          setDeleteDialogOpen(true);
+                        }}
+                        data-testid={`delete-lead-${lead.id}`}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Pagination Controls */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white rounded-lg border border-border p-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Rows per page:</span>
+              <Select value={itemsPerPage.toString()} onValueChange={(v) => {
+                setItemsPerPage(parseInt(v));
+                setCurrentPage(1);
+              }}>
+                <SelectTrigger className="w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">
+                Showing {startIndex + 1}-{Math.min(endIndex, filteredLeads.length)} of {filteredLeads.length}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => handlePageChange(pageNum)}
+                      className="w-10"
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Delete Confirmation Dialog */}
@@ -223,7 +411,7 @@ export default function LeadsList() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Lead?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete {leadToDelete?.name}? This action cannot be undone.
+              Are you sure you want to delete {leadToDelete?.company || leadToDelete?.name}? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
