@@ -23,6 +23,8 @@ export default function TeamStatusFeed() {
   const [selectedDate, setSelectedDate] = useState(format(new Date(Date.now() - 86400000), 'yyyy-MM-dd')); // Yesterday by default
   const [loading, setLoading] = useState(true);
   const [allUsers, setAllUsers] = useState([]);
+  const [aiSummary, setAiSummary] = useState('');
+  const [generatingSummary, setGeneratingSummary] = useState(false);
   
   // Filters
   const [territoryFilter, setTerritoryFilter] = useState('All Territories');
