@@ -934,6 +934,55 @@ async def get_team_status_rollup(
         'statuses_received': len(team_statuses)
     }
 
+@api_router.post("/daily-status/team-summary")
+async def generate_team_summary(request: dict, current_user: dict = Depends(get_current_user)):
+    """Generate AI consolidated summary of team daily statuses"""
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    
+    team_statuses = request.get('team_statuses', [])
+    status_date = request.get('status_date', '')
+    
+    if not team_statuses:
+        raise HTTPException(status_code=400, detail='No team statuses provided')
+    
+    # Build consolidated text for AI
+    status_text = f"Team Daily Status Summary for {status_date}\n\n"
+    
+    for status in team_statuses:
+        status_text += f"--- {status['user_name']} ({status['user_designation']}) - {status['user_territory']} ---\n"
+        if status.get('yesterday_updates'):
+            status_text += f"Updates: {status['yesterday_updates']}\n"
+        if status.get('today_actions'):
+            status_text += f"Action Items: {status['today_actions']}\n"
+        if status.get('help_needed'):
+            status_text += f"Help Needed: {status['help_needed']}\n"
+        status_text += "\n"
+    
+    try:
+        user_id = current_user['id']
+        session_id = f'team-summary-{user_id}'
+        
+        chat = LlmChat(
+            api_key=os.environ['EMERGENT_LLM_KEY'],
+            session_id=session_id,
+            system_message='You are a professional executive assistant. Create a clear, well-organized consolidated summary of team daily status updates. Organize by: 1) Key Achievements, 2) Planned Actions, 3) Help Requests/Blockers. Be concise and highlight important metrics (deals, volumes, client names). Use bullet points for clarity.'
+        ).with_model('anthropic', 'claude-sonnet-4-5-20250929')
+        
+        user_message = UserMessage(
+            text=f'Create a consolidated executive summary of these team status updates. Organize clearly and highlight key achievements, planned actions, and help requests:\n\n{status_text}'
+        )
+        
+        summary = await chat.send_message(user_message)
+        
+        return {
+            'summary': summary,
+            'date': status_date,
+            'team_count': len(team_statuses)
+        }
+    except Exception as e:
+        logger.error(f'Team summary generation error: {str(e)}')
+        raise HTTPException(status_code=500, detail=f'Summary generation failed: {str(e)}')
+
 @api_router.post("/users/create", response_model=User)
 async def create_team_member(user_input: UserCreate, current_user: dict = Depends(get_current_user)):
     # Only admin/CEO can create users
