@@ -42,13 +42,16 @@ class User(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     email: EmailStr
     name: str
-    role: str  # 'admin', 'sales_manager', 'sales_rep'
+    role: str  # 'ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'
+    designation: Optional[str] = None  # Full title like 'CEO & Managing Director'
     phone: Optional[str] = None
     avatar: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     country: Optional[str] = None
-    territory: Optional[str] = None  # Sales territory/region
+    territory: Optional[str] = None
+    reports_to: Optional[str] = None  # user_id of direct manager
+    dotted_line_to: Optional[str] = None  # user_id for dotted line reporting
     is_active: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
