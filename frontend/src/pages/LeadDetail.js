@@ -104,8 +104,10 @@ export default function LeadDetail() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-3xl font-semibold">{lead.name}</h1>
-          <p className="text-muted-foreground mt-1">{lead.company}</p>
+          <h1 className="text-3xl font-semibold">{lead.company}</h1>
+          {lead.contact_person && (
+            <p className="text-muted-foreground mt-1">Contact: {lead.contact_person}</p>
+          )}
         </div>
         <Button onClick={() => navigate(`/leads/${id}/edit`)} data-testid="edit-lead-button">
           Edit Lead
