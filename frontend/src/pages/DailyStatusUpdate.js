@@ -104,9 +104,10 @@ export default function DailyStatusUpdate() {
     }
   };
 
-  const loadExistingStatus = () => {
+  const loadExistingStatus = async () => {
     const existing = pastStatuses.find(s => s.status_date === selectedDate);
     if (existing) {
+      // Load existing saved status
       setYesterdayUpdates(existing.yesterday_updates || '');
       setYesterdayOriginal(existing.yesterday_original || '');
       setYesterdayRevised(existing.yesterday_ai_revised || false);
@@ -119,6 +120,53 @@ export default function DailyStatusUpdate() {
       setHelpOriginal(existing.help_original || '');
       setHelpRevised(existing.help_ai_revised || false);
     } else {
+      // Auto-populate from logged activities
+      await autoPopulateFromActivities();
+    }
+  };
+
+  const autoPopulateFromActivities = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(
+        `${API_URL}/daily-status/auto-populate/${selectedDate}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      if (response.data.formatted_text) {
+        // Determine if it's yesterday or today
+        const today = format(new Date(), 'yyyy-MM-dd');
+        const yesterday = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd');
+        
+        if (selectedDate === yesterday || selectedDate < today) {
+          // Past date - put in Yesterday's Updates
+          setYesterdayUpdates(response.data.formatted_text);
+          setYesterdayOriginal('');
+          setYesterdayRevised(false);
+        } else {
+          // Today - put in Today's Actions
+          setTodayActions(response.data.formatted_text);
+          setTodayOriginal('');
+          setTodayRevised(false);
+        }
+        
+        if (response.data.activity_count > 0) {
+          toast.success(`Auto-populated ${response.data.activity_count} activities from ${response.data.leads_contacted} leads`);
+        }
+      } else {
+        // Reset all fields
+        setYesterdayUpdates('');
+        setYesterdayOriginal('');
+        setYesterdayRevised(false);
+        setTodayActions('');
+        setTodayOriginal('');
+        setTodayRevised(false);
+        setHelpNeeded('');
+        setHelpOriginal('');
+        setHelpRevised(false);
+      }
+    } catch (error) {
+      // If auto-populate fails, just reset fields
       setYesterdayUpdates('');
       setYesterdayOriginal('');
       setYesterdayRevised(false);
