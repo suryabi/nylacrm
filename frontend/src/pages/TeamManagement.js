@@ -1,7 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { usersAPI } from '../utils/api';
+import axios from 'axios';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '../components/ui/dialog';
 import { toast } from 'sonner';
 import {
   Table,
@@ -11,10 +29,48 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
+import { Plus, Loader2 } from 'lucide-react';
+
+const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
+
+const DESIGNATIONS = [
+  'CEO',
+  'Vice President',
+  'Director, Sales',
+  'Sales Manager',
+  'National Head - Sales',
+  'BD Executive'
+];
+
+const ROLE_MAPPING = {
+  'CEO': 'ceo',
+  'Vice President': 'vp',
+  'Director, Sales': 'director',
+  'Sales Manager': 'sales_manager',
+  'National Head - Sales': 'sales_manager',
+  'BD Executive': 'sales_rep'
+};
+
+const TERRITORIES = [
+  'All India',
+  'North India',
+  'South India',
+  'West India',
+  'East India',
+  'Central India'
+];
+
+const toTitleCase = (str) => {
+  if (!str) return '';
+  return str.split(' ').map(word => 
+    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  ).join(' ');
+};
 
 export default function TeamManagement() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -37,16 +93,37 @@ export default function TeamManagement() {
 
   // Sort users by hierarchy
   const sortedUsers = [...users].sort((a, b) => {
-    const roleOrder = { ceo: 1, director: 2, vp: 3, sales_manager: 4, sales_rep: 5 };
+    const roleOrder = { ceo: 1, director: 2, vp: 3, sales_manager: 4, sales_rep: 5, admin: 6 };
     return (roleOrder[a.role] || 99) - (roleOrder[b.role] || 99);
   });
 
   return (
     <div className="space-y-6" data-testid="team-management-page">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-semibold">Team Management</h1>
-        <p className="text-muted-foreground mt-1">Organizational hierarchy and team members</p>
+      <div className="flex flex-col sm:flex-row justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold">Team Management</h1>
+          <p className="text-muted-foreground mt-1">Manage your sales team members</p>
+        </div>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <Button data-testid="add-team-member-button">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Team Member
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Add Team Member</DialogTitle>
+            </DialogHeader>
+            <AddTeamMemberForm
+              onSuccess={() => {
+                setDialogOpen(false);
+                fetchUsers();
+              }}
+            />
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Team Members Table */}
@@ -73,7 +150,7 @@ export default function TeamManagement() {
                     <div>
                       <p className="font-medium">{user.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {user.designation || (user.role ? user.role.replace('_', ' ') : '')}
+                        {user.designation || user.role.replace('_', ' ')}
                       </p>
                     </div>
                   </div>
@@ -104,5 +181,169 @@ export default function TeamManagement() {
         </Table>
       </Card>
     </div>
+  );
+}
+
+function AddTeamMemberForm({ onSuccess }) {
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    designation: '',
+    email: '',
+    phone: '',
+    city: '',
+    state: '',
+    territory: '',
+    role: 'sales_rep',
+    password: '',
+    is_active: true
+  });
+
+  const updateField = (field, value) => {
+    // Apply title case to all fields except email
+    if (field !== 'email' && field !== 'password' && typeof value === 'string') {
+      value = toTitleCase(value);
+    }
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleDesignationChange = (designation) => {
+    const role = ROLE_MAPPING[designation] || 'sales_rep';
+    setFormData(prev => ({ 
+      ...prev, 
+      designation: designation,
+      role: role 
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_URL}/users/create`, formData, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success('Team member added successfully');
+      onSuccess();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to add team member');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="name">Name *</Label>
+          <Input
+            id="name"
+            value={formData.name}
+            onChange={(e) => updateField('name', e.target.value)}
+            required
+            data-testid="team-name-input"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="designation">Designation *</Label>
+          <Select value={formData.designation} onValueChange={handleDesignationChange} required>
+            <SelectTrigger data-testid="team-designation-select">
+              <SelectValue placeholder="Select designation" />
+            </SelectTrigger>
+            <SelectContent>
+              {DESIGNATIONS.map(des => (
+                <SelectItem key={des} value={des}>{des}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="email">Email *</Label>
+          <Input
+            id="email"
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+            required
+            data-testid="team-email-input"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="phone">Phone Number *</Label>
+          <Input
+            id="phone"
+            value={formData.phone}
+            onChange={(e) => updateField('phone', e.target.value)}
+            placeholder="+91"
+            required
+            data-testid="team-phone-input"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="password">Password *</Label>
+          <Input
+            id="password"
+            type="password"
+            value={formData.password}
+            onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+            required
+            data-testid="team-password-input"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="territory">Territory *</Label>
+          <Select value={formData.territory} onValueChange={(v) => updateField('territory', v)} required>
+            <SelectTrigger data-testid="team-territory-select">
+              <SelectValue placeholder="Select territory" />
+            </SelectTrigger>
+            <SelectContent>
+              {TERRITORIES.map(territory => (
+                <SelectItem key={territory} value={territory}>{territory}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="city">City</Label>
+          <Input
+            id="city"
+            value={formData.city}
+            onChange={(e) => updateField('city', e.target.value)}
+            placeholder="e.g., Mumbai"
+            data-testid="team-city-input"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="state">State</Label>
+          <Input
+            id="state"
+            value={formData.state}
+            onChange={(e) => updateField('state', e.target.value)}
+            placeholder="e.g., Maharashtra"
+            data-testid="team-state-input"
+          />
+        </div>
+        <div className="space-y-2 md:col-span-2">
+          <Label htmlFor="role_display">Role (Auto-set based on Designation)</Label>
+          <Input
+            id="role_display"
+            value={formData.role.replace('_', ' ').toUpperCase()}
+            disabled
+            className="bg-muted"
+          />
+        </div>
+      </div>
+      
+      <div className="flex gap-3 pt-4">
+        <Button type="submit" disabled={loading} data-testid="submit-team-member">
+          {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Adding...</> : 'Add Team Member'}
+        </Button>
+        <Button type="button" variant="outline" onClick={() => onSuccess()}>
+          Cancel
+        </Button>
+      </div>
+    </form>
   );
 }
