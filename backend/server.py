@@ -983,6 +983,97 @@ async def generate_team_summary(request: dict, current_user: dict = Depends(get_
         logger.error(f'Team summary generation error: {str(e)}')
         raise HTTPException(status_code=500, detail=f'Summary generation failed: {str(e)}')
 
+@api_router.get("/daily-status/weekly-summary")
+async def get_weekly_status_summary(
+    start_date: str,
+    end_date: str,
+    user_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get weekly status summary for team or individual member"""
+    
+    # Build query
+    query = {'status_date': {'$gte': start_date, '$lte': end_date}}
+    
+    if user_id:
+        # Individual member summary
+        query['user_id'] = user_id
+        user = await db.users.find_one({'id': user_id}, {'_id': 0})
+    else:
+        # Team summary - all direct reports
+        direct_reports = await db.users.find(
+            {'reports_to': current_user['id']},
+            {'_id': 0, 'id': 1}
+        ).to_list(100)
+        
+        if direct_reports:
+            user_ids = [u['id'] for u in direct_reports]
+            query['user_id'] = {'$in': user_ids}
+    
+    # Get all statuses in date range
+    statuses = await db.daily_status.find(query, {'_id': 0}).sort('status_date', 1).to_list(500)
+    
+    return {
+        'statuses': statuses,
+        'start_date': start_date,
+        'end_date': end_date,
+        'total_days': len(set([s['status_date'] for s in statuses])),
+        'is_individual': user_id is not None
+    }
+
+@api_router.post("/daily-status/generate-period-summary")
+async def generate_period_summary(request: dict, current_user: dict = Depends(get_current_user)):
+    """Generate AI summary for weekly/monthly period"""
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    
+    statuses = request.get('statuses', [])
+    period_type = request.get('period_type', 'weekly')  # weekly or monthly
+    start_date = request.get('start_date', '')
+    end_date = request.get('end_date', '')
+    
+    if not statuses:
+        raise HTTPException(status_code=400, detail='No statuses provided')
+    
+    # Build text for AI
+    summary_text = f"{period_type.title()} Status Summary: {start_date} to {end_date}\n\n"
+    
+    for status in statuses:
+        user_name = status.get('user_name', 'Unknown')
+        date = status.get('status_date', '')
+        summary_text += f"[{date}] {user_name}:\n"
+        if status.get('yesterday_updates'):
+            summary_text += f"  {status['yesterday_updates']}\n"
+        if status.get('today_actions'):
+            summary_text += f"  {status['today_actions']}\n"
+        summary_text += "\n"
+    
+    try:
+        user_id = current_user['id']
+        session_id = f'period-summary-{user_id}'
+        
+        chat = LlmChat(
+            api_key=os.environ['EMERGENT_LLM_KEY'],
+            session_id=session_id,
+            system_message=f'You are a professional editor creating a {period_type} summary. Combine all daily updates into a coherent summary. Organize into: 1) Key Activities (what was done), 2) Outcomes (deals, meetings, results), 3) Pending Items (what needs follow-up). Fix grammar, stay factual, do NOT add interpretations or exaggerate. Just consolidate the facts clearly.'
+        ).with_model('anthropic', 'claude-sonnet-4-5-20250929')
+        
+        user_message = UserMessage(
+            text=f'Create a {period_type} summary from these daily updates. Combine into 3 clear paragraphs. Fix grammar only, stay factual:\n\n{summary_text}'
+        )
+        
+        summary = await chat.send_message(user_message)
+        
+        return {
+            'summary': summary,
+            'period_type': period_type,
+            'start_date': start_date,
+            'end_date': end_date,
+            'days_covered': len(statuses)
+        }
+    except Exception as e:
+        logger.error(f'Period summary error: {str(e)}')
+        raise HTTPException(status_code=500, detail=f'Summary generation failed: {str(e)}')
+
 @api_router.post("/users/create", response_model=User)
 async def create_team_member(user_input: UserCreate, current_user: dict = Depends(get_current_user)):
     # Only admin/CEO can create users
