@@ -203,6 +203,26 @@ class CommentCreate(BaseModel):
     lead_id: str
     comment: str
 
+class DailyStatus(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    status_date: str  # YYYY-MM-DD format
+    status_text: str
+    original_text: Optional[str] = None  # Store original before AI revision
+    is_ai_revised: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class DailyStatusCreate(BaseModel):
+    status_date: str  # YYYY-MM-DD
+    status_text: str
+
+class DailyStatusUpdate(BaseModel):
+    status_text: str
+    original_text: Optional[str] = None
+    is_ai_revised: bool = False
+
 # ============= HELPERS =============
 
 def hash_password(password: str) -> str:
