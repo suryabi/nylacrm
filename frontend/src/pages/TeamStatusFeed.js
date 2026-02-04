@@ -58,10 +58,38 @@ export default function TeamStatusFeed() {
         headers: { Authorization: `Bearer ${token}` }
       });
       setRollupData(response.data);
+      setAiSummary(''); // Reset summary when date changes
     } catch (error) {
       toast.error('Failed to load team statuses');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const generateAISummary = async () => {
+    if (!rollupData?.team_statuses || rollupData.team_statuses.length === 0) {
+      toast.error('No statuses to summarize');
+      return;
+    }
+
+    setGeneratingSummary(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        `${API_URL}/daily-status/team-summary`,
+        {
+          team_statuses: rollupData.team_statuses,
+          status_date: selectedDate
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      setAiSummary(response.data.summary);
+      toast.success('AI summary generated!');
+    } catch (error) {
+      toast.error('Failed to generate summary');
+    } finally {
+      setGeneratingSummary(false);
     }
   };
 
