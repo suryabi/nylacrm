@@ -60,11 +60,14 @@ class UserCreate(BaseModel):
     password: str
     name: str
     role: str = 'sales_rep'
+    designation: Optional[str] = None
     phone: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     country: Optional[str] = None
     territory: Optional[str] = None
+    reports_to: Optional[str] = None
+    dotted_line_to: Optional[str] = None
 
 class UserLogin(BaseModel):
     email: EmailStr
