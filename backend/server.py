@@ -102,6 +102,10 @@ class LeadCreate(BaseModel):
     estimated_value: Optional[float] = None
     priority: Optional[str] = 'medium'
     notes: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    region: Optional[str] = None
 
 class LeadUpdate(BaseModel):
     name: Optional[str] = None
@@ -114,6 +118,10 @@ class LeadUpdate(BaseModel):
     estimated_value: Optional[float] = None
     priority: Optional[str] = None
     notes: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    region: Optional[str] = None
 
 class Activity(BaseModel):
     model_config = ConfigDict(extra="ignore")
