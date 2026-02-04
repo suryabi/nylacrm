@@ -128,15 +128,23 @@ export default function ActivityTimeline({ activities }) {
             {/* Activity content */}
             <div className="bg-white border border-border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between mb-3">
-                <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                  activity.activity_type === 'call' ? 'bg-blue-100 text-blue-800' :
-                  activity.activity_type === 'email' ? 'bg-purple-100 text-purple-800' :
-                  activity.activity_type === 'meeting' ? 'bg-green-100 text-green-800' :
-                  activity.activity_type === 'status_change' ? 'bg-orange-100 text-orange-800' :
-                  'bg-gray-100 text-gray-800'
-                }`}>
-                  {activity.activity_type.replace('_', ' ').toUpperCase()}
-                </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`px-2 py-1 text-xs rounded-full font-medium ${
+                    activity.activity_type === 'call' ? 'bg-blue-100 text-blue-800' :
+                    activity.activity_type === 'email' ? 'bg-purple-100 text-purple-800' :
+                    activity.activity_type === 'meeting' ? 'bg-green-100 text-green-800' :
+                    activity.activity_type === 'visit' ? 'bg-teal-100 text-teal-800' :
+                    activity.activity_type === 'status_change' ? 'bg-orange-100 text-orange-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {activity.activity_type.replace('_', ' ').toUpperCase()}
+                  </span>
+                  {activity.interaction_method && (
+                    <span className="px-2 py-1 text-xs rounded-full font-medium bg-slate-100 text-slate-700">
+                      {activity.interaction_method.replace('_', ' ').toUpperCase()}
+                    </span>
+                  )}
+                </div>
                 <div className="text-right">
                   <div className="flex items-center gap-1 text-sm font-semibold text-foreground">
                     <Calendar className="h-4 w-4" />
