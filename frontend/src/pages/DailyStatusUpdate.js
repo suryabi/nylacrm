@@ -6,7 +6,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
-import { Calendar, Sparkles, RotateCcw, Send, Loader2 } from 'lucide-react';
+import { Calendar, Sparkles, RotateCcw, Send, Loader2, Download } from 'lucide-react';
 import { format } from 'date-fns';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
