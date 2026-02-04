@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
+const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
+
 export default function SplashScreen() {
   const navigate = useNavigate();
 
@@ -16,13 +18,12 @@ export default function SplashScreen() {
     <div 
       className="min-h-screen flex items-center justify-center relative overflow-hidden"
       style={{
-        background: 'linear-gradient(135deg, #0891B2 0%, #0E7490 100%)'
+        background: 'linear-gradient(135deg, hsl(155, 35%, 42%) 0%, hsl(155, 45%, 35%) 100%)'
       }}
       data-testid="splash-screen"
     >
-      {/* Water ripple background */}
       <div 
-        className="absolute inset-0 opacity-30"
+        className="absolute inset-0 opacity-20"
         style={{
           backgroundImage: 'url(https://images.unsplash.com/photo-1769701282262-ea008aa5833a?crop=entropy&cs=srgb&fm=jpg&q=85)',
           backgroundSize: 'cover',
@@ -40,11 +41,10 @@ export default function SplashScreen() {
           initial={{ y: 20 }}
           animate={{ y: 0 }}
           transition={{ delay: 0.3, duration: 0.6 }}
+          className="bg-white/95 p-12 rounded-3xl shadow-2xl"
         >
-          <h1 className="text-6xl md:text-7xl font-light text-white mb-4 tracking-tight" data-testid="splash-title">
-            Nyla
-          </h1>
-          <p className="text-xl text-white/90 font-light" data-testid="splash-subtitle">
+          <img src={NYLA_LOGO} alt="Nyla Air Water" className="h-24 mx-auto mb-4" />
+          <p className="text-lg text-foreground font-medium" data-testid="splash-subtitle">
             Sales CRM
           </p>
         </motion.div>
