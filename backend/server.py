@@ -515,29 +515,33 @@ async def update_user(user_id: str, updates: dict, current_user: dict = Depends(
 
 @api_router.get("/analytics/dashboard")
 async def get_dashboard_analytics(current_user: dict = Depends(get_current_user)):
-    # Get leads based on role with only required fields
-    projection = {'_id': 0, 'status': 1, 'estimated_value': 1}
-    if current_user['role'] in ['admin', 'sales_manager']:
-        all_leads = await db.leads.find({}, projection).to_list(5000)
-    else:
-        all_leads = await db.leads.find({'assigned_to': current_user['id']}, projection).to_list(5000)
+    # Build match stage based on role
+    match_stage = {} if current_user['role'] in ['admin', 'sales_manager'] else {'assigned_to': current_user['id']}
     
-    total_leads = len(all_leads)
+    # Use aggregation for status distribution
+    status_pipeline = [
+        {'$match': match_stage},
+        {'$group': {'_id': '$status', 'count': {'$sum': 1}}}
+    ]
+    status_results = await db.leads.aggregate(status_pipeline).to_list(100)
+    status_counts = {item['_id']: item['count'] for item in status_results}
     
-    # Count by status
-    status_counts = {}
-    for lead in all_leads:
-        status = lead.get('status', 'new')
-        status_counts[status] = status_counts.get(status, 0) + 1
+    # Calculate total leads
+    total_leads = sum(status_counts.values())
     
     # Calculate conversion rate
     closed_won = status_counts.get('closed_won', 0)
     conversion_rate = (closed_won / total_leads * 100) if total_leads > 0 else 0
     
-    # Calculate pipeline value
-    pipeline_value = sum(lead.get('estimated_value', 0) or 0 for lead in all_leads if lead.get('status') not in ['closed_lost'])
+    # Calculate pipeline value using aggregation
+    pipeline_value_pipeline = [
+        {'$match': {**match_stage, 'status': {'$ne': 'closed_lost'}}},
+        {'$group': {'_id': None, 'total_value': {'$sum': '$estimated_value'}}}
+    ]
+    pipeline_value_result = await db.leads.aggregate(pipeline_value_pipeline).to_list(1)
+    pipeline_value = pipeline_value_result[0]['total_value'] if pipeline_value_result else 0
     
-    # Get today's follow-ups using MongoDB query
+    # Get today's follow-ups count using MongoDB query
     today = datetime.now(timezone.utc).date()
     today_start = datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc).isoformat()
     today_end = datetime.combine(today, datetime.max.time()).replace(tzinfo=timezone.utc).isoformat()
@@ -550,7 +554,7 @@ async def get_dashboard_analytics(current_user: dict = Depends(get_current_user)
     return {
         'total_leads': total_leads,
         'conversion_rate': round(conversion_rate, 2),
-        'pipeline_value': pipeline_value,
+        'pipeline_value': pipeline_value or 0,
         'today_follow_ups': today_follow_ups_count,
         'status_distribution': status_counts
     }
