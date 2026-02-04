@@ -45,6 +45,10 @@ class User(BaseModel):
     role: str  # 'admin', 'sales_manager', 'sales_rep'
     phone: Optional[str] = None
     avatar: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    territory: Optional[str] = None  # Sales territory/region
     is_active: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
