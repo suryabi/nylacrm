@@ -163,9 +163,9 @@ export default function LeadsList() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
                 <TableHead>Company</TableHead>
-                <TableHead>Email</TableHead>
+                <TableHead>Contact Person</TableHead>
+                <TableHead>Location</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Priority</TableHead>
                 <TableHead>Created</TableHead>
