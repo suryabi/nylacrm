@@ -316,21 +316,20 @@ export default function LeadDetail() {
           <Card className="p-6">
             <h2 className="text-lg font-semibold mb-4">Activity Timeline</h2>
             <div className="space-y-4">
-              {activities.length === 0 ? (
+              {activities.length === 0 && (
                 <p className="text-muted-foreground text-sm">No activities yet</p>
-              ) : (
-                activities.map((activity) => (
-                  <div key={activity.id} className="flex gap-3" data-testid={`activity-${activity.id}`}>
-                    <div className="flex-shrink-0 w-2 h-2 mt-2 rounded-full bg-primary" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{activity.description}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {format(new Date(activity.created_at), 'MMM d, yyyy h:mm a')}
-                      </p>
-                    </div>
-                  </div>
-                ))
               )}
+              {activities.length > 0 && activities.slice(0, 20).map((activity) => (
+                <div key={activity.id} className="flex gap-3" data-testid={`activity-${activity.id}`}>
+                  <div className="flex-shrink-0 w-2 h-2 mt-2 rounded-full bg-primary" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">{activity.description}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {format(new Date(activity.created_at), 'MMM d, yyyy h:mm a')}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
           </Card>
 
