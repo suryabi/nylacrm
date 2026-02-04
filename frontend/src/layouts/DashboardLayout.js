@@ -21,6 +21,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
   { name: 'Leads', href: '/leads', icon: Users, roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
   { name: 'Daily Status', href: '/daily-status', icon: FileText, roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
+  { name: 'Team Status', href: '/team-status', icon: Users, roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager'] },
   { name: 'Follow-ups', href: '/follow-ups', icon: Calendar, roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
   { name: 'Reports', href: '/reports', icon: BarChart3, roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager'] },
   { name: 'Locations', href: '/locations', icon: MapPin, roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager'] },
