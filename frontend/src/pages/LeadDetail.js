@@ -95,6 +95,29 @@ export default function LeadDetail() {
     }
   };
 
+  const handleAddActivity = async (e) => {
+    e.preventDefault();
+    if (!activityDescription.trim()) return;
+
+    setSubmittingActivity(true);
+    try {
+      await activitiesAPI.create({
+        lead_id: id,
+        activity_type: activityType,
+        description: activityDescription,
+        interaction_method: interactionMethod
+      });
+      toast.success('Activity added');
+      setActivityDescription('');
+      setShowActivityForm(false);
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to add activity');
+    } finally {
+      setSubmittingActivity(false);
+    }
+  };
+
   if (loading) {
     return <div className="flex justify-center py-12">Loading...</div>;
   }
