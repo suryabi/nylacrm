@@ -1239,7 +1239,69 @@ async def get_reports(current_user: dict = Depends(get_current_user)):
         'monthly_trends': monthly_data
     }
 
-@api_router.get("/analytics/locations")
+@api_router.get("/analytics/activity-metrics")
+async def get_activity_metrics(
+    start_date: str,
+    end_date: str,
+    user_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get activity metrics for a date range"""
+    
+    # Build query
+    start_datetime = datetime.fromisoformat(f'{start_date}T00:00:00').replace(tzinfo=timezone.utc).isoformat()
+    end_datetime = datetime.fromisoformat(f'{end_date}T23:59:59').replace(tzinfo=timezone.utc).isoformat()
+    
+    query = {
+        'created_at': {'$gte': start_datetime, '$lte': end_datetime}
+    }
+    
+    if user_id:
+        query['created_by'] = user_id
+    else:
+        # Get all direct reports
+        direct_reports = await db.users.find(
+            {'reports_to': current_user['id']},
+            {'_id': 0, 'id': 1}
+        ).to_list(100)
+        
+        if direct_reports:
+            user_ids = [u['id'] for u in direct_reports]
+            query['created_by'] = {'$in': user_ids}
+    
+    # Get all activities
+    activities = await db.activities.find(query, {'_id': 0}).to_list(5000)
+    
+    # Count by interaction method
+    phone_calls = sum(1 for a in activities if a.get('interaction_method') == 'phone_call')
+    customer_visits = sum(1 for a in activities if a.get('interaction_method') == 'customer_visit')
+    emails = sum(1 for a in activities if a.get('interaction_method') == 'email')
+    messages = sum(1 for a in activities if a.get('interaction_method') in ['whatsapp', 'sms'])
+    
+    # Count new leads created in this period
+    leads_query = {
+        'created_at': {'$gte': start_datetime, '$lte': end_datetime}
+    }
+    
+    if user_id:
+        leads_query['created_by'] = user_id
+    else:
+        if direct_reports:
+            user_ids = [u['id'] for u in direct_reports]
+            leads_query['created_by'] = {'$in': user_ids}
+    
+    new_leads = await db.leads.count_documents(leads_query)
+    
+    return {
+        'new_leads': new_leads,
+        'phone_calls': phone_calls,
+        'customer_visits': customer_visits,
+        'emails': emails,
+        'messages': messages,
+        'total_activities': len(activities),
+        'start_date': start_date,
+        'end_date': end_date
+    }
 async def get_location_analytics(current_user: dict = Depends(get_current_user)):
     # Build match stage based on role
     match_stage = {} if current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'sales_manager'] else {'assigned_to': current_user['id']}
