@@ -14,6 +14,7 @@ import Reports from './pages/Reports';
 import LocationAnalytics from './pages/LocationAnalytics';
 import TeamManagement from './pages/TeamManagement';
 import DailyStatusUpdate from './pages/DailyStatusUpdate';
+import TeamStatusFeed from './pages/TeamStatusFeed';
 import '@/App.css';
 
 function ProtectedRoute({ children }) {
