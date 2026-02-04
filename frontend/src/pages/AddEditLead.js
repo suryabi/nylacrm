@@ -32,7 +32,11 @@ export default function AddEditLead() {
     assigned_to: '',
     estimated_value: '',
     priority: 'medium',
-    notes: ''
+    notes: '',
+    city: '',
+    state: '',
+    country: '',
+    region: ''
   });
 
   useEffect(() => {
