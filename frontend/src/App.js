@@ -16,6 +16,7 @@ import TeamManagement from './pages/TeamManagement';
 import DailyStatusUpdate from './pages/DailyStatusUpdate';
 import TeamStatusFeed from './pages/TeamStatusFeed';
 import DashboardPreview from './pages/DashboardPreview';
+import BottlePreview from './pages/BottlePreview';
 import '@/App.css';
 
 function ProtectedRoute({ children }) {
