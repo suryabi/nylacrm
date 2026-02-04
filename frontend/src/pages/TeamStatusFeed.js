@@ -407,11 +407,23 @@ export default function TeamStatusFeed() {
             );
           })}
         </div>
-      ) : (
+      )}
+
+      {/* Weekly/Monthly View */}
+      {viewMode !== 'daily' && rollupData?.statuses && rollupData.statuses.length > 0 && (
         <Card className="p-6">
           <p className="text-sm text-muted-foreground text-center">
             {viewMode === 'weekly' ? 'Weekly' : 'Monthly'} detailed view - Use AI Summary above for consolidated insights
           </p>
+        </Card>
+      )}
+
+      {/* No Data Message */}
+      {((viewMode === 'daily' && (!rollupData?.team_statuses || rollupData.team_statuses.length === 0)) ||
+        (viewMode !== 'daily' && (!rollupData?.statuses || rollupData.statuses.length === 0))) && (
+        <Card className="p-12 text-center">
+          <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <p className="text-muted-foreground">No status updates available for selected filters</p>
         </Card>
       )}
     </div>
