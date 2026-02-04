@@ -40,6 +40,10 @@ async def seed_data():
             'name': 'Admin User',
             'role': 'admin',
             'phone': '+1234567890',
+            'city': 'New York',
+            'state': 'NY',
+            'country': 'United States',
+            'territory': 'Northeast',
             'is_active': True,
             'created_at': datetime.now(timezone.utc).isoformat()
         },
@@ -50,6 +54,10 @@ async def seed_data():
             'name': 'Sales Manager',
             'role': 'sales_manager',
             'phone': '+1234567891',
+            'city': 'Los Angeles',
+            'state': 'CA',
+            'country': 'United States',
+            'territory': 'West Coast',
             'is_active': True,
             'created_at': datetime.now(timezone.utc).isoformat()
         },
@@ -60,6 +68,10 @@ async def seed_data():
             'name': 'Sales Rep',
             'role': 'sales_rep',
             'phone': '+1234567892',
+            'city': 'Chicago',
+            'state': 'IL',
+            'country': 'United States',
+            'territory': 'Midwest',
             'is_active': True,
             'created_at': datetime.now(timezone.utc).isoformat()
         }
