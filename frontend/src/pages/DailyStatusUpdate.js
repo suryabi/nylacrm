@@ -259,7 +259,7 @@ export default function DailyStatusUpdate() {
     ? "Today's Updates" 
     : isYesterday 
       ? "Yesterday's Updates"
-      : format(new Date(selectedDate), 'EEEE, MMM d - Updates');
+      : format(new Date(selectedDate), "EEEE, MMM d") + " - Updates";
   
   const secondSectionTitle = isToday
     ? "Tomorrow's Action Items & Follow-ups"
