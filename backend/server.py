@@ -557,11 +557,12 @@ async def get_dashboard_analytics(current_user: dict = Depends(get_current_user)
 
 @api_router.get("/analytics/reports")
 async def get_reports(current_user: dict = Depends(get_current_user)):
-    # Get all data
+    # Get leads with only required fields
+    projection = {'_id': 0, 'source': 1, 'status': 1, 'assigned_to': 1, 'created_at': 1}
     if current_user['role'] in ['admin', 'sales_manager']:
-        leads = await db.leads.find({}, {'_id': 0}).to_list(10000)
+        leads = await db.leads.find({}, projection).to_list(5000)
     else:
-        leads = await db.leads.find({'assigned_to': current_user['id']}, {'_id': 0}).to_list(10000)
+        leads = await db.leads.find({'assigned_to': current_user['id']}, projection).to_list(5000)
     
     # Lead source analysis
     source_counts = {}
@@ -572,7 +573,7 @@ async def get_reports(current_user: dict = Depends(get_current_user)):
     # Team performance (for admins/managers)
     team_performance = []
     if current_user['role'] in ['admin', 'sales_manager']:
-        users = await db.users.find({}, {'_id': 0, 'password': 0}).to_list(1000)
+        users = await db.users.find({}, {'_id': 0, 'id': 1, 'name': 1, 'password': 0}).to_list(100)
         for user in users:
             user_leads = [l for l in leads if l.get('assigned_to') == user['id']]
             user_won = [l for l in user_leads if l.get('status') == 'closed_won']
