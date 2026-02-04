@@ -561,45 +561,76 @@ async def get_dashboard_analytics(current_user: dict = Depends(get_current_user)
 
 @api_router.get("/analytics/reports")
 async def get_reports(current_user: dict = Depends(get_current_user)):
-    # Get leads with only required fields
-    projection = {'_id': 0, 'source': 1, 'status': 1, 'assigned_to': 1, 'created_at': 1}
-    if current_user['role'] in ['admin', 'sales_manager']:
-        leads = await db.leads.find({}, projection).to_list(5000)
-    else:
-        leads = await db.leads.find({'assigned_to': current_user['id']}, projection).to_list(5000)
+    # Build match stage based on role
+    match_stage = {} if current_user['role'] in ['admin', 'sales_manager'] else {'assigned_to': current_user['id']}
     
-    # Lead source analysis
-    source_counts = {}
-    for lead in leads:
-        source = lead.get('source', 'unknown')
-        source_counts[source] = source_counts.get(source, 0) + 1
+    # Lead source analysis using aggregation
+    source_pipeline = [
+        {'$match': match_stage},
+        {'$group': {'_id': {'$ifNull': ['$source', 'unknown']}, 'count': {'$sum': 1}}}
+    ]
+    source_results = await db.leads.aggregate(source_pipeline).to_list(100)
+    source_counts = {item['_id']: item['count'] for item in source_results}
     
-    # Team performance (for admins/managers)
+    # Team performance (for admins/managers) using aggregation
     team_performance = []
     if current_user['role'] in ['admin', 'sales_manager']:
-        users = await db.users.find({}, {'_id': 0, 'id': 1, 'name': 1, 'password': 0}).to_list(100)
-        for user in users:
-            user_leads = [l for l in leads if l.get('assigned_to') == user['id']]
-            user_won = [l for l in user_leads if l.get('status') == 'closed_won']
-            team_performance.append({
-                'name': user['name'],
-                'total_leads': len(user_leads),
-                'closed_won': len(user_won),
-                'conversion_rate': round(len(user_won) / len(user_leads) * 100, 2) if user_leads else 0
-            })
+        team_pipeline = [
+            {'$match': match_stage},
+            {'$group': {
+                '_id': '$assigned_to',
+                'total_leads': {'$sum': 1},
+                'closed_won': {
+                    '$sum': {'$cond': [{'$eq': ['$status', 'closed_won']}, 1, 0]}
+                }
+            }}
+        ]
+        team_results = await db.leads.aggregate(team_pipeline).to_list(100)
+        
+        # Get user names
+        user_ids = [item['_id'] for item in team_results if item['_id']]
+        users = await db.users.find(
+            {'id': {'$in': user_ids}},
+            {'_id': 0, 'id': 1, 'name': 1}
+        ).to_list(100)
+        user_map = {user['id']: user['name'] for user in users}
+        
+        for item in team_results:
+            if item['_id']:
+                total = item['total_leads']
+                won = item['closed_won']
+                team_performance.append({
+                    'name': user_map.get(item['_id'], 'Unknown'),
+                    'total_leads': total,
+                    'closed_won': won,
+                    'conversion_rate': round(won / total * 100, 2) if total > 0 else 0
+                })
     
-    # Monthly trends
+    # Monthly trends using aggregation
+    monthly_pipeline = [
+        {'$match': match_stage},
+        {'$group': {
+            '_id': {
+                'month': {'$dateToString': {'format': '%Y-%m', 'date': {'$toDate': '$created_at'}}},
+                'status': '$status'
+            },
+            'count': {'$sum': 1}
+        }}
+    ]
+    monthly_results = await db.leads.aggregate(monthly_pipeline).to_list(1000)
+    
+    # Transform monthly results into desired format
     monthly_data = {}
-    for lead in leads:
-        created_at = datetime.fromisoformat(lead['created_at']) if isinstance(lead['created_at'], str) else lead['created_at']
-        month_key = created_at.strftime('%Y-%m')
-        if month_key not in monthly_data:
-            monthly_data[month_key] = {'new': 0, 'closed_won': 0, 'closed_lost': 0}
-        monthly_data[month_key]['new'] += 1
-        if lead.get('status') == 'closed_won':
-            monthly_data[month_key]['closed_won'] += 1
-        elif lead.get('status') == 'closed_lost':
-            monthly_data[month_key]['closed_lost'] += 1
+    for item in monthly_results:
+        month = item['_id']['month']
+        status = item['_id']['status']
+        if month not in monthly_data:
+            monthly_data[month] = {'new': 0, 'closed_won': 0, 'closed_lost': 0}
+        if status == 'closed_won':
+            monthly_data[month]['closed_won'] = item['count']
+        elif status == 'closed_lost':
+            monthly_data[month]['closed_lost'] = item['count']
+        monthly_data[month]['new'] += item['count']
     
     return {
         'source_analysis': source_counts,
