@@ -276,24 +276,24 @@ export default function LeadDetail() {
               Comments
             </h2>
             <div className="space-y-4 mb-6">
-              {comments.length === 0 ? (
+              {comments.length === 0 && (
                 <p className="text-muted-foreground text-sm">No comments yet</p>
-              ) : (
-                comments.map((comment) => {
-                  const commenter = users.find(u => u.id === comment.created_by);
-                  return (
-                    <div key={comment.id} className="bg-muted/50 p-4 rounded-lg" data-testid={`comment-${comment.id}`}>
-                      <div className="flex justify-between items-start mb-2">
-                        <p className="font-medium text-sm">{commenter?.name || 'Unknown'}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(new Date(comment.created_at), 'MMM d, yyyy h:mm a')}
-                        </p>
-                      </div>
-                      <p className="text-sm">{comment.comment}</p>
-                    </div>
-                  );
-                })
               )}
+              {comments.length > 0 && comments.slice(0, 20).map((comment) => {
+                const commenter = users.find(u => u.id === comment.created_by);
+                const commenterName = commenter ? commenter.name : 'Unknown';
+                return (
+                  <div key={comment.id} className="bg-muted/50 p-4 rounded-lg" data-testid={`comment-${comment.id}`}>
+                    <div className="flex justify-between items-start mb-2">
+                      <p className="font-medium text-sm">{commenterName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(comment.created_at), 'MMM d, yyyy h:mm a')}
+                      </p>
+                    </div>
+                    <p className="text-sm">{comment.comment}</p>
+                  </div>
+                );
+              })}
             </div>
             <form onSubmit={handleAddComment} className="space-y-3">
               <Textarea
