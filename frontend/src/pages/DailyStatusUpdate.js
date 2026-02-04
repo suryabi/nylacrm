@@ -400,7 +400,7 @@ export default function DailyStatusUpdate() {
               {status.today_actions && (
                 <div className="mb-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <p className="text-sm font-semibold text-muted-foreground">Today's Action Items</p>
+                    <p className="text-sm font-semibold text-muted-foreground">Today&apos;s Action Items</p>
                     {status.today_ai_revised && (
                       <Badge variant="outline" className="text-xs">
                         <Sparkles className="h-3 w-3 mr-1" />
