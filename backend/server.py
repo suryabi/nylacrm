@@ -58,6 +58,10 @@ class UserCreate(BaseModel):
     name: str
     role: str = 'sales_rep'
     phone: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    territory: Optional[str] = None
 
 class UserLogin(BaseModel):
     email: EmailStr
