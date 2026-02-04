@@ -9,6 +9,7 @@ const navigation = [
   { name: 'Leads', href: '/leads', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
   { name: 'Daily Status', href: '/daily-status', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
   { name: 'Team Status', href: '/team-status', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager'] },
+  { name: 'Bottle Preview', href: '/bottle-preview', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
   { name: 'Follow-ups', href: '/follow-ups', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
   { name: 'Reports', href: '/reports', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager'] },
   { name: 'Locations', href: '/locations', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager'] },
