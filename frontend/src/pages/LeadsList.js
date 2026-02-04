@@ -77,9 +77,11 @@ export default function LeadsList() {
     if (searchQuery) {
       filtered = filtered.filter(
         (lead) =>
-          lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          lead.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          lead.company?.toLowerCase().includes(searchQuery.toLowerCase())
+          (lead.company && lead.company.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          (lead.contact_person && lead.contact_person.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          (lead.name && lead.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          (lead.email && lead.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          (lead.city && lead.city.toLowerCase().includes(searchQuery.toLowerCase()))
       );
     }
 
