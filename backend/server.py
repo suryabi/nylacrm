@@ -826,6 +826,62 @@ async def revise_status_with_ai(request: dict, current_user: dict = Depends(get_
         logger.error(f'AI revision error: {str(e)}')
         raise HTTPException(status_code=500, detail=f'AI revision failed: {str(e)}')
 
+@api_router.get("/daily-status/team-rollup")
+async def get_team_status_rollup(
+    status_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get daily status rollup for team members reporting to current user"""
+    
+    # Find all users who report to current user
+    direct_reports = await db.users.find(
+        {'reports_to': current_user['id']},
+        {'_id': 0, 'id': 1, 'name': 1, 'designation': 1, 'territory': 1}
+    ).to_list(100)
+    
+    if not direct_reports:
+        return {'team_statuses': [], 'date': status_date or format(new Date(), 'yyyy-MM-dd')}
+    
+    # Get statuses for all direct reports
+    user_ids = [u['id'] for u in direct_reports]
+    query = {'user_id': {'$in': user_ids}}
+    
+    if status_date:
+        query['status_date'] = status_date
+    else:
+        # Default to today
+        query['status_date'] = format(new Date(), 'yyyy-MM-dd')
+    
+    statuses = await db.daily_status.find(query, {'_id': 0}).to_list(100)
+    
+    # Map statuses to users
+    user_map = {u['id']: u for u in direct_reports}
+    
+    team_statuses = []
+    for status in statuses:
+        user_info = user_map.get(status['user_id'])
+        if user_info:
+            team_statuses.append({
+                'user_name': user_info['name'],
+                'user_designation': user_info.get('designation', ''),
+                'user_territory': user_info.get('territory', ''),
+                'status_date': status['status_date'],
+                'yesterday_updates': status.get('yesterday_updates', ''),
+                'today_actions': status.get('today_actions', ''),
+                'help_needed': status.get('help_needed', ''),
+                'created_at': status['created_at']
+            })
+    
+    # Sort by creation time (latest first)
+    team_statuses.sort(key=lambda x: x['created_at'], reverse=True)
+    
+    return {
+        'team_statuses': team_statuses,
+        'date': status_date or format(new Date(), 'yyyy-MM-dd'),
+        'total_reports': len(direct_reports),
+        'statuses_received': len(team_statuses)
+    }
+
 @api_router.post("/users/create", response_model=User)
 async def create_team_member(user_input: UserCreate, current_user: dict = Depends(get_current_user)):
     # Only admin/CEO can create users
