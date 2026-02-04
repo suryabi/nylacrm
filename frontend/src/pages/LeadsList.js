@@ -180,9 +180,9 @@ export default function LeadsList() {
                   onClick={() => navigate(`/leads/${lead.id}`)}
                   data-testid={`lead-row-${lead.id}`}
                 >
-                  <TableCell className="font-medium">{lead.name}</TableCell>
-                  <TableCell>{lead.company || '-'}</TableCell>
-                  <TableCell>{lead.email || '-'}</TableCell>
+                  <TableCell className="font-medium">{lead.company || lead.name}</TableCell>
+                  <TableCell>{lead.contact_person || '-'}</TableCell>
+                  <TableCell>{lead.city}, {lead.state}</TableCell>
                   <TableCell>
                     <Badge className={statusColors[lead.status]}>
                       {lead.status.replace('_', ' ')}
