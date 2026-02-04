@@ -69,7 +69,11 @@ export default function AddEditLead() {
         assigned_to: lead.assigned_to || '',
         estimated_value: lead.estimated_value || '',
         priority: lead.priority || 'medium',
-        notes: lead.notes || ''
+        notes: lead.notes || '',
+        city: lead.city || '',
+        state: lead.state || '',
+        country: lead.country || '',
+        region: lead.region || ''
       });
     } catch (error) {
       toast.error('Failed to load lead');
