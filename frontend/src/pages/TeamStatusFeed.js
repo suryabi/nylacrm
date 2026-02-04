@@ -381,6 +381,32 @@ export default function TeamStatusFeed() {
                   </p>
                 </div>
 
+                {/* Per-User Metrics */}
+                {status.metrics && (
+                  <div className="mt-3 grid grid-cols-5 gap-2">
+                    <div className="text-center">
+                      <p className="text-xl font-bold text-primary">{status.metrics.new_leads || 0}</p>
+                      <p className="text-xs text-muted-foreground">Leads</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xl font-bold text-blue-600">{status.metrics.phone_calls || 0}</p>
+                      <p className="text-xs text-muted-foreground">Calls</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xl font-bold text-green-600">{status.metrics.customer_visits || 0}</p>
+                      <p className="text-xs text-muted-foreground">Visits</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xl font-bold text-purple-600">{status.metrics.emails || 0}</p>
+                      <p className="text-xs text-muted-foreground">Emails</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xl font-bold text-teal-600">{status.metrics.messages || 0}</p>
+                      <p className="text-xs text-muted-foreground">Messages</p>
+                    </div>
+                  </div>
+                )}
+
                 {status.yesterday_updates && (
                   <div className="mb-3 pb-3 border-b">
                     <p className="text-xs font-semibold text-muted-foreground mb-1">UPDATES</p>
