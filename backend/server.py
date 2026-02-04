@@ -405,12 +405,16 @@ async def create_follow_up(follow_up_input: FollowUpCreate, current_user: dict =
     return follow_up_obj
 
 @api_router.get("/follow-ups", response_model=List[FollowUp])
-async def get_follow_ups(current_user: dict = Depends(get_current_user)):
+async def get_follow_ups(
+    skip: int = 0,
+    limit: int = 100,
+    current_user: dict = Depends(get_current_user)
+):
     # Get follow-ups assigned to current user or created by them
     if current_user['role'] in ['admin', 'sales_manager']:
-        follow_ups = await db.follow_ups.find({}, {'_id': 0}).to_list(1000)
+        follow_ups = await db.follow_ups.find({}, {'_id': 0}).skip(skip).limit(limit).to_list(limit)
     else:
-        follow_ups = await db.follow_ups.find({'assigned_to': current_user['id']}, {'_id': 0}).to_list(1000)
+        follow_ups = await db.follow_ups.find({'assigned_to': current_user['id']}, {'_id': 0}).skip(skip).limit(limit).to_list(limit)
     
     for follow_up in follow_ups:
         if isinstance(follow_up['created_at'], str):
