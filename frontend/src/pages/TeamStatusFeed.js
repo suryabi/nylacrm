@@ -272,6 +272,48 @@ export default function TeamStatusFeed() {
         </Card>
       )}
 
+      {/* AI Consolidated Summary */}
+      {rollupData?.statuses_received > 0 && (
+        <Card className="p-6 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-bold">AI Consolidated Summary</h3>
+            </div>
+            <Button
+              onClick={generateAISummary}
+              disabled={generatingSummary}
+              size="sm"
+              data-testid="generate-summary-button"
+            >
+              {generatingSummary ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Generating...</>
+              ) : (
+                <><Sparkles className="h-4 w-4 mr-2" /> Generate Summary</>
+              )}
+            </Button>
+          </div>
+
+          {aiSummary ? (
+            <div className="prose prose-sm max-w-none">
+              <div className="bg-white rounded-lg p-5 border border-border whitespace-pre-wrap leading-relaxed">
+                {aiSummary}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 border-2 border-dashed border-primary/30 rounded-lg">
+              <Sparkles className="h-10 w-10 mx-auto text-primary/50 mb-3" />
+              <p className="text-sm text-muted-foreground mb-3">
+                Click "Generate Summary" to get an AI-powered consolidated view
+              </p>
+              <p className="text-xs text-muted-foreground">
+                AI will organize all team updates into key achievements, actions, and help requests
+              </p>
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Team Statuses */}
       {filteredStatuses.length === 0 ? (
         <Card className="p-12 text-center">
