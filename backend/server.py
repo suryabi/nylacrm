@@ -515,11 +515,12 @@ async def update_user(user_id: str, updates: dict, current_user: dict = Depends(
 
 @api_router.get("/analytics/dashboard")
 async def get_dashboard_analytics(current_user: dict = Depends(get_current_user)):
-    # Get leads based on role
+    # Get leads based on role with only required fields
+    projection = {'_id': 0, 'status': 1, 'estimated_value': 1}
     if current_user['role'] in ['admin', 'sales_manager']:
-        all_leads = await db.leads.find({}, {'_id': 0}).to_list(10000)
+        all_leads = await db.leads.find({}, projection).to_list(5000)
     else:
-        all_leads = await db.leads.find({'assigned_to': current_user['id']}, {'_id': 0}).to_list(10000)
+        all_leads = await db.leads.find({'assigned_to': current_user['id']}, projection).to_list(5000)
     
     total_leads = len(all_leads)
     
@@ -536,20 +537,21 @@ async def get_dashboard_analytics(current_user: dict = Depends(get_current_user)
     # Calculate pipeline value
     pipeline_value = sum(lead.get('estimated_value', 0) or 0 for lead in all_leads if lead.get('status') not in ['closed_lost'])
     
-    # Get today's follow-ups
+    # Get today's follow-ups using MongoDB query
     today = datetime.now(timezone.utc).date()
-    all_follow_ups = await db.follow_ups.find({}, {'_id': 0}).to_list(10000)
-    today_follow_ups = [
-        fu for fu in all_follow_ups 
-        if not fu.get('is_completed') and 
-        datetime.fromisoformat(fu['scheduled_date']).date() == today
-    ]
+    today_start = datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc).isoformat()
+    today_end = datetime.combine(today, datetime.max.time()).replace(tzinfo=timezone.utc).isoformat()
+    
+    today_follow_ups_count = await db.follow_ups.count_documents({
+        'is_completed': False,
+        'scheduled_date': {'$gte': today_start, '$lte': today_end}
+    })
     
     return {
         'total_leads': total_leads,
         'conversion_rate': round(conversion_rate, 2),
         'pipeline_value': pipeline_value,
-        'today_follow_ups': len(today_follow_ups),
+        'today_follow_ups': today_follow_ups_count,
         'status_distribution': status_counts
     }
 
