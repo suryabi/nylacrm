@@ -237,25 +237,27 @@ export default function TeamStatusFeed() {
         </div>
       </Card>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="p-4 bg-white border hover:shadow-md transition-shadow">
-          <p className="text-xs text-muted-foreground font-medium mb-2">Completion Rate</p>
-          <p className="text-3xl font-bold text-primary">{completionRate}%</p>
-        </Card>
-        <Card className="p-4 bg-white border hover:shadow-md transition-shadow">
-          <p className="text-xs text-muted-foreground font-medium mb-2">Total Team</p>
-          <p className="text-3xl font-bold text-primary">{totalCount}</p>
-        </Card>
-        <Card className="p-4 bg-white border hover:shadow-md transition-shadow">
-          <p className="text-xs text-muted-foreground font-medium mb-2">Submitted</p>
-          <p className="text-3xl font-bold text-green-600">{submittedCount}</p>
-        </Card>
-        <Card className="p-4 bg-white border hover:shadow-md transition-shadow">
-          <p className="text-xs text-muted-foreground font-medium mb-2">Missing</p>
-          <p className="text-3xl font-bold text-red-600">{totalCount - submittedCount}</p>
-        </Card>
-      </div>
+      {/* Summary Stats - Only for Daily View */}
+      {viewMode === 'daily' && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="p-4 bg-white border hover:shadow-md transition-shadow">
+            <p className="text-xs text-muted-foreground font-medium mb-2">Completion Rate</p>
+            <p className="text-3xl font-bold text-primary">{completionRate}%</p>
+          </Card>
+          <Card className="p-4 bg-white border hover:shadow-md transition-shadow">
+            <p className="text-xs text-muted-foreground font-medium mb-2">Total Team</p>
+            <p className="text-3xl font-bold text-primary">{totalCount}</p>
+          </Card>
+          <Card className="p-4 bg-white border hover:shadow-md transition-shadow">
+            <p className="text-xs text-muted-foreground font-medium mb-2">Submitted</p>
+            <p className="text-3xl font-bold text-green-600">{submittedCount}</p>
+          </Card>
+          <Card className="p-4 bg-white border hover:shadow-md transition-shadow">
+            <p className="text-xs text-muted-foreground font-medium mb-2">Missing</p>
+            <p className="text-3xl font-bold text-red-600">{totalCount - submittedCount}</p>
+          </Card>
+        </div>
+      )}
 
       {/* AI Summary Section */}
       {filteredData.length > 0 && (
