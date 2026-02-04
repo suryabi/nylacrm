@@ -27,51 +27,118 @@ async def seed_data():
     await db.follow_ups.delete_many({})
     await db.comments.delete_many({})
     
-    # Create demo users
-    admin_id = str(uuid.uuid4())
-    manager_id = str(uuid.uuid4())
-    rep_id = str(uuid.uuid4())
+    # Create demo users with organizational hierarchy
+    surya_id = str(uuid.uuid4())  # CEO
+    vamsi_id = str(uuid.uuid4())  # Director
+    karanabir_id = str(uuid.uuid4())  # VP Growth & Strategy
+    manager_id = str(uuid.uuid4())  # Sales Manager
+    rep1_id = str(uuid.uuid4())  # Sales Rep 1
+    rep2_id = str(uuid.uuid4())  # Sales Rep 2
     
     users = [
+        # Top Level - CEO & Managing Director
         {
-            'id': admin_id,
-            'email': 'admin@nyla.com',
-            'password': hash_password('admin123'),
-            'name': 'Admin User',
-            'role': 'admin',
-            'phone': '+919876543210',
-            'city': 'Delhi NCR',
-            'state': 'Delhi',
+            'id': surya_id,
+            'email': 'surya.yadavalli@nyla.com',
+            'password': hash_password('surya123'),
+            'name': 'Surya Yadavalli',
+            'role': 'ceo',
+            'designation': 'CEO & Managing Director',
+            'phone': '+919876543200',
+            'city': 'Hyderabad',
+            'state': 'Telangana',
             'country': 'India',
-            'territory': 'North India',
+            'territory': 'All India',
+            'reports_to': None,  # Top of hierarchy
+            'dotted_line_to': None,
             'is_active': True,
             'created_at': datetime.now(timezone.utc).isoformat()
         },
+        # Second Level - Director
+        {
+            'id': vamsi_id,
+            'email': 'vamsi.bommena@nyla.com',
+            'password': hash_password('vamsi123'),
+            'name': 'Vamsi Bommena',
+            'role': 'director',
+            'designation': 'Director',
+            'phone': '+919876543201',
+            'city': 'Hyderabad',
+            'state': 'Telangana',
+            'country': 'India',
+            'territory': 'All India',
+            'reports_to': surya_id,  # Reports to Surya
+            'dotted_line_to': None,
+            'is_active': True,
+            'created_at': datetime.now(timezone.utc).isoformat()
+        },
+        # Third Level - VP Growth & Strategy
+        {
+            'id': karanabir_id,
+            'email': 'karanabir.gulati@nyla.com',
+            'password': hash_password('karanabir123'),
+            'name': 'Karanabir Singh Gulati',
+            'role': 'vp',
+            'designation': 'VP - Growth & Strategy',
+            'phone': '+919876543202',
+            'city': 'Delhi NCR',
+            'state': 'Delhi',
+            'country': 'India',
+            'territory': 'All India',
+            'reports_to': vamsi_id,  # Reports to Vamsi
+            'dotted_line_to': surya_id,  # Dotted line to Surya
+            'is_active': True,
+            'created_at': datetime.now(timezone.utc).isoformat()
+        },
+        # Sales Team - Reports to Karanabir
         {
             'id': manager_id,
-            'email': 'manager@nyla.com',
+            'email': 'sales.manager@nyla.com',
             'password': hash_password('manager123'),
-            'name': 'Sales Manager',
+            'name': 'Rahul Sharma',
             'role': 'sales_manager',
-            'phone': '+919876543211',
+            'designation': 'Sales Manager - West India',
+            'phone': '+919876543210',
             'city': 'Mumbai',
             'state': 'Maharashtra',
             'country': 'India',
             'territory': 'West India',
+            'reports_to': karanabir_id,  # Reports to Karanabir
+            'dotted_line_to': None,
             'is_active': True,
             'created_at': datetime.now(timezone.utc).isoformat()
         },
         {
-            'id': rep_id,
-            'email': 'sales@nyla.com',
-            'password': hash_password('sales123'),
-            'name': 'Sales Rep',
+            'id': rep1_id,
+            'email': 'priya.sales@nyla.com',
+            'password': hash_password('priya123'),
+            'name': 'Priya Menon',
             'role': 'sales_rep',
-            'phone': '+919876543212',
+            'designation': 'Senior Sales Executive - South India',
+            'phone': '+919876543211',
             'city': 'Bangalore',
             'state': 'Karnataka',
             'country': 'India',
             'territory': 'South India',
+            'reports_to': karanabir_id,  # Reports to Karanabir
+            'dotted_line_to': None,
+            'is_active': True,
+            'created_at': datetime.now(timezone.utc).isoformat()
+        },
+        {
+            'id': rep2_id,
+            'email': 'amit.sales@nyla.com',
+            'password': hash_password('amit123'),
+            'name': 'Amit Verma',
+            'role': 'sales_rep',
+            'designation': 'Sales Executive - North India',
+            'phone': '+919876543212',
+            'city': 'Delhi NCR',
+            'state': 'Delhi',
+            'country': 'India',
+            'territory': 'North India',
+            'reports_to': karanabir_id,  # Reports to Karanabir
+            'dotted_line_to': None,
             'is_active': True,
             'created_at': datetime.now(timezone.utc).isoformat()
         }
