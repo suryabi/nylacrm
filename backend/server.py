@@ -465,8 +465,13 @@ async def create_comment(comment_input: CommentCreate, current_user: dict = Depe
     return comment_obj
 
 @api_router.get("/comments/{lead_id}", response_model=List[Comment])
-async def get_comments(lead_id: str, current_user: dict = Depends(get_current_user)):
-    comments = await db.comments.find({'lead_id': lead_id}, {'_id': 0}).sort('created_at', -1).to_list(1000)
+async def get_comments(
+    lead_id: str,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: dict = Depends(get_current_user)
+):
+    comments = await db.comments.find({'lead_id': lead_id}, {'_id': 0}).sort('created_at', -1).skip(skip).limit(limit).to_list(limit)
     
     for comment in comments:
         if isinstance(comment['created_at'], str):
