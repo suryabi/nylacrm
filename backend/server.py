@@ -808,11 +808,11 @@ async def revise_status_with_ai(request: dict, current_user: dict = Depends(get_
         chat = LlmChat(
             api_key=os.environ['EMERGENT_LLM_KEY'],
             session_id=session_id,
-            system_message='You are a professional business writing assistant. Revise sales status updates to be clear, professional, and well-structured while preserving the original meaning. Keep the tone professional but friendly. Do not add information that was not in the original text.'
+            system_message='You are a professional editor. Your job is to ONLY fix grammar, correct spelling, and improve sentence structure. Do NOT add headings, sections, bullet points, or any new information. Do NOT add greetings or conclusions. Keep the same tone and length. Just make the existing text grammatically correct and more readable while preserving all original content and meaning exactly as written.'
         ).with_model('anthropic', 'claude-sonnet-4-5-20250929')
         
         user_message = UserMessage(
-            text=f'Please revise and improve this daily sales status update. Make it clear, professional, and well-structured. Keep it concise:\n\n{original_text}'
+            text=f'Fix grammar and improve readability of this text. Do not add headings, sections, or new information. Keep it concise:\n\n{original_text}'
         )
         
         revised_text = await chat.send_message(user_message)
