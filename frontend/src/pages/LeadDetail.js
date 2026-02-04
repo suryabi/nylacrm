@@ -42,12 +42,11 @@ export default function LeadDetail() {
 
   const fetchData = async () => {
     try {
-      const [leadRes, activitiesRes, commentsRes, usersRes] = await Promise.all([
-        leadsAPI.getById(id),
-        activitiesAPI.getByLeadId(id),
-        commentsAPI.getByLeadId(id),
-        usersAPI.getAll(),
-      ]);
+      const leadRes = await leadsAPI.getById(id);
+      const activitiesRes = await activitiesAPI.getByLeadId(id);
+      const commentsRes = await commentsAPI.getByLeadId(id);
+      const usersRes = await usersAPI.getAll();
+      
       setLead(leadRes.data);
       setActivities(activitiesRes.data);
       setComments(commentsRes.data);
