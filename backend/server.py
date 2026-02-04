@@ -161,8 +161,9 @@ class Activity(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     lead_id: str
-    activity_type: str  # 'call', 'email', 'meeting', 'note', 'status_change'
+    activity_type: str  # 'call', 'email', 'meeting', 'note', 'status_change', 'visit', 'messaging'
     description: str
+    interaction_method: Optional[str] = None  # 'phone_call', 'customer_visit', 'email', 'whatsapp', 'sms', 'other'
     created_by: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -170,6 +171,7 @@ class ActivityCreate(BaseModel):
     lead_id: str
     activity_type: str
     description: str
+    interaction_method: Optional[str] = None
 
 class FollowUp(BaseModel):
     model_config = ConfigDict(extra="ignore")
