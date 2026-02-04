@@ -22,7 +22,7 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 # JWT Configuration
-JWT_SECRET = os.environ.get('JWT_SECRET', 'nyla-sales-crm-secret-key-2025')
+JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRATION_HOURS = 24
 
