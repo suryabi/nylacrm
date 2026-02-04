@@ -83,6 +83,10 @@ class Lead(BaseModel):
     estimated_value: Optional[float] = None
     priority: Optional[str] = 'medium'  # 'low', 'medium', 'high'
     notes: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    region: Optional[str] = None  # Business region/territory
     created_by: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
