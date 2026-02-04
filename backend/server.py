@@ -623,7 +623,7 @@ async def update_user(user_id: str, updates: dict, current_user: dict = Depends(
 @api_router.get("/analytics/dashboard")
 async def get_dashboard_analytics(current_user: dict = Depends(get_current_user)):
     # Build match stage based on role
-    match_stage = {} if current_user['role'] in ['admin', 'sales_manager'] else {'assigned_to': current_user['id']}
+    match_stage = {} if current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'sales_manager'] else {'assigned_to': current_user['id']}
     
     # Use aggregation for status distribution
     status_pipeline = [
