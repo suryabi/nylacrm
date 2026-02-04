@@ -121,6 +121,22 @@ export default function LeadDetail() {
           <Card className="p-6">
             <h2 className="text-lg font-semibold mb-4">Contact Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center gap-3">
+                <Building2 className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Company</p>
+                  <p className="font-medium">{lead.company}</p>
+                </div>
+              </div>
+              {lead.contact_person && (
+                <div className="flex items-center gap-3">
+                  <User className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Contact Person</p>
+                    <p className="font-medium">{lead.contact_person}</p>
+                  </div>
+                </div>
+              )}
               {lead.email && (
                 <div className="flex items-center gap-3">
                   <Mail className="h-5 w-5 text-muted-foreground" />
@@ -139,21 +155,12 @@ export default function LeadDetail() {
                   </div>
                 </div>
               )}
-              {lead.company && (
-                <div className="flex items-center gap-3">
-                  <Building2 className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Company</p>
-                    <p className="font-medium">{lead.company}</p>
-                  </div>
-                </div>
-              )}
               {assignedUser && (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 md:col-span-2">
                   <User className="h-5 w-5 text-muted-foreground" />
                   <div>
                     <p className="text-sm text-muted-foreground">Assigned To</p>
-                    <p className="font-medium">{assignedUser.name}</p>
+                    <p className="font-medium">{assignedUser.name} - {assignedUser.territory}</p>
                   </div>
                 </div>
               )}
@@ -161,34 +168,79 @@ export default function LeadDetail() {
           </Card>
 
           {/* Location Information */}
-          {(lead.city || lead.state || lead.country || lead.region) && (
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold mb-4">Location</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {lead.city && (
+                <div>
+                  <p className="text-sm text-muted-foreground">City</p>
+                  <p className="font-medium">{lead.city}</p>
+                </div>
+              )}
+              {lead.state && (
+                <div>
+                  <p className="text-sm text-muted-foreground">State</p>
+                  <p className="font-medium">{lead.state}</p>
+                </div>
+              )}
+              {lead.country && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Country</p>
+                  <p className="font-medium">{lead.country}</p>
+                </div>
+              )}
+              {lead.region && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Region</p>
+                  <p className="font-medium">{lead.region}</p>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Current Brand Details */}
+          {(lead.current_water_brand || lead.current_volume || lead.current_landing_price || lead.current_selling_price) && (
             <Card className="p-6">
-              <h2 className="text-lg font-semibold mb-4">Location</h2>
+              <h2 className="text-lg font-semibold mb-4">Current Brand Details</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {lead.city && (
+                {lead.current_water_brand && (
                   <div>
-                    <p className="text-sm text-muted-foreground">City</p>
-                    <p className="font-medium">{lead.city}</p>
+                    <p className="text-sm text-muted-foreground">Current Water Brand</p>
+                    <p className="font-medium">{lead.current_water_brand}</p>
                   </div>
                 )}
-                {lead.state && (
+                {lead.current_volume && (
                   <div>
-                    <p className="text-sm text-muted-foreground">State/Province</p>
-                    <p className="font-medium">{lead.state}</p>
+                    <p className="text-sm text-muted-foreground">Current Volume</p>
+                    <p className="font-medium">{lead.current_volume}</p>
                   </div>
                 )}
-                {lead.country && (
+                {lead.current_landing_price && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Country</p>
-                    <p className="font-medium">{lead.country}</p>
+                    <p className="text-sm text-muted-foreground">Current Landing Price</p>
+                    <p className="font-medium">₹{lead.current_landing_price}</p>
                   </div>
                 )}
-                {lead.region && (
+                {lead.current_selling_price && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Region/Territory</p>
-                    <p className="font-medium">{lead.region}</p>
+                    <p className="text-sm text-muted-foreground">Current Selling Price</p>
+                    <p className="font-medium">₹{lead.current_selling_price}</p>
                   </div>
                 )}
+              </div>
+            </Card>
+          )}
+
+          {/* Nyla Interest */}
+          {lead.interested_skus && lead.interested_skus.length > 0 && (
+            <Card className="p-6">
+              <h2 className="text-lg font-semibold mb-4">Interested Nyla SKUs</h2>
+              <div className="flex flex-wrap gap-2">
+                {lead.interested_skus.map((sku, index) => (
+                  <Badge key={index} className="bg-primary/10 text-primary">
+                    {sku}
+                  </Badge>
+                ))}
               </div>
             </Card>
           )}
