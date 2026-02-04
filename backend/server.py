@@ -258,13 +258,17 @@ async def create_lead(lead_input: LeadCreate, current_user: dict = Depends(get_c
     return lead_obj
 
 @api_router.get("/leads", response_model=List[Lead])
-async def get_leads(current_user: dict = Depends(get_current_user)):
+async def get_leads(
+    skip: int = 0,
+    limit: int = 100,
+    current_user: dict = Depends(get_current_user)
+):
     # Admin and Sales Manager see all leads
     # Sales Rep sees only assigned leads
     if current_user['role'] in ['admin', 'sales_manager']:
-        leads = await db.leads.find({}, {'_id': 0}).to_list(1000)
+        leads = await db.leads.find({}, {'_id': 0}).skip(skip).limit(limit).to_list(limit)
     else:
-        leads = await db.leads.find({'assigned_to': current_user['id']}, {'_id': 0}).to_list(1000)
+        leads = await db.leads.find({'assigned_to': current_user['id']}, {'_id': 0}).skip(skip).limit(limit).to_list(limit)
     
     for lead in leads:
         if isinstance(lead['created_at'], str):
