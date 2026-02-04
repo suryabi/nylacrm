@@ -1,5 +1,5 @@
 import React from 'react';
-import { format, differenceInDays } from 'date-fns';
+import { format, differenceInDays, differenceInHours, differenceInMinutes } from 'date-fns';
 import { Calendar } from 'lucide-react';
 
 export default function ActivityTimeline({ activities }) {
@@ -12,14 +12,33 @@ export default function ActivityTimeline({ activities }) {
     new Date(b.created_at) - new Date(a.created_at)
   );
 
-  // Calculate days between activities (going backwards in time)
+  // Calculate time gaps between activities
   const activitiesWithGaps = sortedActivities.map((activity, index) => {
-    const daysToNext = index < sortedActivities.length - 1
-      ? differenceInDays(new Date(activity.created_at), new Date(sortedActivities[index + 1].created_at))
-      : 0;
+    if (index >= sortedActivities.length - 1) {
+      return { ...activity, gapText: null };
+    }
+    
+    const currentDate = new Date(activity.created_at);
+    const nextDate = new Date(sortedActivities[index + 1].created_at);
+    const days = differenceInDays(currentDate, nextDate);
+    const hours = differenceInHours(currentDate, nextDate);
+    const minutes = differenceInMinutes(currentDate, nextDate);
+    
+    let gapText = '';
+    if (days > 0) {
+      gapText = `${days} ${days === 1 ? 'day' : 'days'}`;
+    } else if (hours > 0) {
+      gapText = `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+    } else if (minutes > 0) {
+      gapText = `${minutes} ${minutes === 1 ? 'min' : 'mins'}`;
+    } else {
+      gapText = '< 1 min';
+    }
+    
     return {
       ...activity,
-      daysToNext
+      gapText,
+      gapDays: days
     };
   });
 
@@ -46,10 +65,10 @@ export default function ActivityTimeline({ activities }) {
             {/* Timeline dot */}
             <div className="absolute left-10.5 top-1.5 w-4 h-4 rounded-full bg-primary border-4 border-white shadow-md z-10" />
             
-            {/* Days gap display on the left line */}
-            {activity.daysToNext > 0 && index < activitiesWithGaps.length - 1 && (
-              <div className="absolute left-2 top-12 bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded-md shadow-sm">
-                {activity.daysToNext} {activity.daysToNext === 1 ? 'day' : 'days'}
+            {/* Gap display on the left line - ALWAYS SHOW IF NOT LAST */}
+            {activity.gapText && index < activitiesWithGaps.length - 1 && (
+              <div className="absolute left-1 top-14 bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded-md shadow-md whitespace-nowrap">
+                ↓ {activity.gapText}
               </div>
             )}
             
@@ -82,8 +101,8 @@ export default function ActivityTimeline({ activities }) {
                     <Calendar className="h-4 w-4" />
                     {format(new Date(activity.created_at), 'MMM d, yyyy')}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Time: {format(new Date(activity.created_at), 'h:mm a')}
+                  <p className="text-sm font-medium text-primary mt-1">
+                    {format(new Date(activity.created_at), 'h:mm a')}
                   </p>
                 </div>
               </div>
