@@ -805,7 +805,7 @@ async def get_location_analytics(current_user: dict = Depends(get_current_user))
     
     # Team locations
     team_locations = []
-    if current_user['role'] in ['admin', 'sales_manager']:
+    if current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'sales_manager']:
         users = await db.users.find(
             {},
             {'_id': 0, 'id': 1, 'name': 1, 'city': 1, 'state': 1, 'country': 1, 'territory': 1}
