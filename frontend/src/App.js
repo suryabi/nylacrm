@@ -11,6 +11,7 @@ import LeadDetail from './pages/LeadDetail';
 import AddEditLead from './pages/AddEditLead';
 import FollowUps from './pages/FollowUps';
 import Reports from './pages/Reports';
+import LocationAnalytics from './pages/LocationAnalytics';
 import TeamManagement from './pages/TeamManagement';
 import '@/App.css';
 
@@ -43,6 +44,7 @@ function App() {
           <Route path="/leads/:id/edit" element={<ProtectedRoute><AddEditLead /></ProtectedRoute>} />
           <Route path="/follow-ups" element={<ProtectedRoute><FollowUps /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+          <Route path="/locations" element={<ProtectedRoute><LocationAnalytics /></ProtectedRoute>} />
           <Route path="/team" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
         </Routes>
         <Toaster />
