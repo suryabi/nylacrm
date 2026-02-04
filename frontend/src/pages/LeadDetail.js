@@ -348,7 +348,7 @@ export default function LeadDetail() {
               {lead.estimated_value && (
                 <div>
                   <p className="text-muted-foreground">Estimated Value</p>
-                  <p className="font-medium">${lead.estimated_value.toLocaleString()}</p>
+                  <p className="font-medium">₹{lead.estimated_value.toLocaleString()}</p>
                 </div>
               )}
               <div>
