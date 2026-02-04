@@ -676,6 +676,126 @@ async def get_reports(current_user: dict = Depends(get_current_user)):
         'monthly_trends': monthly_data
     }
 
+@api_router.get("/analytics/locations")
+async def get_location_analytics(current_user: dict = Depends(get_current_user)):
+    # Build match stage based on role
+    match_stage = {} if current_user['role'] in ['admin', 'sales_manager'] else {'assigned_to': current_user['id']}
+    
+    # Leads by country
+    country_pipeline = [
+        {'$match': match_stage},
+        {'$group': {
+            '_id': {'$ifNull': ['$country', 'Unknown']},
+            'total_leads': {'$sum': 1},
+            'closed_won': {'$sum': {'$cond': [{'$eq': ['$status', 'closed_won']}, 1, 0]}},
+            'pipeline_value': {'$sum': '$estimated_value'}
+        }},
+        {'$sort': {'total_leads': -1}}
+    ]
+    country_results = await db.leads.aggregate(country_pipeline).to_list(100)
+    
+    # Leads by state/region
+    state_pipeline = [
+        {'$match': match_stage},
+        {'$group': {
+            '_id': {'$ifNull': ['$state', 'Unknown']},
+            'total_leads': {'$sum': 1},
+            'closed_won': {'$sum': {'$cond': [{'$eq': ['$status', 'closed_won']}, 1, 0]}},
+            'pipeline_value': {'$sum': '$estimated_value'}
+        }},
+        {'$sort': {'total_leads': -1}}
+    ]
+    state_results = await db.leads.aggregate(state_pipeline).to_list(100)
+    
+    # Leads by city
+    city_pipeline = [
+        {'$match': match_stage},
+        {'$group': {
+            '_id': {'$ifNull': ['$city', 'Unknown']},
+            'total_leads': {'$sum': 1},
+            'closed_won': {'$sum': {'$cond': [{'$eq': ['$status', 'closed_won']}, 1, 0]}},
+            'pipeline_value': {'$sum': '$estimated_value'}
+        }},
+        {'$sort': {'total_leads': -1}},
+        {'$limit': 20}  # Top 20 cities
+    ]
+    city_results = await db.leads.aggregate(city_pipeline).to_list(20)
+    
+    # Leads by region (business territory)
+    region_pipeline = [
+        {'$match': match_stage},
+        {'$group': {
+            '_id': {'$ifNull': ['$region', 'Unknown']},
+            'total_leads': {'$sum': 1},
+            'closed_won': {'$sum': {'$cond': [{'$eq': ['$status', 'closed_won']}, 1, 0]}},
+            'pipeline_value': {'$sum': '$estimated_value'}
+        }},
+        {'$sort': {'total_leads': -1}}
+    ]
+    region_results = await db.leads.aggregate(region_pipeline).to_list(100)
+    
+    # Team locations
+    team_locations = []
+    if current_user['role'] in ['admin', 'sales_manager']:
+        users = await db.users.find(
+            {},
+            {'_id': 0, 'id': 1, 'name': 1, 'city': 1, 'state': 1, 'country': 1, 'territory': 1}
+        ).to_list(100)
+        team_locations = [
+            {
+                'name': user['name'],
+                'city': user.get('city', 'Unknown'),
+                'state': user.get('state', 'Unknown'),
+                'country': user.get('country', 'Unknown'),
+                'territory': user.get('territory', 'Unknown')
+            }
+            for user in users
+        ]
+    
+    return {
+        'by_country': [
+            {
+                'country': item['_id'],
+                'total_leads': item['total_leads'],
+                'closed_won': item['closed_won'],
+                'pipeline_value': item['pipeline_value'] or 0,
+                'conversion_rate': round(item['closed_won'] / item['total_leads'] * 100, 2) if item['total_leads'] > 0 else 0
+            }
+            for item in country_results
+        ],
+        'by_state': [
+            {
+                'state': item['_id'],
+                'total_leads': item['total_leads'],
+                'closed_won': item['closed_won'],
+                'pipeline_value': item['pipeline_value'] or 0,
+                'conversion_rate': round(item['closed_won'] / item['total_leads'] * 100, 2) if item['total_leads'] > 0 else 0
+            }
+            for item in state_results
+        ],
+        'by_city': [
+            {
+                'city': item['_id'],
+                'total_leads': item['total_leads'],
+                'closed_won': item['closed_won'],
+                'pipeline_value': item['pipeline_value'] or 0,
+                'conversion_rate': round(item['closed_won'] / item['total_leads'] * 100, 2) if item['total_leads'] > 0 else 0
+            }
+            for item in city_results
+        ],
+        'by_region': [
+            {
+                'region': item['_id'],
+                'total_leads': item['total_leads'],
+                'closed_won': item['closed_won'],
+                'pipeline_value': item['pipeline_value'] or 0,
+                'conversion_rate': round(item['closed_won'] / item['total_leads'] * 100, 2) if item['total_leads'] > 0 else 0
+            }
+            for item in region_results
+        ],
+        'team_locations': team_locations
+    }
+
 # ============= INCLUDE ROUTER =============
 
 app.include_router(api_router)
