@@ -539,6 +539,67 @@ async def get_users(
     
     return users
 
+@api_router.get("/users/org-chart")
+async def get_org_chart(current_user: dict = Depends(get_current_user)):
+    """Get organizational hierarchy chart"""
+    users = await db.users.find({}, {'_id': 0, 'password': 0}).to_list(1000)
+    
+    # Convert datetime strings
+    for user in users:
+        if isinstance(user.get('created_at'), str):
+            user['created_at'] = datetime.fromisoformat(user['created_at'])
+    
+    # Build hierarchy
+    users_by_id = {user['id']: user for user in users}
+    
+    # Find root (CEO - no reports_to)
+    root = None
+    for user in users:
+        if not user.get('reports_to'):
+            root = user
+            break
+    
+    # Build tree structure
+    def build_tree(user_id):
+        user = users_by_id.get(user_id)
+        if not user:
+            return None
+        
+        # Find direct reports
+        direct_reports = [u for u in users if u.get('reports_to') == user_id]
+        
+        # Find dotted line reports
+        dotted_reports = [u for u in users if u.get('dotted_line_to') == user_id]
+        
+        node = {
+            'id': user['id'],
+            'name': user['name'],
+            'role': user['role'],
+            'designation': user.get('designation', user['role'].replace('_', ' ').title()),
+            'email': user['email'],
+            'phone': user.get('phone'),
+            'city': user.get('city'),
+            'state': user.get('state'),
+            'territory': user.get('territory'),
+            'direct_reports': [build_tree(r['id']) for r in direct_reports],
+            'dotted_line_reports': [
+                {
+                    'id': r['id'],
+                    'name': r['name'],
+                    'role': r['role'],
+                    'designation': r.get('designation', r['role'].replace('_', ' ').title())
+                }
+                for r in dotted_reports
+            ]
+        }
+        return node
+    
+    if root:
+        org_chart = build_tree(root['id'])
+        return {'org_chart': org_chart, 'total_employees': len(users)}
+    
+    return {'org_chart': None, 'total_employees': len(users), 'users': users}
+
 @api_router.put("/users/{user_id}")
 async def update_user(user_id: str, updates: dict, current_user: dict = Depends(get_current_user)):
     if current_user['role'] != 'admin':
