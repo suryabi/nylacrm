@@ -68,7 +68,7 @@ export default function ActivityTimeline({ activities }) {
             {/* Gap display on the left line - ALWAYS SHOW IF NOT LAST */}
             {activity.gapText && index < activitiesWithGaps.length - 1 && (
               <div className="absolute left-1 top-14 bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded-md shadow-md whitespace-nowrap">
-                ↓ {activity.gapText}
+                ↑ {activity.gapText}
               </div>
             )}
             
