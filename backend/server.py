@@ -630,6 +630,45 @@ async def get_org_chart(current_user: dict = Depends(get_current_user)):
     
     return {'org_chart': None, 'total_employees': len(users), 'users': users}
 
+@api_router.get("/config/locations")
+async def get_location_config():
+    """Get regions and cities mapping for India"""
+    locations = {
+        'country': 'India',
+        'regions': [
+            {
+                'name': 'North India',
+                'states': ['Delhi', 'Punjab', 'Haryana', 'Rajasthan', 'Uttar Pradesh', 'Uttarakhand', 'Himachal Pradesh', 'Jammu & Kashmir'],
+                'cities': ['Delhi NCR', 'Chandigarh', 'Jaipur', 'Lucknow', 'Agra', 'Amritsar', 'Dehradun']
+            },
+            {
+                'name': 'South India',
+                'states': ['Karnataka', 'Telangana', 'Andhra Pradesh', 'Tamil Nadu', 'Kerala'],
+                'cities': ['Bangalore', 'Hyderabad', 'Chennai', 'Kochi', 'Coimbatore', 'Visakhapatnam', 'Mysore']
+            },
+            {
+                'name': 'West India',
+                'states': ['Maharashtra', 'Gujarat', 'Goa', 'Madhya Pradesh'],
+                'cities': ['Mumbai', 'Pune', 'Goa', 'Ahmedabad', 'Surat', 'Nagpur', 'Indore', 'Nashik']
+            },
+            {
+                'name': 'East India',
+                'states': ['West Bengal', 'Odisha', 'Bihar', 'Jharkhand'],
+                'cities': ['Kolkata', 'Bhubaneswar', 'Patna', 'Ranchi', 'Siliguri']
+            }
+        ],
+        'skus': [
+            '24 Brand',
+            '660 ml Silver',
+            '660 ml Gold',
+            '330 ml Silver',
+            '330 ml Gold',
+            '660 Sparkling',
+            '330 Sparkling'
+        ]
+    }
+    return locations
+
 @api_router.put("/users/{user_id}")
 async def update_user(user_id: str, updates: dict, current_user: dict = Depends(get_current_user)):
     if current_user['role'] != 'admin':
