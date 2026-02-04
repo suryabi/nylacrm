@@ -344,6 +344,72 @@ export default function LeadDetail() {
 
         {/* Right Column - Activity Timeline */}
         <div className="space-y-6">
+          {/* Add Activity Button */}
+          <Card className="p-6">
+            <Button
+              onClick={() => setShowActivityForm(!showActivityForm)}
+              variant={showActivityForm ? 'outline' : 'default'}
+              className="w-full"
+              data-testid="toggle-activity-form"
+            >
+              {showActivityForm ? 'Cancel' : '+ Log Activity'}
+            </Button>
+          </Card>
+
+          {/* Activity Form */}
+          {showActivityForm && (
+            <Card className="p-6">
+              <h3 className="text-sm font-semibold mb-4">Log New Activity</h3>
+              <form onSubmit={handleAddActivity} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Interaction Method *</Label>
+                  <Select value={interactionMethod} onValueChange={setInteractionMethod}>
+                    <SelectTrigger data-testid="interaction-method-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="phone_call">Phone Call</SelectItem>
+                      <SelectItem value="customer_visit">Customer Visit</SelectItem>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                      <SelectItem value="sms">SMS</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Activity Type *</Label>
+                  <Select value={activityType} onValueChange={setActivityType}>
+                    <SelectTrigger data-testid="activity-type-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="call">Call</SelectItem>
+                      <SelectItem value="meeting">Meeting</SelectItem>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="visit">Visit</SelectItem>
+                      <SelectItem value="note">Note</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Description *</Label>
+                  <Textarea
+                    value={activityDescription}
+                    onChange={(e) => setActivityDescription(e.target.value)}
+                    placeholder="Describe what happened during this interaction..."
+                    rows={4}
+                    required
+                    data-testid="activity-description-input"
+                  />
+                </div>
+                <Button type="submit" disabled={submittingActivity} data-testid="submit-activity-button">
+                  {submittingActivity ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : 'Log Activity'}
+                </Button>
+              </form>
+            </Card>
+          )}
+
           <Card className="p-6">
             <h2 className="text-lg font-semibold mb-4">Activity Timeline</h2>
             <ActivityTimeline activities={activities} />
