@@ -1,60 +1,33 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
     :root {
-        --background: 0 0% 100%;
-        --foreground: 215 19% 35%;
-        --card: 0 0% 100%;
-        --card-foreground: 215 19% 35%;
-        --popover: 0 0% 100%;
-        --popover-foreground: 215 19% 35%;
-        --primary: 188 94% 35%;
+        --background: 40 30% 97%;
+        --background-secondary: 38 35% 94%;
+        --foreground: 25 15% 25%;
+        --foreground-muted: 25 10% 45%;
+        --card: 38 35% 94%;
+        --card-foreground: 25 15% 25%;
+        --popover: 38 35% 94%;
+        --popover-foreground: 25 15% 25%;
+        --primary: 155 35% 42%;
         --primary-foreground: 0 0% 100%;
-        --secondary: 210 20% 96%;
-        --secondary-foreground: 215 19% 35%;
-        --muted: 210 20% 96%;
-        --muted-foreground: 215 16% 47%;
-        --accent: 188 94% 43%;
-        --accent-foreground: 0 0% 100%;
+        --secondary: 38 35% 94%;
+        --secondary-foreground: 25 15% 25%;
+        --muted: 25 8% 60%;
+        --muted-foreground: 25 10% 45%;
+        --accent: 42 85% 65%;
+        --accent-foreground: 25 15% 25%;
         --destructive: 0 72% 60%;
         --destructive-foreground: 0 0% 100%;
-        --border: 214 20% 91%;
-        --input: 214 20% 91%;
-        --ring: 188 94% 35%;
-        --chart-1: 188 94% 35%;
-        --chart-2: 158 64% 39%;
-        --chart-3: 38 92% 50%;
-        --chart-4: 258 90% 66%;
-        --chart-5: 330 81% 60%;
-        --radius: 0.5rem;
-    }
-    .dark {
-        --background: 222 47% 11%;
-        --foreground: 210 20% 98%;
-        --card: 217 33% 17%;
-        --card-foreground: 210 20% 98%;
-        --popover: 217 33% 17%;
-        --popover-foreground: 210 20% 98%;
-        --primary: 188 94% 43%;
-        --primary-foreground: 222 47% 11%;
-        --secondary: 215 25% 27%;
-        --secondary-foreground: 210 20% 98%;
-        --muted: 215 25% 27%;
-        --muted-foreground: 215 20% 65%;
-        --accent: 188 94% 35%;
-        --accent-foreground: 210 20% 98%;
-        --destructive: 0 62% 50%;
-        --destructive-foreground: 210 20% 98%;
-        --border: 215 25% 27%;
-        --input: 215 25% 27%;
-        --ring: 188 94% 43%;
-        --chart-1: 188 94% 43%;
-        --chart-2: 158 64% 52%;
-        --chart-3: 38 92% 60%;
-        --chart-4: 258 90% 70%;
-        --chart-5: 330 81% 65%;
+        --border: 35 15% 88%;
+        --input: 35 15% 88%;
+        --ring: 155 35% 42%;
+        --radius: 0.75rem;
     }
 }
 
@@ -64,22 +37,22 @@
     }
     body {
         @apply bg-background text-foreground;
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     }
     h1, h2, h3, h4, h5, h6 {
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-family: 'Manrope', sans-serif;
     }
     .font-heading {
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-family: 'Manrope', sans-serif;
     }
     .font-subheading {
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-family: 'Work Sans', sans-serif;
     }
     .font-body {
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-family: 'IBM Plex Sans', sans-serif;
     }
     .font-mono {
-        font-family: 'Courier New', Courier, monospace;
+        font-family: 'IBM Plex Mono', monospace;
     }
 }
 
