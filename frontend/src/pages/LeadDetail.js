@@ -36,6 +36,13 @@ export default function LeadDetail() {
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+  
+  // Activity creation state
+  const [showActivityForm, setShowActivityForm] = useState(false);
+  const [activityType, setActivityType] = useState('call');
+  const [interactionMethod, setInteractionMethod] = useState('phone_call');
+  const [activityDescription, setActivityDescription] = useState('');
+  const [submittingActivity, setSubmittingActivity] = useState(false);
 
   useEffect(() => {
     fetchData();
