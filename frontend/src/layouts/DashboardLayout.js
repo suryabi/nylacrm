@@ -12,7 +12,8 @@ import {
   LogOut,
   Menu,
   X,
-  MapPin
+  MapPin,
+  FileText
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
