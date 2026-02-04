@@ -1,0 +1,871 @@
+{
+  "project_name": "Nyla Sales CRM",
+  "design_context": "Dashboard & SaaS Application",
+  "target_audience": "Sales teams, sales managers, executives at Nyla Air Water organization",
+  "emotional_tone": "Premium, Clean, Sustainable, Professional, Trustworthy",
+  "theme": "Light theme primary (with optional dark mode toggle)",
+  "brand_identity": {
+    "brand_name": "Nyla Air Water",
+    "brand_essence": "Luxury sustainable water brand with clean, elegant aesthetic emphasizing purity, innovation, and environmental responsibility",
+    "core_values": ["Health & Wellness", "Quality", "Sustainable Luxury", "Innovation"],
+    "visual_mood": "Premium minimalism with organic touches - think Apple meets sustainable luxury"
+  },
+  "typography": {
+    "philosophy": "Clean, professional hierarchy with subtle elegance",
+    "font_families": {
+      "headings": {
+        "family": "Outfit",
+        "weights": [300, 400, 500, 600, 700],
+        "usage": "Main headings, page titles, dashboard metrics",
+        "import": "@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');",
+        "rationale": "Modern geometric sans with clean lines that feel premium without being corporate. Lighter weights (300-400) for elegance, heavier weights (600-700) for impact."
+      },
+      "subheadings": {
+        "family": "Work Sans",
+        "weights": [400, 500, 600],
+        "usage": "Section headers, card titles, navigation labels",
+        "import": "@import url('https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&display=swap');",
+        "rationale": "Humanist sans that pairs beautifully with Outfit, adds warmth to the interface"
+      },
+      "body": {
+        "family": "Inter",
+        "weights": [400, 500, 600],
+        "usage": "Body text, form labels, table data, descriptions",
+        "import": "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');",
+        "rationale": "Exceptional readability for data-heavy interfaces, optimized for screens"
+      },
+      "mono": {
+        "family": "JetBrains Mono",
+        "weights": [400, 500],
+        "usage": "IDs, timestamps, technical data, code snippets",
+        "import": "@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');",
+        "rationale": "Professional monospace for technical precision"
+      }
+    },
+    "scale": {
+      "display": "text-6xl md:text-7xl (60px-72px) - Splash screen, hero moments",
+      "h1": "text-4xl md:text-5xl (36px-48px) - Page titles",
+      "h2": "text-3xl md:text-4xl (30px-36px) - Section headers",
+      "h3": "text-2xl md:text-3xl (24px-30px) - Card headers, widget titles",
+      "h4": "text-xl md:text-2xl (20px-24px) - Subsection headers",
+      "h5": "text-lg md:text-xl (18px-20px) - Small headers",
+      "body-large": "text-base md:text-lg (16px-18px) - Emphasis text",
+      "body": "text-sm md:text-base (14px-16px) - Standard body",
+      "body-small": "text-xs md:text-sm (12px-14px) - Captions, labels",
+      "overline": "text-xs uppercase tracking-[0.2em] - Labels, categories"
+    },
+    "letter_spacing": {
+      "headings_large": "tracking-tight or tracking-tighter for text > 32px",
+      "headings_normal": "tracking-normal for standard headings",
+      "body": "tracking-normal",
+      "labels": "tracking-wide or tracking-[0.2em] for uppercase labels"
+    },
+    "line_height": {
+      "headings": "leading-tight or leading-none (1.1-1.25)",
+      "body": "leading-relaxed (1.625)",
+      "captions": "leading-normal (1.5)"
+    }
+  },
+  "color_system": {
+    "archetype": "ORGANIC & EARTHY meets PREMIUM TECH",
+    "philosophy": "Inspired by Nyla's water-from-air technology - combine natural blues/teals (water, sky, purity) with warm earth tones (sustainability, trust) and crisp whites (premium, clean). Avoid generic SaaS blues.",
+    "palette": {
+      "primary": {
+        "name": "Ocean Teal",
+        "hex": "#0891B2",
+        "hsl": "188 94% 35%",
+        "usage": "Primary CTAs, active states, key metrics, progress indicators",
+        "rationale": "Deep teal evokes water purity and premium quality without being generic tech blue"
+      },
+      "primary_light": {
+        "name": "Sky Cyan",
+        "hex": "#06B6D4",
+        "hsl": "188 94% 43%",
+        "usage": "Hover states, highlights, secondary actions",
+        "rationale": "Lighter teal for interactive feedback"
+      },
+      "primary_dark": {
+        "name": "Deep Ocean",
+        "hex": "#0E7490",
+        "hsl": "188 89% 32%",
+        "usage": "Active/pressed states, dark mode primary",
+        "rationale": "Deeper teal for depth and contrast"
+      },
+      "secondary": {
+        "name": "Sage Green",
+        "hex": "#10B981",
+        "hsl": "158 64% 39%",
+        "usage": "Success states, positive metrics, growth indicators",
+        "rationale": "Natural green representing sustainability and growth"
+      },
+      "accent": {
+        "name": "Warm Sand",
+        "hex": "#F59E0B",
+        "hsl": "38 92% 50%",
+        "usage": "Warnings, pending states, attention markers",
+        "rationale": "Warm amber for organic warmth without aggression"
+      },
+      "neutral_base": {
+        "name": "Pure White",
+        "hex": "#FFFFFF",
+        "hsl": "0 0% 100%",
+        "usage": "Main background, card surfaces",
+        "rationale": "Clean premium feel"
+      },
+      "neutral_50": {
+        "name": "Cloud White",
+        "hex": "#F8FAFC",
+        "hsl": "210 20% 98%",
+        "usage": "Subtle backgrounds, hover states",
+        "rationale": "Tinted with blue for cohesion"
+      },
+      "neutral_100": {
+        "name": "Mist",
+        "hex": "#F1F5F9",
+        "hsl": "210 20% 96%",
+        "usage": "Secondary backgrounds, disabled states",
+        "rationale": "Soft neutral with blue undertone"
+      },
+      "neutral_200": {
+        "name": "Fog",
+        "hex": "#E2E8F0",
+        "hsl": "214 20% 91%",
+        "usage": "Borders, dividers, subtle separators",
+        "rationale": "Visible but gentle separation"
+      },
+      "neutral_300": {
+        "name": "Stone",
+        "hex": "#CBD5E1",
+        "hsl": "215 16% 84%",
+        "usage": "Inactive borders, placeholder text",
+        "rationale": "Medium contrast for secondary elements"
+      },
+      "neutral_400": {
+        "name": "Slate",
+        "hex": "#94A3B8",
+        "hsl": "215 20% 65%",
+        "usage": "Muted text, icons, secondary information",
+        "rationale": "Readable but de-emphasized"
+      },
+      "neutral_500": {
+        "name": "Steel",
+        "hex": "#64748B",
+        "hsl": "215 16% 47%",
+        "usage": "Body text, standard icons",
+        "rationale": "Primary text color with good contrast"
+      },
+      "neutral_600": {
+        "name": "Charcoal",
+        "hex": "#475569",
+        "hsl": "215 19% 35%",
+        "usage": "Headings, emphasized text",
+        "rationale": "Strong contrast for hierarchy"
+      },
+      "neutral_700": {
+        "name": "Graphite",
+        "hex": "#334155",
+        "hsl": "215 25% 27%",
+        "usage": "Primary headings, high emphasis",
+        "rationale": "Near-black with blue tint"
+      },
+      "neutral_800": {
+        "name": "Midnight",
+        "hex": "#1E293B",
+        "hsl": "217 33% 17%",
+        "usage": "Dark mode backgrounds, maximum contrast text",
+        "rationale": "Deep but not pure black"
+      },
+      "neutral_900": {
+        "name": "Obsidian",
+        "hex": "#0F172A",
+        "hsl": "222 47% 11%",
+        "usage": "Dark mode primary background",
+        "rationale": "Rich dark with blue undertone"
+      },
+      "error": {
+        "name": "Coral Red",
+        "hex": "#EF4444",
+        "hsl": "0 72% 60%",
+        "usage": "Error states, destructive actions, validation errors",
+        "rationale": "Clear error indication without harshness"
+      },
+      "warning": {
+        "name": "Amber",
+        "hex": "#F59E0B",
+        "hsl": "38 92% 50%",
+        "usage": "Warnings, caution states",
+        "rationale": "Warm attention-grabbing without alarm"
+      },
+      "info": {
+        "name": "Sky Blue",
+        "hex": "#3B82F6",
+        "hsl": "217 91% 60%",
+        "usage": "Informational messages, tips",
+        "rationale": "Friendly informational tone"
+      }
+    },
+    "chart_colors": {
+      "chart_1": {
+        "hex": "#0891B2",
+        "hsl": "188 94% 35%",
+        "name": "Ocean Teal"
+      },
+      "chart_2": {
+        "hex": "#10B981",
+        "hsl": "158 64% 39%",
+        "name": "Sage Green"
+      },
+      "chart_3": {
+        "hex": "#F59E0B",
+        "hsl": "38 92% 50%",
+        "name": "Warm Sand"
+      },
+      "chart_4": {
+        "hex": "#8B5CF6",
+        "hsl": "258 90% 66%",
+        "name": "Soft Purple"
+      },
+      "chart_5": {
+        "hex": "#EC4899",
+        "hsl": "330 81% 60%",
+        "name": "Rose Pink"
+      }
+    },
+    "css_variables": {
+      "light_mode": {
+        "--background": "0 0% 100%",
+        "--foreground": "215 19% 35%",
+        "--card": "0 0% 100%",
+        "--card-foreground": "215 19% 35%",
+        "--popover": "0 0% 100%",
+        "--popover-foreground": "215 19% 35%",
+        "--primary": "188 94% 35%",
+        "--primary-foreground": "0 0% 100%",
+        "--secondary": "210 20% 96%",
+        "--secondary-foreground": "215 19% 35%",
+        "--muted": "210 20% 96%",
+        "--muted-foreground": "215 16% 47%",
+        "--accent": "188 94% 43%",
+        "--accent-foreground": "0 0% 100%",
+        "--destructive": "0 72% 60%",
+        "--destructive-foreground": "0 0% 100%",
+        "--border": "214 20% 91%",
+        "--input": "214 20% 91%",
+        "--ring": "188 94% 35%",
+        "--chart-1": "188 94% 35%",
+        "--chart-2": "158 64% 39%",
+        "--chart-3": "38 92% 50%",
+        "--chart-4": "258 90% 66%",
+        "--chart-5": "330 81% 60%",
+        "--radius": "0.5rem"
+      },
+      "dark_mode": {
+        "--background": "222 47% 11%",
+        "--foreground": "210 20% 98%",
+        "--card": "217 33% 17%",
+        "--card-foreground": "210 20% 98%",
+        "--popover": "217 33% 17%",
+        "--popover-foreground": "210 20% 98%",
+        "--primary": "188 94% 43%",
+        "--primary-foreground": "222 47% 11%",
+        "--secondary": "215 25% 27%",
+        "--secondary-foreground": "210 20% 98%",
+        "--muted": "215 25% 27%",
+        "--muted-foreground": "215 20% 65%",
+        "--accent": "188 94% 35%",
+        "--accent-foreground": "210 20% 98%",
+        "--destructive": "0 62% 50%",
+        "--destructive-foreground": "210 20% 98%",
+        "--border": "215 25% 27%",
+        "--input": "215 25% 27%",
+        "--ring": "188 94% 43%",
+        "--chart-1": "188 94% 43%",
+        "--chart-2": "158 64% 52%",
+        "--chart-3": "38 92% 60%",
+        "--chart-4": "258 90% 70%",
+        "--chart-5": "330 81% 65%"
+      }
+    },
+    "contrast_requirements": {
+      "normal_text": "Minimum 4.5:1 contrast ratio (WCAG AA)",
+      "large_text": "Minimum 3:1 contrast ratio (18px+ or 14px+ bold)",
+      "interactive_elements": "Minimum 3:1 against adjacent colors",
+      "hover_states": "MUST explicitly set text color - never rely on inheritance",
+      "focus_states": "MUST have HIGHER contrast than default state",
+      "text_over_images": "Use text shadow or gradient overlays to ensure readability"
+    }
+  },
+  "spacing_system": {
+    "philosophy": "Generous spacing (2-3x typical designs) for premium feel and breathing room",
+    "scale": {
+      "xs": "0.25rem (4px) - Tight internal spacing",
+      "sm": "0.5rem (8px) - Small gaps",
+      "base": "1rem (16px) - Standard spacing",
+      "md": "1.5rem (24px) - Medium spacing",
+      "lg": "2rem (32px) - Large spacing",
+      "xl": "3rem (48px) - Extra large spacing",
+      "2xl": "4rem (64px) - Section spacing",
+      "3xl": "6rem (96px) - Major section breaks",
+      "4xl": "8rem (128px) - Hero spacing"
+    },
+    "component_padding": {
+      "buttons": "px-6 py-3 (medium), px-8 py-4 (large)",
+      "cards": "p-6 md:p-8 (standard), p-8 md:p-12 (featured)",
+      "containers": "px-4 md:px-6 lg:px-8 (responsive)",
+      "sections": "py-12 md:py-16 lg:py-24 (vertical rhythm)",
+      "bordered_containers": "MUST have internal padding (p-6 or p-8) to prevent text collision"
+    },
+    "gaps": {
+      "tight": "gap-2 md:gap-3 (8px-12px) - Dense lists",
+      "normal": "gap-4 md:gap-6 (16px-24px) - Standard grids",
+      "relaxed": "gap-6 md:gap-8 (24px-32px) - Comfortable spacing",
+      "loose": "gap-8 md:gap-12 (32px-48px) - Generous spacing"
+    }
+  },
+  "layout_strategy": {
+    "grid_system": "MODE B: High Density Grid (Dashboard/Analytics focus)",
+    "base_grid": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4",
+    "gap_strategy": "Tight to Normal (gap-4 to gap-6)",
+    "span_logic": {
+      "summary_widgets": "col-span-1 (Single metric cards)",
+      "primary_charts": "col-span-2 row-span-2 or col-span-3 (Main visualizations)",
+      "activity_feeds": "col-span-1 row-span-2 (Tall narrow lists)",
+      "full_width": "col-span-full (Tables, detailed views)"
+    },
+    "alignment_rules": {
+      "mobile_first": "Always start with grid-cols-1",
+      "grid_children": "Grid items MUST be direct children of grid container",
+      "stretch_behavior": "Override default stretch with align-items: start, add align-self: stretch to individual items",
+      "optical_alignment": "Add extra padding for visual centering when elements have icons"
+    },
+    "responsive_breakpoints": {
+      "sm": "640px - Small tablets",
+      "md": "768px - Tablets",
+      "lg": "1024px - Laptops",
+      "xl": "1280px - Desktops",
+      "2xl": "1536px - Large screens"
+    }
+  },
+  "component_strategy": {
+    "philosophy": "Use Shadcn/UI for interactive logic, customize heavily for brand",
+    "shadcn_components": {
+      "use_always": [
+        "Button",
+        "Input",
+        "Select",
+        "Dropdown Menu",
+        "Dialog",
+        "Calendar",
+        "Form",
+        "Checkbox",
+        "Radio Group",
+        "Switch",
+        "Tabs",
+        "Table",
+        "Toast (Sonner)",
+        "Popover",
+        "Command",
+        "Sheet",
+        "Alert Dialog"
+      ],
+      "customize_heavily": "All Shadcn components MUST be customized with brand colors, spacing, and typography",
+      "avoid_default_look": "Strip the 'Vercel-look' via Tailwind customization"
+    },
+    "custom_components": {
+      "use_for": [
+        "Dashboard layouts",
+        "Metric cards",
+        "Activity timelines",
+        "Lead status pipelines",
+        "Custom charts (use Recharts or Shadcn Chart components)"
+      ]
+    },
+    "card_usage": {
+      "avoid_overuse": "Don't use card component everywhere - go cardless, rectangular, dense styles",
+      "when_to_use": "Use cards for distinct, elevated content blocks",
+      "alternatives": "Flat backgrounds with 1px subtle borders, no shadows"
+    }
+  },
+  "surface_treatments": {
+    "primary_style": "GLASSMORPHISM (Crystal Variant)",
+    "glassmorphism": {
+      "usage": "Sticky headers, floating navigation, modal overlays, dropdown menus",
+      "implementation": {
+        "background": "bg-white/70 (light) or bg-neutral-900/60 (dark)",
+        "blur": "backdrop-blur-xl or backdrop-blur-2xl",
+        "saturation": "backdrop-saturate-150 (Apple secret for color pop)",
+        "border": "border border-white/40 (light) or border-white/10 (dark) - MANDATORY",
+        "shadow": "shadow-sm or shadow-[0_8px_32px_rgba(0,0,0,0.12)]"
+      },
+      "rationale": "Premium feel, separates overlays from content, maintains visual hierarchy"
+    },
+    "flat_surfaces": {
+      "usage": "Dashboard cards, data tables, form containers",
+      "implementation": {
+        "background": "bg-white (light) or bg-neutral-800 (dark)",
+        "border": "border border-neutral-200 (light) or border-neutral-700 (dark)",
+        "shadow": "None or shadow-sm on hover",
+        "hover": "Slight lift (-translate-y-1), shadow-lg, border color darkens"
+      },
+      "rationale": "Clean, professional, data-focused"
+    },
+    "header_nav": {
+      "style": "Crystal Glass with solid fallback",
+      "scrolled_state": "bg-white/80 backdrop-blur-xl border-b border-neutral-200/50",
+      "top_state": "bg-transparent backdrop-blur-md (if over content) or bg-white (if solid)"
+    },
+    "footer": {
+      "contrast_shift": "If body is light, footer should be neutral-50 or neutral-100",
+      "spacing": "py-16 md:py-20 lg:py-24 (generous vertical space)",
+      "typography": "Footer links can be small, but include one large element (logo or CTA)"
+    }
+  },
+  "motion_and_interactions": {
+    "philosophy": "Micro-interactions for feedback and delight, not distraction",
+    "required_animations": [
+      "Hover states (all interactive elements)",
+      "Click/press states",
+      "Focus states (accessibility)",
+      "Entrance animations (staggered for lists)",
+      "Transition effects (smooth state changes)"
+    ],
+    "implementation": {
+      "specific_properties": "Use specific properties for transitions (NOT transition: all)",
+      "example": "transition: transform 0.2s ease, opacity 0.2s ease, background-color 0.2s ease",
+      "exclude_transforms": "Never include transform in universal transitions (breaks animations)"
+    },
+    "hover_effects": {
+      "buttons": "Scale slightly (scale-105), shadow increase, color shift",
+      "cards": "Lift (-translate-y-1), shadow-lg, border color change",
+      "links": "Underline animation, color shift",
+      "icons": "Rotate, scale, or color change"
+    },
+    "loading_states": {
+      "skeleton": "Use Shadcn Skeleton component with pulse animation",
+      "spinners": "Subtle, brand-colored, small size",
+      "progress": "Use Shadcn Progress component with smooth animation"
+    },
+    "accessibility": {
+      "prefers_reduced_motion": "MUST respect prefers-reduced-motion media query",
+      "decorative_elements": "Add aria-hidden='true' to purely decorative animations",
+      "focus_management": "Animations should not interfere with keyboard navigation"
+    }
+  },
+  "icons_and_assets": {
+    "icon_library": "lucide-react (default, already installed)",
+    "icon_style": "Outline style, 24px default size, stroke-width: 2",
+    "icon_colors": {
+      "default": "text-neutral-500",
+      "active": "text-primary",
+      "muted": "text-neutral-400",
+      "emphasis": "text-neutral-700"
+    },
+    "icon_usage": {
+      "navigation": "16px-20px icons",
+      "buttons": "20px-24px icons",
+      "feature_highlights": "32px-48px icons",
+      "empty_states": "64px-96px icons"
+    },
+    "image_assets": {
+      "team_photos": [
+        {
+          "url": "https://images.unsplash.com/photo-1758518732175-5d608ba3abdf?crop=entropy&cs=srgb&fm=jpg&q=85",
+          "description": "Business team meeting - diverse professionals collaborating",
+          "usage": "Team page, about section, testimonials"
+        },
+        {
+          "url": "https://images.unsplash.com/photo-1760346546771-a81d986459ff?crop=entropy&cs=srgb&fm=jpg&q=85",
+          "description": "Three professionals in discussion with laptops",
+          "usage": "Collaboration features, team dashboard"
+        },
+        {
+          "url": "https://images.unsplash.com/photo-1758518731706-be5d5230e5a5?crop=entropy&cs=srgb&fm=jpg&q=85",
+          "description": "Diverse business team in modern office",
+          "usage": "Hero sections, team management pages"
+        }
+      ],
+      "brand_visuals": [
+        {
+          "url": "https://images.unsplash.com/photo-1769701282262-ea008aa5833a?crop=entropy&cs=srgb&fm=jpg&q=85",
+          "description": "Ripples on dark water surface - abstract water texture",
+          "usage": "Splash screen background, hero backgrounds, section dividers"
+        },
+        {
+          "url": "https://images.unsplash.com/photo-1603143008349-faac17101479?crop=entropy&cs=srgb&fm=jpg&q=85",
+          "description": "Water droplets on glass - purity and clarity",
+          "usage": "Login page background, empty states, decorative elements"
+        }
+      ],
+      "image_constraints": {
+        "mobile_height": "max-h-[80vh] md:max-h-none",
+        "aspect_ratios": "16:9 for hero images, 1:1 for avatars, 4:3 for cards",
+        "optimization": "Use Unsplash's crop and quality parameters for performance"
+      }
+    }
+  },
+  "data_visualization": {
+    "chart_library": "Recharts (via Shadcn Chart components)",
+    "chart_types": {
+      "line_charts": "Sales trends, lead conversion over time",
+      "bar_charts": "Lead status distribution, team performance comparison",
+      "area_charts": "Pipeline value over time, cumulative metrics",
+      "pie_donut_charts": "Lead source breakdown, status distribution",
+      "radial_charts": "Goal completion, performance scores"
+    },
+    "chart_styling": {
+      "colors": "Use chart_colors from color system",
+      "grid": "Subtle grid lines (stroke: neutral-200)",
+      "axes": "Clean, minimal labels",
+      "tooltips": "Glassmorphic style with backdrop-blur",
+      "legends": "Horizontal below chart, or vertical right side"
+    },
+    "accessibility": {
+      "color_blind_friendly": "Use patterns or textures in addition to colors",
+      "contrast": "Ensure chart colors meet WCAG AA standards",
+      "labels": "Always include clear axis labels and legends"
+    }
+  },
+  "page_specific_guidelines": {
+    "splash_screen": {
+      "duration": "2-3 seconds",
+      "background": "Gradient from primary to primary-dark with water ripple image overlay",
+      "logo": "Nyla Air Water logo (large, centered)",
+      "animation": "Fade in logo, subtle scale animation, fade out to login",
+      "text": "Optional tagline: 'Sustainable Luxury Hydration' or 'Pure. Pristine. Perfection.'",
+      "implementation": "Use framer-motion for smooth animations"
+    },
+    "login_authentication": {
+      "layout": "Split screen - left: brand visual (water droplets), right: form",
+      "form_style": "Clean, minimal, glassmorphic card on right side",
+      "inputs": "Shadcn Input components with icons (email, lock)",
+      "cta": "Primary button 'Sign In', secondary link 'Forgot Password?'",
+      "branding": "Small Nyla logo top-left, tagline below form"
+    },
+    "dashboard": {
+      "layout": "Sidebar navigation (left), main content area (right), top header",
+      "widgets": [
+        "Total Leads (number + trend)",
+        "Conversion Rate (percentage + chart)",
+        "Pipeline Value (currency + progress)",
+        "Follow-ups Today (number + list preview)",
+        "Recent Activity (timeline)",
+        "Lead Status Distribution (donut chart)",
+        "Team Performance (bar chart)",
+        "Monthly Trends (line chart)"
+      ],
+      "grid": "4-column grid on desktop, 1-column on mobile",
+      "spacing": "gap-6 between widgets",
+      "widget_style": "Flat white cards with subtle border, no shadow (shadow on hover)"
+    },
+    "leads_list": {
+      "layout": "Full-width table with filters and search",
+      "filters": "Status, Assigned To, Date Range, Lead Source",
+      "search": "Real-time search by name, email, company",
+      "table_columns": ["Name", "Company", "Status", "Assigned To", "Last Contact", "Next Follow-up", "Actions"],
+      "row_actions": "View, Edit, Delete (dropdown menu)",
+      "pagination": "Bottom of table, show 25/50/100 per page",
+      "empty_state": "Friendly illustration + 'No leads yet. Add your first lead!' + CTA button"
+    },
+    "lead_detail": {
+      "layout": "Two-column - left: lead info, right: activity timeline",
+      "sections": [
+        "Contact Information (name, email, phone, company)",
+        "Lead Status (visual pipeline with current stage highlighted)",
+        "Assigned Sales Rep (avatar + name)",
+        "Lead Source",
+        "Notes/Comments (threaded, newest first)",
+        "Activity Timeline (calls, emails, meetings with timestamps)",
+        "Follow-up Reminders (upcoming, with edit/complete actions)"
+      ],
+      "actions": "Edit Lead, Change Status, Schedule Follow-up, Add Note, Delete Lead",
+      "style": "Clean cards for each section, generous spacing"
+    },
+    "add_edit_lead": {
+      "layout": "Centered form, max-width 600px",
+      "form_sections": [
+        "Contact Details (name, email, phone, company)",
+        "Lead Information (status, source, assigned to)",
+        "Initial Notes (textarea)"
+      ],
+      "validation": "Real-time validation with error messages",
+      "actions": "Save Lead (primary), Cancel (secondary)",
+      "style": "Shadcn Form components, clean layout, clear labels"
+    },
+    "follow_up_calendar": {
+      "layout": "Calendar view (month/week/day toggle) + upcoming list",
+      "calendar": "Shadcn Calendar component, customized with brand colors",
+      "events": "Follow-up reminders shown as colored dots/badges on dates",
+      "list_view": "Upcoming follow-ups sorted by date, with lead name and action",
+      "actions": "Click date to add follow-up, click event to view/edit/complete",
+      "filters": "Filter by assigned rep, status, priority"
+    },
+    "reports_analytics": {
+      "layout": "Grid of report cards + detailed charts",
+      "reports": [
+        "Lead Conversion Funnel (visual funnel chart)",
+        "Sales Pipeline Overview (stacked bar chart)",
+        "Team Performance Metrics (comparison table + bar chart)",
+        "Lead Source Analysis (pie chart + table)",
+        "Time to Close (average days, trend line)",
+        "Activity Summary (calls, emails, meetings counts)"
+      ],
+      "filters": "Date range, team member, lead status",
+      "export": "Export to PDF/CSV buttons",
+      "style": "Large charts, clear labels, interactive tooltips"
+    },
+    "team_management": {
+      "layout": "Table of team members + add/edit modal",
+      "columns": ["Name", "Email", "Role", "Leads Assigned", "Status", "Actions"],
+      "roles": "Admin, Sales Manager, Sales Rep",
+      "actions": "Edit, Deactivate, Reset Password",
+      "add_member": "Modal with form (name, email, role)",
+      "permissions": "Only visible to Admin role"
+    },
+    "user_profile_settings": {
+      "layout": "Tabs - Profile, Preferences, Security",
+      "profile_tab": "Edit name, email, phone, avatar upload",
+      "preferences_tab": "Notification settings, theme toggle (light/dark), language",
+      "security_tab": "Change password, two-factor authentication",
+      "style": "Clean form layout, Shadcn components"
+    }
+  },
+  "responsive_design": {
+    "mobile_first": "Always design for mobile first, then scale up",
+    "breakpoint_strategy": {
+      "mobile": "320px-639px - Single column, stacked layout, hamburger menu",
+      "tablet": "640px-1023px - 2-column grids, collapsible sidebar",
+      "laptop": "1024px-1279px - 3-4 column grids, persistent sidebar",
+      "desktop": "1280px+ - Full layout, maximum content width 1536px"
+    },
+    "navigation": {
+      "mobile": "Bottom tab bar or hamburger menu",
+      "tablet": "Collapsible sidebar (icon + label)",
+      "desktop": "Persistent sidebar (full width with icons + labels)"
+    },
+    "tables": {
+      "mobile": "Card-based layout (stack rows as cards)",
+      "tablet": "Horizontal scroll with sticky first column",
+      "desktop": "Full table layout"
+    },
+    "forms": {
+      "mobile": "Single column, full-width inputs",
+      "tablet": "2-column for short inputs (first name, last name)",
+      "desktop": "2-3 column layout for efficiency"
+    }
+  },
+  "accessibility": {
+    "wcag_level": "WCAG 2.1 AA compliance minimum",
+    "color_contrast": "4.5:1 for normal text, 3:1 for large text",
+    "keyboard_navigation": "All interactive elements must be keyboard accessible",
+    "focus_indicators": "Clear, high-contrast focus rings on all interactive elements",
+    "aria_labels": "Proper ARIA labels for screen readers",
+    "semantic_html": "Use semantic HTML5 elements (nav, main, section, article, aside)",
+    "alt_text": "Descriptive alt text for all images",
+    "form_labels": "Visible labels for all form inputs",
+    "error_messages": "Clear, descriptive error messages with suggestions",
+    "skip_links": "Skip to main content link for keyboard users"
+  },
+  "testing_attributes": {
+    "data_testid": "All interactive and key informational elements MUST include data-testid attribute",
+    "convention": "kebab-case, role-based (NOT appearance-based)",
+    "examples": [
+      "data-testid='login-form-submit-button'",
+      "data-testid='lead-list-search-input'",
+      "data-testid='dashboard-total-leads-widget'",
+      "data-testid='lead-detail-edit-button'",
+      "data-testid='follow-up-calendar-view'"
+    ],
+    "applies_to": [
+      "Buttons",
+      "Links",
+      "Form inputs",
+      "Menus",
+      "Error messages",
+      "Key metrics",
+      "Confirmation text"
+    ]
+  },
+  "performance": {
+    "image_optimization": "Use Unsplash's crop and quality parameters, lazy load images",
+    "code_splitting": "Lazy load routes and heavy components",
+    "bundle_size": "Monitor and optimize bundle size, use tree-shaking",
+    "caching": "Implement proper caching strategies for API calls",
+    "loading_states": "Always show loading states for async operations"
+  },
+  "component_paths": {
+    "shadcn_ui": "/app/frontend/src/components/ui/",
+    "available_components": [
+      "accordion.jsx",
+      "alert-dialog.jsx",
+      "alert.jsx",
+      "avatar.jsx",
+      "badge.jsx",
+      "button.jsx",
+      "calendar.jsx",
+      "card.jsx",
+      "checkbox.jsx",
+      "dialog.jsx",
+      "dropdown-menu.jsx",
+      "form.jsx",
+      "input.jsx",
+      "label.jsx",
+      "popover.jsx",
+      "select.jsx",
+      "separator.jsx",
+      "sheet.jsx",
+      "sonner.jsx (toast)",
+      "switch.jsx",
+      "table.jsx",
+      "tabs.jsx",
+      "textarea.jsx",
+      "tooltip.jsx"
+    ]
+  },
+  "instructions_to_main_agent": {
+    "critical_rules": [
+      "DO NOT use complete transparent backgrounds in headers, overlays, or any surface with content underneath",
+      "ALWAYS explicitly set text color on hover states - never rely on inheritance",
+      "MUST add data-testid attributes to all interactive elements",
+      "Use Shadcn components for forms, dialogs, dropdowns - NOT native HTML",
+      "Customize Shadcn components heavily - strip default Vercel look",
+      "Follow generous spacing philosophy - 2-3x typical designs",
+      "Grid items MUST be direct children of grid containers",
+      "Respect prefers-reduced-motion for accessibility",
+      "Use specific properties for transitions, NOT transition: all",
+      "Containers with borders MUST have internal padding"
+    ],
+    "design_philosophy": [
+      "Premium minimalism with organic touches",
+      "Clean, professional, trustworthy",
+      "Data-focused but not cold",
+      "Sustainable luxury aesthetic",
+      "Generous spacing for breathing room",
+      "Subtle animations for delight",
+      "Accessibility first"
+    ],
+    "implementation_order": [
+      "1. Set up color system in index.css (CSS variables)",
+      "2. Import Google Fonts (Outfit, Work Sans, Inter, JetBrains Mono)",
+      "3. Create Splash Screen component",
+      "4. Create Login/Authentication page",
+      "5. Create Dashboard layout (sidebar + header + main content)",
+      "6. Create Dashboard widgets (metrics, charts, activity feed)",
+      "7. Create Leads List page (table with filters)",
+      "8. Create Lead Detail page (info + timeline)",
+      "9. Create Add/Edit Lead form",
+      "10. Create Follow-up Calendar",
+      "11. Create Reports & Analytics page",
+      "12. Create Team Management page (admin only)",
+      "13. Create User Profile/Settings page",
+      "14. Add responsive navigation (mobile hamburger, desktop sidebar)",
+      "15. Implement dark mode toggle",
+      "16. Add loading states and error handling",
+      "17. Test accessibility and keyboard navigation",
+      "18. Optimize performance and bundle size"
+    ],
+    "key_libraries": {
+      "already_installed": [
+        "react",
+        "react-router-dom",
+        "tailwindcss",
+        "shadcn/ui components",
+        "lucide-react (icons)",
+        "sonner (toasts)"
+      ],
+      "need_to_install": [
+        "framer-motion (animations)",
+        "recharts (charts)",
+        "date-fns (date formatting)",
+        "react-hook-form (form handling)",
+        "zod (form validation)"
+      ],
+      "installation_commands": [
+        "yarn add framer-motion",
+        "yarn add recharts",
+        "yarn add date-fns",
+        "yarn add react-hook-form",
+        "yarn add zod @hookform/resolvers"
+      ]
+    },
+    "file_structure": {
+      "pages": "/app/frontend/src/pages/ (SplashScreen.js, Login.js, Dashboard.js, LeadsList.js, LeadDetail.js, AddEditLead.js, FollowUpCalendar.js, Reports.js, TeamManagement.js, UserProfile.js)",
+      "components": "/app/frontend/src/components/ (Sidebar.js, Header.js, MetricCard.js, ActivityTimeline.js, LeadStatusPipeline.js, etc.)",
+      "layouts": "/app/frontend/src/layouts/ (DashboardLayout.js, AuthLayout.js)",
+      "utils": "/app/frontend/src/utils/ (api.js, formatters.js, validators.js)",
+      "hooks": "/app/frontend/src/hooks/ (useAuth.js, useLeads.js, useAnalytics.js)",
+      "context": "/app/frontend/src/context/ (AuthContext.js, ThemeContext.js)"
+    }
+  },
+  "universal_ui_ux_guidelines": {
+    "anti_patterns": [
+      "DO NOT center-align all content (disrupts natural reading flow)",
+      "DO NOT use universal transitions (transition: all breaks transforms)",
+      "DO NOT use AI emoji characters for icons",
+      "DO NOT use purple or teal for CTAs by default",
+      "DO NOT use Inter for headings (only body text)",
+      "DO NOT overuse card components (go flat, rectangular, dense)",
+      "DO NOT use complete transparent backgrounds without blur or scrim"
+    ],
+    "pro_patterns": [
+      "Use generous spacing (2-3x typical)",
+      "Layer design elements with z-index hierarchy for depth",
+      "Use glassmorphism for overlays (12-24px blur + saturation boost)",
+      "Add micro-animations to all interactive elements",
+      "Use modern button styles (pill-shaped or sharp with animations)",
+      "Customize scrollbars (no default gutter)",
+      "Use text shadows for text over images",
+      "Implement skeleton loading states",
+      "Add hover states with explicit color changes",
+      "Use optical alignment over geometric alignment"
+    ],
+    "component_reuse": [
+      "Prioritize using pre-existing Shadcn components",
+      "Create new components matching existing style and conventions",
+      "Examine existing components before creating new ones"
+    ],
+    "export_conventions": [
+      "Components: Use named exports (export const ComponentName = ...)",
+      "Pages: Use default exports (export default function PageName() {...})"
+    ],
+    "toast_notifications": [
+      "Use sonner for all toast notifications",
+      "Sonner component located at /app/frontend/src/components/ui/sonner.jsx",
+      "Import: import { toast } from 'sonner'",
+      "Usage: toast.success('Lead created!'), toast.error('Failed to save')"
+    ]
+  },
+  "brand_voice": {
+    "tone": "Professional, trustworthy, innovative, sustainable",
+    "messaging": [
+      "Emphasize purity, clarity, and precision (like water from air)",
+      "Use clean, concise language",
+      "Avoid jargon, be accessible",
+      "Highlight sustainability and innovation",
+      "Be helpful and supportive (not pushy)"
+    ],
+    "microcopy": {
+      "empty_states": "Friendly and encouraging (e.g., 'No leads yet. Let's add your first one!')",
+      "error_messages": "Clear and actionable (e.g., 'Email is required. Please enter a valid email address.')",
+      "success_messages": "Positive and brief (e.g., 'Lead created successfully!')",
+      "button_labels": "Action-oriented (e.g., 'Add Lead', 'Schedule Follow-up', 'View Details')"
+    }
+  },
+  "design_references": {
+    "inspiration_sources": [
+      "Nyla Air Water website (nylaairwater.earth) - Brand aesthetic, colors, typography",
+      "Modern minimal dashboards - Clean interfaces, ample white space, intuitive data viz",
+      "Luxury sustainable brands - Premium feel with eco-conscious design",
+      "SaaS CRM platforms - Functional layouts, clear hierarchy, efficient workflows"
+    ],
+    "key_takeaways": [
+      "Use 1px borders with 10-20% opacity for subtle separation",
+      "Floating nav bars with backdrop-blur for premium feel",
+      "Ample white space and generous padding for luxury aesthetic",
+      "Color-coded status indicators for quick scanning",
+      "Interactive charts with smooth animations",
+      "Card-based layouts with subtle hover effects",
+      "Clean typography with clear hierarchy",
+      "Responsive grids that adapt gracefully"
+    ]
+  }
+}
