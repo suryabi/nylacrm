@@ -47,8 +47,9 @@ export default function Login() {
           }}
         />
         <div className="relative z-10 text-center px-8">
-          <h1 className="text-5xl font-light text-white mb-4">Nyla Sales CRM</h1>
-          <p className="text-xl text-white/90 font-light">Track leads, close deals, grow revenue</p>
+          <img src={NYLA_LOGO} alt="Nyla Air Water" className="h-20 mx-auto mb-6" />
+          <h1 className="text-4xl font-light text-white mb-4">Sales CRM</h1>
+          <p className="text-lg text-white/90 font-light">Track leads, close deals, grow revenue</p>
         </div>
       </div>
 
