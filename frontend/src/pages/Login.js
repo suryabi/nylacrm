@@ -11,8 +11,8 @@ import { motion } from 'framer-motion';
 export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('admin@nyla.com');
+  const [password, setPassword] = useState('admin123');
   const [loading, setLoading] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
 
