@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import ActivityTimeline from '../components/ActivityTimeline';
+import TimelineSummaryCompact from '../components/TimelineSummaryCompact';
 
 const statusColors = {
   new: 'bg-blue-100 text-blue-800',
