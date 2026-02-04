@@ -335,29 +335,36 @@ export default function DailyStatusUpdate() {
         )}
       </Button>
 
-      {/* Section 1: Yesterday's Updates */}
+      {/* Section 1: Yesterday's Updates / Today's Updates / Date-specific */}
       <StatusSection
-        title="Yesterday's Updates"
+        title={firstSectionTitle}
         value={yesterdayUpdates}
         onChange={setYesterdayUpdates}
         onRevise={() => reviseSection(yesterdayUpdates, setRevisingYesterday, setYesterdayUpdates, setYesterdayOriginal, setYesterdayRevised)}
         onUndo={() => undoSection(yesterdayOriginal, setYesterdayUpdates, setYesterdayRevised)}
         isRevised={yesterdayRevised}
         isRevising={revisingYesterday}
-        placeholder="What did you accomplish yesterday? Meetings, client visits, deals closed..."
+        placeholder={isToday ? "What did you accomplish today? Meetings, client visits, deals closed..." : "What did you accomplish on this day? Meetings, client visits, deals closed..."}
       />
 
-      {/* Section 2: Today's Action Items & Follow-ups */}
-      <StatusSection
-        title="Today's Action Items & Follow-ups"
-        value={todayActions}
-        onChange={setTodayActions}
-        onRevise={() => reviseSection(todayActions, setRevisingToday, setTodayActions, setTodayOriginal, setTodayRevised)}
-        onUndo={() => undoSection(todayOriginal, setTodayActions, setTodayRevised)}
-        isRevised={todayRevised}
-        isRevising={revisingToday}
-        placeholder="What are your plans for today? Follow-ups scheduled, client meetings, proposals to send..."
-      />
+      {/* Section 2: Today's / Tomorrow's Action Items (Disabled for past dates) */}
+      {!secondSectionDisabled ? (
+        <StatusSection
+          title={secondSectionTitle}
+          value={todayActions}
+          onChange={setTodayActions}
+          onRevise={() => reviseSection(todayActions, setRevisingToday, setTodayActions, setTodayOriginal, setTodayRevised)}
+          onUndo={() => undoSection(todayOriginal, setTodayActions, setTodayRevised)}
+          isRevised={todayRevised}
+          isRevising={revisingToday}
+          placeholder={isToday ? "What are your plans for tomorrow? Follow-ups scheduled, client meetings, proposals to send..." : "What are your plans for today? Follow-ups scheduled, client meetings, proposals to send..."}
+        />
+      ) : (
+        <Card className="p-5 bg-muted/30">
+          <p className="text-sm font-semibold text-muted-foreground mb-2">{secondSectionTitle}</p>
+          <p className="text-sm text-muted-foreground italic">Action items not available for past dates</p>
+        </Card>
+      )}
 
       {/* Section 3: Help Needed from Team */}
       <StatusSection
