@@ -306,6 +306,22 @@ export default function DailyStatusUpdate() {
       <Button
         type="button"
         variant="outline"
+        className="w-full h-14 text-base font-medium border-dashed"
+        onClick={handleFetchFromActivities}
+        disabled={loading}
+        data-testid="fetch-activities-button"
+      >
+        {loading ? (
+          <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Loading activities...</>
+        ) : (
+          <><Download className="h-5 w-5 mr-2" /> Fetch from Lead Activities</>
+        )}
+      </Button>
+
+      {/* Fetch from Lead Activities Button */}
+      <Button
+        type="button"
+        variant="outline"
         className="w-full h-14 text-base font-medium border-2 border-dashed"
         onClick={handleFetchFromActivities}
         disabled={loading}
