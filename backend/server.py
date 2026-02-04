@@ -965,11 +965,11 @@ async def generate_team_summary(request: dict, current_user: dict = Depends(get_
         chat = LlmChat(
             api_key=os.environ['EMERGENT_LLM_KEY'],
             session_id=session_id,
-            system_message='You are a professional executive assistant. Create a consolidated summary of team daily status updates in paragraph format. Write 3 paragraphs: 1) All team updates combined into one flowing paragraph, 2) All action items combined into one paragraph, 3) All help requests combined into one paragraph. Fix grammar, make it professional and clear, but DO NOT add information that was not provided. DO NOT exaggerate numbers or achievements. Keep it factual and accurate. Use proper business writing style.'
+            system_message='You are a professional editor. Your ONLY job is to: 1) Combine all team member updates into flowing paragraphs, 2) Fix grammar and spelling, 3) Make sentences clear and professional. DO NOT add interpretations like "significant progress" or "achieved well". DO NOT add adjectives or descriptions that were not in the original text. DO NOT elaborate or embellish. Just combine the facts exactly as stated, fix grammar, and organize into 3 paragraphs: Updates, Action Items, Help Needed. Keep it purely factual.'
         ).with_model('anthropic', 'claude-sonnet-4-5-20250929')
         
         user_message = UserMessage(
-            text=f'Create a consolidated summary in 3 paragraphs (Updates, Action Items, Help Needed) from these team status updates. Fix grammar and make professional, but stay factual - do not exaggerate:\n\n{status_text}'
+            text=f'Combine these team status updates into 3 paragraphs (Updates, Actions, Help). Fix grammar ONLY. Do not add interpretations or adjectives. Stay purely factual:\n\n{status_text}'
         )
         
         summary = await chat.send_message(user_message)
