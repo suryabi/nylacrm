@@ -102,34 +102,34 @@ export default function ActivityTimeline({ activities }) {
         <div className="absolute left-12 top-0 bottom-0 w-0.5 bg-border" />
         
         {activitiesWithGaps.map((activity, index) => (
-          <div key={activity.id} className="relative pl-24 pb-10 last:pb-0">
+          <div key={activity.id} className="relative pl-24 pb-6 last:pb-0">
             {/* Timeline dot */}
-            <div className="absolute left-10.5 top-1.5 w-4 h-4 rounded-full bg-primary border-4 border-white shadow-md z-10" />
+            <div className="absolute left-10.5 top-1 w-3 h-3 rounded-full bg-primary border-2 border-white shadow-sm z-10" />
             
-            {/* Gap display on the left line - ALWAYS SHOW IF NOT LAST */}
+            {/* Gap display on the left line - Subtle gray badge */}
             {activity.gapText && index < activitiesWithGaps.length - 1 && (
-              <div className="absolute left-1 top-14 bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded-md shadow-md whitespace-nowrap">
+              <div className="absolute left-0 top-10 bg-gray-100 text-gray-700 text-xs font-semibold px-2 py-1 rounded border border-gray-200">
                 ↑ {activity.gapText}
               </div>
             )}
             
             {/* Latest/First marker */}
             {index === 0 && (
-              <div className="absolute left-0 top-0 bg-green-600 text-white text-xs font-bold px-2 py-1 rounded">
+              <div className="absolute left-0 -top-1 bg-green-600 text-white text-xs font-bold px-2 py-0.5 rounded">
                 LATEST
               </div>
             )}
             {index === activitiesWithGaps.length - 1 && (
-              <div className="absolute left-0 top-0 bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded">
+              <div className="absolute left-0 -top-1 bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded">
                 FIRST
               </div>
             )}
             
-            {/* Activity content */}
-            <div className="bg-white border border-border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between mb-3">
+            {/* Activity content - Compact */}
+            <div className="bg-white border border-border rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`px-2 py-1 text-xs rounded-full font-medium ${
+                  <span className={`px-2 py-0.5 text-xs rounded font-medium ${
                     activity.activity_type === 'call' ? 'bg-blue-100 text-blue-800' :
                     activity.activity_type === 'email' ? 'bg-purple-100 text-purple-800' :
                     activity.activity_type === 'meeting' ? 'bg-green-100 text-green-800' :
@@ -140,23 +140,23 @@ export default function ActivityTimeline({ activities }) {
                     {activity.activity_type.replace('_', ' ').toUpperCase()}
                   </span>
                   {activity.interaction_method && (
-                    <span className="px-2 py-1 text-xs rounded-full font-medium bg-slate-100 text-slate-700">
+                    <span className="px-2 py-0.5 text-xs rounded font-medium bg-slate-100 text-slate-700">
                       {activity.interaction_method.replace('_', ' ').toUpperCase()}
                     </span>
                   )}
                 </div>
                 <div className="text-right">
-                  <div className="flex items-center gap-1 text-sm font-semibold text-foreground">
-                    <Calendar className="h-4 w-4" />
+                  <p className="text-xs font-semibold text-foreground flex items-center gap-1 justify-end">
+                    <Calendar className="h-3 w-3" />
                     {format(new Date(activity.created_at), 'MMM d, yyyy')}
-                  </div>
-                  <p className="text-sm font-medium text-primary mt-1">
+                  </p>
+                  <p className="text-xs font-medium text-primary mt-0.5">
                     {format(new Date(activity.created_at), 'h:mm a')}
                   </p>
                 </div>
               </div>
               
-              <p className="text-sm font-medium">{activity.description}</p>
+              <p className="text-sm leading-relaxed">{activity.description}</p>
             </div>
           </div>
         ))}
