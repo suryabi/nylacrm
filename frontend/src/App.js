@@ -41,6 +41,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/dashboard-preview" element={<ProtectedRoute><DashboardPreview /></ProtectedRoute>} />
           <Route path="/leads" element={<ProtectedRoute><LeadsList /></ProtectedRoute>} />
           <Route path="/leads/new" element={<ProtectedRoute><AddEditLead /></ProtectedRoute>} />
           <Route path="/leads/:id" element={<ProtectedRoute><LeadDetail /></ProtectedRoute>} />
