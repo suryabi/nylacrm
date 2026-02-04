@@ -898,13 +898,33 @@ async def get_team_status_rollup(
     
     statuses = await db.daily_status.find(query, {'_id': 0}).to_list(100)
     
-    # Map statuses to users
+    # Get activity metrics for the day
+    start_datetime = datetime.fromisoformat(f'{target_date}T00:00:00').replace(tzinfo=timezone.utc).isoformat()
+    end_datetime = datetime.fromisoformat(f'{target_date}T23:59:59').replace(tzinfo=timezone.utc).isoformat()
+    
+    # Map statuses to users with metrics
     user_map = {u['id']: u for u in direct_reports}
     
     team_statuses = []
     for status in statuses:
         user_info = user_map.get(status['user_id'])
         if user_info:
+            # Get activity metrics for this user
+            user_activities = await db.activities.find({
+                'created_by': status['user_id'],
+                'created_at': {'$gte': start_datetime, '$lte': end_datetime}
+            }, {'_id': 0}).to_list(1000)
+            
+            phone_calls = sum(1 for a in user_activities if a.get('interaction_method') == 'phone_call')
+            customer_visits = sum(1 for a in user_activities if a.get('interaction_method') == 'customer_visit')
+            emails = sum(1 for a in user_activities if a.get('interaction_method') == 'email')
+            messages = sum(1 for a in user_activities if a.get('interaction_method') in ['whatsapp', 'sms'])
+            
+            new_leads = await db.leads.count_documents({
+                'created_by': status['user_id'],
+                'created_at': {'$gte': start_datetime, '$lte': end_datetime}
+            })
+            
             if isinstance(status.get('created_at'), str):
                 created_at = status['created_at']
             else:
@@ -921,7 +941,14 @@ async def get_team_status_rollup(
                 'yesterday_ai_revised': status.get('yesterday_ai_revised', False),
                 'today_ai_revised': status.get('today_ai_revised', False),
                 'help_ai_revised': status.get('help_ai_revised', False),
-                'created_at': created_at
+                'created_at': created_at,
+                'metrics': {
+                    'new_leads': new_leads,
+                    'phone_calls': phone_calls,
+                    'customer_visits': customer_visits,
+                    'emails': emails,
+                    'messages': messages
+                }
             })
     
     # Sort by creation time (latest first)
