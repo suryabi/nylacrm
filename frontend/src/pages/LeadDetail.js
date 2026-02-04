@@ -364,32 +364,25 @@ export default function LeadDetail() {
               <form onSubmit={handleAddActivity} className="space-y-4">
                 <div className="space-y-2">
                   <Label>Interaction Method *</Label>
-                  <Select value={interactionMethod} onValueChange={setInteractionMethod}>
+                  <Select value={interactionMethod} onValueChange={(value) => {
+                    setInteractionMethod(value);
+                    // Auto-set activity type based on interaction method
+                    if (value === 'phone_call') setActivityType('call');
+                    else if (value === 'customer_visit') setActivityType('visit');
+                    else if (value === 'email') setActivityType('email');
+                    else if (value === 'whatsapp' || value === 'sms') setActivityType('call');
+                    else setActivityType('note');
+                  }}>
                     <SelectTrigger data-testid="interaction-method-select">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="phone_call">Phone Call</SelectItem>
-                      <SelectItem value="customer_visit">Customer Visit</SelectItem>
-                      <SelectItem value="email">Email</SelectItem>
-                      <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                      <SelectItem value="sms">SMS</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Activity Type *</Label>
-                  <Select value={activityType} onValueChange={setActivityType}>
-                    <SelectTrigger data-testid="activity-type-select">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="call">Call</SelectItem>
-                      <SelectItem value="meeting">Meeting</SelectItem>
-                      <SelectItem value="email">Email</SelectItem>
-                      <SelectItem value="visit">Visit</SelectItem>
-                      <SelectItem value="note">Note</SelectItem>
+                      <SelectItem value="phone_call">📞 Phone Call</SelectItem>
+                      <SelectItem value="customer_visit">🚗 Customer Visit</SelectItem>
+                      <SelectItem value="email">✉️ Email</SelectItem>
+                      <SelectItem value="whatsapp">💬 WhatsApp</SelectItem>
+                      <SelectItem value="sms">📱 SMS</SelectItem>
+                      <SelectItem value="other">📝 Other</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -404,7 +397,7 @@ export default function LeadDetail() {
                     data-testid="activity-description-input"
                   />
                 </div>
-                <Button type="submit" disabled={submittingActivity} data-testid="submit-activity-button">
+                <Button type="submit" className="w-full h-12" disabled={submittingActivity} data-testid="submit-activity-button">
                   {submittingActivity ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : 'Log Activity'}
                 </Button>
               </form>
