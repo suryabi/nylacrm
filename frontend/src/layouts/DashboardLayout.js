@@ -36,7 +36,7 @@ export default function DashboardLayout({ children }) {
           <div className="flex items-center justify-between">
             {/* Logo */}
             <div className="flex items-center gap-8">
-              <h1 className="text-xl font-bold text-foreground">Nyla CRM</h1>
+              <img src={NYLA_LOGO} alt="Nyla Air Water" className="h-8" />
               
               {/* Desktop Navigation */}
               <div className="hidden lg:flex items-center gap-2">
