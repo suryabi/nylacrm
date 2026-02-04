@@ -66,6 +66,13 @@ export default function TeamStatusFeed() {
           headers: { Authorization: `Bearer ${token}` }
         });
         setRollupData(response.data);
+        
+        // Fetch team metrics for the day
+        const metricsRes = await axios.get(`${API_URL}/analytics/activity-metrics`, {
+          params: { start_date: selectedDate, end_date: selectedDate },
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setRollupData(prev => ({ ...prev, team_metrics: metricsRes.data }));
       } else {
         // Weekly or Monthly
         let startDate, endDate;
@@ -78,11 +85,23 @@ export default function TeamStatusFeed() {
           endDate = format(endOfMonth(new Date(selectedDate)), 'yyyy-MM-dd');
         }
         
-        const response = await axios.get(`${API_URL}/daily-status/weekly-summary`, {
-          params: { start_date: startDate, end_date: endDate },
-          headers: { Authorization: `Bearer ${token}` }
+        const [statusRes, metricsRes] = await Promise.all([
+          axios.get(`${API_URL}/daily-status/weekly-summary`, {
+            params: { start_date: startDate, end_date: endDate },
+            headers: { Authorization: `Bearer ${token}` }
+          }),
+          axios.get(`${API_URL}/analytics/activity-metrics`, {
+            params: { start_date: startDate, end_date: endDate },
+            headers: { Authorization: `Bearer ${token}` }
+          })
+        ]);
+        
+        setRollupData({ 
+          ...statusRes.data, 
+          start_date: startDate, 
+          end_date: endDate,
+          team_metrics: metricsRes.data
         });
-        setRollupData({ ...response.data, start_date: startDate, end_date: endDate });
       }
     } catch (error) {
       toast.error('Failed to load statuses');
