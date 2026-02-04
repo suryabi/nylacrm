@@ -223,7 +223,7 @@ export default function DailyStatusUpdate() {
       {/* Date Selection - Mobile Optimized */}
       <Card className="p-5">
         <label className="block text-sm font-semibold mb-3">Select Date</label>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 mb-4">
           <Button
             type="button"
             variant={selectedDate === today ? 'default' : 'outline'}
@@ -245,7 +245,21 @@ export default function DailyStatusUpdate() {
             Tomorrow
           </Button>
         </div>
-        <p className="text-sm text-center mt-3 font-medium text-primary">
+        
+        {/* Custom Date Picker for Past Dates */}
+        <div className="space-y-2">
+          <label className="text-xs text-muted-foreground font-medium">Or select a past date:</label>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            max={tomorrow}
+            className="w-full h-12 px-4 rounded-md border border-input bg-background text-base"
+            data-testid="date-picker"
+          />
+        </div>
+        
+        <p className="text-sm text-center mt-4 font-medium text-primary">
           {format(new Date(selectedDate), 'EEEE, MMMM d, yyyy')}
         </p>
       </Card>
