@@ -782,15 +782,18 @@ async def revise_status_with_ai(request: dict, current_user: dict = Depends(get_
         raise HTTPException(status_code=400, detail='Text is required')
     
     try:
+        user_id = current_user['id']
+        session_id = f'status-revision-{user_id}'
+        
         # Initialize Claude chat
         chat = LlmChat(
             api_key=os.environ['EMERGENT_LLM_KEY'],
-            session_id=f'status-revision-{current_user[\"id\"]}',
+            session_id=session_id,
             system_message='You are a professional business writing assistant. Revise sales status updates to be clear, professional, and well-structured while preserving the original meaning. Keep the tone professional but friendly. Do not add information that was not in the original text.'
         ).with_model('anthropic', 'claude-sonnet-4-5-20250929')
         
         user_message = UserMessage(
-            text=f'Please revise and improve this daily sales status update. Make it clear, professional, and well-structured. Keep it concise:\\n\\n{original_text}'
+            text=f'Please revise and improve this daily sales status update. Make it clear, professional, and well-structured. Keep it concise:\n\n{original_text}'
         )
         
         revised_text = await chat.send_message(user_message)
