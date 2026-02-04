@@ -67,7 +67,7 @@ export default function ActivityTimeline({ activities }) {
             
             {/* Activity content */}
             <div className="bg-white border border-border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between mb-2">
+              <div className="flex items-start justify-between mb-3">
                 <span className={`px-2 py-1 text-xs rounded-full font-medium ${
                   activity.activity_type === 'call' ? 'bg-blue-100 text-blue-800' :
                   activity.activity_type === 'email' ? 'bg-purple-100 text-purple-800' :
@@ -77,16 +77,18 @@ export default function ActivityTimeline({ activities }) {
                 }`}>
                   {activity.activity_type.replace('_', ' ').toUpperCase()}
                 </span>
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Calendar className="h-3 w-3" />
-                  {format(new Date(activity.created_at), 'MMM d, yyyy')}
+                <div className="text-right">
+                  <div className="flex items-center gap-1 text-sm font-semibold text-foreground">
+                    <Calendar className="h-4 w-4" />
+                    {format(new Date(activity.created_at), 'MMM d, yyyy')}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Time: {format(new Date(activity.created_at), 'h:mm a')}
+                  </p>
                 </div>
               </div>
               
-              <p className="text-sm font-medium mb-1">{activity.description}</p>
-              <p className="text-xs text-muted-foreground">
-                {format(new Date(activity.created_at), 'h:mm a')}
-              </p>
+              <p className="text-sm font-medium">{activity.description}</p>
             </div>
           </div>
         ))}
