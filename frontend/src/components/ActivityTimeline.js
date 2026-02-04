@@ -44,33 +44,33 @@ export default function ActivityTimeline({ activities }) {
 
   const totalDays = activitiesWithGaps.length > 0
     ? differenceInDays(
-        new Date(activitiesWithGaps[0].created_at),
-        new Date(activitiesWithGaps[activitiesWithGaps.length - 1].created_at)
+        new Date(),
+        new Date(activitiesWithGaps[0].created_at)
       )
     : 0;
 
-  const avgDays = activitiesWithGaps.length > 1
-    ? Math.round(totalDays / (activitiesWithGaps.length - 1))
-    : 0;
+  const lastContactedDate = activitiesWithGaps.length > 0
+    ? new Date(activitiesWithGaps[0].created_at)
+    : null;
 
   return (
     <div className="space-y-6">
       {/* Summary Stats */}
-      {activitiesWithGaps.length > 1 && (
+      {activitiesWithGaps.length > 0 && (
         <div className="bg-muted/50 rounded-lg p-4 border border-border">
           <h3 className="text-sm font-semibold mb-3">Timeline Summary</h3>
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
               <p className="text-2xl font-bold text-primary">{activitiesWithGaps.length}</p>
-              <p className="text-xs text-muted-foreground">Total Activities</p>
+              <p className="text-xs text-muted-foreground">Total Follow ups</p>
             </div>
             <div>
               <p className="text-2xl font-bold text-primary">{totalDays}</p>
-              <p className="text-xs text-muted-foreground">Days Since First Contact</p>
+              <p className="text-xs text-muted-foreground">Days Since Last Contact</p>
             </div>
             <div>
-              <p className="text-2xl font-bold text-primary">{avgDays}</p>
-              <p className="text-xs text-muted-foreground">Avg Days Between Contacts</p>
+              <p className="text-sm font-semibold text-foreground">{format(lastContactedDate, 'MMM d, yyyy')}</p>
+              <p className="text-xs text-muted-foreground">Last Contacted Date</p>
             </div>
           </div>
         </div>
