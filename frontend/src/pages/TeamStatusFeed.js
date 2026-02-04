@@ -108,10 +108,10 @@ export default function TeamStatusFeed() {
               <div className="flex items-start justify-between mb-4 pb-4 border-b border-border">
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
-                    {status.user_name[0].toUpperCase()}
+                    {userInitial}
                   </div>
                   <div>
-                    <p className="font-bold text-lg">{status.user_name}</p>
+                    <p className="font-bold text-lg">{userName}</p>
                     <p className="text-sm text-muted-foreground">{status.user_designation}</p>
                     <p className="text-xs text-primary mt-1">{status.user_territory}</p>
                   </div>
@@ -174,7 +174,8 @@ export default function TeamStatusFeed() {
                 </div>
               )}
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
