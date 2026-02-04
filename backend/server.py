@@ -297,7 +297,8 @@ async def get_leads(
     # Build query based on role and filters
     query = {}
     
-    if current_user['role'] not in ['admin', 'sales_manager']:
+    # Only sales_rep sees their assigned leads, everyone else sees all
+    if current_user['role'] == 'sales_rep':
         query['assigned_to'] = current_user['id']
     
     # Add location filters
