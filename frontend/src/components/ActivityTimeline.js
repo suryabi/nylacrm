@@ -62,40 +62,6 @@ export default function ActivityTimeline({ activities }) {
 
   return (
     <div className="space-y-6">
-      {/* Summary Stats - 4 Individual Cards */}
-      {activitiesWithGaps.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold mb-4 text-foreground">Timeline Summary</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Total Follow ups */}
-            <div className="bg-white border border-border rounded-lg p-5 hover:shadow-md transition-shadow">
-              <p className="text-xs text-muted-foreground font-medium mb-3 uppercase tracking-wide">Total Follow ups</p>
-              <p className="text-4xl font-bold text-primary">{activitiesWithGaps.length}</p>
-            </div>
-            
-            {/* Days Since Last Contact */}
-            <div className="bg-white border border-border rounded-lg p-5 hover:shadow-md transition-shadow">
-              <p className="text-xs text-muted-foreground font-medium mb-3 uppercase tracking-wide">Days Since Last Contact</p>
-              <p className="text-4xl font-bold text-primary">{daysSinceLastContact}</p>
-            </div>
-            
-            {/* Last Contacted Date */}
-            <div className="bg-white border border-border rounded-lg p-5 hover:shadow-md transition-shadow">
-              <p className="text-xs text-muted-foreground font-medium mb-3 uppercase tracking-wide">Last Contacted Date</p>
-              <p className="text-2xl font-bold text-foreground leading-tight">
-                {format(lastContactedDate, 'MMM d, yyyy')}
-              </p>
-            </div>
-            
-            {/* Days Since First Contact */}
-            <div className="bg-white border border-border rounded-lg p-5 hover:shadow-md transition-shadow">
-              <p className="text-xs text-muted-foreground font-medium mb-3 uppercase tracking-wide">Days Since First Contact</p>
-              <p className="text-4xl font-bold text-primary">{daysSinceFirstContact}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Timeline Visualization */}
       <div className="relative">
         {/* Vertical line */}
