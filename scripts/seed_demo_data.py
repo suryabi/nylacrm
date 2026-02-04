@@ -324,8 +324,8 @@ async def seed_data():
             'description': 'Schedule discovery call to understand requirements',
             'scheduled_date': (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
             'is_completed': False,
-            'assigned_to': rep_id,
-            'created_by': admin_id,
+            'assigned_to': rep2_id,
+            'created_by': karanabir_id,
             'created_at': datetime.now(timezone.utc).isoformat()
         },
         {
@@ -335,8 +335,8 @@ async def seed_data():
             'description': 'Send detailed proposal with pricing',
             'scheduled_date': (datetime.now(timezone.utc) + timedelta(hours=5)).isoformat(),
             'is_completed': False,
-            'assigned_to': rep_id,
-            'created_by': admin_id,
+            'assigned_to': manager_id,
+            'created_by': karanabir_id,
             'created_at': datetime.now(timezone.utc).isoformat()
         }
     ]
