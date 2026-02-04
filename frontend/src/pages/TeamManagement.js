@@ -57,8 +57,11 @@ export default function TeamManagement() {
     return colors[role] || 'bg-gray-100 text-gray-800';
   };
 
-  const renderOrgNode = (node, level = 0) => {
-    if (!node) return null;
+  const renderOrgNode = (node, level = 0, visitedIds = new Set()) => {
+    if (!node || !node.id || visitedIds.has(node.id) || level > 10) return null;
+    
+    // Add current node to visited set to prevent circular references
+    visitedIds.add(node.id);
     
     const marginLeft = level * 40;
     const hasDottedLine = node.dotted_line_reports && node.dotted_line_reports.length > 0;
@@ -73,11 +76,11 @@ export default function TeamManagement() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-lg">
-                {node.name[0].toUpperCase()}
+                {node.name && node.name[0] ? node.name[0].toUpperCase() : '?'}
               </div>
               <div>
-                <p className="font-semibold text-lg">{node.name}</p>
-                <p className="text-sm text-primary">{node.designation}</p>
+                <p className="font-semibold text-lg">{node.name || 'Unknown'}</p>
+                <p className="text-sm text-primary">{node.designation || node.role}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {node.city && node.state ? `${node.city}, ${node.state}` : ''}
                   {node.territory ? ` • ${node.territory}` : ''}
@@ -85,7 +88,7 @@ export default function TeamManagement() {
               </div>
             </div>
             <Badge className={getRoleBadgeColor(node.role)}>
-              {node.role.replace('_', ' ').toUpperCase()}
+              {node.role ? node.role.replace('_', ' ').toUpperCase() : 'N/A'}
             </Badge>
           </div>
         </Card>
@@ -98,14 +101,14 @@ export default function TeamManagement() {
               Dotted Line Reporting
             </p>
             {node.dotted_line_reports.map((dr) => (
-              <Card key={dr.id} className="p-3 mb-2 bg-muted/30 border-dashed">
+              <Card key={`dotted-${dr.id}`} className="p-3 mb-2 bg-muted/30 border-dashed">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-sm">{dr.name}</p>
-                    <p className="text-xs text-muted-foreground">{dr.designation}</p>
+                    <p className="font-medium text-sm">{dr.name || 'Unknown'}</p>
+                    <p className="text-xs text-muted-foreground">{dr.designation || dr.role}</p>
                   </div>
                   <Badge variant="outline" className="text-xs">
-                    {dr.role.replace('_', ' ')}
+                    {dr.role ? dr.role.replace('_', ' ') : 'N/A'}
                   </Badge>
                 </div>
               </Card>
@@ -116,7 +119,9 @@ export default function TeamManagement() {
         {/* Direct Reports */}
         {node.direct_reports && node.direct_reports.length > 0 && (
           <div className="mt-2">
-            {node.direct_reports.map((child) => renderOrgNode(child, level + 1))}
+            {node.direct_reports.map((child, index) => 
+              renderOrgNode(child, level + 1, new Set(visitedIds))
+            )}
           </div>
         )}
       </div>
