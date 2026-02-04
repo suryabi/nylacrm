@@ -295,9 +295,16 @@ export default function TeamStatusFeed() {
           </div>
 
           {aiSummary ? (
-            <div className="prose prose-sm max-w-none">
-              <div className="bg-white rounded-lg p-5 border border-border whitespace-pre-wrap leading-relaxed">
-                {aiSummary}
+            <div className="bg-white rounded-lg p-5 border border-border">
+              <div className="space-y-4 leading-relaxed">
+                {aiSummary.split('\n\n').map((paragraph, index) => {
+                  // Remove markdown ** and display as bold headers
+                  const cleanParagraph = paragraph.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                  
+                  return (
+                    <div key={index} dangerouslySetInnerHTML={{ __html: cleanParagraph }} />
+                  );
+                })}
               </div>
             </div>
           ) : (
