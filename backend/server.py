@@ -116,36 +116,46 @@ class Lead(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class LeadCreate(BaseModel):
-    name: str
+    company: str
+    contact_person: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
-    company: Optional[str] = None
+    city: str
+    state: str
+    country: str = 'India'
+    region: str
     status: str = 'new'
     source: Optional[str] = None
     assigned_to: Optional[str] = None
-    estimated_value: Optional[float] = None
     priority: Optional[str] = 'medium'
+    current_water_brand: Optional[str] = None
+    current_landing_price: Optional[float] = None
+    current_volume: Optional[str] = None
+    current_selling_price: Optional[float] = None
+    interested_skus: Optional[List[str]] = []
     notes: Optional[str] = None
+    estimated_value: Optional[float] = None
+
+class LeadUpdate(BaseModel):
+    company: Optional[str] = None
+    contact_person: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     country: Optional[str] = None
     region: Optional[str] = None
-
-class LeadUpdate(BaseModel):
-    name: Optional[str] = None
-    email: Optional[EmailStr] = None
-    phone: Optional[str] = None
-    company: Optional[str] = None
     status: Optional[str] = None
     source: Optional[str] = None
     assigned_to: Optional[str] = None
-    estimated_value: Optional[float] = None
     priority: Optional[str] = None
+    current_water_brand: Optional[str] = None
+    current_landing_price: Optional[float] = None
+    current_volume: Optional[str] = None
+    current_selling_price: Optional[float] = None
+    interested_skus: Optional[List[str]] = None
     notes: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    country: Optional[str] = None
-    region: Optional[str] = None
+    estimated_value: Optional[float] = None
 
 class Activity(BaseModel):
     model_config = ConfigDict(extra="ignore")
