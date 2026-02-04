@@ -43,13 +43,15 @@ export default function LeadDetail() {
   const fetchData = async () => {
     try {
       const leadRes = await leadsAPI.getById(id);
-      const activitiesRes = await activitiesAPI.getByLeadId(id);
-      const commentsRes = await commentsAPI.getByLeadId(id);
-      const usersRes = await usersAPI.getAll();
-      
       setLead(leadRes.data);
+      
+      const activitiesRes = await activitiesAPI.getByLeadId(id);
       setActivities(activitiesRes.data);
+      
+      const commentsRes = await commentsAPI.getByLeadId(id);
       setComments(commentsRes.data);
+      
+      const usersRes = await usersAPI.getAll();
       setUsers(usersRes.data);
     } catch (error) {
       toast.error('Failed to load lead details');
