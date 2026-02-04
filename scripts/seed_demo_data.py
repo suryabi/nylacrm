@@ -345,10 +345,14 @@ async def seed_data():
     print("✅ Created demo follow-ups")
     
     print("\\n🎉 Demo data seeded successfully!")
-    print("\\n📧 Demo Login Credentials:")
-    print("  Admin:   admin@nyla.com / admin123")
-    print("  Manager: manager@nyla.com / manager123")
-    print("  Sales:   sales@nyla.com / sales123")
+    print("\\n👥 Organizational Hierarchy:")
+    print("  CEO & MD: Surya Yadavalli (surya.yadavalli@nyla.com / surya123)")
+    print("  Director: Vamsi Bommena (vamsi.bommena@nyla.com / vamsi123)")
+    print("  VP Growth: Karanabir Singh Gulati (karanabir.gulati@nyla.com / karanabir123)")
+    print("\\n📧 Sales Team Login Credentials:")
+    print("  Manager: sales.manager@nyla.com / manager123 (Rahul Sharma - West)")
+    print("  Rep 1: priya.sales@nyla.com / priya123 (Priya Menon - South)")
+    print("  Rep 2: amit.sales@nyla.com / amit123 (Amit Verma - North)")
     
     client.close()
 
