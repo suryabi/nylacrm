@@ -361,8 +361,13 @@ async def create_activity(activity_input: ActivityCreate, current_user: dict = D
     return activity_obj
 
 @api_router.get("/activities/{lead_id}", response_model=List[Activity])
-async def get_activities(lead_id: str, current_user: dict = Depends(get_current_user)):
-    activities = await db.activities.find({'lead_id': lead_id}, {'_id': 0}).sort('created_at', -1).to_list(1000)
+async def get_activities(
+    lead_id: str,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: dict = Depends(get_current_user)
+):
+    activities = await db.activities.find({'lead_id': lead_id}, {'_id': 0}).sort('created_at', -1).skip(skip).limit(limit).to_list(limit)
     
     for activity in activities:
         if isinstance(activity['created_at'], str):
