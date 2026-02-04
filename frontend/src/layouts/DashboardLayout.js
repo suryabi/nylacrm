@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Bell, Settings, LogOut, Menu, X } from 'lucide-react';
 
+const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
+
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
   { name: 'Leads', href: '/leads', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
