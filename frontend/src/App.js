@@ -1,53 +1,53 @@
-import { useEffect } from "react";
-import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { Toaster } from './components/ui/sonner';
+import DashboardLayout from './layouts/DashboardLayout';
+import SplashScreen from './pages/SplashScreen';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import LeadsList from './pages/LeadsList';
+import LeadDetail from './pages/LeadDetail';
+import AddEditLead from './pages/AddEditLead';
+import FollowUps from './pages/FollowUps';
+import Reports from './pages/Reports';
+import TeamManagement from './pages/TeamManagement';
+import '@/App.css';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth();
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  }
 
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
 
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
+  return <DashboardLayout>{children}</DashboardLayout>;
+}
 
 function App() {
   return (
-    <div className="App">
+    <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
+          <Route path="/" element={<SplashScreen />} />
+          <Route path="/login" element={<Login />} />
+          
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/leads" element={<ProtectedRoute><LeadsList /></ProtectedRoute>} />
+          <Route path="/leads/new" element={<ProtectedRoute><AddEditLead /></ProtectedRoute>} />
+          <Route path="/leads/:id" element={<ProtectedRoute><LeadDetail /></ProtectedRoute>} />
+          <Route path="/leads/:id/edit" element={<ProtectedRoute><AddEditLead /></ProtectedRoute>} />
+          <Route path="/follow-ups" element={<ProtectedRoute><FollowUps /></ProtectedRoute>} />
+          <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+          <Route path="/team" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
         </Routes>
+        <Toaster />
       </BrowserRouter>
-    </div>
+    </AuthProvider>
   );
 }
 
