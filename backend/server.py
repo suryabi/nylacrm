@@ -679,9 +679,9 @@ async def get_reports(current_user: dict = Depends(get_current_user)):
     source_results = await db.leads.aggregate(source_pipeline).to_list(100)
     source_counts = {item['_id']: item['count'] for item in source_results}
     
-    # Team performance (for admins/managers) using aggregation
+    # Team performance (for leadership/managers) using aggregation
     team_performance = []
-    if current_user['role'] in ['admin', 'sales_manager']:
+    if current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'sales_manager']:
         team_pipeline = [
             {'$match': match_stage},
             {'$group': {
