@@ -482,8 +482,12 @@ async def get_comments(
 # ============= USERS/TEAM ROUTES =============
 
 @api_router.get("/users", response_model=List[User])
-async def get_users(current_user: dict = Depends(get_current_user)):
-    users = await db.users.find({}, {'_id': 0, 'password': 0}).to_list(1000)
+async def get_users(
+    skip: int = 0,
+    limit: int = 100,
+    current_user: dict = Depends(get_current_user)
+):
+    users = await db.users.find({}, {'_id': 0, 'password': 0}).skip(skip).limit(limit).to_list(limit)
     
     for user in users:
         if isinstance(user['created_at'], str):
