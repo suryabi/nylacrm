@@ -250,6 +250,23 @@ export default function DailyStatusUpdate() {
   const today = format(new Date(), 'yyyy-MM-dd');
   const yesterday = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd');
 
+  // Dynamic section titles based on selected date
+  const isToday = selectedDate === today;
+  const isYesterday = selectedDate === yesterday;
+  const isPastDate = selectedDate < yesterday;
+  
+  const firstSectionTitle = isToday 
+    ? "Today's Updates" 
+    : isYesterday 
+      ? "Yesterday's Updates"
+      : format(new Date(selectedDate), 'EEEE, MMM d - Updates');
+  
+  const secondSectionTitle = isToday
+    ? "Tomorrow's Action Items & Follow-ups"
+    : "Today's Action Items & Follow-ups";
+  
+  const secondSectionDisabled = isPastDate;
+
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-8 px-4" data-testid="daily-status-page">
       {/* Header */}
