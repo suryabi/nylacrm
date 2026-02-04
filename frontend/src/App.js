@@ -47,6 +47,7 @@ function App() {
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/locations" element={<ProtectedRoute><LocationAnalytics /></ProtectedRoute>} />
           <Route path="/team" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
+          <Route path="/daily-status" element={<ProtectedRoute><DailyStatusUpdate /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </BrowserRouter>
