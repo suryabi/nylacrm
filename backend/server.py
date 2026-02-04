@@ -839,18 +839,17 @@ async def get_team_status_rollup(
         {'_id': 0, 'id': 1, 'name': 1, 'designation': 1, 'territory': 1}
     ).to_list(100)
     
+    target_date = status_date or datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    
     if not direct_reports:
-        return {'team_statuses': [], 'date': status_date or format(new Date(), 'yyyy-MM-dd')}
+        return {'team_statuses': [], 'date': target_date, 'total_reports': 0, 'statuses_received': 0}
     
     # Get statuses for all direct reports
     user_ids = [u['id'] for u in direct_reports]
-    query = {'user_id': {'$in': user_ids}}
-    
-    if status_date:
-        query['status_date'] = status_date
-    else:
-        # Default to today
-        query['status_date'] = format(new Date(), 'yyyy-MM-dd')
+    query = {
+        'user_id': {'$in': user_ids},
+        'status_date': target_date
+    }
     
     statuses = await db.daily_status.find(query, {'_id': 0}).to_list(100)
     
@@ -861,6 +860,11 @@ async def get_team_status_rollup(
     for status in statuses:
         user_info = user_map.get(status['user_id'])
         if user_info:
+            if isinstance(status.get('created_at'), str):
+                created_at = status['created_at']
+            else:
+                created_at = status['created_at'].isoformat()
+                
             team_statuses.append({
                 'user_name': user_info['name'],
                 'user_designation': user_info.get('designation', ''),
@@ -869,7 +873,10 @@ async def get_team_status_rollup(
                 'yesterday_updates': status.get('yesterday_updates', ''),
                 'today_actions': status.get('today_actions', ''),
                 'help_needed': status.get('help_needed', ''),
-                'created_at': status['created_at']
+                'yesterday_ai_revised': status.get('yesterday_ai_revised', False),
+                'today_ai_revised': status.get('today_ai_revised', False),
+                'help_ai_revised': status.get('help_ai_revised', False),
+                'created_at': created_at
             })
     
     # Sort by creation time (latest first)
@@ -877,7 +884,7 @@ async def get_team_status_rollup(
     
     return {
         'team_statuses': team_statuses,
-        'date': status_date or format(new Date(), 'yyyy-MM-dd'),
+        'date': target_date,
         'total_reports': len(direct_reports),
         'statuses_received': len(team_statuses)
     }
