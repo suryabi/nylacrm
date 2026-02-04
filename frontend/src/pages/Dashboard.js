@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { analyticsAPI, followUpsAPI } from '../utils/api';
+import { analyticsAPI } from '../utils/api';
 import { Card } from '../components/ui/card';
-import { Users, TrendingUp, DollarSign, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
+import { Users, TrendingUp, DollarSign, Calendar } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -13,11 +13,10 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer
 } from 'recharts';
 
-const COLORS = ['#0891B2', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
+const COLORS = ['hsl(155, 35%, 42%)', 'hsl(42, 85%, 65%)', 'hsl(25, 50%, 55%)', 'hsl(155, 25%, 60%)', 'hsl(35, 50%, 60%)'];
 
 export default function Dashboard() {
   const [analytics, setAnalytics] = useState(null);
@@ -40,12 +39,8 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[1, 2, 3, 4].map(i => (
-          <Card key={i} className="p-6 animate-pulse">
-            <div className="h-20 bg-muted rounded" />
-          </Card>
-        ))}
+      <div className="flex items-center justify-center py-12">
+        <p className="text-foreground-muted">Loading dashboard...</p>
       </div>
     );
   }
@@ -57,34 +52,36 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8" data-testid="dashboard-page">
+      {/* Page Header */}
+      <div>
+        <h1 className="text-4xl font-light text-foreground mb-2">Dashboard</h1>
+        <p className="text-foreground-muted">Overview of your sales pipeline and team performance</p>
+      </div>
+
       {/* Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard
           title="Total Leads"
           value={analytics?.total_leads || 0}
           icon={Users}
-          color="text-primary"
           testId="total-leads-metric"
         />
         <MetricCard
           title="Conversion Rate"
           value={`${analytics?.conversion_rate || 0}%`}
           icon={TrendingUp}
-          color="text-green-600"
           testId="conversion-rate-metric"
         />
         <MetricCard
           title="Pipeline Value"
-          value={`$${(analytics?.pipeline_value || 0).toLocaleString()}`}
+          value={`₹${((analytics?.pipeline_value || 0) / 100000).toFixed(1)}L`}
           icon={DollarSign}
-          color="text-amber-600"
           testId="pipeline-value-metric"
         />
         <MetricCard
           title="Follow-ups Today"
           value={analytics?.today_follow_ups || 0}
           icon={Calendar}
-          color="text-purple-600"
           testId="followups-today-metric"
         />
       </div>
@@ -92,9 +89,9 @@ export default function Dashboard() {
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Lead Status Distribution */}
-        <Card className="p-6" data-testid="status-distribution-chart">
-          <h3 className="text-lg font-semibold mb-4">Lead Status Distribution</h3>
-          <ResponsiveContainer width="100%" height={300}>
+        <Card className="p-8 bg-card border border-border rounded-2xl shadow-sm" data-testid="status-distribution-chart">
+          <h3 className="text-lg font-semibold mb-6 text-foreground">Lead Status Distribution</h3>
+          <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie
                 data={statusData}
@@ -102,7 +99,7 @@ export default function Dashboard() {
                 cy="50%"
                 labelLine={false}
                 label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                outerRadius={100}
+                outerRadius={90}
                 fill="#8884d8"
                 dataKey="value"
               >
@@ -116,15 +113,15 @@ export default function Dashboard() {
         </Card>
 
         {/* Status Bar Chart */}
-        <Card className="p-6" data-testid="status-bar-chart">
-          <h3 className="text-lg font-semibold mb-4">Lead Pipeline</h3>
-          <ResponsiveContainer width="100%" height={300}>
+        <Card className="p-8 bg-card border border-border rounded-2xl shadow-sm" data-testid="status-bar-chart">
+          <h3 className="text-lg font-semibold mb-6 text-foreground">Lead Pipeline</h3>
+          <ResponsiveContainer width="100%" height={280}>
             <BarChart data={statusData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-              <YAxis />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(35, 15%, 88%)" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 12, fill: 'hsl(25, 10%, 45%)' }} />
+              <YAxis tick={{ fontSize: 12, fill: 'hsl(25, 10%, 45%)' }} />
               <Tooltip />
-              <Bar dataKey="value" fill="#0891B2" />
+              <Bar dataKey="value" fill="hsl(155, 35%, 42%)" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -133,22 +130,16 @@ export default function Dashboard() {
   );
 }
 
-function MetricCard({ title, value, icon: Icon, color, testId }) {
+function MetricCard({ title, value, icon: Icon, testId }) {
   return (
-    <Card className="p-6 hover:shadow-lg transition-shadow" data-testid={testId}>
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground font-medium mb-2">{title}</p>
-          <p className="text-3xl font-semibold">{value}</p>
-        </div>
-        <div className={cn("p-3 rounded-lg bg-muted", color)}>
-          <Icon className="h-6 w-6" />
+    <Card className="p-6 bg-card border border-border rounded-2xl shadow-sm hover:shadow-md transition-all" data-testid={testId}>
+      <div className="flex items-start justify-between mb-4">
+        <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+          <Icon className="h-6 w-6 text-primary" />
         </div>
       </div>
+      <p className="text-sm text-muted-foreground font-medium mb-2">{title}</p>
+      <p className="text-3xl font-semibold text-foreground">{value}</p>
     </Card>
   );
-}
-
-function cn(...classes) {
-  return classes.filter(Boolean).join(' ');
 }
