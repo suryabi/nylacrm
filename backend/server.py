@@ -748,7 +748,7 @@ async def get_reports(current_user: dict = Depends(get_current_user)):
 @api_router.get("/analytics/locations")
 async def get_location_analytics(current_user: dict = Depends(get_current_user)):
     # Build match stage based on role
-    match_stage = {} if current_user['role'] in ['admin', 'sales_manager'] else {'assigned_to': current_user['id']}
+    match_stage = {} if current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'sales_manager'] else {'assigned_to': current_user['id']}
     
     # Leads by country
     country_pipeline = [
