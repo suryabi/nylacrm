@@ -60,6 +60,51 @@ const TERRITORIES = [
   'Central India'
 ];
 
+// Priority states first, then alphabetical
+const PRIORITY_STATES = [
+  'Telangana',
+  'Tamil Nadu',
+  'Delhi',
+  'Maharashtra',
+  'Punjab',
+  'Jammu & Kashmir',
+  'Karnataka'
+];
+
+const OTHER_STATES = [
+  'Andhra Pradesh',
+  'Arunachal Pradesh',
+  'Assam',
+  'Bihar',
+  'Chhattisgarh',
+  'Goa',
+  'Gujarat',
+  'Haryana',
+  'Himachal Pradesh',
+  'Jharkhand',
+  'Kerala',
+  'Madhya Pradesh',
+  'Manipur',
+  'Meghalaya',
+  'Mizoram',
+  'Nagaland',
+  'Odisha',
+  'Rajasthan',
+  'Sikkim',
+  'Tripura',
+  'Uttar Pradesh',
+  'Uttarakhand',
+  'West Bengal',
+  'Andaman & Nicobar Islands',
+  'Chandigarh',
+  'Dadra & Nagar Haveli',
+  'Daman & Diu',
+  'Lakshadweep',
+  'Puducherry'
+];
+
+const INDIAN_STATES = [...PRIORITY_STATES, ...OTHER_STATES];
+
 const toTitleCase = (str) => {
   if (!str) return '';
   return str.split(' ').map(word => 
