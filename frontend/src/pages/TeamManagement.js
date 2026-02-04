@@ -51,6 +51,8 @@ export default function TeamManagement() {
               <TableHead>Name</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Phone</TableHead>
+              <TableHead>Location</TableHead>
+              <TableHead>Territory</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
@@ -68,6 +70,12 @@ export default function TeamManagement() {
                 </TableCell>
                 <TableCell>{user.email}</TableCell>
                 <TableCell>{user.phone || '-'}</TableCell>
+                <TableCell>
+                  {user.city && user.state && user.country 
+                    ? `${user.city}, ${user.state}, ${user.country}`
+                    : user.city || user.state || user.country || '-'}
+                </TableCell>
+                <TableCell>{user.territory || '-'}</TableCell>
                 <TableCell>
                   <Badge variant="outline" className="capitalize">
                     {user.role.replace('_', ' ')}
