@@ -286,7 +286,7 @@ export default function TeamStatusFeed() {
       )}
 
       {/* AI Summary Section */}
-      {filteredData.length > 0 && (
+      {(viewMode === 'daily' ? (rollupData?.team_statuses?.length > 0) : (rollupData?.statuses?.length > 0)) && (
         <Card className="p-6 border-2 border-primary/20">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -329,12 +329,7 @@ export default function TeamStatusFeed() {
       )}
 
       {/* Individual Status Cards */}
-      {filteredData.length === 0 ? (
-        <Card className="p-12 text-center">
-          <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <p className="text-muted-foreground">No status updates available for selected filters</p>
-        </Card>
-      ) : viewMode === 'daily' ? (
+      {viewMode === 'daily' && rollupData?.team_statuses && rollupData.team_statuses.length > 0 && (
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">Individual Team Updates</h2>
           {filteredData.map((status, index) => {
