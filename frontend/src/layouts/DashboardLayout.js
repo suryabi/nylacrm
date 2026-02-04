@@ -20,6 +20,7 @@ const navigation = [
   { name: 'Leads', href: '/leads', icon: Users, roles: ['admin', 'sales_manager', 'sales_rep'] },
   { name: 'Follow-ups', href: '/follow-ups', icon: Calendar, roles: ['admin', 'sales_manager', 'sales_rep'] },
   { name: 'Reports', href: '/reports', icon: BarChart3, roles: ['admin', 'sales_manager'] },
+  { name: 'Locations', href: '/locations', icon: Settings, roles: ['admin', 'sales_manager'] },
   { name: 'Team', href: '/team', icon: UsersRound, roles: ['admin', 'sales_manager'] },
 ];
 
