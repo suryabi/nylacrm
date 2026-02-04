@@ -158,6 +158,39 @@ export default function LeadDetail() {
             </div>
           </Card>
 
+          {/* Location Information */}
+          {(lead.city || lead.state || lead.country || lead.region) && (
+            <Card className="p-6">
+              <h2 className="text-lg font-semibold mb-4">Location</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {lead.city && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">City</p>
+                    <p className="font-medium">{lead.city}</p>
+                  </div>
+                )}
+                {lead.state && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">State/Province</p>
+                    <p className="font-medium">{lead.state}</p>
+                  </div>
+                )}
+                {lead.country && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Country</p>
+                    <p className="font-medium">{lead.country}</p>
+                  </div>
+                )}
+                {lead.region && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Region/Territory</p>
+                    <p className="font-medium">{lead.region}</p>
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+
           {/* Lead Status */}
           <Card className="p-6">
             <h2 className="text-lg font-semibold mb-4">Lead Status</h2>
