@@ -362,13 +362,22 @@ function AddTeamMemberForm({ onSuccess }) {
         </div>
         <div className="space-y-2">
           <Label htmlFor="state">State</Label>
-          <Input
-            id="state"
-            value={formData.state}
-            onChange={(e) => updateField('state', e.target.value)}
-            placeholder="e.g., Maharashtra"
-            data-testid="team-state-input"
-          />
+          <Select value={formData.state} onValueChange={(v) => updateField('state', v)}>
+            <SelectTrigger data-testid="team-state-select">
+              <SelectValue placeholder="Select state" />
+            </SelectTrigger>
+            <SelectContent>
+              <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Priority States</div>
+              {PRIORITY_STATES.map(state => (
+                <SelectItem key={state} value={state}>{state}</SelectItem>
+              ))}
+              <div className="border-t my-1"></div>
+              <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Other States</div>
+              {OTHER_STATES.map(state => (
+                <SelectItem key={state} value={state}>{state}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-2 md:col-span-2">
           <Label htmlFor="role_display">Role (Auto-set based on Designation)</Label>
