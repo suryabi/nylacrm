@@ -210,7 +210,7 @@ export default function DailyStatusUpdate() {
   };
 
   const today = format(new Date(), 'yyyy-MM-dd');
-  const tomorrow = format(new Date(Date.now() + 86400000), 'yyyy-MM-dd');
+  const yesterday = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd');
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-8 px-4" data-testid="daily-status-page">
@@ -226,6 +226,16 @@ export default function DailyStatusUpdate() {
         <div className="grid grid-cols-2 gap-3 mb-4">
           <Button
             type="button"
+            variant={selectedDate === yesterday ? 'default' : 'outline'}
+            className="h-16 text-base font-medium"
+            onClick={() => setSelectedDate(yesterday)}
+            data-testid="date-yesterday"
+          >
+            <Calendar className="h-5 w-5 mr-2" />
+            Yesterday
+          </Button>
+          <Button
+            type="button"
             variant={selectedDate === today ? 'default' : 'outline'}
             className="h-16 text-base font-medium"
             onClick={() => setSelectedDate(today)}
@@ -234,26 +244,16 @@ export default function DailyStatusUpdate() {
             <Calendar className="h-5 w-5 mr-2" />
             Today
           </Button>
-          <Button
-            type="button"
-            variant={selectedDate === tomorrow ? 'default' : 'outline'}
-            className="h-16 text-base font-medium"
-            onClick={() => setSelectedDate(tomorrow)}
-            data-testid="date-tomorrow"
-          >
-            <Calendar className="h-5 w-5 mr-2" />
-            Tomorrow
-          </Button>
         </div>
         
         {/* Custom Date Picker for Past Dates */}
         <div className="space-y-2">
-          <label className="text-xs text-muted-foreground font-medium">Or select a past date:</label>
+          <label className="text-xs text-muted-foreground font-medium">Or select any past date:</label>
           <input
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            max={tomorrow}
+            max={today}
             className="w-full h-12 px-4 rounded-md border border-input bg-background text-base"
             data-testid="date-picker"
           />
