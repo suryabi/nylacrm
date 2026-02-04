@@ -49,6 +49,7 @@ function App() {
           <Route path="/locations" element={<ProtectedRoute><LocationAnalytics /></ProtectedRoute>} />
           <Route path="/team" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
           <Route path="/daily-status" element={<ProtectedRoute><DailyStatusUpdate /></ProtectedRoute>} />
+          <Route path="/team-status" element={<ProtectedRoute><TeamStatusFeed /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </BrowserRouter>
