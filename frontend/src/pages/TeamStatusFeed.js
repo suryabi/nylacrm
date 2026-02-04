@@ -256,6 +256,35 @@ export default function TeamStatusFeed() {
         </div>
       </Card>
 
+      {/* Activity Metrics - All Views */}
+      {rollupData?.team_metrics && (
+        <div>
+          <h2 className="text-lg font-semibold mb-4">Activity Metrics</h2>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <Card className="p-4 bg-white border hover:shadow-md transition-shadow">
+              <p className="text-xs text-muted-foreground font-medium mb-2 uppercase tracking-wide">New Leads</p>
+              <p className="text-3xl font-bold text-primary">{rollupData.team_metrics.new_leads || 0}</p>
+            </Card>
+            <Card className="p-4 bg-white border hover:shadow-md transition-shadow">
+              <p className="text-xs text-muted-foreground font-medium mb-2 uppercase tracking-wide">Phone Calls</p>
+              <p className="text-3xl font-bold text-blue-600">{rollupData.team_metrics.phone_calls || 0}</p>
+            </Card>
+            <Card className="p-4 bg-white border hover:shadow-md transition-shadow">
+              <p className="text-xs text-muted-foreground font-medium mb-2 uppercase tracking-wide">Customer Visits</p>
+              <p className="text-3xl font-bold text-green-600">{rollupData.team_metrics.customer_visits || 0}</p>
+            </Card>
+            <Card className="p-4 bg-white border hover:shadow-md transition-shadow">
+              <p className="text-xs text-muted-foreground font-medium mb-2 uppercase tracking-wide">Emails</p>
+              <p className="text-3xl font-bold text-purple-600">{rollupData.team_metrics.emails || 0}</p>
+            </Card>
+            <Card className="p-4 bg-white border hover:shadow-md transition-shadow">
+              <p className="text-xs text-muted-foreground font-medium mb-2 uppercase tracking-wide">Messages</p>
+              <p className="text-3xl font-bold text-teal-600">{rollupData.team_metrics.messages || 0}</p>
+            </Card>
+          </div>
+        </div>
+      )}
+
       {/* Summary Stats - Only for Daily View */}
       {viewMode === 'daily' && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
