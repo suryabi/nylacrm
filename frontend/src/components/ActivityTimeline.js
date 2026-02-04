@@ -129,19 +129,16 @@ export default function ActivityTimeline({ activities }) {
             <div className="bg-white border border-border rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`px-2 py-0.5 text-xs rounded font-medium ${
-                    activity.activity_type === 'call' ? 'bg-blue-100 text-blue-800' :
-                    activity.activity_type === 'email' ? 'bg-purple-100 text-purple-800' :
-                    activity.activity_type === 'meeting' ? 'bg-green-100 text-green-800' :
-                    activity.activity_type === 'visit' ? 'bg-teal-100 text-teal-800' :
-                    activity.activity_type === 'status_change' ? 'bg-orange-100 text-orange-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {activity.activity_type.replace('_', ' ').toUpperCase()}
-                  </span>
-                  {activity.interaction_method && (
-                    <span className="px-2 py-0.5 text-xs rounded font-medium bg-slate-100 text-slate-700">
-                      {activity.interaction_method.replace('_', ' ').toUpperCase()}
+                  {/* Only show activity type for status changes */}
+                  {activity.activity_type === 'status_change' && (
+                    <span className="px-2 py-0.5 text-xs rounded font-medium bg-orange-100 text-orange-800">
+                      STATUS CHANGE
+                    </span>
+                  )}
+                  {/* Show interaction method subtly - small gray text */}
+                  {activity.interaction_method && activity.activity_type !== 'status_change' && (
+                    <span className="text-xs text-muted-foreground">
+                      via {activity.interaction_method.replace('_', ' ')}
                     </span>
                   )}
                 </div>
