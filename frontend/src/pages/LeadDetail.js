@@ -237,8 +237,8 @@ export default function LeadDetail() {
             <Card className="p-6">
               <h2 className="text-lg font-semibold mb-4">Interested Nyla SKUs</h2>
               <div className="flex flex-wrap gap-2">
-                {lead.interested_skus.map((sku, index) => (
-                  <Badge key={index} className="bg-primary/10 text-primary">
+                {lead.interested_skus.slice(0, 10).map((sku) => (
+                  <Badge key={sku} className="bg-primary/10 text-primary">
                     {sku}
                   </Badge>
                 ))}
