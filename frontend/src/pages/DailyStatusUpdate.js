@@ -104,7 +104,7 @@ export default function DailyStatusUpdate() {
     }
   };
 
-  const loadExistingStatus = () => {
+  const loadExistingStatus = useCallback(() => {
     const existing = pastStatuses.find(s => s.status_date === selectedDate);
     if (existing) {
       // Load existing saved status
@@ -131,7 +131,7 @@ export default function DailyStatusUpdate() {
       setHelpOriginal('');
       setHelpRevised(false);
     }
-  };
+  }, [selectedDate, pastStatuses]);
 
   const handleFetchFromActivities = async () => {
     setLoading(true);
