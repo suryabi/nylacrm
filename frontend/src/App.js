@@ -13,6 +13,7 @@ import FollowUps from './pages/FollowUps';
 import Reports from './pages/Reports';
 import LocationAnalytics from './pages/LocationAnalytics';
 import TeamManagement from './pages/TeamManagement';
+import DailyStatusUpdate from './pages/DailyStatusUpdate';
 import '@/App.css';
 
 function ProtectedRoute({ children }) {
