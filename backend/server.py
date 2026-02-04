@@ -794,7 +794,50 @@ async def update_daily_status(
     
     return updated_status
 
-@api_router.post("/daily-status/revise")
+@api_router.get("/daily-status/auto-populate/{status_date}")
+async def auto_populate_from_activities(status_date: str, current_user: dict = Depends(get_current_user)):
+    """Auto-populate daily status from logged lead activities"""
+    
+    # Get all activities created by user on this date
+    start_datetime = datetime.fromisoformat(f'{status_date}T00:00:00').replace(tzinfo=timezone.utc).isoformat()
+    end_datetime = datetime.fromisoformat(f'{status_date}T23:59:59').replace(tzinfo=timezone.utc).isoformat()
+    
+    activities = await db.activities.find(
+        {
+            'created_by': current_user['id'],
+            'created_at': {'$gte': start_datetime, '$lte': end_datetime}
+        },
+        {'_id': 0}
+    ).to_list(100)
+    
+    if not activities:
+        return {'formatted_text': '', 'activity_count': 0}
+    
+    # Get lead names for all activities
+    lead_ids = list(set([a['lead_id'] for a in activities]))
+    leads = await db.leads.find(
+        {'id': {'$in': lead_ids}},
+        {'_id': 0, 'id': 1, 'company': 1, 'name': 1}
+    ).to_list(100)
+    
+    lead_map = {l['id']: l.get('company') or l.get('name') for l in leads}
+    
+    # Format activities by lead
+    formatted_lines = []
+    for activity in activities:
+        lead_name = lead_map.get(activity['lead_id'], 'Unknown Lead')
+        interaction = activity.get('interaction_method', activity.get('activity_type', 'activity')).replace('_', ' ').title()
+        description = activity.get('description', '')
+        
+        formatted_lines.append(f"{lead_name}: {interaction} - {description}")
+    
+    formatted_text = '\n\n'.join(formatted_lines)
+    
+    return {
+        'formatted_text': formatted_text,
+        'activity_count': len(activities),
+        'leads_contacted': len(lead_map)
+    }
 async def revise_status_with_ai(request: dict, current_user: dict = Depends(get_current_user)):
     from emergentintegrations.llm.chat import LlmChat, UserMessage
     
