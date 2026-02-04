@@ -281,14 +281,32 @@ async def create_lead(lead_input: LeadCreate, current_user: dict = Depends(get_c
 async def get_leads(
     skip: int = 0,
     limit: int = 100,
+    status: Optional[str] = None,
+    city: Optional[str] = None,
+    state: Optional[str] = None,
+    country: Optional[str] = None,
+    region: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    # Admin and Sales Manager see all leads
-    # Sales Rep sees only assigned leads
-    if current_user['role'] in ['admin', 'sales_manager']:
-        leads = await db.leads.find({}, {'_id': 0}).skip(skip).limit(limit).to_list(limit)
-    else:
-        leads = await db.leads.find({'assigned_to': current_user['id']}, {'_id': 0}).skip(skip).limit(limit).to_list(limit)
+    # Build query based on role and filters
+    query = {}
+    
+    if current_user['role'] not in ['admin', 'sales_manager']:
+        query['assigned_to'] = current_user['id']
+    
+    # Add location filters
+    if status:
+        query['status'] = status
+    if city:
+        query['city'] = city
+    if state:
+        query['state'] = state
+    if country:
+        query['country'] = country
+    if region:
+        query['region'] = region
+    
+    leads = await db.leads.find(query, {'_id': 0}).skip(skip).limit(limit).to_list(limit)
     
     for lead in leads:
         if isinstance(lead['created_at'], str):
