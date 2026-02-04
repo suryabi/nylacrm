@@ -21,6 +21,27 @@ import { useAuth } from '../context/AuthContext';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
+const LOCATIONS = {
+  'North India': {
+    cities: ['Delhi NCR', 'Chandigarh', 'Jaipur', 'Lucknow', 'Agra', 'Amritsar', 'Dehradun'],
+    states: ['Delhi', 'Punjab', 'Haryana', 'Rajasthan', 'Uttar Pradesh', 'Uttarakhand', 'Himachal Pradesh']
+  },
+  'South India': {
+    cities: ['Bangalore', 'Hyderabad', 'Chennai', 'Kochi', 'Coimbatore', 'Visakhapatnam', 'Mysore'],
+    states: ['Karnataka', 'Telangana', 'Andhra Pradesh', 'Tamil Nadu', 'Kerala']
+  },
+  'West India': {
+    cities: ['Mumbai', 'Pune', 'Goa', 'Ahmedabad', 'Surat', 'Nagpur', 'Indore', 'Nashik'],
+    states: ['Maharashtra', 'Gujarat', 'Goa', 'Madhya Pradesh']
+  },
+  'East India': {
+    cities: ['Kolkata', 'Bhubaneswar', 'Patna', 'Ranchi', 'Siliguri'],
+    states: ['West Bengal', 'Odisha', 'Bihar', 'Jharkhand']
+  }
+};
+
+const SKUS = ['24 Brand', '660 ml Silver', '660 ml Gold', '330 ml Silver', '330 ml Gold', '660 Sparkling', '330 Sparkling'];
+
 export default function AddEditLead() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -28,10 +49,6 @@ export default function AddEditLead() {
   const isEdit = !!id;
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState([]);
-  const [locationConfig, setLocationConfig] = useState(null);
-  const [selectedRegion, setSelectedRegion] = useState('');
-  const [availableCities, setAvailableCities] = useState([]);
-  
   const [formData, setFormData] = useState({
     company: '',
     contact_person: '',
@@ -40,7 +57,7 @@ export default function AddEditLead() {
     city: '',
     state: '',
     country: 'India',
-    region: '',
+    region: user?.territory || '',
     status: 'new',
     source: '',
     assigned_to: '',
@@ -55,44 +72,18 @@ export default function AddEditLead() {
   });
 
   useEffect(() => {
-    fetchInitialData();
-  }, []);
-
-  useEffect(() => {
-    if (isEdit && id) {
+    fetchUsers();
+    if (isEdit) {
       fetchLead();
     }
-  }, [id, isEdit]);
+  }, []);
 
-  useEffect(() => {
-    // Update cities when region changes
-    if (locationConfig && selectedRegion) {
-      const region = locationConfig.regions.find(r => r.name === selectedRegion);
-      setAvailableCities(region?.cities || []);
-      
-      // Auto-set state to first state in region
-      if (region?.states?.length > 0 && !formData.state) {
-        setFormData(prev => ({ ...prev, state: region.states[0] }));
-      }
-    }
-  }, [selectedRegion, locationConfig]);
-
-  const fetchInitialData = async () => {
+  const fetchUsers = async () => {
     try {
-      const [usersRes, configRes] = await Promise.all([
-        usersAPI.getAll(),
-        axios.get(`${API_URL}/config/locations`)
-      ]);
-      setUsers(usersRes.data);
-      setLocationConfig(configRes.data);
-      
-      // Default region to user's territory if available
-      if (user?.territory && !formData.region) {
-        setSelectedRegion(user.territory);
-        setFormData(prev => ({ ...prev, region: user.territory }));
-      }
+      const response = await usersAPI.getAll();
+      setUsers(response.data);
     } catch (error) {
-      toast.error('Failed to load configuration');
+      toast.error('Failed to load users');
     }
   };
 
@@ -121,34 +112,21 @@ export default function AddEditLead() {
         notes: lead.notes || '',
         estimated_value: lead.estimated_value || ''
       });
-      setSelectedRegion(lead.region || '');
     } catch (error) {
       toast.error('Failed to load lead');
     }
   };
 
-  const handleRegionChange = (value) => {
-    setSelectedRegion(value);
-    setFormData({ ...formData, region: value, city: '', state: '' });
-  };
-
-  const handleCityChange = (value) => {
-    setFormData({ ...formData, city: value });
-    // Auto-set state based on city
-    if (locationConfig) {
-      const region = locationConfig.regions.find(r => r.name === selectedRegion);
-      if (region?.states?.length > 0) {
-        setFormData(prev => ({ ...prev, city: value, state: region.states[0] }));
-      }
-    }
+  const updateField = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const toggleSKU = (sku) => {
-    const skus = formData.interested_skus || [];
-    if (skus.includes(sku)) {
-      setFormData({ ...formData, interested_skus: skus.filter(s => s !== sku) });
+    const currentSkus = formData.interested_skus || [];
+    if (currentSkus.includes(sku)) {
+      updateField('interested_skus', currentSkus.filter(s => s !== sku));
     } else {
-      setFormData({ ...formData, interested_skus: [...skus, sku] });
+      updateField('interested_skus', [...currentSkus, sku]);
     }
   };
 
@@ -156,28 +134,31 @@ export default function AddEditLead() {
     e.preventDefault();
     setLoading(true);
     try {
-      const data = {
+      const submitData = {
         ...formData,
         estimated_value: formData.estimated_value ? parseFloat(formData.estimated_value) : null,
         current_landing_price: formData.current_landing_price ? parseFloat(formData.current_landing_price) : null,
         current_selling_price: formData.current_selling_price ? parseFloat(formData.current_selling_price) : null,
-        name: formData.contact_person || formData.company  // For backward compatibility
+        name: formData.contact_person || formData.company
       };
       
       if (isEdit) {
-        await leadsAPI.update(id, data);
+        await leadsAPI.update(id, submitData);
         toast.success('Lead updated successfully');
       } else {
-        await leadsAPI.create(data);
+        await leadsAPI.create(submitData);
         toast.success('Lead created successfully');
       }
       navigate('/leads');
     } catch (error) {
-      toast.error(error.response?.data?.detail || `Failed to ${isEdit ? 'update' : 'create'} lead`);
+      toast.error(error.response?.data?.detail || 'Failed to save lead');
     } finally {
       setLoading(false);
     }
   };
+
+  const regionCities = LOCATIONS[formData.region]?.cities || [];
+  const regionStates = LOCATIONS[formData.region]?.states || [];
 
   return (
     <div className="max-w-4xl mx-auto space-y-6" data-testid="add-edit-lead-page">
@@ -189,7 +170,6 @@ export default function AddEditLead() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Company & Contact Details */}
         <Card className="p-6">
           <h2 className="text-lg font-semibold mb-4">Company & Contact Details</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -198,7 +178,7 @@ export default function AddEditLead() {
               <Input
                 id="company"
                 value={formData.company}
-                onChange={(e) => setFormData({...formData, company: e.target.value})}
+                onChange={(e) => updateField('company', e.target.value)}
                 required
                 data-testid="lead-company-input"
               />
@@ -208,7 +188,7 @@ export default function AddEditLead() {
               <Input
                 id="contact_person"
                 value={formData.contact_person}
-                onChange={(e) => setFormData({...formData, contact_person: e.target.value})}
+                onChange={(e) => updateField('contact_person', e.target.value)}
                 data-testid="lead-contact-input"
               />
             </div>
@@ -217,7 +197,7 @@ export default function AddEditLead() {
               <Input
                 id="phone"
                 value={formData.phone}
-                onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                onChange={(e) => updateField('phone', e.target.value)}
                 placeholder="+91"
                 data-testid="lead-phone-input"
               />
@@ -228,14 +208,13 @@ export default function AddEditLead() {
                 id="email"
                 type="email"
                 value={formData.email}
-                onChange={(e) => setFormData({...formData, email: e.target.value})}
+                onChange={(e) => updateField('email', e.target.value)}
                 data-testid="lead-email-input"
               />
             </div>
           </div>
         </Card>
 
-        {/* Location */}
         <Card className="p-6">
           <h2 className="text-lg font-semibold mb-4">Location</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -245,30 +224,26 @@ export default function AddEditLead() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="region">Region *</Label>
-              <Select value={selectedRegion} onValueChange={handleRegionChange} required>
+              <Select value={formData.region} onValueChange={(v) => updateField('region', v)} required>
                 <SelectTrigger data-testid="lead-region-select">
                   <SelectValue placeholder="Select region" />
                 </SelectTrigger>
                 <SelectContent>
-                  {locationConfig?.regions.map(region => (
-                    <SelectItem key={region.name} value={region.name}>{region.name}</SelectItem>
-                  ))}
+                  <SelectItem value="North India">North India</SelectItem>
+                  <SelectItem value="South India">South India</SelectItem>
+                  <SelectItem value="West India">West India</SelectItem>
+                  <SelectItem value="East India">East India</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="city">City *</Label>
-              <Select 
-                value={formData.city} 
-                onValueChange={handleCityChange}
-                disabled={!selectedRegion}
-                required
-              >
+              <Select value={formData.city} onValueChange={(v) => updateField('city', v)} disabled={!formData.region} required>
                 <SelectTrigger data-testid="lead-city-select">
                   <SelectValue placeholder="Select city" />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableCities.map(city => (
+                  {regionCities.map(city => (
                     <SelectItem key={city} value={city}>{city}</SelectItem>
                   ))}
                 </SelectContent>
@@ -276,12 +251,12 @@ export default function AddEditLead() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="state">State *</Label>
-              <Select value={formData.state} onValueChange={(value) => setFormData({...formData, state: value})}>
+              <Select value={formData.state} onValueChange={(v) => updateField('state', v)} required>
                 <SelectTrigger data-testid="lead-state-select">
                   <SelectValue placeholder="Select state" />
                 </SelectTrigger>
                 <SelectContent>
-                  {locationConfig?.regions.find(r => r.name === selectedRegion)?.states.map(state => (
+                  {regionStates.map(state => (
                     <SelectItem key={state} value={state}>{state}</SelectItem>
                   ))}
                 </SelectContent>
@@ -290,13 +265,12 @@ export default function AddEditLead() {
           </div>
         </Card>
 
-        {/* Lead Information */}
         <Card className="p-6">
           <h2 className="text-lg font-semibold mb-4">Lead Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="status">Status</Label>
-              <Select value={formData.status} onValueChange={(value) => setFormData({...formData, status: value})}>
+              <Select value={formData.status} onValueChange={(v) => updateField('status', v)}>
                 <SelectTrigger data-testid="lead-status-select">
                   <SelectValue />
                 </SelectTrigger>
@@ -314,30 +288,28 @@ export default function AddEditLead() {
               <Label htmlFor="source">Source</Label>
               <Input
                 id="source"
-                placeholder="e.g., Website, Referral, Cold Call"
+                placeholder="Website, Referral, Cold Call"
                 value={formData.source}
-                onChange={(e) => setFormData({...formData, source: e.target.value})}
+                onChange={(e) => updateField('source', e.target.value)}
                 data-testid="lead-source-input"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="assigned_to">Assign To</Label>
-              <Select value={formData.assigned_to} onValueChange={(value) => setFormData({...formData, assigned_to: value})}>
+              <Select value={formData.assigned_to} onValueChange={(v) => updateField('assigned_to', v)}>
                 <SelectTrigger data-testid="lead-assign-select">
                   <SelectValue placeholder="Select user" />
                 </SelectTrigger>
                 <SelectContent>
-                  {users.filter(u => ['sales_manager', 'sales_rep'].includes(u.role)).map(user => (
-                    <SelectItem key={user.id} value={user.id}>
-                      {user.name} ({user.territory})
-                    </SelectItem>
+                  {users.filter(u => ['sales_manager', 'sales_rep'].includes(u.role)).map(usr => (
+                    <SelectItem key={usr.id} value={usr.id}>{usr.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="priority">Priority</Label>
-              <Select value={formData.priority} onValueChange={(value) => setFormData({...formData, priority: value})}>
+              <Select value={formData.priority} onValueChange={(v) => updateField('priority', v)}>
                 <SelectTrigger data-testid="lead-priority-select">
                   <SelectValue />
                 </SelectTrigger>
@@ -351,7 +323,6 @@ export default function AddEditLead() {
           </div>
         </Card>
 
-        {/* Current Brand Details */}
         <Card className="p-6">
           <h2 className="text-lg font-semibold mb-4">Current Brand Details</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -361,7 +332,7 @@ export default function AddEditLead() {
                 id="current_water_brand"
                 placeholder="e.g., Bisleri, Kinley"
                 value={formData.current_water_brand}
-                onChange={(e) => setFormData({...formData, current_water_brand: e.target.value})}
+                onChange={(e) => updateField('current_water_brand', e.target.value)}
                 data-testid="current-brand-input"
               />
             </div>
@@ -371,7 +342,7 @@ export default function AddEditLead() {
                 id="current_volume"
                 placeholder="e.g., 1000 bottles/month"
                 value={formData.current_volume}
-                onChange={(e) => setFormData({...formData, current_volume: e.target.value})}
+                onChange={(e) => updateField('current_volume', e.target.value)}
                 data-testid="current-volume-input"
               />
             </div>
@@ -382,7 +353,7 @@ export default function AddEditLead() {
                 type="number"
                 placeholder="15"
                 value={formData.current_landing_price}
-                onChange={(e) => setFormData({...formData, current_landing_price: e.target.value})}
+                onChange={(e) => updateField('current_landing_price', e.target.value)}
                 data-testid="current-landing-price-input"
               />
             </div>
@@ -393,36 +364,35 @@ export default function AddEditLead() {
                 type="number"
                 placeholder="20"
                 value={formData.current_selling_price}
-                onChange={(e) => setFormData({...formData, current_selling_price: e.target.value})}
+                onChange={(e) => updateField('current_selling_price', e.target.value)}
                 data-testid="current-selling-price-input"
               />
             </div>
           </div>
         </Card>
 
-        {/* Nyla Details */}
         <Card className="p-6">
           <h2 className="text-lg font-semibold mb-4">Nyla Details</h2>
           <div className="space-y-4">
             <div className="space-y-3">
               <Label>Which SKUs is the customer interested in?</Label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {locationConfig?.skus.map((sku) => (
-                  <div key={sku} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`sku-${sku}`}
-                      checked={formData.interested_skus.includes(sku)}
-                      onCheckedChange={() => toggleSKU(sku)}
-                      data-testid={`sku-checkbox-${sku}`}
-                    />
-                    <label
-                      htmlFor={`sku-${sku}`}
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                    >
-                      {sku}
-                    </label>
-                  </div>
-                ))}
+                {SKUS.map((sku) => {
+                  const isChecked = (formData.interested_skus || []).includes(sku);
+                  return (
+                    <div key={sku} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`sku-${sku}`}
+                        checked={isChecked}
+                        onCheckedChange={() => toggleSKU(sku)}
+                        data-testid={`sku-checkbox-${sku}`}
+                      />
+                      <label htmlFor={`sku-${sku}`} className="text-sm font-medium cursor-pointer">
+                        {sku}
+                      </label>
+                    </div>
+                  );
+                })}
               </div>
             </div>
             <div className="space-y-2">
@@ -432,33 +402,27 @@ export default function AddEditLead() {
                 type="number"
                 placeholder="500000"
                 value={formData.estimated_value}
-                onChange={(e) => setFormData({...formData, estimated_value: e.target.value})}
+                onChange={(e) => updateField('estimated_value', e.target.value)}
                 data-testid="lead-value-input"
               />
             </div>
           </div>
         </Card>
 
-        {/* Notes */}
         <Card className="p-6">
           <h2 className="text-lg font-semibold mb-4">Notes</h2>
           <Textarea
             value={formData.notes}
-            onChange={(e) => setFormData({...formData, notes: e.target.value})}
+            onChange={(e) => updateField('notes', e.target.value)}
             rows={4}
             placeholder="Add any additional notes about this lead..."
             data-testid="lead-notes-input"
           />
         </Card>
 
-        {/* Actions */}
         <div className="flex gap-4">
           <Button type="submit" disabled={loading} data-testid="save-lead-button">
-            {loading ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
-            ) : (
-              isEdit ? 'Update Lead' : 'Create Lead'
-            )}
+            {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : (isEdit ? 'Update Lead' : 'Create Lead')}
           </Button>
           <Button type="button" variant="outline" onClick={() => navigate('/leads')} data-testid="cancel-button">
             Cancel
