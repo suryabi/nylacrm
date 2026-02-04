@@ -98,8 +98,12 @@ export default function TeamStatusFeed() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {rollupData?.team_statuses.map((status, index) => (
-            <Card key={index} className="p-6" data-testid={`team-status-${index}`}>
+          {rollupData?.team_statuses && rollupData.team_statuses.length > 0 && rollupData.team_statuses.slice(0, 20).map((status, index) => {
+            const userName = status.user_name || 'Unknown';
+            const userInitial = userName[0] ? userName[0].toUpperCase() : '?';
+            
+            return (
+              <Card key={`status-${index}`} className="p-6" data-testid={`team-status-${index}`}>
               {/* Team Member Info */}
               <div className="flex items-start justify-between mb-4 pb-4 border-b border-border">
                 <div className="flex items-center gap-3">
