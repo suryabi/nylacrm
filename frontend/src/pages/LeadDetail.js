@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import ActivityTimeline from '../components/ActivityTimeline';
 
 const statusColors = {
   new: 'bg-blue-100 text-blue-800',
