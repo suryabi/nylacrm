@@ -231,6 +231,53 @@ export default function AddEditLead() {
             </div>
           </div>
 
+          {/* Location Information */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold">Location</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="city">City</Label>
+                <Input
+                  id="city"
+                  placeholder="e.g., New York"
+                  value={formData.city}
+                  onChange={(e) => setFormData({...formData, city: e.target.value})}
+                  data-testid="lead-city-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="state">State/Province</Label>
+                <Input
+                  id="state"
+                  placeholder="e.g., California, NY"
+                  value={formData.state}
+                  onChange={(e) => setFormData({...formData, state: e.target.value})}
+                  data-testid="lead-state-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="country">Country</Label>
+                <Input
+                  id="country"
+                  placeholder="e.g., United States"
+                  value={formData.country}
+                  onChange={(e) => setFormData({...formData, country: e.target.value})}
+                  data-testid="lead-country-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="region">Region/Territory</Label>
+                <Input
+                  id="region"
+                  placeholder="e.g., North America, EMEA"
+                  value={formData.region}
+                  onChange={(e) => setFormData({...formData, region: e.target.value})}
+                  data-testid="lead-region-input"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Notes */}
           <div className="space-y-2">
             <Label htmlFor="notes">Notes</Label>
