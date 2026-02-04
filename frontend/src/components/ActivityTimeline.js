@@ -62,26 +62,33 @@ export default function ActivityTimeline({ activities }) {
 
   return (
     <div className="space-y-6">
-      {/* Summary Stats */}
+      {/* Summary Stats - 4 Individual Cards */}
       {activitiesWithGaps.length > 0 && (
-        <div className="bg-muted/50 rounded-lg p-4 border border-border">
-          <h3 className="text-sm font-semibold mb-3">Timeline Summary</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-            <div>
-              <p className="text-2xl font-bold text-primary">{activitiesWithGaps.length}</p>
-              <p className="text-xs text-muted-foreground">Total Follow ups</p>
+        <div>
+          <h3 className="text-sm font-semibold mb-4 text-foreground">Timeline Summary</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Total Follow ups */}
+            <div className="bg-white border border-border rounded-lg p-4 hover:shadow-md transition-shadow">
+              <p className="text-xs text-muted-foreground font-medium mb-2">Total Follow ups</p>
+              <p className="text-3xl font-bold text-primary">{activitiesWithGaps.length}</p>
             </div>
-            <div>
-              <p className="text-2xl font-bold text-primary">{daysSinceLastContact}</p>
-              <p className="text-xs text-muted-foreground">Days Since Last Contact</p>
+            
+            {/* Days Since Last Contact */}
+            <div className="bg-white border border-border rounded-lg p-4 hover:shadow-md transition-shadow">
+              <p className="text-xs text-muted-foreground font-medium mb-2">Days Since Last Contact</p>
+              <p className="text-3xl font-bold text-primary">{daysSinceLastContact}</p>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-foreground">{format(lastContactedDate, 'MMM d, yyyy')}</p>
-              <p className="text-xs text-muted-foreground">Last Contacted Date</p>
+            
+            {/* Last Contacted Date */}
+            <div className="bg-white border border-border rounded-lg p-4 hover:shadow-md transition-shadow">
+              <p className="text-xs text-muted-foreground font-medium mb-2">Last Contacted Date</p>
+              <p className="text-lg font-bold text-foreground">{format(lastContactedDate, 'MMM d, yyyy')}</p>
             </div>
-            <div>
-              <p className="text-2xl font-bold text-primary">{daysSinceFirstContact}</p>
-              <p className="text-xs text-muted-foreground">Days Since First Contact</p>
+            
+            {/* Days Since First Contact */}
+            <div className="bg-white border border-border rounded-lg p-4 hover:shadow-md transition-shadow">
+              <p className="text-xs text-muted-foreground font-medium mb-2">Days Since First Contact</p>
+              <p className="text-3xl font-bold text-primary">{daysSinceFirstContact}</p>
             </div>
           </div>
         </div>
