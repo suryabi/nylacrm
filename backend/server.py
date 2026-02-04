@@ -79,20 +79,38 @@ class LeadStatus(BaseModel):
 class Lead(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
+    
+    # Company & Contact
+    company: str
+    contact_person: Optional[str] = None
+    name: Optional[str] = None  # Kept for backward compatibility
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
-    company: Optional[str] = None
+    
+    # Location
+    city: str
+    state: str
+    country: str = 'India'
+    region: str
+    
+    # Lead Information
     status: str = 'new'
-    source: Optional[str] = None  # 'website', 'referral', 'cold_call', 'social_media', etc.
-    assigned_to: Optional[str] = None  # user_id
-    estimated_value: Optional[float] = None
-    priority: Optional[str] = 'medium'  # 'low', 'medium', 'high'
+    source: Optional[str] = None
+    assigned_to: Optional[str] = None
+    priority: Optional[str] = 'medium'
+    
+    # Current Brand Details
+    current_water_brand: Optional[str] = None
+    current_landing_price: Optional[float] = None
+    current_volume: Optional[str] = None
+    current_selling_price: Optional[float] = None
+    
+    # Nyla Details
+    interested_skus: Optional[List[str]] = []  # Multi-select SKUs
     notes: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    country: Optional[str] = None
-    region: Optional[str] = None  # Business region/territory
+    
+    # System fields
+    estimated_value: Optional[float] = None
     created_by: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
