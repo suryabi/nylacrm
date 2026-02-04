@@ -90,7 +90,7 @@ export default function DailyStatusUpdate() {
 
   useEffect(() => {
     loadExistingStatus();
-  }, [selectedDate, pastStatuses]);
+  }, [loadExistingStatus]);
 
   const fetchPastStatuses = async () => {
     try {
