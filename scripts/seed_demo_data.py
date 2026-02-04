@@ -145,9 +145,16 @@ async def seed_data():
     ]
     
     await db.users.insert_many(users)
-    print("✅ Created 3 demo users")
+    print("✅ Created 6 team members with organizational hierarchy")
+    print("   └─ Surya Yadavalli (CEO & MD)")
+    print("      └─ Vamsi Bommena (Director)")
+    print("         └─ Karanabir Singh Gulati (VP Growth & Strategy)")
+    print("            ├─ Rahul Sharma (Sales Manager - West)")
+    print("            ├─ Priya Menon (Senior Sales Executive - South)")
+    print("            └─ Amit Verma (Sales Executive - North)")
+    print("   [Dotted line: Karanabir → Surya]")
     
-    # Create demo leads
+    # Create demo leads - assign to sales team members
     leads_data = [
         {
             'id': str(uuid.uuid4()),
@@ -157,7 +164,7 @@ async def seed_data():
             'company': 'Tech Solutions India',
             'status': 'new',
             'source': 'website',
-            'assigned_to': rep_id,
+            'assigned_to': rep2_id,  # Amit Verma - North India
             'estimated_value': 450000,
             'priority': 'high',
             'notes': 'Interested in enterprise water purification solution',
@@ -165,7 +172,7 @@ async def seed_data():
             'state': 'Delhi',
             'country': 'India',
             'region': 'North India',
-            'created_by': admin_id,
+            'created_by': karanabir_id,
             'created_at': datetime.now(timezone.utc).isoformat(),
             'updated_at': datetime.now(timezone.utc).isoformat()
         },
@@ -177,7 +184,7 @@ async def seed_data():
             'company': 'Innovate Corp',
             'status': 'contacted',
             'source': 'referral',
-            'assigned_to': rep_id,
+            'assigned_to': manager_id,  # Rahul Sharma - West India
             'estimated_value': 650000,
             'priority': 'high',
             'notes': 'Looking for corporate office solution',
@@ -185,7 +192,7 @@ async def seed_data():
             'state': 'Maharashtra',
             'country': 'India',
             'region': 'West India',
-            'created_by': admin_id,
+            'created_by': karanabir_id,
             'created_at': (datetime.now(timezone.utc) - timedelta(days=2)).isoformat(),
             'updated_at': datetime.now(timezone.utc).isoformat()
         },
@@ -197,7 +204,7 @@ async def seed_data():
             'company': 'Goa Hospitality Group',
             'status': 'qualified',
             'source': 'cold_call',
-            'assigned_to': manager_id,
+            'assigned_to': manager_id,  # Rahul Sharma - West India
             'estimated_value': 350000,
             'priority': 'medium',
             'notes': 'Resort chain interested in premium water systems',
@@ -217,7 +224,7 @@ async def seed_data():
             'company': 'Bangalore Tech Park',
             'status': 'proposal',
             'source': 'social_media',
-            'assigned_to': rep_id,
+            'assigned_to': rep1_id,  # Priya Menon - South India
             'estimated_value': 850000,
             'priority': 'high',
             'notes': 'IT park with 5000+ employees, proposal sent',
@@ -225,7 +232,7 @@ async def seed_data():
             'state': 'Karnataka',
             'country': 'India',
             'region': 'South India',
-            'created_by': manager_id,
+            'created_by': rep1_id,
             'created_at': (datetime.now(timezone.utc) - timedelta(days=7)).isoformat(),
             'updated_at': datetime.now(timezone.utc).isoformat()
         },
@@ -237,7 +244,7 @@ async def seed_data():
             'company': 'Hyderabad Pharma Ltd',
             'status': 'closed_won',
             'source': 'website',
-            'assigned_to': manager_id,
+            'assigned_to': rep1_id,  # Priya Menon - South India
             'estimated_value': 1200000,
             'priority': 'high',
             'notes': 'Large pharmaceutical facility, deal closed!',
@@ -245,7 +252,7 @@ async def seed_data():
             'state': 'Telangana',
             'country': 'India',
             'region': 'South India',
-            'created_by': admin_id,
+            'created_by': karanabir_id,
             'created_at': (datetime.now(timezone.utc) - timedelta(days=15)).isoformat(),
             'updated_at': (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
         },
@@ -257,7 +264,7 @@ async def seed_data():
             'company': 'Heritage Hotels Jaipur',
             'status': 'contacted',
             'source': 'referral',
-            'assigned_to': rep_id,
+            'assigned_to': rep2_id,  # Amit Verma - North India
             'estimated_value': 400000,
             'priority': 'medium',
             'notes': 'Heritage hotel chain, 8 properties',
@@ -265,7 +272,7 @@ async def seed_data():
             'state': 'Rajasthan',
             'country': 'India',
             'region': 'North India',
-            'created_by': admin_id,
+            'created_by': karanabir_id,
             'created_at': (datetime.now(timezone.utc) - timedelta(days=3)).isoformat(),
             'updated_at': datetime.now(timezone.utc).isoformat()
         },
@@ -277,7 +284,7 @@ async def seed_data():
             'company': 'Chandigarh Education Hub',
             'status': 'qualified',
             'source': 'website',
-            'assigned_to': rep_id,
+            'assigned_to': rep2_id,  # Amit Verma - North India
             'estimated_value': 300000,
             'priority': 'high',
             'notes': 'Educational institution campus',
@@ -285,7 +292,7 @@ async def seed_data():
             'state': 'Chandigarh',
             'country': 'India',
             'region': 'North India',
-            'created_by': manager_id,
+            'created_by': rep2_id,
             'created_at': (datetime.now(timezone.utc) - timedelta(days=4)).isoformat(),
             'updated_at': datetime.now(timezone.utc).isoformat()
         }
