@@ -385,7 +385,7 @@ export default function DailyStatusUpdate() {
               {status.yesterday_updates && (
                 <div className="mb-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <p className="text-sm font-semibold text-muted-foreground">Yesterday's Updates</p>
+                    <p className="text-sm font-semibold text-muted-foreground">Yesterday&apos;s Updates</p>
                     {status.yesterday_ai_revised && (
                       <Badge variant="outline" className="text-xs">
                         <Sparkles className="h-3 w-3 mr-1" />
