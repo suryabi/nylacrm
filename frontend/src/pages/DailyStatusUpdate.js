@@ -319,7 +319,7 @@ export default function DailyStatusUpdate() {
         </p>
       </Card>
 
-      {/* Fetch from Lead Activities Button */}
+      {/* Fetch from Lead Activities Button - Dynamic text */}
       <Button
         type="button"
         variant="outline"
@@ -331,7 +331,11 @@ export default function DailyStatusUpdate() {
         {loading ? (
           <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Loading activities...</>
         ) : (
-          <><Download className="h-5 w-5 mr-2" /> Fetch from Lead Activities</>
+          <><Download className="h-5 w-5 mr-2" /> 
+            {isToday ? "Fetch Today's Lead Activities" : 
+             isYesterday ? "Fetch Yesterday's Lead Activities" :
+             `Fetch Lead Activities from ${format(new Date(selectedDate), 'MMM d')}`}
+          </>
         )}
       </Button>
 
