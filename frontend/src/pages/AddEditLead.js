@@ -115,6 +115,7 @@ export default function AddEditLead() {
     contact_person: '',
     email: '',
     phone: '',
+    category: '',
     city: '',
     state: '',
     country: 'India',
