@@ -2066,7 +2066,7 @@ async def allocate_territory_targets(
     
     return {'message': 'Territory targets allocated', 'targets': created_targets}
 
-@api_router.post(\"/target-plans/{plan_id}/territories/{territory}/cities\")
+@api_router.post("/target-plans/{plan_id}/territories/{territory}/cities")
 async def allocate_city_targets(
     plan_id: str,
     territory: str,
