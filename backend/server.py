@@ -2026,7 +2026,7 @@ async def allocate_territory_targets(
     territories: List[TerritoryTargetCreate],
     current_user: dict = Depends(get_current_user)
 ):
-    \"\"\"Allocate country target to territories\"\"\"
+    """Allocate country target to territories"""
     
     if current_user['role'] not in ['ceo', 'director', 'vp', 'admin']:
         raise HTTPException(status_code=403, detail='Only leadership can allocate territory targets')
