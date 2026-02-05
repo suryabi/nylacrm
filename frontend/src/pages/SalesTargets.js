@@ -343,39 +343,71 @@ function CityAllocationForm({ territory, planId, onSuccess }) {
   }[territory.territory] || [];
 
   const [values, setValues] = React.useState({});
+  const [submitting, setSubmitting] = React.useState(false);
 
-  const total = Object.values(values).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
+  const updateValue = (cityName, value) => {
+    const newValues = {...values};
+    newValues[cityName] = value;
+    setValues(newValues);
+  };
+
+  const total = cities.reduce((sum, city) => {
+    const val = parseFloat(values[city.c]) || 0;
+    return sum + val;
+  }, 0);
+  
   const targetL = territory.target_revenue / 100000;
-  const valid = Math.abs(total - targetL) < 0.1;
+  const valid = Math.abs(total - targetL) < 0.1 && total > 0;
 
   const submit = async () => {
+    setSubmitting(true);
     try {
       const token = localStorage.getItem('token');
-      const payload = cities
-        .filter(city => parseFloat(values[city.c]) > 0)
-        .map(city => ({
-          state: city.s,
-          city: city.c,
-          target_revenue: parseFloat(values[city.c]) * 100000
-        }));
+      const payload = [];
+      
+      for (const city of cities) {
+        const val = parseFloat(values[city.c]);
+        if (val > 0) {
+          payload.push({
+            state: city.s,
+            city: city.c,
+            target_revenue: val * 100000
+          });
+        }
+      }
 
       await axios.post(
         `${API}/target-plans/${planId}/territories/${encodeURIComponent(territory.territory)}/cities`,
         payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      toast.success(`${territory.territory} cities allocated!`);
+      
+      toast.success(`✓ ${territory.territory} cities allocated successfully! ${payload.length} cities with Rs ${total.toFixed(1)}L total.`, {
+        duration: 4000
+      });
+      
       onSuccess();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed');
+      toast.error(err.response?.data?.detail || 'Failed to allocate cities. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
     <div className="space-y-4">
       <div className="bg-primary/5 p-4 rounded-xl">
-        <p className="font-semibold">{territory.territory} Target: Rs {targetL.toFixed(1)}L</p>
-        <p className="text-sm text-muted-foreground mt-1">Allocated: Rs {(territory.allocated_revenue / 100000).toFixed(1)}L</p>
+        <div className="flex justify-between items-center">
+          <div>
+            <p className="font-semibold">{territory.territory} Target: Rs {targetL.toFixed(1)}L</p>
+            <p className="text-sm text-muted-foreground mt-1">Already Allocated: Rs {(territory.allocated_revenue / 100000).toFixed(1)}L</p>
+          </div>
+          {territory.allocated_revenue > 0 && (
+            <Badge className="bg-green-100 text-green-800">
+              {((territory.allocated_revenue / territory.target_revenue) * 100).toFixed(0)}% Done
+            </Badge>
+          )}
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -385,29 +417,51 @@ function CityAllocationForm({ territory, planId, onSuccess }) {
               <p className="font-medium">{city.c}</p>
               <p className="text-xs text-muted-foreground">{city.s}</p>
             </div>
-            <Input
-              type="number"
-              value={values[city.c] || ''}
-              onChange={e => setValues({...values, [city.c]: e.target.value})}
-              placeholder="Lakhs"
-              className="w-40 h-11 text-right font-semibold"
-            />
+            <div className="w-48">
+              <Input
+                type="number"
+                value={values[city.c] || ''}
+                onChange={e => updateValue(city.c, e.target.value)}
+                placeholder="Enter in Lakhs"
+                className="h-11 text-right font-semibold text-lg"
+              />
+            </div>
+            <div className="w-16 text-right">
+              <p className="text-sm text-muted-foreground">Lakhs</p>
+            </div>
           </div>
         ))}
       </div>
 
-      <div className={`p-4 rounded-xl ${valid && total > 0 ? 'bg-green-50 border-2 border-green-300' : 'bg-amber-50 border-2 border-amber-300'}`}>
-        <div className="flex justify-between">
-          <span className="font-semibold">Total:</span>
-          <span className="text-xl font-bold">Rs {total.toFixed(1)}L</span>
+      <div className={`p-5 rounded-xl border-2 ${valid ? 'bg-green-50 border-green-300' : 'bg-amber-50 border-amber-300'}`}>
+        <div className="flex justify-between items-center mb-2">
+          <span className="font-semibold text-lg">Total Allocated:</span>
+          <span className="text-3xl font-bold">Rs {total.toFixed(1)}L</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Territory Target:</span>
+          <span className="font-medium">Rs {targetL.toFixed(1)}L</span>
         </div>
         {!valid && total > 0 && (
-          <p className="text-sm text-amber-800 mt-2">Must equal Rs {targetL.toFixed(1)}L</p>
+          <p className="text-sm text-amber-800 mt-3 flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" />
+            Difference: Rs {Math.abs(total - targetL).toFixed(1)}L - Must equal territory target
+          </p>
+        )}
+        {valid && (
+          <p className="text-sm text-green-800 mt-3 flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4" />
+            Perfect! Ready to allocate
+          </p>
         )}
       </div>
 
-      <Button onClick={submit} disabled={!valid || total === 0} className="w-full h-12 rounded-full">
-        Allocate {territory.territory} Cities
+      <Button 
+        onClick={submit} 
+        disabled={!valid || submitting} 
+        className="w-full h-14 rounded-full text-base font-semibold"
+      >
+        {submitting ? 'Allocating...' : `Allocate ${territory.territory} Cities (${cities.length} cities)`}
       </Button>
     </div>
   );
