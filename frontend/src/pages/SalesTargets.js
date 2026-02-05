@@ -455,6 +455,38 @@ function TerritoryAlloc({ planId, target, onNext }) {
   const [s, setS] = React.useState('');
   const [w, setW] = React.useState('');
   const [e, setE] = React.useState('');
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    loadExistingAllocations();
+  }, []);
+
+  const loadExistingAllocations = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API}/target-plans/${planId}/hierarchy`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (res.data.territories) {
+        for (const terr of res.data.territories) {
+          const val = (terr.target_revenue / 100000).toString();
+          if (terr.territory === 'North India') setN(val);
+          if (terr.territory === 'South India') setS(val);
+          if (terr.territory === 'West India') setW(val);
+          if (terr.territory === 'East India') setE(val);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load existing allocations');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="text-center py-8">Loading existing allocations...</div>;
+  }
 
   const total = (parseFloat(n) || 0) + (parseFloat(s) || 0) + (parseFloat(w) || 0) + (parseFloat(e) || 0);
   const targetL = target / 100000;
