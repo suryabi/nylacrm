@@ -2175,6 +2175,88 @@ async def get_target_hierarchy(plan_id: str, current_user: dict = Depends(get_cu
     
     return hierarchy
 
+@api_router.post("/target-plans/{plan_id}/cities/{city_id}/resources")
+async def assign_city_resources(
+    plan_id: str,
+    city_id: str,
+    resources: List[ResourceTargetCreate],
+    current_user: dict = Depends(get_current_user)
+):
+    """Assign city target to sales resources"""
+    
+    # Get city target
+    city = await db.city_targets.find_one({'id': city_id}, {'_id': 0})
+    if not city:
+        raise HTTPException(status_code=404, detail='City not found')
+    
+    # Validate total
+    total_assigned = sum([r.target_revenue for r in resources])
+    if abs(total_assigned - city['target_revenue']) > 0.01:
+        raise HTTPException(
+            status_code=400,
+            detail=f'Resource targets must equal city target'
+        )
+    
+    # Delete existing resource targets for this city
+    await db.resource_targets.delete_many({'city_id': city_id})
+    
+    # Create new resource targets
+    for resource in resources:
+        resource_data = resource.model_dump()
+        resource_data['plan_id'] = plan_id
+        resource_data['city_id'] = city_id
+        resource_obj = ResourceTarget(**resource_data)
+        
+        doc = resource_obj.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        
+        await db.resource_targets.insert_one(doc)
+    
+    return {'message': 'Resources assigned successfully'}
+
+@api_router.get("/target-plans/{plan_id}/resource-summary")
+async def get_resource_summary(plan_id: str, current_user: dict = Depends(get_current_user)):
+    """Get resource-wise summary with city breakdowns"""
+    
+    # Get all resource targets for this plan
+    resources = await db.resource_targets.find({'plan_id': plan_id}, {'_id': 0}).to_list(1000)
+    
+    # Get cities
+    cities = await db.city_targets.find({'plan_id': plan_id}, {'_id': 0}).to_list(1000)
+    city_map = {c['id']: c for c in cities}
+    
+    # Get users
+    user_ids = list(set([r['resource_id'] for r in resources]))
+    users = await db.users.find({'id': {'$in': user_ids}}, {'_id': 0}).to_list(100)
+    user_map = {u['id']: u for u in users}
+    
+    # Build resource summary
+    resource_summary = {}
+    for res in resources:
+        user_id = res['resource_id']
+        if user_id not in resource_summary:
+            user_info = user_map.get(user_id, {})
+            resource_summary[user_id] = {
+                'resource_name': user_info.get('name', 'Unknown'),
+                'designation': user_info.get('designation', ''),
+                'territory': user_info.get('territory', ''),
+                'total_target': 0,
+                'city_breakdown': []
+            }
+        
+        city_info = city_map.get(res['city_id'], {})
+        resource_summary[user_id]['total_target'] += res['target_revenue']
+        resource_summary[user_id]['city_breakdown'].append({
+            'city': city_info.get('city', 'Unknown'),
+            'state': city_info.get('state', ''),
+            'target': res['target_revenue']
+        })
+    
+    return {
+        'resources': list(resource_summary.values()),
+        'plan_id': plan_id
+    }
+
 # ============= BOTTLE PREVIEW ROUTES =============
 
 @api_router.post("/bottle-preview/upload-logo")
