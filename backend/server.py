@@ -2072,7 +2072,7 @@ async def allocate_city_targets(
     cities: List[CityTargetCreate],
     current_user: dict = Depends(get_current_user)
 ):
-    \"\"\"Allocate territory target to cities\"\"\"
+    """Allocate territory target to cities"""
     
     # Get territory target
     territory_target = await db.territory_targets.find_one(
