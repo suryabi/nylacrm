@@ -56,9 +56,47 @@ const TERRITORIES = [
   'North India',
   'South India',
   'West India',
-  'East India',
-  'Central India'
+  'East India'
 ];
+
+const TERRITORY_LOCATIONS = {
+  'North India': {
+    states: {
+      'Delhi': ['New Delhi'],
+      'Uttar Pradesh': ['Noida']
+    }
+  },
+  'South India': {
+    states: {
+      'Karnataka': ['Bengaluru'],
+      'Tamil Nadu': ['Chennai'],
+      'Telangana': ['Hyderabad']
+    }
+  },
+  'West India': {
+    states: {
+      'Maharashtra': ['Mumbai', 'Pune'],
+      'Gujarat': ['Ahmedabad']
+    }
+  },
+  'East India': {
+    states: {
+      'West Bengal': ['Kolkata']
+    }
+  },
+  'All India': {
+    states: {
+      'Delhi': ['New Delhi'],
+      'Uttar Pradesh': ['Noida'],
+      'Karnataka': ['Bengaluru'],
+      'Tamil Nadu': ['Chennai'],
+      'Telangana': ['Hyderabad'],
+      'Maharashtra': ['Mumbai', 'Pune'],
+      'Gujarat': ['Ahmedabad'],
+      'West Bengal': ['Kolkata']
+    }
+  }
+};
 
 const PRIORITY_STATES = [
   'Telangana',
