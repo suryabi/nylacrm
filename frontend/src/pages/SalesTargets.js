@@ -619,6 +619,15 @@ function TerritoryRow({ label, value, onChange }) {
   );
 }
 
+function TerritoryViewRow({ label, value }) {
+  return (
+    <div className="flex items-center justify-between bg-secondary p-4 rounded-xl">
+      <p className="font-medium">{label}</p>
+      <p className="text-xl font-bold text-primary">Rs {parseFloat(value).toFixed(1)}L</p>
+    </div>
+  );
+}
+
 function CityAlloc({ planId, onNext }) {
   const [territories, setTerritories] = React.useState([]);
   const [selectedTerritory, setSelectedTerritory] = React.useState(null);
