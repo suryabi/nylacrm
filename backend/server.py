@@ -1222,9 +1222,161 @@ async def update_user(user_id: str, updates: dict, current_user: dict = Depends(
 @api_router.get("/analytics/dashboard")
 async def get_dashboard_analytics(
     time_filter: Optional[str] = 'lifetime',
+    territory: Optional[str] = None,
+    state: Optional[str] = None,
+    city: Optional[str] = None,
+    sales_resource: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get dashboard analytics with time filter"""
+    """Get dashboard analytics with filters"""
+    
+    # Calculate date range based on time filter
+    now = datetime.now(timezone.utc)
+    
+    if time_filter == 'this_week':
+        start_date = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0).isoformat()
+        end_date = now.isoformat()
+    elif time_filter == 'last_week':
+        start_date = (now - timedelta(days=now.weekday() + 7)).replace(hour=0, minute=0, second=0).isoformat()
+        end_date = (now - timedelta(days=now.weekday() + 1)).replace(hour=23, minute=59, second=59).isoformat()
+    elif time_filter == 'this_month':
+        start_date = now.replace(day=1, hour=0, minute=0, second=0).isoformat()
+        end_date = now.isoformat()
+    elif time_filter == 'last_month':
+        last_month = now.replace(day=1) - timedelta(days=1)
+        start_date = last_month.replace(day=1, hour=0, minute=0, second=0).isoformat()
+        end_date = last_month.replace(hour=23, minute=59, second=59).isoformat()
+    elif time_filter == 'last_3_months':
+        start_date = (now - timedelta(days=90)).replace(hour=0, minute=0, second=0).isoformat()
+        end_date = now.isoformat()
+    elif time_filter == 'last_6_months':
+        start_date = (now - timedelta(days=180)).replace(hour=0, minute=0, second=0).isoformat()
+        end_date = now.isoformat()
+    elif time_filter == 'this_quarter':
+        quarter = (now.month - 1) // 3
+        start_date = now.replace(month=quarter * 3 + 1, day=1, hour=0, minute=0, second=0).isoformat()
+        end_date = now.isoformat()
+    elif time_filter == 'last_quarter':
+        quarter = (now.month - 1) // 3
+        if quarter == 0:
+            start_date = now.replace(year=now.year - 1, month=10, day=1, hour=0, minute=0, second=0).isoformat()
+            end_date = now.replace(year=now.year - 1, month=12, day=31, hour=23, minute=59, second=59).isoformat()
+        else:
+            start_date = now.replace(month=(quarter - 1) * 3 + 1, day=1, hour=0, minute=0, second=0).isoformat()
+            end_date = now.replace(month=quarter * 3, day=1, hour=0, minute=0, second=0).isoformat()
+    else:  # lifetime
+        start_date = None
+        end_date = None
+    
+    # Build match stage based on role and filters
+    match_stage = {}
+    
+    # Role-based access
+    if current_user['role'] == 'sales_rep':
+        match_stage['assigned_to'] = current_user['id']
+    elif sales_resource:
+        # Filter by specific sales resource
+        match_stage['assigned_to'] = sales_resource
+    
+    # Add location filters
+    if territory and territory != 'all':
+        match_stage['region'] = territory
+    if state:
+        match_stage['state'] = state
+    if city:
+        match_stage['city'] = city
+    
+    # Add date filter if not lifetime
+    if start_date and end_date:
+        match_stage['created_at'] = {'$gte': start_date, '$lte': end_date}
+    
+    # Activity query with same filters
+    activity_query = {}
+    
+    if current_user['role'] == 'sales_rep':
+        activity_query['created_by'] = current_user['id']
+    elif sales_resource:
+        activity_query['created_by'] = sales_resource
+    
+    if start_date and end_date:
+        activity_query['created_at'] = {'$gte': start_date, '$lte': end_date}
+    
+    # Get all activities
+    activities = await db.activities.find(activity_query, {'_id': 0}).to_list(10000)
+    
+    # Filter activities by location if needed (via lead lookup)
+    if territory or state or city:
+        lead_ids_query = {}
+        if territory and territory != 'all':
+            lead_ids_query['region'] = territory
+        if state:
+            lead_ids_query['state'] = state
+        if city:
+            lead_ids_query['city'] = city
+        
+        matching_leads = await db.leads.find(lead_ids_query, {'_id': 0, 'id': 1}).to_list(10000)
+        matching_lead_ids = [l['id'] for l in matching_leads]
+        activities = [a for a in activities if a.get('lead_id') in matching_lead_ids]
+    
+    # Count visits and calls
+    visits = [a for a in activities if a.get('interaction_method') == 'customer_visit']
+    calls = [a for a in activities if a.get('interaction_method') == 'phone_call']
+    
+    total_visits = len(visits)
+    total_calls = len(calls)
+    
+    # Unique visits/calls (unique lead_ids)
+    unique_visit_leads = len(set([a['lead_id'] for a in visits]))
+    unique_call_leads = len(set([a['lead_id'] for a in calls]))
+    
+    # Status distribution
+    status_pipeline = [
+        {'$match': match_stage},
+        {'$group': {'_id': '$status', 'count': {'$sum': 1}}}
+    ]
+    status_results = await db.leads.aggregate(status_pipeline).to_list(100)
+    status_counts = {item['_id']: item['count'] for item in status_results}
+    
+    # Calculate metrics
+    total_leads = sum(status_counts.values())
+    new_leads_added = total_leads
+    leads_won = status_counts.get('closed_won', 0)
+    leads_lost = status_counts.get('closed_lost', 0)
+    conversion_rate = (leads_won / total_leads * 100) if total_leads > 0 else 0
+    
+    # Pipeline value
+    pipeline_value_pipeline = [
+        {'$match': {**match_stage, 'status': {'$ne': 'closed_lost'}}},
+        {'$group': {'_id': None, 'total_value': {'$sum': '$estimated_value'}}}
+    ]
+    pipeline_value_result = await db.leads.aggregate(pipeline_value_pipeline).to_list(1)
+    pipeline_value = pipeline_value_result[0]['total_value'] if pipeline_value_result else 0
+    
+    # Today's follow-ups
+    today = datetime.now(timezone.utc).date()
+    today_start = datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc).isoformat()
+    today_end = datetime.combine(today, datetime.max.time()).replace(tzinfo=timezone.utc).isoformat()
+    
+    today_follow_ups_count = await db.follow_ups.count_documents({
+        'is_completed': False,
+        'scheduled_date': {'$gte': today_start, '$lte': today_end}
+    })
+    
+    return {
+        'total_leads': total_leads,
+        'conversion_rate': round(conversion_rate, 2),
+        'pipeline_value': pipeline_value or 0,
+        'today_follow_ups': today_follow_ups_count,
+        'status_distribution': status_counts,
+        'total_visits': total_visits,
+        'unique_visits': unique_visit_leads,
+        'total_calls': total_calls,
+        'unique_calls': unique_call_leads,
+        'new_leads_added': new_leads_added,
+        'leads_won': leads_won,
+        'leads_lost': leads_lost,
+        'time_filter': time_filter
+    }
     
     # Calculate date range based on time filter
     now = datetime.now(timezone.utc)
