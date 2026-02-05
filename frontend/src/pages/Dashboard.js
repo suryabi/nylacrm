@@ -285,7 +285,7 @@ export default function Dashboard() {
         <MetricCard title=\"New Leads\" value={analytics?.new_leads_added || 0} icon={UserPlus} onClick={() => handleMetricClick('new_leads')} testId=\"new-leads-metric\" />
         <MetricCard title=\"Leads Won\" value={analytics?.leads_won || 0} icon={CheckCircle} onClick={() => handleMetricClick('won')} testId=\"leads-won-metric\" />
         <MetricCard title=\"Leads Lost\" value={analytics?.leads_lost || 0} icon={XCircle} onClick={() => handleMetricClick('lost')} testId=\"leads-lost-metric\" />
-        <MetricCard title=\"Pipeline Value\" value={`₹${((analytics?.pipeline_value || 0) / 100000).toFixed(1)}L`} icon={TrendingUp} testId=\"pipeline-value-metric\" />
+        <MetricCard title="Pipeline Value" value={`Rs ${((analytics?.pipeline_value || 0) / 100000).toFixed(1)}L`} icon={TrendingUp} testId="pipeline-value-metric" />
       </div>
 
       <div className=\"grid grid-cols-1 lg:grid-cols-2 gap-6\">
