@@ -413,24 +413,6 @@ function AddTeamMemberForm({ onSuccess }) {
           </Select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="reports_to">Reporting To</Label>
-          <Select value={formData.reports_to} onValueChange={(v) => setFormData(prev => ({ ...prev, reports_to: v }))}>
-            <SelectTrigger data-testid="team-reports-to-select">
-              <SelectValue placeholder="Select manager" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">None</SelectItem>
-              {allUsers
-                .filter(user => ['ceo', 'director', 'vp', 'sales_manager'].includes(user.role))
-                .map(user => (
-                  <SelectItem key={user.id} value={user.id.toString()}>
-                    {user.name} - {user.designation || user.role.replace('_', ' ')}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
           <Label htmlFor="role_display">Role (Auto-set based on Designation)</Label>
           <Input
             id="role_display"
