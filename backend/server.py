@@ -1981,6 +1981,198 @@ async def get_pending_approvals(current_user: dict = Depends(get_current_user)):
     
     return {'pending_requests': pending, 'count': len(pending)}
 
+# ============= SALES TARGET ROUTES =============
+
+@api_router.post("/target-plans", response_model=TargetPlan)
+async def create_target_plan(plan: TargetPlanCreate, current_user: dict = Depends(get_current_user)):
+    """Create sales target plan"""
+    
+    if current_user['role'] not in ['ceo', 'director', 'vp', 'admin']:
+        raise HTTPException(status_code=403, detail='Only leadership can create target plans')
+    
+    plan_data = plan.model_dump()
+    plan_data['created_by'] = current_user['id']
+    plan_obj = TargetPlan(**plan_data)
+    
+    doc = plan_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    if doc.get('locked_at'):
+        doc['locked_at'] = doc['locked_at'].isoformat()
+    
+    await db.target_plans.insert_one(doc)
+    
+    return plan_obj
+
+@api_router.get("/target-plans")
+async def get_target_plans(current_user: dict = Depends(get_current_user)):
+    """Get all target plans"""
+    
+    plans = await db.target_plans.find({}, {'_id': 0}).sort('created_at', -1).to_list(100)
+    
+    for plan in plans:
+        if isinstance(plan.get('created_at'), str):
+            plan['created_at'] = datetime.fromisoformat(plan['created_at'])
+        if isinstance(plan.get('updated_at'), str):
+            plan['updated_at'] = datetime.fromisoformat(plan['updated_at'])
+        if plan.get('locked_at') and isinstance(plan['locked_at'], str):
+            plan['locked_at'] = datetime.fromisoformat(plan['locked_at'])
+    
+    return plans
+
+@api_router.post("/target-plans/{plan_id}/territories")
+async def allocate_territory_targets(
+    plan_id: str,
+    territories: List[TerritoryTargetCreate],
+    current_user: dict = Depends(get_current_user)
+):
+    \"\"\"Allocate country target to territories\"\"\"
+    
+    if current_user['role'] not in ['ceo', 'director', 'vp', 'admin']:
+        raise HTTPException(status_code=403, detail='Only leadership can allocate territory targets')
+    
+    # Get plan
+    plan = await db.target_plans.find_one({'id': plan_id}, {'_id': 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail='Target plan not found')
+    
+    if plan['status'] == 'locked':
+        raise HTTPException(status_code=400, detail='Cannot modify locked plan')
+    
+    # Validate total equals country target
+    total_allocated = sum([t.target_revenue for t in territories])
+    if abs(total_allocated - plan['country_target']) > 0.01:
+        raise HTTPException(
+            status_code=400,
+            detail=f'Territory targets ({total_allocated}) must equal country target ({plan[\"country_target\"]})'
+        )
+    
+    # Delete existing territory targets for this plan
+    await db.territory_targets.delete_many({'plan_id': plan_id})
+    
+    # Create new territory targets
+    created_targets = []
+    for territory in territories:
+        target_data = territory.model_dump()
+        target_data['plan_id'] = plan_id
+        target_obj = TerritoryTarget(**target_data)
+        
+        doc = target_obj.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        
+        await db.territory_targets.insert_one(doc)
+        created_targets.append(target_obj)
+    
+    return {'message': 'Territory targets allocated', 'targets': created_targets}
+
+@api_router.post(\"/target-plans/{plan_id}/territories/{territory}/cities\")
+async def allocate_city_targets(
+    plan_id: str,
+    territory: str,
+    cities: List[CityTargetCreate],
+    current_user: dict = Depends(get_current_user)
+):
+    \"\"\"Allocate territory target to cities\"\"\"
+    
+    # Get territory target
+    territory_target = await db.territory_targets.find_one(
+        {'plan_id': plan_id, 'territory': territory},
+        {'_id': 0}
+    )
+    
+    if not territory_target:
+        raise HTTPException(status_code=404, detail='Territory target not found')
+    
+    # Validate total
+    total_allocated = sum([c.target_revenue for c in cities])
+    if abs(total_allocated - territory_target['target_revenue']) > 0.01:
+        raise HTTPException(
+            status_code=400,
+            detail=f'City targets ({total_allocated}) must equal territory target ({territory_target[\"target_revenue\"]})'
+        )
+    
+    # Delete existing city targets
+    await db.city_targets.delete_many({'plan_id': plan_id, 'territory': territory})
+    
+    # Create new city targets
+    for city in cities:
+        city_data = city.model_dump()
+        city_data['plan_id'] = plan_id
+        city_data['territory'] = territory
+        city_obj = CityTarget(**city_data)
+        
+        doc = city_obj.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        
+        await db.city_targets.insert_one(doc)
+    
+    # Update territory allocated amount
+    await db.territory_targets.update_one(
+        {'plan_id': plan_id, 'territory': territory},
+        {'$set': {'allocated_revenue': total_allocated}}
+    )
+    
+    return {'message': 'City targets allocated'}
+
+@api_router.get(\"/target-plans/{plan_id}/hierarchy\")
+async def get_target_hierarchy(plan_id: str, current_user: dict = Depends(get_current_user)):
+    \"\"\"Get complete target hierarchy with roll-ups\"\"\"
+    
+    plan = await db.target_plans.find_one({'id': plan_id}, {'_id': 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail='Plan not found')
+    
+    # Get territories
+    territories = await db.territory_targets.find({'plan_id': plan_id}, {'_id': 0}).to_list(100)
+    
+    # Get cities
+    cities = await db.city_targets.find({'plan_id': plan_id}, {'_id': 0}).to_list(1000)
+    
+    # Get resources
+    resources = await db.resource_targets.find({'plan_id': plan_id}, {'_id': 0}).to_list(1000)
+    
+    # Build hierarchy
+    hierarchy = {
+        'plan': plan,
+        'territories': []
+    }
+    
+    for territory in territories:
+        territory_data = {
+            **territory,
+            'states': {}
+        }
+        
+        # Group cities by state
+        territory_cities = [c for c in cities if c['territory'] == territory['territory']]
+        
+        for city in territory_cities:
+            state = city['state']
+            if state not in territory_data['states']:
+                territory_data['states'][state] = {
+                    'state_name': state,
+                    'state_target': 0,
+                    'cities': []
+                }
+            
+            # Get resources for this city
+            city_resources = [r for r in resources if r['city_id'] == city['id']]
+            
+            city_data = {
+                **city,
+                'resources': city_resources
+            }
+            
+            territory_data['states'][state]['cities'].append(city_data)
+            territory_data['states'][state]['state_target'] += city['target_revenue']
+        
+        # Convert states dict to list
+        territory_data['states'] = list(territory_data['states'].values())
+        
+        hierarchy['territories'].append(territory_data)
+    
+    return hierarchy
+
 # ============= BOTTLE PREVIEW ROUTES =============
 
 @api_router.post("/bottle-preview/upload-logo")
