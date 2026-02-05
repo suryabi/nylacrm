@@ -12,9 +12,9 @@ const API = process.env.REACT_APP_BACKEND_URL + '/api';
 
 export default function SalesTargets() {
   const [plans, setPlans] = React.useState([]);
-  const [view, setView] = React.useState('list'); // 'list', 'create', 'allocate'
+  const [view, setView] = React.useState('list'); // 'list', 'create', 'allocate', 'review'
   const [currentPlan, setCurrentPlan] = React.useState(null);
-  const [step, setStep] = React.useState(1); // 1=territories, 2=cities, 3=resources
+  const [step, setStep] = React.useState(1); // 1=territories, 2=cities, 3=resources, 4=review
 
   React.useEffect(() => {
     loadPlans();
