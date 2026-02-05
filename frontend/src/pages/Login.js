@@ -35,22 +35,30 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex" data-testid="login-page">
-      {/* Left side - Brand visual */}
+      {/* Left side - Misty Mountains Background */}
       <div 
-        className="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-primary to-primary/80 items-center justify-center overflow-hidden"
+        className="hidden lg:flex lg:w-1/2 relative items-center justify-center overflow-hidden"
       >
+        {/* Misty Mountains Background */}
         <div 
-          className="absolute inset-0 opacity-20"
+          className="absolute inset-0"
           style={{
-            backgroundImage: 'url(https://images.unsplash.com/photo-1603143008349-faac17101479?crop=entropy&cs=srgb&fm=jpg&q=85)',
+            backgroundImage: `url(${MOUNTAIN_BG})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center'
           }}
         />
+        
+        {/* Dark overlay for better text visibility */}
+        <div className="absolute inset-0 bg-black/30" />
+        
         <div className="relative z-10 text-center px-8">
-          <img src={NYLA_LOGO} alt="Nyla Air Water" className="h-20 mx-auto mb-6" />
-          <h1 className="text-4xl font-light text-white mb-4">Sales CRM</h1>
-          <p className="text-lg text-white/90 font-light">Track leads, close deals, grow revenue</p>
+          {/* Circular Logo */}
+          <div className="h-32 w-32 rounded-full bg-white p-2 shadow-2xl mb-6 mx-auto overflow-hidden">
+            <img src={NYLA_LOGO} alt="Nyla Air Water" className="w-full h-full object-cover rounded-full" />
+          </div>
+          <h1 className="text-4xl font-light text-white mb-4 drop-shadow-lg">Sales CRM</h1>
+          <p className="text-lg text-white/90 font-light drop-shadow">Track leads, close deals, grow revenue</p>
         </div>
       </div>
 
