@@ -2041,10 +2041,11 @@ async def allocate_territory_targets(
     
     # Validate total equals country target
     total_allocated = sum([t.target_revenue for t in territories])
-    if abs(total_allocated - plan['country_target']) > 0.01:
+    country_target = plan['country_target']
+    if abs(total_allocated - country_target) > 0.01:
         raise HTTPException(
             status_code=400,
-            detail=f'Territory targets ({total_allocated}) must equal country target ({plan[\"country_target\"]})'
+            detail=f'Territory targets ({total_allocated}) must equal country target ({country_target})'
         )
     
     # Delete existing territory targets for this plan
