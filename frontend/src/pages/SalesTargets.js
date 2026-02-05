@@ -626,6 +626,237 @@ function TerritoryRow({ label, value, onChange }) {
   );
 }
 
+function ResourceAssignmentForm({ city, planId, salesTeam, onSuccess }) {
+  const [assignments, setAssignments] = React.useState({});
+  const [submitting, setSubmitting] = React.useState(false);
+
+  // Group sales team by territory
+  const groupedTeam = {
+    'North India': salesTeam.filter(m => m.territory?.includes('North')),
+    'South India': salesTeam.filter(m => m.territory?.includes('South')),
+    'West India': salesTeam.filter(m => m.territory?.includes('West')),
+    'East India': salesTeam.filter(m => m.territory?.includes('East')),
+    'All India': salesTeam.filter(m => m.territory === 'All India')
+  };
+
+  const updateAssignment = (resourceId, value) => {
+    const newAssignments = {...assignments};
+    newAssignments[resourceId] = value;
+    setAssignments(newAssignments);
+  };
+
+  const total = Object.values(assignments).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
+  const targetL = city.target_revenue / 100000;
+  const valid = Math.abs(total - targetL) < 0.1 && total > 0;
+
+  const submit = async () => {
+    setSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      
+      const payload = Object.keys(assignments)
+        .filter(resourceId => parseFloat(assignments[resourceId]) > 0)
+        .map(resourceId => ({
+          resource_id: resourceId,
+          target_revenue: parseFloat(assignments[resourceId]) * 100000
+        }));
+
+      await axios.post(
+        `${API}/target-plans/${planId}/cities/${city.id}/resources`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      toast.success(`✓ ${payload.length} resources assigned to ${city.city}! Total: Rs ${total.toFixed(1)}L`, {
+        duration: 4000
+      });
+      
+      onSuccess();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to assign resources');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-primary/5 p-4 rounded-xl">
+        <div className="flex justify-between">
+          <div>
+            <p className="font-semibold text-lg">{city.city}</p>
+            <p className="text-sm text-muted-foreground">{city.state}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-bold text-primary">Rs {targetL.toFixed(1)}L</p>
+            <p className="text-xs text-muted-foreground">City Target</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <p className="text-sm font-medium text-muted-foreground">
+          Assign target to sales resources (can assign to any resource, regardless of territory):
+        </p>
+        
+        {Object.keys(groupedTeam).map(territory => {
+          const members = groupedTeam[territory];
+          if (members.length === 0) return null;
+          
+          return (
+            <div key={territory} className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{territory}</p>
+              {members.map(resource => (
+                <div key={resource.id} className="flex items-center gap-4 bg-secondary p-4 rounded-xl">
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold">
+                      {resource.name[0]}
+                    </div>
+                    <div>
+                      <p className="font-medium">{resource.name}</p>
+                      <p className="text-xs text-muted-foreground">{resource.designation || resource.role}</p>
+                    </div>
+                  </div>
+                  <Input
+                    type="number"
+                    value={assignments[resource.id] || ''}
+                    onChange={e => updateAssignment(resource.id, e.target.value)}
+                    placeholder="Lakhs"
+                    className="w-40 h-11 text-right font-semibold"
+                  />
+                  <span className="text-sm text-muted-foreground w-12">Lakhs</span>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className={`p-5 rounded-xl border-2 ${valid ? 'bg-green-50 border-green-300' : 'bg-amber-50 border-amber-300'}`}>
+        <div className="flex justify-between items-center mb-2">
+          <span className="font-semibold text-lg">Total Assigned:</span>
+          <span className="text-3xl font-bold">Rs {total.toFixed(1)}L</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">City Target:</span>
+          <span className="font-medium">Rs {targetL.toFixed(1)}L</span>
+        </div>
+        {!valid && total > 0 && (
+          <p className="text-sm text-amber-800 mt-3 flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" />
+            Difference: Rs {Math.abs(total - targetL).toFixed(1)}L
+          </p>
+        )}
+        {valid && (
+          <p className="text-sm text-green-800 mt-3 flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4" />
+            Perfect! Ready to assign
+          </p>
+        )}
+      </div>
+
+      <Button 
+        onClick={submit} 
+        disabled={!valid || submitting} 
+        className="w-full h-14 rounded-full text-base font-semibold"
+      >
+        {submitting ? 'Assigning...' : `Save ${city.city} Resource Assignments`}
+      </Button>
+    </div>
+  );
+}
+
+function ReviewScreen({ planId, onFinish }) {
+  const [summary, setSummary] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    loadSummary();
+  }, []);
+
+  const loadSummary = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API}/target-plans/${planId}/resource-summary`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSummary(res.data);
+    } catch (err) {
+      console.error('Failed to load summary');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="text-center py-8">Loading summary...</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-green-50 border border-green-200 p-6 rounded-2xl">
+        <div className="flex items-center gap-3 mb-2">
+          <CheckCircle2 className="h-6 w-6 text-green-600" />
+          <h3 className="text-lg font-semibold text-green-800">Target Allocation Complete!</h3>
+        </div>
+        <p className="text-sm text-green-700">All targets have been assigned. Review the summary below.</p>
+      </div>
+
+      <div className="space-y-6">
+        <h3 className="text-xl font-semibold">Resource-Wise Summary</h3>
+        
+        {summary?.resources && summary.resources.length > 0 ? (
+          summary.resources.map((resource, idx) => (
+            <Card key={idx} className="p-6 border rounded-2xl">
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
+                    {resource.resource_name[0]}
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold">{resource.resource_name}</p>
+                    <p className="text-sm text-muted-foreground">{resource.designation}</p>
+                    <p className="text-xs text-primary">{resource.territory}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-muted-foreground">Total Target</p>
+                  <p className="text-3xl font-bold text-primary">Rs {(resource.total_target / 100000).toFixed(1)}L</p>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <p className="text-sm font-semibold text-muted-foreground mb-3">City-wise Breakdown:</p>
+                <div className="space-y-2">
+                  {resource.city_breakdown.map((city, i) => (
+                    <div key={i} className="flex justify-between items-center bg-secondary p-3 rounded-lg">
+                      <div>
+                        <p className="font-medium text-sm">{city.city}</p>
+                        <p className="text-xs text-muted-foreground">{city.state}</p>
+                      </div>
+                      <p className="font-semibold">Rs {(city.target / 100000).toFixed(1)}L</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          ))
+        ) : (
+          <div className="text-center py-12 bg-muted rounded-xl">
+            <p className="text-muted-foreground">No resource assignments yet</p>
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-end pt-6 border-t">
+        <Button onClick={onFinish} className="h-14 px-8 rounded-full text-base">
+          Finish & Return to Plans
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function TerritoryViewRow({ label, value }) {
   return (
     <div className="flex items-center justify-between bg-secondary p-4 rounded-xl">
