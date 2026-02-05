@@ -330,7 +330,7 @@ function TerritoryRow({ label, value, onChange }) {
   );
 }
 
-function CityAlloc({ planId, onDone }) {
+function CityAlloc({ planId, onNext }) {
   const [territories, setTerritories] = React.useState([]);
   const [selectedTerritory, setSelectedTerritory] = React.useState(null);
 
@@ -357,19 +357,25 @@ function CityAlloc({ planId, onDone }) {
     return <div className="text-center py-8">Loading territories...</div>;
   }
 
+  const allTerritoriesAllocated = territories.every(t => t.allocated_revenue > 0);
+
   return (
     <div className="space-y-6">
       <div className="flex gap-3">
-        {territories.map(t => (
-          <Button
-            key={t.id}
-            variant={selectedTerritory.id === t.id ? 'default' : 'outline'}
-            onClick={() => setSelectedTerritory(t)}
-            className="rounded-full"
-          >
-            {t.territory}
-          </Button>
-        ))}
+        {territories.map(t => {
+          const pct = (t.allocated_revenue / t.target_revenue) * 100;
+          return (
+            <Button
+              key={t.id}
+              variant={selectedTerritory.id === t.id ? 'default' : 'outline'}
+              onClick={() => setSelectedTerritory(t)}
+              className="rounded-full relative"
+            >
+              {t.territory}
+              {pct > 0 && <span className="ml-2 text-xs">({pct.toFixed(0)}%)</span>}
+            </Button>
+          );
+        })}
       </div>
 
       <CityAllocationForm
@@ -379,8 +385,20 @@ function CityAlloc({ planId, onDone }) {
       />
 
       <div className="flex justify-between pt-6 border-t">
-        <Button variant="outline" onClick={onDone} className="h-12 rounded-full">Finish & View Plans</Button>
-        <p className="text-sm text-muted-foreground self-center">Allocate all territories, then finish</p>
+        <div className="text-sm text-muted-foreground self-center">
+          {allTerritoriesAllocated ? (
+            <span className="text-green-600 font-medium">✓ All territories allocated!</span>
+          ) : (
+            <span>Allocate all territories before continuing to resources</span>
+          )}
+        </div>
+        <Button 
+          onClick={onNext} 
+          disabled={!allTerritoriesAllocated}
+          className="h-12 rounded-full"
+        >
+          Continue to Resources Assignment
+        </Button>
       </div>
     </div>
   );
