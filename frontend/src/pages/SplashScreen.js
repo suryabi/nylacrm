@@ -46,8 +46,8 @@ export default function SplashScreen() {
           className="flex flex-col items-center"
         >
           {/* Circular Logo */}
-          <div className="h-40 w-40 rounded-full bg-white p-4 shadow-2xl mb-6 flex items-center justify-center">
-            <img src={NYLA_LOGO} alt="Nyla Air Water" className="w-full h-full object-contain" />
+          <div className="h-40 w-40 rounded-full bg-white p-2 shadow-2xl mb-6 overflow-hidden">
+            <img src={NYLA_LOGO} alt="Nyla Air Water" className="w-full h-full object-cover rounded-full" />
           </div>
           <p className="text-2xl text-white font-light drop-shadow-lg" data-testid="splash-subtitle">
             Sales CRM
