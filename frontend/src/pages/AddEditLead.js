@@ -247,6 +247,19 @@ export default function AddEditLead() {
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="category">Business Category *</Label>
+              <Select value={formData.category} onValueChange={(v) => updateField('category', v)} required>
+                <SelectTrigger data-testid="lead-category-select">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LEAD_CATEGORIES.map(cat => (
+                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="contact_person">Contact Person</Label>
               <Input
                 id="contact_person"
@@ -265,7 +278,7 @@ export default function AddEditLead() {
                 data-testid="lead-phone-input"
               />
             </div>
-            <div className="space-y-2 md:col-span-2">
+            <div className="space-y-2">
               <Label htmlFor="email">Contact Email</Label>
               <Input
                 id="email"
