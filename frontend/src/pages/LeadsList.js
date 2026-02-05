@@ -42,6 +42,18 @@ const statusColors = {
   closed_lost: 'bg-red-100 text-red-800',
 };
 
+const TIME_FILTERS = [
+  { value: 'this_week', label: 'This Week' },
+  { value: 'last_week', label: 'Last Week' },
+  { value: 'this_month', label: 'This Month' },
+  { value: 'last_month', label: 'Last Month' },
+  { value: 'last_3_months', label: 'Last 3 Months' },
+  { value: 'last_6_months', label: 'Last 6 Months' },
+  { value: 'this_quarter', label: 'This Quarter' },
+  { value: 'last_quarter', label: 'Last Quarter' },
+  { value: 'lifetime', label: 'Lifetime' },
+];
+
 export default function LeadsList() {
   const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
