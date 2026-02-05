@@ -12,6 +12,7 @@ const navigation = [
   { name: 'Daily Status', href: '/daily-status', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
   { name: 'Team Status', href: '/team-status', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager'] },
   { name: 'Bottle Preview', href: '/bottle-preview', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
+  { name: 'Leaves', href: '/leaves', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
   { name: 'Team', href: '/team', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager'] },
 ];
 
