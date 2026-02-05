@@ -106,24 +106,66 @@ export default function SalesTargets() {
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {plans.map(plan => (
-            <Card key={plan.id} className="p-6 border rounded-2xl hover:shadow-lg transition-shadow">
-              <div className="mb-4">
-                <h3 className="text-lg font-semibold mb-1">{plan.plan_name}</h3>
-                <p className="text-sm text-muted-foreground capitalize">{plan.time_period}</p>
-                <p className="text-xs text-muted-foreground">{plan.start_date} to {plan.end_date}</p>
-              </div>
-              <div className="mb-4">
-                <p className="text-3xl font-bold text-primary">Rs {(plan.country_target / 100000).toFixed(1)}L</p>
-                <p className="text-xs text-muted-foreground">Country Target</p>
-              </div>
-              <Button onClick={() => startAllocation(plan)} className="w-full rounded-full" variant="outline">
-                Manage Allocation <ChevronRight className="h-4 w-4 ml-2" />
-              </Button>
-            </Card>
+            <PlanCard key={plan.id} plan={plan} onSelect={startAllocation} />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function PlanCard({ plan, onSelect }) {
+  const [hierarchy, setHierarchy] = React.useState(null);
+
+  React.useEffect(() => {
+    loadHierarchy();
+  }, []);
+
+  const loadHierarchy = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API}/target-plans/${plan.id}/hierarchy`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setHierarchy(res.data);
+    } catch (err) {
+      console.error('Failed to load hierarchy');
+    }
+  };
+
+  const territoryCount = hierarchy?.territories?.length || 0;
+  const allocatedTerritories = hierarchy?.territories?.filter(t => t.allocated_revenue > 0).length || 0;
+
+  return (
+    <Card className="p-6 border rounded-2xl hover:shadow-lg transition-shadow">
+      <div className="mb-4">
+        <div className="flex items-start justify-between mb-2">
+          <h3 className="text-lg font-semibold">{plan.plan_name}</h3>
+          {territoryCount > 0 && (
+            <Badge variant="outline" className="text-xs">
+              {allocatedTerritories}/{territoryCount} allocated
+            </Badge>
+          )}
+        </div>
+        <p className="text-sm text-muted-foreground capitalize">{plan.time_period}</p>
+        <p className="text-xs text-muted-foreground">{plan.start_date} to {plan.end_date}</p>
+      </div>
+      <div className="mb-4">
+        <p className="text-3xl font-bold text-primary">Rs {(plan.country_target / 100000).toFixed(1)}L</p>
+        <p className="text-xs text-muted-foreground">Country Target</p>
+      </div>
+      {territoryCount > 0 && (
+        <div className="mb-4 h-2 bg-muted rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-primary"
+            style={{ width: `${(allocatedTerritories / territoryCount) * 100}%` }}
+          />
+        </div>
+      )}
+      <Button onClick={() => onSelect(plan)} className="w-full rounded-full" variant="outline">
+        {territoryCount === 0 ? 'Start Allocation' : 'Continue Allocation'} <ChevronRight className="h-4 w-4 ml-2" />
+      </Button>
+    </Card>
   );
 }
 
