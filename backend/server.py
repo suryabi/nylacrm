@@ -719,29 +719,61 @@ async def get_org_chart(current_user: dict = Depends(get_current_user)):
 
 @api_router.get("/config/locations")
 async def get_location_config():
-    """Get regions and cities mapping for India"""
+    """Get regions, states, and cities mapping for India"""
     locations = {
         'country': 'India',
         'regions': [
             {
                 'name': 'North India',
-                'states': ['Delhi', 'Punjab', 'Haryana', 'Rajasthan', 'Uttar Pradesh', 'Uttarakhand', 'Himachal Pradesh', 'Jammu & Kashmir'],
-                'cities': ['Delhi NCR', 'Chandigarh', 'Jaipur', 'Lucknow', 'Agra', 'Amritsar', 'Dehradun']
+                'states': [
+                    {
+                        'name': 'Delhi',
+                        'cities': ['New Delhi']
+                    },
+                    {
+                        'name': 'Uttar Pradesh',
+                        'cities': ['Noida']
+                    }
+                ]
             },
             {
                 'name': 'South India',
-                'states': ['Karnataka', 'Telangana', 'Andhra Pradesh', 'Tamil Nadu', 'Kerala'],
-                'cities': ['Bangalore', 'Hyderabad', 'Chennai', 'Kochi', 'Coimbatore', 'Visakhapatnam', 'Mysore']
+                'states': [
+                    {
+                        'name': 'Karnataka',
+                        'cities': ['Bengaluru']
+                    },
+                    {
+                        'name': 'Tamil Nadu',
+                        'cities': ['Chennai']
+                    },
+                    {
+                        'name': 'Telangana',
+                        'cities': ['Hyderabad']
+                    }
+                ]
             },
             {
                 'name': 'West India',
-                'states': ['Maharashtra', 'Gujarat', 'Goa', 'Madhya Pradesh'],
-                'cities': ['Mumbai', 'Pune', 'Goa', 'Ahmedabad', 'Surat', 'Nagpur', 'Indore', 'Nashik']
+                'states': [
+                    {
+                        'name': 'Maharashtra',
+                        'cities': ['Mumbai', 'Pune']
+                    },
+                    {
+                        'name': 'Gujarat',
+                        'cities': ['Ahmedabad']
+                    }
+                ]
             },
             {
                 'name': 'East India',
-                'states': ['West Bengal', 'Odisha', 'Bihar', 'Jharkhand'],
-                'cities': ['Kolkata', 'Bhubaneswar', 'Patna', 'Ranchi', 'Siliguri']
+                'states': [
+                    {
+                        'name': 'West Bengal',
+                        'cities': ['Kolkata']
+                    }
+                ]
             }
         ],
         'skus': [
