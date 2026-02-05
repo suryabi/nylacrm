@@ -23,24 +23,28 @@ const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
 const LOCATIONS = {
   'North India': {
-    cities: ['Delhi NCR', 'Chandigarh', 'Jaipur', 'Lucknow', 'Agra', 'Amritsar', 'Dehradun'],
-    states: ['Delhi', 'Punjab', 'Haryana', 'Rajasthan', 'Uttar Pradesh', 'Uttarakhand', 'Himachal Pradesh', 'Jammu & Kashmir']
+    states: {
+      'Delhi': ['New Delhi'],
+      'Uttar Pradesh': ['Noida']
+    }
   },
   'South India': {
-    cities: ['Bangalore', 'Hyderabad', 'Chennai', 'Kochi', 'Coimbatore', 'Visakhapatnam', 'Mysore'],
-    states: ['Karnataka', 'Telangana', 'Andhra Pradesh', 'Tamil Nadu', 'Kerala', 'Puducherry']
+    states: {
+      'Karnataka': ['Bengaluru'],
+      'Tamil Nadu': ['Chennai'],
+      'Telangana': ['Hyderabad']
+    }
   },
   'West India': {
-    cities: ['Mumbai', 'Pune', 'Goa', 'Ahmedabad', 'Surat', 'Nagpur', 'Indore', 'Nashik'],
-    states: ['Maharashtra', 'Gujarat', 'Goa', 'Madhya Pradesh', 'Daman & Diu', 'Dadra & Nagar Haveli']
+    states: {
+      'Maharashtra': ['Mumbai', 'Pune'],
+      'Gujarat': ['Ahmedabad']
+    }
   },
   'East India': {
-    cities: ['Kolkata', 'Bhubaneswar', 'Patna', 'Ranchi', 'Siliguri'],
-    states: ['West Bengal', 'Odisha', 'Bihar', 'Jharkhand', 'Assam', 'Sikkim', 'Arunachal Pradesh', 'Nagaland', 'Manipur', 'Mizoram', 'Tripura', 'Meghalaya']
-  },
-  'Central India': {
-    cities: ['Bhopal', 'Raipur', 'Indore'],
-    states: ['Madhya Pradesh', 'Chhattisgarh']
+    states: {
+      'West Bengal': ['Kolkata']
+    }
   }
 };
 
@@ -49,44 +53,13 @@ const PRIORITY_STATES = [
   'Tamil Nadu',
   'Delhi',
   'Maharashtra',
-  'Punjab',
-  'Jammu & Kashmir',
-  'Karnataka'
-];
-
-const ALL_INDIAN_STATES = [
-  'Andhra Pradesh',
-  'Arunachal Pradesh',
-  'Assam',
-  'Bihar',
-  'Chhattisgarh',
-  'Goa',
   'Gujarat',
-  'Haryana',
-  'Himachal Pradesh',
-  'Jharkhand',
-  'Kerala',
-  'Madhya Pradesh',
-  'Manipur',
-  'Meghalaya',
-  'Mizoram',
-  'Nagaland',
-  'Odisha',
-  'Rajasthan',
-  'Sikkim',
-  'Tripura',
+  'Karnataka',
   'Uttar Pradesh',
-  'Uttarakhand',
-  'West Bengal',
-  'Andaman & Nicobar Islands',
-  'Chandigarh',
-  'Dadra & Nagar Haveli',
-  'Daman & Diu',
-  'Lakshadweep',
-  'Puducherry'
+  'West Bengal'
 ];
 
-const OTHER_STATES = ALL_INDIAN_STATES.filter(state => !PRIORITY_STATES.includes(state));
+const OTHER_STATES = [];
 
 const SKUS = ['24 Brand', '660 ml Silver', '660 ml Gold', '330 ml Silver', '330 ml Gold', '660 Sparkling', '330 Sparkling'];
 
