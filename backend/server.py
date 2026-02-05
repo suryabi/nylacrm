@@ -90,6 +90,9 @@ class Lead(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     
+    # Lead Category
+    category: Optional[str] = None  # Restaurant, Bar & Kitchen, Star Hotel, etc.
+    
     # Location
     city: str
     state: str
