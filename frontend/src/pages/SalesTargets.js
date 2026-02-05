@@ -71,7 +71,7 @@ export default function SalesTargets() {
 
         {step === 1 && (
           <Card className="p-8 border rounded-2xl">
-            <h2 className="text-xl font-semibold mb-6">Allocate to Territories</h2>
+            <h2 className="text-xl font-semibold mb-6">Territory Allocation</h2>
             <TerritoryAlloc planId={currentPlan.id} target={currentPlan.country_target} onNext={() => setStep(2)} />
           </Card>
         )}
