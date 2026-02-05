@@ -250,6 +250,11 @@ export default function LeadsList() {
           <h1 className="text-3xl font-semibold">Leads</h1>
           <p className="text-muted-foreground mt-1">
             {filteredLeads.length} {filteredLeads.length === 1 ? 'lead' : 'leads'} found
+            {timeFilter && (
+              <span className="ml-2 text-primary font-medium">
+                ({TIME_FILTERS.find(f => f.value === timeFilter)?.label || timeFilter})
+              </span>
+            )}
           </p>
         </div>
         <Button onClick={() => navigate('/leads/new')} data-testid="add-lead-button">
