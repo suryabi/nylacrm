@@ -1779,6 +1779,142 @@ async def get_location_analytics(current_user: dict = Depends(get_current_user))
         'team_locations': team_locations
     }
 
+# ============= LEAVE MANAGEMENT ROUTES =============
+
+@api_router.post("/leave-requests", response_model=LeaveRequest)
+async def create_leave_request(request: LeaveRequestCreate, current_user: dict = Depends(get_current_user)):
+    """Create leave request"""
+    
+    # Calculate total days
+    from datetime import datetime as dt
+    start = dt.fromisoformat(request.start_date)
+    end = dt.fromisoformat(request.end_date)
+    total_days = (end - start).days + 1
+    
+    leave_data = request.model_dump()
+    leave_data['user_id'] = current_user['id']
+    leave_data['total_days'] = total_days
+    leave_obj = LeaveRequest(**leave_data)
+    
+    doc = leave_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    if doc.get('approval_date'):
+        doc['approval_date'] = doc['approval_date'].isoformat()
+    
+    await db.leave_requests.insert_one(doc)
+    
+    return leave_obj
+
+@api_router.get("/leave-requests")
+async def get_leave_requests(
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get leave requests - users see their own, managers see their team's"""
+    
+    if current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'sales_manager']:
+        # Managers see requests from their direct reports
+        direct_reports = await db.users.find(
+            {'reports_to': current_user['id']},
+            {'_id': 0, 'id': 1}
+        ).to_list(100)
+        
+        user_ids = [current_user['id']] + [u['id'] for u in direct_reports]
+        query = {'user_id': {'$in': user_ids}}
+    else:
+        # Regular users see only their own
+        query = {'user_id': current_user['id']}
+    
+    if status:
+        query['status'] = status
+    
+    requests = await db.leave_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(100)
+    
+    # Get user names
+    user_ids = list(set([r['user_id'] for r in requests]))
+    users = await db.users.find(
+        {'id': {'$in': user_ids}},
+        {'_id': 0, 'id': 1, 'name': 1}
+    ).to_list(100)
+    user_map = {u['id']: u['name'] for u in users}
+    
+    # Add user names to requests
+    for req in requests:
+        if isinstance(req.get('created_at'), str):
+            req['created_at'] = datetime.fromisoformat(req['created_at'])
+        if isinstance(req.get('updated_at'), str):
+            req['updated_at'] = datetime.fromisoformat(req['updated_at'])
+        if req.get('approval_date') and isinstance(req['approval_date'], str):
+            req['approval_date'] = datetime.fromisoformat(req['approval_date'])
+        
+        req['user_name'] = user_map.get(req['user_id'], 'Unknown')
+    
+    return requests
+
+@api_router.put("/leave-requests/{request_id}/approve")
+async def approve_leave_request(
+    request_id: str,
+    approval: LeaveApproval,
+    current_user: dict = Depends(get_current_user)
+):
+    """Approve or reject leave request"""
+    
+    leave_req = await db.leave_requests.find_one({'id': request_id}, {'_id': 0})
+    if not leave_req:
+        raise HTTPException(status_code=404, detail='Leave request not found')
+    
+    # Check if user is the manager of the requester
+    requester = await db.users.find_one({'id': leave_req['user_id']}, {'_id': 0})
+    if not requester:
+        raise HTTPException(status_code=404, detail='Requester not found')
+    
+    if requester.get('reports_to') != current_user['id'] and current_user['role'] not in ['admin', 'ceo']:
+        raise HTTPException(status_code=403, detail='Only the reporting manager can approve leaves')
+    
+    # Update leave request
+    update_data = {
+        'status': approval.status,
+        'approved_by': current_user['id'],
+        'approval_date': datetime.now(timezone.utc).isoformat(),
+        'updated_at': datetime.now(timezone.utc).isoformat()
+    }
+    
+    if approval.rejection_reason:
+        update_data['rejection_reason'] = approval.rejection_reason
+    
+    await db.leave_requests.update_one({'id': request_id}, {'$set': update_data})
+    
+    return {'message': f'Leave request {approval.status}'}
+
+@api_router.get("/leave-requests/pending-approvals")
+async def get_pending_approvals(current_user: dict = Depends(get_current_user)):
+    """Get pending leave requests that need approval from current user"""
+    
+    # Get direct reports
+    direct_reports = await db.users.find(
+        {'reports_to': current_user['id']},
+        {'_id': 0, 'id': 1, 'name': 1}
+    ).to_list(100)
+    
+    if not direct_reports:
+        return {'pending_requests': [], 'count': 0}
+    
+    user_ids = [u['id'] for u in direct_reports]
+    
+    # Get pending requests from direct reports
+    pending = await db.leave_requests.find(
+        {'user_id': {'$in': user_ids}, 'status': 'pending'},
+        {'_id': 0}
+    ).sort('created_at', 1).to_list(100)
+    
+    # Add user names
+    user_map = {u['id']: u['name'] for u in direct_reports}
+    for req in pending:
+        req['user_name'] = user_map.get(req['user_id'], 'Unknown')
+    
+    return {'pending_requests': pending, 'count': len(pending)}
+
 # ============= BOTTLE PREVIEW ROUTES =============
 
 @api_router.post("/bottle-preview/upload-logo")
