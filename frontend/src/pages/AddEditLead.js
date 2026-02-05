@@ -90,6 +90,19 @@ const OTHER_STATES = ALL_INDIAN_STATES.filter(state => !PRIORITY_STATES.includes
 
 const SKUS = ['24 Brand', '660 ml Silver', '660 ml Gold', '330 ml Silver', '330 ml Gold', '660 Sparkling', '330 Sparkling'];
 
+const LEAD_CATEGORIES = [
+  'Restaurant',
+  'Bar & Kitchen',
+  'Star Hotel',
+  'Cafe',
+  'Event Caterer',
+  'HNIs',
+  'Government',
+  'Theatre',
+  'Premium Club',
+  'Wellness Center'
+];
+
 export default function AddEditLead() {
   const { id } = useParams();
   const navigate = useNavigate();
