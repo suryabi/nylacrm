@@ -138,7 +138,14 @@ export default function LeadDetail() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-3xl font-semibold">{lead.company}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-semibold">{lead.company}</h1>
+            {lead.category && (
+              <Badge variant="outline" className="text-sm capitalize">
+                {lead.category}
+              </Badge>
+            )}
+          </div>
           {lead.contact_person && (
             <p className="text-muted-foreground mt-1">Contact: {lead.contact_person}</p>
           )}
