@@ -2116,7 +2116,7 @@ async def allocate_city_targets(
 
 @api_router.get(\"/target-plans/{plan_id}/hierarchy\")
 async def get_target_hierarchy(plan_id: str, current_user: dict = Depends(get_current_user)):
-    \"\"\"Get complete target hierarchy with roll-ups\"\"\"
+    """Get complete target hierarchy with roll-ups"""
     
     plan = await db.target_plans.find_one({'id': plan_id}, {'_id': 0})
     if not plan:
