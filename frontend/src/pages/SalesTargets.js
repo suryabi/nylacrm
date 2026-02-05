@@ -656,12 +656,13 @@ function CityAlloc({ planId, onNext }) {
   }
 
   const allTerritoriesAllocated = territories.every(t => t.allocated_revenue > 0);
+  const hasAnyCityAllocations = territories.some(t => t.allocated_revenue > 0);
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-3">
+      <div className="flex gap-3 flex-wrap">
         {territories.map(t => {
-          const pct = (t.allocated_revenue / t.target_revenue) * 100;
+          const pct = t.target_revenue > 0 ? Math.round((t.allocated_revenue / t.target_revenue) * 100) : 0;
           return (
             <Button
               key={t.id}
@@ -670,7 +671,7 @@ function CityAlloc({ planId, onNext }) {
               className="rounded-full relative"
             >
               {t.territory}
-              {pct > 0 && <span className="ml-2 text-xs">({pct.toFixed(0)}%)</span>}
+              {pct > 0 && <span className="ml-2 text-xs font-semibold">({pct}%)</span>}
             </Button>
           );
         })}
@@ -683,19 +684,19 @@ function CityAlloc({ planId, onNext }) {
       />
 
       <div className="flex justify-between pt-6 border-t">
-        <div className="text-sm text-muted-foreground self-center">
-          {allTerritoriesAllocated ? (
-            <span className="text-green-600 font-medium">✓ All territories allocated!</span>
+        <div className="text-sm self-center">
+          {hasAnyCityAllocations ? (
+            <span className="text-green-600 font-medium">✓ You can now assign resources to allocated cities</span>
           ) : (
-            <span>Allocate all territories before continuing to resources</span>
+            <span className="text-muted-foreground">Allocate cities to enable resource assignment</span>
           )}
         </div>
         <Button 
           onClick={onNext} 
-          disabled={!allTerritoriesAllocated}
-          className="h-12 rounded-full"
+          disabled={!hasAnyCityAllocations}
+          className="h-12 rounded-full px-6"
         >
-          Continue to Resources Assignment
+          Assign Sales Resources →
         </Button>
       </div>
     </div>
