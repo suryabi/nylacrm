@@ -2086,10 +2086,11 @@ async def allocate_city_targets(
     
     # Validate total
     total_allocated = sum([c.target_revenue for c in cities])
-    if abs(total_allocated - territory_target['target_revenue']) > 0.01:
+    territory_target_value = territory_target['target_revenue']
+    if abs(total_allocated - territory_target_value) > 0.01:
         raise HTTPException(
             status_code=400,
-            detail=f'City targets ({total_allocated}) must equal territory target ({territory_target[\"target_revenue\"]})'
+            detail=f'City targets ({total_allocated}) must equal territory target ({territory_target_value})'
         )
     
     # Delete existing city targets
