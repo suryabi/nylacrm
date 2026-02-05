@@ -713,6 +713,8 @@ function CityAllocationForm({ territory, planId, onSuccess }) {
   const [values, setValues] = React.useState({});
   const [submitting, setSubmitting] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
+  const [editMode, setEditMode] = React.useState(false);
+  const [hasExistingData, setHasExistingData] = React.useState(false);
 
   React.useEffect(() => {
     loadExistingCityAllocations();
@@ -725,28 +727,34 @@ function CityAllocationForm({ territory, planId, onSuccess }) {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // Find this territory's cities in the hierarchy
-      const thisTerr = res.data.territories.find(t => t.id === territory.id);
+      const thisTerr = res.data.territories?.find(t => t.id === territory.id);
+      let dataFound = false;
+      
       if (thisTerr && thisTerr.states) {
         const existingValues = {};
         for (const state of thisTerr.states) {
           if (state.cities) {
             for (const city of state.cities) {
               existingValues[city.city] = (city.target_revenue / 100000).toString();
+              dataFound = true;
             }
           }
         }
         setValues(existingValues);
+        setHasExistingData(dataFound);
+      } else {
+        setEditMode(true);
       }
     } catch (err) {
-      console.error('Failed to load existing city allocations');
+      console.error('Failed to load city allocations');
+      setEditMode(true);
     } finally {
       setLoading(false);
     }
   };
 
   if (loading) {
-    return <div className="text-center py-8">Loading existing allocations...</div>;
+    return <div className="text-center py-8">Loading city allocations...</div>;
   }
 
   const updateValue = (cityName, value) => {
@@ -786,10 +794,12 @@ function CityAllocationForm({ territory, planId, onSuccess }) {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
-      toast.success(`✓ ${territory.territory} cities allocated successfully! ${payload.length} cities with Rs ${total.toFixed(1)}L total.`, {
+      toast.success(`✓ ${territory.territory} cities saved! ${payload.length} cities with Rs ${total.toFixed(1)}L total.`, {
         duration: 4000
       });
       
+      setEditMode(false);
+      setHasExistingData(true);
       onSuccess();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to allocate cities. Please try again.');
@@ -798,6 +808,56 @@ function CityAllocationForm({ territory, planId, onSuccess }) {
     }
   };
 
+  // View Mode
+  if (!editMode && hasExistingData) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-primary/5 p-4 rounded-xl">
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="font-semibold text-lg">{territory.territory}</p>
+              <p className="text-sm text-muted-foreground mt-1">Target: Rs {targetL.toFixed(1)}L</p>
+            </div>
+            <Badge className="bg-green-100 text-green-800">
+              ✓ Cities Allocated
+            </Badge>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          {cities.map(city => {
+            const cityValue = parseFloat(values[city.c]) || 0;
+            if (cityValue > 0) {
+              return (
+                <div key={city.c} className="flex justify-between items-center bg-secondary p-3 rounded-lg">
+                  <div>
+                    <p className="font-medium">{city.c}</p>
+                    <p className="text-xs text-muted-foreground">{city.s}</p>
+                  </div>
+                  <p className="text-lg font-bold text-primary">Rs {cityValue.toFixed(1)}L</p>
+                </div>
+              );
+            }
+            return null;
+          })}
+        </div>
+
+        <div className="bg-primary/5 p-4 rounded-xl">
+          <div className="flex justify-between">
+            <span className="font-semibold">Total Allocated:</span>
+            <span className="text-2xl font-bold text-primary">Rs {total.toFixed(1)}L</span>
+          </div>
+        </div>
+
+        <Button onClick={() => setEditMode(true)} variant="outline" className="w-full h-12 rounded-full">
+          <Edit className="h-4 w-4 mr-2" />
+          Edit City Allocation
+        </Button>
+      </div>
+    );
+  }
+
+  // Edit Mode
   return (
     <div className="space-y-4">
       <div className="bg-primary/5 p-4 rounded-xl">
