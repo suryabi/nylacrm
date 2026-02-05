@@ -2116,7 +2116,7 @@ async def allocate_city_targets(
     
     return {'message': 'City targets allocated'}
 
-@api_router.get(\"/target-plans/{plan_id}/hierarchy\")
+@api_router.get("/target-plans/{plan_id}/hierarchy")
 async def get_target_hierarchy(plan_id: str, current_user: dict = Depends(get_current_user)):
     """Get complete target hierarchy with roll-ups"""
     
