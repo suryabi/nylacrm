@@ -401,7 +401,7 @@ function AddTeamMemberForm({ onSuccess }) {
               <SelectValue placeholder="Select manager" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">None</SelectItem>
+              <SelectItem value="none">None</SelectItem>
               {allUsers
                 .filter(user => ['ceo', 'director', 'vp', 'sales_manager'].includes(user.role))
                 .map(user => (
