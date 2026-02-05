@@ -370,22 +370,23 @@ export default function LeadsList() {
                   </TableHead>
                   <TableHead>
                     <button
+                      onClick={() => handleSort('last_contacted_date')}
+                      className="flex items-center hover:text-foreground font-semibold"
+                      data-testid="sort-last-contacted"
+                    >
+                      Last Contacted
+                      {getSortIcon('last_contacted_date')}
+                    </button>
+                  </TableHead>
+                  <TableHead>Contact Method</TableHead>
+                  <TableHead>
+                    <button
                       onClick={() => handleSort('status')}
                       className="flex items-center hover:text-foreground font-semibold"
                       data-testid="sort-status"
                     >
                       Status
                       {getSortIcon('status')}
-                    </button>
-                  </TableHead>
-                  <TableHead>
-                    <button
-                      onClick={() => handleSort('priority')}
-                      className="flex items-center hover:text-foreground font-semibold"
-                      data-testid="sort-priority"
-                    >
-                      Priority
-                      {getSortIcon('priority')}
                     </button>
                   </TableHead>
                   <TableHead>
@@ -413,13 +414,21 @@ export default function LeadsList() {
                     <TableCell>{lead.contact_person || '-'}</TableCell>
                     <TableCell>{lead.city}, {lead.state}</TableCell>
                     <TableCell>
-                      <Badge className={statusColors[lead.status]}>
-                        {lead.status.replace('_', ' ')}
-                      </Badge>
+                      {lead.last_contacted_date 
+                        ? format(new Date(lead.last_contacted_date), 'MMM d, yyyy')
+                        : '-'
+                      }
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="capitalize">
-                        {lead.priority}
+                      {lead.last_contact_method ? (
+                        <span className="text-xs text-muted-foreground">
+                          {lead.last_contact_method.replace('_', ' ')}
+                        </span>
+                      ) : '-'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={statusColors[lead.status]}>
+                        {lead.status.replace('_', ' ')}
                       </Badge>
                     </TableCell>
                     <TableCell>{format(new Date(lead.created_at), 'MMM d, yyyy')}</TableCell>
