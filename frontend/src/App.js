@@ -18,6 +18,7 @@ import TeamStatusFeed from './pages/TeamStatusFeed';
 import DashboardPreview from './pages/DashboardPreview';
 import BottlePreview from './pages/BottlePreview';
 import LeaveManagement from './pages/LeaveManagement';
+import SalesTargets from './pages/SalesTargets';
 import '@/App.css';
 
 function ProtectedRoute({ children }) {
