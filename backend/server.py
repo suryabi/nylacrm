@@ -282,6 +282,72 @@ class LeaveApproval(BaseModel):
     status: str  # 'approved' or 'rejected'
     rejection_reason: Optional[str] = None
 
+class TargetPlan(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    plan_name: str
+    time_period: str  # 'monthly', 'quarterly', 'half_yearly', 'yearly'
+    start_date: str  # YYYY-MM-DD
+    end_date: str  # YYYY-MM-DD
+    country: str = 'India'
+    country_target: float  # Total revenue target
+    currency: str = 'INR'
+    status: str = 'draft'  # 'draft', 'finalized', 'locked'
+    created_by: str
+    locked_by: Optional[str] = None
+    locked_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class TargetPlanCreate(BaseModel):
+    plan_name: str
+    time_period: str
+    start_date: str
+    end_date: str
+    country_target: float
+
+class TerritoryTarget(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    plan_id: str
+    territory: str
+    target_revenue: float
+    allocated_revenue: float = 0  # Sum of city targets
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class TerritoryTargetCreate(BaseModel):
+    territory: str
+    target_revenue: float
+
+class CityTarget(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    plan_id: str
+    territory: str
+    state: str
+    city: str
+    target_revenue: float
+    allocated_revenue: float = 0  # Sum of resource targets
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class CityTargetCreate(BaseModel):
+    state: str
+    city: str
+    target_revenue: float
+
+class ResourceTarget(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    plan_id: str
+    city_id: str
+    resource_id: str  # user_id
+    target_revenue: float
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class ResourceTargetCreate(BaseModel):
+    resource_id: str
+    target_revenue: float
+
 # ============= HELPERS =============
 
 def hash_password(password: str) -> str:
