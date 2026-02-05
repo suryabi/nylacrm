@@ -126,6 +126,7 @@ class LeadCreate(BaseModel):
     contact_person: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
+    category: Optional[str] = None
     city: str
     state: str
     country: str = 'India'
@@ -147,6 +148,7 @@ class LeadUpdate(BaseModel):
     contact_person: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
+    category: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     country: Optional[str] = None
