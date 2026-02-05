@@ -405,7 +405,12 @@ async def get_leads(
         lead_id = activity['lead_id']
         activity_date = activity['created_at'] if isinstance(activity['created_at'], str) else activity['created_at'].isoformat()
         
-        if lead_id not in lead_last_activity or activity_date > lead_last_activity[lead_id]['created_at']:
+        if lead_id not in lead_last_activity:
+            lead_last_activity[lead_id] = {
+                'created_at': activity_date,
+                'interaction_method': activity.get('interaction_method', '')
+            }
+        elif activity_date and lead_last_activity[lead_id]['created_at'] and activity_date > lead_last_activity[lead_id]['created_at']:
             lead_last_activity[lead_id] = {
                 'created_at': activity_date,
                 'interaction_method': activity.get('interaction_method', '')
