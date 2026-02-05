@@ -158,6 +158,7 @@ export default function AddEditLead() {
         contact_person: lead.contact_person || '',
         email: lead.email || '',
         phone: lead.phone || '',
+        category: lead.category || '',
         city: lead.city || '',
         state: lead.state || '',
         country: lead.country || 'India',
