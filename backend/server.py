@@ -392,11 +392,40 @@ async def get_leads(
     
     leads = await db.leads.find(query, {'_id': 0}).skip(skip).limit(limit).to_list(limit)
     
+    # Get last activity for each lead
+    lead_ids = [lead['id'] for lead in leads]
+    activities = await db.activities.find(
+        {'lead_id': {'$in': lead_ids}},
+        {'_id': 0, 'lead_id': 1, 'created_at': 1, 'interaction_method': 1}
+    ).to_list(5000)
+    
+    # Group activities by lead_id and get the most recent
+    lead_last_activity = {}
+    for activity in activities:
+        lead_id = activity['lead_id']
+        activity_date = activity['created_at'] if isinstance(activity['created_at'], str) else activity['created_at'].isoformat()
+        
+        if lead_id not in lead_last_activity or activity_date > lead_last_activity[lead_id]['created_at']:
+            lead_last_activity[lead_id] = {
+                'created_at': activity_date,
+                'interaction_method': activity.get('interaction_method', '')
+            }
+    
+    # Add last contacted info to leads
     for lead in leads:
         if isinstance(lead['created_at'], str):
             lead['created_at'] = datetime.fromisoformat(lead['created_at'])
         if isinstance(lead['updated_at'], str):
             lead['updated_at'] = datetime.fromisoformat(lead['updated_at'])
+        
+        # Add last contacted info
+        last_activity = lead_last_activity.get(lead['id'])
+        if last_activity:
+            lead['last_contacted_date'] = last_activity['created_at']
+            lead['last_contact_method'] = last_activity['interaction_method']
+        else:
+            lead['last_contacted_date'] = None
+            lead['last_contact_method'] = None
     
     return leads
 
