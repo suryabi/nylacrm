@@ -79,7 +79,14 @@ export default function SalesTargets() {
         {step === 2 && (
           <Card className="p-8 border rounded-2xl">
             <h2 className="text-xl font-semibold mb-6">Allocate Cities</h2>
-            <CityAlloc planId={currentPlan.id} onDone={() => { setView('list'); loadPlans(); }} />
+            <CityAlloc planId={currentPlan.id} onNext={() => setStep(3)} />
+          </Card>
+        )}
+
+        {step === 3 && (
+          <Card className="p-8 border rounded-2xl">
+            <h2 className="text-xl font-semibold mb-6">Assign Sales Resources</h2>
+            <ResourceAlloc planId={currentPlan.id} onDone={() => { setView('list'); loadPlans(); }} />
           </Card>
         )}
       </div>
