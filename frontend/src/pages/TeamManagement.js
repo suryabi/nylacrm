@@ -303,6 +303,14 @@ function AddTeamMemberForm({ onSuccess }) {
     }
   };
 
+  const territoryStates = formData.territory && TERRITORY_LOCATIONS[formData.territory] 
+    ? Object.keys(TERRITORY_LOCATIONS[formData.territory].states)
+    : [];
+
+  const stateCities = formData.state && formData.territory && TERRITORY_LOCATIONS[formData.territory]
+    ? TERRITORY_LOCATIONS[formData.territory].states[formData.state] || []
+    : [];
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
