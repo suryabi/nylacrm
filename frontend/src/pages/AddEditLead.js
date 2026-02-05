@@ -100,7 +100,8 @@ const LEAD_CATEGORIES = [
   'Government',
   'Theatre',
   'Premium Club',
-  'Wellness Center'
+  'Wellness Center',
+  'Corporate'
 ];
 
 export default function AddEditLead() {
