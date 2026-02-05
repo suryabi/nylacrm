@@ -80,7 +80,7 @@ class LeadStatus(BaseModel):
     status: str  # 'new', 'contacted', 'qualified', 'proposal', 'closed_won', 'closed_lost'
 
 class Lead(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="allow")  # Allow extra fields
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     
     # Company & Contact
@@ -120,6 +120,10 @@ class Lead(BaseModel):
     created_by: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    
+    # Computed fields (added dynamically)
+    last_contacted_date: Optional[str] = None
+    last_contact_method: Optional[str] = None
 
 class LeadCreate(BaseModel):
     company: str
