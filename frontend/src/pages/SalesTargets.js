@@ -86,7 +86,14 @@ export default function SalesTargets() {
         {step === 3 && (
           <Card className="p-8 border rounded-2xl">
             <h2 className="text-xl font-semibold mb-6">Assign Sales Resources</h2>
-            <ResourceAlloc planId={currentPlan.id} onDone={() => { setView('list'); loadPlans(); }} />
+            <ResourceAlloc planId={currentPlan.id} onDone={() => setStep(4)} />
+          </Card>
+        )}
+
+        {step === 4 && (
+          <Card className="p-8 border rounded-2xl">
+            <h2 className="text-xl font-semibold mb-6">Review & Summary</h2>
+            <ReviewScreen planId={currentPlan.id} onFinish={() => { setView('list'); loadPlans(); }} />
           </Card>
         )}
       </div>
