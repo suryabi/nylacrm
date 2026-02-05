@@ -56,9 +56,10 @@ export default function SalesTargets() {
         <div className="flex items-center justify-between">
           <Button variant="outline" onClick={() => setView('list')} className="rounded-full">← Back to Plans</Button>
           <div className="flex gap-2">
-            <Badge className={step === 1 ? 'bg-primary' : 'bg-muted'}>Step 1: Territories</Badge>
-            <Badge className={step === 2 ? 'bg-primary' : 'bg-muted'}>Step 2: Cities</Badge>
-            <Badge className={step === 3 ? 'bg-primary' : 'bg-muted'}>Step 3: Resources</Badge>
+            <Badge className={step === 1 ? 'bg-primary text-white' : 'bg-muted'}>1: Territories</Badge>
+            <Badge className={step === 2 ? 'bg-primary text-white' : 'bg-muted'}>2: Cities</Badge>
+            <Badge className={step === 3 ? 'bg-primary text-white' : 'bg-muted'}>3: Resources</Badge>
+            <Badge className={step === 4 ? 'bg-primary text-white' : 'bg-muted'}>4: Review</Badge>
           </div>
         </div>
 
