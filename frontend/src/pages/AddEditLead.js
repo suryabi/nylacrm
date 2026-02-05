@@ -289,33 +289,33 @@ export default function AddEditLead() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="city">City *</Label>
-              <Select value={formData.city} onValueChange={(v) => updateField('city', v)} disabled={!formData.region} required>
-                <SelectTrigger data-testid="lead-city-select">
-                  <SelectValue placeholder="Select city" />
-                </SelectTrigger>
-                <SelectContent>
-                  {regionCities.map(city => (
-                    <SelectItem key={city} value={city}>{city}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
               <Label htmlFor="state">State *</Label>
               <Select value={formData.state} onValueChange={(v) => updateField('state', v)} required>
                 <SelectTrigger data-testid="lead-state-select">
                   <SelectValue placeholder="Select state" />
                 </SelectTrigger>
                 <SelectContent>
-                  <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Priority States</div>
-                  {PRIORITY_STATES.map(state => (
+                  <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Available States</div>
+                  {regionStates.map(state => (
                     <SelectItem key={state} value={state}>{state}</SelectItem>
                   ))}
-                  <div className="border-t my-1"></div>
-                  <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Other States</div>
-                  {OTHER_STATES.map(state => (
-                    <SelectItem key={state} value={state}>{state}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="city">City *</Label>
+              <Select 
+                value={formData.city} 
+                onValueChange={(v) => updateField('city', v)}
+                disabled={!formData.state}
+                required
+              >
+                <SelectTrigger data-testid="lead-city-select">
+                  <SelectValue placeholder="Select city" />
+                </SelectTrigger>
+                <SelectContent>
+                  {stateCities.map(city => (
+                    <SelectItem key={city} value={city}>{city}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
