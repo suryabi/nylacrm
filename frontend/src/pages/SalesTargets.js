@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Target, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Plus, Target, Edit, ChevronRight, ChevronDown, CheckCircle2, AlertCircle } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL + '/api';
 
