@@ -61,6 +61,22 @@ export default function LeadsList() {
 
   useEffect(() => {
     fetchLeads();
+    
+    // Check for URL parameters from dashboard
+    const params = new URLSearchParams(window.location.search);
+    const metric = params.get('metric');
+    
+    if (metric) {
+      // Apply filter based on metric clicked
+      if (metric === 'won') {
+        setStatusFilter('closed_won');
+      } else if (metric === 'lost') {
+        setStatusFilter('closed_lost');
+      } else if (metric === 'new_leads') {
+        setStatusFilter('new');
+      }
+      // For visits and calls, we'll show all leads but could add specific filtering if needed
+    }
   }, []);
 
   const fetchLeads = async () => {
