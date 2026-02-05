@@ -10,7 +10,7 @@ import { Users, TrendingUp, Phone, MapPin, UserPlus, CheckCircle, XCircle, Rotat
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-const COLORS = ['hsl(188, 87%, 63%)', 'hsl(32, 97%, 58%)', 'hsl(188, 70%, 45%)', 'hsl(32, 80%, 70%)', 'hsl(188, 60%, 80%)'];
+const COLORS = ['hsl(155, 35%, 42%)', 'hsl(42, 85%, 65%)', 'hsl(25, 50%, 55%)', 'hsl(155, 25%, 60%)', 'hsl(35, 50%, 60%)'];
 
 const TIME_FILTERS = [
   { value: 'this_week', label: 'This Week' },
