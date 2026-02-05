@@ -205,6 +205,19 @@ function ResourceAssignmentForm({ city, planId, salesTeam, onSuccess }) {
   const [assignments, setAssignments] = React.useState({});
   const [submitting, setSubmitting] = React.useState(false);
 
+  // Filter sales team by city's territory
+  const territoryTeam = salesTeam.filter(member => {
+    // Get territory from city (need to pass it from parent)
+    // For now, match based on member's territory containing the region
+    return member.territory && (
+      (city.city === 'New Delhi' || city.city === 'Noida') && member.territory.includes('North') ||
+      (city.city === 'Bengaluru' || city.city === 'Chennai' || city.city === 'Hyderabad') && member.territory.includes('South') ||
+      (city.city === 'Mumbai' || city.city === 'Pune' || city.city === 'Ahmedabad') && member.territory.includes('West') ||
+      (city.city === 'Kolkata') && member.territory.includes('East') ||
+      member.territory === 'All India'
+    );
+  });
+
   const updateAssignment = (resourceId, value) => {
     const newAssignments = {...assignments};
     newAssignments[resourceId] = value;
@@ -221,8 +234,8 @@ function ResourceAssignmentForm({ city, planId, salesTeam, onSuccess }) {
       const token = localStorage.getItem('token');
       
       // Note: Resource target endpoint needs to be created
-      // For now, just show success message
-      toast.success(`✓ Resources assigned to ${city.city}! ${Object.keys(assignments).length} resources with Rs ${total.toFixed(1)}L total.`, {
+      const assignedCount = Object.keys(assignments).filter(k => parseFloat(assignments[k]) > 0).length;
+      toast.success(`✓ ${assignedCount} resources assigned to ${city.city}! Total: Rs ${total.toFixed(1)}L`, {
         duration: 4000
       });
       
@@ -250,60 +263,73 @@ function ResourceAssignmentForm({ city, planId, salesTeam, onSuccess }) {
       </div>
 
       <div className="space-y-3">
-        <p className="text-sm font-medium text-muted-foreground mb-3">Assign to Sales Resources:</p>
-        {salesTeam.map(resource => (
-          <div key={resource.id} className="flex items-center gap-4 bg-secondary p-4 rounded-xl">
-            <div className="flex items-center gap-3 flex-1">
-              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold">
-                {resource.name[0]}
-              </div>
-              <div>
-                <p className="font-medium">{resource.name}</p>
-                <p className="text-xs text-muted-foreground">{resource.designation || resource.role} • {resource.territory}</p>
-              </div>
-            </div>
-            <Input
-              type="number"
-              value={assignments[resource.id] || ''}
-              onChange={e => updateAssignment(resource.id, e.target.value)}
-              placeholder="Lakhs"
-              className="w-40 h-11 text-right font-semibold"
-            />
-            <span className="text-sm text-muted-foreground w-12">Lakhs</span>
+        <p className="text-sm font-medium text-muted-foreground mb-3">
+          Sales Resources in this territory ({territoryTeam.length} available):
+        </p>
+        {territoryTeam.length === 0 ? (
+          <div className="text-center py-8 bg-amber-50 border border-amber-200 rounded-xl">
+            <p className="text-amber-800">No sales resources assigned to this territory yet.</p>
+            <p className="text-xs text-muted-foreground mt-2">Add team members with this territory in Team Management.</p>
           </div>
-        ))}
+        ) : (
+          territoryTeam.map(resource => (
+            <div key={resource.id} className="flex items-center gap-4 bg-secondary p-4 rounded-xl">
+              <div className="flex items-center gap-3 flex-1">
+                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold">
+                  {resource.name[0]}
+                </div>
+                <div>
+                  <p className="font-medium">{resource.name}</p>
+                  <p className="text-xs text-muted-foreground">{resource.designation || resource.role} • {resource.territory}</p>
+                </div>
+              </div>
+              <Input
+                type="number"
+                value={assignments[resource.id] || ''}
+                onChange={e => updateAssignment(resource.id, e.target.value)}
+                placeholder="Lakhs"
+                className="w-40 h-11 text-right font-semibold"
+              />
+              <span className="text-sm text-muted-foreground w-12">Lakhs</span>
+            </div>
+          ))
+        )}
       </div>
 
-      <div className={`p-5 rounded-xl border-2 ${valid ? 'bg-green-50 border-green-300' : 'bg-amber-50 border-amber-300'}`}>
-        <div className="flex justify-between items-center mb-2">
-          <span className="font-semibold text-lg">Total Assigned:</span>
-          <span className="text-3xl font-bold">Rs {total.toFixed(1)}L</span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">City Target:</span>
-          <span className="font-medium">Rs {targetL.toFixed(1)}L</span>
-        </div>
-        {!valid && total > 0 && (
-          <p className="text-sm text-amber-800 mt-3 flex items-center gap-2">
-            <AlertCircle className="h-4 w-4" />
-            Difference: Rs {Math.abs(total - targetL).toFixed(1)}L
-          </p>
-        )}
-        {valid && (
-          <p className="text-sm text-green-800 mt-3 flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4" />
-            Perfect! Ready to assign
-          </p>
-        )}
-      </div>
+      {territoryTeam.length > 0 && (
+        <>
+          <div className={`p-5 rounded-xl border-2 ${valid ? 'bg-green-50 border-green-300' : 'bg-amber-50 border-amber-300'}`}>
+            <div className="flex justify-between items-center mb-2">
+              <span className="font-semibold text-lg">Total Assigned:</span>
+              <span className="text-3xl font-bold">Rs {total.toFixed(1)}L</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">City Target:</span>
+              <span className="font-medium">Rs {targetL.toFixed(1)}L</span>
+            </div>
+            {!valid && total > 0 && (
+              <p className="text-sm text-amber-800 mt-3 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4" />
+                Difference: Rs {Math.abs(total - targetL).toFixed(1)}L
+              </p>
+            )}
+            {valid && (
+              <p className="text-sm text-green-800 mt-3 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4" />
+                Perfect! Ready to assign
+              </p>
+            )}
+          </div>
 
-      <Button 
-        onClick={submit} 
-        disabled={!valid || submitting} 
-        className="w-full h-14 rounded-full text-base font-semibold"
-      >
-        {submitting ? 'Assigning...' : `Assign Resources to ${city.city}`}
-      </Button>
+          <Button 
+            onClick={submit} 
+            disabled={!valid || submitting} 
+            className="w-full h-14 rounded-full text-base font-semibold"
+          >
+            {submitting ? 'Assigning...' : `Assign Resources to ${city.city}`}
+          </Button>
+        </>
+      )}
     </div>
   );
 }
