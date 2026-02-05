@@ -1,775 +1,754 @@
 {
-  "project_name": "Nyla Air Water CRM",
-  "design_context": "Dashboard & SaaS Application",
+  "project_name": "Nyla Air Water - Sales Target Planning & Allocation System",
+  "design_context": "dashboard",
   "theme": "light",
   "design_philosophy": {
-    "core_principles": [
-      "Minimal and very clean design inspired by Crextio HR platform",
-      "Soft, elegant aesthetic with generous spacing (2-3x more than typical)",
-      "Professional but approachable for water sustainability brand",
-      "Clarity over decoration - every element serves a purpose",
-      "Breathing room and visual hierarchy through whitespace"
-    ],
-    "emotional_tone": "Trust, Growth, Calm, Premium, Sustainable",
-    "target_audience": "Sales teams, managers, VP, directors, CEO at Nyla Air Water India operations",
-    "brand_identity": "Water company, sustainable, premium quality, eco-conscious"
+    "primary_goal": "Create an intuitive, spreadsheet-like enterprise planning interface with clear visual hierarchy and real-time validation feedback",
+    "emotional_tone": "Professional, trustworthy, efficient, calm",
+    "visual_mood": "Clean minimal aesthetic with organic warmth",
+    "key_principles": [
+      "Spreadsheet-like clarity for data entry and allocation",
+      "Clear parent-child hierarchical relationships",
+      "Real-time validation with visual feedback",
+      "Progressive disclosure (expand/collapse)",
+      "Generous spacing for breathing room",
+      "High information density without clutter",
+      "Desktop-first with mobile-friendly review mode"
+    ]
+  },
+  "color_system": {
+    "archetype": "ORGANIC & EARTHY (Trust, Growth, Calm)",
+    "rationale": "Enterprise planning tool for leadership requires trust, clarity, and calm decision-making environment. Organic palette with sage green and warm beige creates grounded, professional atmosphere without corporate coldness",
+    "palette": {
+      "primary": {
+        "value": "hsl(155, 35%, 42%)",
+        "hex": "#4A9B7F",
+        "usage": "CTAs, active states, success indicators, primary actions",
+        "contrast_note": "Sage green - meets WCAG AA for white text"
+      },
+      "accent": {
+        "value": "hsl(42, 85%, 65%)",
+        "hex": "#F4C542",
+        "usage": "Warnings, pending states, highlights, attention markers",
+        "contrast_note": "Warm golden yellow - use with dark text only"
+      },
+      "destructive": {
+        "value": "hsl(0, 72%, 60%)",
+        "hex": "#E84855",
+        "usage": "Over-allocation warnings, errors, delete actions",
+        "contrast_note": "Coral red - softer than pure red, maintains urgency"
+      },
+      "background": {
+        "value": "hsl(40, 30%, 97%)",
+        "hex": "#F9F7F4",
+        "usage": "Main background - warm off-white",
+        "tint_note": "Tinted with warm beige, never pure white"
+      },
+      "background_secondary": {
+        "value": "hsl(38, 35%, 94%)",
+        "hex": "#F3EFE8",
+        "usage": "Cards, panels, secondary surfaces",
+        "tint_note": "Slightly darker warm beige for layering"
+      },
+      "foreground": {
+        "value": "hsl(25, 15%, 25%)",
+        "hex": "#4A4238",
+        "usage": "Primary text - warm dark brown",
+        "contrast_note": "Tinted with warm undertone, not pure black"
+      },
+      "foreground_muted": {
+        "value": "hsl(25, 10%, 45%)",
+        "hex": "#7A6F64",
+        "usage": "Secondary text, labels, metadata",
+        "contrast_note": "Warm grey for hierarchy"
+      },
+      "border": {
+        "value": "hsl(35, 15%, 88%)",
+        "hex": "#E5DFD6",
+        "usage": "Subtle borders, dividers, table lines",
+        "tint_note": "Warm tinted grey, not neutral"
+      },
+      "validation_colors": {
+        "success": "hsl(155, 35%, 42%)",
+        "warning": "hsl(42, 85%, 65%)",
+        "error": "hsl(0, 72%, 60%)",
+        "info": "hsl(210, 50%, 55%)"
+      }
+    },
+    "contrast_rules": {
+      "text_on_background": "4.5:1 minimum (WCAG AA)",
+      "text_on_primary": "White text on sage green meets AA",
+      "text_on_accent": "Dark text required on yellow",
+      "interactive_elements": "3:1 minimum against adjacent colors",
+      "hover_states": "Always explicitly set text color on hover - never rely on inheritance"
+    }
   },
   "typography": {
-    "strategy": "The Soft Utility - Rounded Humanist Sans for friendly approachability with Clean Sans Body",
-    "fonts": {
+    "font_families": {
       "heading": {
         "family": "Manrope",
         "weights": [300, 400, 500, 600, 700, 800],
-        "usage": "Main headings (h1, h2), dashboard titles, page headers",
-        "import": "@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap');",
-        "css_class": "font-heading",
-        "notes": "Use font-light (300) for elegant large headings, font-semibold (600) for section headers, font-bold (700) for emphasis"
+        "usage": "All headings (h1-h6), section titles, page titles",
+        "rationale": "Geometric sans with warmth - professional yet approachable",
+        "import": "Already imported in index.css"
       },
       "subheading": {
         "family": "Work Sans",
         "weights": [400, 500, 600],
-        "usage": "Subheadings (h3, h4, h5), card titles, section labels",
-        "import": "@import url('https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&display=swap');",
-        "css_class": "font-subheading",
-        "notes": "Clean and readable, pairs well with Manrope"
+        "usage": "Subheadings, labels, overlines, table headers",
+        "rationale": "Clean sans for hierarchy and clarity",
+        "import": "Already imported in index.css"
       },
       "body": {
         "family": "IBM Plex Sans",
         "weights": [300, 400, 500],
-        "usage": "Body text, paragraphs, descriptions, table content",
-        "import": "@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500&display=swap');",
-        "css_class": "font-body",
-        "notes": "Highly legible for data-heavy interfaces"
+        "usage": "Body text, paragraphs, descriptions, table cells",
+        "rationale": "Highly legible for data-heavy interfaces",
+        "import": "Already imported in index.css"
       },
       "mono": {
         "family": "IBM Plex Mono",
         "weights": [400, 500],
-        "usage": "IDs, codes, technical data, timestamps",
-        "import": "@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap');",
-        "css_class": "font-mono",
-        "notes": "For technical precision when needed"
+        "usage": "Numbers, currency values, IDs, codes",
+        "rationale": "Monospace for numerical alignment and precision",
+        "import": "Already imported in index.css"
       }
     },
-    "typesetting_rules": {
-      "headlines_large": "tracking-tight or tracking-tighter for sizes > 32px",
-      "labels_overlines": "uppercase + tracking-[0.2em] for small labels",
-      "line_height_headers": "leading-tight or leading-snug",
-      "line_height_body": "leading-relaxed for readability",
-      "text_sizes": {
-        "h1": "text-4xl md:text-5xl lg:text-6xl",
-        "h2": "text-3xl md:text-4xl",
-        "h3": "text-2xl md:text-3xl",
-        "h4": "text-xl md:text-2xl",
-        "h5": "text-lg md:text-xl",
-        "body": "text-base",
-        "small": "text-sm",
-        "tiny": "text-xs"
-      }
+    "scale": {
+      "page_title": "text-3xl md:text-4xl font-heading font-bold tracking-tight",
+      "section_title": "text-2xl md:text-3xl font-heading font-semibold tracking-tight",
+      "card_title": "text-xl font-heading font-semibold",
+      "subsection_title": "text-lg font-subheading font-medium",
+      "table_header": "text-sm font-subheading font-medium uppercase tracking-wide",
+      "body_large": "text-base font-body",
+      "body_default": "text-sm font-body",
+      "body_small": "text-xs font-body",
+      "label": "text-xs font-subheading font-medium uppercase tracking-wider",
+      "number_display": "font-mono tabular-nums"
+    },
+    "line_height": {
+      "tight": "leading-tight (headings, titles)",
+      "normal": "leading-normal (body text)",
+      "relaxed": "leading-relaxed (long-form content)"
+    },
+    "letter_spacing": {
+      "tighter": "tracking-tighter (large headings >32px)",
+      "tight": "tracking-tight (headings)",
+      "normal": "tracking-normal (body)",
+      "wide": "tracking-wide (labels)",
+      "wider": "tracking-wider (uppercase labels)"
     }
   },
-  "color_system": {
-    "archetype": "ORGANIC & EARTHY (Trust, Growth, Calm) - Perfect for Water Sustainability Brand",
-    "palette_strategy": "Soft, muted earth tones with warm neutrals. Avoid bright teal/ocean blues. Use gentle sage, warm sand, soft cream backgrounds with subtle accents.",
-    "light_theme": {
-      "background": {
-        "primary": "hsl(40, 30%, 97%)",
-        "description": "Warm off-white, almost cream - main app background",
-        "tailwind": "bg-[hsl(40,30%,97%)]",
-        "usage": "Main app background, page backgrounds"
-      },
-      "background_secondary": {
-        "primary": "hsl(38, 35%, 94%)",
-        "description": "Soft beige for cards and elevated surfaces",
-        "tailwind": "bg-[hsl(38,35%,94%)]",
-        "usage": "Cards, panels, secondary surfaces"
-      },
-      "foreground": {
-        "primary": "hsl(25, 15%, 25%)",
-        "description": "Warm dark brown for primary text - excellent contrast",
-        "tailwind": "text-[hsl(25,15%,25%)]",
-        "usage": "Primary text, headings, important content"
-      },
-      "foreground_muted": {
-        "primary": "hsl(25, 10%, 45%)",
-        "description": "Medium warm gray for secondary text",
-        "tailwind": "text-[hsl(25,10%,45%)]",
-        "usage": "Secondary text, descriptions, metadata"
-      },
-      "primary": {
-        "color": "hsl(155, 35%, 42%)",
-        "description": "Soft sage green - water sustainability, growth, calm",
-        "tailwind": "bg-[hsl(155,35%,42%)] text-white",
-        "usage": "Primary CTAs, active states, key actions - USE SPARINGLY",
-        "hover": "hsl(155, 35%, 35%)",
-        "hover_tailwind": "hover:bg-[hsl(155,35%,35%)]"
-      },
-      "accent": {
-        "color": "hsl(42, 85%, 65%)",
-        "description": "Soft warm yellow - highlights, gentle emphasis (like Crextio reference)",
-        "tailwind": "bg-[hsl(42,85%,65%)] text-[hsl(25,15%,25%)]",
-        "usage": "Highlights, badges, gentle emphasis, status indicators",
-        "notes": "Use for positive states, featured items, soft highlights"
-      },
-      "border": {
-        "color": "hsl(38, 20%, 85%)",
-        "description": "Soft warm border - subtle separation",
-        "tailwind": "border-[hsl(38,20%,85%)]",
-        "usage": "Borders, dividers, subtle separations"
-      },
-      "success": {
-        "color": "hsl(145, 45%, 48%)",
-        "description": "Natural green for success states",
-        "tailwind": "bg-[hsl(145,45%,48%)] text-white"
-      },
-      "warning": {
-        "color": "hsl(35, 75%, 55%)",
-        "description": "Warm amber for warnings",
-        "tailwind": "bg-[hsl(35,75%,55%)] text-white"
-      },
-      "error": {
-        "color": "hsl(5, 65%, 55%)",
-        "description": "Muted terracotta red for errors",
-        "tailwind": "bg-[hsl(5,65%,55%)] text-white"
-      },
-      "info": {
-        "color": "hsl(200, 40%, 50%)",
-        "description": "Soft muted blue for info",
-        "tailwind": "bg-[hsl(200,40%,50%)] text-white"
-      }
+  "spacing_system": {
+    "philosophy": "Generous spacing (2-3x typical) for breathing room and clarity",
+    "scale": {
+      "xs": "p-1 (4px)",
+      "sm": "p-2 (8px)",
+      "md": "p-4 (16px)",
+      "lg": "p-6 (24px)",
+      "xl": "p-8 (32px)",
+      "2xl": "p-12 (48px)",
+      "3xl": "p-16 (64px)",
+      "4xl": "p-20 (80px)",
+      "5xl": "p-24 (96px)"
     },
-    "chart_colors": {
-      "description": "Earthy, muted palette for data visualization - color-blind friendly",
-      "colors": [
-        {
-          "name": "sage",
-          "value": "hsl(155, 35%, 42%)",
-          "usage": "Primary metric, main data series"
-        },
-        {
-          "name": "terracotta",
-          "value": "hsl(15, 55%, 58%)",
-          "usage": "Secondary metric, comparison data"
-        },
-        {
-          "name": "ochre",
-          "value": "hsl(42, 70%, 55%)",
-          "usage": "Tertiary metric, highlights"
-        },
-        {
-          "name": "clay",
-          "value": "hsl(25, 45%, 50%)",
-          "usage": "Additional data series"
-        },
-        {
-          "name": "moss",
-          "value": "hsl(85, 30%, 45%)",
-          "usage": "Additional data series"
-        }
-      ]
-    },
-    "contrast_requirements": {
-      "normal_text": "Minimum 4.5:1 contrast ratio (WCAG AA)",
-      "large_text": "Minimum 3:1 contrast ratio (18px+ or 14px+ bold)",
-      "interactive_elements": "Minimum 3:1 against adjacent colors",
-      "critical_rule": "ALWAYS set explicit text color on hover states - never rely on inheritance",
-      "hover_pattern": "hover:bg-[color] hover:text-[explicit-color]",
-      "focus_states": "Must have HIGHER contrast than default state with visible focus ring"
-    },
-    "forbidden_colors": [
-      "Bright teal (#1B93A4) - overused in dashboards",
-      "Purple (#7351B7) - AI page cliché",
-      "Pure black (#000000) or pure gray (#808080) - use tinted neutrals instead"
-    ]
-  },
-  "spacing_and_layout": {
-    "philosophy": "Generous spacing - use 2-3x more than typical designs for breathing room",
-    "spacing_scale": "Tailwind default: p-1, p-2, p-4, p-6, p-8, p-12, p-16, p-20, p-24, p-32",
-    "recommended_usage": {
-      "section_padding": "py-16 md:py-24 lg:py-32",
-      "card_padding": "p-8 md:p-10 lg:p-12",
-      "container_padding": "px-6 md:px-12 lg:px-16",
-      "element_gaps": "gap-8 md:gap-12 lg:gap-16",
-      "form_spacing": "space-y-6 md:space-y-8"
+    "application": {
+      "page_container": "px-6 md:px-8 lg:px-12 py-6 md:py-8",
+      "card_padding": "p-6 md:p-8",
+      "section_spacing": "space-y-8 md:space-y-12",
+      "table_cell": "px-4 py-3",
+      "button_padding": "px-4 py-2 (default), px-6 py-3 (large)",
+      "input_padding": "px-4 py-2",
+      "gap_between_elements": "gap-4 md:gap-6"
     },
     "critical_rules": [
-      "Containers with borders MUST have internal padding (p-6 or p-8 minimum)",
-      "Mobile images MUST NOT exceed 80vh height - use max-h-[80vh] md:max-h-none",
-      "Grid items MUST be direct children of grid containers",
-      "Use align-items: start on grids, add align-self: stretch to individual items as needed"
-    ],
-    "grid_system": {
-      "dashboard_grid": {
-        "type": "High Density Grid - for data correlation and scanability",
-        "base": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4",
-        "gap": "gap-6 md:gap-8",
-        "usage": "Dashboard metrics, analytics cards, data widgets",
-        "span_logic": {
-          "summary_metric": "col-span-1 (single KPI card)",
-          "primary_chart": "col-span-2 md:col-span-3 (main visualization)",
-          "activity_feed": "col-span-1 row-span-2 (tall narrow list)"
-        }
-      },
-      "list_grid": {
-        "type": "Clean table/list layout",
-        "usage": "Leads list, team list, reports",
-        "notes": "Use Shadcn Table component with custom styling"
-      }
-    },
-    "alignment_rules": [
-      "Left-align: paragraphs, labels, inputs, dense content, lists, forms, tables",
-      "Center-align: only for hero sections or when it improves visual hierarchy",
-      "Buttons: align relative to container context",
-      "Optical alignment over geometric - adjust for visual weight"
+      "Containers with borders MUST have internal padding (p-6 or p-8)",
+      "Never let text touch container edges",
+      "Use optical alignment over geometric alignment",
+      "Mobile: reduce spacing by 25-33% but maintain hierarchy"
     ]
   },
-  "surface_strategies": {
-    "primary_approach": "Flat Solid with subtle borders - Medical/Clinical precision for data clarity",
-    "card_style": {
-      "background": "bg-[hsl(38,35%,94%)] (soft beige)",
-      "border": "border border-[hsl(38,20%,85%)]",
-      "border_radius": "rounded-xl (12px) for soft, approachable feel",
-      "shadow": "shadow-sm (very subtle)",
-      "padding": "p-8 md:p-10",
-      "hover_state": "hover:-translate-y-1 hover:shadow-md transition-transform duration-200 ease-out"
-    },
-    "header_nav": {
-      "type": "Horizontal top navigation - clean and professional",
-      "background": "bg-[hsl(40,30%,97%)]/95 backdrop-blur-md",
-      "border": "border-b border-[hsl(38,20%,85%)]",
-      "height": "h-16 md:h-20",
-      "padding": "px-6 md:px-12",
-      "sticky": "sticky top-0 z-50",
-      "notes": "Slight blur for depth, solid enough for text clarity"
-    },
-    "sidebar": {
-      "usage": "Optional secondary navigation for deep sections",
-      "background": "bg-[hsl(38,35%,94%)]",
-      "border": "border-r border-[hsl(38,20%,85%)]",
-      "width": "w-64",
-      "notes": "Use sparingly - prefer horizontal nav"
-    },
-    "modal_overlay": {
-      "background": "bg-black/20 backdrop-blur-sm",
-      "notes": "Subtle overlay, not too dark"
-    },
-    "input_fields": {
-      "background": "bg-white",
-      "border": "border border-[hsl(38,20%,85%)]",
-      "border_radius": "rounded-lg",
-      "padding": "px-4 py-3",
-      "focus": "focus:border-[hsl(155,35%,42%)] focus:ring-2 focus:ring-[hsl(155,35%,42%)]/20"
-    },
-    "buttons": {
-      "primary": {
-        "style": "Pill-shaped (rounded-full) for soft, approachable feel",
-        "background": "bg-[hsl(155,35%,42%)]",
-        "text": "text-white font-medium",
-        "padding": "px-8 py-3",
-        "hover": "hover:bg-[hsl(155,35%,35%)] hover:text-white transition-colors duration-200",
-        "shadow": "shadow-sm hover:shadow-md"
+  "layout_patterns": {
+    "grid_system": {
+      "type": "High Density Grid (Dashboard Mode B)",
+      "base_grid": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4",
+      "gap_strategy": "gap-4 md:gap-6 (tight for data correlation)",
+      "span_logic": {
+        "summary_cards": "col-span-1 (single metric cards)",
+        "main_allocation_area": "col-span-2 md:col-span-3 (primary workspace)",
+        "hierarchy_tree": "col-span-1 md:col-span-1 (sidebar tree view)",
+        "validation_panel": "col-span-full (full-width alerts)"
       },
-      "secondary": {
-        "style": "Pill-shaped outline",
-        "background": "bg-transparent",
-        "border": "border-2 border-[hsl(155,35%,42%)]",
-        "text": "text-[hsl(155,35%,42%)]",
-        "padding": "px-8 py-3",
-        "hover": "hover:bg-[hsl(155,35%,42%)] hover:text-white transition-all duration-200"
+      "alignment": "align-items: start (override default stretch)",
+      "mobile_first": "Always start with grid-cols-1"
+    },
+    "page_layouts": {
+      "target_plan_list": {
+        "structure": "Header + Filter Bar + Grid of Plan Cards + Pagination",
+        "grid": "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
       },
-      "ghost": {
-        "background": "bg-transparent",
-        "text": "text-[hsl(25,15%,25%)]",
-        "padding": "px-6 py-2",
-        "hover": "hover:bg-[hsl(38,35%,94%)] transition-colors duration-200"
+      "allocation_workspace": {
+        "structure": "Header + Breadcrumb + Main Grid (Tree Sidebar + Allocation Area) + Validation Footer",
+        "layout": "Two-column: 1/4 tree navigation, 3/4 allocation workspace",
+        "responsive": "Stack vertically on mobile with collapsible tree"
+      },
+      "plan_creation_form": {
+        "structure": "Centered form card (max-w-2xl) with clear sections",
+        "layout": "Single column with grouped fields"
       }
     },
-    "badges": {
-      "style": "Soft pill badges with accent color",
-      "background": "bg-[hsl(42,85%,65%)]/30",
-      "text": "text-[hsl(25,15%,25%)] text-xs font-medium",
-      "padding": "px-3 py-1",
-      "border_radius": "rounded-full"
+    "component_layouts": {
+      "allocation_table": {
+        "type": "Spreadsheet-like table with inline editing",
+        "columns": "Territory/City Name | Target Amount | Allocated Amount | Remaining | Progress Bar | Actions",
+        "features": "Sticky header, zebra striping, hover states, inline input fields"
+      },
+      "hierarchy_tree": {
+        "type": "Expandable/collapsible tree with indentation",
+        "levels": "Country → Territory → State → City → Resource",
+        "visual": "Indent by 16px per level, use icons for expand/collapse, show allocation status badges"
+      },
+      "summary_cards": {
+        "type": "Metric cards with icon, label, value, and mini progress",
+        "layout": "Grid of 4 cards (Total Target, Allocated, Remaining, Progress %)"
+      }
     }
   },
-  "component_usage": {
+  "component_strategy": {
     "shadcn_components": {
-      "required": [
-        "Table - for leads list, reports",
-        "Calendar - for follow-up scheduler",
-        "Select - for dropdowns (location, status, filters)",
-        "Dialog - for modals (add/edit lead)",
-        "Form - for all form inputs with validation",
-        "Dropdown Menu - for action menus",
-        "Tabs - for switching views (daily/weekly/monthly)",
-        "Badge - for status indicators",
-        "Avatar - for user profiles",
-        "Tooltip - for helpful hints",
-        "Popover - for additional info",
-        "Sheet - for mobile navigation drawer",
-        "Sonner (Toast) - for notifications"
+      "use_cases": [
+        "Table (for allocation grids)",
+        "Button (all interactive actions)",
+        "Input (inline editing, form fields)",
+        "Select (dropdowns for filters)",
+        "Dialog (modals for confirmations)",
+        "Badge (status indicators)",
+        "Progress (allocation progress bars)",
+        "Accordion (collapsible sections)",
+        "Tabs (switching between views)",
+        "Calendar (date range picker)",
+        "Tooltip (contextual help)",
+        "Alert (validation messages)",
+        "Separator (visual dividers)",
+        "Skeleton (loading states)"
       ],
-      "customization_notes": "Override default Shadcn styles to match Nyla brand - change colors, radius, spacing. Remove default heights (h-9) with h-auto to prevent content cutoff."
-    },
-    "charts": {
-      "library": "Shadcn Chart components (built on Recharts)",
-      "types_needed": [
-        "Line Chart - trends over time",
-        "Bar Chart - comparisons, location analytics",
-        "Pie/Donut Chart - status distribution",
-        "Area Chart - cumulative metrics"
-      ],
-      "styling": "Use earthy chart color palette, generous padding, clear labels, accessible color combinations"
-    },
-    "icons": {
-      "library": "lucide-react (already installed)",
-      "style": "Consistent stroke width, use sparingly for clarity",
-      "size": "w-5 h-5 for inline, w-6 h-6 for standalone",
-      "color": "text-[hsl(25,10%,45%)] for neutral, text-[hsl(155,35%,42%)] for primary actions"
+      "customization_required": [
+        "Override default Shadcn styling to match warm organic palette",
+        "Adjust border-radius to match --radius: 0.75rem",
+        "Ensure hover states explicitly set text colors",
+        "Add data-testid attributes to all interactive elements"
+      ]
     },
     "custom_components_needed": [
-      "ActivityTimeline - for lead interaction history",
-      "StatusUpdateCard - for daily status with AI assistance",
-      "TeamFeedCard - for team status feed",
-      "MetricCard - for dashboard KPIs",
-      "LeadCard - for lead preview cards",
-      "LocationAnalyticsMap - for geographic data visualization"
-    ]
+      "AllocationRow (table row with inline editing)",
+      "HierarchyTreeNode (recursive tree component)",
+      "ValidationAlert (custom alert with allocation status)",
+      "ProgressIndicator (custom progress with labels)",
+      "AllocationInput (input with validation and formatting)",
+      "StatusBadge (custom badge with allocation states)"
+    ],
+    "component_conventions": {
+      "exports": "Named exports for components (export const ComponentName)",
+      "pages": "Default exports for pages (export default function PageName)",
+      "location": "Components in src/components/, Pages in src/pages/",
+      "styling": "Tailwind classes only, no inline styles",
+      "state": "Simple useState, avoid complex nested state"
+    }
+  },
+  "surface_strategies": {
+    "header": {
+      "style": "Solid background with subtle bottom border",
+      "background": "bg-background-secondary",
+      "border": "border-b border-border",
+      "height": "h-16",
+      "padding": "px-6 md:px-8",
+      "position": "sticky top-0 z-50",
+      "rationale": "Solid for clarity, not glass (data-heavy context)"
+    },
+    "cards": {
+      "style": "Flat with subtle border, no shadow by default",
+      "background": "bg-background-secondary",
+      "border": "border border-border",
+      "radius": "rounded-lg",
+      "padding": "p-6 md:p-8",
+      "hover": "hover:border-primary/40 hover:shadow-sm transition-all duration-200"
+    },
+    "tables": {
+      "style": "Grid borders (technical look)",
+      "background": "bg-background",
+      "borders": "border-b border-border/40 on rows",
+      "header": "bg-background-secondary border-b-2 border-border",
+      "hover": "hover:bg-primary/5 transition-colors",
+      "zebra": "Optional: even:bg-background-secondary/50"
+    },
+    "modals": {
+      "style": "Solid card with overlay",
+      "overlay": "bg-black/40 backdrop-blur-sm",
+      "card": "bg-background border border-border rounded-lg shadow-xl",
+      "padding": "p-6 md:p-8"
+    },
+    "sidebar": {
+      "style": "Solid with right border",
+      "background": "bg-background-secondary",
+      "border": "border-r border-border",
+      "width": "w-64 md:w-80",
+      "padding": "p-4 md:p-6"
+    }
   },
   "motion_and_interactions": {
-    "philosophy": "Subtle, purposeful animations - enhance UX without distraction",
     "required_animations": [
       "Hover states on all interactive elements",
-      "Click/press feedback",
-      "Focus states for accessibility",
-      "Entrance animations (fade-in, slide-up) for content",
-      "Smooth transitions between states"
+      "Click/press states (scale-95 or brightness shift)",
+      "Focus states with ring (focus-visible:ring-2 focus-visible:ring-ring)",
+      "Expand/collapse animations for tree nodes",
+      "Progress bar transitions",
+      "Modal enter/exit animations",
+      "Loading skeleton animations"
     ],
-    "technical_implementation": {
-      "transition_properties": "transition-[property] duration-[time] ease-[curve]",
-      "example": "transition-colors duration-200 ease-out",
-      "never_use": "transition: all (breaks transforms)",
-      "preferred_properties": "transform, opacity, colors, background-color, border-color"
+    "transition_properties": {
+      "default": "transition-colors duration-200",
+      "transform": "transition-transform duration-200 ease-out",
+      "opacity": "transition-opacity duration-200",
+      "all_interactive": "transition-all duration-200",
+      "never_use": "transition: all (breaks transforms)"
     },
-    "specific_animations": {
-      "button_hover": "hover:-translate-y-0.5 hover:shadow-md transition-all duration-200",
-      "card_hover": "hover:-translate-y-1 hover:shadow-lg transition-transform duration-200",
-      "list_entrance": "Stagger children with framer-motion",
-      "page_transition": "Fade in content on route change",
-      "loading_states": "Skeleton screens with pulse animation"
+    "hover_states": {
+      "buttons": "hover:bg-primary/90 hover:text-primary-foreground",
+      "table_rows": "hover:bg-primary/5",
+      "cards": "hover:border-primary/40 hover:shadow-sm hover:-translate-y-0.5",
+      "links": "hover:text-primary hover:underline",
+      "critical_rule": "ALWAYS explicitly set text color on hover"
+    },
+    "focus_states": {
+      "all_interactive": "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+      "inputs": "focus:border-primary focus:ring-2 focus:ring-primary/20"
+    },
+    "loading_states": {
+      "skeleton": "animate-pulse bg-muted",
+      "spinner": "animate-spin",
+      "progress": "transition-all duration-300 ease-out"
     },
     "accessibility": {
-      "prefers_reduced_motion": "MUST respect - disable/reduce animations",
-      "decorative_elements": "Add aria-hidden='true'",
-      "focus_management": "Animations must not interfere with keyboard navigation"
+      "reduced_motion": "Respect prefers-reduced-motion media query",
+      "decorative_elements": "Add aria-hidden='true' to decorative icons",
+      "focus_management": "Ensure keyboard navigation works smoothly"
     }
   },
-  "accessibility": {
-    "critical_requirements": [
-      "All interactive elements MUST have data-testid attribute",
-      "Contrast ratios must meet WCAG AA standards (4.5:1 for normal text)",
-      "Focus indicators must be visible and high contrast",
-      "Keyboard navigation must work for all interactions",
-      "Screen reader friendly labels and ARIA attributes",
-      "Form validation with clear error messages",
-      "Responsive text sizing (no fixed px for body text)"
-    ],
-    "data_testid_convention": {
-      "format": "kebab-case, role-based naming",
-      "examples": [
-        "login-form-submit-button",
-        "leads-table-search-input",
-        "add-lead-dialog",
-        "dashboard-metrics-card",
-        "team-status-feed"
-      ],
-      "applies_to": "buttons, links, form inputs, menus, error messages, key data displays"
+  "icons_and_assets": {
+    "icon_library": {
+      "primary": "lucide-react (already installed)",
+      "rationale": "Clean, consistent, matches Tailwind sizing",
+      "usage": "All UI icons (ChevronDown, Plus, Check, X, AlertCircle, etc.)"
+    },
+    "icon_usage": {
+      "tree_expand_collapse": "ChevronRight (collapsed), ChevronDown (expanded)",
+      "actions": "Plus (add), Trash2 (delete), Edit (edit), Lock (finalize)",
+      "status": "CheckCircle (complete), AlertCircle (warning), XCircle (error)",
+      "navigation": "ArrowLeft (back), Home, Menu",
+      "data": "TrendingUp, TrendingDown, DollarSign, Users"
+    },
+    "icon_sizing": {
+      "small": "w-4 h-4 (16px)",
+      "default": "w-5 h-5 (20px)",
+      "large": "w-6 h-6 (24px)",
+      "hero": "w-8 h-8 (32px)"
+    },
+    "images": {
+      "not_required": "This is a data-heavy dashboard - no decorative images needed",
+      "logo": "Nyla Air Water logo in header (to be provided by client)",
+      "empty_states": "Use illustrations or icons for empty states"
     }
   },
-  "page_specific_guidelines": {
-    "dashboard": {
-      "layout": "High density grid with metrics cards, charts, recent activity feed",
-      "metrics_cards": "4 key KPIs in grid-cols-1 md:grid-cols-2 lg:grid-cols-4",
-      "charts": "2-3 main charts in col-span-2 or col-span-3",
-      "activity_feed": "Sidebar or bottom section with recent leads, follow-ups",
-      "spacing": "Generous gaps (gap-8) between sections"
-    },
-    "leads_list": {
-      "layout": "Full-width table with filters, search, pagination",
-      "table_style": "Shadcn Table with custom styling - alternating row backgrounds",
-      "filters": "Top bar with Select dropdowns, Search input, Sort options",
-      "actions": "Row actions in dropdown menu, bulk actions in header",
-      "pagination": "Bottom with page numbers and items per page selector"
-    },
-    "lead_detail": {
-      "layout": "Two-column on desktop: left = contact info/details, right = activity timeline",
-      "sections": "Contact Info, Location Details, SKUs, Current Brand, Activity Timeline, Comments",
-      "timeline": "Vertical timeline component with interaction icons, timestamps, notes",
-      "actions": "Edit, Delete, Add Follow-up buttons in header"
-    },
-    "add_edit_lead": {
-      "layout": "Single column form with sections",
-      "form_sections": "Basic Info, Contact Details, Location (cascading dropdowns), SKUs, Current Brand",
-      "validation": "Real-time validation with clear error messages",
-      "actions": "Save, Cancel buttons at bottom (sticky on mobile)"
-    },
-    "daily_status_update": {
-      "layout": "Mobile-optimized, single column, 3 sections",
-      "sections": "Leads Contacted, Follow-ups Completed, New Opportunities",
-      "ai_assistance": "AI revision button for each section to improve text",
-      "submission": "Submit button at bottom, confirmation toast"
-    },
-    "team_status_feed": {
-      "layout": "Feed view with filters (Daily/Weekly/Monthly)",
-      "filters": "Tabs for time period, dropdown for team member",
-      "feed_cards": "Individual status cards with user avatar, timestamp, content",
-      "ai_summary": "AI-generated summary at top for selected period",
-      "infinite_scroll": "Load more as user scrolls"
-    },
-    "follow_ups_calendar": {
-      "layout": "Calendar view with Shadcn Calendar component",
-      "views": "Month, Week, Day views",
-      "events": "Follow-up items displayed on calendar dates",
-      "actions": "Click date to add follow-up, click event to view/edit"
-    },
-    "reports_analytics": {
-      "layout": "Dashboard-style with multiple chart types",
-      "filters": "Date range, team member, location, status",
-      "charts": "Line charts for trends, bar charts for comparisons, pie charts for distribution",
-      "export": "Export to PDF/CSV buttons"
-    },
-    "location_analytics": {
-      "layout": "Map view + data tables",
-      "visualization": "Geographic breakdown by city/state/region",
-      "charts": "Bar charts for top locations, pie chart for regional distribution",
-      "filters": "Region, state, city dropdowns"
-    },
-    "team_management": {
-      "layout": "List view + org chart view (tabs)",
-      "list": "Table with team members, roles, contact info",
-      "org_chart": "Visual hierarchy of team structure",
-      "actions": "Add member, edit member, view member details"
-    }
-  },
-  "image_assets": {
-    "hero_images": [
-      {
-        "url": "https://images.unsplash.com/photo-1548839140-29a749e1cf4d?crop=entropy&cs=srgb&fm=jpg&q=85",
-        "description": "Clean glass of water - minimal aesthetic",
-        "usage": "Login page background, splash screen, about section",
-        "category": "brand_identity"
+  "validation_and_feedback": {
+    "validation_states": {
+      "fully_allocated": {
+        "color": "text-primary",
+        "badge": "bg-primary/10 text-primary border-primary/20",
+        "icon": "CheckCircle",
+        "message": "Fully allocated"
       },
-      {
-        "url": "https://images.unsplash.com/photo-1560542567-585c958d6e88?crop=entropy&cs=srgb&fm=jpg&q=85",
-        "description": "Clean plant with water droplets - sustainability",
-        "usage": "Dashboard header, sustainability messaging",
-        "category": "brand_identity"
-      }
-    ],
-    "team_collaboration": [
-      {
-        "url": "https://images.unsplash.com/photo-1739298061740-5ed03045b280?crop=entropy&cs=srgb&fm=jpg&q=85",
-        "description": "Team meeting in conference room",
-        "usage": "Team management page, about team section",
-        "category": "team"
+      "under_allocated": {
+        "color": "text-accent",
+        "badge": "bg-accent/10 text-accent-foreground border-accent/20",
+        "icon": "AlertCircle",
+        "message": "Under-allocated by ₹X"
       },
-      {
-        "url": "https://images.unsplash.com/photo-1752650735943-d0fbf1edce21?crop=entropy&cs=srgb&fm=jpg&q=85",
-        "description": "Two women working together on project",
-        "usage": "Collaboration features, team status feed",
-        "category": "team"
+      "over_allocated": {
+        "color": "text-destructive",
+        "badge": "bg-destructive/10 text-destructive border-destructive/20",
+        "icon": "XCircle",
+        "message": "Over-allocated by ₹X"
+      },
+      "not_started": {
+        "color": "text-muted-foreground",
+        "badge": "bg-muted text-muted-foreground",
+        "icon": "Circle",
+        "message": "Not allocated"
       }
-    ],
-    "usage_notes": "Use images sparingly - this is a data-focused CRM. Images should support brand identity without overwhelming the interface."
+    },
+    "progress_indicators": {
+      "type": "Progress bar with percentage label",
+      "colors": {
+        "0-50%": "bg-destructive (red - under-allocated)",
+        "51-99%": "bg-accent (yellow - partial)",
+        "100%": "bg-primary (green - complete)"
+      },
+      "display": "Show percentage and absolute values (₹X / ₹Y)"
+    },
+    "real_time_validation": {
+      "trigger": "On input change (debounced 300ms)",
+      "display": "Inline validation messages below inputs",
+      "summary": "Validation summary panel at bottom of allocation workspace",
+      "blocking": "Prevent finalization if validation fails"
+    },
+    "toast_notifications": {
+      "library": "sonner (already installed)",
+      "usage": "Success/error feedback for actions (save, delete, finalize)",
+      "position": "top-right",
+      "duration": "3000ms (success), 5000ms (error)"
+    }
+  },
+  "data_display_patterns": {
+    "currency_formatting": {
+      "format": "₹X,XX,XXX (Indian numbering system)",
+      "component": "Use Intl.NumberFormat with 'en-IN' locale",
+      "display": "font-mono tabular-nums for alignment",
+      "example": "₹12,34,567"
+    },
+    "percentage_display": {
+      "format": "XX.X%",
+      "rounding": "1 decimal place",
+      "display": "font-mono tabular-nums"
+    },
+    "date_display": {
+      "format": "DD MMM YYYY (e.g., 15 Jan 2024)",
+      "range": "DD MMM - DD MMM YYYY",
+      "component": "Use date-fns for formatting"
+    },
+    "hierarchy_display": {
+      "indentation": "16px per level (pl-4 per level)",
+      "connectors": "Subtle vertical lines (border-l border-border)",
+      "badges": "Show allocation status at each level",
+      "expand_icon": "ChevronRight/ChevronDown before label"
+    },
+    "table_patterns": {
+      "sticky_header": "sticky top-0 z-10 bg-background-secondary",
+      "zebra_striping": "even:bg-background-secondary/50",
+      "hover_highlight": "hover:bg-primary/5",
+      "inline_editing": "Click cell to edit, show input with focus",
+      "action_column": "Right-aligned with icon buttons"
+    }
   },
   "responsive_design": {
     "breakpoints": {
-      "mobile": "< 768px",
-      "tablet": "768px - 1024px (iPad friendly)",
-      "desktop": "> 1024px"
+      "sm": "640px",
+      "md": "768px",
+      "lg": "1024px",
+      "xl": "1280px",
+      "2xl": "1536px"
     },
-    "mobile_first": "Always design mobile-first, enhance for larger screens",
-    "critical_mobile_optimizations": [
-      "Daily Status Update must be mobile-optimized (primary use case)",
-      "Navigation collapses to hamburger menu (Sheet component)",
-      "Tables become scrollable or card-based on mobile",
-      "Forms stack vertically with full-width inputs",
-      "Charts resize responsively with maintained aspect ratios",
-      "Touch targets minimum 44x44px"
-    ],
-    "tablet_ipad_optimizations": [
-      "Hybrid layouts - not quite desktop, not quite mobile",
-      "Side-by-side views where appropriate (lead detail)",
-      "Larger touch targets than desktop",
-      "Optimized for landscape and portrait orientations"
-    ]
+    "strategy": "Desktop-first for planning, mobile-friendly for review",
+    "mobile_adaptations": {
+      "allocation_workspace": "Stack tree and allocation area vertically, collapsible tree",
+      "tables": "Horizontal scroll with sticky first column",
+      "cards": "Single column grid",
+      "spacing": "Reduce padding by 25-33%",
+      "typography": "Slightly smaller scales"
+    },
+    "tablet_optimizations": {
+      "allocation_workspace": "Side-by-side layout with narrower tree",
+      "tables": "Full table view with comfortable spacing",
+      "cards": "2-column grid"
+    }
   },
-  "performance_considerations": {
-    "lazy_loading": "Lazy load charts, heavy components, images",
-    "code_splitting": "Split routes for faster initial load",
-    "optimized_images": "Use WebP format, responsive images with srcset",
-    "debounced_search": "Debounce search inputs (300ms)",
-    "virtualized_lists": "Use virtualization for long lists (react-window)",
-    "skeleton_screens": "Show skeleton UI while loading data"
+  "accessibility": {
+    "contrast": {
+      "standard": "WCAG AA (4.5:1 for normal text, 3:1 for large text)",
+      "tool": "Use APCA contrast calculator for accuracy",
+      "critical_rule": "Always test text on colored backgrounds"
+    },
+    "keyboard_navigation": {
+      "focus_visible": "Clear focus indicators on all interactive elements",
+      "tab_order": "Logical tab order following visual hierarchy",
+      "shortcuts": "Consider keyboard shortcuts for common actions"
+    },
+    "screen_readers": {
+      "aria_labels": "Add aria-label to icon-only buttons",
+      "aria_hidden": "Add aria-hidden='true' to decorative elements",
+      "semantic_html": "Use proper heading hierarchy (h1, h2, h3)"
+    },
+    "testing_attributes": {
+      "data_testid": "MUST add to all interactive and key informational elements",
+      "convention": "kebab-case, role-based (e.g., 'territory-allocation-input')",
+      "examples": [
+        "data-testid='create-plan-button'",
+        "data-testid='territory-allocation-row'",
+        "data-testid='validation-alert'",
+        "data-testid='hierarchy-tree-node'",
+        "data-testid='allocation-progress-bar'"
+      ]
+    }
   },
-  "libraries_and_tools": {
-    "required_installations": [
-      {
-        "name": "framer-motion",
-        "command": "yarn add framer-motion",
-        "usage": "Page transitions, list animations, micro-interactions"
-      },
-      {
-        "name": "recharts",
-        "command": "Already available via Shadcn Chart components",
-        "usage": "Data visualization, charts, analytics"
-      },
-      {
-        "name": "date-fns",
-        "command": "yarn add date-fns",
-        "usage": "Date formatting, calendar operations"
-      },
-      {
-        "name": "react-hook-form",
-        "command": "yarn add react-hook-form",
-        "usage": "Form management with Shadcn Form components"
-      },
-      {
-        "name": "zod",
-        "command": "yarn add zod",
-        "usage": "Form validation schemas"
-      }
-    ],
-    "optional_enhancements": [
-      {
-        "name": "react-window",
-        "command": "yarn add react-window",
-        "usage": "Virtualized lists for performance with large datasets"
-      }
-    ]
-  },
-  "css_custom_properties": {
-    "update_index_css": {
-      "description": "Update /app/frontend/src/index.css with new color system and fonts",
-      "light_theme_colors": {
-        "--background": "40 30% 97%",
-        "--background-secondary": "38 35% 94%",
-        "--foreground": "25 15% 25%",
-        "--foreground-muted": "25 10% 45%",
-        "--primary": "155 35% 42%",
-        "--primary-foreground": "0 0% 100%",
-        "--accent": "42 85% 65%",
-        "--accent-foreground": "25 15% 25%",
-        "--border": "38 20% 85%",
-        "--input": "38 20% 85%",
-        "--ring": "155 35% 42%",
-        "--success": "145 45% 48%",
-        "--warning": "35 75% 55%",
-        "--error": "5 65% 55%",
-        "--info": "200 40% 50%",
-        "--card": "38 35% 94%",
-        "--card-foreground": "25 15% 25%",
-        "--radius": "0.75rem"
-      },
-      "font_imports": [
-        "@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap');",
-        "@import url('https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&display=swap');",
-        "@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500&display=swap');",
-        "@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap');"
+  "page_specifications": {
+    "target_plan_list": {
+      "purpose": "View all target plans, select one to work on",
+      "layout": "Header + Filter Bar + Grid of Plan Cards + Pagination",
+      "components": [
+        "Header with 'Create New Plan' button",
+        "Filter bar (Year, Status, Search)",
+        "Plan cards showing: Name, Period, Total Target, Status, Progress",
+        "Pagination controls"
       ],
-      "font_family_updates": {
-        "body": "font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;",
-        "h1_h6": "font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;",
-        "font-heading": "font-family: 'Manrope', sans-serif;",
-        "font-subheading": "font-family: 'Work Sans', sans-serif;",
-        "font-body": "font-family: 'IBM Plex Sans', sans-serif;",
-        "font-mono": "font-family: 'IBM Plex Mono', 'Courier New', monospace;"
+      "interactions": [
+        "Click card to open allocation workspace",
+        "Filter and search plans",
+        "Create new plan button opens creation form"
+      ]
+    },
+    "target_plan_creation": {
+      "purpose": "Create new target plan with country-level target",
+      "layout": "Centered form card (max-w-2xl)",
+      "fields": [
+        "Plan Name (text input)",
+        "Financial Year (select)",
+        "Start Date (date picker)",
+        "End Date (date picker)",
+        "Country Target Amount (currency input)",
+        "Description (textarea, optional)"
+      ],
+      "validation": [
+        "All fields required except description",
+        "End date must be after start date",
+        "Target amount must be positive"
+      ],
+      "actions": [
+        "Create Plan (primary button)",
+        "Cancel (secondary button)"
+      ]
+    },
+    "allocation_workspace": {
+      "purpose": "Main planning interface for allocating targets",
+      "layout": "Two-column: Tree Sidebar (1/4) + Allocation Area (3/4)",
+      "sections": {
+        "header": {
+          "components": ["Breadcrumb", "Plan name", "Status badge", "Actions (Save, Finalize, Export)"]
+        },
+        "tree_sidebar": {
+          "components": ["Hierarchical tree view", "Expand/collapse all", "Search/filter"],
+          "features": ["Show allocation status at each level", "Click to navigate to allocation section"]
+        },
+        "allocation_area": {
+          "tabs": ["Territory Allocation", "City Allocation", "Resource Assignment"],
+          "components": ["Allocation table", "Summary cards", "Validation alerts"]
+        },
+        "validation_footer": {
+          "components": ["Validation summary", "Quick stats", "Action buttons"]
+        }
+      },
+      "territory_allocation": {
+        "table_columns": ["Territory Name", "Target Amount", "Allocated Amount", "Remaining", "Progress", "Actions"],
+        "features": ["Inline editing", "Auto-calculate remaining", "Progress bar", "Validation feedback"]
+      },
+      "city_allocation": {
+        "grouped_by": "Territory",
+        "table_columns": ["City Name", "State (auto)", "Target Amount", "Allocated Amount", "Remaining", "Progress", "Actions"],
+        "features": ["Expandable territory groups", "Inline editing", "State auto-calculated from city totals"]
+      },
+      "resource_assignment": {
+        "grouped_by": "City",
+        "table_columns": ["Resource Name", "Role", "Target Amount", "Actions"],
+        "features": ["Assign resources to cities", "Multiple resources per city", "Sum must equal city target"]
       }
+    },
+    "hierarchy_tree_view": {
+      "purpose": "Visual representation of entire allocation hierarchy",
+      "structure": "Country → Territory → State → City → Resource",
+      "features": [
+        "Expandable/collapsible nodes",
+        "Indentation per level (16px)",
+        "Status badges at each level",
+        "Click to navigate to allocation section",
+        "Show allocated vs target at each level"
+      ],
+      "visual_design": [
+        "Vertical connector lines (border-l)",
+        "Icons for expand/collapse (ChevronRight/Down)",
+        "Color-coded status badges",
+        "Hover highlight on nodes"
+      ]
+    },
+    "validation_summary": {
+      "purpose": "Show overall allocation status and issues",
+      "display": "Panel at bottom of allocation workspace",
+      "sections": [
+        "Overall Status (Fully/Under/Over allocated)",
+        "Issues List (territories/cities with problems)",
+        "Quick Actions (Navigate to issue, Auto-distribute)"
+      ],
+      "states": [
+        "All Clear (green, CheckCircle icon)",
+        "Warnings (yellow, AlertCircle icon)",
+        "Errors (red, XCircle icon)"
+      ]
     }
   },
-  "scrollbar_customization": {
-    "description": "Custom scrollbar styling for clean, minimal look",
-    "webkit_scrollbar": {
-      "width": "8px",
-      "height": "8px"
-    },
-    "webkit_scrollbar_track": {
-      "background": "hsl(38, 35%, 94%)",
-      "border-radius": "4px"
-    },
-    "webkit_scrollbar_thumb": {
-      "background": "hsl(38, 20%, 75%)",
-      "border-radius": "4px",
-      "hover": "hsl(155, 35%, 42%)"
-    },
-    "css_implementation": "::-webkit-scrollbar { width: 8px; height: 8px; } ::-webkit-scrollbar-track { background: hsl(38, 35%, 94%); border-radius: 4px; } ::-webkit-scrollbar-thumb { background: hsl(38, 20%, 75%); border-radius: 4px; } ::-webkit-scrollbar-thumb:hover { background: hsl(155, 35%, 42%); }"
+  "technical_constraints": {
+    "framework": "React (JavaScript, not TypeScript)",
+    "styling": "Tailwind CSS",
+    "components": "Shadcn UI primitives",
+    "state_management": "Simple useState, avoid complex nested state",
+    "array_operations": "Avoid complex array operations (babel compatibility)",
+    "file_extensions": ".js and .jsx (not .tsx)",
+    "backend": "FastAPI (APIs already built and working)",
+    "data_format": "JSON responses from backend"
   },
-  "instructions_to_main_agent": {
-    "critical_steps": [
-      "1. UPDATE /app/frontend/src/index.css with new color system (light theme colors from css_custom_properties section)",
-      "2. ADD font imports to index.css (all 4 Google Fonts imports)",
-      "3. UPDATE font-family declarations in index.css for body, headings, and utility classes",
-      "4. ADD custom scrollbar styles to index.css",
-      "5. INSTALL required libraries: framer-motion, date-fns, react-hook-form, zod",
-      "6. CREATE custom components: ActivityTimeline, StatusUpdateCard, TeamFeedCard, MetricCard, LeadCard",
-      "7. CUSTOMIZE Shadcn components to match Nyla brand (colors, radius, spacing)",
-      "8. IMPLEMENT responsive layouts following mobile-first approach",
-      "9. ADD data-testid attributes to all interactive elements",
-      "10. ENSURE all hover states have explicit text colors (never rely on inheritance)",
-      "11. USE generous spacing throughout (2-3x more than typical)",
-      "12. APPLY pill-shaped buttons (rounded-full) for primary actions",
-      "13. USE soft beige cards with subtle borders and shadows",
-      "14. IMPLEMENT smooth transitions and micro-interactions",
-      "15. ENSURE accessibility: contrast ratios, keyboard navigation, screen reader support"
+  "universal_guidelines": {
+    "avoid_ai_slop": [
+      "No generic centered layouts",
+      "No simplistic gradients",
+      "No uniform styling everywhere",
+      "Create depth through layered design with z-index hierarchy"
     ],
-    "design_reference": "Crextio HR platform - minimal, clean, soft beige/cream aesthetic with generous spacing and professional approachability",
-    "brand_essence": "Water sustainability company - trust, growth, calm, premium quality, eco-conscious",
-    "color_usage": "Use primary sage green SPARINGLY - only for CTAs and key actions. Rely on soft neutrals (beige, cream, warm browns) for most of the interface. Accent yellow for highlights and positive states.",
-    "spacing_emphasis": "This is CRITICAL - use 2-3x more spacing than you think is necessary. Generous padding, large gaps, breathing room everywhere. This creates the premium, clean aesthetic.",
-    "component_customization": "Shadcn components are the foundation, but MUST be heavily customized. Change default colors, increase border-radius to rounded-xl, add more padding, adjust shadows to be very subtle.",
-    "mobile_priority": "Daily Status Update is mobile-first - this is where sales teams will spend most time. Make it effortless on mobile devices.",
-    "data_visualization": "Use earthy chart colors (sage, terracotta, ochre, clay, moss) - avoid bright blues and purples. Ensure color-blind friendly combinations.",
-    "avoid_patterns": [
-      "DO NOT center-align everything - use left-alignment for readability",
-      "DO NOT use bright teal or ocean blue - use soft sage green instead",
-      "DO NOT use sharp corners everywhere - use rounded-xl (12px) for soft feel",
-      "DO NOT use heavy shadows - keep them very subtle (shadow-sm, shadow-md max)",
-      "DO NOT cram content - generous spacing is key to the aesthetic",
-      "DO NOT use transparent backgrounds without blur on overlays",
-      "DO NOT forget explicit hover text colors"
+    "transitions": [
+      "NEVER use 'transition: all' - breaks transforms",
+      "Always specify transition properties explicitly",
+      "Example: transition-colors, transition-transform, transition-opacity"
     ],
-    "file_structure": {
-      "components": "/app/frontend/src/components/",
-      "pages": "/app/frontend/src/pages/",
-      "ui_components": "/app/frontend/src/components/ui/",
-      "styles": "/app/frontend/src/index.css and /app/frontend/src/App.css",
-      "config": "/app/frontend/tailwind.config.js"
-    }
-  },
-  "general_ui_ux_guidelines": {
-    "core_principles": [
-      "Clarity over cleverness - every design decision should enhance usability",
-      "Consistency in patterns - same actions should look and behave the same way",
-      "Feedback for all interactions - users should always know what's happening",
-      "Progressive disclosure - show what's needed, hide complexity until required",
-      "Error prevention over error handling - design to prevent mistakes",
-      "Accessibility is not optional - design for all users from the start"
+    "text_alignment": [
+      "NEVER center-align the entire app container",
+      "Left-align body text, forms, tables for natural reading flow",
+      "Center-align only specific elements (headings, CTAs) when appropriate"
     ],
-    "interaction_patterns": {
-      "loading_states": "Use skeleton screens, not spinners, for better perceived performance",
-      "empty_states": "Provide helpful guidance and clear CTAs when no data exists",
-      "error_states": "Clear, actionable error messages with recovery suggestions",
-      "success_feedback": "Subtle toast notifications (Sonner) for confirmations",
-      "form_validation": "Real-time validation with inline error messages",
-      "destructive_actions": "Always confirm with dialog before deleting/removing"
-    },
-    "content_guidelines": {
-      "tone": "Professional but friendly - like a helpful colleague",
-      "labels": "Clear, concise, action-oriented",
-      "placeholders": "Provide examples, not instructions",
-      "error_messages": "Explain what went wrong and how to fix it",
-      "empty_states": "Encouraging and helpful, not just 'No data'"
-    },
-    "navigation_principles": {
-      "wayfinding": "Users should always know where they are",
-      "breadcrumbs": "Use for deep hierarchies (location analytics, team org)",
-      "active_states": "Clearly indicate current page/section",
-      "back_navigation": "Provide clear ways to go back",
-      "shortcuts": "Keyboard shortcuts for power users (document them)"
-    },
-    "data_display": {
-      "tables": "Sortable columns, filterable data, clear pagination",
-      "charts": "Clear labels, legends, tooltips on hover",
-      "metrics": "Show trends (up/down arrows), comparisons, context",
-      "timestamps": "Relative time (2 hours ago) with absolute on hover",
-      "status_indicators": "Color + icon + text for accessibility"
-    },
-    "form_design": {
-      "field_order": "Logical flow, group related fields",
-      "required_fields": "Mark clearly with asterisk and label",
-      "input_types": "Use appropriate types (email, tel, date, etc.)",
-      "autocomplete": "Enable browser autocomplete for common fields",
-      "validation_timing": "On blur for individual fields, on submit for form",
-      "error_recovery": "Keep user's input, highlight errors, focus first error"
-    },
-    "responsive_behavior": {
-      "touch_targets": "Minimum 44x44px on mobile",
-      "hover_states": "Don't rely on hover for critical info on touch devices",
-      "orientation": "Support both portrait and landscape on tablets",
-      "text_sizing": "Use relative units (rem, em) not fixed px",
-      "images": "Responsive with srcset, appropriate sizes for viewports"
-    },
-    "performance_ux": {
-      "perceived_performance": "Skeleton screens, optimistic UI updates",
-      "actual_performance": "Lazy loading, code splitting, image optimization",
-      "offline_handling": "Graceful degradation, clear offline indicators",
-      "slow_connections": "Progressive enhancement, don't block on slow assets"
-    }
-  },
-  "universal_guidelines_for_main_agent": {
-    "anti_ai_slop_rules": [
-      "DO NOT create generic centered layouts - use intentional alignment",
-      "DO NOT use simplistic gradients - prefer solid colors with texture",
-      "DO NOT apply uniform styling - create visual hierarchy through variation",
-      "DO NOT use dark colors as gradients - use them independently",
-      "DO NOT use AI assistant emojis (🤖🧠💭💡🔮🎯📚🎭🎬🎪🎉🎊🎁🎀🎂🍰🎈🎨🎰💰💵💳🏦💎🪙💸🤑📊📈📉💹🔢🏆🥇) for icons"
+    "button_styles": [
+      "Modern pill-shaped or sharp buttons with rounded-lg",
+      "Interaction animations (hover, active states)",
+      "Colors relevant to app style (sage green primary)"
     ],
-    "depth_and_layering": [
-      "Create depth through z-index hierarchy and layered elements",
-      "Use subtle shadows for elevation (shadow-sm, shadow-md)",
-      "Layer backgrounds with slight color variations",
-      "Use borders to separate layers (1px subtle borders)"
+    "no_emoji_icons": [
+      "NEVER use emoji characters for icons",
+      "Always use proper icon library (lucide-react)"
     ],
-    "transitions_critical": [
-      "NEVER use transition: all - it breaks transforms",
-      "ALWAYS specify exact properties: transition-colors, transition-transform, transition-opacity",
-      "Use duration-200 or duration-300 for most interactions",
-      "Use ease-out for natural feeling animations"
+    "micro_animations": [
+      "Every interaction needs micro-animations",
+      "Hover states, transitions, entrance animations",
+      "Static = dead"
     ],
-    "text_alignment_critical": [
-      "DO NOT center-align the app container",
-      "DO NOT add text-align: center to .App in CSS",
-      "Left-align by default for natural reading flow",
-      "Center-align only specific elements when intentional"
-    ],
-    "button_styling": [
-      "Use pill-shaped buttons (rounded-full) for primary actions",
-      "Add hover animations: hover:-translate-y-0.5 hover:shadow-md",
-      "Include active states: active:translate-y-0",
-      "Ensure color contrast on all states (default, hover, active, focus)"
-    ],
-    "micro_interactions": [
-      "Every interaction needs feedback - hover, click, focus",
-      "Use subtle scale transforms: hover:scale-105",
-      "Add smooth color transitions on interactive elements",
-      "Include loading states for async actions"
-    ],
-    "spacing_emphasis": [
+    "spacing_generosity": [
       "Use 2-3x more spacing than feels comfortable",
-      "Generous padding on cards: p-8 md:p-10 lg:p-12",
-      "Large gaps between sections: gap-8 md:gap-12 lg:gap-16",
-      "Breathing room prevents cramped, cheap appearance"
+      "Cramped designs look cheap",
+      "Breathing room creates premium feel"
     ],
     "component_reuse": [
-      "Prioritize using pre-existing Shadcn components from /app/frontend/src/components/ui/",
-      "Create new components that match existing style and conventions",
-      "Examine existing components before creating new ones",
-      "Maintain consistent patterns across the application"
+      "Prioritize using pre-existing Shadcn components",
+      "Create new components matching existing patterns",
+      "Examine existing components before creating new ones"
     ],
     "export_conventions": [
-      "Components MUST use named exports: export const ComponentName = ...",
-      "Pages MUST use default exports: export default function PageName() {...}"
+      "Components: Named exports (export const ComponentName)",
+      "Pages: Default exports (export default function PageName)"
     ],
-    "toast_notifications": [
-      "Use Sonner for all toast notifications",
-      "Sonner component located at /app/frontend/src/components/ui/sonner.jsx",
-      "Import: import { toast } from 'sonner'",
-      "Usage: toast.success('Message'), toast.error('Error'), toast.info('Info')"
-    ],
-    "image_usage": [
-      "Use images from image_assets section only",
-      "NEVER use placeholder text for images",
-      "Optimize images with appropriate sizes and formats",
-      "Include alt text for accessibility"
+    "toasts": [
+      "Use sonner for all toast notifications",
+      "Located in /app/frontend/src/components/ui/sonner.jsx"
     ]
+  },
+  "implementation_steps": [
+    {
+      "step": 1,
+      "task": "Set up routing and page structure",
+      "details": "Create pages for Target Plan List, Plan Creation, Allocation Workspace"
+    },
+    {
+      "step": 2,
+      "task": "Build Target Plan List page",
+      "details": "Grid of plan cards with filters, search, and pagination"
+    },
+    {
+      "step": 3,
+      "task": "Build Plan Creation form",
+      "details": "Form with validation for creating new target plans"
+    },
+    {
+      "step": 4,
+      "task": "Build Allocation Workspace layout",
+      "details": "Two-column layout with tree sidebar and allocation area"
+    },
+    {
+      "step": 5,
+      "task": "Build Hierarchy Tree component",
+      "details": "Recursive tree with expand/collapse, status badges, navigation"
+    },
+    {
+      "step": 6,
+      "task": "Build Territory Allocation table",
+      "details": "Spreadsheet-like table with inline editing and validation"
+    },
+    {
+      "step": 7,
+      "task": "Build City Allocation table",
+      "details": "Grouped by territory with state auto-calculation"
+    },
+    {
+      "step": 8,
+      "task": "Build Resource Assignment section",
+      "details": "Assign sales resources to cities with validation"
+    },
+    {
+      "step": 9,
+      "task": "Build Validation Summary panel",
+      "details": "Real-time validation feedback and issue navigation"
+    },
+    {
+      "step": 10,
+      "task": "Implement auto-save and lock mechanism",
+      "details": "Auto-save drafts, finalize/lock workflow"
+    },
+    {
+      "step": 11,
+      "task": "Add responsive design and mobile optimizations",
+      "details": "Ensure mobile-friendly review mode"
+    },
+    {
+      "step": 12,
+      "task": "Add loading states and error handling",
+      "details": "Skeleton loaders, error messages, retry logic"
+    }
+  ],
+  "design_references": {
+    "inspiration_sources": [
+      "Smartsheet - spreadsheet-like allocation interface with drag-and-drop",
+      "SaaSFrame dashboard examples - hierarchical tree views in tables",
+      "Godly.website enterprise tools - clean minimal aesthetic",
+      "Linear - clean dashboard with excellent hierarchy",
+      "Notion - expandable/collapsible tree structures"
+    ],
+    "key_takeaways": [
+      "Spreadsheet familiarity reduces learning curve",
+      "Real-time validation prevents errors",
+      "Visual hierarchy through indentation and color",
+      "Progressive disclosure keeps interface clean",
+      "Inline editing for efficiency"
+    ]
+  },
+  "special_considerations": {
+    "indian_context": {
+      "currency": "₹ (Indian Rupee)",
+      "number_format": "Indian numbering system (₹12,34,567)",
+      "regions": "North, South, East, West India territories",
+      "cities": "9 major cities across India"
+    },
+    "business_logic": {
+      "hierarchy": "Country → Territory → State → City → Resource",
+      "validation": "Child totals must equal parent target",
+      "states": "Auto-calculated from city totals (not directly editable)",
+      "locking": "Once finalized, plan cannot be edited without unlocking"
+    },
+    "user_roles": {
+      "ceo": "View all plans, create plans, finalize plans",
+      "directors": "View and edit plans, cannot finalize",
+      "vp": "View and edit assigned territories",
+      "territory_heads": "View and edit assigned territory",
+      "state_heads": "View assigned state, cannot edit"
+    }
   }
 }
