@@ -202,13 +202,19 @@ function TerritoryAllocationForm({ planId, countryTarget, onSuccess, onCancel })
       if (parseFloat(west) > 0) payload.push({ territory: 'West India', target_revenue: parseFloat(west) * 100000 });
       if (parseFloat(east) > 0) payload.push({ territory: 'East India', target_revenue: parseFloat(east) * 100000 });
 
-      await axios.post(`${API_URL}/target-plans/${planId}/territories`, payload, {
+      console.log('Submitting payload:', payload);
+      
+      const response = await axios.post(`${API_URL}/target-plans/${planId}/territories`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      toast.success('Territories allocated!');
+      
+      console.log('Response:', response.data);
+      toast.success('Territories allocated successfully!');
       onSuccess();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed');
+      console.error('Allocation error:', error);
+      const errorMsg = error.response?.data?.detail || error.message || 'Failed to allocate';
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
