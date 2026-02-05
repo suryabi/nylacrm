@@ -210,10 +210,12 @@ function TerritoryAlloc({ planId, target, onNext }) {
       await axios.post(`${API}/target-plans/${planId}/territories`, data, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      toast.success('Territories allocated!');
+      toast.success(`✓ Territory targets allocated successfully! ${data.length} territories with Rs ${total.toFixed(1)}L total.`, {
+        duration: 4000
+      });
       onNext();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to allocate');
+      toast.error(err.response?.data?.detail || 'Failed to allocate territories. Please check totals match country target.');
     }
   };
 
