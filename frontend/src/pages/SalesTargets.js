@@ -421,10 +421,8 @@ function ResourceAlloc({ planId, onNext }) {
   const loadData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const [h, u] = await Promise.all([
-        axios.get(`${API}/target-plans/${planId}/hierarchy`, { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`${API}/users`, { headers: { Authorization: `Bearer ${token}` } })
-      ]);
+      const h = await axios.get(`${API}/target-plans/${planId}/hierarchy`, { headers: { Authorization: `Bearer ${token}` } });
+      const u = await axios.get(`${API}/users`, { headers: { Authorization: `Bearer ${token}` } });
 
       const allCities = [];
       if (h.data.territories) {
