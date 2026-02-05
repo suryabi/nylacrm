@@ -194,8 +194,10 @@ export default function AddEditLead() {
     }
   };
 
-  const regionCities = LOCATIONS[formData.region]?.cities || [];
-  const regionStates = LOCATIONS[formData.region]?.states || [];
+  const regionStates = formData.region ? Object.keys(LOCATIONS[formData.region]?.states || {}) : [];
+  const stateCities = formData.state && formData.region 
+    ? LOCATIONS[formData.region]?.states[formData.state] || []
+    : [];
 
   return (
     <div className="max-w-4xl mx-auto space-y-6" data-testid="add-edit-lead-page">
