@@ -369,12 +369,12 @@ function AddTeamMemberForm({ onSuccess }) {
         </div>
         <div className="space-y-2">
           <Label htmlFor="reports_to">Reports To</Label>
-          <Select value={formData.reports_to} onValueChange={(v) => setFormData(prev => ({...prev, reports_to: v}))}>
+          <Select value={formData.reports_to} onValueChange={(v) => setFormData(prev => ({...prev, reports_to: v === 'none' ? '' : v}))}>
             <SelectTrigger data-testid="team-reports-to-select">
               <SelectValue placeholder="Select manager" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">None (Top Level)</SelectItem>
+              <SelectItem value="none">None (Top Level)</SelectItem>
               {allUsers.filter(u => ['ceo', 'director', 'vp', 'sales_manager'].includes(u.role)).map(user => (
                 <SelectItem key={user.id} value={user.id}>
                   {user.name} - {user.designation || user.role}
