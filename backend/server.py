@@ -256,6 +256,32 @@ class DailyStatusUpdate(BaseModel):
     help_original: Optional[str] = None
     help_ai_revised: Optional[bool] = None
 
+class LeaveRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    leave_type: str  # 'casual', 'sick', 'earned', 'unpaid'
+    start_date: str  # YYYY-MM-DD
+    end_date: str  # YYYY-MM-DD
+    total_days: int
+    reason: str
+    status: str = 'pending'  # 'pending', 'approved', 'rejected'
+    approved_by: Optional[str] = None
+    approval_date: Optional[datetime] = None
+    rejection_reason: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class LeaveRequestCreate(BaseModel):
+    leave_type: str
+    start_date: str
+    end_date: str
+    reason: str
+
+class LeaveApproval(BaseModel):
+    status: str  # 'approved' or 'rejected'
+    rejection_reason: Optional[str] = None
+
 # ============= HELPERS =============
 
 def hash_password(password: str) -> str:
