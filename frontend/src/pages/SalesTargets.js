@@ -456,6 +456,8 @@ function TerritoryAlloc({ planId, target, onNext }) {
   const [w, setW] = React.useState('');
   const [e, setE] = React.useState('');
   const [loading, setLoading] = React.useState(true);
+  const [editMode, setEditMode] = React.useState(false);
+  const [hasExistingData, setHasExistingData] = React.useState(false);
 
   React.useEffect(() => {
     loadExistingAllocations();
@@ -468,24 +470,29 @@ function TerritoryAlloc({ planId, target, onNext }) {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      if (res.data.territories) {
+      let dataFound = false;
+      if (res.data.territories && res.data.territories.length > 0) {
         for (const terr of res.data.territories) {
           const val = (terr.target_revenue / 100000).toString();
-          if (terr.territory === 'North India') setN(val);
-          if (terr.territory === 'South India') setS(val);
-          if (terr.territory === 'West India') setW(val);
-          if (terr.territory === 'East India') setE(val);
+          if (terr.territory === 'North India') { setN(val); dataFound = true; }
+          if (terr.territory === 'South India') { setS(val); dataFound = true; }
+          if (terr.territory === 'West India') { setW(val); dataFound = true; }
+          if (terr.territory === 'East India') { setE(val); dataFound = true; }
         }
+        setHasExistingData(dataFound);
+      } else {
+        setEditMode(true); // Auto-enter edit mode if no data
       }
     } catch (err) {
       console.error('Failed to load existing allocations');
+      setEditMode(true); // Auto-enter edit mode on error
     } finally {
       setLoading(false);
     }
   };
 
   if (loading) {
-    return <div className="text-center py-8">Loading existing allocations...</div>;
+    return <div className="text-center py-8">Loading allocations...</div>;
   }
 
   const total = (parseFloat(n) || 0) + (parseFloat(s) || 0) + (parseFloat(w) || 0) + (parseFloat(e) || 0);
@@ -504,15 +511,53 @@ function TerritoryAlloc({ planId, target, onNext }) {
       await axios.post(`${API}/target-plans/${planId}/territories`, data, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      toast.success(`✓ Territory targets allocated successfully! ${data.length} territories with Rs ${total.toFixed(1)}L total.`, {
+      toast.success(`✓ Territory targets saved! ${data.length} territories with Rs ${total.toFixed(1)}L total.`, {
         duration: 4000
       });
+      setEditMode(false);
+      setHasExistingData(true);
       onNext();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to allocate territories. Please check totals match country target.');
+      toast.error(err.response?.data?.detail || 'Failed to allocate territories.');
     }
   };
 
+  // View Mode
+  if (!editMode && hasExistingData) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-green-50 border border-green-200 p-4 rounded-xl mb-4">
+          <p className="text-sm text-green-800 font-medium">✓ Territories have been allocated</p>
+        </div>
+
+        <div className="space-y-3">
+          {parseFloat(n) > 0 && <TerritoryViewRow label="North India" value={n} />}
+          {parseFloat(s) > 0 && <TerritoryViewRow label="South India" value={s} />}
+          {parseFloat(w) > 0 && <TerritoryViewRow label="West India" value={w} />}
+          {parseFloat(e) > 0 && <TerritoryViewRow label="East India" value={e} />}
+        </div>
+
+        <div className="bg-primary/5 p-4 rounded-xl">
+          <div className="flex justify-between">
+            <span className="font-semibold">Total Allocated:</span>
+            <span className="text-2xl font-bold text-primary">Rs {total.toFixed(1)}L</span>
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <Button onClick={() => setEditMode(true)} variant="outline" className="flex-1 h-12 rounded-full">
+            <Edit className="h-4 w-4 mr-2" />
+            Edit Allocation
+          </Button>
+          <Button onClick={onNext} className="flex-1 h-12 rounded-full">
+            Continue to Cities
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Edit Mode
   return (
     <div className="space-y-6">
       <div className="bg-primary/5 p-5 rounded-xl">
