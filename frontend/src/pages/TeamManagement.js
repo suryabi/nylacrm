@@ -231,6 +231,7 @@ export default function TeamManagement() {
 
 function AddTeamMemberForm({ onSuccess }) {
   const [loading, setLoading] = useState(false);
+  const [allUsers, setAllUsers] = useState([]);
   const [formData, setFormData] = useState({
     name: '',
     designation: '',
@@ -241,8 +242,22 @@ function AddTeamMemberForm({ onSuccess }) {
     territory: '',
     role: 'sales_rep',
     password: '',
+    reports_to: '',
     is_active: true
   });
+
+  useEffect(() => {
+    fetchManagers();
+  }, []);
+
+  const fetchManagers = async () => {
+    try {
+      const response = await usersAPI.getAll();
+      setAllUsers(response.data);
+    } catch (error) {
+      console.error('Failed to load users');
+    }
+  };
 
   const updateField = (field, value) => {
     // Apply title case to all fields except email
