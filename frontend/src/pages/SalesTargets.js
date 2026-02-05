@@ -658,6 +658,42 @@ function CityAllocationForm({ territory, planId, onSuccess }) {
 
   const [values, setValues] = React.useState({});
   const [submitting, setSubmitting] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    loadExistingCityAllocations();
+  }, [territory.id]);
+
+  const loadExistingCityAllocations = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API}/target-plans/${planId}/hierarchy`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Find this territory's cities in the hierarchy
+      const thisTerr = res.data.territories.find(t => t.id === territory.id);
+      if (thisTerr && thisTerr.states) {
+        const existingValues = {};
+        for (const state of thisTerr.states) {
+          if (state.cities) {
+            for (const city of state.cities) {
+              existingValues[city.city] = (city.target_revenue / 100000).toString();
+            }
+          }
+        }
+        setValues(existingValues);
+      }
+    } catch (err) {
+      console.error('Failed to load existing city allocations');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="text-center py-8">Loading existing allocations...</div>;
+  }
 
   const updateValue = (cityName, value) => {
     const newValues = {...values};
