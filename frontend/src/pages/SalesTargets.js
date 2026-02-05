@@ -58,6 +58,7 @@ export default function SalesTargets() {
           <div className="flex gap-2">
             <Badge className={step === 1 ? 'bg-primary' : 'bg-muted'}>Step 1: Territories</Badge>
             <Badge className={step === 2 ? 'bg-primary' : 'bg-muted'}>Step 2: Cities</Badge>
+            <Badge className={step === 3 ? 'bg-primary' : 'bg-muted'}>Step 3: Resources</Badge>
           </div>
         </div>
 
