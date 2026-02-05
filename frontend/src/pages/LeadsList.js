@@ -307,6 +307,20 @@ export default function LeadsList() {
             <SelectItem value="closed_lost">Closed Lost</SelectItem>
           </SelectContent>
         </Select>
+        
+        {/* Reset Time Filter Button */}
+        {timeFilter && (
+          <Button
+            variant="outline"
+            onClick={() => {
+              setTimeFilter(null);
+              window.history.replaceState({}, '', '/leads');
+            }}
+            className="whitespace-nowrap"
+          >
+            Reset Time Filter
+          </Button>
+        )}
       </div>
 
       {/* Leads Table */}
