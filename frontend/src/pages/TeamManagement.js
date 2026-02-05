@@ -246,18 +246,20 @@ function AddTeamMemberForm({ onSuccess }) {
     is_active: true
   });
 
-  useEffect(() => {
+  React.useEffect(() => {
+    const fetchManagers = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`${API_URL}/users`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setAllUsers(response.data);
+      } catch (error) {
+        console.error('Failed to load users');
+      }
+    };
     fetchManagers();
   }, []);
-
-  const fetchManagers = async () => {
-    try {
-      const response = await usersAPI.getAll();
-      setAllUsers(response.data);
-    } catch (error) {
-      console.error('Failed to load users');
-    }
-  };
 
   const updateField = (field, value) => {
     // Apply title case to all fields except email
