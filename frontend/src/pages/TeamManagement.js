@@ -372,7 +372,11 @@ function AddTeamMemberForm({ onSuccess }) {
         </div>
         <div className="space-y-2">
           <Label htmlFor="territory">Territory *</Label>
-          <Select value={formData.territory} onValueChange={(v) => updateField('territory', v)} required>
+          <Select value={formData.territory} onValueChange={(v) => {
+            updateField('territory', v);
+            // Reset state and city when territory changes
+            setFormData(prev => ({...prev, territory: v, state: '', city: ''}));
+          }} required>
             <SelectTrigger data-testid="team-territory-select">
               <SelectValue placeholder="Select territory" />
             </SelectTrigger>
@@ -385,7 +389,7 @@ function AddTeamMemberForm({ onSuccess }) {
         </div>
         <div className="space-y-2">
           <Label htmlFor="reports_to">Reports To</Label>
-          <Select value={formData.reports_to} onValueChange={(v) => setFormData(prev => ({...prev, reports_to: v === 'none' ? '' : v}))}>
+          <Select value={formData.reports_to || 'none'} onValueChange={(v) => setFormData(prev => ({...prev, reports_to: v === 'none' ? '' : v}))}>
             <SelectTrigger data-testid="team-reports-to-select">
               <SelectValue placeholder="Select manager" />
             </SelectTrigger>
@@ -400,24 +404,38 @@ function AddTeamMemberForm({ onSuccess }) {
           </Select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="city">City</Label>
-          <Input
-            id="city"
-            value={formData.city}
-            onChange={(e) => updateField('city', e.target.value)}
-            placeholder="e.g., Mumbai"
-            data-testid="team-city-input"
-          />
-        </div>
-        <div className="space-y-2">
           <Label htmlFor="state">State</Label>
-          <Select value={formData.state} onValueChange={(v) => updateField('state', v)}>
+          <Select 
+            value={formData.state} 
+            onValueChange={(v) => {
+              updateField('state', v);
+              setFormData(prev => ({...prev, state: v, city: ''}));
+            }}
+            disabled={!formData.territory}
+          >
             <SelectTrigger data-testid="team-state-select">
               <SelectValue placeholder="Select state" />
             </SelectTrigger>
             <SelectContent>
-              {PRIORITY_STATES.map(state => (
+              {territoryStates.map(state => (
                 <SelectItem key={state} value={state}>{state}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="city">City</Label>
+          <Select
+            value={formData.city}
+            onValueChange={(v) => updateField('city', v)}
+            disabled={!formData.state}
+          >
+            <SelectTrigger data-testid="team-city-select">
+              <SelectValue placeholder="Select city" />
+            </SelectTrigger>
+            <SelectContent>
+              {stateCities.map(city => (
+                <SelectItem key={city} value={city}>{city}</SelectItem>
               ))}
             </SelectContent>
           </Select>
