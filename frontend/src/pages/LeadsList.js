@@ -50,6 +50,7 @@ export default function LeadsList() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
+  const [timeFilter, setTimeFilter] = useState(null);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -60,11 +61,14 @@ export default function LeadsList() {
   const [sortDirection, setSortDirection] = useState('desc');
 
   useEffect(() => {
-    fetchLeads();
-    
     // Check for URL parameters from dashboard
     const params = new URLSearchParams(window.location.search);
     const metric = params.get('metric');
+    const timeFilterParam = params.get('time_filter');
+    
+    if (timeFilterParam) {
+      setTimeFilter(timeFilterParam);
+    }
     
     if (metric) {
       // Apply filter based on metric clicked
@@ -75,8 +79,9 @@ export default function LeadsList() {
       } else if (metric === 'new_leads') {
         setStatusFilter('new');
       }
-      // For visits and calls, we'll show all leads but could add specific filtering if needed
     }
+    
+    fetchLeads();
   }, []);
 
   const fetchLeads = async () => {
