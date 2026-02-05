@@ -14,7 +14,7 @@ export default function SalesTargets() {
   const [plans, setPlans] = React.useState([]);
   const [view, setView] = React.useState('list'); // 'list', 'create', 'allocate'
   const [currentPlan, setCurrentPlan] = React.useState(null);
-  const [step, setStep] = React.useState(1); // 1=territories, 2=cities
+  const [step, setStep] = React.useState(1); // 1=territories, 2=cities, 3=resources
 
   React.useEffect(() => {
     loadPlans();
