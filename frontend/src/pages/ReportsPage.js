@@ -85,7 +85,32 @@ export default function ReportsPage() {
     }
   };
 
-  const sortedData = [...reportData].sort((a, b) => {
+  // Apply filters
+  let filteredData = reportData;
+  
+  if (filterTargetName) {
+    filteredData = filteredData.filter(row => 
+      row.target_name.toLowerCase().includes(filterTargetName.toLowerCase())
+    );
+  }
+  if (filterTerritory) {
+    filteredData = filteredData.filter(row => 
+      row.territory.toLowerCase().includes(filterTerritory.toLowerCase())
+    );
+  }
+  if (filterCity) {
+    filteredData = filteredData.filter(row => 
+      row.city.toLowerCase().includes(filterCity.toLowerCase())
+    );
+  }
+  if (filterSKU) {
+    filteredData = filteredData.filter(row => 
+      row.sku.toLowerCase().includes(filterSKU.toLowerCase())
+    );
+  }
+
+  // Sort filtered data
+  const sortedData = [...filteredData].sort((a, b) => {
     let aVal = a[sortField];
     let bVal = b[sortField];
     
