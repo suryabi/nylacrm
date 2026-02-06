@@ -125,7 +125,11 @@ export default function ReportsPage() {
     filteredData = filteredData.filter(row => row.city === filterCity);
   }
   if (filterSKU && filterSKU !== 'All') {
-    filteredData = filteredData.filter(row => row.sku === filterSKU);
+    if (selectedReport === 'target-sku') {
+      filteredData = filteredData.filter(row => row.sku === filterSKU);
+    } else {
+      filteredData = filteredData.filter(row => row.resource_name === filterSKU);
+    }
   }
 
   // Sort filtered data
