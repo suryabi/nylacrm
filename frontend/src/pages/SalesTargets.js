@@ -28,6 +28,26 @@ export default function SalesTargets() {
     setPlans(res.data);
   };
 
+  const handleDelete = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(API + '/target-plans/' + planToDelete.id, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      toast.success('Plan deleted!');
+      setDeleteDialog(false);
+      setPlanToDelete(null);
+      loadPlans();
+    } catch (error) {
+      toast.error('Failed to delete plan');
+    }
+  };
+
+  const startEdit = (plan) => {
+    setCurrentPlan(plan);
+    setPage('edit');
+  };
+
   if (page === 'create') return <CreatePage onBack={() => setPage('list')} />;
   if (page === 'territories' && currentPlan) return <TerritoriesPage plan={currentPlan} onBack={() => setPage('list')} />;
   if (page === 'cities' && currentPlan) return <CitiesPage plan={currentPlan} onBack={() => setPage('list')} />;
