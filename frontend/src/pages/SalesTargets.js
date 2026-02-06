@@ -136,7 +136,7 @@ function GridViewPage({ plan, onBack }) {
 
             {/* Territory Level */}
             {hierarchy.territories && hierarchy.territories.map(terr => (
-              <React.Fragment key={terr.id}>
+              <tbody key={terr.id}>
                 <tr 
                   className="border-b hover:bg-secondary/50 cursor-pointer"
                   onClick={() => toggleExpand('terr-' + terr.id)}
@@ -162,38 +162,32 @@ function GridViewPage({ plan, onBack }) {
 
                 {/* State Level (Roll-up) */}
                 {expanded['terr-' + terr.id] && terr.states && terr.states.map(state => (
-                  <React.Fragment key={state.state_name}>
-                    <tr 
-                      className="border-b bg-secondary/30"
-                      onClick={() => toggleExpand('state-' + terr.id + '-' + state.state_name)}
-                    >
-                      <td className="p-4 pl-12 text-sm">
-                        {expanded['state-' + terr.id + '-' + state.state_name] ? <ChevronDown className="h-4 w-4 inline" /> : <ChevronRight className="h-4 w-4 inline" />}
-                        {' '}State
-                      </td>
-                      <td className="p-4 font-medium text-sm">{state.state_name}</td>
-                      <td className="text-right p-4 text-sm text-muted-foreground">Roll-up</td>
-                      <td className="text-right p-4 font-semibold text-sm">Rs {(state.state_target / 100000).toFixed(1)}L</td>
-                      <td className="text-right p-4 text-sm">-</td>
-                      <td className="text-right p-4">-</td>
-                    </tr>
-
-                    {/* City Level */}
-                    {expanded['state-' + terr.id + '-' + state.state_name] && state.cities && state.cities.map(city => (
-                      <tr key={city.id} className="border-b hover:bg-secondary/20">
-                        <td className="p-4 pl-16 text-sm">City</td>
-                        <td className="p-4 text-sm">{city.city}</td>
-                        <td className="text-right p-4 text-sm">{city.allocation_percentage?.toFixed(1)}%</td>
-                        <td className="text-right p-4 font-semibold text-sm text-primary">Rs {(city.target_revenue / 100000).toFixed(1)}L</td>
-                        <td className="text-right p-4 text-sm">-</td>
-                        <td className="text-right p-4">
-                          <Badge variant="outline" className="text-xs">City</Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </React.Fragment>
+                  <tr key={state.state_name} className="border-b bg-secondary/30">
+                    <td className="p-4 pl-12 text-sm">State</td>
+                    <td className="p-4 font-medium text-sm">{state.state_name}</td>
+                    <td className="text-right p-4 text-sm text-muted-foreground">Roll-up</td>
+                    <td className="text-right p-4 font-semibold text-sm">Rs {(state.state_target / 100000).toFixed(1)}L</td>
+                    <td className="text-right p-4 text-sm">-</td>
+                    <td className="text-right p-4">-</td>
+                  </tr>
                 ))}
-              </React.Fragment>
+
+                {/* City Level */}
+                {expanded['terr-' + terr.id] && terr.states && terr.states.map(state => (
+                  state.cities && state.cities.map(city => (
+                    <tr key={city.id} className="border-b hover:bg-secondary/20">
+                      <td className="p-4 pl-16 text-sm">City</td>
+                      <td className="p-4 text-sm">{city.city}</td>
+                      <td className="text-right p-4 text-sm">{city.allocation_percentage?.toFixed(1)}%</td>
+                      <td className="text-right p-4 font-semibold text-sm text-primary">Rs {(city.target_revenue / 100000).toFixed(1)}L</td>
+                      <td className="text-right p-4 text-sm">-</td>
+                      <td className="text-right p-4">
+                        <Badge variant="outline" className="text-xs">City</Badge>
+                      </td>
+                    </tr>
+                  ))
+                ))}
+              </tbody>
             ))}
           </tbody>
         </table>
