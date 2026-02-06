@@ -196,7 +196,9 @@ export default function ReportsPage() {
           ) : (
             <>
               <div className="mb-4 flex justify-between items-center">
-                <h2 className="text-lg font-semibold">Target SKU Allocation Report</h2>
+                <h2 className="text-lg font-semibold">
+                  {selectedReport === 'target-sku' ? 'Target SKU Allocation Report' : 'Target Resource Allocation Report'}
+                </h2>
                 <p className="text-sm text-muted-foreground">{reportData.length} records</p>
               </div>
 
@@ -219,9 +221,15 @@ export default function ReportsPage() {
                       <th onClick={() => handleSort('city')} className="text-left p-3 font-semibold cursor-pointer hover:bg-secondary/80">
                         City {getSortIcon('city')}
                       </th>
-                      <th onClick={() => handleSort('sku')} className="text-left p-3 font-semibold cursor-pointer hover:bg-secondary/80">
-                        SKU {getSortIcon('sku')}
-                      </th>
+                      {selectedReport === 'target-sku' ? (
+                        <th onClick={() => handleSort('sku')} className="text-left p-3 font-semibold cursor-pointer hover:bg-secondary/80">
+                          SKU {getSortIcon('sku')}
+                        </th>
+                      ) : (
+                        <th onClick={() => handleSort('resource_name')} className="text-left p-3 font-semibold cursor-pointer hover:bg-secondary/80">
+                          Resource {getSortIcon('resource_name')}
+                        </th>
+                      )}
                       <th onClick={() => handleSort('target_revenue')} className="text-right p-3 font-semibold cursor-pointer hover:bg-secondary/80">
                         Target Revenue {getSortIcon('target_revenue')}
                       </th>
