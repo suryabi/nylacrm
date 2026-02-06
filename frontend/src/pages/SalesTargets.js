@@ -1,69 +1,502 @@
 import React from 'react';
+import axios from 'axios';
 import { Card } from '../components/ui/card';
-import { Target, ExternalLink } from 'lucide-react';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { toast } from 'sonner';
+import { Plus, Target } from 'lucide-react';
+
+const API = process.env.REACT_APP_BACKEND_URL + '/api';
 
 export default function SalesTargets() {
+  const [mode, setMode] = React.useState('list');
+  const [plans, setPlans] = React.useState([]);
+  const [currentPlanId, setCurrentPlanId] = React.useState(null);
+
+  React.useEffect(() => {
+    if (mode === 'list') {
+      fetchPlans();
+    }
+  }, [mode]);
+
+  const fetchPlans = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API}/target-plans`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setPlans(response.data);
+    } catch (error) {
+      toast.error('Failed to load plans');
+    }
+  };
+
+  const openPlan = (planId) => {
+    setCurrentPlanId(planId);
+    setMode('manage');
+  };
+
+  if (mode === 'create') {
+    return <CreatePlanView onBack={() => setMode('list')} />;
+  }
+
+  if (mode === 'manage' && currentPlanId) {
+    return <ManagePlanView planId={currentPlanId} onBack={() => setMode('list')} />;
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-4xl font-light mb-2">Sales Target Planning</h1>
-        <p className="text-muted-foreground">Revenue-based target allocation system</p>
+      <div className="flex justify-between">
+        <div>
+          <h1 className="text-4xl font-light mb-2">Sales Target Planning</h1>
+          <p className="text-muted-foreground">Manage revenue targets</p>
+        </div>
+        <Button onClick={() => setMode('create')} className="h-12 rounded-full">
+          <Plus className="h-5 w-5 mr-2" />Create Plan
+        </Button>
       </div>
 
-      <Card className="p-12 bg-card border rounded-2xl">
-        <div className="text-center mb-8">
-          <Target className="h-20 w-20 mx-auto text-primary mb-4" />
-          <h2 className="text-2xl font-semibold mb-3">Target Planning System</h2>
-          <p className="text-muted-foreground max-w-2xl mx-auto">
-            Complete backend API system for hierarchical revenue target allocation from Country → Territory → State → City → Sales Resource
-          </p>
+      {plans.length === 0 ? (
+        <Card className="p-16 text-center border rounded-2xl">
+          <Target className="h-20 w-20 mx-auto text-muted-foreground mb-4" />
+          <p className="text-muted-foreground mb-4">No target plans yet</p>
+          <Button onClick={() => setMode('create')} className="rounded-full">Create Your First Plan</Button>
+        </Card>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {plans.map(plan => (
+            <Card key={plan.id} className="p-6 border rounded-2xl hover:shadow-lg transition">
+              <h3 className="text-lg font-semibold mb-2">{plan.plan_name}</h3>
+              <p className="text-sm text-muted-foreground capitalize mb-4">{plan.time_period}</p>
+              <p className="text-3xl font-bold text-primary mb-4">Rs {(plan.country_target / 100000).toFixed(1)}L</p>
+              <Button onClick={() => openPlan(plan.id)} className="w-full rounded-full" variant="outline">
+                Manage Allocation
+              </Button>
+            </Card>
+          ))}
         </div>
+      )}
+    </div>
+  );
+}
 
-        <div className="max-w-3xl mx-auto space-y-6">
-          <div className="bg-green-50 border border-green-200 p-6 rounded-xl">
-            <h3 className="font-semibold text-green-800 mb-3">✓ Fully Functional Backend APIs</h3>
-            <ul className="text-sm text-green-700 space-y-2">
-              <li>• Create target plans (monthly/quarterly/yearly)</li>
-              <li>• Allocate country target to 4 territories</li>
-              <li>• Allocate territory targets to cities (9 cities)</li>
-              <li>• Assign city targets to sales resources</li>
-              <li>• Automatic state roll-ups (calculated from cities)</li>
-              <li>• Validation (child totals must equal parent)</li>
-              <li>• Complete hierarchy view with roll-ups</li>
-              <li>• Resource-wise summary with city breakdowns</li>
-            </ul>
+function CreatePlanView({ onBack }) {
+  const [name, setName] = React.useState('');
+  const [period, setPeriod] = React.useState('quarterly');
+  const [start, setStart] = React.useState('');
+  const [end, setEnd] = React.useState('');
+  const [target, setTarget] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API}/target-plans`, {
+        plan_name: name,
+        time_period: period,
+        start_date: start,
+        end_date: end,
+        country_target: parseFloat(target) * 100000
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success('Plan created successfully!');
+      onBack();
+    } catch (error) {
+      toast.error('Failed to create plan');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-6">
+      <Button variant="outline" onClick={onBack} className="rounded-full">← Back</Button>
+      <Card className="p-8 border rounded-2xl">
+        <h1 className="text-2xl font-semibold mb-6">Create Target Plan</h1>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <Label>Plan Name *</Label>
+            <Input value={name} onChange={e => setName(e.target.value)} placeholder="Q1 2026 Target" required className="h-12" />
           </div>
-
-          <div className="bg-primary/5 border border-primary/20 p-6 rounded-xl">
-            <h3 className="font-semibold mb-3">Sample Data Created</h3>
-            <div className="text-sm text-muted-foreground space-y-2">
-              <p>• <strong>Q1 2026 Plan</strong>: Rs 500L (India)</p>
-              <p>• <strong>Territories</strong>: North(100L), South(200L), West(150L), East(50L)</p>
-              <p>• <strong>Cities</strong>: Bengaluru(80L), Chennai(70L), Hyderabad(50L)</p>
-              <p>• <strong>States (Roll-up)</strong>: Karnataka(80L), Tamil Nadu(70L), Telangana(50L)</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Period *</Label>
+              <select value={period} onChange={e => setPeriod(e.target.value)} className="w-full h-12 px-4 rounded-xl border bg-background" required>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="half_yearly">Half-Yearly</option>
+                <option value="yearly">Yearly</option>
+              </select>
+            </div>
+            <div>
+              <Label>Target (Lakhs) *</Label>
+              <Input type="number" value={target} onChange={e => setTarget(e.target.value)} placeholder="500" required className="h-12" />
             </div>
           </div>
-
-          <div className="bg-amber-50 border border-amber-200 p-6 rounded-xl">
-            <h3 className="font-semibold text-amber-800 mb-3">API Documentation</h3>
-            <div className="text-sm text-amber-900 space-y-2 font-mono">
-              <p>POST /api/target-plans</p>
-              <p>POST /api/target-plans/:id/territories</p>
-              <p>POST /api/target-plans/:id/territories/:territory/cities</p>
-              <p>POST /api/target-plans/:id/cities/:city_id/resources</p>
-              <p>GET /api/target-plans/:id/hierarchy</p>
-              <p>GET /api/target-plans/:id/resource-summary</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Start Date *</Label>
+              <Input type="date" value={start} onChange={e => setStart(e.target.value)} required className="h-12" />
+            </div>
+            <div>
+              <Label>End Date *</Label>
+              <Input type="date" value={end} onChange={e => setEnd(e.target.value)} required className="h-12" />
             </div>
           </div>
-
-          <div className="text-center pt-6">
-            <p className="text-sm text-muted-foreground">
-              Frontend UI can be built using a simpler component structure to avoid framework limitations.
-              All business logic and data management is complete and tested.
-            </p>
-          </div>
-        </div>
+          <Button type="submit" disabled={loading} className="w-full h-14 rounded-full text-base">
+            {loading ? 'Creating...' : 'Create Plan'}
+          </Button>
+        </form>
       </Card>
+    </div>
+  );
+}
+
+function ManagePlanView({ planId, onBack }) {
+  const [plan, setPlan] = React.useState(null);
+  const [hierarchy, setHierarchy] = React.useState(null);
+  const [activeSection, setActiveSection] = React.useState('territories');
+
+  React.useEffect(() => {
+    loadPlanData();
+  }, []);
+
+  const loadPlanData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      const plansRes = await axios.get(`${API}/target-plans`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const foundPlan = plansRes.data.find(p => p.id === planId);
+      setPlan(foundPlan);
+
+      const hierarchyRes = await axios.get(`${API}/target-plans/${planId}/hierarchy`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setHierarchy(hierarchyRes.data);
+    } catch (error) {
+      console.error('Failed to load plan');
+    }
+  };
+
+  if (!plan) {
+    return <div className="flex justify-center py-12">Loading plan...</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <Button variant="outline" onClick={onBack} className="rounded-full">← Back to Plans</Button>
+
+      <Card className="p-8 bg-primary/5 border-primary/20 rounded-2xl">
+        <h1 className="text-2xl font-semibold mb-2">{plan.plan_name}</h1>
+        <p className="text-sm text-muted-foreground capitalize mb-4">{plan.time_period} • {plan.start_date} to {plan.end_date}</p>
+        <p className="text-4xl font-bold text-primary">Rs {(plan.country_target / 100000).toFixed(1)}L</p>
+        <p className="text-sm text-muted-foreground">Country Target (India)</p>
+      </Card>
+
+      <Card className="p-6 border rounded-2xl">
+        <div className="flex gap-3 mb-6">
+          <Button
+            variant={activeSection === 'territories' ? 'default' : 'outline'}
+            onClick={() => setActiveSection('territories')}
+            className="rounded-full"
+          >
+            Territories
+          </Button>
+          <Button
+            variant={activeSection === 'cities' ? 'default' : 'outline'}
+            onClick={() => setActiveSection('cities')}
+            className="rounded-full"
+          >
+            Cities
+          </Button>
+        </div>
+
+        {activeSection === 'territories' && (
+          <TerritorySection planId={planId} countryTarget={plan.country_target} hierarchy={hierarchy} onUpdate={loadPlanData} />
+        )}
+
+        {activeSection === 'cities' && hierarchy && (
+          <CitySection planId={planId} territories={hierarchy.territories || []} onUpdate={loadPlanData} />
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function TerritorySection({ planId, countryTarget, hierarchy, onUpdate }) {
+  const [editing, setEditing] = React.useState(false);
+  const [north, setNorth] = React.useState('');
+  const [south, setSouth] = React.useState('');
+  const [west, setWest] = React.useState('');
+  const [east, setEast] = React.useState('');
+
+  const territories = hierarchy?.territories || [];
+  const hasData = territories.length > 0;
+
+  React.useEffect(() => {
+    if (hasData) {
+      territories.forEach(t => {
+        const val = (t.target_revenue / 100000).toString();
+        if (t.territory === 'North India') setNorth(val);
+        if (t.territory === 'South India') setSouth(val);
+        if (t.territory === 'West India') setWest(val);
+        if (t.territory === 'East India') setEast(val);
+      });
+    } else {
+      setEditing(true);
+    }
+  }, [hasData]);
+
+  const total = (parseFloat(north) || 0) + (parseFloat(south) || 0) + (parseFloat(west) || 0) + (parseFloat(east) || 0);
+  const targetL = countryTarget / 100000;
+  const valid = Math.abs(total - targetL) < 0.1;
+
+  const save = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const payload = [];
+      if (parseFloat(north) > 0) payload.push({ territory: 'North India', target_revenue: parseFloat(north) * 100000 });
+      if (parseFloat(south) > 0) payload.push({ territory: 'South India', target_revenue: parseFloat(south) * 100000 });
+      if (parseFloat(west) > 0) payload.push({ territory: 'West India', target_revenue: parseFloat(west) * 100000 });
+      if (parseFloat(east) > 0) payload.push({ territory: 'East India', target_revenue: parseFloat(east) * 100000 });
+
+      await axios.post(`${API}/target-plans/${planId}/territories`, payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success('Territories saved!');
+      setEditing(false);
+      onUpdate();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
+  if (!editing && hasData) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-green-50 p-4 rounded-xl mb-4">
+          <p className="text-sm text-green-800 font-medium">✓ Territories allocated</p>
+        </div>
+        {parseFloat(north) > 0 && <Row label="North India" value={`Rs ${north}L`} />}
+        {parseFloat(south) > 0 && <Row label="South India" value={`Rs ${south}L`} />}
+        {parseFloat(west) > 0 && <Row label="West India" value={`Rs ${west}L`} />}
+        {parseFloat(east) > 0 && <Row label="East India" value={`Rs ${east}L`} />}
+        <Button onClick={() => setEditing(true)} variant="outline" className="w-full rounded-full">Edit</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-primary/5 p-4 rounded-xl"><p className="font-semibold">Total: Rs {targetL.toFixed(1)}L</p></div>
+      
+      <InputRow label="North India" value={north} onChange={setNorth} />
+      <InputRow label="South India" value={south} onChange={setSouth} />
+      <InputRow label="West India" value={west} onChange={setWest} />
+      <InputRow label="East India" value={east} onChange={setEast} />
+
+      <div className={`p-4 rounded-xl ${valid && total > 0 ? 'bg-green-50' : 'bg-amber-50'}`}>
+        <p className="font-bold">Total: Rs {total.toFixed(1)}L</p>
+        {!valid && total > 0 && <p className="text-xs text-amber-800 mt-1">Must equal {targetL.toFixed(1)}L</p>}
+      </div>
+      
+      <Button onClick={save} disabled={!valid} className="w-full h-12 rounded-full">Save Territories</Button>
+    </div>
+  );
+}
+
+function CitySection({ planId, territories, onUpdate }) {
+  const [selectedTerr, setSelectedTerr] = React.useState(null);
+
+  React.useEffect(() => {
+    if (territories.length > 0 && !selectedTerr) {
+      setSelectedTerr(territories[0]);
+    }
+  }, [territories]);
+
+  if (!selectedTerr) {
+    return <div className="text-center py-8">Select a territory first</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex gap-2">
+        {territories.map(t => (
+          <Button
+            key={t.id}
+            variant={selectedTerr.id === t.id ? 'default' : 'outline'}
+            onClick={() => setSelectedTerr(t)}
+            size="sm"
+            className="rounded-full"
+          >
+            {t.territory}
+          </Button>
+        ))}
+      </div>
+      
+      <CityAllocation territory={selectedTerr} planId={planId} onUpdate={onUpdate} />
+    </div>
+  );
+}
+
+function CityAllocation({ territory, planId, onUpdate }) {
+  const CITY_MAP = {
+    'North India': [{s: 'Delhi', c: 'New Delhi'}, {s: 'Uttar Pradesh', c: 'Noida'}],
+    'South India': [{s: 'Karnataka', c: 'Bengaluru'}, {s: 'Tamil Nadu', c: 'Chennai'}, {s: 'Telangana', c: 'Hyderabad'}],
+    'West India': [{s: 'Maharashtra', c: 'Mumbai'}, {s: 'Maharashtra', c: 'Pune'}, {s: 'Gujarat', c: 'Ahmedabad'}],
+    'East India': [{s: 'West Bengal', c: 'Kolkata'}]
+  };
+
+  const cities = CITY_MAP[territory.territory] || [];
+  const [values, setValues] = React.useState({});
+  const [editing, setEditing] = React.useState(false);
+
+  React.useEffect(() => {
+    loadCityData();
+  }, [territory.id]);
+
+  const loadCityData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API}/target-plans/${planId}/hierarchy`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const thisTerr = res.data.territories?.find(t => t.id === territory.id);
+      const newValues = {};
+      let hasData = false;
+
+      if (thisTerr && thisTerr.states) {
+        thisTerr.states.forEach(state => {
+          if (state.cities) {
+            state.cities.forEach(city => {
+              newValues[city.city] = (city.target_revenue / 100000).toString();
+              hasData = true;
+            });
+          }
+        });
+      }
+
+      setValues(newValues);
+      if (!hasData) setEditing(true);
+    } catch (error) {
+      setEditing(true);
+    }
+  };
+
+  const total = cities.reduce((sum, city) => sum + (parseFloat(values[city.c]) || 0), 0);
+  const targetL = territory.target_revenue / 100000;
+  const valid = Math.abs(total - targetL) < 0.1 && total > 0;
+
+  const save = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const payload = cities
+        .filter(c => parseFloat(values[c.c]) > 0)
+        .map(c => ({
+          state: c.s,
+          city: c.c,
+          target_revenue: parseFloat(values[c.c]) * 100000
+        }));
+
+      await axios.post(
+        `${API}/target-plans/${planId}/territories/${encodeURIComponent(territory.territory)}/cities`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      toast.success('Cities saved!');
+      setEditing(false);
+      onUpdate();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
+  const hasData = Object.keys(values).some(k => parseFloat(values[k]) > 0);
+
+  if (!editing && hasData) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-primary/5 p-4 rounded-xl">
+          <p className="font-semibold">{territory.territory}: Rs {targetL.toFixed(1)}L</p>
+        </div>
+        
+        {cities.map(city => {
+          const val = parseFloat(values[city.c]) || 0;
+          if (val > 0) {
+            return (
+              <div key={city.c} className="flex justify-between bg-secondary p-3 rounded-lg">
+                <span>{city.c} ({city.s})</span>
+                <span className="font-bold">Rs {val.toFixed(1)}L</span>
+              </div>
+            );
+          }
+          return null;
+        })}
+        
+        <Button onClick={() => setEditing(true)} variant="outline" className="w-full rounded-full">Edit Cities</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-primary/5 p-4 rounded-xl">
+        <p className="font-semibold">{territory.territory}: Rs {targetL.toFixed(1)}L</p>
+      </div>
+
+      {cities.map(city => (
+        <div key={city.c} className="flex items-center gap-4 bg-secondary p-4 rounded-xl">
+          <div className="flex-1">
+            <p className="font-medium">{city.c}</p>
+            <p className="text-xs text-muted-foreground">{city.s}</p>
+          </div>
+          <Input
+            type="number"
+            value={values[city.c] || ''}
+            onChange={e => setValues({...values, [city.c]: e.target.value})}
+            placeholder="Lakhs"
+            className="w-40 h-11 text-right font-semibold"
+          />
+        </div>
+      ))}
+
+      <div className={`p-4 rounded-xl ${valid ? 'bg-green-50' : 'bg-amber-50'}`}>
+        <p className="font-bold">Total: Rs {total.toFixed(1)}L</p>
+        {!valid && total > 0 && <p className="text-xs text-amber-800">Must equal {targetL.toFixed(1)}L</p>}
+      </div>
+
+      <Button onClick={save} disabled={!valid} className="w-full h-12 rounded-full">Save Cities</Button>
+    </div>
+  );
+}
+
+function Row({ label, value }) {
+  return (
+    <div className="flex justify-between bg-secondary p-4 rounded-xl">
+      <span className="font-medium">{label}</span>
+      <span className="text-lg font-bold text-primary">{value}</span>
+    </div>
+  );
+}
+
+function InputRow({ label, value, onChange }) {
+  return (
+    <div className="flex items-center gap-4 bg-secondary p-4 rounded-xl">
+      <div className="flex-1"><p className="font-medium">{label}</p></div>
+      <Input
+        type="number"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder="Lakhs"
+        className="w-48 h-11 text-right font-semibold"
+      />
+      <span className="text-sm text-muted-foreground w-12">Lakhs</span>
     </div>
   );
 }
