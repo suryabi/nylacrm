@@ -61,6 +61,7 @@ function App() {
           <Route path="/leaves" element={<ProtectedRoute><LeaveManagement /></ProtectedRoute>} />
           <Route path="/targets" element={<ProtectedRoute><SalesTargets /></ProtectedRoute>} />
           <Route path="/reports-new" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
+          <Route path="/sales-portal" element={<ProtectedRoute><SalesPortal /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </BrowserRouter>
