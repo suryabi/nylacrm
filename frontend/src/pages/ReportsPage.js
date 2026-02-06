@@ -10,7 +10,7 @@ const API = process.env.REACT_APP_BACKEND_URL + '/api';
 
 const REPORTS = [
   { value: 'target-sku', label: 'Target SKU Allocation Report' },
-  { value: 'resource-summary', label: 'Resource Summary Report (Coming Soon)' },
+  { value: 'target-resource', label: 'Target Resource Allocation Report' },
   { value: 'city-performance', label: 'City Performance Report (Coming Soon)' }
 ];
 
