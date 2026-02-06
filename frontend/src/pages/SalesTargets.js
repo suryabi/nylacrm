@@ -418,6 +418,18 @@ function ResourceForm({ planId, city, team }) {
   }, [city.id]);
 
   const loadExisting = async () => {
+    const token = localStorage.getItem('token');
+    const res = await axios.get(API + '/target-plans/' + planId + '/cities/' + city.id + '/resources', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+
+    if (res.data.resources) {
+      const newVals = {};
+      res.data.resources.forEach(resource => {
+        newVals[resource.resource_id] = resource.allocation_percentage?.toString() || '';
+      });
+      setVals(newVals);
+    }
     setLoaded(true);
   };
 
