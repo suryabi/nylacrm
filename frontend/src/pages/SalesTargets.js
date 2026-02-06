@@ -53,13 +53,18 @@ export default function SalesTargets() {
             <h3 className="font-semibold mb-2">{p.plan_name}</h3>
             <p className="text-sm text-muted-foreground mb-4">{p.time_period}</p>
             <p className="text-3xl font-bold text-primary mb-4">Rs {(p.country_target / 100000).toFixed(1)}L</p>
-            <div className="flex gap-2">
-              <Button onClick={() => { setCurrentPlan(p); setPage('territories'); }} variant="outline" className="flex-1 rounded-full text-xs">Territories</Button>
-              <Button onClick={() => { setCurrentPlan(p); setPage('cities'); }} variant="outline" className="flex-1 rounded-full text-xs">Cities</Button>
-            </div>
-            <div className="flex gap-2 mt-2">
-              <Button onClick={() => { setCurrentPlan(p); setPage('resources'); }} variant="outline" className="flex-1 rounded-full text-xs">Resources</Button>
-              <Button onClick={() => { setCurrentPlan(p); setPage('skus'); }} variant="outline" className="flex-1 rounded-full text-xs">SKUs</Button>
+            <div className="space-y-2">
+              <Button onClick={() => { setCurrentPlan(p); setPage('gridview'); }} className="w-full rounded-full bg-primary/10 text-primary hover:bg-primary hover:text-white">
+                <Table2 className="h-4 w-4 mr-2" />Grid View
+              </Button>
+              <div className="flex gap-2">
+                <Button onClick={() => { setCurrentPlan(p); setPage('territories'); }} variant="outline" className="flex-1 rounded-full text-xs">Territories</Button>
+                <Button onClick={() => { setCurrentPlan(p); setPage('cities'); }} variant="outline" className="flex-1 rounded-full text-xs">Cities</Button>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={() => { setCurrentPlan(p); setPage('resources'); }} variant="outline" className="flex-1 rounded-full text-xs">Resources</Button>
+                <Button onClick={() => { setCurrentPlan(p); setPage('skus'); }} variant="outline" className="flex-1 rounded-full text-xs">SKUs</Button>
+              </div>
             </div>
           </Card>
         ))}
