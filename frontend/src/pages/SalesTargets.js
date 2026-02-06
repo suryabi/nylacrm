@@ -70,8 +70,30 @@ export default function SalesTargets() {
       <div className="grid md:grid-cols-3 gap-6">
         {plans.map(p => (
           <Card key={p.id} className="p-6 border rounded-2xl">
-            <h3 className="font-semibold mb-2">{p.plan_name}</h3>
-            <p className="text-sm text-muted-foreground mb-4">{p.time_period}</p>
+            <div className="flex justify-between items-start mb-3">
+              <div>
+                <h3 className="font-semibold mb-1">{p.plan_name}</h3>
+                <p className="text-sm text-muted-foreground">{p.time_period}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => startEdit(p)}
+                  className="rounded-full h-8 w-8"
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => { setPlanToDelete(p); setDeleteDialog(true); }}
+                  className="rounded-full h-8 w-8 text-red-600"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
             <p className="text-3xl font-bold text-primary mb-4">Rs {(p.country_target / 100000).toFixed(1)}L</p>
             <div className="grid grid-cols-2 gap-2">
               <Button onClick={() => { setCurrentPlan(p); setPage('territories'); }} variant="outline" className="rounded-full text-xs">Territories</Button>
