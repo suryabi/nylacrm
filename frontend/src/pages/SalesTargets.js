@@ -240,11 +240,11 @@ function TerritorySection({ planId, countryTarget, hierarchy, onUpdate }) {
   React.useEffect(() => {
     if (hasData) {
       territories.forEach(t => {
-        const val = (t.target_revenue / 100000).toString();
-        if (t.territory === 'North India') setNorth(val);
-        if (t.territory === 'South India') setSouth(val);
-        if (t.territory === 'West India') setWest(val);
-        if (t.territory === 'East India') setEast(val);
+        const pct = t.allocation_percentage?.toString() || '';
+        if (t.territory === 'North India') setNorth(pct);
+        if (t.territory === 'South India') setSouth(pct);
+        if (t.territory === 'West India') setWest(pct);
+        if (t.territory === 'East India') setEast(pct);
       });
     } else {
       setEditing(true);
