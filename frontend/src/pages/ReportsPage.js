@@ -29,15 +29,32 @@ export default function ReportsPage() {
 
   React.useEffect(() => {
     if (selectedReport === 'target-sku') {
-      loadReport();
+      loadSKUReport();
+    } else if (selectedReport === 'target-resource') {
+      loadResourceReport();
     }
   }, [selectedReport]);
 
-  const loadReport = async () => {
+  const loadSKUReport = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
       const res = await axios.get(API + '/reports/target-sku-allocation', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      setReportData(res.data.report_data || []);
+    } catch (err) {
+      toast.error('Failed to load report');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadResourceReport = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(API + '/reports/target-resource-allocation', {
         headers: { Authorization: 'Bearer ' + token }
       });
       setReportData(res.data.report_data || []);
