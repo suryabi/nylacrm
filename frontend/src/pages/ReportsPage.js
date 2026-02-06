@@ -209,6 +209,47 @@ export default function ReportsPage() {
                         Target Revenue {getSortIcon('target_revenue')}
                       </th>
                     </tr>
+                    <tr className="bg-background">
+                      <th className="p-2">
+                        <input
+                          type="text"
+                          value={filterTargetName}
+                          onChange={e => setFilterTargetName(e.target.value)}
+                          placeholder="Filter..."
+                          className="w-full px-2 py-1 text-xs border rounded"
+                        />
+                      </th>
+                      <th className="p-2">
+                        <input
+                          type="text"
+                          value={filterTerritory}
+                          onChange={e => setFilterTerritory(e.target.value)}
+                          placeholder="Filter..."
+                          className="w-full px-2 py-1 text-xs border rounded"
+                        />
+                      </th>
+                      <th className="p-2"></th>
+                      <th className="p-2"></th>
+                      <th className="p-2">
+                        <input
+                          type="text"
+                          value={filterCity}
+                          onChange={e => setFilterCity(e.target.value)}
+                          placeholder="Filter..."
+                          className="w-full px-2 py-1 text-xs border rounded"
+                        />
+                      </th>
+                      <th className="p-2">
+                        <input
+                          type="text"
+                          value={filterSKU}
+                          onChange={e => setFilterSKU(e.target.value)}
+                          placeholder="Filter..."
+                          className="w-full px-2 py-1 text-xs border rounded"
+                        />
+                      </th>
+                      <th className="p-2"></th>
+                    </tr>
                   </thead>
                   <tbody>
                     {sortedData.map((row, idx) => (
