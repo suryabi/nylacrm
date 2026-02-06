@@ -2196,21 +2196,23 @@ async def assign_city_resources(
         raise HTTPException(status_code=404, detail='City not found')
     
     # Validate total
-    total_assigned = sum([r.target_revenue for r in resources])
-    if abs(total_assigned - city['target_revenue']) > 0.01:
+    total_percentage = sum([r.allocation_percentage for r in resources])
+    if abs(total_percentage - 100) > 0.01:
         raise HTTPException(
             status_code=400,
-            detail=f'Resource targets must equal city target'
+            detail=f'Resource percentages must total 100% (current: {total_percentage}%)'
         )
     
     # Delete existing resource targets for this city
     await db.resource_targets.delete_many({'city_id': city_id})
     
-    # Create new resource targets
+    # Create new resource targets with calculated values
     for resource in resources:
         resource_data = resource.model_dump()
         resource_data['plan_id'] = plan_id
         resource_data['city_id'] = city_id
+        # Calculate actual revenue from percentage
+        resource_data['target_revenue'] = (resource.allocation_percentage / 100) * city['target_revenue']
         resource_obj = ResourceTarget(**resource_data)
         
         doc = resource_obj.model_dump()
