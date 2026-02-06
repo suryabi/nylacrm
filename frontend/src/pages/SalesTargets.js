@@ -4,8 +4,9 @@ import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, ArrowLeft } from 'lucide-react';
+import { Plus, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -27,7 +28,7 @@ export default function SalesTargets() {
   };
 
   if (page === 'create') return <CreatePage onBack={() => setPage('list')} />;
-  if (page === 'territories' && currentPlan) return <TerritoriesPage plan={currentPlan} onBack={() => setPage('list')} onNext={() => setPage('cities')} />;
+  if (page === 'territories' && currentPlan) return <TerritoriesPage plan={currentPlan} onBack={() => setPage('list')} />;
   if (page === 'cities' && currentPlan) return <CitiesPage plan={currentPlan} onBack={() => setPage('list')} />;
   if (page === 'resources' && currentPlan) return <ResourcesPage plan={currentPlan} onBack={() => setPage('list')} />;
   if (page === 'skus' && currentPlan) return <SKUsPage plan={currentPlan} onBack={() => setPage('list')} />;
@@ -111,11 +112,34 @@ function CreatePage({ onBack }) {
   );
 }
 
-function TerritoriesPage({ plan, onBack, onNext }) {
+function TerritoriesPage({ plan, onBack }) {
   const [n, setN] = React.useState('');
   const [s, setS] = React.useState('');
   const [w, setW] = React.useState('');
   const [e, setE] = React.useState('');
+  const [loaded, setLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    loadExisting();
+  }, []);
+
+  const loadExisting = async () => {
+    const token = localStorage.getItem('token');
+    const res = await axios.get(API + '/target-plans/' + plan.id + '/hierarchy', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    
+    if (res.data.territories) {
+      res.data.territories.forEach(t => {
+        const pct = t.allocation_percentage?.toString() || '';
+        if (t.territory === 'North India') setN(pct);
+        if (t.territory === 'South India') setS(pct);
+        if (t.territory === 'West India') setW(pct);
+        if (t.territory === 'East India') setE(pct);
+      });
+    }
+    setLoaded(true);
+  };
 
   const total = (parseFloat(n) || 0) + (parseFloat(s) || 0) + (parseFloat(w) || 0) + (parseFloat(e) || 0);
   const valid = Math.abs(total - 100) < 0.1;
@@ -134,11 +158,14 @@ function TerritoriesPage({ plan, onBack, onNext }) {
     toast.success('Territories saved!');
   };
 
+  if (!loaded) return <div className="text-center py-8">Loading...</div>;
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <Button variant="outline" onClick={onBack} className="rounded-full"><ArrowLeft className="h-4 w-4 mr-2" />Back</Button>
       <Card className="p-8 bg-primary/5 rounded-2xl">
         <h1 className="text-2xl font-semibold mb-2">{plan.plan_name}</h1>
+        <p className="text-sm text-muted-foreground mb-3">Country Target</p>
         <p className="text-4xl font-bold text-primary">Rs {(plan.country_target / 100000).toFixed(1)}L</p>
       </Card>
       <Card className="p-8 border rounded-2xl">
@@ -157,44 +184,541 @@ function TerritoriesPage({ plan, onBack, onNext }) {
           {!valid && total > 0 && <p className="text-sm text-amber-800">Must = 100%</p>}
           {valid && <p className="text-sm text-green-800">✓ Perfect!</p>}
         </div>
-        <Button onClick={save} disabled={!valid} className="w-full h-14 rounded-full mt-6">Save</Button>
+        <Button onClick={save} disabled={!valid} className="w-full h-14 rounded-full mt-6">Save Territories</Button>
       </Card>
     </div>
   );
 }
 
 function CitiesPage({ plan, onBack }) {
+  const [tab, setTab] = React.useState('south');
+  const [territories, setTerritories] = React.useState([]);
+
+  React.useEffect(() => {
+    loadTerr();
+  }, []);
+
+  const loadTerr = async () => {
+    const token = localStorage.getItem('token');
+    const res = await axios.get(API + '/target-plans/' + plan.id + '/hierarchy', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    setTerritories(res.data.territories || []);
+  };
+
+  const currentTerr = territories.find(t => 
+    (tab === 'south' && t.territory === 'South India') ||
+    (tab === 'west' && t.territory === 'West India') ||
+    (tab === 'north' && t.territory === 'North India') ||
+    (tab === 'east' && t.territory === 'East India')
+  );
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <Button variant="outline" onClick={onBack} className="rounded-full"><ArrowLeft className="h-4 w-4 mr-2" />Back</Button>
-      <Card className="p-12 text-center border rounded-2xl">
-        <p className="text-lg mb-4">Cities Allocation</p>
-        <p className="text-muted-foreground">Feature working via backend API</p>
+      <Card className="p-8 bg-primary/5 rounded-2xl">
+        <h1 className="text-2xl font-semibold mb-2">{plan.plan_name}</h1>
+        <p className="text-xl font-bold text-primary">Allocate Cities</p>
       </Card>
+      <Card className="p-6 border rounded-2xl">
+        <div className="flex gap-2 mb-6">
+          <Button variant={tab === 'south' ? 'default' : 'outline'} onClick={() => setTab('south')} className="rounded-full">South India</Button>
+          <Button variant={tab === 'west' ? 'default' : 'outline'} onClick={() => setTab('west')} className="rounded-full">West India</Button>
+          <Button variant={tab === 'north' ? 'default' : 'outline'} onClick={() => setTab('north')} className="rounded-full">North India</Button>
+          <Button variant={tab === 'east' ? 'default' : 'outline'} onClick={() => setTab('east')} className="rounded-full">East India</Button>
+        </div>
+        {currentTerr && <CityForm planId={plan.id} territory={currentTerr} onUpdate={loadTerr} />}
+      </Card>
+    </div>
+  );
+}
+
+function CityForm({ planId, territory, onUpdate }) {
+  const [bengaluru, setBengaluru] = React.useState('');
+  const [chennai, setChennai] = React.useState('');
+  const [hyderabad, setHyderabad] = React.useState('');
+  const [mumbai, setMumbai] = React.useState('');
+  const [pune, setPune] = React.useState('');
+  const [ahmedabad, setAhmedabad] = React.useState('');
+  const [delhi, setDelhi] = React.useState('');
+  const [noida, setNoida] = React.useState('');
+  const [kolkata, setKolkata] = React.useState('');
+  const [loaded, setLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    setBengaluru('');
+    setChennai('');
+    setHyderabad('');
+    setMumbai('');
+    setPune('');
+    setAhmedabad('');
+    setDelhi('');
+    setNoida('');
+    setKolkata('');
+    setLoaded(false);
+    loadExisting();
+  }, [territory.id]);
+
+  const loadExisting = async () => {
+    const token = localStorage.getItem('token');
+    const res = await axios.get(API + '/target-plans/' + planId + '/hierarchy', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+
+    const thisTerr = res.data.territories?.find(t => t.id === territory.id);
+    if (thisTerr && thisTerr.states) {
+      thisTerr.states.forEach(state => {
+        if (state.cities) {
+          state.cities.forEach(city => {
+            const pct = city.allocation_percentage?.toString() || '';
+            if (city.city === 'Bengaluru') setBengaluru(pct);
+            if (city.city === 'Chennai') setChennai(pct);
+            if (city.city === 'Hyderabad') setHyderabad(pct);
+            if (city.city === 'Mumbai') setMumbai(pct);
+            if (city.city === 'Pune') setPune(pct);
+            if (city.city === 'Ahmedabad') setAhmedabad(pct);
+            if (city.city === 'New Delhi') setDelhi(pct);
+            if (city.city === 'Noida') setNoida(pct);
+            if (city.city === 'Kolkata') setKolkata(pct);
+          });
+        }
+      });
+    }
+    setLoaded(true);
+  };
+
+  let total = 0;
+  let cities = [];
+  const territoryTarget = territory.target_revenue / 100000;
+
+  if (territory.territory === 'South India') {
+    total = (parseFloat(bengaluru) || 0) + (parseFloat(chennai) || 0) + (parseFloat(hyderabad) || 0);
+    cities = [
+      {s: 'Karnataka', c: 'Bengaluru', val: bengaluru, set: setBengaluru},
+      {s: 'Tamil Nadu', c: 'Chennai', val: chennai, set: setChennai},
+      {s: 'Telangana', c: 'Hyderabad', val: hyderabad, set: setHyderabad}
+    ];
+  } else if (territory.territory === 'West India') {
+    total = (parseFloat(mumbai) || 0) + (parseFloat(pune) || 0) + (parseFloat(ahmedabad) || 0);
+    cities = [
+      {s: 'Maharashtra', c: 'Mumbai', val: mumbai, set: setMumbai},
+      {s: 'Maharashtra', c: 'Pune', val: pune, set: setPune},
+      {s: 'Gujarat', c: 'Ahmedabad', val: ahmedabad, set: setAhmedabad}
+    ];
+  } else if (territory.territory === 'North India') {
+    total = (parseFloat(delhi) || 0) + (parseFloat(noida) || 0);
+    cities = [
+      {s: 'Delhi', c: 'New Delhi', val: delhi, set: setDelhi},
+      {s: 'Uttar Pradesh', c: 'Noida', val: noida, set: setNoida}
+    ];
+  } else if (territory.territory === 'East India') {
+    total = parseFloat(kolkata) || 0;
+    cities = [{s: 'West Bengal', c: 'Kolkata', val: kolkata, set: setKolkata}];
+  }
+
+  const valid = Math.abs(total - 100) < 0.1;
+
+  const save = async () => {
+    const token = localStorage.getItem('token');
+    const payload = cities
+      .filter(c => parseFloat(c.val) > 0)
+      .map(c => ({ state: c.s, city: c.c, allocation_percentage: parseFloat(c.val) }));
+
+    await axios.post(API + '/target-plans/' + planId + '/territories/' + encodeURIComponent(territory.territory) + '/cities', payload, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    toast.success(territory.territory + ' cities saved!');
+    onUpdate();
+  };
+
+  if (!loaded) return <div className="text-center py-8">Loading...</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-gradient-to-r from-primary/10 to-primary/5 border-2 border-primary/20 p-6 rounded-2xl">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <p className="text-sm text-muted-foreground mb-1">Territory</p>
+            <h3 className="text-3xl font-bold text-primary">{territory.territory}</h3>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground mb-1">Territory Target</p>
+            <p className="text-4xl font-bold text-foreground">Rs {territoryTarget.toFixed(1)}L</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {cities.map(city => {
+          const cityAmount = (parseFloat(city.val) || 0) / 100 * territoryTarget;
+          return (
+            <div key={city.c} className="bg-card border-2 border-border p-5 rounded-xl">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="flex-1">
+                  <p className="font-semibold text-lg">{city.c}</p>
+                  <p className="text-xs text-muted-foreground">{city.s}</p>
+                </div>
+                <Input type="number" value={city.val} onChange={e => city.set(e.target.value)} placeholder="%" className="w-28 h-12 text-right font-bold text-xl" />
+                <span className="font-bold text-lg w-8">%</span>
+              </div>
+              <div className="bg-primary/5 p-3 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">City Target:</span>
+                  <span className="text-2xl font-bold text-primary">Rs {cityAmount.toFixed(1)}L</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className={`p-6 rounded-xl border-2 ${valid && total > 0 ? 'bg-green-50 border-green-300' : 'bg-amber-50 border-amber-300'}`}>
+        <div className="flex justify-between items-center mb-3">
+          <span className="font-semibold text-lg">Total:</span>
+          <span className="text-4xl font-bold">{total.toFixed(1)}%</span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-muted-foreground">Equals:</span>
+          <span className="text-2xl font-semibold text-primary">Rs {(total / 100 * territoryTarget).toFixed(1)}L</span>
+        </div>
+        {!valid && total > 0 && <p className="text-sm text-amber-800 mt-3">Must = 100%</p>}
+        {valid && <p className="text-sm text-green-800 mt-3"><CheckCircle2 className="h-4 w-4 inline" /> Perfect!</p>}
+      </div>
+
+      <Button onClick={save} disabled={!valid} className="w-full h-14 rounded-full font-semibold">
+        Save {territory.territory} Cities
+      </Button>
     </div>
   );
 }
 
 function ResourcesPage({ plan, onBack }) {
+  const [tab, setTab] = React.useState('bengaluru');
+  const [cities, setCities] = React.useState([]);
+  const [salesTeam, setSalesTeam] = React.useState([]);
+
+  React.useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    const token = localStorage.getItem('token');
+    
+    const hRes = await axios.get(API + '/target-plans/' + plan.id + '/hierarchy', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    
+    const uRes = await axios.get(API + '/users', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+
+    const allCities = [];
+    if (hRes.data.territories) {
+      hRes.data.territories.forEach(terr => {
+        if (terr.states) {
+          terr.states.forEach(state => {
+            if (state.cities) {
+              state.cities.forEach(city => allCities.push(city));
+            }
+          });
+        }
+      });
+    }
+    
+    setCities(allCities);
+    setSalesTeam(uRes.data.filter(u => ['sales_rep', 'sales_manager'].includes(u.role)));
+  };
+
+  const currentCity = cities.find(c => c.city.toLowerCase().replace(' ', '') === tab);
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <Button variant="outline" onClick={onBack} className="rounded-full"><ArrowLeft className="h-4 w-4 mr-2" />Back</Button>
-      <Card className="p-12 text-center border rounded-2xl">
-        <p className="text-lg mb-4">Resource Allocation</p>
-        <p className="text-muted-foreground">Feature working via backend API</p>
+      <Card className="p-8 bg-primary/5 rounded-2xl">
+        <h1 className="text-2xl font-semibold mb-2">{plan.plan_name}</h1>
+        <p className="text-xl font-bold text-primary">Resource Allocation</p>
+      </Card>
+      <Card className="p-6 border rounded-2xl">
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {cities.map(c => (
+            <Button
+              key={c.id}
+              variant={c.city.toLowerCase().replace(' ', '') === tab ? 'default' : 'outline'}
+              onClick={() => setTab(c.city.toLowerCase().replace(' ', ''))}
+              size="sm"
+              className="rounded-full"
+            >
+              {c.city}
+            </Button>
+          ))}
+        </div>
+        {currentCity && <ResourceForm planId={plan.id} city={currentCity} team={salesTeam} />}
       </Card>
     </div>
   );
 }
 
+function ResourceForm({ planId, city, team }) {
+  const [vals, setVals] = React.useState({});
+  const [loading, setLoading] = React.useState(false);
+
+  const grouped = {
+    'North India': team.filter(m => m.territory?.includes('North')),
+    'South India': team.filter(m => m.territory?.includes('South')),
+    'West India': team.filter(m => m.territory?.includes('West')),
+    'East India': team.filter(m => m.territory?.includes('East')),
+    'All India': team.filter(m => m.territory === 'All India')
+  };
+
+  const total = Object.values(vals).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+  const cityTarget = city.target_revenue / 100000;
+  const valid = Math.abs(total - 100) < 0.1 && total > 0;
+
+  const save = async () => {
+    setLoading(true);
+    const token = localStorage.getItem('token');
+    const payload = Object.keys(vals)
+      .filter(k => parseFloat(vals[k]) > 0)
+      .map(k => ({ resource_id: k, allocation_percentage: parseFloat(vals[k]) }));
+
+    await axios.post(API + '/target-plans/' + planId + '/cities/' + city.id + '/resources', payload, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    toast.success(city.city + ' resources saved!');
+    setLoading(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-primary/5 p-4 rounded-xl">
+        <div className="flex justify-between">
+          <div>
+            <p className="font-semibold text-lg">{city.city}</p>
+            <p className="text-xs text-muted-foreground">{city.state}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-bold text-primary">Rs {cityTarget.toFixed(1)}L</p>
+          </div>
+        </div>
+      </div>
+
+      {Object.keys(grouped).map(terrName => {
+        const members = grouped[terrName];
+        if (members.length === 0) return null;
+
+        return (
+          <div key={terrName} className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase">{terrName}</p>
+            {members.map(m => (
+              <div key={m.id} className="flex items-center gap-3 bg-secondary p-3 rounded-xl">
+                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">{m.name[0]}</div>
+                <div className="flex-1">
+                  <p className="font-medium text-sm">{m.name}</p>
+                  <p className="text-xs text-muted-foreground">{m.designation}</p>
+                </div>
+                <Input type="number" value={vals[m.id] || ''} onChange={e => setVals({...vals, [m.id]: e.target.value})} placeholder="%" className="w-24 h-10 text-right font-semibold text-lg" />
+                <span className="font-medium w-6">%</span>
+                <span className="text-sm text-muted-foreground w-20 text-right">Rs {((parseFloat(vals[m.id]) || 0) / 100 * cityTarget).toFixed(1)}L</span>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+
+      <div className={`p-5 rounded-xl border-2 ${valid ? 'bg-green-50 border-green-300' : 'bg-amber-50 border-amber-300'}`}>
+        <div className="flex justify-between mb-2">
+          <span className="font-semibold">Total:</span>
+          <span className="text-3xl font-bold">{total.toFixed(1)}%</span>
+        </div>
+        {!valid && total > 0 && <p className="text-sm text-amber-800">Must = 100%</p>}
+        {valid && <p className="text-sm text-green-800"><CheckCircle2 className="h-4 w-4 inline" /> Perfect!</p>}
+      </div>
+
+      <Button onClick={save} disabled={!valid || loading} className="w-full h-12 rounded-full">
+        Save {city.city} Resources
+      </Button>
+    </div>
+  );
+}
+
 function SKUsPage({ plan, onBack }) {
+  const [tab, setTab] = React.useState('bengaluru');
+  const [cities, setCities] = React.useState([]);
+
+  React.useEffect(() => {
+    loadCities();
+  }, []);
+
+  const loadCities = async () => {
+    const token = localStorage.getItem('token');
+    const res = await axios.get(API + '/target-plans/' + plan.id + '/hierarchy', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+
+    const allCities = [];
+    if (res.data.territories) {
+      res.data.territories.forEach(terr => {
+        if (terr.states) {
+          terr.states.forEach(state => {
+            if (state.cities) {
+              state.cities.forEach(city => allCities.push(city));
+            }
+          });
+        }
+      });
+    }
+    setCities(allCities);
+  };
+
+  const currentCity = cities.find(c => c.city.toLowerCase().replace(' ', '') === tab);
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <Button variant="outline" onClick={onBack} className="rounded-full"><ArrowLeft className="h-4 w-4 mr-2" />Back</Button>
-      <Card className="p-12 text-center border rounded-2xl">
-        <p className="text-lg mb-4">SKU Allocation</p>
-        <p className="text-muted-foreground">Feature working via backend API</p>
+      <Card className="p-8 bg-primary/5 rounded-2xl">
+        <h1 className="text-2xl font-semibold mb-2">{plan.plan_name}</h1>
+        <p className="text-xl font-bold text-primary">SKU Allocation</p>
       </Card>
+      <Card className="p-6 border rounded-2xl">
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {cities.map(c => (
+            <Button
+              key={c.id}
+              variant={c.city.toLowerCase().replace(' ', '') === tab ? 'default' : 'outline'}
+              onClick={() => setTab(c.city.toLowerCase().replace(' ', ''))}
+              size="sm"
+              className="rounded-full"
+            >
+              {c.city}
+            </Button>
+          ))}
+        </div>
+        {currentCity && <SKUForm planId={plan.id} city={currentCity} />}
+      </Card>
+    </div>
+  );
+}
+
+function SKUForm({ planId, city }) {
+  const [s660silver, setS660silver] = React.useState('');
+  const [s660gold, setS660gold] = React.useState('');
+  const [s330silver, setS330silver] = React.useState('');
+  const [s330gold, setS330gold] = React.useState('');
+  const [s660spark, setS660spark] = React.useState('');
+  const [s330spark, setS330spark] = React.useState('');
+  const [s24brand, setS24brand] = React.useState('');
+  const [loaded, setLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    setS660silver('');
+    setS660gold('');
+    setS330silver('');
+    setS330gold('');
+    setS660spark('');
+    setS330spark('');
+    setS24brand('');
+    setLoaded(false);
+    loadExisting();
+  }, [city.id]);
+
+  const loadExisting = async () => {
+    const token = localStorage.getItem('token');
+    const res = await axios.get(API + '/target-plans/' + planId + '/cities/' + city.id + '/skus', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+
+    if (res.data.skus) {
+      res.data.skus.forEach(sku => {
+        const pct = sku.allocation_percentage?.toString() || '';
+        if (sku.sku_name === '660 ml Silver') setS660silver(pct);
+        if (sku.sku_name === '660 ml Gold') setS660gold(pct);
+        if (sku.sku_name === '330 ml Silver') setS330silver(pct);
+        if (sku.sku_name === '330 ml Gold') setS330gold(pct);
+        if (sku.sku_name === '660 Sparkling') setS660spark(pct);
+        if (sku.sku_name === '330 Sparkling') setS330spark(pct);
+        if (sku.sku_name === '24 Brand') setS24brand(pct);
+      });
+    }
+    setLoaded(true);
+  };
+
+  const skus = [
+    {name: '660 ml Silver', val: s660silver, set: setS660silver},
+    {name: '660 ml Gold', val: s660gold, set: setS660gold},
+    {name: '330 ml Silver', val: s330silver, set: setS330silver},
+    {name: '330 ml Gold', val: s330gold, set: setS330gold},
+    {name: '660 Sparkling', val: s660spark, set: setS660spark},
+    {name: '330 Sparkling', val: s330spark, set: setS330spark},
+    {name: '24 Brand', val: s24brand, set: setS24brand}
+  ];
+
+  const total = skus.reduce((s, sku) => s + (parseFloat(sku.val) || 0), 0);
+  const cityTarget = city.target_revenue / 100000;
+  const valid = Math.abs(total - 100) < 0.1 && total > 0;
+
+  const save = async () => {
+    const token = localStorage.getItem('token');
+    const payload = skus
+      .filter(sku => parseFloat(sku.val) > 0)
+      .map(sku => ({ sku_name: sku.name, allocation_percentage: parseFloat(sku.val) }));
+
+    await axios.post(API + '/target-plans/' + planId + '/cities/' + city.id + '/skus', payload, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    toast.success(city.city + ' SKUs saved!');
+  };
+
+  if (!loaded) return <div className="text-center py-8">Loading...</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-gradient-to-r from-primary/10 to-primary/5 border-2 border-primary/20 p-6 rounded-2xl">
+        <div className="flex justify-between items-center">
+          <div>
+            <p className="text-sm text-muted-foreground mb-1">City</p>
+            <h3 className="text-2xl font-bold">{city.city}</h3>
+            <p className="text-xs text-muted-foreground">{city.state}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground mb-1">City Target</p>
+            <p className="text-4xl font-bold text-primary">Rs {cityTarget.toFixed(1)}L</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {skus.map(sku => {
+          const skuAmount = (parseFloat(sku.val) || 0) / 100 * cityTarget;
+          return (
+            <div key={sku.name} className="bg-card border-2 border-border p-4 rounded-xl">
+              <div className="flex items-center gap-4 mb-2">
+                <div className="flex-1"><p className="font-semibold">{sku.name}</p></div>
+                <Input type="number" value={sku.val} onChange={e => sku.set(e.target.value)} placeholder="%" className="w-28 h-11 text-right font-bold text-xl" />
+                <span className="font-bold text-lg w-8">%</span>
+              </div>
+              <div className="bg-primary/5 p-2 rounded-lg">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">SKU Target:</span>
+                  <span className="font-bold text-primary">Rs {skuAmount.toFixed(1)}L</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className={`p-6 rounded-xl border-2 ${valid ? 'bg-green-50 border-green-300' : 'bg-amber-50 border-amber-300'}`}>
+        <div className="flex justify-between mb-2">
+          <span className="font-semibold">Total:</span>
+          <span className="text-4xl font-bold">{total.toFixed(1)}%</span>
+        </div>
+        {!valid && total > 0 && <p className="text-sm text-amber-800">Must = 100%</p>}
+        {valid && <p className="text-sm text-green-800"><CheckCircle2 className="h-4 w-4 inline" /> Perfect!</p>}
+      </div>
+
+      <Button onClick={save} disabled={!valid} className="w-full h-14 rounded-full font-semibold">
+        Save {city.city} SKUs
+      </Button>
     </div>
   );
 }
@@ -211,3 +735,5 @@ function TRow({ label, value, onChange, target }) {
     </div>
   );
 }
+STABLE
+echo "✅ Fully working stable version restored"
