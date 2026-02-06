@@ -505,6 +505,17 @@ function SKUForm({ planId, city, onUpdate }) {
   const [loaded, setLoaded] = React.useState(false);
 
   React.useEffect(() => {
+    // Reset all values when city changes
+    setS660silver('');
+    setS660gold('');
+    setS330silver('');
+    setS330gold('');
+    setS660spark('');
+    setS330spark('');
+    setS24brand('');
+    setLoaded(false);
+    
+    // Load data for new city
     loadExistingSKUs();
   }, [city.id]);
 
