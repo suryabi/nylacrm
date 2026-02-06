@@ -87,28 +87,26 @@ export default function ReportsPage() {
     }
   };
 
+  // Get unique values for filters
+  const uniqueTargets = ['All', ...new Set(reportData.map(r => r.target_name))];
+  const uniqueTerritories = ['All', ...new Set(reportData.map(r => r.territory))];
+  const uniqueCities = ['All', ...new Set(reportData.map(r => r.city))];
+  const uniqueSKUs = ['All', ...new Set(reportData.map(r => r.sku))];
+
   // Apply filters
   let filteredData = reportData;
   
-  if (filterTargetName) {
-    filteredData = filteredData.filter(row => 
-      row.target_name.toLowerCase().includes(filterTargetName.toLowerCase())
-    );
+  if (filterTargetName && filterTargetName !== 'All') {
+    filteredData = filteredData.filter(row => row.target_name === filterTargetName);
   }
-  if (filterTerritory) {
-    filteredData = filteredData.filter(row => 
-      row.territory.toLowerCase().includes(filterTerritory.toLowerCase())
-    );
+  if (filterTerritory && filterTerritory !== 'All') {
+    filteredData = filteredData.filter(row => row.territory === filterTerritory);
   }
-  if (filterCity) {
-    filteredData = filteredData.filter(row => 
-      row.city.toLowerCase().includes(filterCity.toLowerCase())
-    );
+  if (filterCity && filterCity !== 'All') {
+    filteredData = filteredData.filter(row => row.city === filterCity);
   }
-  if (filterSKU) {
-    filteredData = filteredData.filter(row => 
-      row.sku.toLowerCase().includes(filterSKU.toLowerCase())
-    );
+  if (filterSKU && filterSKU !== 'All') {
+    filteredData = filteredData.filter(row => row.sku === filterSKU);
   }
 
   // Sort filtered data
