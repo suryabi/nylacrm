@@ -30,6 +30,8 @@ export default function SalesTargets() {
   if (page === 'create') return <CreatePage onBack={() => setPage('list')} />;
   if (page === 'territories' && currentPlan) return <TerritoriesPage plan={currentPlan} onBack={() => setPage('list')} onNext={() => setPage('cities')} />;
   if (page === 'cities' && currentPlan) return <CitiesPage plan={currentPlan} onBack={() => setPage('list')} />;
+  if (page === 'resources' && currentPlan) return <ResourcesPage plan={currentPlan} onBack={() => setPage('list')} />;
+  if (page === 'skus' && currentPlan) return <SKUsPage plan={currentPlan} onBack={() => setPage('list')} />;
 
   return (
     <div className="space-y-6">
