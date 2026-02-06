@@ -18,6 +18,8 @@ export default function ReportsPage() {
   const [selectedReport, setSelectedReport] = React.useState('target-sku');
   const [reportData, setReportData] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
+  const [sortField, setSortField] = React.useState('target_name');
+  const [sortDirection, setSortDirection] = React.useState('asc');
 
   React.useEffect(() => {
     if (selectedReport === 'target-sku') {
