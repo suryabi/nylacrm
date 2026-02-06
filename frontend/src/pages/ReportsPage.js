@@ -305,7 +305,16 @@ export default function ReportsPage() {
                             <p className="text-xs text-muted-foreground">{row.state}</p>
                           </div>
                         </td>
-                        <td className="p-3">{row.sku}</td>
+                        {selectedReport === 'target-sku' ? (
+                          <td className="p-3">{row.sku}</td>
+                        ) : (
+                          <td className="p-3">
+                            <div>
+                              <p className="font-medium">{row.resource_name}</p>
+                              <p className="text-xs text-muted-foreground">{row.designation}</p>
+                            </div>
+                          </td>
+                        )}
                         <td className="text-right p-3 font-semibold text-primary">
                           Rs {(row.target_revenue / 100000).toFixed(2)}L
                         </td>
