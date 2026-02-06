@@ -473,11 +473,8 @@ function CityAllocation({ territory, planId, onUpdate }) {
             type="number"
             value={values[city.c] || ''}
             onChange={e => setValues({...values, [city.c]: e.target.value})}
-            placeholder="0-100"
-            className="w-32 h-11 text-right font-semibold"
-            step="0.1"
-            max="100"
-            min="0"
+            placeholder="Enter %"
+            className="w-32 h-11 text-right font-semibold text-lg"
           />
           <span className="text-sm font-medium w-8">%</span>
           <span className="text-sm text-muted-foreground w-24 text-right">
