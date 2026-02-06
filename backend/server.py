@@ -351,6 +351,20 @@ class ResourceTargetCreate(BaseModel):
     resource_id: str
     allocation_percentage: float  # User enters percentage
 
+class SKUTarget(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    plan_id: str
+    city_id: str
+    sku_name: str
+    allocation_percentage: float  # Percentage of city target
+    target_revenue: float  # Calculated from percentage
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class SKUTargetCreate(BaseModel):
+    sku_name: str
+    allocation_percentage: float  # User enters percentage
+
 # ============= HELPERS =============
 
 def hash_password(password: str) -> str:
