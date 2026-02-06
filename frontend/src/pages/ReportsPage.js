@@ -257,6 +257,8 @@ export default function ReportsPage() {
                         />
                       </th>
                       <th className="p-2"></th>
+                      <th className="p-2"></th>
+                      <th className="p-2"></th>
                     </tr>
                   </thead>
                   <tbody>
