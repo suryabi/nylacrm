@@ -646,6 +646,11 @@ function ResourceAllocationForm({ city, planId, salesTeam, onUpdate }) {
         Assign percentages to any sales resource (same resource can have allocations in multiple cities):
       </p>
 
+      <p className="text-sm text-muted-foreground bg-primary/5 p-3 rounded-lg border border-primary/20">
+        <strong>Note:</strong> Each city's allocation is independent. The same resource can have different percentages across cities.
+        For example, Priya could be assigned 60% of Bengaluru and 80% of Chennai.
+      </p>
+
       {Object.keys(grouped).map(terrName => {
         const members = grouped[terrName];
         if (members.length === 0) return null;
