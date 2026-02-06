@@ -2088,22 +2088,23 @@ async def allocate_city_targets(
         raise HTTPException(status_code=404, detail='Territory target not found')
     
     # Validate total
-    total_allocated = sum([c.target_revenue for c in cities])
-    territory_target_value = territory_target['target_revenue']
-    if abs(total_allocated - territory_target_value) > 0.01:
+    total_percentage = sum([c.allocation_percentage for c in cities])
+    if abs(total_percentage - 100) > 0.01:
         raise HTTPException(
             status_code=400,
-            detail=f'City targets ({total_allocated}) must equal territory target ({territory_target_value})'
+            detail=f'City percentages must total 100% (current: {total_percentage}%)'
         )
     
     # Delete existing city targets
     await db.city_targets.delete_many({'plan_id': plan_id, 'territory': territory})
     
-    # Create new city targets
+    # Create new city targets with calculated values
     for city in cities:
         city_data = city.model_dump()
         city_data['plan_id'] = plan_id
         city_data['territory'] = territory
+        # Calculate actual revenue from percentage
+        city_data['target_revenue'] = (city.allocation_percentage / 100) * territory_target['target_revenue']
         city_obj = CityTarget(**city_data)
         
         doc = city_obj.model_dump()
@@ -2112,9 +2113,10 @@ async def allocate_city_targets(
         await db.city_targets.insert_one(doc)
     
     # Update territory allocated amount
+    total_city_revenue = sum([(c.allocation_percentage / 100) * territory_target['target_revenue'] for c in cities])
     await db.territory_targets.update_one(
         {'plan_id': plan_id, 'territory': territory},
-        {'$set': {'allocated_revenue': total_allocated}}
+        {'$set': {'allocated_revenue': total_city_revenue}}
     )
     
     return {'message': 'City targets allocated'}
