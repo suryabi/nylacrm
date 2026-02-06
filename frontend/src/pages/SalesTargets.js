@@ -434,29 +434,177 @@ function ResourcesPage({ plan, onBack }) {
 }
 
 function SKUsPage({ plan, onBack }) {
+  const [tab, setTab] = React.useState('bengaluru');
+  const [cities, setCities] = React.useState([]);
+  
+  React.useEffect(() => {
+    loadCities();
+  }, []);
+
+  const loadCities = async () => {
+    const token = localStorage.getItem('token');
+    const res = await axios.get(API + '/target-plans/' + plan.id + '/hierarchy', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    
+    const allCities = [];
+    if (res.data.territories) {
+      res.data.territories.forEach(terr => {
+        if (terr.states) {
+          terr.states.forEach(state => {
+            if (state.cities) {
+              state.cities.forEach(city => allCities.push(city));
+            }
+          });
+        }
+      });
+    }
+    setCities(allCities);
+  };
+
+  const currentCity = cities.find(c => c.city.toLowerCase().replace(' ', '') === tab);
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <Button variant="outline" onClick={onBack} className="rounded-full"><ArrowLeft className="h-4 w-4 mr-2" />Back</Button>
+      
       <Card className="p-8 bg-primary/5 rounded-2xl">
         <h1 className="text-2xl font-semibold mb-2">{plan.plan_name}</h1>
-        <p className="text-xl font-bold text-primary">Assign SKUs to Cities</p>
+        <p className="text-xl font-bold text-primary">SKU Allocation by City</p>
       </Card>
-      <Card className="p-12 text-center border rounded-2xl">
-        <p className="text-lg font-semibold mb-2">SKU Allocation</p>
-        <p className="text-muted-foreground mb-4">
-          For each city, assign percentages to SKUs (independent from resource allocation).<br />
-          Shows WHAT products will contribute to the city target.
-        </p>
-        <div className="bg-primary/5 p-4 rounded-xl text-left max-w-xl mx-auto">
-          <p className="text-sm font-semibold mb-2">Example:</p>
-          <p className="text-xs text-muted-foreground">• Bengaluru (Rs 80L):</p>
-          <p className="text-xs text-muted-foreground ml-4">660ml Silver: 40% = Rs 32L</p>
-          <p className="text-xs text-muted-foreground ml-4">660ml Gold: 35% = Rs 28L</p>
-          <p className="text-xs text-muted-foreground ml-4">24 Brand: 25% = Rs 20L</p>
-          <p className="text-xs text-muted-foreground ml-4">Total: 100% = Rs 80L</p>
+
+      <Card className="p-6 border rounded-2xl">
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {cities.map(c => (
+            <Button
+              key={c.id}
+              variant={c.city.toLowerCase().replace(' ', '') === tab ? 'default' : 'outline'}
+              onClick={() => setTab(c.city.toLowerCase().replace(' ', ''))}
+              size="sm"
+              className="rounded-full"
+            >
+              {c.city}
+            </Button>
+          ))}
         </div>
-        <p className="text-sm text-muted-foreground mt-6">Backend API ready. UI can be accessed via API calls.</p>
+
+        {currentCity && <SKUForm planId={plan.id} city={currentCity} onUpdate={loadCities} />}
       </Card>
+    </div>
+  );
+}
+
+function SKUForm({ planId, city, onUpdate }) {
+  const [s660silver, setS660silver] = React.useState('');
+  const [s660gold, setS660gold] = React.useState('');
+  const [s330silver, setS330silver] = React.useState('');
+  const [s330gold, setS330gold] = React.useState('');
+  const [s660spark, setS660spark] = React.useState('');
+  const [s330spark, setS330spark] = React.useState('');
+  const [s24brand, setS24brand] = React.useState('');
+
+  const skus = [
+    {name: '660 ml Silver', val: s660silver, set: setS660silver},
+    {name: '660 ml Gold', val: s660gold, set: setS660gold},
+    {name: '330 ml Silver', val: s330silver, set: setS330silver},
+    {name: '330 ml Gold', val: s330gold, set: setS330gold},
+    {name: '660 Sparkling', val: s660spark, set: setS660spark},
+    {name: '330 Sparkling', val: s330spark, set: setS330spark},
+    {name: '24 Brand', val: s24brand, set: setS24brand}
+  ];
+
+  const total = skus.reduce((sum, sku) => sum + (parseFloat(sku.val) || 0), 0);
+  const cityTarget = city.target_revenue / 100000;
+  const valid = Math.abs(total - 100) < 0.1 && total > 0;
+
+  const save = async () => {
+    const token = localStorage.getItem('token');
+    const payload = skus
+      .filter(sku => parseFloat(sku.val) > 0)
+      .map(sku => ({
+        sku_name: sku.name,
+        allocation_percentage: parseFloat(sku.val)
+      }));
+
+    await axios.post(
+      API + '/target-plans/' + planId + '/cities/' + city.id + '/skus',
+      payload,
+      { headers: { Authorization: 'Bearer ' + token } }
+    );
+    toast.success(city.city + ' SKUs saved!');
+    onUpdate();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-gradient-to-r from-primary/10 to-primary/5 border-2 border-primary/20 p-6 rounded-2xl">
+        <div className="flex justify-between items-center">
+          <div>
+            <p className="text-sm text-muted-foreground mb-1">Allocating SKUs for</p>
+            <h3 className="text-2xl font-bold">{city.city}</h3>
+            <p className="text-xs text-muted-foreground">{city.state}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground mb-1">City Revenue Target</p>
+            <p className="text-4xl font-bold text-primary">Rs {cityTarget.toFixed(1)}L</p>
+          </div>
+        </div>
+        <div className="bg-white/50 p-3 rounded-lg mt-4">
+          <p className="text-xs text-muted-foreground">
+            <strong>Assign percentages to SKUs</strong> - What product mix will achieve this city's target? Each SKU's % represents its contribution to the Rs {cityTarget.toFixed(1)}L goal.
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {skus.map(sku => {
+          const skuAmount = (parseFloat(sku.val) || 0) / 100 * cityTarget;
+          return (
+            <div key={sku.name} className="bg-card border-2 border-border p-4 rounded-xl">
+              <div className="flex items-center gap-4 mb-2">
+                <div className="flex-1">
+                  <p className="font-semibold">{sku.name}</p>
+                </div>
+                <Input
+                  type="number"
+                  value={sku.val}
+                  onChange={e => sku.set(e.target.value)}
+                  placeholder="%"
+                  className="w-28 h-11 text-right font-bold text-xl"
+                />
+                <span className="font-bold text-lg w-8">%</span>
+              </div>
+              <div className="bg-primary/5 p-2 rounded-lg">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">SKU Target:</span>
+                  <span className="font-bold text-primary">Rs {skuAmount.toFixed(1)}L</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className={`p-6 rounded-xl border-2 ${valid ? 'bg-green-50 border-green-300' : 'bg-amber-50 border-amber-300'}`}>
+        <div className="flex justify-between items-center mb-3">
+          <span className="font-semibold text-lg">Total SKU Allocation:</span>
+          <span className="text-4xl font-bold">{total.toFixed(1)}%</span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-muted-foreground">Total Revenue Covered:</span>
+          <span className="text-2xl font-semibold text-primary">Rs {(total / 100 * cityTarget).toFixed(1)}L</span>
+        </div>
+        {!valid && total > 0 && (
+          <p className="text-sm text-amber-800 mt-3">⚠ Must equal 100% to fully allocate Rs {cityTarget.toFixed(1)}L</p>
+        )}
+        {valid && (
+          <p className="text-sm text-green-800 mt-3">✓ Perfect! Full city target allocated</p>
+        )}
+      </div>
+
+      <Button onClick={save} disabled={!valid} className="w-full h-14 rounded-full text-base font-semibold">
+        Save {city.city} SKU Allocation
+      </Button>
     </div>
   );
 }
