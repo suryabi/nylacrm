@@ -311,13 +311,14 @@ class TerritoryTarget(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     plan_id: str
     territory: str
-    target_revenue: float
+    allocation_percentage: float  # Percentage of country target
+    target_revenue: float  # Calculated from percentage
     allocated_revenue: float = 0  # Sum of city targets
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class TerritoryTargetCreate(BaseModel):
     territory: str
-    target_revenue: float
+    allocation_percentage: float  # User enters percentage
 
 class CityTarget(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -326,14 +327,15 @@ class CityTarget(BaseModel):
     territory: str
     state: str
     city: str
-    target_revenue: float
+    allocation_percentage: float  # Percentage of territory target
+    target_revenue: float  # Calculated from percentage
     allocated_revenue: float = 0  # Sum of resource targets
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class CityTargetCreate(BaseModel):
     state: str
     city: str
-    target_revenue: float
+    allocation_percentage: float  # User enters percentage
 
 class ResourceTarget(BaseModel):
     model_config = ConfigDict(extra="ignore")
