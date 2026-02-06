@@ -719,6 +719,110 @@ function ResourceAllocationForm({ city, planId, salesTeam, onUpdate }) {
   );
 }
 
+function SummarySection({ planId }) {
+  const [summary, setSummary] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    loadSummary();
+  }, []);
+
+  const loadSummary = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API}/target-plans/${planId}/resource-summary`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSummary(res.data);
+    } catch (err) {
+      console.error('Failed to load summary');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="text-center py-8">Loading summary...</div>;
+  }
+
+  if (!summary || !summary.resources || summary.resources.length === 0) {
+    return (
+      <div className="text-center py-12 bg-amber-50 border border-amber-200 rounded-xl">
+        <p className="text-amber-800">No resource assignments yet. Go to Resources tab to assign targets.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-green-50 border border-green-200 p-5 rounded-xl">
+        <h3 className="text-lg font-semibold text-green-800 mb-2">✓ Resource-Wise Target Summary</h3>
+        <p className="text-sm text-green-700">
+          Below is the total revenue target assigned to each sales resource, aggregated across all cities.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        {summary.resources.map((resource, idx) => (
+          <Card key={idx} className="p-6 border-2 border-primary/20 rounded-2xl">
+            <div className="flex justify-between items-start mb-6 pb-4 border-b">
+              <div className="flex items-center gap-4">
+                <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xl">
+                  {resource.resource_name[0]}
+                </div>
+                <div>
+                  <p className="text-xl font-semibold">{resource.resource_name}</p>
+                  <p className="text-sm text-muted-foreground">{resource.designation}</p>
+                  <p className="text-xs text-primary font-medium">{resource.territory}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-muted-foreground mb-1">Total Assigned Target</p>
+                <p className="text-4xl font-bold text-primary">Rs {(resource.total_target / 100000).toFixed(1)}L</p>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm font-semibold text-muted-foreground mb-3">City-wise Breakdown:</p>
+              <div className="space-y-2">
+                {resource.city_breakdown.map((city, i) => (
+                  <div key={i} className="flex justify-between items-center bg-secondary p-4 rounded-lg">
+                    <div>
+                      <p className="font-medium">{city.city}</p>
+                      <p className="text-xs text-muted-foreground">{city.state}</p>
+                    </div>
+                    <p className="text-lg font-bold text-primary">Rs {(city.target / 100000).toFixed(1)}L</p>
+                  </div>
+                ))}
+              </div>
+              
+              {resource.city_breakdown.length > 1 && (
+                <div className="mt-4 pt-4 border-t bg-primary/5 p-3 rounded-lg">
+                  <div className="flex justify-between">
+                    <span className="font-semibold">Across {resource.city_breakdown.length} cities:</span>
+                    <span className="text-xl font-bold text-primary">Rs {(resource.total_target / 100000).toFixed(1)}L</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      <div className="bg-primary/5 border border-primary/20 p-6 rounded-xl">
+        <h4 className="font-semibold mb-4">How Allocation Works:</h4>
+        <ul className="text-sm text-muted-foreground space-y-2">
+          <li>• Each city's 100% is allocated independently to sales resources</li>
+          <li>• A resource can have different percentages in different cities</li>
+          <li>• Example: Priya could have 60% of Bengaluru and 80% of Chennai</li>
+          <li>• The system automatically calculates revenue amounts from percentages</li>
+          <li>• Above summary shows each resource's total target (sum across all cities)</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 function Row({ label, value }) {
   return (
     <div className="flex justify-between bg-secondary p-4 rounded-xl">
