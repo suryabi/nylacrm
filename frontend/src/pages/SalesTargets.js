@@ -73,6 +73,145 @@ export default function SalesTargets() {
   );
 }
 
+function GridViewPage({ plan, onBack }) {
+  const [hierarchy, setHierarchy] = React.useState(null);
+  const [expanded, setExpanded] = React.useState({});
+
+  React.useEffect(() => {
+    loadHierarchy();
+  }, []);
+
+  const loadHierarchy = async () => {
+    const token = localStorage.getItem('token');
+    const res = await axios.get(API + '/target-plans/' + plan.id + '/hierarchy', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    setHierarchy(res.data);
+  };
+
+  const toggleExpand = (key) => {
+    setExpanded({...expanded, [key]: !expanded[key]});
+  };
+
+  if (!hierarchy) return <div className="text-center py-8">Loading...</div>;
+
+  return (
+    <div className="space-y-6">
+      <Button variant="outline" onClick={onBack} className="rounded-full">
+        <ArrowLeft className="h-4 w-4 mr-2" />Back to Plans
+      </Button>
+
+      <Card className="p-8 bg-primary/5 rounded-2xl">
+        <div className="flex items-center gap-3 mb-2">
+          <Table2 className="h-8 w-8 text-primary" />
+          <h1 className="text-2xl font-semibold">{plan.plan_name} - Hierarchy Grid</h1>
+        </div>
+        <p className="text-muted-foreground">Complete allocation breakdown with drill-down</p>
+      </Card>
+
+      <Card className="p-6 border rounded-2xl overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-secondary">
+            <tr className="border-b-2 border-border">
+              <th className="text-left p-4 font-semibold">Level</th>
+              <th className="text-left p-4 font-semibold">Name</th>
+              <th className="text-right p-4 font-semibold">Allocation %</th>
+              <th className="text-right p-4 font-semibold">Target (Rs)</th>
+              <th className="text-right p-4 font-semibold">Allocated (Rs)</th>
+              <th className="text-right p-4 font-semibold">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {/* Country Level */}
+            <tr className="border-b bg-primary/5 font-bold">
+              <td className="p-4">Country</td>
+              <td className="p-4">India</td>
+              <td className="text-right p-4">100%</td>
+              <td className="text-right p-4 text-primary text-lg">Rs {(plan.country_target / 100000).toFixed(1)}L</td>
+              <td className="text-right p-4">-</td>
+              <td className="text-right p-4">
+                <Badge className="bg-primary">Active</Badge>
+              </td>
+            </tr>
+
+            {/* Territory Level */}
+            {hierarchy.territories && hierarchy.territories.map(terr => (
+              <React.Fragment key={terr.id}>
+                <tr 
+                  className="border-b hover:bg-secondary/50 cursor-pointer"
+                  onClick={() => toggleExpand('terr-' + terr.id)}
+                >
+                  <td className="p-4 pl-8">
+                    {expanded['terr-' + terr.id] ? <ChevronDown className="h-4 w-4 inline" /> : <ChevronRight className="h-4 w-4 inline" />}
+                    {' '}Territory
+                  </td>
+                  <td className="p-4 font-medium">{terr.territory}</td>
+                  <td className="text-right p-4">{terr.allocation_percentage?.toFixed(1)}%</td>
+                  <td className="text-right p-4 font-semibold">Rs {(terr.target_revenue / 100000).toFixed(1)}L</td>
+                  <td className="text-right p-4 text-muted-foreground">Rs {(terr.allocated_revenue / 100000).toFixed(1)}L</td>
+                  <td className="text-right p-4">
+                    {terr.allocated_revenue > 0 ? (
+                      <Badge className="bg-green-100 text-green-800">
+                        {((terr.allocated_revenue / terr.target_revenue) * 100).toFixed(0)}%
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline">0%</Badge>
+                    )}
+                  </td>
+                </tr>
+
+                {/* State Level (Roll-up) */}
+                {expanded['terr-' + terr.id] && terr.states && terr.states.map(state => (
+                  <React.Fragment key={state.state_name}>
+                    <tr 
+                      className="border-b bg-secondary/30"
+                      onClick={() => toggleExpand('state-' + terr.id + '-' + state.state_name)}
+                    >
+                      <td className="p-4 pl-12 text-sm">
+                        {expanded['state-' + terr.id + '-' + state.state_name] ? <ChevronDown className="h-4 w-4 inline" /> : <ChevronRight className="h-4 w-4 inline" />}
+                        {' '}State
+                      </td>
+                      <td className="p-4 font-medium text-sm">{state.state_name}</td>
+                      <td className="text-right p-4 text-sm text-muted-foreground">Roll-up</td>
+                      <td className="text-right p-4 font-semibold text-sm">Rs {(state.state_target / 100000).toFixed(1)}L</td>
+                      <td className="text-right p-4 text-sm">-</td>
+                      <td className="text-right p-4">-</td>
+                    </tr>
+
+                    {/* City Level */}
+                    {expanded['state-' + terr.id + '-' + state.state_name] && state.cities && state.cities.map(city => (
+                      <tr key={city.id} className="border-b hover:bg-secondary/20">
+                        <td className="p-4 pl-16 text-sm">City</td>
+                        <td className="p-4 text-sm">{city.city}</td>
+                        <td className="text-right p-4 text-sm">{city.allocation_percentage?.toFixed(1)}%</td>
+                        <td className="text-right p-4 font-semibold text-sm text-primary">Rs {(city.target_revenue / 100000).toFixed(1)}L</td>
+                        <td className="text-right p-4 text-sm">-</td>
+                        <td className="text-right p-4">
+                          <Badge variant="outline" className="text-xs">City</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                ))}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+
+      <div className="bg-primary/5 border border-primary/20 p-6 rounded-xl">
+        <h4 className="font-semibold mb-3">Grid View Features:</h4>
+        <ul className="text-sm text-muted-foreground space-y-2">
+          <li>• Click rows to expand/collapse drill-down</li>
+          <li>• Country → Territory → State (roll-up) → City</li>
+          <li>• Shows allocation %, target amounts, and allocation status</li>
+          <li>• States are auto-calculated roll-ups from cities</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 function CreatePage({ onBack }) {
   const [name, setName] = React.useState('');
   const [period, setPeriod] = React.useState('quarterly');
