@@ -183,7 +183,7 @@ export default function ReportsPage() {
         </div>
       </Card>
 
-      {selectedReport === 'target-sku' && (
+      {(selectedReport === 'target-sku' || selectedReport === 'target-resource') && (
         <Card className="p-6 border rounded-2xl">
           {loading ? (
             <div className="text-center py-12">
