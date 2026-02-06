@@ -2042,22 +2042,23 @@ async def allocate_territory_targets(
         raise HTTPException(status_code=400, detail='Cannot modify locked plan')
     
     # Validate total equals country target
-    total_allocated = sum([t.target_revenue for t in territories])
-    country_target = plan['country_target']
-    if abs(total_allocated - country_target) > 0.01:
+    total_percentage = sum([t.allocation_percentage for t in territories])
+    if abs(total_percentage - 100) > 0.01:
         raise HTTPException(
             status_code=400,
-            detail=f'Territory targets ({total_allocated}) must equal country target ({country_target})'
+            detail=f'Territory percentages must total 100% (current: {total_percentage}%)'
         )
     
-    # Delete existing territory targets for this plan
+    # Delete existing territory targets
     await db.territory_targets.delete_many({'plan_id': plan_id})
     
-    # Create new territory targets
+    # Create new territory targets with calculated values
     created_targets = []
     for territory in territories:
         target_data = territory.model_dump()
         target_data['plan_id'] = plan_id
+        # Calculate actual revenue from percentage
+        target_data['target_revenue'] = (territory.allocation_percentage / 100) * plan['country_target']
         target_obj = TerritoryTarget(**target_data)
         
         doc = target_obj.model_dump()
