@@ -2059,6 +2059,8 @@ async def update_target_plan(plan_id: str, plan_data: dict, current_user: dict =
     update_data = {}
     if 'plan_name' in plan_data:
         update_data['plan_name'] = plan_data['plan_name']
+    if 'time_period' in plan_data:
+        update_data['time_period'] = plan_data['time_period']
     if 'country_target' in plan_data:
         update_data['country_target'] = plan_data['country_target']
     if 'start_date' in plan_data:
