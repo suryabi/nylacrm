@@ -278,6 +278,12 @@ export default function ReportsPage() {
                         <td className="text-right p-3 font-semibold text-primary">
                           Rs {(row.target_revenue / 100000).toFixed(2)}L
                         </td>
+                        <td className="text-right p-3 font-semibold text-green-600">
+                          Rs {(row.achieved_revenue / 100000).toFixed(2)}L
+                        </td>
+                        <td className="text-right p-3 font-semibold text-amber-600">
+                          Rs {(row.tbd_revenue / 100000).toFixed(2)}L
+                        </td>
                       </tr>
                     ))}
                   </tbody>
