@@ -2336,6 +2336,50 @@ async def assign_city_skus(
     
     return {'message': 'SKUs assigned successfully'}
 
+@api_router.get("/reports/target-resource-allocation")
+async def get_target_resource_allocation_report(current_user: dict = Depends(get_current_user)):
+    """Get Target Resource Allocation Report"""
+    
+    # Get all target plans
+    plans = await db.target_plans.find({}, {'_id': 0}).to_list(100)
+    
+    report_data = []
+    
+    for plan in plans:
+        # Get all resource targets for this plan
+        resource_targets = await db.resource_targets.find({'plan_id': plan['id']}, {'_id': 0}).to_list(1000)
+        
+        # Get city info
+        city_ids = list(set([r['city_id'] for r in resource_targets]))
+        cities = await db.city_targets.find({'id': {'$in': city_ids}}, {'_id': 0}).to_list(1000)
+        city_map = {c['id']: c for c in cities}
+        
+        # Get user info
+        user_ids = list(set([r['resource_id'] for r in resource_targets]))
+        users = await db.users.find({'id': {'$in': user_ids}}, {'_id': 0}).to_list(100)
+        user_map = {u['id']: u for u in users}
+        
+        for res_target in resource_targets:
+            city_info = city_map.get(res_target['city_id'], {})
+            user_info = user_map.get(res_target['resource_id'], {})
+            
+            report_data.append({
+                'target_name': plan['plan_name'],
+                'territory': city_info.get('territory', ''),
+                'start_date': plan['start_date'],
+                'end_date': plan['end_date'],
+                'city': city_info.get('city', ''),
+                'state': city_info.get('state', ''),
+                'resource_name': user_info.get('name', 'Unknown'),
+                'designation': user_info.get('designation', ''),
+                'resource_territory': user_info.get('territory', ''),
+                'target_revenue': res_target['target_revenue'],
+                'achieved_revenue': 0,  # Placeholder
+                'tbd_revenue': res_target['target_revenue']
+            })
+    
+    return {'report_data': report_data, 'total_records': len(report_data)}
+
 @api_router.get("/reports/target-sku-allocation")
 async def get_target_sku_allocation_report(current_user: dict = Depends(get_current_user)):
     """Get Target SKU Allocation Report"""
