@@ -210,6 +210,12 @@ export default function ReportsPage() {
                       <th onClick={() => handleSort('target_revenue')} className="text-right p-3 font-semibold cursor-pointer hover:bg-secondary/80">
                         Target Revenue {getSortIcon('target_revenue')}
                       </th>
+                      <th onClick={() => handleSort('achieved_revenue')} className="text-right p-3 font-semibold cursor-pointer hover:bg-secondary/80">
+                        Achieved {getSortIcon('achieved_revenue')}
+                      </th>
+                      <th onClick={() => handleSort('tbd_revenue')} className="text-right p-3 font-semibold cursor-pointer hover:bg-secondary/80">
+                        TBD {getSortIcon('tbd_revenue')}
+                      </th>
                     </tr>
                     <tr className="bg-background">
                       <th className="p-2">
