@@ -217,42 +217,50 @@ export default function ReportsPage() {
                     </tr>
                     <tr className="bg-background">
                       <th className="p-2">
-                        <input
-                          type="text"
+                        <select
                           value={filterTargetName}
                           onChange={e => setFilterTargetName(e.target.value)}
-                          placeholder="Filter..."
                           className="w-full px-2 py-1 text-xs border rounded"
-                        />
+                        >
+                          {uniqueTargets.map(t => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
                       </th>
                       <th className="p-2">
-                        <input
-                          type="text"
+                        <select
                           value={filterTerritory}
                           onChange={e => setFilterTerritory(e.target.value)}
-                          placeholder="Filter..."
                           className="w-full px-2 py-1 text-xs border rounded"
-                        />
+                        >
+                          {uniqueTerritories.map(t => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
                       </th>
                       <th className="p-2"></th>
                       <th className="p-2"></th>
                       <th className="p-2">
-                        <input
-                          type="text"
+                        <select
                           value={filterCity}
                           onChange={e => setFilterCity(e.target.value)}
-                          placeholder="Filter..."
                           className="w-full px-2 py-1 text-xs border rounded"
-                        />
+                        >
+                          {uniqueCities.map(c => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
                       </th>
                       <th className="p-2">
-                        <input
-                          type="text"
+                        <select
                           value={filterSKU}
                           onChange={e => setFilterSKU(e.target.value)}
-                          placeholder="Filter..."
                           className="w-full px-2 py-1 text-xs border rounded"
-                        />
+                        >
+                          {uniqueSKUs.map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
                       </th>
                       <th className="p-2"></th>
                       <th className="p-2"></th>
