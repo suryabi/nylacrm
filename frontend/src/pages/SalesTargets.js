@@ -341,6 +341,181 @@ function CityForm({ planId, territory, onUpdate }) {
   );
 }
 
+function ResourcesPage({ plan, onBack }) {
+  const [tab, setTab] = React.useState('bengaluru');
+  const [cities, setCities] = React.useState([]);
+  const [salesTeam, setSalesTeam] = React.useState([]);
+
+  React.useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    const token = localStorage.getItem('token');
+    
+    const hRes = await axios.get(API + '/target-plans/' + plan.id + '/hierarchy', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    
+    const uRes = await axios.get(API + '/users', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+
+    const allCities = [];
+    if (hRes.data.territories) {
+      hRes.data.territories.forEach(terr => {
+        if (terr.states) {
+          terr.states.forEach(state => {
+            if (state.cities) {
+              state.cities.forEach(city => allCities.push(city));
+            }
+          });
+        }
+      });
+    }
+    
+    setCities(allCities);
+    setSalesTeam(uRes.data.filter(u => ['sales_rep', 'sales_manager'].includes(u.role)));
+  };
+
+  const currentCity = cities.find(c => c.city.toLowerCase().replace(' ', '') === tab);
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+      <Button variant="outline" onClick={onBack} className="rounded-full"><ArrowLeft className="h-4 w-4 mr-2" />Back</Button>
+      <Card className="p-8 bg-primary/5 rounded-2xl">
+        <h1 className="text-2xl font-semibold mb-2">{plan.plan_name}</h1>
+        <p className="text-xl font-bold text-primary">Resource Allocation</p>
+      </Card>
+      <Card className="p-6 border rounded-2xl">
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {cities.map(c => (
+            <Button
+              key={c.id}
+              variant={c.city.toLowerCase().replace(' ', '') === tab ? 'default' : 'outline'}
+              onClick={() => setTab(c.city.toLowerCase().replace(' ', ''))}
+              size="sm"
+              className="rounded-full"
+            >
+              {c.city}
+            </Button>
+          ))}
+        </div>
+        {currentCity && <ResourceForm planId={plan.id} city={currentCity} team={salesTeam} />}
+      </Card>
+    </div>
+  );
+}
+
+function ResourceForm({ planId, city, team }) {
+  const [vals, setVals] = React.useState({});
+  const [loaded, setLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    setVals({});
+    setLoaded(false);
+    loadExisting();
+  }, [city.id]);
+
+  const loadExisting = async () => {
+    setLoaded(true);
+  };
+
+  const grouped = {
+    'North India': team.filter(m => m.territory?.includes('North')),
+    'South India': team.filter(m => m.territory?.includes('South')),
+    'West India': team.filter(m => m.territory?.includes('West')),
+    'East India': team.filter(m => m.territory?.includes('East')),
+    'All India': team.filter(m => m.territory === 'All India')
+  };
+
+  const total = Object.values(vals).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+  const cityTarget = city.target_revenue / 100000;
+  const valid = Math.abs(total - 100) < 0.1 && total > 0;
+
+  const save = async () => {
+    const token = localStorage.getItem('token');
+    const payload = Object.keys(vals)
+      .filter(k => parseFloat(vals[k]) > 0)
+      .map(k => ({ resource_id: k, allocation_percentage: parseFloat(vals[k]) }));
+
+    await axios.post(API + '/target-plans/' + planId + '/cities/' + city.id + '/resources', payload, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    toast.success(city.city + ' resources saved!');
+  };
+
+  if (!loaded) return <div className="text-center py-8">Loading...</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-primary/5 p-6 rounded-2xl border-2 border-primary/20">
+        <div className="flex justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">City</p>
+            <h3 className="text-2xl font-bold">{city.city}</h3>
+            <p className="text-xs text-muted-foreground">{city.state}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground">City Target</p>
+            <p className="text-4xl font-bold text-primary">Rs {cityTarget.toFixed(1)}L</p>
+          </div>
+        </div>
+      </div>
+
+      <p className="text-sm text-muted-foreground bg-primary/5 p-3 rounded-lg">
+        Assign WHO sells - Resources can be from any territory and same resource can have different % across cities.
+      </p>
+
+      {Object.keys(grouped).map(terrName => {
+        const members = grouped[terrName];
+        if (members.length === 0) return null;
+
+        return (
+          <div key={terrName} className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase">{terrName}</p>
+            {members.map(m => {
+              const resAmount = (parseFloat(vals[m.id]) || 0) / 100 * cityTarget;
+              return (
+                <div key={m.id} className="bg-card border-2 p-4 rounded-xl">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">{m.name[0]}</div>
+                    <div className="flex-1">
+                      <p className="font-semibold">{m.name}</p>
+                      <p className="text-xs text-muted-foreground">{m.designation}</p>
+                    </div>
+                    <Input type="number" value={vals[m.id] || ''} onChange={e => setVals({...vals, [m.id]: e.target.value})} placeholder="%" className="w-28 h-11 text-right font-bold text-xl" />
+                    <span className="font-bold w-8">%</span>
+                  </div>
+                  <div className="bg-primary/5 p-2 rounded-lg">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Resource Target:</span>
+                      <span className="font-bold text-primary">Rs {resAmount.toFixed(1)}L</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+
+      <div className={`p-5 rounded-xl ${valid ? 'bg-green-50' : 'bg-amber-50'}`}>
+        <div className="flex justify-between mb-2">
+          <span className="font-semibold">Total:</span>
+          <span className="text-3xl font-bold">{total.toFixed(1)}%</span>
+        </div>
+        {!valid && total > 0 && <p className="text-xs text-amber-800">Must = 100%</p>}
+        {valid && <p className="text-xs text-green-800">✓ Perfect!</p>}
+      </div>
+
+      <Button onClick={save} disabled={!valid} className="w-full h-12 rounded-full">
+        Save {city.city} Resources
+      </Button>
+    </div>
+  );
+}
+
 function SKUsPage({ plan, onBack }) {
   const [tab, setTab] = React.useState('bengaluru');
   const [cities, setCities] = React.useState([]);
