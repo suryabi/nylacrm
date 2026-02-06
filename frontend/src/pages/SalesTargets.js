@@ -567,6 +567,8 @@ function SKUForm({ planId, city, onUpdate }) {
     onUpdate();
   };
 
+  if (!loaded) return <div className="text-center py-8">Loading SKU allocations...</div>;
+
   return (
     <div className="space-y-4">
       <div className="bg-gradient-to-r from-primary/10 to-primary/5 border-2 border-primary/20 p-6 rounded-2xl">
