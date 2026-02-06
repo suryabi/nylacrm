@@ -14,6 +14,7 @@ export default function SalesTargets() {
   const [page, setPage] = React.useState('list');
   const [plans, setPlans] = React.useState([]);
   const [currentPlan, setCurrentPlan] = React.useState(null);
+  const [currentTerritory, setCurrentTerritory] = React.useState(null);
 
   React.useEffect(() => {
     if (page === 'list') loadPlans();
