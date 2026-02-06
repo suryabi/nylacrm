@@ -520,11 +520,8 @@ function InputRow({ label, value, onChange, suffix = 'Lakhs' }) {
         type="number"
         value={value}
         onChange={e => onChange(e.target.value)}
-        placeholder={suffix === '%' ? '0-100' : 'Enter value'}
-        className="w-48 h-11 text-right font-semibold"
-        step={suffix === '%' ? '0.1' : '1'}
-        max={suffix === '%' ? '100' : undefined}
-        min="0"
+        placeholder={suffix === '%' ? 'Enter %' : 'Enter value'}
+        className="w-48 h-11 text-right font-semibold text-lg"
       />
       <span className="text-sm text-muted-foreground w-12">{suffix}</span>
     </div>
