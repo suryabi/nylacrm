@@ -253,16 +253,16 @@ function TerritorySection({ planId, countryTarget, hierarchy, onUpdate }) {
 
   const total = (parseFloat(north) || 0) + (parseFloat(south) || 0) + (parseFloat(west) || 0) + (parseFloat(east) || 0);
   const targetL = countryTarget / 100000;
-  const valid = Math.abs(total - targetL) < 0.1;
+  const valid = Math.abs(total - 100) < 0.1; // Must equal 100%
 
   const save = async () => {
     try {
       const token = localStorage.getItem('token');
       const payload = [];
-      if (parseFloat(north) > 0) payload.push({ territory: 'North India', target_revenue: parseFloat(north) * 100000 });
-      if (parseFloat(south) > 0) payload.push({ territory: 'South India', target_revenue: parseFloat(south) * 100000 });
-      if (parseFloat(west) > 0) payload.push({ territory: 'West India', target_revenue: parseFloat(west) * 100000 });
-      if (parseFloat(east) > 0) payload.push({ territory: 'East India', target_revenue: parseFloat(east) * 100000 });
+      if (parseFloat(north) > 0) payload.push({ territory: 'North India', allocation_percentage: parseFloat(north) });
+      if (parseFloat(south) > 0) payload.push({ territory: 'South India', allocation_percentage: parseFloat(south) });
+      if (parseFloat(west) > 0) payload.push({ territory: 'West India', allocation_percentage: parseFloat(west) });
+      if (parseFloat(east) > 0) payload.push({ territory: 'East India', allocation_percentage: parseFloat(east) });
 
       await axios.post(`${API}/target-plans/${planId}/territories`, payload, {
         headers: { Authorization: `Bearer ${token}` }
@@ -281,10 +281,10 @@ function TerritorySection({ planId, countryTarget, hierarchy, onUpdate }) {
         <div className="bg-green-50 p-4 rounded-xl mb-4">
           <p className="text-sm text-green-800 font-medium">✓ Territories allocated</p>
         </div>
-        {parseFloat(north) > 0 && <Row label="North India" value={`Rs ${north}L`} />}
-        {parseFloat(south) > 0 && <Row label="South India" value={`Rs ${south}L`} />}
-        {parseFloat(west) > 0 && <Row label="West India" value={`Rs ${west}L`} />}
-        {parseFloat(east) > 0 && <Row label="East India" value={`Rs ${east}L`} />}
+        {parseFloat(north) > 0 && <Row label="North India" value={`${north}% (Rs ${((parseFloat(north) / 100) * targetL).toFixed(1)}L)`} />}
+        {parseFloat(south) > 0 && <Row label="South India" value={`${south}% (Rs ${((parseFloat(south) / 100) * targetL).toFixed(1)}L)`} />}
+        {parseFloat(west) > 0 && <Row label="West India" value={`${west}% (Rs ${((parseFloat(west) / 100) * targetL).toFixed(1)}L)`} />}
+        {parseFloat(east) > 0 && <Row label="East India" value={`${east}% (Rs ${((parseFloat(east) / 100) * targetL).toFixed(1)}L)`} />}
         <Button onClick={() => setEditing(true)} variant="outline" className="w-full rounded-full">Edit</Button>
       </div>
     );
@@ -292,16 +292,27 @@ function TerritorySection({ planId, countryTarget, hierarchy, onUpdate }) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-primary/5 p-4 rounded-xl"><p className="font-semibold">Total: Rs {targetL.toFixed(1)}L</p></div>
+      <div className="bg-primary/5 p-4 rounded-xl">
+        <p className="font-semibold">Country Target: Rs {targetL.toFixed(1)}L</p>
+        <p className="text-sm text-muted-foreground">Allocate using percentages (must total 100%)</p>
+      </div>
       
-      <InputRow label="North India" value={north} onChange={setNorth} />
-      <InputRow label="South India" value={south} onChange={setSouth} />
-      <InputRow label="West India" value={west} onChange={setWest} />
-      <InputRow label="East India" value={east} onChange={setEast} />
+      <InputRow label="North India" value={north} onChange={setNorth} suffix="%" />
+      <InputRow label="South India" value={south} onChange={setSouth} suffix="%" />
+      <InputRow label="West India" value={west} onChange={setWest} suffix="%" />
+      <InputRow label="East India" value={east} onChange={setEast} suffix="%" />
 
       <div className={`p-4 rounded-xl ${valid && total > 0 ? 'bg-green-50' : 'bg-amber-50'}`}>
-        <p className="font-bold">Total: Rs {total.toFixed(1)}L</p>
-        {!valid && total > 0 && <p className="text-xs text-amber-800 mt-1">Must equal {targetL.toFixed(1)}L</p>}
+        <div className="flex justify-between mb-2">
+          <span className="font-bold">Total:</span>
+          <span className="text-2xl font-bold">{total.toFixed(1)}%</span>
+        </div>
+        <div className="flex justify-between text-sm text-muted-foreground">
+          <span>Equals:</span>
+          <span className="font-semibold">Rs {((total / 100) * targetL).toFixed(1)}L</span>
+        </div>
+        {!valid && total > 0 && <p className="text-xs text-amber-800 mt-2">Must equal 100%</p>}
+        {valid && <p className="text-xs text-green-800 mt-2">✓ Perfect!</p>}
       </div>
       
       <Button onClick={save} disabled={!valid} className="w-full h-12 rounded-full">Save Territories</Button>
