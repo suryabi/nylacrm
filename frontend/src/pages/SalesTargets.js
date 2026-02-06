@@ -511,12 +511,22 @@ function SKUForm({ planId, city, onUpdate }) {
   const loadExistingSKUs = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(API + '/target-plans/' + planId + '/hierarchy', {
+      const res = await axios.get(API + '/target-plans/' + planId + '/cities/' + city.id + '/skus', {
         headers: { Authorization: 'Bearer ' + token }
       });
 
-      // Find SKU targets for this city in the response
-      // Note: Need to add SKUs to hierarchy endpoint response or create separate endpoint
+      if (res.data.skus) {
+        res.data.skus.forEach(sku => {
+          const pct = sku.allocation_percentage?.toString() || '';
+          if (sku.sku_name === '660 ml Silver') setS660silver(pct);
+          if (sku.sku_name === '660 ml Gold') setS660gold(pct);
+          if (sku.sku_name === '330 ml Silver') setS330silver(pct);
+          if (sku.sku_name === '330 ml Gold') setS330gold(pct);
+          if (sku.sku_name === '660 Sparkling') setS660spark(pct);
+          if (sku.sku_name === '330 Sparkling') setS330spark(pct);
+          if (sku.sku_name === '24 Brand') setS24brand(pct);
+        });
+      }
       
       setLoaded(true);
     } catch (err) {
