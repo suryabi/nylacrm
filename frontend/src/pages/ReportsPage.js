@@ -22,10 +22,10 @@ export default function ReportsPage() {
   const [sortDirection, setSortDirection] = React.useState('asc');
   
   // Filters
-  const [filterTargetName, setFilterTargetName] = React.useState('');
-  const [filterTerritory, setFilterTerritory] = React.useState('');
-  const [filterCity, setFilterCity] = React.useState('');
-  const [filterSKU, setFilterSKU] = React.useState('');
+  const [filterTargetName, setFilterTargetName] = React.useState('All');
+  const [filterTerritory, setFilterTerritory] = React.useState('All');
+  const [filterCity, setFilterCity] = React.useState('All');
+  const [filterSKU, setFilterSKU] = React.useState('All');
 
   React.useEffect(() => {
     if (selectedReport === 'target-sku') {
