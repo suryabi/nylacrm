@@ -502,6 +502,28 @@ function SKUForm({ planId, city, onUpdate }) {
   const [s660spark, setS660spark] = React.useState('');
   const [s330spark, setS330spark] = React.useState('');
   const [s24brand, setS24brand] = React.useState('');
+  const [loaded, setLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    loadExistingSKUs();
+  }, [city.id]);
+
+  const loadExistingSKUs = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(API + '/target-plans/' + planId + '/hierarchy', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+
+      // Find SKU targets for this city in the response
+      // Note: Need to add SKUs to hierarchy endpoint response or create separate endpoint
+      
+      setLoaded(true);
+    } catch (err) {
+      console.error('Failed to load SKUs');
+      setLoaded(true);
+    }
+  };
 
   const skus = [
     {name: '660 ml Silver', val: s660silver, set: setS660silver},
