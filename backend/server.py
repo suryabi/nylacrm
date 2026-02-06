@@ -2279,6 +2279,14 @@ async def get_resource_summary(plan_id: str, current_user: dict = Depends(get_cu
         'plan_id': plan_id
     }
 
+@api_router.get("/target-plans/{plan_id}/cities/{city_id}/skus")
+async def get_city_skus(plan_id: str, city_id: str, current_user: dict = Depends(get_current_user)):
+    """Get SKU allocations for a city"""
+    
+    skus = await db.sku_targets.find({'city_id': city_id}, {'_id': 0}).to_list(100)
+    
+    return {'skus': skus}
+
 @api_router.post("/target-plans/{plan_id}/cities/{city_id}/skus")
 async def assign_city_skus(
     plan_id: str,
