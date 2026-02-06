@@ -54,7 +54,7 @@ export default function ReportsPage() {
       return;
     }
 
-    const headers = ['Target Name', 'Territory', 'Start Date', 'End Date', 'City', 'SKU', 'Target Revenue (Rs Lakhs)'];
+    const headers = ['Target Name', 'Territory', 'Start Date', 'End Date', 'City', 'SKU', 'Target Revenue (Rs Lakhs)', 'Achieved (Rs Lakhs)', 'TBD (Rs Lakhs)'];
     const csvData = reportData.map(row => [
       row.target_name,
       row.territory,
@@ -62,7 +62,9 @@ export default function ReportsPage() {
       row.end_date,
       row.city,
       row.sku,
-      (row.target_revenue / 100000).toFixed(2)
+      (row.target_revenue / 100000).toFixed(2),
+      (row.achieved_revenue / 100000).toFixed(2),
+      (row.tbd_revenue / 100000).toFixed(2)
     ]);
 
     const csvContent = [headers, ...csvData].map(row => row.join(',')).join('\\n');
