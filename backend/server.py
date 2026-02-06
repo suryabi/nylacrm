@@ -2279,6 +2279,47 @@ async def get_resource_summary(plan_id: str, current_user: dict = Depends(get_cu
         'plan_id': plan_id
     }
 
+@api_router.post("/target-plans/{plan_id}/cities/{city_id}/skus")
+async def assign_city_skus(
+    plan_id: str,
+    city_id: str,
+    skus: List[SKUTargetCreate],
+    current_user: dict = Depends(get_current_user)
+):
+    """Assign city target to SKUs (independent from resource allocation)"""
+    
+    # Get city target
+    city = await db.city_targets.find_one({'id': city_id}, {'_id': 0})
+    if not city:
+        raise HTTPException(status_code=404, detail='City not found')
+    
+    # Validate total
+    total_percentage = sum([s.allocation_percentage for s in skus])
+    if abs(total_percentage - 100) > 0.01:
+        raise HTTPException(
+            status_code=400,
+            detail=f'SKU percentages must total 100% (current: {total_percentage}%)'
+        )
+    
+    # Delete existing SKU targets for this city
+    await db.sku_targets.delete_many({'city_id': city_id})
+    
+    # Create new SKU targets with calculated values
+    for sku in skus:
+        sku_data = sku.model_dump()
+        sku_data['plan_id'] = plan_id
+        sku_data['city_id'] = city_id
+        # Calculate actual revenue from percentage
+        sku_data['target_revenue'] = (sku.allocation_percentage / 100) * city['target_revenue']
+        sku_obj = SKUTarget(**sku_data)
+        
+        doc = sku_obj.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        
+        await db.sku_targets.insert_one(doc)
+    
+    return {'message': 'SKUs assigned successfully'}
+
 # ============= BOTTLE PREVIEW ROUTES =============
 
 @api_router.post("/bottle-preview/upload-logo")
