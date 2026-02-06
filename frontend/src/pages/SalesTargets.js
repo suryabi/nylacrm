@@ -213,6 +213,13 @@ function ManagePlanView({ planId, onBack }) {
           >
             Cities
           </Button>
+          <Button
+            variant={activeSection === 'resources' ? 'default' : 'outline'}
+            onClick={() => setActiveSection('resources')}
+            className="rounded-full"
+          >
+            Resources
+          </Button>
         </div>
 
         {activeSection === 'territories' && (
