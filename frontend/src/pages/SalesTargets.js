@@ -53,7 +53,8 @@ export default function SalesTargets() {
             <div className="grid grid-cols-2 gap-2">
               <Button onClick={() => { setCurrentPlan(p); setPage('territories'); }} variant="outline" className="rounded-full text-xs">Territories</Button>
               <Button onClick={() => { setCurrentPlan(p); setPage('cities'); }} variant="outline" className="rounded-full text-xs">Cities</Button>
-              <Button onClick={() => { setCurrentPlan(p); setPage('skus'); }} variant="outline" className="rounded-full text-xs col-span-2">SKUs</Button>
+              <Button onClick={() => { setCurrentPlan(p); setPage('resources'); }} variant="outline" className="rounded-full text-xs">Resources</Button>
+              <Button onClick={() => { setCurrentPlan(p); setPage('skus'); }} variant="outline" className="rounded-full text-xs">SKUs</Button>
             </div>
           </Card>
         ))}
