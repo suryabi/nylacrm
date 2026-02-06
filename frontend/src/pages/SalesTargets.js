@@ -385,7 +385,7 @@ function CityAllocation({ territory, planId, onUpdate }) {
         thisTerr.states.forEach(state => {
           if (state.cities) {
             state.cities.forEach(city => {
-              newValues[city.city] = (city.target_revenue / 100000).toString();
+              newValues[city.city] = city.allocation_percentage?.toString() || '';
               hasData = true;
             });
           }
@@ -401,7 +401,7 @@ function CityAllocation({ territory, planId, onUpdate }) {
 
   const total = cities.reduce((sum, city) => sum + (parseFloat(values[city.c]) || 0), 0);
   const targetL = territory.target_revenue / 100000;
-  const valid = Math.abs(total - targetL) < 0.1 && total > 0;
+  const valid = Math.abs(total - 100) < 0.1 && total > 0; // Must equal 100%
 
   const save = async () => {
     try {
@@ -411,7 +411,7 @@ function CityAllocation({ territory, planId, onUpdate }) {
         .map(c => ({
           state: c.s,
           city: c.c,
-          target_revenue: parseFloat(values[c.c]) * 100000
+          allocation_percentage: parseFloat(values[c.c])
         }));
 
       await axios.post(
@@ -438,12 +438,13 @@ function CityAllocation({ territory, planId, onUpdate }) {
         </div>
         
         {cities.map(city => {
-          const val = parseFloat(values[city.c]) || 0;
-          if (val > 0) {
+          const pct = parseFloat(values[city.c]) || 0;
+          if (pct > 0) {
+            const amount = (pct / 100) * targetL;
             return (
               <div key={city.c} className="flex justify-between bg-secondary p-3 rounded-lg">
                 <span>{city.c} ({city.s})</span>
-                <span className="font-bold">Rs {val.toFixed(1)}L</span>
+                <span className="font-bold">{pct}% (Rs {amount.toFixed(1)}L)</span>
               </div>
             );
           }
@@ -459,6 +460,7 @@ function CityAllocation({ territory, planId, onUpdate }) {
     <div className="space-y-4">
       <div className="bg-primary/5 p-4 rounded-xl">
         <p className="font-semibold">{territory.territory}: Rs {targetL.toFixed(1)}L</p>
+        <p className="text-sm text-muted-foreground">Enter percentages (must total 100%)</p>
       </div>
 
       {cities.map(city => (
@@ -471,15 +473,29 @@ function CityAllocation({ territory, planId, onUpdate }) {
             type="number"
             value={values[city.c] || ''}
             onChange={e => setValues({...values, [city.c]: e.target.value})}
-            placeholder="Lakhs"
-            className="w-40 h-11 text-right font-semibold"
+            placeholder="0-100"
+            className="w-32 h-11 text-right font-semibold"
+            step="0.1"
+            max="100"
+            min="0"
           />
+          <span className="text-sm font-medium w-8">%</span>
+          <span className="text-sm text-muted-foreground w-24 text-right">
+            Rs {((parseFloat(values[city.c]) || 0) / 100 * targetL).toFixed(1)}L
+          </span>
         </div>
       ))}
 
       <div className={`p-4 rounded-xl ${valid ? 'bg-green-50' : 'bg-amber-50'}`}>
-        <p className="font-bold">Total: Rs {total.toFixed(1)}L</p>
-        {!valid && total > 0 && <p className="text-xs text-amber-800">Must equal {targetL.toFixed(1)}L</p>}
+        <div className="flex justify-between mb-2">
+          <span className="font-bold">Total:</span>
+          <span className="text-2xl font-bold">{total.toFixed(1)}%</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Equals:</span>
+          <span className="font-semibold">Rs {((total / 100) * targetL).toFixed(1)}L</span>
+        </div>
+        {!valid && total > 0 && <p className="text-xs text-amber-800 mt-2">Must equal 100%</p>}
       </div>
 
       <Button onClick={save} disabled={!valid} className="w-full h-12 rounded-full">Save Cities</Button>
