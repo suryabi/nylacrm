@@ -104,6 +104,26 @@ export default function SalesTargets() {
           </Card>
         ))}
       </div>
+
+      {deleteDialog && planToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setDeleteDialog(false)}>
+          <Card className="p-8 max-w-md" onClick={e => e.stopPropagation()}>
+            <h3 className="text-xl font-semibold mb-4">Delete Target Plan?</h3>
+            <p className="text-muted-foreground mb-6">
+              Are you sure you want to delete <strong>{planToDelete.plan_name}</strong>? 
+              This will remove all territory, city, resource, and SKU allocations.
+            </p>
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setDeleteDialog(false)} className="flex-1 rounded-full">
+                Cancel
+              </Button>
+              <Button onClick={handleDelete} className="flex-1 rounded-full bg-red-600 hover:bg-red-700">
+                Delete Plan
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
