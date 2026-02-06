@@ -343,12 +343,13 @@ class ResourceTarget(BaseModel):
     plan_id: str
     city_id: str
     resource_id: str  # user_id
-    target_revenue: float
+    allocation_percentage: float  # Percentage of city target
+    target_revenue: float  # Calculated from percentage
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ResourceTargetCreate(BaseModel):
     resource_id: str
-    target_revenue: float
+    allocation_percentage: float  # User enters percentage
 
 # ============= HELPERS =============
 
