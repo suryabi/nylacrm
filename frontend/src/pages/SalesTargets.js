@@ -233,6 +233,10 @@ function ManagePlanView({ planId, onBack }) {
         {activeSection === 'resources' && hierarchy && (
           <ResourceSection planId={planId} hierarchy={hierarchy} onUpdate={loadPlanData} />
         )}
+
+        {activeSection === 'summary' && (
+          <SummarySection planId={planId} />
+        )}
       </Card>
     </div>
   );
