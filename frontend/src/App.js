@@ -59,7 +59,7 @@ function App() {
           <Route path="/bottle-preview" element={<ProtectedRoute><BottlePreview /></ProtectedRoute>} />
           <Route path="/leaves" element={<ProtectedRoute><LeaveManagement /></ProtectedRoute>} />
           <Route path="/targets" element={<ProtectedRoute><SalesTargets /></ProtectedRoute>} />
-          <Route path="/targets" element={<ProtectedRoute><SalesTargets /></ProtectedRoute>} />
+          <Route path="/reports-new" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </BrowserRouter>
