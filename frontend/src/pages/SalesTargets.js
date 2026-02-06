@@ -50,8 +50,12 @@ export default function SalesTargets() {
             <p className="text-sm text-muted-foreground mb-4">{p.time_period}</p>
             <p className="text-3xl font-bold text-primary mb-4">Rs {(p.country_target / 100000).toFixed(1)}L</p>
             <div className="flex gap-2">
-              <Button onClick={() => { setCurrentPlan(p); setPage('territories'); }} variant="outline" className="flex-1 rounded-full">Territories</Button>
-              <Button onClick={() => { setCurrentPlan(p); setPage('cities'); }} variant="outline" className="flex-1 rounded-full">Cities</Button>
+              <Button onClick={() => { setCurrentPlan(p); setPage('territories'); }} variant="outline" className="flex-1 rounded-full text-xs">Territories</Button>
+              <Button onClick={() => { setCurrentPlan(p); setPage('cities'); }} variant="outline" className="flex-1 rounded-full text-xs">Cities</Button>
+            </div>
+            <div className="flex gap-2 mt-2">
+              <Button onClick={() => { setCurrentPlan(p); setPage('resources'); }} variant="outline" className="flex-1 rounded-full text-xs">Resources</Button>
+              <Button onClick={() => { setCurrentPlan(p); setPage('skus'); }} variant="outline" className="flex-1 rounded-full text-xs">SKUs</Button>
             </div>
           </Card>
         ))}
