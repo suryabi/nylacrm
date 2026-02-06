@@ -2021,6 +2021,57 @@ async def create_target_plan(plan: TargetPlanCreate, current_user: dict = Depend
     
     return plan_obj
 
+@api_router.delete("/target-plans/{plan_id}")
+async def delete_target_plan(plan_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete target plan and all allocations"""
+    
+    if current_user['role'] not in ['ceo', 'director', 'vp', 'admin']:
+        raise HTTPException(status_code=403, detail='Only leadership can delete target plans')
+    
+    # Delete plan
+    result = await db.target_plans.delete_one({'id': plan_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail='Plan not found')
+    
+    # Delete all related allocations
+    await db.territory_targets.delete_many({'plan_id': plan_id})
+    await db.city_targets.delete_many({'plan_id': plan_id})
+    await db.resource_targets.delete_many({'plan_id': plan_id})
+    await db.sku_targets.delete_many({'plan_id': plan_id})
+    
+    return {'message': 'Target plan deleted successfully'}
+
+@api_router.put("/target-plans/{plan_id}")
+async def update_target_plan(plan_id: str, plan_data: dict, current_user: dict = Depends(get_current_user)):
+    """Update target plan"""
+    
+    if current_user['role'] not in ['ceo', 'director', 'vp', 'admin']:
+        raise HTTPException(status_code=403, detail='Only leadership can update target plans')
+    
+    plan = await db.target_plans.find_one({'id': plan_id}, {'_id': 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail='Plan not found')
+    
+    if plan['status'] == 'locked':
+        raise HTTPException(status_code=400, detail='Cannot modify locked plan')
+    
+    # Update fields
+    update_data = {}
+    if 'plan_name' in plan_data:
+        update_data['plan_name'] = plan_data['plan_name']
+    if 'country_target' in plan_data:
+        update_data['country_target'] = plan_data['country_target']
+    if 'start_date' in plan_data:
+        update_data['start_date'] = plan_data['start_date']
+    if 'end_date' in plan_data:
+        update_data['end_date'] = plan_data['end_date']
+    
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.target_plans.update_one({'id': plan_id}, {'$set': update_data})
+    
+    return {'message': 'Target plan updated successfully'}
+
 @api_router.get("/target-plans")
 async def get_target_plans(current_user: dict = Depends(get_current_user)):
     """Get all target plans"""
