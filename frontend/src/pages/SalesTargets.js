@@ -511,6 +511,198 @@ function CityAllocation({ territory, planId, onUpdate }) {
   );
 }
 
+function ResourceSection({ planId, hierarchy, onUpdate }) {
+  const [selectedCity, setSelectedCity] = React.useState(null);
+  const [salesTeam, setSalesTeam] = React.useState([]);
+
+  React.useEffect(() => {
+    loadSalesTeam();
+    
+    // Get first city from hierarchy
+    if (hierarchy.territories) {
+      for (const terr of hierarchy.territories) {
+        if (terr.states) {
+          for (const state of terr.states) {
+            if (state.cities && state.cities[0]) {
+              setSelectedCity(state.cities[0]);
+              return;
+            }
+          }
+        }
+      }
+    }
+  }, []);
+
+  const loadSalesTeam = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API}/users`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSalesTeam(res.data.filter(u => ['sales_rep', 'sales_manager'].includes(u.role)));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  if (!selectedCity) {
+    return <div className="text-center py-8">No cities allocated yet. Allocate cities first.</div>;
+  }
+
+  // Get all allocated cities
+  const allCities = [];
+  if (hierarchy.territories) {
+    hierarchy.territories.forEach(terr => {
+      if (terr.states) {
+        terr.states.forEach(state => {
+          if (state.cities) {
+            state.cities.forEach(city => allCities.push(city));
+          }
+        });
+      }
+    });
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex gap-2 flex-wrap">
+        {allCities.map(c => (
+          <Button
+            key={c.id}
+            variant={selectedCity.id === c.id ? 'default' : 'outline'}
+            onClick={() => setSelectedCity(c)}
+            size="sm"
+            className="rounded-full"
+          >
+            {c.city}
+          </Button>
+        ))}
+      </div>
+
+      <ResourceAllocationForm city={selectedCity} planId={planId} salesTeam={salesTeam} onUpdate={onUpdate} />
+    </div>
+  );
+}
+
+function ResourceAllocationForm({ city, planId, salesTeam, onUpdate }) {
+  const [values, setValues] = React.useState({});
+  const [loading, setLoading] = React.useState(false);
+
+  // Group resources by territory
+  const grouped = {
+    'North India': salesTeam.filter(m => m.territory?.includes('North')),
+    'South India': salesTeam.filter(m => m.territory?.includes('South')),
+    'West India': salesTeam.filter(m => m.territory?.includes('West')),
+    'East India': salesTeam.filter(m => m.territory?.includes('East')),
+    'All India': salesTeam.filter(m => m.territory === 'All India')
+  };
+
+  const total = Object.values(values).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+  const targetL = city.target_revenue / 100000;
+  const valid = Math.abs(total - 100) < 0.1 && total > 0;
+
+  const save = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const payload = Object.keys(values)
+        .filter(k => parseFloat(values[k]) > 0)
+        .map(k => ({
+          resource_id: k,
+          allocation_percentage: parseFloat(values[k])
+        }));
+
+      await axios.post(
+        `${API}/target-plans/${planId}/cities/${city.id}/resources`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      toast.success(`✓ ${payload.length} resources assigned to ${city.city}!`, { duration: 4000 });
+      onUpdate();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-primary/5 p-4 rounded-xl">
+        <div className="flex justify-between">
+          <div>
+            <p className="font-semibold text-lg">{city.city}</p>
+            <p className="text-sm text-muted-foreground">{city.state}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-bold text-primary">Rs {targetL.toFixed(1)}L</p>
+            <p className="text-xs text-muted-foreground">City Target</p>
+          </div>
+        </div>
+      </div>
+
+      <p className="text-sm text-muted-foreground">
+        Assign percentages to any sales resource (same resource can have allocations in multiple cities):
+      </p>
+
+      {Object.keys(grouped).map(terrName => {
+        const members = grouped[terrName];
+        if (members.length === 0) return null;
+
+        return (
+          <div key={terrName} className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{terrName}</p>
+            {members.map(m => (
+              <div key={m.id} className="flex items-center gap-3 bg-secondary p-3 rounded-xl">
+                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                  {m.name[0]}
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-sm">{m.name}</p>
+                  <p className="text-xs text-muted-foreground">{m.designation}</p>
+                </div>
+                <Input
+                  type="number"
+                  value={values[m.id] || ''}
+                  onChange={e => setValues({...values, [m.id]: e.target.value})}
+                  placeholder="%"
+                  className="w-24 h-10 text-right font-semibold text-lg"
+                />
+                <span className="text-sm font-medium w-6">%</span>
+                <span className="text-sm text-muted-foreground w-20 text-right">
+                  Rs {((parseFloat(values[m.id]) || 0) / 100 * targetL).toFixed(1)}L
+                </span>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+
+      <div className={`p-5 rounded-xl border-2 ${valid ? 'bg-green-50 border-green-300' : 'bg-amber-50 border-amber-300'}`}>
+        <div className="flex justify-between mb-2">
+          <span className="font-semibold">Total Assigned:</span>
+          <span className="text-3xl font-bold">{total.toFixed(1)}%</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Equals:</span>
+          <span className="font-semibold">Rs {((total / 100) * targetL).toFixed(1)}L</span>
+        </div>
+        {!valid && total > 0 && (
+          <p className="text-sm text-amber-800 mt-3">Must total 100%</p>
+        )}
+        {valid && (
+          <p className="text-sm text-green-800 mt-3">✓ Perfect!</p>
+        )}
+      </div>
+
+      <Button onClick={save} disabled={!valid || loading} className="w-full h-12 rounded-full">
+        {loading ? 'Saving...' : `Save ${city.city} Assignments`}
+      </Button>
+    </div>
+  );
+}
+
 function Row({ label, value }) {
   return (
     <div className="flex justify-between bg-secondary p-4 rounded-xl">
