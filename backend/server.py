@@ -2365,7 +2365,9 @@ async def get_target_sku_allocation_report(current_user: dict = Depends(get_curr
                 'city': city_info.get('city', ''),
                 'state': city_info.get('state', ''),
                 'sku': sku_target['sku_name'],
-                'target_revenue': sku_target['target_revenue']
+                'target_revenue': sku_target['target_revenue'],
+                'achieved_revenue': 0,  # Placeholder - will be connected to actual sales
+                'tbd_revenue': sku_target['target_revenue']  # target - achieved
             })
     
     return {'report_data': report_data, 'total_records': len(report_data)}
