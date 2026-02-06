@@ -407,6 +407,60 @@ function CityForm({ planId, territory, onUpdate }) {
   );
 }
 
+function ResourcesPage({ plan, onBack }) {
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+      <Button variant="outline" onClick={onBack} className="rounded-full"><ArrowLeft className="h-4 w-4 mr-2" />Back</Button>
+      <Card className="p-8 bg-primary/5 rounded-2xl">
+        <h1 className="text-2xl font-semibold mb-2">{plan.plan_name}</h1>
+        <p className="text-xl font-bold text-primary">Assign Resources to Cities</p>
+      </Card>
+      <Card className="p-12 text-center border rounded-2xl">
+        <p className="text-lg font-semibold mb-2">Resources Allocation</p>
+        <p className="text-muted-foreground mb-4">
+          For each city, assign percentages to sales resources.<br />
+          Same resource can have different % across multiple cities.
+        </p>
+        <div className="bg-primary/5 p-4 rounded-xl text-left max-w-xl mx-auto">
+          <p className="text-sm font-semibold mb-2">Example:</p>
+          <p className="text-xs text-muted-foreground">• Bengaluru (Rs 80L): Priya(60%), Amit(40%) = 100%</p>
+          <p className="text-xs text-muted-foreground">• Chennai (Rs 70L): Priya(80%), Rahul(20%) = 100%</p>
+          <p className="text-xs text-muted-foreground mt-2"><strong>Priya's Total:</strong> 60% of 80L + 80% of 70L = Rs 104L</p>
+        </div>
+        <p className="text-sm text-muted-foreground mt-6">Backend API ready. UI can be accessed via API calls.</p>
+      </Card>
+    </div>
+  );
+}
+
+function SKUsPage({ plan, onBack }) {
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+      <Button variant="outline" onClick={onBack} className="rounded-full"><ArrowLeft className="h-4 w-4 mr-2" />Back</Button>
+      <Card className="p-8 bg-primary/5 rounded-2xl">
+        <h1 className="text-2xl font-semibold mb-2">{plan.plan_name}</h1>
+        <p className="text-xl font-bold text-primary">Assign SKUs to Cities</p>
+      </Card>
+      <Card className="p-12 text-center border rounded-2xl">
+        <p className="text-lg font-semibold mb-2">SKU Allocation</p>
+        <p className="text-muted-foreground mb-4">
+          For each city, assign percentages to SKUs (independent from resource allocation).<br />
+          Shows WHAT products will contribute to the city target.
+        </p>
+        <div className="bg-primary/5 p-4 rounded-xl text-left max-w-xl mx-auto">
+          <p className="text-sm font-semibold mb-2">Example:</p>
+          <p className="text-xs text-muted-foreground">• Bengaluru (Rs 80L):</p>
+          <p className="text-xs text-muted-foreground ml-4">660ml Silver: 40% = Rs 32L</p>
+          <p className="text-xs text-muted-foreground ml-4">660ml Gold: 35% = Rs 28L</p>
+          <p className="text-xs text-muted-foreground ml-4">24 Brand: 25% = Rs 20L</p>
+          <p className="text-xs text-muted-foreground ml-4">Total: 100% = Rs 80L</p>
+        </div>
+        <p className="text-sm text-muted-foreground mt-6">Backend API ready. UI can be accessed via API calls.</p>
+      </Card>
+    </div>
+  );
+}
+
 function TRow({ label, value, onChange, target }) {
   return (
     <div className="flex items-center gap-4 bg-secondary p-4 rounded-xl">
