@@ -9,7 +9,6 @@ const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
   { name: 'Leads', href: '/leads', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
-  { name: 'Targets', href: '/targets', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager'] },
   { name: 'Daily Status', href: '/daily-status', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
   { name: 'Team Status', href: '/team-status', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager'] },
   { name: 'Bottle Preview', href: '/bottle-preview', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
