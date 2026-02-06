@@ -176,6 +176,55 @@ function CreatePage({ onBack }) {
   );
 }
 
+function EditPage({ plan, onBack }) {
+  const [name, setName] = React.useState(plan.plan_name);
+  const [period, setPeriod] = React.useState(plan.time_period);
+  const [start, setStart] = React.useState(plan.start_date);
+  const [end, setEnd] = React.useState(plan.end_date);
+  const [target, setTarget] = React.useState((plan.country_target / 100000).toString());
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem('token');
+    await axios.put(API + '/target-plans/' + plan.id, {
+      plan_name: name,
+      time_period: period,
+      start_date: start,
+      end_date: end,
+      country_target: parseFloat(target) * 100000
+    }, { headers: { Authorization: 'Bearer ' + token } });
+    toast.success('Plan updated!');
+    onBack();
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-6">
+      <Button variant="outline" onClick={onBack} className="rounded-full"><ArrowLeft className="h-4 w-4 mr-2" />Back</Button>
+      <Card className="p-8 border rounded-2xl">
+        <h1 className="text-2xl font-semibold mb-6">Edit Plan</h1>
+        <form onSubmit={submit} className="space-y-4">
+          <div><Label>Plan Name</Label><Input value={name} onChange={e => setName(e.target.value)} required className="h-12" /></div>
+          <div className="grid grid-cols-2 gap-4">
+            <div><Label>Period</Label>
+              <select value={period} onChange={e => setPeriod(e.target.value)} className="w-full h-12 px-4 rounded-xl border">
+                <option value="quarterly">Quarterly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </div>
+            <div><Label>Target (Lakhs)</Label><Input type="number" value={target} onChange={e => setTarget(e.target.value)} required className="h-12" /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div><Label>Start</Label><Input type="date" value={start} onChange={e => setStart(e.target.value)} required className="h-12" /></div>
+            <div><Label>End</Label><Input type="date" value={end} onChange={e => setEnd(e.target.value)} required className="h-12" /></div>
+          </div>
+          <Button type="submit" className="w-full h-14 rounded-full">Update Plan</Button>
+        </form>
+      </Card>
+    </div>
+  );
+}
+
+
 function TerritoriesPage({ plan, onBack }) {
   const [n, setN] = React.useState('');
   const [s, setS] = React.useState('');
