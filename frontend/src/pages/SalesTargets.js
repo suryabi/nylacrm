@@ -408,27 +408,231 @@ function CityForm({ planId, territory, onUpdate }) {
 }
 
 function ResourcesPage({ plan, onBack }) {
+  const [tab, setTab] = React.useState('bengaluru');
+  const [cities, setCities] = React.useState([]);
+  
+  React.useEffect(() => {
+    loadCities();
+  }, []);
+
+  const loadCities = async () => {
+    const token = localStorage.getItem('token');
+    const res = await axios.get(API + '/target-plans/' + plan.id + '/hierarchy', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    
+    const allCities = [];
+    if (res.data.territories) {
+      res.data.territories.forEach(terr => {
+        if (terr.states) {
+          terr.states.forEach(state => {
+            if (state.cities) {
+              state.cities.forEach(city => allCities.push(city));
+            }
+          });
+        }
+      });
+    }
+    setCities(allCities);
+  };
+
+  const currentCity = cities.find(c => c.city.toLowerCase().replace(' ', '') === tab);
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <Button variant="outline" onClick={onBack} className="rounded-full"><ArrowLeft className="h-4 w-4 mr-2" />Back</Button>
+      
       <Card className="p-8 bg-primary/5 rounded-2xl">
         <h1 className="text-2xl font-semibold mb-2">{plan.plan_name}</h1>
-        <p className="text-xl font-bold text-primary">Assign Resources to Cities</p>
+        <p className="text-xl font-bold text-primary">Resource Allocation by City</p>
       </Card>
-      <Card className="p-12 text-center border rounded-2xl">
-        <p className="text-lg font-semibold mb-2">Resources Allocation</p>
-        <p className="text-muted-foreground mb-4">
-          For each city, assign percentages to sales resources.<br />
-          Same resource can have different % across multiple cities.
-        </p>
-        <div className="bg-primary/5 p-4 rounded-xl text-left max-w-xl mx-auto">
-          <p className="text-sm font-semibold mb-2">Example:</p>
-          <p className="text-xs text-muted-foreground">• Bengaluru (Rs 80L): Priya(60%), Amit(40%) = 100%</p>
-          <p className="text-xs text-muted-foreground">• Chennai (Rs 70L): Priya(80%), Rahul(20%) = 100%</p>
-          <p className="text-xs text-muted-foreground mt-2"><strong>Priya's Total:</strong> 60% of 80L + 80% of 70L = Rs 104L</p>
+
+      <Card className="p-6 border rounded-2xl">
+        <div className="flex gap-2 mb-6 flex-wrap">
+          {cities.map(c => (
+            <Button
+              key={c.id}
+              variant={c.city.toLowerCase().replace(' ', '') === tab ? 'default' : 'outline'}
+              onClick={() => setTab(c.city.toLowerCase().replace(' ', ''))}
+              size="sm"
+              className="rounded-full"
+            >
+              {c.city}
+            </Button>
+          ))}
         </div>
-        <p className="text-sm text-muted-foreground mt-6">Backend API ready. UI can be accessed via API calls.</p>
+
+        {currentCity && <ResourceForm planId={plan.id} city={currentCity} onUpdate={loadCities} />}
       </Card>
+    </div>
+  );
+}
+
+function ResourceForm({ planId, city, onUpdate }) {
+  const [salesTeam, setSalesTeam] = React.useState([]);
+  const [allocations, setAllocations] = React.useState({});
+  const [loaded, setLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    // Reset allocations when city changes
+    setAllocations({});
+    setLoaded(false);
+    
+    // Load data for new city
+    loadData();
+  }, [city.id]);
+
+  const loadData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Load sales team
+      const teamRes = await axios.get(API + '/users', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      const team = teamRes.data.filter(u => ['sales_rep', 'sales_manager'].includes(u.role));
+      setSalesTeam(team);
+
+      // Load existing resource allocations for this city
+      const resRes = await axios.get(API + '/target-plans/' + planId + '/hierarchy', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+
+      // Find resource targets in hierarchy (if they exist)
+      // For now, they're not in hierarchy, so we'd need a separate endpoint or accept empty state
+      
+      setLoaded(true);
+    } catch (err) {
+      console.error('Failed to load data');
+      setLoaded(true);
+    }
+  };
+
+  // Group resources by territory
+  const grouped = {
+    'North India': salesTeam.filter(m => m.territory?.includes('North')),
+    'South India': salesTeam.filter(m => m.territory?.includes('South')),
+    'West India': salesTeam.filter(m => m.territory?.includes('West')),
+    'East India': salesTeam.filter(m => m.territory?.includes('East')),
+    'All India': salesTeam.filter(m => m.territory === 'All India')
+  };
+
+  const updateAllocation = (resourceId, value) => {
+    const newAllocations = {...allocations};
+    newAllocations[resourceId] = value;
+    setAllocations(newAllocations);
+  };
+
+  const total = Object.values(allocations).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+  const cityTarget = city.target_revenue / 100000;
+  const valid = Math.abs(total - 100) < 0.1 && total > 0;
+
+  const save = async () => {
+    const token = localStorage.getItem('token');
+    const payload = Object.keys(allocations)
+      .filter(id => parseFloat(allocations[id]) > 0)
+      .map(id => ({
+        resource_id: id,
+        allocation_percentage: parseFloat(allocations[id])
+      }));
+
+    await axios.post(
+      API + '/target-plans/' + planId + '/cities/' + city.id + '/resources',
+      payload,
+      { headers: { Authorization: 'Bearer ' + token } }
+    );
+    toast.success(city.city + ' resources saved!');
+    onUpdate();
+  };
+
+  if (!loaded) return <div className="text-center py-8">Loading resources...</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-gradient-to-r from-primary/10 to-primary/5 border-2 border-primary/20 p-6 rounded-2xl">
+        <div className="flex justify-between items-center">
+          <div>
+            <p className="text-sm text-muted-foreground mb-1">Assigning Resources to</p>
+            <h3 className="text-2xl font-bold">{city.city}</h3>
+            <p className="text-xs text-muted-foreground">{city.state}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground mb-1">City Revenue Target</p>
+            <p className="text-4xl font-bold text-primary">Rs {cityTarget.toFixed(1)}L</p>
+          </div>
+        </div>
+        <div className="bg-white/50 p-3 rounded-lg mt-4">
+          <p className="text-xs text-muted-foreground">
+            <strong>Assign WHO sells:</strong> Each resource can be assigned a % of this city's target. Same resource can have different % across multiple cities.
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {Object.keys(grouped).map(terrName => {
+          const members = grouped[terrName];
+          if (members.length === 0) return null;
+
+          return (
+            <div key={terrName} className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide bg-secondary px-3 py-1 rounded-full inline-block">
+                {terrName}
+              </p>
+              {members.map(resource => {
+                const resAmount = (parseFloat(allocations[resource.id]) || 0) / 100 * cityTarget;
+                return (
+                  <div key={resource.id} className="bg-card border-2 border-border p-4 rounded-xl">
+                    <div className="flex items-center gap-4 mb-2">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                        {resource.name[0]}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold">{resource.name}</p>
+                        <p className="text-xs text-muted-foreground">{resource.designation}</p>
+                      </div>
+                      <Input
+                        type="number"
+                        value={allocations[resource.id] || ''}
+                        onChange={e => updateAllocation(resource.id, e.target.value)}
+                        placeholder="%"
+                        className="w-28 h-11 text-right font-bold text-xl"
+                      />
+                      <span className="font-bold text-lg w-8">%</span>
+                    </div>
+                    <div className="bg-primary/5 p-2 rounded-lg">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Resource Target:</span>
+                        <span className="font-bold text-primary">Rs {resAmount.toFixed(1)}L</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className={`p-6 rounded-xl border-2 ${valid ? 'bg-green-50 border-green-300' : 'bg-amber-50 border-amber-300'}`}>
+        <div className="flex justify-between items-center mb-3">
+          <span className="font-semibold text-lg">Total Resource Allocation:</span>
+          <span className="text-4xl font-bold">{total.toFixed(1)}%</span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-muted-foreground">Total Revenue Covered:</span>
+          <span className="text-2xl font-semibold text-primary">Rs {(total / 100 * cityTarget).toFixed(1)}L</span>
+        </div>
+        {!valid && total > 0 && (
+          <p className="text-sm text-amber-800 mt-3">⚠ Must equal 100% to fully allocate Rs {cityTarget.toFixed(1)}L</p>
+        )}
+        {valid && (
+          <p className="text-sm text-green-800 mt-3">✓ Perfect! Full city target allocated</p>
+        )}
+      </div>
+
+      <Button onClick={save} disabled={!valid} className="w-full h-14 rounded-full text-base font-semibold">
+        Save {city.city} Resource Allocation
+      </Button>
     </div>
   );
 }
