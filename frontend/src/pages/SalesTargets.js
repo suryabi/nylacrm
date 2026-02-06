@@ -496,7 +496,7 @@ function Row({ label, value }) {
   );
 }
 
-function InputRow({ label, value, onChange }) {
+function InputRow({ label, value, onChange, suffix = 'Lakhs' }) {
   return (
     <div className="flex items-center gap-4 bg-secondary p-4 rounded-xl">
       <div className="flex-1"><p className="font-medium">{label}</p></div>
@@ -504,10 +504,13 @@ function InputRow({ label, value, onChange }) {
         type="number"
         value={value}
         onChange={e => onChange(e.target.value)}
-        placeholder="Lakhs"
+        placeholder={suffix === '%' ? '0-100' : 'Enter value'}
         className="w-48 h-11 text-right font-semibold"
+        step={suffix === '%' ? '0.1' : '1'}
+        max={suffix === '%' ? '100' : undefined}
+        min="0"
       />
-      <span className="text-sm text-muted-foreground w-12">Lakhs</span>
+      <span className="text-sm text-muted-foreground w-12">{suffix}</span>
     </div>
   );
 }
