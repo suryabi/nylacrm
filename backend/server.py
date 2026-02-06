@@ -2195,6 +2195,14 @@ async def get_target_hierarchy(plan_id: str, current_user: dict = Depends(get_cu
     
     return hierarchy
 
+@api_router.get("/target-plans/{plan_id}/cities/{city_id}/resources")
+async def get_city_resources(plan_id: str, city_id: str, current_user: dict = Depends(get_current_user)):
+    """Get resource allocations for a city"""
+    
+    resources = await db.resource_targets.find({'city_id': city_id}, {'_id': 0}).to_list(100)
+    
+    return {'resources': resources}
+
 @api_router.post("/target-plans/{plan_id}/cities/{city_id}/resources")
 async def assign_city_resources(
     plan_id: str,
