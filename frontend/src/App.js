@@ -20,6 +20,7 @@ import BottlePreview from './pages/BottlePreview';
 import LeaveManagement from './pages/LeaveManagement';
 import SalesTargets from './pages/SalesTargets';
 import ReportsPage from './pages/ReportsPage';
+import SalesPortal from './pages/SalesPortal';
 import '@/App.css';
 
 function ProtectedRoute({ children }) {
