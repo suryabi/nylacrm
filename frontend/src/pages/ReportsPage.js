@@ -108,7 +108,9 @@ export default function ReportsPage() {
   const uniqueTargets = ['All', ...new Set(reportData.map(r => r.target_name))];
   const uniqueTerritories = ['All', ...new Set(reportData.map(r => r.territory))];
   const uniqueCities = ['All', ...new Set(reportData.map(r => r.city))];
-  const uniqueSKUs = ['All', ...new Set(reportData.map(r => r.sku))];
+  const uniqueSKUs = selectedReport === 'target-sku' 
+    ? ['All', ...new Set(reportData.map(r => r.sku))]
+    : ['All', ...new Set(reportData.map(r => r.resource_name))];
 
   // Apply filters
   let filteredData = reportData;
