@@ -134,61 +134,112 @@ function GridViewPage({ plan, onBack }) {
               </td>
             </tr>
 
-            {/* Territory Level */}
-            {hierarchy.territories && hierarchy.territories.map(terr => (
-              <tbody key={terr.id}>
-                <tr 
-                  className="border-b hover:bg-secondary/50 cursor-pointer"
-                  onClick={() => toggleExpand('terr-' + terr.id)}
-                >
-                  <td className="p-4 pl-8">
-                    {expanded['terr-' + terr.id] ? <ChevronDown className="h-4 w-4 inline" /> : <ChevronRight className="h-4 w-4 inline" />}
-                    {' '}Territory
-                  </td>
-                  <td className="p-4 font-medium">{terr.territory}</td>
-                  <td className="text-right p-4">{terr.allocation_percentage?.toFixed(1)}%</td>
-                  <td className="text-right p-4 font-semibold">Rs {(terr.target_revenue / 100000).toFixed(1)}L</td>
-                  <td className="text-right p-4 text-muted-foreground">Rs {(terr.allocated_revenue / 100000).toFixed(1)}L</td>
-                  <td className="text-right p-4">
-                    {terr.allocated_revenue > 0 ? (
-                      <Badge className="bg-green-100 text-green-800">
-                        {((terr.allocated_revenue / terr.target_revenue) * 100).toFixed(0)}%
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline">0%</Badge>
-                    )}
-                  </td>
+function GridViewPage({ plan, onBack }) {
+  const [hierarchy, setHierarchy] = React.useState(null);
+
+  React.useEffect(() => {
+    loadHierarchy();
+  }, []);
+
+  const loadHierarchy = async () => {
+    const token = localStorage.getItem('token');
+    const res = await axios.get(API + '/target-plans/' + plan.id + '/hierarchy', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    setHierarchy(res.data);
+  };
+
+  if (!hierarchy) return <div className="text-center py-8">Loading...</div>;
+
+  return (
+    <div className="space-y-6">
+      <Button variant="outline" onClick={onBack} className="rounded-full">
+        <ArrowLeft className="h-4 w-4 mr-2" />Back
+      </Button>
+
+      <Card className="p-8 bg-primary/5 rounded-2xl">
+        <div className="flex items-center gap-3">
+          <Table2 className="h-8 w-8 text-primary" />
+          <div>
+            <h1 className="text-2xl font-semibold">{plan.plan_name} - Grid View</h1>
+            <p className="text-sm text-muted-foreground">Complete allocation hierarchy</p>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-6 border rounded-2xl overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-secondary">
+            <tr className="border-b-2">
+              <th className="text-left p-3 font-semibold">Level</th>
+              <th className="text-left p-3 font-semibold">Name</th>
+              <th className="text-right p-3 font-semibold">%</th>
+              <th className="text-right p-3 font-semibold">Target (Rs)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b bg-primary/5 font-bold">
+              <td className="p-3">Country</td>
+              <td className="p-3">India</td>
+              <td className="text-right p-3">100%</td>
+              <td className="text-right p-3 text-primary">Rs {(plan.country_target / 100000).toFixed(1)}L</td>
+            </tr>
+
+            {hierarchy.territories && hierarchy.territories[0] && (
+              <>
+                <tr className="border-b hover:bg-secondary/50">
+                  <td className="p-3 pl-6">Territory</td>
+                  <td className="p-3 font-medium">{hierarchy.territories[0].territory}</td>
+                  <td className="text-right p-3">{hierarchy.territories[0].allocation_percentage?.toFixed(1)}%</td>
+                  <td className="text-right p-3">Rs {(hierarchy.territories[0].target_revenue / 100000).toFixed(1)}L</td>
                 </tr>
-
-                {/* State Level (Roll-up) */}
-                {expanded['terr-' + terr.id] && terr.states && terr.states.map(state => (
-                  <tr key={state.state_name} className="border-b bg-secondary/30">
-                    <td className="p-4 pl-12 text-sm">State</td>
-                    <td className="p-4 font-medium text-sm">{state.state_name}</td>
-                    <td className="text-right p-4 text-sm text-muted-foreground">Roll-up</td>
-                    <td className="text-right p-4 font-semibold text-sm">Rs {(state.state_target / 100000).toFixed(1)}L</td>
-                    <td className="text-right p-4 text-sm">-</td>
-                    <td className="text-right p-4">-</td>
-                  </tr>
-                ))}
-
-                {/* City Level */}
-                {expanded['terr-' + terr.id] && terr.states && terr.states.map(state => (
-                  state.cities && state.cities.map(city => (
-                    <tr key={city.id} className="border-b hover:bg-secondary/20">
-                      <td className="p-4 pl-16 text-sm">City</td>
-                      <td className="p-4 text-sm">{city.city}</td>
-                      <td className="text-right p-4 text-sm">{city.allocation_percentage?.toFixed(1)}%</td>
-                      <td className="text-right p-4 font-semibold text-sm text-primary">Rs {(city.target_revenue / 100000).toFixed(1)}L</td>
-                      <td className="text-right p-4 text-sm">-</td>
-                      <td className="text-right p-4">
-                        <Badge variant="outline" className="text-xs">City</Badge>
-                      </td>
+                {hierarchy.territories[0].states && hierarchy.territories[0].states[0] && (
+                  <>
+                    <tr className="border-b bg-secondary/30">
+                      <td className="p-3 pl-9 text-xs">State</td>
+                      <td className="p-3 text-xs">{hierarchy.territories[0].states[0].state_name}</td>
+                      <td className="text-right p-3 text-xs text-muted-foreground">Roll-up</td>
+                      <td className="text-right p-3 text-xs">Rs {(hierarchy.territories[0].states[0].state_target / 100000).toFixed(1)}L</td>
                     </tr>
-                  ))
-                ))}
-              </tbody>
-            ))}
+                    {hierarchy.territories[0].states[0].cities && hierarchy.territories[0].states[0].cities[0] && (
+                      <tr className="border-b">
+                        <td className="p-3 pl-12 text-xs">City</td>
+                        <td className="p-3 text-xs">{hierarchy.territories[0].states[0].cities[0].city}</td>
+                        <td className="text-right p-3 text-xs">{hierarchy.territories[0].states[0].cities[0].allocation_percentage?.toFixed(1)}%</td>
+                        <td className="text-right p-3 text-xs text-primary">Rs {(hierarchy.territories[0].states[0].cities[0].target_revenue / 100000).toFixed(1)}L</td>
+                      </tr>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+
+            {hierarchy.territories && hierarchy.territories[1] && (
+              <tr className="border-b hover:bg-secondary/50">
+                <td className="p-3 pl-6">Territory</td>
+                <td className="p-3 font-medium">{hierarchy.territories[1].territory}</td>
+                <td className="text-right p-3">{hierarchy.territories[1].allocation_percentage?.toFixed(1)}%</td>
+                <td className="text-right p-3">Rs {(hierarchy.territories[1].target_revenue / 100000).toFixed(1)}L</td>
+              </tr>
+            )}
+
+            {hierarchy.territories && hierarchy.territories[2] && (
+              <tr className="border-b hover:bg-secondary/50">
+                <td className="p-3 pl-6">Territory</td>
+                <td className="p-3 font-medium">{hierarchy.territories[2].territory}</td>
+                <td className="text-right p-3">{hierarchy.territories[2].allocation_percentage?.toFixed(1)}%</td>
+                <td className="text-right p-3">Rs {(hierarchy.territories[2].target_revenue / 100000).toFixed(1)}L</td>
+              </tr>
+            )}
+
+            {hierarchy.territories && hierarchy.territories[3] && (
+              <tr className="border-b hover:bg-secondary/50">
+                <td className="p-3 pl-6">Territory</td>
+                <td className="p-3 font-medium">{hierarchy.territories[3].territory}</td>
+                <td className="text-right p-3">{hierarchy.territories[3].allocation_percentage?.toFixed(1)}%</td>
+                <td className="text-right p-3">Rs {(hierarchy.territories[3].target_revenue / 100000).toFixed(1)}L</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </Card>
