@@ -156,17 +156,31 @@ export default function ReportsPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-secondary">
                     <tr className="border-b">
-                      <th className="text-left p-3 font-semibold">Target Name</th>
-                      <th className="text-left p-3 font-semibold">Territory</th>
-                      <th className="text-left p-3 font-semibold">Start Date</th>
-                      <th className="text-left p-3 font-semibold">End Date</th>
-                      <th className="text-left p-3 font-semibold">City</th>
-                      <th className="text-left p-3 font-semibold">SKU</th>
-                      <th className="text-right p-3 font-semibold">Target Revenue</th>
+                      <th onClick={() => handleSort('target_name')} className="text-left p-3 font-semibold cursor-pointer hover:bg-secondary/80">
+                        Target Name {getSortIcon('target_name')}
+                      </th>
+                      <th onClick={() => handleSort('territory')} className="text-left p-3 font-semibold cursor-pointer hover:bg-secondary/80">
+                        Territory {getSortIcon('territory')}
+                      </th>
+                      <th onClick={() => handleSort('start_date')} className="text-left p-3 font-semibold cursor-pointer hover:bg-secondary/80">
+                        Start Date {getSortIcon('start_date')}
+                      </th>
+                      <th onClick={() => handleSort('end_date')} className="text-left p-3 font-semibold cursor-pointer hover:bg-secondary/80">
+                        End Date {getSortIcon('end_date')}
+                      </th>
+                      <th onClick={() => handleSort('city')} className="text-left p-3 font-semibold cursor-pointer hover:bg-secondary/80">
+                        City {getSortIcon('city')}
+                      </th>
+                      <th onClick={() => handleSort('sku')} className="text-left p-3 font-semibold cursor-pointer hover:bg-secondary/80">
+                        SKU {getSortIcon('sku')}
+                      </th>
+                      <th onClick={() => handleSort('target_revenue')} className="text-right p-3 font-semibold cursor-pointer hover:bg-secondary/80">
+                        Target Revenue {getSortIcon('target_revenue')}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {reportData.map((row, idx) => (
+                    {sortedData.map((row, idx) => (
                       <tr key={idx} className="border-b hover:bg-secondary/50">
                         <td className="p-3">{row.target_name}</td>
                         <td className="p-3">{row.territory}</td>
