@@ -222,6 +222,10 @@ function ManagePlanView({ planId, onBack }) {
         {activeSection === 'cities' && hierarchy && (
           <CitySection planId={planId} territories={hierarchy.territories || []} onUpdate={loadPlanData} />
         )}
+
+        {activeSection === 'resources' && hierarchy && (
+          <ResourceSection planId={planId} hierarchy={hierarchy} onUpdate={loadPlanData} />
+        )}
       </Card>
     </div>
   );
