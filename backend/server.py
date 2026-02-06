@@ -2336,6 +2336,40 @@ async def assign_city_skus(
     
     return {'message': 'SKUs assigned successfully'}
 
+@api_router.get("/reports/target-sku-allocation")
+async def get_target_sku_allocation_report(current_user: dict = Depends(get_current_user)):
+    """Get Target SKU Allocation Report"""
+    
+    # Get all target plans
+    plans = await db.target_plans.find({}, {'_id': 0}).to_list(100)
+    
+    report_data = []
+    
+    for plan in plans:
+        # Get all SKU targets for this plan
+        sku_targets = await db.sku_targets.find({'plan_id': plan['id']}, {'_id': 0}).to_list(1000)
+        
+        # Get city info for each SKU target
+        city_ids = list(set([s['city_id'] for s in sku_targets]))
+        cities = await db.city_targets.find({'id': {'$in': city_ids}}, {'_id': 0}).to_list(1000)
+        city_map = {c['id']: c for c in cities}
+        
+        for sku_target in sku_targets:
+            city_info = city_map.get(sku_target['city_id'], {})
+            
+            report_data.append({
+                'target_name': plan['plan_name'],
+                'territory': city_info.get('territory', ''),
+                'start_date': plan['start_date'],
+                'end_date': plan['end_date'],
+                'city': city_info.get('city', ''),
+                'state': city_info.get('state', ''),
+                'sku': sku_target['sku_name'],
+                'target_revenue': sku_target['target_revenue']
+            })
+    
+    return {'report_data': report_data, 'total_records': len(report_data)}
+
 # ============= BOTTLE PREVIEW ROUTES =============
 
 @api_router.post("/bottle-preview/upload-logo")
