@@ -77,6 +77,14 @@ const LEAD_CATEGORIES = [
   'Corporate'
 ];
 
+const CUSTOMER_TIERS = [
+  'Tier 1',
+  'Tier 2',
+  'Tier 3',
+  'Tier 4',
+  'Tier 5'
+];
+
 export default function AddEditLead() {
   const { id } = useParams();
   const navigate = useNavigate();
