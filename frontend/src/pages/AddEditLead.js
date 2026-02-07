@@ -194,6 +194,13 @@ export default function AddEditLead() {
     try {
       const submitData = {
         ...formData,
+        // Convert empty strings to null for optional fields
+        contact_person: formData.contact_person || null,
+        email: formData.email || null,
+        phone: formData.phone || null,
+        source: formData.source || null,
+        current_water_brand: formData.current_water_brand || null,
+        current_volume: formData.current_volume || null,
         estimated_value: formData.estimated_value ? parseFloat(formData.estimated_value) : null,
         current_landing_price: formData.current_landing_price ? parseFloat(formData.current_landing_price) : null,
         current_selling_price: formData.current_selling_price ? parseFloat(formData.current_selling_price) : null,
@@ -209,7 +216,18 @@ export default function AddEditLead() {
       }
       navigate('/leads');
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to save lead');
+      console.error('Save error:', error);
+      console.error('Error response:', error.response?.data);
+      
+      let errorMsg = 'Failed to save lead';
+      if (error.response?.data?.detail) {
+        if (Array.isArray(error.response.data.detail)) {
+          errorMsg = error.response.data.detail.map(e => `${e.loc?.join('.')}: ${e.msg}`).join(', ');
+        } else {
+          errorMsg = error.response.data.detail;
+        }
+      }
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
