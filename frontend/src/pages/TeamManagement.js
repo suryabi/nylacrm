@@ -202,6 +202,27 @@ export default function TeamManagement() {
         </div>
       </div>
 
+      {/* Edit Team Member Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Team Member</DialogTitle>
+          </DialogHeader>
+          <EditTeamMemberForm
+            user={editUser}
+            onSuccess={() => {
+              setEditDialogOpen(false);
+              setEditUser(null);
+              fetchUsers();
+            }}
+            onCancel={() => {
+              setEditDialogOpen(false);
+              setEditUser(null);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
       {viewMode === 'table' ? (
         // Table View
         <Card className="p-6">
