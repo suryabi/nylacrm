@@ -302,10 +302,11 @@ export default function LeadsList() {
             <SelectItem value="all">All Statuses</SelectItem>
             <SelectItem value="new">New</SelectItem>
             <SelectItem value="contacted">Contacted</SelectItem>
-            <SelectItem value="qualified">Qualified</SelectItem>
-            <SelectItem value="proposal">Proposal</SelectItem>
-            <SelectItem value="closed_won">Closed Won</SelectItem>
-            <SelectItem value="closed_lost">Closed Lost</SelectItem>
+            <SelectItem value="in_progress">In Progress</SelectItem>
+            <SelectItem value="proposal_stage">Proposal Stage</SelectItem>
+            <SelectItem value="won">Won</SelectItem>
+            <SelectItem value="lost">Lost</SelectItem>
+            <SelectItem value="future_followup">Future Follow up</SelectItem>
           </SelectContent>
         </Select>
         
