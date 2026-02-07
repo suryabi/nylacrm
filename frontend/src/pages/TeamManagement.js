@@ -525,6 +525,249 @@ function AddTeamMemberForm({ onSuccess }) {
     </form>
   );
 }
+
+function EditTeamMemberForm({ user, onSuccess, onCancel }) {
+  const [loading, setLoading] = useState(false);
+  const [allUsers, setAllUsers] = useState([]);
+  const [formData, setFormData] = useState({
+    name: user?.name || '',
+    designation: user?.designation || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    city: user?.city || '',
+    state: user?.state || '',
+    territory: user?.territory || '',
+    role: user?.role || 'sales_rep',
+    reports_to: user?.reports_to || '',
+    is_active: user?.is_active ?? true
+  });
+
+  React.useEffect(() => {
+    const fetchManagers = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`${API_URL}/users`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setAllUsers(response.data);
+      } catch (error) {
+        console.error('Failed to load users');
+      }
+    };
+    fetchManagers();
+  }, []);
+
+  React.useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.name || '',
+        designation: user.designation || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        city: user.city || '',
+        state: user.state || '',
+        territory: user.territory || '',
+        role: user.role || 'sales_rep',
+        reports_to: user.reports_to || '',
+        is_active: user.is_active ?? true
+      });
+    }
+  }, [user]);
+
+  const updateField = (field, value) => {
+    // Apply title case to all fields except email
+    if (field !== 'email' && field !== 'password' && typeof value === 'string') {
+      value = toTitleCase(value);
+    }
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleDesignationChange = (designation) => {
+    const role = ROLE_MAPPING[designation] || 'sales_rep';
+    setFormData(prev => ({ 
+      ...prev, 
+      designation: designation,
+      role: role 
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_URL}/users/${user.id}`, formData, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success('Team member updated successfully');
+      onSuccess();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to update team member');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const territoryStates = formData.territory && TERRITORY_LOCATIONS[formData.territory] 
+    ? Object.keys(TERRITORY_LOCATIONS[formData.territory].states)
+    : [];
+
+  const stateCities = formData.state && formData.territory && TERRITORY_LOCATIONS[formData.territory]
+    ? TERRITORY_LOCATIONS[formData.territory].states[formData.state] || []
+    : [];
+
+  if (!user) return null;
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="edit-name">Name *</Label>
+          <Input
+            id="edit-name"
+            value={formData.name}
+            onChange={(e) => updateField('name', e.target.value)}
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="edit-designation">Designation *</Label>
+          <Select value={formData.designation} onValueChange={handleDesignationChange} required>
+            <SelectTrigger>
+              <SelectValue placeholder="Select designation" />
+            </SelectTrigger>
+            <SelectContent>
+              {DESIGNATIONS.map(des => (
+                <SelectItem key={des} value={des}>{des}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="edit-email">Email *</Label>
+          <Input
+            id="edit-email"
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="edit-phone">Phone Number *</Label>
+          <Input
+            id="edit-phone"
+            value={formData.phone}
+            onChange={(e) => updateField('phone', e.target.value)}
+            placeholder="+91"
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="edit-territory">Territory *</Label>
+          <Select value={formData.territory} onValueChange={(v) => {
+            updateField('territory', v);
+            // Reset state and city when territory changes
+            setFormData(prev => ({...prev, territory: v, state: '', city: ''}));
+          }} required>
+            <SelectTrigger>
+              <SelectValue placeholder="Select territory" />
+            </SelectTrigger>
+            <SelectContent>
+              {TERRITORIES.map(territory => (
+                <SelectItem key={territory} value={territory}>{territory}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="edit-reports_to">Reports To</Label>
+          <Select value={formData.reports_to || 'none'} onValueChange={(v) => setFormData(prev => ({...prev, reports_to: v === 'none' ? '' : v}))}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select manager" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None (Top Level)</SelectItem>
+              {allUsers.filter(u => ['ceo', 'director', 'vp', 'sales_manager'].includes(u.role) && u.id !== user.id).map(manager => (
+                <SelectItem key={manager.id} value={manager.id}>
+                  {manager.name} - {manager.designation || manager.role}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="edit-state">State</Label>
+          <Select 
+            value={formData.state} 
+            onValueChange={(v) => {
+              updateField('state', v);
+              setFormData(prev => ({...prev, state: v, city: ''}));
+            }}
+            disabled={!formData.territory}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select state" />
+            </SelectTrigger>
+            <SelectContent>
+              {territoryStates.map(state => (
+                <SelectItem key={state} value={state}>{state}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="edit-city">City</Label>
+          <Select
+            value={formData.city}
+            onValueChange={(v) => updateField('city', v)}
+            disabled={!formData.state}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select city" />
+            </SelectTrigger>
+            <SelectContent>
+              {stateCities.map(city => (
+                <SelectItem key={city} value={city}>{city}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="edit-role_display">Role (Auto-set based on Designation)</Label>
+          <Input
+            id="edit-role_display"
+            value={formData.role.replace('_', ' ').toUpperCase()}
+            disabled
+            className="bg-muted"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="edit-is_active">Status</Label>
+          <Select value={formData.is_active ? 'active' : 'inactive'} onValueChange={(v) => setFormData(prev => ({...prev, is_active: v === 'active'}))}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      
+      <div className="flex gap-3 pt-4">
+        <Button type="submit" disabled={loading}>
+          {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Updating...</> : 'Update Team Member'}
+        </Button>
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 function OrgChartView({ users }) {
   const topLevel = users.filter(u => !u.reports_to);
   
