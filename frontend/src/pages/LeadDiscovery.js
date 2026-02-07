@@ -190,8 +190,33 @@ export default function LeadDiscovery() {
                 step="0.1"
                 value={minRating}
                 onChange={e => setMinRating(parseFloat(e.target.value))}
-                className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer"
+                className="w-full h-3 bg-secondary rounded-lg appearance-none cursor-pointer"
+                style={{
+                  WebkitAppearance: 'none',
+                  background: `linear-gradient(to right, hsl(42, 85%, 65%) 0%, hsl(42, 85%, 65%) ${(minRating - 3) / 2 * 100}%, hsl(35, 15%, 88%) ${(minRating - 3) / 2 * 100}%, hsl(35, 15%, 88%) 100%)`
+                }}
               />
+              <style>{`
+                input[type="range"]::-webkit-slider-thumb {
+                  appearance: none;
+                  width: 24px;
+                  height: 24px;
+                  border-radius: 50%;
+                  background: hsl(42, 85%, 65%);
+                  cursor: pointer;
+                  border: 3px solid white;
+                  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                }
+                input[type="range"]::-moz-range-thumb {
+                  width: 24px;
+                  height: 24px;
+                  border-radius: 50%;
+                  background: hsl(42, 85%, 65%);
+                  cursor: pointer;
+                  border: 3px solid white;
+                  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                }
+              `}</style>
               <div className="flex justify-between text-xs text-muted-foreground mt-1">
                 <span>3.0 ★</span>
                 <span>5.0 ★</span>
