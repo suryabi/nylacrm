@@ -85,6 +85,17 @@ const CUSTOMER_TIERS = [
   'Tier 5'
 ];
 
+const LEAD_SOURCES = [
+  'Website',
+  'LinkedIn',
+  'Through Contacts',
+  'Customer Referral',
+  'Cold Call',
+  'Internet',
+  'Lead Discovery',
+  'Other'
+];
+
 export default function AddEditLead() {
   const { id } = useParams();
   const navigate = useNavigate();
