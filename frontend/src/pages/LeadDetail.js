@@ -312,7 +312,7 @@ export default function LeadDetail() {
             <h2 className="text-lg font-semibold mb-4">Lead Status</h2>
             <div className="flex items-center gap-4">
               <Badge className={`${statusColors[lead.status]} text-sm px-3 py-1`}>
-                {lead.status.replace('_', ' ')}
+                {getStatusLabel(lead.status)}
               </Badge>
               <Select value={lead.status} onValueChange={handleStatusChange}>
                 <SelectTrigger className="w-[200px]" data-testid="status-selector">
