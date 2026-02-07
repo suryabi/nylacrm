@@ -35,20 +35,20 @@ const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
 const DESIGNATIONS = [
   'CEO',
+  'Director',
   'Vice President',
-  'Director, Sales',
-  'Sales Manager',
-  'National Head - Sales',
-  'BD Executive'
+  'National Sales Head',
+  'Regional Sales Manager',
+  'BDE'
 ];
 
 const ROLE_MAPPING = {
   'CEO': 'ceo',
+  'Director': 'director',
   'Vice President': 'vp',
-  'Director, Sales': 'director',
-  'Sales Manager': 'sales_manager',
-  'National Head - Sales': 'sales_manager',
-  'BD Executive': 'sales_rep'
+  'National Sales Head': 'sales_manager',
+  'Regional Sales Manager': 'sales_manager',
+  'BDE': 'sales_rep'
 };
 
 const TERRITORIES = [
