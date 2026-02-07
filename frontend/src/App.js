@@ -82,9 +82,8 @@ function AppRouter() {
           <Route path="/sales-portal" element={<ProtectedRoute><SalesPortal /></ProtectedRoute>} />
         </Routes>
         <Toaster />
-      </BrowserRouter>
-    </AuthProvider>
-  );
-}
+      </>
+    );
+  }
 
 export default App;
