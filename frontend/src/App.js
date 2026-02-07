@@ -2,11 +2,15 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Toaster } from './components/ui/sonner';
+import axios from 'axios';
 import DashboardLayout from './layouts/DashboardLayout';
 import SplashScreen from './pages/SplashScreen';
 import Login from './pages/Login';
 import AuthCallback from './components/AuthCallback';
 import Dashboard from './pages/Dashboard';
+
+// CRITICAL: Configure axios to always send credentials (cookies) with all requests
+axios.defaults.withCredentials = true;
 import LeadsList from './pages/LeadsList';
 import LeadDetail from './pages/LeadDetail';
 import AddEditLead from './pages/AddEditLead';
