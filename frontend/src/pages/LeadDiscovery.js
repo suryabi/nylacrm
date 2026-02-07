@@ -368,8 +368,20 @@ export default function LeadDiscovery() {
               </p>
             </div>
           ) : (
-            <div className="space-y-3 max-h-[600px] overflow-y-auto">
-              {results.map(outlet => {
+            <>
+              <div className="mb-4 flex justify-between items-center">
+                <p className="text-sm text-muted-foreground">
+                  Showing {startIndex + 1}-{Math.min(endIndex, results.length)} of {results.length} results
+                </p>
+                {selectedOutlets.length > 0 && (
+                  <p className="text-sm font-medium text-primary">
+                    {selectedOutlets.length} selected
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-3 mb-6">
+                {currentResults.map(outlet => {
                 const alreadyImported = isAlreadyImported(outlet);
                 
                 return (
