@@ -246,6 +246,19 @@ export default function AddEditLead() {
               </Select>
             </div>
             <div className="space-y-2">
+              <Label htmlFor="tier">Customer Tier *</Label>
+              <Select value={formData.tier} onValueChange={(v) => updateField('tier', v)} required>
+                <SelectTrigger data-testid="lead-tier-select">
+                  <SelectValue placeholder="Select tier" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CUSTOMER_TIERS.map(tier => (
+                    <SelectItem key={tier} value={tier}>{tier}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="contact_person">Contact Person</Label>
               <Input
                 id="contact_person"
