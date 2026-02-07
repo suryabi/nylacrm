@@ -95,6 +95,9 @@ class Lead(BaseModel):
     # Lead Category
     category: Optional[str] = None  # Restaurant, Bar & Kitchen, Star Hotel, etc.
     
+    # Customer Tier
+    tier: Optional[str] = None  # Tier 1, Tier 2, Tier 3, Tier 4, Tier 5
+    
     # Location
     city: str
     state: str
