@@ -263,103 +263,6 @@ export default function TeamManagement() {
   );
 }
 
-function OrgChartView({ users }) {
-  // Build hierarchy
-  const topLevel = users.filter(u => !u.reports_to);
-  
-  const getDirectReports = (userId) => {
-    return users.filter(u => u.reports_to === userId);
-  };
-
-  const renderNode = (user, level = 0) => {
-    const directReports = getDirectReports(user.id);
-
-    return (
-      <div key={user.id} className="flex flex-col items-center">
-        {/* Node Card */}
-        <div className="mb-8">
-          <Card className={`w-64 p-6 border-2 rounded-2xl text-center ${
-            level === 0 ? 'bg-primary/10 border-primary shadow-lg' :
-            level === 1 ? 'bg-secondary border-primary/30' :
-            'bg-card border-border'
-          }`}>
-            <div className="flex flex-col items-center">
-              <div className="h-20 w-20 rounded-full bg-primary/20 border-4 border-white shadow-lg flex items-center justify-center text-primary font-bold text-2xl mb-3">
-                {user.name && user.name[0] ? user.name[0].toUpperCase() : '?'}
-              </div>
-              <h3 className="font-bold text-lg mb-1">{user.name}</h3>
-              <p className="text-sm text-muted-foreground mb-2">{user.designation || user.role}</p>
-              <div className="flex items-center gap-2 text-xs">
-                <Badge variant="outline" className="text-xs">
-                  {user.role?.replace('_', ' ')}
-                </Badge>
-              </div>
-              {user.territory && (
-                <p className="text-xs text-primary mt-2">{user.territory}</p>
-              )}
-            </div>
-          </Card>
-        </div>
-
-        {/* Connecting Line Down */}
-        {directReports.length > 0 && (
-          <div className="w-0.5 h-12 bg-border mb-4"></div>
-        )}
-
-        {/* Direct Reports */}
-        {directReports.length > 0 && (
-          <div className="flex flex-col items-center">
-            {/* Horizontal Line */}
-            {directReports.length > 1 && (
-              <div className="relative w-full mb-4">
-                <div className="absolute top-0 left-1/2 w-0.5 h-4 bg-border -translate-x-1/2"></div>
-                <div 
-                  className="h-0.5 bg-border"
-                  style={{
-                    marginLeft: `${100 / directReports.length / 2}%`,
-                    marginRight: `${100 / directReports.length / 2}%`
-                  }}
-                ></div>
-              </div>
-            )}
-
-            {/* Reports Grid */}
-            <div className={`grid gap-8 ${
-              directReports.length === 1 ? 'grid-cols-1' :
-              directReports.length === 2 ? 'grid-cols-2' :
-              directReports.length === 3 ? 'grid-cols-3' :
-              'grid-cols-4'
-            }`}>
-              {directReports.map(report => (
-                <div key={report.id} className="flex flex-col items-center">
-                  {/* Vertical line to child */}
-                  {directReports.length > 1 && (
-                    <div className="w-0.5 h-4 bg-border mb-4"></div>
-                  )}
-                  {renderNode(report, level + 1)}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  return (
-    <Card className="p-8 border rounded-2xl overflow-x-auto">
-      <h2 className="text-lg font-semibold mb-8 text-center">Organizational Structure</h2>
-      <div className="min-w-max pb-8">
-        {topLevel.length === 0 ? (
-          <p className="text-center text-muted-foreground py-12">No organizational structure found</p>
-        ) : (
-          <div className="flex justify-center">
-            {topLevel.map(user => renderNode(user))}
-          </div>
-        )}
-      </div>
-    </Card>
-  );
 }
 
 function AddTeamMemberForm({ onSuccess }) {
@@ -587,3 +490,71 @@ function AddTeamMemberForm({ onSuccess }) {
     </form>
   );
 }
+function OrgChartView({ users }) {
+  const topLevel = users.filter(u => !u.reports_to);
+  
+  const getDirectReports = (userId) => users.filter(u => u.reports_to === userId);
+
+  const renderNode = (user, level = 0) => {
+    const directReports = getDirectReports(user.id);
+
+    return (
+      <div key={user.id} className="flex flex-col items-center">
+        <div className="mb-4">
+          <Card className={`w-44 p-3 border-2 rounded-lg ${level === 0 ? 'bg-primary/10 border-primary' : level === 1 ? 'bg-secondary border-primary/30' : 'bg-card border-border'}`}>
+            <div className="flex items-start gap-2 mb-2">
+              <div className="text-xs text-muted-foreground w-16 flex-shrink-0">{user.phone?.substring(3, 13) || '-'}</div>
+              <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm flex-shrink-0">{user.name?.[0]}</div>
+            </div>
+            <h3 className="font-bold text-sm truncate">{user.name}</h3>
+            <p className="text-xs text-muted-foreground truncate">{user.designation || user.role}</p>
+            {user.territory && <p className="text-xs text-primary truncate mt-1">{user.territory}</p>}
+          </Card>
+        </div>
+
+        {directReports.length > 0 && (
+          <>
+            <div className="w-0.5 h-6 bg-primary/50"></div>
+            <div className="relative">
+              {directReports.length > 1 && (
+                <>
+                  <div className="absolute left-1/2 top-0 w-0.5 h-2 bg-primary/50 -translate-x-1/2"></div>
+                  <div className="h-0.5 bg-primary/50 mb-2" style={{width: `${(directReports.length - 1) * 176 + 44}px`, marginLeft: `-${((directReports.length - 1) * 176 + 44) / 2 - 88}px`}}></div>
+                </>
+              )}
+            </div>
+            <div className="flex gap-4 items-start">
+              {directReports.map(report => (
+                <div key={report.id} className="flex flex-col items-center">
+                  {directReports.length > 1 && <div className="w-0.5 h-2 bg-primary/50 mb-2"></div>}
+                  {renderNode(report, level + 1)}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <Card className="p-8 border rounded-2xl overflow-x-auto">
+      <h2 className="text-xl font-semibold mb-6 text-center">Reporting Structure</h2>
+      <div className="min-w-max pb-8 flex justify-center">
+        {topLevel.length === 0 ? (
+          <p className="text-center text-muted-foreground py-12">No hierarchy found</p>
+        ) : (
+          topLevel.map(user => renderNode(user))
+        )}
+      </div>
+      <div className="text-center text-xs text-muted-foreground mt-6 p-4 bg-primary/5 rounded-lg">
+        <p className="font-semibold mb-2">How to Read:</p>
+        <p>• Top person is the manager</p>
+        <p>• Lines connect manager to direct reports (going down)</p>
+        <p>• People at same level are peers</p>
+        <p>• Phone number shown on left of each card</p>
+      </div>
+    </Card>
+  );
+}
+
