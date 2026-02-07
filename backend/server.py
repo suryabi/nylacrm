@@ -1440,8 +1440,8 @@ async def create_team_member(user_input: UserCreate, current_user: dict = Depend
     await db.users.insert_one(doc)
     return user_obj
 async def update_user(user_id: str, updates: dict, current_user: dict = Depends(get_current_user)):
-    if current_user['role'] != 'admin':
-        raise HTTPException(status_code=403, detail='Only admins can update users')
+    if current_user['role'] not in ['CEO', 'Director', 'Vice President']:
+        raise HTTPException(status_code=403, detail='Only leadership can update users')
     
     # Remove sensitive fields
     updates.pop('password', None)
