@@ -98,6 +98,7 @@ export default function AddEditLead() {
     email: '',
     phone: '',
     category: '',
+    tier: '',
     city: '',
     state: '',
     country: 'India',
