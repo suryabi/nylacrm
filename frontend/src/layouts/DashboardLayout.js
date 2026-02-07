@@ -9,6 +9,7 @@ const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Business Development Executive'] },
   { name: 'Leads', href: '/leads', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Business Development Executive'] },
+  { name: 'Lead Discovery', href: '/lead-discovery', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Business Development Executive'] },
   { name: 'Targets', href: '/targets', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager'] },
   { name: 'Reports', href: '/reports-new', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager'] },
   { name: 'Sales Portal', href: '/sales-portal', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Business Development Executive'] },
