@@ -493,7 +493,7 @@ function ResourcesPage({ plan, onBack }) {
     }
     
     setCities(allCities);
-    setSalesTeam(uRes.data.filter(u => ['sales_rep', 'sales_manager'].includes(u.role)));
+    setSalesTeam(uRes.data.filter(u => ['Business Development Executive', 'Regional Sales Manager', 'National Sales Head'].includes(u.role)));
   };
 
   const currentCity = cities.find(c => c.city.toLowerCase().replace(' ', '') === tab);
