@@ -46,6 +46,7 @@ export default function LeadDiscovery() {
 
   const handleSearch = async () => {
     setSearching(true);
+    setCurrentPage(1); // Reset to first page on new search
     
     try {
       // Fetch existing leads to check for duplicates
