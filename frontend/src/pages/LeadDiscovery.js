@@ -416,7 +416,8 @@ export default function LeadDiscovery() {
                     </div>
                   </div>
                 </Card>
-              ))}
+              );
+              })}
             </div>
           )}
         </Card>
