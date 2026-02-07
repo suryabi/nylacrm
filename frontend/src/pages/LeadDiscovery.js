@@ -87,10 +87,18 @@ export default function LeadDiscovery() {
     
     try {
       const token = localStorage.getItem('token');
+      
+      // Get current user to assign leads
+      const userRes = await axios.get(process.env.REACT_APP_BACKEND_URL + '/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      
+      const currentUser = userRes.data;
       const outletsToImport = results.filter(o => selectedOutlets.includes(o.id));
       
       // Import each outlet as a lead
-      const importPromises = outletsToImport.map(outlet => {
+      for (const outlet of outletsToImport) {
         const leadData = {
           company: outlet.name,
           contact_person: '',
@@ -98,31 +106,37 @@ export default function LeadDiscovery() {
           phone: outlet.phone || '',
           category: outlet.type,
           tier: outlet.price_range.length >= 4 ? 'Tier 1' : outlet.price_range.length >= 3 ? 'Tier 2' : 'Tier 3',
-          city: 'Bengaluru',  // Extract from address in real implementation
+          city: 'Bengaluru',
           state: 'Karnataka',
           country: 'India',
           region: 'South India',
           status: 'new',
           source: 'lead_discovery',
+          assigned_to: currentUser.id,
           priority: outlet.rating >= 4.5 ? 'high' : 'medium',
+          current_water_brand: '',
+          current_landing_price: null,
+          current_volume: '',
+          current_selling_price: null,
+          interested_skus: [],
           notes: `Discovered via Lead Discovery. Rating: ${outlet.rating}★, Price: ${outlet.price_range}. Address: ${outlet.address}`,
           estimated_value: outlet.price_range.length * 100000
         };
 
-        return axios.post(process.env.REACT_APP_BACKEND_URL + '/api/leads', leadData, {
+        await axios.post(process.env.REACT_APP_BACKEND_URL + '/api/leads', leadData, {
           headers: { Authorization: `Bearer ${token}` },
           withCredentials: true
         });
-      });
-
-      await Promise.all(importPromises);
+      }
       
       toast.success(`✓ ${selectedOutlets.length} outlets imported as new leads! Check Leads page.`, {
         duration: 5000
       });
       setSelectedOutlets([]);
     } catch (error) {
-      toast.error('Failed to import leads. Please try again.');
+      console.error('Import error:', error);
+      const errorMsg = error.response?.data?.detail || error.message || 'Failed to import leads';
+      toast.error(errorMsg);
     }
   };
 
