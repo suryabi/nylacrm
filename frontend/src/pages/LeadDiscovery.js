@@ -101,9 +101,9 @@ export default function LeadDiscovery() {
       for (const outlet of outletsToImport) {
         const leadData = {
           company: outlet.name,
-          contact_person: '',
-          email: '',
-          phone: outlet.phone || '',
+          contact_person: null,  // null instead of empty string
+          email: null,  // null instead of empty string for EmailStr validation
+          phone: outlet.phone || null,
           category: outlet.type,
           tier: outlet.price_range.length >= 4 ? 'Tier 1' : outlet.price_range.length >= 3 ? 'Tier 2' : 'Tier 3',
           city: 'Bengaluru',
@@ -114,9 +114,9 @@ export default function LeadDiscovery() {
           source: 'lead_discovery',
           assigned_to: currentUser.id,
           priority: outlet.rating >= 4.5 ? 'high' : 'medium',
-          current_water_brand: '',
+          current_water_brand: null,
           current_landing_price: null,
-          current_volume: '',
+          current_volume: null,
           current_selling_price: null,
           interested_skus: [],
           notes: `Discovered via Lead Discovery. Rating: ${outlet.rating}★, Price: ${outlet.price_range}. Address: ${outlet.address}`,
