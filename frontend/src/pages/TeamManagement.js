@@ -214,6 +214,7 @@ export default function TeamManagement() {
               <TableHead>Territory</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
