@@ -185,9 +185,14 @@ export default function Login() {
           <div className="mt-8 p-4 bg-muted/50 rounded-lg border border-border">
             <p className="text-xs text-muted-foreground text-center mb-2 font-semibold">Demo Accounts:</p>
             <div className="text-xs text-muted-foreground space-y-1">
-              <p className="text-center">Admin: <span className="font-mono">admin@nyla.com</span> / admin123</p>
-              <p className="text-center">Karanabir (VP): <span className="font-mono">karanabir.gulati@nyla.com</span> / karanabir123</p>
-              <p className="text-center">Priya (Sales): <span className="font-mono">priya.sales@nyla.com</span> / priya123</p>
+              <p className="text-center">Admin: <span className="font-mono">admin@nylalife.com</span> / admin123</p>
+              <p className="text-center">Karanabir (VP): <span className="font-mono">karanabir.gulati@nylalife.com</span> / karanabir123</p>
+              <p className="text-center">Priya (Sales): <span className="font-mono">priya.sales@nylalife.com</span> / priya123</p>
+            </div>
+            <div className="mt-3 pt-3 border-t border-border">
+              <p className="text-xs text-center text-primary font-medium">
+                Or use "Sign in with Google Workspace" button above
+              </p>
             </div>
           </div>
         </motion.div>
