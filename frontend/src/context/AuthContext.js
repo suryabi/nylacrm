@@ -11,17 +11,32 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('token'));
 
   useEffect(() => {
-    if (token) {
-      fetchCurrentUser();
-    } else {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    try {
+      // Check for cookie-based session first (Google OAuth)
+      const response = await axios.get(`${API_URL}/auth/me`, {
+        withCredentials: true  // Send cookies
+      });
+      setUser(response.data);
       setLoading(false);
+    } catch (error) {
+      // If cookie auth fails, try JWT token
+      if (token) {
+        fetchCurrentUser();
+      } else {
+        setLoading(false);
+      }
     }
-  }, [token]);
+  };
 
   const fetchCurrentUser = async () => {
     try {
       const response = await axios.get(`${API_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
       });
       setUser(response.data);
     } catch (error) {
