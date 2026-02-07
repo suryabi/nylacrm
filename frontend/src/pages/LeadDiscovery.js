@@ -111,7 +111,7 @@ export default function LeadDiscovery() {
           country: 'India',
           region: 'South India',
           status: 'new',
-          source: 'lead_discovery',
+          source: 'Lead Discovery',  // Match exact dropdown option
           assigned_to: currentUser.id,
           priority: outlet.rating >= 4.5 ? 'high' : 'medium',
           current_water_brand: null,
