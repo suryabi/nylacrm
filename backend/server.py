@@ -423,38 +423,34 @@ async def exchange_google_session(request: Request, response: Response):
         
         user_data = auth_response.json()
     
-    # Create or update user in database
+    # Get user email
     user_email = user_data['email']
     user_name = user_data['name']
     user_picture = user_data.get('picture', '')
     session_token = user_data['session_token']
     
-    # Check if user exists
+    # Check if user exists in database (MUST be pre-registered by admin)
     existing_user = await db.users.find_one({'email': user_email}, {'_id': 0})
     
-    if existing_user:
-        user_id = existing_user['id']
-        # Update user info
-        await db.users.update_one(
-            {'email': user_email},
-            {'$set': {
-                'name': user_name,
-                'avatar': user_picture,
-                'updated_at': datetime.now(timezone.utc).isoformat()
-            }}
+    if not existing_user:
+        # User not registered - reject login
+        raise HTTPException(
+            status_code=403, 
+            detail='You do not have access. Please contact your manager to set up your account.'
         )
-    else:
-        # Create new user
-        user_id = str(uuid.uuid4())
-        await db.users.insert_one({
-            'id': user_id,
-            'email': user_email,
+    
+    # User exists - proceed with login
+    user_id = existing_user['id']
+    
+    # Update user info from Google
+    await db.users.update_one(
+        {'email': user_email},
+        {'$set': {
             'name': user_name,
-            'role': 'sales_rep',  # Default role
             'avatar': user_picture,
-            'is_active': True,
-            'created_at': datetime.now(timezone.utc).isoformat()
-        })
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }}
+    )
     
     # Create session
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
@@ -472,7 +468,7 @@ async def exchange_google_session(request: Request, response: Response):
         httponly=True,
         secure=True,
         samesite='none',
-        max_age=7*24*60*60,  # 7 days
+        max_age=7*24*60*60,
         path='/'
     )
     
