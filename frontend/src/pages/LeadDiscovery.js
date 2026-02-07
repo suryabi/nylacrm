@@ -135,7 +135,19 @@ export default function LeadDiscovery() {
       setSelectedOutlets([]);
     } catch (error) {
       console.error('Import error:', error);
-      const errorMsg = error.response?.data?.detail || error.message || 'Failed to import leads';
+      console.error('Error response:', error.response?.data);
+      
+      let errorMsg = 'Failed to import leads';
+      
+      if (error.response?.data?.detail) {
+        if (Array.isArray(error.response.data.detail)) {
+          // Pydantic validation errors
+          errorMsg = error.response.data.detail.map(e => `${e.loc?.join('.')}: ${e.msg}`).join(', ');
+        } else {
+          errorMsg = error.response.data.detail;
+        }
+      }
+      
       toast.error(errorMsg);
     }
   };
