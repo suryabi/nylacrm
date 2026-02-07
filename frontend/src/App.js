@@ -1,10 +1,11 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Toaster } from './components/ui/sonner';
 import DashboardLayout from './layouts/DashboardLayout';
 import SplashScreen from './pages/SplashScreen';
 import Login from './pages/Login';
+import AuthCallback from './components/AuthCallback';
 import Dashboard from './pages/Dashboard';
 import LeadsList from './pages/LeadsList';
 import LeadDetail from './pages/LeadDetail';
