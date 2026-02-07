@@ -263,6 +263,85 @@ export default function TeamManagement() {
   );
 }
 
+function OrgChartView({ users }) {
+  const [expanded, setExpanded] = React.useState({});
+
+  // Build hierarchy
+  const topLevel = users.filter(u => !u.reports_to);
+  
+  const getDirectReports = (userId) => {
+    return users.filter(u => u.reports_to === userId);
+  };
+
+  const toggleExpand = (userId) => {
+    setExpanded({...expanded, [userId]: !expanded[userId]});
+  };
+
+  const renderNode = (user, level = 0) => {
+    const directReports = getDirectReports(user.id);
+    const hasReports = directReports.length > 0;
+    const isExpanded = expanded[user.id];
+
+    return (
+      <div key={user.id} className="mb-2">
+        <div 
+          className={`flex items-center gap-3 p-4 rounded-xl border-2 ${
+            level === 0 ? 'bg-primary/10 border-primary/30' :
+            level === 1 ? 'bg-secondary border-border' :
+            'bg-card border-border'
+          }`}
+          style={{ marginLeft: `${level * 40}px` }}
+        >
+          {hasReports && (
+            <button
+              onClick={() => toggleExpand(user.id)}
+              className="h-6 w-6 rounded-full bg-primary/20 hover:bg-primary/30 flex items-center justify-center"
+            >
+              {isExpanded ? '−' : '+'}
+            </button>
+          )}
+          {!hasReports && <div className="w-6"></div>}
+          
+          <div className="h-12 w-12 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-lg">
+            {user.name && user.name[0] ? user.name[0].toUpperCase() : '?'}
+          </div>
+          
+          <div className="flex-1">
+            <p className="font-semibold text-lg">{user.name}</p>
+            <p className="text-sm text-muted-foreground">{user.designation || user.role}</p>
+            <p className="text-xs text-primary">{user.territory}</p>
+          </div>
+          
+          <div className="text-right">
+            <Badge variant="outline" className="capitalize">
+              {user.role?.replace('_', ' ')}
+            </Badge>
+          </div>
+        </div>
+
+        {hasReports && isExpanded && (
+          <div className="mt-2">
+            {directReports.map(report => renderNode(report, level + 1))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <Card className="p-6 border rounded-2xl">
+      <h2 className="text-lg font-semibold mb-6">Organizational Hierarchy</h2>
+      <div className="space-y-4">
+        {topLevel.length === 0 ? (
+          <p className="text-center text-muted-foreground py-12">No organizational structure found</p>
+        ) : (
+          topLevel.map(user => renderNode(user))
+        )}
+      </div>
+    </Card>
+  );
+}
+
 function AddTeamMemberForm({ onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
