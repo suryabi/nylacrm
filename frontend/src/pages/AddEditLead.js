@@ -235,9 +235,22 @@ export default function AddEditLead() {
   };
 
   const regionStates = formData.region ? Object.keys(LOCATIONS[formData.region]?.states || {}) : [];
+  
+  // Add current state if not in list
+  const availableStates = [...regionStates];
+  if (formData.state && !availableStates.includes(formData.state)) {
+    availableStates.push(formData.state);
+  }
+
   const stateCities = formData.state && formData.region 
     ? LOCATIONS[formData.region]?.states[formData.state] || []
     : [];
+  
+  // Add current city if not in list
+  const availableCities = [...stateCities];
+  if (formData.city && !availableCities.includes(formData.city)) {
+    availableCities.push(formData.city);
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6" data-testid="add-edit-lead-page">
