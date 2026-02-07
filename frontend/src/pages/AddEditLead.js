@@ -362,7 +362,7 @@ export default function AddEditLead() {
                 </SelectTrigger>
                 <SelectContent>
                   <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Available States</div>
-                  {regionStates.map(state => (
+                  {availableStates.map(state => (
                     <SelectItem key={state} value={state}>{state}</SelectItem>
                   ))}
                 </SelectContent>
