@@ -115,10 +115,23 @@ export default function Dashboard() {
     return <div className="flex items-center justify-center py-12"><p className="text-foreground-muted">Loading...</p></div>;
   }
 
-  const statusData = Object.entries(analytics?.status_distribution || {}).map(([key, value]) => ({
-    name: key.replace('_', ' ').toUpperCase(),
-    value
-  }));
+  const statusData = Object.entries(analytics?.status_distribution || {}).map(([key, value]) => {
+    const labels = {
+      'new': 'New',
+      'contacted': 'Contacted',
+      'qualified': 'Qualified',
+      'not_qualified': 'Not Qualified',
+      'in_progress': 'In Progress',
+      'proposal_stage': 'Proposal Stage',
+      'won': 'Won',
+      'lost': 'Lost',
+      'future_followup': 'Future Follow up'
+    };
+    return {
+      name: labels[key] || key,
+      value
+    };
+  });
 
   const hasActiveFilters = territoryFilter !== 'all' || stateFilter !== 'all' || cityFilter !== 'all' || salesResource !== 'all';
 
