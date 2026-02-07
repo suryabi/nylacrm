@@ -159,29 +159,50 @@ export default function TeamManagement() {
           <h1 className="text-3xl font-semibold">Team Management</h1>
           <p className="text-muted-foreground mt-1">Manage your sales team members</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="add-team-member-button">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Team Member
+        <div className="flex gap-3">
+          <div className="flex gap-2 bg-secondary p-1 rounded-full">
+            <Button
+              variant={viewMode === 'table' ? 'default' : 'ghost'}
+              onClick={() => setViewMode('table')}
+              size="sm"
+              className="rounded-full"
+            >
+              Table
             </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Add Team Member</DialogTitle>
-            </DialogHeader>
-            <AddTeamMemberForm
-              onSuccess={() => {
-                setDialogOpen(false);
-                fetchUsers();
-              }}
-            />
-          </DialogContent>
-        </Dialog>
+            <Button
+              variant={viewMode === 'chart' ? 'default' : 'ghost'}
+              onClick={() => setViewMode('chart')}
+              size="sm"
+              className="rounded-full"
+            >
+              Org Chart
+            </Button>
+          </div>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="add-team-member-button">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Team Member
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Add Team Member</DialogTitle>
+              </DialogHeader>
+              <AddTeamMemberForm
+                onSuccess={() => {
+                  setDialogOpen(false);
+                  fetchUsers();
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      {/* Team Members Table */}
-      <Card className="p-6">
+      {viewMode === 'table' ? (
+        // Table View
+        <Card className="p-6">
         <Table>
           <TableHeader>
             <TableRow>
