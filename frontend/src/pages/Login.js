@@ -85,6 +85,12 @@ export default function Login() {
             <p className="text-muted-foreground">
               {showRegister ? 'Register for a new account' : 'Sign in to your account'}
             </p>
+            
+            {errorMessage && (
+              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-800">{errorMessage}</p>
+              </div>
+            )}
           </div>
 
           {!showRegister ? (
