@@ -2233,7 +2233,7 @@ async def allocate_territory_targets(
 ):
     """Allocate country target to territories"""
     
-    if current_user['role'] not in ['ceo', 'director', 'vp', 'admin']:
+    if current_user['role'] not in ['CEO', 'Director', 'Vice President']:
         raise HTTPException(status_code=403, detail='Only leadership can allocate territory targets')
     
     # Get plan
