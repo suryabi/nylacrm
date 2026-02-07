@@ -13,11 +13,13 @@ const MOUNTAIN_BG = 'https://images.unsplash.com/photo-1761589951732-2795cd6ecdb
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
   const [email, setEmail] = useState('admin@nyla.com');
   const [password, setPassword] = useState('admin123');
   const [loading, setLoading] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
+  const errorMessage = location.state?.error;
 
   const handleLogin = async (e) => {
     e.preventDefault();
