@@ -85,6 +85,13 @@ export default function LeadDiscovery() {
     }
   };
 
+  const isAlreadyImported = (outlet) => {
+    return existingLeads.some(lead => 
+      lead.company?.toLowerCase() === outlet.name?.toLowerCase() ||
+      (lead.phone && outlet.phone && lead.phone === outlet.phone)
+    );
+  };
+
   const toggleOutletSelection = (outletId) => {
     if (selectedOutlets.includes(outletId)) {
       setSelectedOutlets(selectedOutlets.filter(id => id !== outletId));
