@@ -40,6 +40,7 @@ export default function LeadDiscovery() {
   const [searching, setSearching] = React.useState(false);
   const [results, setResults] = React.useState([]);
   const [selectedOutlets, setSelectedOutlets] = React.useState([]);
+  const [existingLeads, setExistingLeads] = React.useState([]);
 
   const handleSearch = () => {
     setSearching(true);
