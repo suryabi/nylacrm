@@ -29,7 +29,7 @@ export default function AuthCallback() {
         const response = await axios.post(`${API_URL}/auth/google-session`, {
           session_id: sessionId
         }, {
-          withCredentials: true  // Important for cookies
+          withCredentials: true
         });
 
         const userData = response.data.user;
@@ -38,7 +38,14 @@ export default function AuthCallback() {
         navigate('/dashboard', { state: { user: userData }, replace: true });
       } catch (error) {
         console.error('Auth error:', error);
-        navigate('/login');
+        
+        // Check if it's an access denied error
+        if (error.response?.status === 403) {
+          const errorMessage = error.response?.data?.detail || 'You do not have access. Please contact your manager.';
+          navigate('/login', { state: { error: errorMessage }, replace: true });
+        } else {
+          navigate('/login', { state: { error: 'Authentication failed. Please try again.' }, replace: true });
+        }
       }
     };
 
