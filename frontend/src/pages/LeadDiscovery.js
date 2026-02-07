@@ -184,6 +184,12 @@ export default function LeadDiscovery() {
     }
   };
 
+  // Pagination
+  const totalPages = Math.ceil(results.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentResults = results.slice(startIndex, endIndex);
+
   return (
     <div className="space-y-6">
       <div>
