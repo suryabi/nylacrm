@@ -29,7 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
-import { Plus, Loader2 } from 'lucide-react';
+import { Plus, Loader2, Edit } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
