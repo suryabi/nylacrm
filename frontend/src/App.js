@@ -42,7 +42,24 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Routes>
+        <AppRouter />
+      </BrowserRouter>
+    </AuthProvider>
+  );
+}
+
+function AppRouter() {
+  const location = useLocation();
+  
+  // Check URL fragment for session_id (OAuth callback)
+  // CRITICAL: Do this during render, not in useEffect
+  if (location.hash?.includes('session_id=')) {
+    return <AuthCallback />;
+  }
+
+  return (
+    <>
+      <Routes>
           <Route path="/" element={<SplashScreen />} />
           <Route path="/login" element={<Login />} />
           
