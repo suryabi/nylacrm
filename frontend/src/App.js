@@ -26,6 +26,7 @@ import LeaveManagement from './pages/LeaveManagement';
 import SalesTargets from './pages/SalesTargets';
 import ReportsPage from './pages/ReportsPage';
 import SalesPortal from './pages/SalesPortal';
+import LeadDiscovery from './pages/LeadDiscovery';
 import '@/App.css';
 
 function ProtectedRoute({ children }) {
