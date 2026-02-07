@@ -147,6 +147,7 @@ export default function AddEditLead() {
     try {
       const response = await leadsAPI.getById(id);
       const lead = response.data;
+      
       setFormData({
         company: lead.company || '',
         contact_person: lead.contact_person || '',
