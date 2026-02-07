@@ -360,29 +360,40 @@ export default function LeadDiscovery() {
             </div>
           ) : (
             <div className="space-y-3 max-h-[600px] overflow-y-auto">
-              {results.map(outlet => (
-                <Card
-                  key={outlet.id}
-                  className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                    selectedOutlets.includes(outlet.id)
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-primary/50'
-                  }`}
-                  onClick={() => toggleOutletSelection(outlet.id)}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-start gap-3 mb-2">
-                        <Checkbox
-                          checked={selectedOutlets.includes(outlet.id)}
-                          onCheckedChange={() => toggleOutletSelection(outlet.id)}
-                          onClick={e => e.stopPropagation()}
-                        />
-                        <div>
-                          <h3 className="font-semibold text-lg">{outlet.name}</h3>
-                          <Badge variant="outline" className="mt-1">{outlet.type}</Badge>
+              {results.map(outlet => {
+                const alreadyImported = isAlreadyImported(outlet);
+                
+                return (
+                  <Card
+                    key={outlet.id}
+                    className={`p-4 border-2 rounded-xl transition-all ${
+                      alreadyImported
+                        ? 'border-green-300 bg-green-50 opacity-60'
+                        : selectedOutlets.includes(outlet.id)
+                        ? 'border-primary bg-primary/5 cursor-pointer'
+                        : 'border-border hover:border-primary/50 cursor-pointer'
+                    }`}
+                    onClick={() => !alreadyImported && toggleOutletSelection(outlet.id)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-start gap-3 mb-2">
+                          <Checkbox
+                            checked={selectedOutlets.includes(outlet.id)}
+                            onCheckedChange={() => toggleOutletSelection(outlet.id)}
+                            onClick={e => e.stopPropagation()}
+                            disabled={alreadyImported}
+                          />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-lg">{outlet.name}</h3>
+                              {alreadyImported && (
+                                <Badge className="bg-green-600 text-white">Already Imported</Badge>
+                              )}
+                            </div>
+                            <Badge variant="outline" className="mt-1">{outlet.type}</Badge>
+                          </div>
                         </div>
-                      </div>
                       
                       <div className="ml-10 space-y-1 text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
