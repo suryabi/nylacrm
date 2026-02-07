@@ -22,11 +22,28 @@ import TimelineSummaryCompact from '../components/TimelineSummaryCompact';
 const statusColors = {
   new: 'bg-blue-100 text-blue-800',
   contacted: 'bg-yellow-100 text-yellow-800',
+  qualified: 'bg-green-100 text-green-800',
+  not_qualified: 'bg-gray-100 text-gray-800',
   in_progress: 'bg-purple-100 text-purple-800',
   proposal_stage: 'bg-orange-100 text-orange-800',
   won: 'bg-emerald-100 text-emerald-800',
   lost: 'bg-red-100 text-red-800',
-  future_followup: 'bg-gray-100 text-gray-800',
+  future_followup: 'bg-slate-100 text-slate-800',
+};
+
+const getStatusLabel = (status) => {
+  const labels = {
+    'new': 'New',
+    'contacted': 'Contacted',
+    'qualified': 'Qualified',
+    'not_qualified': 'Not Qualified',
+    'in_progress': 'In Progress',
+    'proposal_stage': 'Proposal Stage',
+    'won': 'Won',
+    'lost': 'Lost',
+    'future_followup': 'Future Follow up'
+  };
+  return labels[status] || status;
 };
 
 export default function LeadDetail() {
