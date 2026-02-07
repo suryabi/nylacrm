@@ -130,8 +130,33 @@ export default function LeadDiscovery() {
                 max="20"
                 value={radius}
                 onChange={e => setRadius(parseInt(e.target.value))}
-                className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer"
+                className="w-full h-3 bg-secondary rounded-lg appearance-none cursor-pointer"
+                style={{
+                  WebkitAppearance: 'none',
+                  background: `linear-gradient(to right, hsl(155, 35%, 42%) 0%, hsl(155, 35%, 42%) ${(radius - 1) / 19 * 100}%, hsl(35, 15%, 88%) ${(radius - 1) / 19 * 100}%, hsl(35, 15%, 88%) 100%)`
+                }}
               />
+              <style>{`
+                input[type="range"]::-webkit-slider-thumb {
+                  appearance: none;
+                  width: 24px;
+                  height: 24px;
+                  border-radius: 50%;
+                  background: hsl(155, 35%, 42%);
+                  cursor: pointer;
+                  border: 3px solid white;
+                  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                }
+                input[type="range"]::-moz-range-thumb {
+                  width: 24px;
+                  height: 24px;
+                  border-radius: 50%;
+                  background: hsl(155, 35%, 42%);
+                  cursor: pointer;
+                  border: 3px solid white;
+                  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                }
+              `}</style>
               <div className="flex justify-between text-xs text-muted-foreground mt-1">
                 <span>1 km</span>
                 <span>20 km</span>
