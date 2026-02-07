@@ -142,6 +142,7 @@ export default function AddEditLead() {
         email: lead.email || '',
         phone: lead.phone || '',
         category: lead.category || '',
+        tier: lead.tier || '',
         city: lead.city || '',
         state: lead.state || '',
         country: lead.country || 'India',
