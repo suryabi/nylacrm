@@ -42,34 +42,47 @@ export default function LeadDiscovery() {
   const [selectedOutlets, setSelectedOutlets] = React.useState([]);
   const [existingLeads, setExistingLeads] = React.useState([]);
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
     setSearching(true);
     
-    // Simulate API call with demo data
-    setTimeout(() => {
-      let filtered = DEMO_OUTLETS;
+    try {
+      // Fetch existing leads to check for duplicates
+      const token = localStorage.getItem('token');
+      const leadsRes = await axios.get(process.env.REACT_APP_BACKEND_URL + '/api/leads?limit=1000', {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setExistingLeads(leadsRes.data);
       
-      // Filter by types
-      if (selectedTypes.length > 0) {
-        filtered = filtered.filter(o => selectedTypes.includes(o.type));
-      }
-      
-      // Filter by rating
-      filtered = filtered.filter(o => o.rating >= minRating);
-      
-      // Filter by price range
-      if (priceRange !== 'all') {
-        const priceMap = { 'budget': 2, 'mid': 3, 'premium': 5 };
-        filtered = filtered.filter(o => o.price_range.length >= priceMap[priceRange]);
-      }
-      
-      // Filter by radius
-      filtered = filtered.filter(o => o.distance <= radius);
-      
-      setResults(filtered);
+      // Simulate API call with demo data
+      setTimeout(() => {
+        let filtered = DEMO_OUTLETS;
+        
+        // Filter by types
+        if (selectedTypes.length > 0) {
+          filtered = filtered.filter(o => selectedTypes.includes(o.type));
+        }
+        
+        // Filter by rating
+        filtered = filtered.filter(o => o.rating >= minRating);
+        
+        // Filter by price range
+        if (priceRange !== 'all') {
+          const priceMap = { 'budget': 2, 'mid': 3, 'premium': 5 };
+          filtered = filtered.filter(o => o.price_range.length >= priceMap[priceRange]);
+        }
+        
+        // Filter by radius
+        filtered = filtered.filter(o => o.distance <= radius);
+        
+        setResults(filtered);
+        setSearching(false);
+        toast.success(`Found ${filtered.length} outlets matching your criteria`);
+      }, 1500);
+    } catch (error) {
       setSearching(false);
-      toast.success(`Found ${filtered.length} outlets matching your criteria`);
-    }, 1500);
+      toast.error('Failed to search. Please try again.');
+    }
   };
 
   const toggleOutletSelection = (outletId) => {
