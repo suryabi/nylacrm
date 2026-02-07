@@ -380,7 +380,7 @@ export default function AddEditLead() {
                   <SelectValue placeholder="Select city" />
                 </SelectTrigger>
                 <SelectContent>
-                  {stateCities.map(city => (
+                  {availableCities.map(city => (
                     <SelectItem key={city} value={city}>{city}</SelectItem>
                   ))}
                 </SelectContent>
