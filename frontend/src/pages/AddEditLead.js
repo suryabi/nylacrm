@@ -381,13 +381,16 @@ export default function AddEditLead() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="source">Source</Label>
-              <Input
-                id="source"
-                placeholder="Website, Referral, Cold Call"
-                value={formData.source}
-                onChange={(e) => updateField('source', e.target.value)}
-                data-testid="lead-source-input"
-              />
+              <Select value={formData.source} onValueChange={(v) => updateField('source', v)}>
+                <SelectTrigger data-testid="lead-source-select">
+                  <SelectValue placeholder="Select source" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LEAD_SOURCES.map(source => (
+                    <SelectItem key={source} value={source}>{source}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="assigned_to">Assign To</Label>
