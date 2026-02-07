@@ -263,7 +263,6 @@ export default function TeamManagement() {
   );
 }
 
-}
 
 function AddTeamMemberForm({ onSuccess }) {
   const [loading, setLoading] = useState(false);
