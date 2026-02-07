@@ -253,6 +253,18 @@ export default function TeamManagement() {
                     {user.is_active ? 'Active' : 'Inactive'}
                   </Badge>
                 </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setEditUser(user);
+                      setEditDialogOpen(true);
+                    }}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
