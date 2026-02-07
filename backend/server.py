@@ -136,6 +136,7 @@ class LeadCreate(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     category: Optional[str] = None
+    tier: Optional[str] = None
     city: str
     state: str
     country: str = 'India'
