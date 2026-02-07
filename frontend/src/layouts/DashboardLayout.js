@@ -7,16 +7,16 @@ import { LogOut, Menu, X } from 'lucide-react';
 const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
-  { name: 'Leads', href: '/leads', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
-  { name: 'Targets', href: '/targets', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager'] },
-  { name: 'Reports', href: '/reports-new', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager'] },
-  { name: 'Sales Portal', href: '/sales-portal', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
-  { name: 'Daily Status', href: '/daily-status', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
-  { name: 'Team Status', href: '/team-status', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager'] },
-  { name: 'Bottle Preview', href: '/bottle-preview', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
-  { name: 'Leaves', href: '/leaves', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'] },
-  { name: 'Team', href: '/team', roles: ['ceo', 'director', 'vp', 'admin', 'sales_manager'] },
+  { name: 'Dashboard', href: '/dashboard', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Business Development Executive'] },
+  { name: 'Leads', href: '/leads', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Business Development Executive'] },
+  { name: 'Targets', href: '/targets', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager'] },
+  { name: 'Reports', href: '/reports-new', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager'] },
+  { name: 'Sales Portal', href: '/sales-portal', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Business Development Executive'] },
+  { name: 'Daily Status', href: '/daily-status', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Business Development Executive'] },
+  { name: 'Team Status', href: '/team-status', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager'] },
+  { name: 'Bottle Preview', href: '/bottle-preview', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Business Development Executive'] },
+  { name: 'Leaves', href: '/leaves', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Business Development Executive'] },
+  { name: 'Team', href: '/team', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager'] },
 ];
 
 export default function DashboardLayout({ children }) {
