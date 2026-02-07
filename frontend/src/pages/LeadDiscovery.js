@@ -78,14 +78,51 @@ export default function LeadDiscovery() {
     }
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     if (selectedOutlets.length === 0) {
       toast.error('Please select at least one outlet to import');
       return;
     }
     
-    toast.success(`${selectedOutlets.length} outlets imported as raw leads!`);
-    setSelectedOutlets([]);
+    try {
+      const token = localStorage.getItem('token');
+      const outletsToImport = results.filter(o => selectedOutlets.includes(o.id));
+      
+      // Import each outlet as a lead
+      const importPromises = outletsToImport.map(outlet => {
+        const leadData = {
+          company: outlet.name,
+          contact_person: '',
+          email: '',
+          phone: outlet.phone || '',
+          category: outlet.type,
+          tier: outlet.price_range.length >= 4 ? 'Tier 1' : outlet.price_range.length >= 3 ? 'Tier 2' : 'Tier 3',
+          city: 'Bengaluru',  // Extract from address in real implementation
+          state: 'Karnataka',
+          country: 'India',
+          region: 'South India',
+          status: 'new',
+          source: 'lead_discovery',
+          priority: outlet.rating >= 4.5 ? 'high' : 'medium',
+          notes: `Discovered via Lead Discovery. Rating: ${outlet.rating}★, Price: ${outlet.price_range}. Address: ${outlet.address}`,
+          estimated_value: outlet.price_range.length * 100000
+        };
+
+        return axios.post(process.env.REACT_APP_BACKEND_URL + '/api/leads', leadData, {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
+        });
+      });
+
+      await Promise.all(importPromises);
+      
+      toast.success(`✓ ${selectedOutlets.length} outlets imported as new leads! Check Leads page.`, {
+        duration: 5000
+      });
+      setSelectedOutlets([]);
+    } catch (error) {
+      toast.error('Failed to import leads. Please try again.');
+    }
   };
 
   const toggleType = (type) => {
