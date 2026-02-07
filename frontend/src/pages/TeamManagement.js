@@ -124,6 +124,7 @@ export default function TeamManagement() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [viewMode, setViewMode] = useState('table'); // 'table' or 'chart'
 
   useEffect(() => {
     fetchUsers();
