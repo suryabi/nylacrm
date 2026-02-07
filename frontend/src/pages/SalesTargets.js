@@ -9,6 +9,9 @@ import { Plus, ArrowLeft, CheckCircle2, AlertCircle, Edit, Trash2 } from 'lucide
 
 const API = process.env.REACT_APP_BACKEND_URL + '/api';
 
+// Configure axios to always send credentials
+axios.defaults.withCredentials = true;
+
 export default function SalesTargets() {
   const [page, setPage] = React.useState('list');
   const [plans, setPlans] = React.useState([]);
