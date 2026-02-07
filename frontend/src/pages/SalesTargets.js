@@ -23,7 +23,8 @@ export default function SalesTargets() {
   const loadPlans = async () => {
     const token = localStorage.getItem('token');
     const res = await axios.get(API + '/target-plans', {
-      headers: { Authorization: 'Bearer ' + token }
+      headers: { Authorization: 'Bearer ' + token },
+      withCredentials: true
     });
     setPlans(res.data);
   };
