@@ -2139,7 +2139,7 @@ async def get_pending_approvals(current_user: dict = Depends(get_current_user)):
 async def create_target_plan(plan: TargetPlanCreate, current_user: dict = Depends(get_current_user)):
     """Create sales target plan"""
     
-    if current_user['role'] not in ['ceo', 'director', 'vp', 'admin']:
+    if current_user['role'] not in ['CEO', 'Director', 'Vice President']:
         raise HTTPException(status_code=403, detail='Only leadership can create target plans')
     
     plan_data = plan.model_dump()
