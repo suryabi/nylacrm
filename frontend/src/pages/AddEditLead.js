@@ -358,6 +358,8 @@ export default function AddEditLead() {
                 <SelectContent>
                   <SelectItem value="new">New</SelectItem>
                   <SelectItem value="contacted">Contacted</SelectItem>
+                  <SelectItem value="qualified">Qualified</SelectItem>
+                  <SelectItem value="not_qualified">Not Qualified</SelectItem>
                   <SelectItem value="in_progress">In Progress</SelectItem>
                   <SelectItem value="proposal_stage">Proposal Stage</SelectItem>
                   <SelectItem value="won">Won</SelectItem>
