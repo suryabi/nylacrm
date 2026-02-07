@@ -385,19 +385,9 @@ def create_access_token(user_id: str, email: str, role: str) -> str:
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    try:
-        token = credentials.credentials
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        user_id = payload.get('user_id')
-        user_doc = await db.users.find_one({'id': user_id}, {'_id': 0})
-        if not user_doc:
-            raise HTTPException(status_code=401, detail='User not found')
-        return user_doc
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail='Token expired')
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail='Invalid token')
+async def get_current_user(request: Request):
+    """Get user from cookie or JWT token"""
+    return await get_current_user_from_cookie_or_header(request)
 
 # ============= GOOGLE OAUTH AUTH ROUTES =============
 
