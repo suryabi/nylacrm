@@ -39,16 +39,16 @@ const DESIGNATIONS = [
   'Vice President',
   'National Sales Head',
   'Regional Sales Manager',
-  'BDE'
+  'Business Development Executive'
 ];
 
 const ROLE_MAPPING = {
-  'CEO': 'ceo',
-  'Director': 'director',
-  'Vice President': 'vp',
-  'National Sales Head': 'sales_manager',
-  'Regional Sales Manager': 'sales_manager',
-  'BDE': 'sales_rep'
+  'CEO': 'CEO',
+  'Director': 'Director',
+  'Vice President': 'Vice President',
+  'National Sales Head': 'National Sales Head',
+  'Regional Sales Manager': 'Regional Sales Manager',
+  'Business Development Executive': 'Business Development Executive'
 };
 
 const TERRITORIES = [
