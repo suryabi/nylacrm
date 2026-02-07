@@ -255,6 +255,10 @@ export default function TeamManagement() {
           </TableBody>
         </Table>
       </Card>
+      ) : (
+        // Org Chart View
+        <OrgChartView users={sortedUsers} />
+      )}
     </div>
   );
 }
