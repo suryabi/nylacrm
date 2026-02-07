@@ -447,7 +447,7 @@ export default function LeadsList() {
                     </TableCell>
                     <TableCell>
                       <Badge className={statusColors[lead.status]}>
-                        {lead.status.replace('_', ' ')}
+                        {getStatusLabel(lead.status)}
                       </Badge>
                     </TableCell>
                     <TableCell>{format(new Date(lead.created_at), 'MMM d, yyyy')}</TableCell>
