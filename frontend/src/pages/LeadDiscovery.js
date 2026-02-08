@@ -219,17 +219,59 @@ export default function LeadDiscovery() {
           
           <div className="space-y-5">
             <div>
-              <Label>Pin Code *</Label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                <Input
-                  value={pincode}
-                  onChange={e => setPincode(e.target.value)}
-                  placeholder="560001"
-                  className="pl-10 h-12"
-                />
+              <Label className="mb-3 block">Search By</Label>
+              <div className="flex gap-2 bg-secondary p-1 rounded-full">
+                <Button
+                  type="button"
+                  variant={searchMode === 'pincode' ? 'default' : 'ghost'}
+                  onClick={() => setSearchMode('pincode')}
+                  size="sm"
+                  className="rounded-full flex-1"
+                >
+                  Pin Code
+                </Button>
+                <Button
+                  type="button"
+                  variant={searchMode === 'location' ? 'default' : 'ghost'}
+                  onClick={() => setSearchMode('location')}
+                  size="sm"
+                  className="rounded-full flex-1"
+                >
+                  Location Name
+                </Button>
               </div>
             </div>
+
+            {searchMode === 'pincode' ? (
+              <div>
+                <Label>Pin Code *</Label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                  <Input
+                    value={pincode}
+                    onChange={e => setPincode(e.target.value)}
+                    placeholder="560001"
+                    className="pl-10 h-12"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div>
+                <Label>Location Name *</Label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                  <Input
+                    value={locationName}
+                    onChange={e => setLocationName(e.target.value)}
+                    placeholder="e.g., Jubilee Hills, Banjara Hills, MG Road"
+                    className="pl-10 h-12"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Try: Jubilee Hills, Koramangala, Connaught Place, etc.
+                </p>
+              </div>
+            )}
 
             <div>
               <Label>Radius: {radius} km</Label>
