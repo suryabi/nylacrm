@@ -390,7 +390,7 @@ export default function LeadDiscovery() {
 
             <Button
               onClick={handleSearch}
-              disabled={searching || !pincode}
+              disabled={searching || (!pincode && !locationName)}
               className="w-full h-14 rounded-full text-base"
             >
               {searching ? (
