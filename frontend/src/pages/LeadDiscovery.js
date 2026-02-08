@@ -46,45 +46,57 @@ export default function LeadDiscovery() {
 
   const handleSearch = async () => {
     setSearching(true);
-    setCurrentPage(1); // Reset to first page on new search
+    setCurrentPage(1);
     
     try {
-      // Fetch existing leads to check for duplicates
       const token = localStorage.getItem('token');
+      
+      // Fetch existing leads for duplicate check
       const leadsRes = await axios.get(process.env.REACT_APP_BACKEND_URL + '/api/leads?limit=1000', {
         headers: { Authorization: `Bearer ${token}` },
         withCredentials: true
       });
       setExistingLeads(leadsRes.data);
       
-      // Simulate API call with demo data
-      setTimeout(() => {
-        let filtered = DEMO_OUTLETS;
-        
-        // Filter by types
-        if (selectedTypes.length > 0) {
-          filtered = filtered.filter(o => selectedTypes.includes(o.type));
+      // Call Google Places API via backend
+      const searchRes = await axios.post(
+        process.env.REACT_APP_BACKEND_URL + '/api/lead-discovery/search',
+        {
+          pincode: pincode,
+          radius: radius,
+          types: selectedTypes,
+          min_rating: minRating,
+          price_range: priceRange
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
         }
-        
-        // Filter by rating
-        filtered = filtered.filter(o => o.rating >= minRating);
-        
-        // Filter by price range
-        if (priceRange !== 'all') {
-          const priceMap = { 'budget': 2, 'mid': 3, 'premium': 5 };
-          filtered = filtered.filter(o => o.price_range.length >= priceMap[priceRange]);
-        }
-        
-        // Filter by radius
-        filtered = filtered.filter(o => o.distance <= radius);
-        
-        setResults(filtered);
-        setSearching(false);
-        toast.success(`Found ${filtered.length} outlets matching your criteria`);
-      }, 1500);
+      );
+      
+      // Transform Google Places results to match our outlet format
+      const transformedResults = searchRes.data.results.map((place, idx) => ({
+        id: place.place_id || idx,
+        name: place.name,
+        type: selectedTypes[0] || 'Restaurant',
+        address: place.formatted_address || place.address,
+        phone: place.phone,
+        rating: place.rating,
+        price_range: place.price_level,
+        pincode: pincode,
+        distance: 0,  // Calculate from location if needed
+        place_id: place.place_id
+      }));
+      
+      setResults(transformedResults);
+      toast.success(`Found ${transformedResults.length} real outlets via Google Places API!`, {
+        duration: 4000
+      });
     } catch (error) {
+      console.error('Search error:', error);
+      toast.error(error.response?.data?.detail || 'Search failed. Please try again.');
+    } finally {
       setSearching(false);
-      toast.error('Failed to search. Please try again.');
     }
   };
 
