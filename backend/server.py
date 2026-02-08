@@ -2031,71 +2031,100 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
             formatted_location = geocode_data['results'][0]['formatted_address']
             
             # Map outlet types to Google Place types
-            google_types = []
-            if 'Star Hotel' in types or 'Restaurant' in types:
-                google_types.append('restaurant')
+            type_searches = []
+            if 'Star Hotel' in types:
+                type_searches.append('lodging')
+            if 'Restaurant' in types:
+                type_searches.append('restaurant')
             if 'Bar & Kitchen' in types:
-                google_types.append('bar')
+                type_searches.append('bar')
             if 'Cafe' in types:
-                google_types.append('cafe')
-            if not google_types:
-                google_types = ['restaurant']
+                type_searches.append('cafe')
+            if 'Wellness Center' in types:
+                type_searches.append('spa')
+            if 'Premium Club' in types:
+                type_searches.append('night_club')
             
-            # Use Places API (New) - Nearby Search
-            places_url = "https://places.googleapis.com/v1/places:searchNearby"
+            # If no types selected, search all
+            if not type_searches:
+                type_searches = ['restaurant', 'cafe', 'bar', 'lodging']
             
-            headers = {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': api_key,
-                'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.internationalPhoneNumber,places.rating,places.userRatingCount,places.priceLevel,places.types,places.id'
-            }
+            # Search for EACH type separately and combine results
+            all_places = []
+            seen_place_ids = set()
             
-            body = {
-                "includedTypes": google_types,
-                "maxResultCount": 20,
-                "locationRestriction": {
-                    "circle": {
-                        "center": {
-                            "latitude": location['lat'],
-                            "longitude": location['lng']
-                        },
-                        "radius": radius
+            for search_type in type_searches:
+                places_url = "https://places.googleapis.com/v1/places:searchNearby"
+                
+                headers = {
+                    'Content-Type': 'application/json',
+                    'X-Goog-Api-Key': api_key,
+                    'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.internationalPhoneNumber,places.rating,places.userRatingCount,places.priceLevel,places.types,places.id'
+                }
+                
+                body = {
+                    "includedTypes": [search_type],
+                    "maxResultCount": 20,
+                    "locationRestriction": {
+                        "circle": {
+                            "center": {
+                                "latitude": location['lat'],
+                                "longitude": location['lng']
+                            },
+                            "radius": float(radius)
+                        }
                     }
                 }
-            }
-            
-            places_response = await client.post(places_url, json=body, headers=headers)
-            places_data = places_response.json()
-            
-            # Process results
-            all_places = []
-            for place in places_data.get('places', []):
-                # Filter by rating
-                rating = place.get('rating', 0)
-                if rating < min_rating:
+                
+                try:
+                    places_response = await client.post(places_url, json=body, headers=headers)
+                    places_data = places_response.json()
+                    
+                    # Process results from this type
+                    for place in places_data.get('places', []):
+                        place_id = place.get('id', '')
+                        
+                        # Skip duplicates
+                        if place_id in seen_place_ids:
+                            continue
+                        seen_place_ids.add(place_id)
+                        
+                        # Filter by rating
+                        rating = place.get('rating', 0)
+                        if rating < min_rating:
+                            continue
+                        
+                        # Filter by price level
+                        price_level_map = {
+                            'PRICE_LEVEL_FREE': 1,
+                            'PRICE_LEVEL_INEXPENSIVE': 2,
+                            'PRICE_LEVEL_MODERATE': 3,
+                            'PRICE_LEVEL_EXPENSIVE': 4,
+                            'PRICE_LEVEL_VERY_EXPENSIVE': 5
+                        }
+                        price_level = price_level_map.get(place.get('priceLevel', 'PRICE_LEVEL_MODERATE'), 3)
+                        
+                        if price_range == 'budget' and price_level > 2:
+                            continue
+                        if price_range == 'premium' and price_level < 4:
+                            continue
+                        
+                        outlet_data = {
+                            'place_id': place_id,
+                            'name': place.get('displayName', {}).get('text', 'Unknown'),
+                            'address': place.get('formattedAddress', ''),
+                            'phone': place.get('internationalPhoneNumber', ''),
+                            'rating': rating,
+                            'user_ratings_total': place.get('userRatingCount', 0),
+                            'price_level': '₹' * price_level,
+                            'types': place.get('types', []),
+                            'search_type': search_type
+                        }
+                        
+                        all_places.append(outlet_data)
+                except Exception as search_error:
+                    logger.warning(f'Search failed for type {search_type}: {str(search_error)}')
                     continue
-                
-                # Filter by price level
-                price_level_map = {'PRICE_LEVEL_FREE': 1, 'PRICE_LEVEL_INEXPENSIVE': 2, 'PRICE_LEVEL_MODERATE': 3, 'PRICE_LEVEL_EXPENSIVE': 4, 'PRICE_LEVEL_VERY_EXPENSIVE': 5}
-                price_level = price_level_map.get(place.get('priceLevel', 'PRICE_LEVEL_MODERATE'), 3)
-                
-                if price_range == 'budget' and price_level > 2:
-                    continue
-                if price_range == 'premium' and price_level < 4:
-                    continue
-                
-                outlet_data = {
-                    'place_id': place.get('id', ''),
-                    'name': place.get('displayName', {}).get('text', 'Unknown'),
-                    'address': place.get('formattedAddress', ''),
-                    'phone': place.get('internationalPhoneNumber', ''),
-                    'rating': rating,
-                    'user_ratings_total': place.get('userRatingCount', 0),
-                    'price_level': '₹' * price_level,
-                    'types': place.get('types', [])
-                }
-                
-                all_places.append(outlet_data)
             
             return {
                 'results': all_places,
