@@ -2002,22 +2002,27 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
     """Search places using Google Places API (New)"""
     
     pincode = search_params.get('pincode')
-    radius = search_params.get('radius', 5) * 1000  # Convert km to meters
+    location_name = search_params.get('location_name')
+    radius = search_params.get('radius', 5) * 1000
     types = search_params.get('types', [])
     min_rating = search_params.get('min_rating', 4.0)
     price_range = search_params.get('price_range', 'all')
     
-    if not pincode:
-        raise HTTPException(status_code=400, detail='Pin code is required')
+    if not pincode and not location_name:
+        raise HTTPException(status_code=400, detail='Pin code or location name is required')
     
     try:
         api_key = os.environ['GOOGLE_MAPS_API_KEY']
         
-        # First, geocode the pincode to get coordinates using Geocoding API
+        # Geocode to get coordinates
         async with httpx.AsyncClient() as client:
             geocode_url = f"https://maps.googleapis.com/maps/api/geocode/json"
+            
+            # Use location name or pincode
+            search_query = location_name if location_name else f'{pincode}, India'
+            
             geocode_params = {
-                'address': f'{pincode}, India',
+                'address': search_query,
                 'key': api_key
             }
             
@@ -2025,7 +2030,7 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
             geocode_data = geocode_response.json()
             
             if geocode_data['status'] != 'OK' or not geocode_data.get('results'):
-                raise HTTPException(status_code=404, detail='Pin code not found')
+                raise HTTPException(status_code=404, detail=f'Location "{search_query}" not found')
             
             location = geocode_data['results'][0]['geometry']['location']
             formatted_location = geocode_data['results'][0]['formatted_address']
