@@ -32,7 +32,9 @@ const OUTLET_TYPES = [
 ];
 
 export default function LeadDiscovery() {
+  const [searchMode, setSearchMode] = React.useState('pincode'); // 'pincode' or 'location'
   const [pincode, setPincode] = React.useState('');
+  const [locationName, setLocationName] = React.useState('');
   const [radius, setRadius] = React.useState(5);
   const [selectedTypes, setSelectedTypes] = React.useState([]);
   const [minRating, setMinRating] = React.useState(4.0);
