@@ -507,17 +507,17 @@ export default function LeadDiscovery() {
       </div>
 
       {/* Info Banner */}
-      <Card className="p-6 bg-primary/5 border-primary/20 rounded-2xl">
+      <Card className="p-6 bg-green-50 border-green-200 rounded-2xl">
         <div className="flex items-start gap-4">
-          <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-            <MapPin className="h-5 w-5 text-primary" />
+          <div className="h-10 w-10 rounded-full bg-green-600 flex items-center justify-center flex-shrink-0">
+            <MapPin className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h3 className="font-semibold mb-2">Currently using Demo Data</h3>
-            <p className="text-sm text-muted-foreground">
-              This module is ready to integrate with Google Maps Places API. 
-              Once you enable billing and provide an API key, it will search real outlets in real-time.
-              For now, you're seeing sample data from Bengaluru to test the workflow.
+            <h3 className="font-semibold text-green-800 mb-2">✓ Google Places API Integrated</h3>
+            <p className="text-sm text-green-700">
+              Lead Discovery is now powered by Google Places API with real-time data. 
+              Search any pin code in India to discover actual outlets with verified information including 
+              ratings, phone numbers, and addresses. Results are live from Google's database.
             </p>
           </div>
         </div>
