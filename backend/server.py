@@ -1999,9 +1999,7 @@ async def get_location_analytics(current_user: dict = Depends(get_current_user))
 
 @api_router.post("/lead-discovery/search")
 async def search_places(search_params: dict, current_user: dict = Depends(get_current_user)):
-    """Search places using Google Places API"""
-    
-    import googlemaps
+    """Search places using Google Places API (New)"""
     
     pincode = search_params.get('pincode')
     radius = search_params.get('radius', 5) * 1000  # Convert km to meters
@@ -2013,78 +2011,97 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
         raise HTTPException(status_code=400, detail='Pin code is required')
     
     try:
-        gmaps = googlemaps.Client(key=os.environ['GOOGLE_MAPS_API_KEY'])
+        api_key = os.environ['GOOGLE_MAPS_API_KEY']
         
-        # First, geocode the pincode to get coordinates
-        geocode_result = gmaps.geocode(f'{pincode}, India')
-        if not geocode_result:
-            raise HTTPException(status_code=404, detail='Pin code not found')
-        
-        location = geocode_result[0]['geometry']['location']
-        
-        # Map outlet types to Google Places types
-        google_types = []
-        type_mapping = {
-            'Star Hotel': 'lodging',
-            'Restaurant': 'restaurant',
-            'Bar & Kitchen': 'bar',
-            'Cafe': 'cafe',
-            'Event Caterer': 'meal_delivery',
-            'Premium Club': 'night_club',
-            'Wellness Center': 'spa'
-        }
-        
-        for outlet_type in types:
-            if outlet_type in type_mapping:
-                google_types.append(type_mapping[outlet_type])
-        
-        # Search for each type
-        all_places = []
-        search_type = google_types[0] if google_types else 'restaurant'
-        
-        places_result = gmaps.places_nearby(
-            location=location,
-            radius=radius,
-            type=search_type
-        )
-        
-        # Process results
-        for place in places_result.get('results', []):
-            # Filter by rating
-            rating = place.get('rating', 0)
-            if rating < min_rating:
-                continue
-            
-            # Filter by price level
-            price_level = place.get('price_level', 2)
-            if price_range == 'budget' and price_level > 2:
-                continue
-            if price_range == 'premium' and price_level < 4:
-                continue
-            
-            # Get detailed place info
-            place_details = gmaps.place(place['place_id'])['result']
-            
-            outlet_data = {
-                'place_id': place['place_id'],
-                'name': place.get('name', ''),
-                'address': place.get('vicinity', ''),
-                'formatted_address': place_details.get('formatted_address', ''),
-                'phone': place_details.get('formatted_phone_number', ''),
-                'rating': rating,
-                'user_ratings_total': place.get('user_ratings_total', 0),
-                'price_level': '₹' * price_level if price_level else '₹₹',
-                'types': place.get('types', []),
-                'location': place['geometry']['location']
+        # First, geocode the pincode to get coordinates using Geocoding API
+        async with httpx.AsyncClient() as client:
+            geocode_url = f"https://maps.googleapis.com/maps/api/geocode/json"
+            geocode_params = {
+                'address': f'{pincode}, India',
+                'key': api_key
             }
             
-            all_places.append(outlet_data)
-        
-        return {
-            'results': all_places,
-            'total_results': len(all_places),
-            'search_location': geocode_result[0]['formatted_address']
-        }
+            geocode_response = await client.get(geocode_url, params=geocode_params)
+            geocode_data = geocode_response.json()
+            
+            if geocode_data['status'] != 'OK' or not geocode_data.get('results'):
+                raise HTTPException(status_code=404, detail='Pin code not found')
+            
+            location = geocode_data['results'][0]['geometry']['location']
+            formatted_location = geocode_data['results'][0]['formatted_address']
+            
+            # Map outlet types to Google Place types
+            google_types = []
+            if 'Star Hotel' in types or 'Restaurant' in types:
+                google_types.append('restaurant')
+            if 'Bar & Kitchen' in types:
+                google_types.append('bar')
+            if 'Cafe' in types:
+                google_types.append('cafe')
+            if not google_types:
+                google_types = ['restaurant']
+            
+            # Use Places API (New) - Nearby Search
+            places_url = "https://places.googleapis.com/v1/places:searchNearby"
+            
+            headers = {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': api_key,
+                'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.internationalPhoneNumber,places.rating,places.userRatingCount,places.priceLevel,places.types,places.id'
+            }
+            
+            body = {
+                "includedTypes": google_types,
+                "maxResultCount": 20,
+                "locationRestriction": {
+                    "circle": {
+                        "center": {
+                            "latitude": location['lat'],
+                            "longitude": location['lng']
+                        },
+                        "radius": radius
+                    }
+                }
+            }
+            
+            places_response = await client.post(places_url, json=body, headers=headers)
+            places_data = places_response.json()
+            
+            # Process results
+            all_places = []
+            for place in places_data.get('places', []):
+                # Filter by rating
+                rating = place.get('rating', 0)
+                if rating < min_rating:
+                    continue
+                
+                # Filter by price level
+                price_level_map = {'PRICE_LEVEL_FREE': 1, 'PRICE_LEVEL_INEXPENSIVE': 2, 'PRICE_LEVEL_MODERATE': 3, 'PRICE_LEVEL_EXPENSIVE': 4, 'PRICE_LEVEL_VERY_EXPENSIVE': 5}
+                price_level = price_level_map.get(place.get('priceLevel', 'PRICE_LEVEL_MODERATE'), 3)
+                
+                if price_range == 'budget' and price_level > 2:
+                    continue
+                if price_range == 'premium' and price_level < 4:
+                    continue
+                
+                outlet_data = {
+                    'place_id': place.get('id', ''),
+                    'name': place.get('displayName', {}).get('text', 'Unknown'),
+                    'address': place.get('formattedAddress', ''),
+                    'phone': place.get('internationalPhoneNumber', ''),
+                    'rating': rating,
+                    'user_ratings_total': place.get('userRatingCount', 0),
+                    'price_level': '₹' * price_level,
+                    'types': place.get('types', [])
+                }
+                
+                all_places.append(outlet_data)
+            
+            return {
+                'results': all_places,
+                'total_results': len(all_places),
+                'search_location': formatted_location
+            }
         
     except Exception as e:
         logger.error(f'Google Places API error: {str(e)}')
