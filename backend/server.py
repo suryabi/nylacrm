@@ -1997,6 +1997,99 @@ async def get_location_analytics(current_user: dict = Depends(get_current_user))
         'team_locations': team_locations
     }
 
+@api_router.post("/lead-discovery/search")
+async def search_places(search_params: dict, current_user: dict = Depends(get_current_user)):
+    """Search places using Google Places API"""
+    
+    import googlemaps
+    
+    pincode = search_params.get('pincode')
+    radius = search_params.get('radius', 5) * 1000  # Convert km to meters
+    types = search_params.get('types', [])
+    min_rating = search_params.get('min_rating', 4.0)
+    price_range = search_params.get('price_range', 'all')
+    
+    if not pincode:
+        raise HTTPException(status_code=400, detail='Pin code is required')
+    
+    try:
+        gmaps = googlemaps.Client(key=os.environ['GOOGLE_MAPS_API_KEY'])
+        
+        # First, geocode the pincode to get coordinates
+        geocode_result = gmaps.geocode(f'{pincode}, India')
+        if not geocode_result:
+            raise HTTPException(status_code=404, detail='Pin code not found')
+        
+        location = geocode_result[0]['geometry']['location']
+        
+        # Map outlet types to Google Places types
+        google_types = []
+        type_mapping = {
+            'Star Hotel': 'lodging',
+            'Restaurant': 'restaurant',
+            'Bar & Kitchen': 'bar',
+            'Cafe': 'cafe',
+            'Event Caterer': 'meal_delivery',
+            'Premium Club': 'night_club',
+            'Wellness Center': 'spa'
+        }
+        
+        for outlet_type in types:
+            if outlet_type in type_mapping:
+                google_types.append(type_mapping[outlet_type])
+        
+        # Search for each type
+        all_places = []
+        search_type = google_types[0] if google_types else 'restaurant'
+        
+        places_result = gmaps.places_nearby(
+            location=location,
+            radius=radius,
+            type=search_type
+        )
+        
+        # Process results
+        for place in places_result.get('results', []):
+            # Filter by rating
+            rating = place.get('rating', 0)
+            if rating < min_rating:
+                continue
+            
+            # Filter by price level
+            price_level = place.get('price_level', 2)
+            if price_range == 'budget' and price_level > 2:
+                continue
+            if price_range == 'premium' and price_level < 4:
+                continue
+            
+            # Get detailed place info
+            place_details = gmaps.place(place['place_id'])['result']
+            
+            outlet_data = {
+                'place_id': place['place_id'],
+                'name': place.get('name', ''),
+                'address': place.get('vicinity', ''),
+                'formatted_address': place_details.get('formatted_address', ''),
+                'phone': place_details.get('formatted_phone_number', ''),
+                'rating': rating,
+                'user_ratings_total': place.get('user_ratings_total', 0),
+                'price_level': '₹' * price_level if price_level else '₹₹',
+                'types': place.get('types', []),
+                'location': place['geometry']['location']
+            }
+            
+            all_places.append(outlet_data)
+        
+        return {
+            'results': all_places,
+            'total_results': len(all_places),
+            'search_location': geocode_result[0]['formatted_address']
+        }
+        
+    except Exception as e:
+        logger.error(f'Google Places API error: {str(e)}')
+        raise HTTPException(status_code=500, detail=f'Search failed: {str(e)}')
+
 # ============= LEAVE MANAGEMENT ROUTES =============
 
 @api_router.post("/leave-requests", response_model=LeaveRequest)
