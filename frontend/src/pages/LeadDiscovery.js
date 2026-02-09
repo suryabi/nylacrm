@@ -433,7 +433,7 @@ export default function LeadDiscovery() {
 
             <Button
               onClick={handleSearch}
-              disabled={searching || (!pincode && !locationName)}
+              disabled={searching || !selectedCity || !locationName}
               className="w-full h-14 rounded-full text-base"
             >
               {searching ? (
