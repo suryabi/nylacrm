@@ -259,57 +259,60 @@ export default function LeadDiscovery() {
           
           <div className="space-y-5">
             <div>
-              <Label className="mb-3 block">Search By</Label>
-              <div className="flex gap-2 bg-secondary p-1 rounded-full">
-                <Button
-                  type="button"
-                  variant={searchMode === 'pincode' ? 'default' : 'ghost'}
-                  onClick={() => setSearchMode('pincode')}
-                  size="sm"
-                  className="rounded-full flex-1"
-                >
-                  Pin Code
-                </Button>
-                <Button
-                  type="button"
-                  variant={searchMode === 'location' ? 'default' : 'ghost'}
-                  onClick={() => setSearchMode('location')}
-                  size="sm"
-                  className="rounded-full flex-1"
-                >
-                  Location Name
-                </Button>
-              </div>
+              <Label>Select City *</Label>
+              <select
+                value={selectedCity}
+                onChange={e => {
+                  setSelectedCity(e.target.value);
+                  setLocationName('');
+                  setSelectedLocation(null);
+                }}
+                className="w-full h-12 px-4 rounded-xl border bg-background"
+              >
+                <option value="">Choose a city...</option>
+                <option value="Bengaluru">Bengaluru</option>
+                <option value="Chennai">Chennai</option>
+                <option value="Hyderabad">Hyderabad</option>
+                <option value="Mumbai">Mumbai</option>
+                <option value="Pune">Pune</option>
+                <option value="Delhi">Delhi</option>
+                <option value="Kolkata">Kolkata</option>
+                <option value="Ahmedabad">Ahmedabad</option>
+              </select>
             </div>
 
-            {searchMode === 'pincode' ? (
-              <div>
-                <Label>Pin Code *</Label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                  <Input
-                    value={pincode}
-                    onChange={e => setPincode(e.target.value)}
-                    placeholder="560001"
-                    className="pl-10 h-12"
-                  />
-                </div>
-              </div>
-            ) : (
-              <div>
-                <Label>Location Name *</Label>
+            {selectedCity && (
+              <div className="relative">
+                <Label>Location/Area Name *</Label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
                   <Input
                     value={locationName}
                     onChange={e => setLocationName(e.target.value)}
-                    placeholder="e.g., Jubilee Hills, Banjara Hills, MG Road"
+                    onFocus={() => locationSuggestions.length > 0 && setShowSuggestions(true)}
+                    placeholder="e.g., Jubilee Hills, MG Road, Koramangala"
                     className="pl-10 h-12"
                   />
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Try: Jubilee Hills, Koramangala, Connaught Place, etc.
+                  Start typing area name in {selectedCity}
                 </p>
+
+                {/* Autocomplete Suggestions */}
+                {showSuggestions && locationSuggestions.length > 0 && (
+                  <Card className="absolute z-50 w-full mt-1 max-h-64 overflow-y-auto border-2 border-primary/30">
+                    {locationSuggestions.map((suggestion, idx) => (
+                      <div
+                        key={idx}
+                        onClick={() => selectSuggestion(suggestion)}
+                        className="p-3 hover:bg-secondary cursor-pointer border-b last:border-0"
+                      >
+                        <p className="font-medium text-sm">{suggestion.description}</p>
+                        <p className="text-xs text-muted-foreground">{suggestion.structured_formatting?.secondary_text}</p>
+                      </div>
+                    ))}
+                  </Card>
+                )}
               </div>
             )}
 
