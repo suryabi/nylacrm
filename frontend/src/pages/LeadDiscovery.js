@@ -48,7 +48,45 @@ export default function LeadDiscovery() {
   const [currentPage, setCurrentPage] = React.useState(1);
   const [itemsPerPage] = React.useState(10);
 
-  const handleSearch = async () => {
+  // Debounced autocomplete
+  React.useEffect(() => {
+    if (locationName.length >= 3 && selectedCity) {
+      const timer = setTimeout(() => {
+        fetchLocationSuggestions();
+      }, 500);
+      return () => clearTimeout(timer);
+    } else {
+      setLocationSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }, [locationName, selectedCity]);
+
+  const fetchLocationSuggestions = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(
+        process.env.REACT_APP_BACKEND_URL + '/api/lead-discovery/autocomplete',
+        {
+          input: locationName,
+          city: selectedCity
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
+        }
+      );
+      setLocationSuggestions(res.data.predictions || []);
+      setShowSuggestions(true);
+    } catch (error) {
+      console.error('Autocomplete error:', error);
+    }
+  };
+
+  const selectSuggestion = (suggestion) => {
+    setLocationName(suggestion.description);
+    setSelectedLocation(suggestion);
+    setShowSuggestions(false);
+  };
     setSearching(true);
     setCurrentPage(1);
     
