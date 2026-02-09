@@ -292,7 +292,15 @@ export default function LeadDiscovery() {
                   <Input
                     value={locationName}
                     onChange={e => setLocationName(e.target.value)}
-                    onFocus={() => locationSuggestions.length > 0 && setShowSuggestions(true)}
+                    onFocus={() => {
+                      if (locationSuggestions.length > 0 && !selectedLocation) {
+                        setShowSuggestions(true);
+                      }
+                    }}
+                    onBlur={() => {
+                      // Delay to allow click on suggestion
+                      setTimeout(() => setShowSuggestions(false), 200);
+                    }}
                     placeholder="e.g., Jubilee Hills, MG Road, Koramangala"
                     className="pl-10 h-12"
                   />
