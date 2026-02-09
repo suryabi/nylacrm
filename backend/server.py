@@ -1997,6 +1997,42 @@ async def get_location_analytics(current_user: dict = Depends(get_current_user))
         'team_locations': team_locations
     }
 
+@api_router.post("/lead-discovery/autocomplete")
+async def autocomplete_places(params: dict, current_user: dict = Depends(get_current_user)):
+    """Autocomplete place names within a city"""
+    
+    input_text = params.get('input', '')
+    city = params.get('city', '')
+    
+    if not input_text or len(input_text) < 3:
+        return {'predictions': []}
+    
+    try:
+        api_key = os.environ['GOOGLE_MAPS_API_KEY']
+        
+        async with httpx.AsyncClient() as client:
+            # Use Place Autocomplete API
+            autocomplete_url = "https://maps.googleapis.com/maps/api/place/autocomplete/json"
+            
+            params_dict = {
+                'input': f'{input_text}, {city}',
+                'key': api_key,
+                'components': 'country:in',  # Restrict to India
+                'types': 'establishment|geocode'  # Places and areas
+            }
+            
+            response = await client.get(autocomplete_url, params=params_dict)
+            data = response.json()
+            
+            if data['status'] == 'OK':
+                return {'predictions': data.get('predictions', [])}
+            else:
+                return {'predictions': []}
+    
+    except Exception as e:
+        logger.error(f'Autocomplete error: {str(e)}')
+        return {'predictions': []}
+
 @api_router.post("/lead-discovery/search")
 async def search_places(search_params: dict, current_user: dict = Depends(get_current_user)):
     """Search places using Google Places API (New)"""
