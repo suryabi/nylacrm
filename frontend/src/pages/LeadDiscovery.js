@@ -50,6 +50,11 @@ export default function LeadDiscovery() {
 
   // Debounced autocomplete
   React.useEffect(() => {
+    // Don't fetch if location already selected
+    if (selectedLocation) {
+      return;
+    }
+    
     if (locationName.length >= 3 && selectedCity) {
       const timer = setTimeout(() => {
         fetchLocationSuggestions();
@@ -59,7 +64,7 @@ export default function LeadDiscovery() {
       setLocationSuggestions([]);
       setShowSuggestions(false);
     }
-  }, [locationName, selectedCity]);
+  }, [locationName, selectedCity, selectedLocation]);
 
   const fetchLocationSuggestions = async () => {
     try {
