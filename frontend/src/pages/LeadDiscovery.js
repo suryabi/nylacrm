@@ -87,6 +87,8 @@ export default function LeadDiscovery() {
     setSelectedLocation(suggestion);
     setShowSuggestions(false);
   };
+
+  const handleSearch = async () => {
     setSearching(true);
     setCurrentPage(1);
     
