@@ -86,6 +86,7 @@ export default function LeadDiscovery() {
     setLocationName(suggestion.description);
     setSelectedLocation(suggestion);
     setShowSuggestions(false);
+    setLocationSuggestions([]); // Clear suggestions
   };
 
   const handleSearch = async () => {
