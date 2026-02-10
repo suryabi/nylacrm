@@ -396,6 +396,101 @@ async def get_current_user(request: Request):
 
 # ============= GOOGLE OAUTH AUTH ROUTES =============
 
+@api_router.post("/auth/google-callback")
+async def google_oauth_callback(request: Request, response: Response):
+    """Handle Google OAuth callback with your own credentials"""
+    
+    body = await request.json()
+    code = body.get('code')
+    
+    if not code:
+        raise HTTPException(status_code=400, detail='Authorization code required')
+    
+    try:
+        client_id = os.environ['GOOGLE_OAUTH_CLIENT_ID']
+        client_secret = os.environ['GOOGLE_OAUTH_CLIENT_SECRET']
+        redirect_uri = os.environ['GOOGLE_OAUTH_REDIRECT_URI']
+        
+        # Exchange code for tokens
+        async with httpx.AsyncClient() as client:
+            token_response = await client.post(
+                'https://oauth2.googleapis.com/token',
+                data={
+                    'code': code,
+                    'client_id': client_id,
+                    'client_secret': client_secret,
+                    'redirect_uri': redirect_uri,
+                    'grant_type': 'authorization_code'
+                }
+            )
+            
+            tokens = token_response.json()
+            
+            if 'error' in tokens:
+                raise HTTPException(status_code=400, detail=tokens['error'])
+            
+            # Get user info
+            user_info_response = await client.get(
+                'https://www.googleapis.com/oauth2/v2/userinfo',
+                headers={'Authorization': f"Bearer {tokens['access_token']}"}
+            )
+            
+            user_info = user_info_response.json()
+        
+        # Check if user exists
+        user_email = user_info['email']
+        existing_user = await db.users.find_one({'email': user_email}, {'_id': 0})
+        
+        if not existing_user:
+            raise HTTPException(
+                status_code=403,
+                detail='You do not have access. Please contact your manager.'
+            )
+        
+        user_id = existing_user['id']
+        
+        # Update user info
+        await db.users.update_one(
+            {'email': user_email},
+            {'$set': {
+                'name': user_info.get('name', existing_user.get('name')),
+                'avatar': user_info.get('picture', ''),
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        
+        # Create session
+        session_token = str(uuid.uuid4())
+        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        
+        await db.user_sessions.insert_one({
+            'user_id': user_id,
+            'session_token': session_token,
+            'expires_at': expires_at.isoformat(),
+            'created_at': datetime.now(timezone.utc).isoformat()
+        })
+        
+        # Set cookie
+        response.set_cookie(
+            key='session_token',
+            value=session_token,
+            httponly=True,
+            secure=True,
+            samesite='lax',
+            max_age=7*24*60*60,
+            path='/'
+        )
+        
+        user_doc = await db.users.find_one({'id': user_id}, {'_id': 0, 'password': 0})
+        
+        return {'user': user_doc, 'message': 'Login successful'}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f'OAuth callback error: {str(e)}')
+        raise HTTPException(status_code=500, detail=f'Authentication failed: {str(e)}')
+
 @api_router.post("/auth/google-session")
 async def exchange_google_session(request: Request, response: Response):
     """Exchange Emergent session_id for user data and create session"""
