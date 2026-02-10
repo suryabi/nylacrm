@@ -294,14 +294,16 @@ export default function LeadDiscovery() {
                   <MapPin className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
                   <Input
                     value={locationName}
-                    onChange={e => setLocationName(e.target.value)}
+                    onChange={e => {
+                      setLocationName(e.target.value);
+                      setSelectedLocation(null); // Clear selection when typing new text
+                    }}
                     onFocus={() => {
                       if (locationSuggestions.length > 0 && !selectedLocation) {
                         setShowSuggestions(true);
                       }
                     }}
                     onBlur={() => {
-                      // Delay to allow click on suggestion
                       setTimeout(() => setShowSuggestions(false), 200);
                     }}
                     placeholder="e.g., Jubilee Hills, MG Road, Koramangala"
