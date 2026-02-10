@@ -36,9 +36,20 @@ export default function Login() {
   };
 
   const handleGoogleLogin = () => {
-    // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-    const redirectUrl = window.location.origin + '/dashboard';
-    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+    // Use your own Google OAuth
+    const clientId = '549668101765-dtjhf507bj613veeevblg6d578nva0r7.apps.googleusercontent.com';
+    const redirectUri = window.location.origin + '/auth/callback';
+    const scope = 'email profile openid';
+    const responseType = 'code';
+    
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${clientId}&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+      `response_type=${responseType}&` +
+      `scope=${encodeURIComponent(scope)}&` +
+      `access_type=offline`;
+    
+    window.location.href = authUrl;
   };
 
   return (
