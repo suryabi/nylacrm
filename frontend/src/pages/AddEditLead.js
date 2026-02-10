@@ -431,7 +431,7 @@ export default function AddEditLead() {
                   <SelectValue placeholder="Select user" />
                 </SelectTrigger>
                 <SelectContent>
-                  {users.filter(u => ['sales_manager', 'sales_rep'].includes(u.role)).map(usr => (
+                  {users.filter(u => ['Business Development Executive', 'Regional Sales Manager', 'National Sales Head'].includes(u.role)).map(usr => (
                     <SelectItem key={usr.id} value={usr.id}>{usr.name}</SelectItem>
                   ))}
                 </SelectContent>
