@@ -129,17 +129,16 @@ export default function LeadDiscovery() {
         id: place.place_id || idx,
         name: place.name,
         type: selectedTypes[0] || 'Restaurant',
-        address: place.formatted_address || place.address,
+        address: place.address,
         phone: place.phone,
         rating: place.rating,
         price_range: place.price_level,
-        pincode: pincode,
-        distance: 0,  // Calculate from location if needed
+        distance: 0,
         place_id: place.place_id
       }));
       
       setResults(transformedResults);
-      toast.success(`Found ${transformedResults.length} real outlets via Google Places API!`, {
+      toast.success(`Found ${transformedResults.length} real outlets!`, {
         duration: 4000
       });
     } catch (error) {
