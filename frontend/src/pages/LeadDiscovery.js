@@ -112,8 +112,7 @@ export default function LeadDiscovery() {
       const searchRes = await axios.post(
         process.env.REACT_APP_BACKEND_URL + '/api/lead-discovery/search',
         {
-          pincode: searchMode === 'pincode' ? pincode : null,
-          location_name: searchMode === 'location' ? locationName : null,
+          location_name: selectedLocation ? selectedLocation.description : locationName,
           radius: radius,
           types: selectedTypes,
           min_rating: minRating,
