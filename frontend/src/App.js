@@ -7,6 +7,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 import SplashScreen from './pages/SplashScreen';
 import Login from './pages/Login';
 import AuthCallback from './components/AuthCallback';
+import GoogleAuthCallback from './pages/GoogleAuthCallback';
 import Dashboard from './pages/Dashboard';
 
 // CRITICAL: Configure axios to always send credentials (cookies) with all requests
