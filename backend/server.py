@@ -1999,7 +1999,7 @@ async def get_location_analytics(current_user: dict = Depends(get_current_user))
 
 @api_router.post("/lead-discovery/autocomplete")
 async def autocomplete_places(params: dict, current_user: dict = Depends(get_current_user)):
-    """Autocomplete place names within a city"""
+    """Autocomplete place names using Places API (New) Text Search"""
     
     input_text = params.get('input', '')
     city = params.get('city', '')
@@ -2011,26 +2011,41 @@ async def autocomplete_places(params: dict, current_user: dict = Depends(get_cur
         api_key = os.environ['GOOGLE_MAPS_API_KEY']
         
         async with httpx.AsyncClient() as client:
-            # Use Place Autocomplete API
-            autocomplete_url = "https://maps.googleapis.com/maps/api/place/autocomplete/json"
+            # Use Places API (New) - Text Search for autocomplete
+            text_search_url = "https://places.googleapis.com/v1/places:searchText"
             
-            params_dict = {
-                'input': f'{input_text}, {city}',
-                'key': api_key,
-                'components': 'country:in',  # Restrict to India
-                'types': 'establishment|geocode'  # Places and areas
+            headers = {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': api_key,
+                'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.id'
             }
             
-            response = await client.get(autocomplete_url, params=params_dict)
+            body = {
+                "textQuery": f"{input_text}, {city}, India",
+                "maxResultCount": 5
+            }
+            
+            response = await client.post(text_search_url, json=body, headers=headers)
             data = response.json()
             
-            if data['status'] == 'OK':
-                return {'predictions': data.get('predictions', [])}
+            if 'places' in data:
+                # Transform to autocomplete format
+                predictions = []
+                for place in data['places']:
+                    predictions.append({
+                        'description': place.get('formattedAddress', place.get('displayName', {}).get('text', '')),
+                        'place_id': place.get('id', ''),
+                        'structured_formatting': {
+                            'main_text': place.get('displayName', {}).get('text', ''),
+                            'secondary_text': place.get('formattedAddress', '')
+                        }
+                    })
+                return {'predictions': predictions}
             else:
                 return {'predictions': []}
     
     except Exception as e:
-        logger.error(f'Autocomplete error: {str(e)}')
+        logger.error(f'Text search error: {str(e)}')
         return {'predictions': []}
 
 @api_router.post("/lead-discovery/search")
