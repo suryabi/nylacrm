@@ -113,7 +113,7 @@ export default function Login() {
 
               <div className="mt-8 p-4 bg-primary/5 border border-primary/20 rounded-lg text-center">
                 <p className="text-sm text-muted-foreground">
-                  Use your company email (@nylalife.com) to sign in
+                  Use your company email (@nylaairwater.earth) to sign in
                 </p>
               </div>
             </div>
