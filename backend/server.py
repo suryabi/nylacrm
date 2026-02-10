@@ -437,11 +437,15 @@ async def google_oauth_callback(request: Request, response: Response):
             
             user_info = user_info_response.json()
         
-        # Check if user exists
+        # Get user info from Google
         user_email = user_info['email']
+        logger.info(f'Google OAuth: Received email: {user_email}')
+        
         existing_user = await db.users.find_one({'email': user_email}, {'_id': 0})
+        logger.info(f'Database lookup result: {existing_user is not None}')
         
         if not existing_user:
+            logger.warning(f'User not found in database: {user_email}')
             raise HTTPException(
                 status_code=403,
                 detail='You do not have access. Please contact your manager.'
