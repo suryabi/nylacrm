@@ -438,17 +438,28 @@ async def google_oauth_callback(request: Request, response: Response):
             user_info = user_info_response.json()
         
         # Get user info from Google
-        user_email = user_info['email']
-        logger.info(f'Google OAuth: Received email: {user_email}')
+        user_email = user_info['email'].strip().lower()  # Normalize email
+        user_name = user_info.get('name', '')
         
-        existing_user = await db.users.find_one({'email': user_email}, {'_id': 0})
-        logger.info(f'Database lookup result: {existing_user is not None}')
+        logger.info(f'Google OAuth: Email received: "{user_email}"')
         
-        if not existing_user:
-            logger.warning(f'User not found in database: {user_email}')
+        # Case-insensitive email lookup
+        existing_user = await db.users.find_one(
+            {'email': {'$regex': f'^{user_email}$', '$options': 'i'}},
+            {'_id': 0}
+        )
+        
+        if existing_user:
+            logger.info(f'User found: {existing_user["name"]} with role {existing_user["role"]}')
+        else:
+            logger.warning(f'User NOT found for email: {user_email}')
+            # List all emails in database for debugging
+            all_emails = await db.users.find({}, {'_id': 0, 'email': 1}).limit(5).to_list(5)
+            logger.warning(f'Sample emails in DB: {[u["email"] for u in all_emails]}')
+            
             raise HTTPException(
                 status_code=403,
-                detail='You do not have access. Please contact your manager.'
+                detail=f'No account found for {user_email}. Please contact your administrator.'
             )
         
         user_id = existing_user['id']
