@@ -394,6 +394,136 @@ async def get_current_user(request: Request):
     """Get user from cookie or JWT token"""
     return await get_current_user_from_cookie_or_header(request)
 
+@api_router.post("/admin/setup-production-database")
+async def setup_production_database_endpoint(request: Request):
+    """TEMPORARY ENDPOINT: Setup production database - REMOVE AFTER USE"""
+    
+    # Simple security - require exact secret
+    body = await request.json()
+    secret = body.get('secret', '')
+    
+    if secret != 'nyla-production-setup-2026':
+        raise HTTPException(status_code=403, detail='Invalid secret')
+    
+    try:
+        # Run the setup inline
+        surya_id = str(uuid.uuid4())
+        vamsi_id = str(uuid.uuid4())
+        karanabir_id = str(uuid.uuid4())
+        admin_id = str(uuid.uuid4())
+        
+        # Check if users already exist
+        existing_count = await db.users.count_documents({})
+        if existing_count > 5:
+            return {'message': 'Database already populated', 'user_count': existing_count}
+        
+        # Create leadership
+        leadership = [
+            {
+                'id': surya_id,
+                'email': 'surya.yadavalli@nylaairwater.earth',
+                'password': hash_password('Nyla2026!'),
+                'name': 'Surya Yadavalli',
+                'role': 'CEO',
+                'designation': 'CEO',
+                'phone': '+919876543200',
+                'city': 'Hyderabad',
+                'state': 'Telangana',
+                'territory': 'All India',
+                'reports_to': None,
+                'is_active': True,
+                'created_at': datetime.now(timezone.utc).isoformat()
+            },
+            {
+                'id': vamsi_id,
+                'email': 'vamsi.bommena@nylaairwater.earth',
+                'password': hash_password('Nyla2026!'),
+                'name': 'Vamsi Bommena',
+                'role': 'Director',
+                'designation': 'Director',
+                'phone': '+919876543201',
+                'city': 'Hyderabad',
+                'state': 'Telangana',
+                'territory': 'All India',
+                'reports_to': surya_id,
+                'is_active': True,
+                'created_at': datetime.now(timezone.utc).isoformat()
+            },
+            {
+                'id': karanabir_id,
+                'email': 'karanabir.gulati@nylaairwater.earth',
+                'password': hash_password('Nyla2026!'),
+                'name': 'Karanabir Singh Gulati',
+                'role': 'Vice President',
+                'designation': 'Vice President',
+                'phone': '+919876543202',
+                'city': 'Delhi',
+                'state': 'Delhi',
+                'territory': 'All India',
+                'reports_to': vamsi_id,
+                'is_active': True,
+                'created_at': datetime.now(timezone.utc).isoformat()
+            },
+            {
+                'id': admin_id,
+                'email': 'admin@nylaairwater.earth',
+                'password': hash_password('NylaAdmin2026!'),
+                'name': 'System Administrator',
+                'role': 'CEO',
+                'designation': 'CEO',
+                'phone': '+919876543299',
+                'city': 'Hyderabad',
+                'state': 'Telangana',
+                'territory': 'All India',
+                'reports_to': None,
+                'is_active': True,
+                'created_at': datetime.now(timezone.utc).isoformat()
+            }
+        ]
+        
+        await db.users.insert_many(leadership)
+        
+        # Create sample sales reps (simplified)
+        cities = [
+            ('Bengaluru', 'Karnataka', 'South India'),
+            ('Chennai', 'Tamil Nadu', 'South India'),
+            ('Hyderabad', 'Telangana', 'South India'),
+            ('Mumbai', 'Maharashtra', 'West India')
+        ]
+        
+        sales_team = []
+        for idx, (city, state, territory) in enumerate(cities, 1):
+            member = {
+                'id': str(uuid.uuid4()),
+                'email': f'{city.lower().replace(" ", "")}.sales{idx}@nylaairwater.earth',
+                'password': hash_password('Nyla2026!'),
+                'name': f'{city} Sales Rep',
+                'role': 'Business Development Executive',
+                'designation': 'Business Development Executive',
+                'city': city,
+                'state': state,
+                'territory': territory,
+                'reports_to': karanabir_id,
+                'is_active': True,
+                'created_at': datetime.now(timezone.utc).isoformat()
+            }
+            sales_team.append(member)
+        
+        await db.users.insert_many(sales_team)
+        
+        total_users = len(leadership) + len(sales_team)
+        
+        return {
+            'message': 'Production database setup complete!',
+            'users_created': total_users,
+            'leadership': 4,
+            'sales_team': len(sales_team)
+        }
+        
+    except Exception as e:
+        logger.error(f'Setup error: {str(e)}')
+        raise HTTPException(status_code=500, detail=f'Setup failed: {str(e)}')
+
 # ============= GOOGLE OAUTH AUTH ROUTES =============
 
 @api_router.post("/auth/google-callback")
