@@ -106,6 +106,43 @@ export default function Login() {
 
           {!showRegister ? (
             <div className="space-y-6" data-testid="login-form">
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <Label>Email</Label>
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="admin@nylaairwater.earth"
+                    required
+                    className="h-12"
+                  />
+                </div>
+                <div>
+                  <Label>Password</Label>
+                  <Input
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="Enter password"
+                    required
+                    className="h-12"
+                  />
+                </div>
+                <Button type="submit" disabled={loading} className="w-full h-12">
+                  {loading ? 'Signing in...' : 'Sign In'}
+                </Button>
+              </form>
+
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-background text-muted-foreground">Or</span>
+                </div>
+              </div>
+
               <Button
                 type="button"
                 variant="default"
