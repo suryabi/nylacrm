@@ -621,7 +621,7 @@ async def google_oauth_callback(request: Request, response: Response):
             value=session_token,
             httponly=True,
             secure=True,
-            samesite='lax',
+            samesite='none',  # Required for OAuth callback
             max_age=7*24*60*60,
             path='/'
         )
