@@ -389,6 +389,7 @@ export default function LeadDiscovery() {
             {searchMode === 'location' && (
               // Only show filters for area search
               <>
+            <div>
               <Label>Radius: {radius} km</Label>
               <input
                 type="range"
