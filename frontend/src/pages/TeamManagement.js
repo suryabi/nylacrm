@@ -262,6 +262,45 @@ export default function TeamManagement() {
         </DialogContent>
       </Dialog>
 
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Team Member</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete <strong>{userToDelete?.name}</strong>? This will permanently remove the user and all associated data including:
+            </p>
+            <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+              <li>All customer interactions</li>
+              <li>All leads and opportunities</li>
+              <li>All activity history</li>
+            </ul>
+            <p className="text-sm font-semibold text-red-600">
+              This action cannot be undone.
+            </p>
+            <div className="flex gap-3 pt-4">
+              <Button
+                variant="destructive"
+                onClick={handleDelete}
+              >
+                Delete Permanently
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDeleteDialogOpen(false);
+                  setUserToDelete(null);
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {viewMode === 'table' ? (
         // Table View
         <Card className="p-6">
