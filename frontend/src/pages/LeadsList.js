@@ -260,7 +260,16 @@ export default function LeadsList() {
   }
 
   if (assignedToFilter !== 'all') {
-    filteredLeads = filteredLeads.filter((lead) => lead.assigned_to === parseInt(assignedToFilter));
+    console.log('Filtering by assigned_to:', assignedToFilter);
+    console.log('Sample lead assigned_to:', filteredLeads[0]?.assigned_to);
+    filteredLeads = filteredLeads.filter((lead) => {
+      const match = lead.assigned_to === parseInt(assignedToFilter);
+      if (!match && filteredLeads.indexOf(lead) === 0) {
+        console.log('First lead assigned_to:', lead.assigned_to, 'type:', typeof lead.assigned_to);
+        console.log('Filter value:', assignedToFilter, 'type:', typeof assignedToFilter);
+      }
+      return match;
+    });
   }
 
   // Sort leads
