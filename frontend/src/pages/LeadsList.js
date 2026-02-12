@@ -347,6 +347,23 @@ export default function LeadsList() {
           </SelectContent>
         </Select>
         
+        <Select value={assignedToFilter} onValueChange={(v) => {
+          setAssignedToFilter(v);
+          setCurrentPage(1);
+        }}>
+          <SelectTrigger className="w-full sm:w-[200px]" data-testid="assigned-filter">
+            <SelectValue placeholder="Filter by assigned" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Users</SelectItem>
+            {users.map(user => (
+              <SelectItem key={user.id} value={user.id.toString()}>
+                {user.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        
         {/* Reset Time Filter Button */}
         {timeFilter && (
           <Button
