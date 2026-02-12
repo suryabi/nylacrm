@@ -115,7 +115,21 @@ export default function LeadsList() {
     }
     
     fetchLeads();
+    fetchUsers();
   }, []);
+
+  const fetchUsers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(process.env.REACT_APP_BACKEND_URL + '/api/users', {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setUsers(response.data);
+    } catch (error) {
+      console.error('Failed to load users');
+    }
+  };
 
   const fetchLeads = async () => {
     try {
