@@ -355,6 +355,27 @@ export default function LeadsList() {
           </SelectContent>
         </Select>
         
+        <Select value={cityFilter} onValueChange={(v) => {
+          setCityFilter(v);
+          setCurrentPage(1);
+        }}>
+          <SelectTrigger className="w-full sm:w-[200px]">
+            <SelectValue placeholder="Filter by city" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Cities</SelectItem>
+            <SelectItem value="Bengaluru">Bengaluru</SelectItem>
+            <SelectItem value="Chennai">Chennai</SelectItem>
+            <SelectItem value="Hyderabad">Hyderabad</SelectItem>
+            <SelectItem value="Mumbai">Mumbai</SelectItem>
+            <SelectItem value="Pune">Pune</SelectItem>
+            <SelectItem value="New Delhi">New Delhi</SelectItem>
+            <SelectItem value="Ahmedabad">Ahmedabad</SelectItem>
+            <SelectItem value="Kolkata">Kolkata</SelectItem>
+            <SelectItem value="Noida">Noida</SelectItem>
+          </SelectContent>
+        </Select>
+        
         <Select value={assignedToFilter} onValueChange={(v) => {
           setAssignedToFilter(v);
           setCurrentPage(1);
