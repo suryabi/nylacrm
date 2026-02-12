@@ -272,12 +272,37 @@ export default function LeadDiscovery() {
           
           <div className="space-y-5">
             <div>
+              <Label className="mb-3 block">Search Mode</Label>
+              <div className="flex gap-2 bg-secondary p-1 rounded-full">
+                <Button
+                  type="button"
+                  variant={searchMode === 'location' ? 'default' : 'ghost'}
+                  onClick={() => setSearchMode('location')}
+                  size="sm"
+                  className="rounded-full flex-1"
+                >
+                  By Area
+                </Button>
+                <Button
+                  type="button"
+                  variant={searchMode === 'outlet_name' ? 'default' : 'ghost'}
+                  onClick={() => setSearchMode('outlet_name')}
+                  size="sm"
+                  className="rounded-full flex-1"
+                >
+                  By Outlet Name
+                </Button>
+              </div>
+            </div>
+
+            <div>
               <Label>Select City *</Label>
               <select
                 value={selectedCity}
                 onChange={e => {
                   setSelectedCity(e.target.value);
                   setLocationName('');
+                  setOutletName('');
                   setSelectedLocation(null);
                 }}
                 className="w-full h-12 px-4 rounded-xl border bg-background"
@@ -294,7 +319,9 @@ export default function LeadDiscovery() {
               </select>
             </div>
 
-            {selectedCity && (
+            {searchMode === 'location' ? (
+              // Location Area Search
+              selectedCity && (
               <div className="relative">
                 <Label>Location/Area Name *</Label>
                 <div className="relative">
