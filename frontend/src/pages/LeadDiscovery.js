@@ -364,7 +364,7 @@ export default function LeadDiscovery() {
                   </Card>
                 )}
               </div>
-            )}
+            )
             ) : (
               // Direct Outlet Name Search
               selectedCity && (
