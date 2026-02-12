@@ -78,6 +78,8 @@ export default function LeadsList() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [cityFilter, setCityFilter] = useState('all');
+  const [assignedToFilter, setAssignedToFilter] = useState('all');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
   const [timeFilter, setTimeFilter] = useState(null);
