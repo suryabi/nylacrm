@@ -363,9 +363,9 @@ export default function LeadsList() {
             <SelectValue placeholder="Filter by assigned" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Users</SelectItem>
+          <SelectItem value="all">All Users</SelectItem>
             {users.map(user => (
-              <SelectItem key={user.id} value={user.id.toString()}>
+              <SelectItem key={user.id} value={user.id}>
                 {user.name}
               </SelectItem>
             ))}
