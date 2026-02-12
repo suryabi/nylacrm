@@ -2317,18 +2317,68 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
     
     pincode = search_params.get('pincode')
     location_name = search_params.get('location_name')
+    outlet_name = search_params.get('outlet_name')
+    city = search_params.get('city', '')
     radius = search_params.get('radius', 5) * 1000
     types = search_params.get('types', [])
     min_rating = search_params.get('min_rating', 4.0)
     price_range = search_params.get('price_range', 'all')
     
-    if not pincode and not location_name:
-        raise HTTPException(status_code=400, detail='Pin code or location name is required')
+    if not pincode and not location_name and not outlet_name:
+        raise HTTPException(status_code=400, detail='Pin code, location name, or outlet name is required')
     
     try:
         api_key = os.environ['GOOGLE_MAPS_API_KEY']
         
-        # Geocode to get coordinates
+        # If searching by outlet name, use text search directly
+        if outlet_name:
+            async with httpx.AsyncClient() as client:
+                text_search_url = "https://places.googleapis.com/v1/places:searchText"
+                
+                headers = {
+                    'Content-Type': 'application/json',
+                    'X-Goog-Api-Key': api_key,
+                    'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.internationalPhoneNumber,places.rating,places.userRatingCount,places.priceLevel,places.types,places.id'
+                }
+                
+                body = {
+                    "textQuery": f"{outlet_name}, {city}, India" if city else f"{outlet_name}, India",
+                    "maxResultCount": 20
+                }
+                
+                response = await client.post(text_search_url, json=body, headers=headers)
+                data = response.json()
+                
+                all_places = []
+                for place in data.get('places', []):
+                    price_level_map = {
+                        'PRICE_LEVEL_FREE': 1,
+                        'PRICE_LEVEL_INEXPENSIVE': 2,
+                        'PRICE_LEVEL_MODERATE': 3,
+                        'PRICE_LEVEL_EXPENSIVE': 4,
+                        'PRICE_LEVEL_VERY_EXPENSIVE': 5
+                    }
+                    price_level = price_level_map.get(place.get('priceLevel', 'PRICE_LEVEL_MODERATE'), 3)
+                    
+                    outlet_data = {
+                        'place_id': place.get('id', ''),
+                        'name': place.get('displayName', {}).get('text', 'Unknown'),
+                        'address': place.get('formattedAddress', ''),
+                        'phone': place.get('internationalPhoneNumber', ''),
+                        'rating': place.get('rating', 0),
+                        'user_ratings_total': place.get('userRatingCount', 0),
+                        'price_level': '₹' * price_level,
+                        'types': place.get('types', [])
+                    }
+                    all_places.append(outlet_data)
+                
+                return {
+                    'results': all_places,
+                    'total_results': len(all_places),
+                    'search_location': f'{city}, India' if city else 'India'
+                }
+        
+        # Otherwise, geocode location and search nearby
         async with httpx.AsyncClient() as client:
             geocode_url = f"https://maps.googleapis.com/maps/api/geocode/json"
             
