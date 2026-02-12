@@ -974,9 +974,19 @@ async def update_lead(lead_id: str, lead_update: LeadUpdate, current_user: dict 
 
 @api_router.delete("/leads/{lead_id}")
 async def delete_lead(lead_id: str, current_user: dict = Depends(get_current_user)):
-    # Only leadership and national heads can delete leads
-    if current_user['role'] not in ['CEO', 'Director', 'Vice President', 'National Sales Head']:
-        raise HTTPException(status_code=403, detail='Only leadership can delete leads')
+    # Get the lead first
+    lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+    
+    # Allow deletion if user is:
+    # 1. Lead creator, OR
+    # 2. Leadership (CEO, Director, VP, National Head)
+    is_creator = lead.get('created_by') == current_user['id']
+    is_leadership = current_user['role'] in ['CEO', 'Director', 'Vice President', 'National Sales Head']
+    
+    if not (is_creator or is_leadership):
+        raise HTTPException(status_code=403, detail='Only lead creator or leadership can delete leads')
     
     result = await db.leads.delete_one({'id': lead_id})
     if result.deleted_count == 0:
