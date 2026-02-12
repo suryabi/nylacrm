@@ -463,6 +463,12 @@ export default function LeadsList() {
                     <TableCell>{lead.contact_person || '-'}</TableCell>
                     <TableCell>{lead.city}, {lead.state}</TableCell>
                     <TableCell>
+                      {lead.assigned_to 
+                        ? users.find(u => u.id === lead.assigned_to)?.name || 'Unknown'
+                        : '-'
+                      }
+                    </TableCell>
+                    <TableCell>
                       {lead.last_contacted_date 
                         ? format(new Date(lead.last_contacted_date), 'MMM d, yyyy')
                         : '-'
