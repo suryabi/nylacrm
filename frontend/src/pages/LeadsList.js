@@ -75,6 +75,7 @@ const TIME_FILTERS = [
 export default function LeadsList() {
   const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
+  const [users, setUsers] = useState([]);  // For assigned to names
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
