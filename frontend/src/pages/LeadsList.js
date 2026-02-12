@@ -255,6 +255,10 @@ export default function LeadsList() {
     filteredLeads = filteredLeads.filter((lead) => lead.status === statusFilter);
   }
 
+  if (cityFilter !== 'all') {
+    filteredLeads = filteredLeads.filter((lead) => lead.city === cityFilter);
+  }
+
   if (assignedToFilter !== 'all') {
     filteredLeads = filteredLeads.filter((lead) => lead.assigned_to === parseInt(assignedToFilter));
   }
