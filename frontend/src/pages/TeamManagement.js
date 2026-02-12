@@ -145,6 +145,43 @@ export default function TeamManagement() {
     }
   };
 
+  const handleToggleActive = async (user) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(
+        `${process.env.REACT_APP_BACKEND_URL}/api/users/${user.id}`,
+        { is_active: !user.is_active },
+        { 
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
+        }
+      );
+      toast.success(`User ${user.is_active ? 'deactivated' : 'activated'} successfully`);
+      fetchUsers();
+    } catch (error) {
+      toast.error('Failed to update user status');
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(
+        `${process.env.REACT_APP_BACKEND_URL}/api/users/${userToDelete.id}`,
+        { 
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
+        }
+      );
+      toast.success('User and all associated data deleted successfully');
+      setDeleteDialogOpen(false);
+      setUserToDelete(null);
+      fetchUsers();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete user');
+    }
+  };
+
   if (loading) {
     return <div className="flex justify-center py-12">Loading team...</div>;
   }
