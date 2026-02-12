@@ -404,6 +404,52 @@ export default function TeamManagement() {
         // Org Chart View
         <OrgChartView users={sortedUsers} />
       )}
+
+      {/* Delete Confirmation Dialog */}
+      {deleteDialogOpen && userToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setDeleteDialogOpen(false)}>
+          <Card className="p-8 max-w-lg" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start gap-4 mb-6">
+              <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="h-6 w-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-semibold mb-2">Delete Team Member?</h3>
+                <p className="text-muted-foreground">
+                  Are you sure you want to permanently delete <strong>{userToDelete.name}</strong>?
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-red-50 border border-red-200 p-4 rounded-lg mb-6">
+              <p className="text-sm font-semibold text-red-800 mb-2">⚠️ This action will delete:</p>
+              <ul className="text-sm text-red-700 space-y-1">
+                <li>• User account and profile</li>
+                <li>• All leads assigned to this user</li>
+                <li>• All activities created by this user</li>
+                <li>• All daily status updates</li>
+                <li>• All target allocations</li>
+                <li>• This action cannot be undone</li>
+              </ul>
+            </div>
+
+            <div className="bg-primary/5 border border-primary/20 p-4 rounded-lg mb-6">
+              <p className="text-sm text-muted-foreground">
+                <strong>Alternative:</strong> Consider deactivating the user instead to preserve all historical data while preventing future assignments.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} className="flex-1 rounded-full">
+                Cancel
+              </Button>
+              <Button onClick={handleDelete} className="flex-1 rounded-full bg-red-600 hover:bg-red-700">
+                Delete Permanently
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
