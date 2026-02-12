@@ -1368,11 +1368,12 @@ async def update_daily_status(
 async def auto_populate_from_activities(status_date: str, current_user: dict = Depends(get_current_user)):
     """Auto-populate daily status from logged lead activities"""
     
-    # Get all activities created by user on this date
-    start_datetime = datetime.fromisoformat(f'{status_date}T00:00:00').replace(tzinfo=timezone.utc).isoformat()
-    end_datetime = datetime.fromisoformat(f'{status_date}T23:59:59').replace(tzinfo=timezone.utc).isoformat()
-    
-    activities = await db.activities.find(
+    try:
+        # Get all activities created by user on this date
+        start_datetime = datetime.fromisoformat(f'{status_date}T00:00:00').replace(tzinfo=timezone.utc).isoformat()
+        end_datetime = datetime.fromisoformat(f'{status_date}T23:59:59').replace(tzinfo=timezone.utc).isoformat()
+        
+        activities = await db.activities.find(
         {
             'created_by': current_user['id'],
             'created_at': {'$gte': start_datetime, '$lte': end_datetime}
