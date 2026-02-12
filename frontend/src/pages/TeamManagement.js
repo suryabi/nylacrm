@@ -613,7 +613,7 @@ function AddTeamMemberForm({ onSuccess }) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">None (Top Level)</SelectItem>
-              {allUsers.filter(u => ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager'].includes(u.role)).map(user => (
+              {allUsers.filter(u => ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager'].includes(u.role) && u.is_active).map(user => (
                 <SelectItem key={user.id} value={user.id}>
                   {user.name} - {user.designation || user.role}
                 </SelectItem>
