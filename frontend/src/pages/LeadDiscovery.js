@@ -113,13 +113,18 @@ export default function LeadDiscovery() {
       // Call Google Places API via backend
       const searchRes = await axios.post(
         process.env.REACT_APP_BACKEND_URL + '/api/lead-discovery/search',
-        {
-          location_name: selectedLocation ? selectedLocation.description : locationName,
-          radius: radius,
-          types: selectedTypes,
-          min_rating: minRating,
-          price_range: priceRange
-        },
+        searchMode === 'outlet_name' 
+          ? {
+              outlet_name: outletName,
+              city: selectedCity
+            }
+          : {
+              location_name: selectedLocation ? selectedLocation.description : locationName,
+              radius: radius,
+              types: selectedTypes,
+              min_rating: minRating,
+              price_range: priceRange
+            },
         {
           headers: { Authorization: `Bearer ${token}` },
           withCredentials: true
