@@ -255,6 +255,10 @@ export default function LeadsList() {
     filteredLeads = filteredLeads.filter((lead) => lead.status === statusFilter);
   }
 
+  if (assignedToFilter !== 'all') {
+    filteredLeads = filteredLeads.filter((lead) => lead.assigned_to === parseInt(assignedToFilter));
+  }
+
   // Sort leads
   filteredLeads = [...filteredLeads].sort((a, b) => {
     let aVal = a[sortField];
