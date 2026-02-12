@@ -1685,6 +1685,29 @@ async def create_team_member(user_input: UserCreate, current_user: dict = Depend
     await db.users.insert_one(doc)
     return user_obj
 
+@api_router.delete("/users/{user_id}")
+async def delete_user(user_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete user and all associated data"""
+    
+    if current_user['role'] not in ['CEO', 'Director', 'Vice President']:
+        raise HTTPException(status_code=403, detail='Only leadership can delete users')
+    
+    # Delete user
+    result = await db.users.delete_one({'id': user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail='User not found')
+    
+    # Delete associated data
+    await db.leads.delete_many({'assigned_to': user_id})
+    await db.leads.delete_many({'created_by': user_id})
+    await db.activities.delete_many({'created_by': user_id})
+    await db.daily_status.delete_many({'user_id': user_id})
+    await db.user_sessions.delete_many({'user_id': user_id})
+    await db.leave_requests.delete_many({'user_id': user_id})
+    await db.resource_targets.delete_many({'resource_id': user_id})
+    
+    return {'message': 'User and all associated data deleted successfully'}
+
 @api_router.put("/users/{user_id}")
 async def update_user(user_id: str, updates: dict, current_user: dict = Depends(get_current_user)):
     if current_user['role'] not in ['CEO', 'Director', 'Vice President']:
