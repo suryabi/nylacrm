@@ -191,6 +191,20 @@ export default function LeadDiscovery() {
       
       // Import each outlet as a lead
       for (const outlet of outletsToImport) {
+        // Extract city info from selected city
+        const cityStateMap = {
+          'Bengaluru': { state: 'Karnataka', territory: 'South India' },
+          'Chennai': { state: 'Tamil Nadu', territory: 'South India' },
+          'Hyderabad': { state: 'Telangana', territory: 'South India' },
+          'Mumbai': { state: 'Maharashtra', territory: 'West India' },
+          'Pune': { state: 'Maharashtra', territory: 'West India' },
+          'Delhi': { state: 'Delhi', territory: 'North India' },
+          'Kolkata': { state: 'West Bengal', territory: 'East India' },
+          'Ahmedabad': { state: 'Gujarat', territory: 'West India' }
+        };
+        
+        const locationInfo = cityStateMap[selectedCity] || { state: 'Unknown', territory: 'Unknown' };
+        
         const leadData = {
           company: outlet.name,
           contact_person: null,  // null instead of empty string
@@ -198,13 +212,13 @@ export default function LeadDiscovery() {
           phone: outlet.phone || null,
           category: outlet.type,
           tier: outlet.price_range.length >= 4 ? 'Tier 1' : outlet.price_range.length >= 3 ? 'Tier 2' : 'Tier 3',
-          city: 'Bengaluru',
-          state: 'Karnataka',
+          city: selectedCity,  // Use selected city
+          state: locationInfo.state,  // Auto-populate state
           country: 'India',
-          region: 'South India',
+          region: locationInfo.territory,  // Auto-populate territory
           status: 'new',
           source: 'Lead Discovery',  // Match exact dropdown option
-          assigned_to: currentUser.id,
+          assigned_to: currentUser.id,  // Assign to current logged-in user
           priority: outlet.rating >= 4.5 ? 'high' : 'medium',
           current_water_brand: null,
           current_landing_price: null,
