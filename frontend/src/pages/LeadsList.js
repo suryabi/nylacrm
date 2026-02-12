@@ -391,6 +391,16 @@ export default function LeadsList() {
                   </TableHead>
                   <TableHead>
                     <button
+                      onClick={() => handleSort('assigned_to')}
+                      className="flex items-center hover:text-foreground font-semibold"
+                      data-testid="sort-assigned"
+                    >
+                      Assigned To
+                      {getSortIcon('assigned_to')}
+                    </button>
+                  </TableHead>
+                  <TableHead>
+                    <button
                       onClick={() => handleSort('last_contacted_date')}
                       className="flex items-center hover:text-foreground font-semibold"
                       data-testid="sort-last-contacted"
