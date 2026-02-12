@@ -503,6 +503,8 @@ export default function LeadDiscovery() {
                 <option value="premium">Premium (₹₹₹₹₹)</option>
               </select>
             </div>
+              </>
+            )}
 
             <Button
               onClick={handleSearch}
