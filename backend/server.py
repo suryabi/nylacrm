@@ -1409,6 +1409,14 @@ async def auto_populate_from_activities(status_date: str, current_user: dict = D
         'activity_count': len(activities),
         'leads_contacted': len(lead_map)
     }
+    
+    except Exception as e:
+        logger.error(f'Auto-populate error: {str(e)}')
+        return {
+            'formatted_text': '',
+            'activity_count': 0,
+            'leads_contacted': 0
+        }
 async def revise_status_with_ai(request: dict, current_user: dict = Depends(get_current_user)):
     from emergentintegrations.llm.chat import LlmChat, UserMessage
     
