@@ -843,7 +843,7 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">None (Top Level)</SelectItem>
-              {allUsers.filter(u => ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager'].includes(u.role) && u.id !== user.id).map(manager => (
+              {allUsers.filter(u => ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager'].includes(u.role) && u.is_active && u.id !== user.id).map(manager => (
                 <SelectItem key={manager.id} value={manager.id}>
                   {manager.name} - {manager.designation || manager.role}
                 </SelectItem>
