@@ -365,8 +365,30 @@ export default function LeadDiscovery() {
                 )}
               </div>
             )}
+            ) : (
+              // Direct Outlet Name Search
+              selectedCity && (
+                <div>
+                  <Label>Outlet Name *</Label>
+                  <div className="relative">
+                    <Building2 className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                    <Input
+                      value={outletName}
+                      onChange={e => setOutletName(e.target.value)}
+                      placeholder="e.g., Taj Hotel, ITC Gardenia, Cafe Coffee Day"
+                      className="pl-10 h-12"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Enter exact outlet name - ignores radius and filters
+                  </p>
+                </div>
+              )
+            )}
 
-            <div>
+            {searchMode === 'location' && (
+              // Only show filters for area search
+              <>
               <Label>Radius: {radius} km</Label>
               <input
                 type="range"
