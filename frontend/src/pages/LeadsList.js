@@ -540,6 +540,12 @@ export default function LeadsList() {
                       }
                     </TableCell>
                     <TableCell>
+                      {lead.next_followup_date 
+                        ? format(new Date(lead.next_followup_date), 'MMM d, yyyy')
+                        : '-'
+                      }
+                    </TableCell>
+                    <TableCell>
                       {lead.last_contact_method ? (
                         <span className="text-xs text-muted-foreground">
                           {lead.last_contact_method.replace('_', ' ')}
