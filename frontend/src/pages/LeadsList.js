@@ -493,16 +493,6 @@ export default function LeadsList() {
                       {getSortIcon('status')}
                     </button>
                   </TableHead>
-                  <TableHead>
-                    <button
-                      onClick={() => handleSort('created_at')}
-                      className="flex items-center hover:text-foreground font-semibold"
-                      data-testid="sort-created"
-                    >
-                      Created
-                      {getSortIcon('created_at')}
-                    </button>
-                  </TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
