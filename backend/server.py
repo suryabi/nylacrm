@@ -178,6 +178,7 @@ class LeadUpdate(BaseModel):
     interested_skus: Optional[List[str]] = None
     notes: Optional[str] = None
     estimated_value: Optional[float] = None
+    next_followup_date: Optional[str] = None
 
 class Activity(BaseModel):
     model_config = ConfigDict(extra="ignore")
