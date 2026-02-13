@@ -515,8 +515,7 @@ export default function LeadsList() {
                     data-testid={`lead-row-${lead.id}`}
                   >
                     <TableCell className="font-medium">{lead.company || lead.name}</TableCell>
-                    <TableCell>{lead.contact_person || '-'}</TableCell>
-                    <TableCell>{lead.city}, {lead.state}</TableCell>
+                    <TableCell>{lead.city}</TableCell>
                     <TableCell>
                       {lead.assigned_to 
                         ? users.find(u => u.id === lead.assigned_to)?.name || 'Unknown'
