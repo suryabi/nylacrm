@@ -320,7 +320,7 @@ export default function LeadDetail() {
           {/* Lead Status */}
           <Card className="p-6">
             <h2 className="text-lg font-semibold mb-4">Lead Status</h2>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 mb-4">
               <Badge className={`${statusColors[lead.status]} text-sm px-3 py-1`}>
                 {getStatusLabel(lead.status)}
               </Badge>
