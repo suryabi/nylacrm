@@ -277,9 +277,9 @@ export default function LeadsList() {
     let aVal = a[sortField];
     let bVal = b[sortField];
     
-    if (sortField === 'created_at' || sortField === 'updated_at') {
-      aVal = new Date(aVal).getTime();
-      bVal = new Date(bVal).getTime();
+    if (sortField === 'created_at' || sortField === 'updated_at' || sortField === 'next_followup_date' || sortField === 'last_contacted_date') {
+      aVal = aVal ? new Date(aVal).getTime() : 0;
+      bVal = bVal ? new Date(bVal).getTime() : 0;
     } else if (typeof aVal === 'string') {
       aVal = (aVal || '').toLowerCase();
       bVal = (bVal || '').toLowerCase();
