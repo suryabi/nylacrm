@@ -557,6 +557,12 @@ export default function LeadsList() {
                         {getStatusLabel(lead.status)}
                       </Badge>
                     </TableCell>
+                    <TableCell>
+                      {lead.next_followup_date 
+                        ? format(new Date(lead.next_followup_date), 'MMM d, yyyy')
+                        : '-'
+                      }
+                    </TableCell>
                     <TableCell>{format(new Date(lead.created_at), 'MMM d, yyyy')}</TableCell>
                     <TableCell className="text-right">
                       <Button
