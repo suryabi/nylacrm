@@ -120,6 +120,9 @@ class Lead(BaseModel):
     interested_skus: Optional[List[str]] = []  # Multi-select SKUs
     notes: Optional[str] = None
     
+    # Follow-up tracking
+    next_followup_date: Optional[str] = None  # YYYY-MM-DD format
+    
     # System fields
     estimated_value: Optional[float] = None
     created_by: str
