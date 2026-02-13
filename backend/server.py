@@ -1389,31 +1389,31 @@ async def auto_populate_from_activities(status_date: str, current_user: dict = D
             return {'formatted_text': '', 'activity_count': 0}
         
         # Get lead names for all activities
-    lead_ids = list(set([a['lead_id'] for a in activities]))
-    leads = await db.leads.find(
-        {'id': {'$in': lead_ids}},
-        {'_id': 0, 'id': 1, 'company': 1, 'name': 1}
-    ).to_list(100)
-    
-    lead_map = {l['id']: l.get('company') or l.get('name') for l in leads}
-    
-    # Format activities by lead
-    formatted_lines = []
-    for activity in activities:
-        lead_name = lead_map.get(activity['lead_id'], 'Unknown Lead')
-        interaction = activity.get('interaction_method', activity.get('activity_type', 'activity')).replace('_', ' ').title()
-        description = activity.get('description', '')
+        lead_ids = list(set([a['lead_id'] for a in activities]))
+        leads = await db.leads.find(
+            {'id': {'$in': lead_ids}},
+            {'_id': 0, 'id': 1, 'company': 1, 'name': 1}
+        ).to_list(100)
         
-        formatted_lines.append(f"{lead_name}: {interaction} - {description}")
-    
-    formatted_text = '\n\n'.join(formatted_lines)
-    
-    return {
-        'formatted_text': formatted_text,
-        'activity_count': len(activities),
-        'leads_contacted': len(lead_map)
-    }
-    
+        lead_map = {l['id']: l.get('company') or l.get('name') for l in leads}
+        
+        # Format activities by lead
+        formatted_lines = []
+        for activity in activities:
+            lead_name = lead_map.get(activity['lead_id'], 'Unknown Lead')
+            interaction = activity.get('interaction_method', activity.get('activity_type', 'activity')).replace('_', ' ').title()
+            description = activity.get('description', '')
+            
+            formatted_lines.append(f"{lead_name}: {interaction} - {description}")
+        
+        formatted_text = '\n\n'.join(formatted_lines)
+        
+        return {
+            'formatted_text': formatted_text,
+            'activity_count': len(activities),
+            'leads_contacted': len(lead_map)
+        }
+        
     except Exception as e:
         logger.error(f'Auto-populate error: {str(e)}')
         return {
