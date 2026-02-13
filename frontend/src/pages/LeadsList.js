@@ -482,6 +482,16 @@ export default function LeadsList() {
                       {getSortIcon('last_contacted_date')}
                     </button>
                   </TableHead>
+                  <TableHead>
+                    <button
+                      onClick={() => handleSort('next_followup_date')}
+                      className="flex items-center hover:text-foreground font-semibold"
+                      data-testid="sort-followup"
+                    >
+                      Next Follow-up
+                      {getSortIcon('next_followup_date')}
+                    </button>
+                  </TableHead>
                   <TableHead>Contact Method</TableHead>
                   <TableHead>
                     <button
