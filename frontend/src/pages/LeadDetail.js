@@ -98,6 +98,16 @@ export default function LeadDetail() {
     }
   };
 
+  const handleFollowUpChange = async (newDate) => {
+    try {
+      await leadsAPI.update(id, { next_followup_date: newDate });
+      toast.success('Next follow-up date updated');
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to update follow-up date');
+    }
+  };
+
   const handleAddComment = async (e) => {
     e.preventDefault();
     if (!newComment.trim()) return;
