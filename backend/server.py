@@ -1378,17 +1378,17 @@ async def auto_populate_from_activities(status_date: str, current_user: dict = D
         end_datetime = datetime.fromisoformat(f'{status_date}T23:59:59').replace(tzinfo=timezone.utc).isoformat()
         
         activities = await db.activities.find(
-        {
-            'created_by': current_user['id'],
-            'created_at': {'$gte': start_datetime, '$lte': end_datetime}
-        },
-        {'_id': 0}
-    ).to_list(100)
-    
-    if not activities:
-        return {'formatted_text': '', 'activity_count': 0}
-    
-    # Get lead names for all activities
+            {
+                'created_by': current_user['id'],
+                'created_at': {'$gte': start_datetime, '$lte': end_datetime}
+            },
+            {'_id': 0}
+        ).to_list(100)
+        
+        if not activities:
+            return {'formatted_text': '', 'activity_count': 0}
+        
+        # Get lead names for all activities
     lead_ids = list(set([a['lead_id'] for a in activities]))
     leads = await db.leads.find(
         {'id': {'$in': lead_ids}},
