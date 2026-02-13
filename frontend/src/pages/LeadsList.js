@@ -444,16 +444,6 @@ export default function LeadsList() {
                   </TableHead>
                   <TableHead>
                     <button
-                      onClick={() => handleSort('contact_person')}
-                      className="flex items-center hover:text-foreground font-semibold"
-                      data-testid="sort-contact"
-                    >
-                      Contact Person
-                      {getSortIcon('contact_person')}
-                    </button>
-                  </TableHead>
-                  <TableHead>
-                    <button
                       onClick={() => handleSort('city')}
                       className="flex items-center hover:text-foreground font-semibold"
                       data-testid="sort-location"
