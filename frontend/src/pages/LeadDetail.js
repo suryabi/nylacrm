@@ -341,6 +341,22 @@ export default function LeadDetail() {
                 </SelectContent>
               </Select>
             </div>
+            
+            <div className="mt-4 pt-4 border-t">
+              <Label className="mb-2 block">Next Follow-up Date</Label>
+              <Input
+                type="date"
+                value={lead.next_followup_date || ''}
+                onChange={(e) => handleFollowUpChange(e.target.value)}
+                className="w-full"
+                min={new Date().toISOString().split('T')[0]}
+              />
+              {lead.next_followup_date && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Follow-up scheduled for: {format(new Date(lead.next_followup_date), 'MMM d, yyyy')}
+                </p>
+              )}
+            </div>
           </Card>
 
           {/* Comments */}
