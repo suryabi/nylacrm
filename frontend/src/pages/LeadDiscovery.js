@@ -28,7 +28,8 @@ const OUTLET_TYPES = [
   'Cafe',
   'Event Caterer',
   'Premium Club',
-  'Wellness Center'
+  'Wellness Center',
+  'Jewellery Stores'
 ];
 
 export default function LeadDiscovery() {
