@@ -225,7 +225,8 @@ export default function COGSCalculator() {
         <h3 className="font-semibold mb-3">Formulas:</h3>
         <ul className="text-sm text-muted-foreground space-y-1">
           <li>• <strong>Total COGS</strong> = Primary Packaging + Secondary Packaging + Manufacturing Cost</li>
-          <li>• <strong>Ex-Factory Price</strong> = Total COGS + Gross Margin</li>
+          <li>• <strong>Gross Margin (₹)</strong> = Total COGS × Gross Margin %</li>
+          <li>• <strong>Ex-Factory Price</strong> = Total COGS + Gross Margin (₹)</li>
           <li>• <strong>Minimum Landing Price</strong> = Ex-Factory Price + Outbound Logistics</li>
         </ul>
       </Card>
