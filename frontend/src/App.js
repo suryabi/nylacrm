@@ -91,6 +91,7 @@ function AppRouter() {
           <Route path="/sales-portal" element={<ProtectedRoute><SalesPortal /></ProtectedRoute>} />
           <Route path="/lead-discovery" element={<ProtectedRoute><LeadDiscovery /></ProtectedRoute>} />
           <Route path="/cogs-calculator" element={<ProtectedRoute><COGSCalculator /></ProtectedRoute>} />
+          <Route path="/proposals" element={<ProtectedRoute><ProposalGenerator /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </>
