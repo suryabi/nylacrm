@@ -374,7 +374,37 @@ class SKUTarget(BaseModel):
 
 class SKUTargetCreate(BaseModel):
     sku_name: str
-    allocation_percentage: float  # User enters percentage
+    allocation_percentage: float
+
+class COGSData(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    sku_name: str
+    city: str
+    
+    # User inputs
+    primary_packaging_cost: float = 0.0
+    secondary_packaging_cost: float = 0.0
+    manufacturing_variable_cost: float = 0.0
+    gross_margin: float = 0.0
+    outbound_logistics_cost: float = 0.0
+    
+    # Computed (stored for reference)
+    total_cogs: float = 0.0
+    ex_factory_price: float = 0.0
+    minimum_landing_price: float = 0.0
+    
+    # Metadata
+    last_edited_by: Optional[str] = None
+    last_edited_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class COGSDataUpdate(BaseModel):
+    primary_packaging_cost: Optional[float] = None
+    secondary_packaging_cost: Optional[float] = None
+    manufacturing_variable_cost: Optional[float] = None
+    gross_margin: Optional[float] = None
+    outbound_logistics_cost: Optional[float] = None  # User enters percentage
 
 # ============= HELPERS =============
 
