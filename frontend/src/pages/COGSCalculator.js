@@ -13,6 +13,8 @@ export default function COGSCalculator() {
   const [selectedCity, setSelectedCity] = React.useState('Bengaluru');
   const [cogsData, setCogsData] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [hasChanges, setHasChanges] = React.useState(false);
 
   React.useEffect(() => {
     if (selectedCity) {
