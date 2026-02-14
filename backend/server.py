@@ -2545,6 +2545,8 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
                 type_searches.append('spa')
             if 'Premium Club' in types:
                 type_searches.append('night_club')
+            if 'Jewellery Stores' in types:
+                type_searches.append('jewelry_store')
             
             # If no types selected, search all
             if not type_searches:
