@@ -148,17 +148,9 @@ export default function DailyStatusUpdate() {
       }
       
       if (response.data.formatted_text) {
-        // Determine if it's yesterday or today
-        const today = format(new Date(), 'yyyy-MM-dd');
-        const yesterday = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd');
-        
-        if (selectedDate === yesterday || selectedDate < today) {
-          // Past date - put in Yesterday's Updates
-          setYesterdayUpdates(response.data.formatted_text);
-        } else {
-          // Today - put in Today's Actions
-          setTodayActions(response.data.formatted_text);
-        }
+        // Always populate the FIRST section (Yesterday's/Today's Updates)
+        // The section title is dynamic based on selected date
+        setYesterdayUpdates(response.data.formatted_text);
         
         toast.success(`Loaded ${response.data.activity_count} activities from ${response.data.leads_contacted} leads`);
       }
