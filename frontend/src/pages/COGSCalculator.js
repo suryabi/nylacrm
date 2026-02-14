@@ -40,6 +40,32 @@ export default function COGSCalculator() {
   const updateField = (index, field, value) => {
     const newData = [...cogsData];
     newData[index] = { ...newData[index], [field]: value };
+    
+    // Calculate computed values locally in real-time
+    const row = newData[index];
+    const primary = parseFloat(row.primary_packaging_cost) || 0;
+    const secondary = parseFloat(row.secondary_packaging_cost) || 0;
+    const manufacturing = parseFloat(row.manufacturing_variable_cost) || 0;
+    const marginPercent = parseFloat(row.gross_margin) || 0;
+    const logistics = parseFloat(row.outbound_logistics_cost) || 0;
+    
+    // Calculate COGS
+    const totalCOGS = primary + secondary + manufacturing;
+    
+    // Calculate Gross Margin in rupees
+    const grossMarginRupees = totalCOGS * (marginPercent / 100);
+    
+    // Calculate Ex-Factory Price
+    const exFactory = totalCOGS + grossMarginRupees;
+    
+    // Calculate Minimum Landing Price
+    const landingPrice = exFactory + logistics;
+    
+    // Update computed fields
+    newData[index].total_cogs = totalCOGS;
+    newData[index].ex_factory_price = exFactory;
+    newData[index].minimum_landing_price = landingPrice;
+    
     setCogsData(newData);
     setHasChanges(true);
   };
