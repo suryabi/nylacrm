@@ -108,9 +108,19 @@ export default function COGSCalculator() {
           <h1 className="text-4xl font-light mb-2">COGS Calculator</h1>
           <p className="text-muted-foreground">Calculate cost and minimum landing price</p>
         </div>
-        <Button onClick={exportToExcel} className="rounded-full">
-          <Download className="h-4 w-4 mr-2" />Download Excel
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            onClick={saveAll}
+            disabled={!hasChanges || saving}
+            className="rounded-full"
+          >
+            <Save className="h-4 w-4 mr-2" />
+            {saving ? 'Saving...' : hasChanges ? 'Save All Changes' : 'All Saved'}
+          </Button>
+          <Button onClick={exportToExcel} variant="outline" className="rounded-full">
+            <Download className="h-4 w-4 mr-2" />Download Excel
+          </Button>
+        </div>
       </div>
 
       <Card className="p-6 border rounded-2xl">
