@@ -161,7 +161,7 @@ export default function COGSCalculator() {
                 </tr>
               </thead>
               <tbody>
-                {cogsData.map(row => (
+                {cogsData.map((row, index) => (
                   <tr key={row.id} className="border-b hover:bg-secondary/20">
                     <td className="p-3 font-medium sticky left-0 bg-background">{row.sku_name}</td>
                     <td className="p-2">
@@ -171,10 +171,11 @@ export default function COGSCalculator() {
                         onChange={e => {
                           const val = e.target.value;
                           if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                            updateField(row.id, 'primary_packaging_cost', val);
+                            updateField(index, 'primary_packaging_cost', val);
                           }
                         }}
-                        className="w-24 h-9 text-right px-2 border rounded"
+                        className="w-24 h-9 text-right px-2 border rounded bg-background"
+                        placeholder="0.00"
                       />
                     </td>
                     <td className="p-2">
@@ -184,10 +185,11 @@ export default function COGSCalculator() {
                         onChange={e => {
                           const val = e.target.value;
                           if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                            updateField(row.id, 'secondary_packaging_cost', val);
+                            updateField(index, 'secondary_packaging_cost', val);
                           }
                         }}
-                        className="w-24 h-9 text-right px-2 border rounded"
+                        className="w-24 h-9 text-right px-2 border rounded bg-background"
+                        placeholder="0.00"
                       />
                     </td>
                     <td className="p-2">
@@ -197,10 +199,11 @@ export default function COGSCalculator() {
                         onChange={e => {
                           const val = e.target.value;
                           if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                            updateField(row.id, 'manufacturing_variable_cost', val);
+                            updateField(index, 'manufacturing_variable_cost', val);
                           }
                         }}
-                        className="w-24 h-9 text-right px-2 border rounded"
+                        className="w-24 h-9 text-right px-2 border rounded bg-background"
+                        placeholder="0.00"
                       />
                     </td>
                     <td className="p-2">
@@ -210,10 +213,10 @@ export default function COGSCalculator() {
                         onChange={e => {
                           const val = e.target.value;
                           if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                            updateField(row.id, 'gross_margin', val);
+                            updateField(index, 'gross_margin', val);
                           }
                         }}
-                        className="w-24 h-9 text-right px-2 border rounded"
+                        className="w-24 h-9 text-right px-2 border rounded bg-background"
                         placeholder="%"
                       />
                     </td>
@@ -224,10 +227,11 @@ export default function COGSCalculator() {
                         onChange={e => {
                           const val = e.target.value;
                           if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                            updateField(row.id, 'outbound_logistics_cost', val);
+                            updateField(index, 'outbound_logistics_cost', val);
                           }
                         }}
-                        className="w-24 h-9 text-right px-2 border rounded"
+                        className="w-24 h-9 text-right px-2 border rounded bg-background"
+                        placeholder="0.00"
                       />
                     </td>
                     <td className="p-3 text-right font-bold text-primary bg-green-50">{row.total_cogs?.toFixed(2)}</td>
