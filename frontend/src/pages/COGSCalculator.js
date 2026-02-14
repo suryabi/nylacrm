@@ -122,9 +122,10 @@ export default function COGSCalculator() {
                   <th className="text-right p-3 font-semibold bg-primary/5">Primary Pkg (₹)</th>
                   <th className="text-right p-3 font-semibold bg-primary/5">Secondary Pkg (₹)</th>
                   <th className="text-right p-3 font-semibold bg-primary/5">Mfg Cost (₹)</th>
-                  <th className="text-right p-3 font-semibold bg-primary/5">Gross Margin (₹)</th>
+                  <th className="text-right p-3 font-semibold bg-primary/5">Gross Margin (%)</th>
                   <th className="text-right p-3 font-semibold bg-primary/5">Logistics (₹)</th>
                   <th className="text-right p-3 font-semibold bg-green-50">Total COGS (₹)</th>
+                  <th className="text-right p-3 font-semibold bg-green-50">Gross Margin (₹)</th>
                   <th className="text-right p-3 font-semibold bg-green-50">Ex-Factory (₹)</th>
                   <th className="text-right p-3 font-semibold bg-green-50">Min Landing (₹)</th>
                   <th className="text-left p-3 font-semibold">Last Edited</th>
