@@ -37,25 +37,42 @@ export default function COGSCalculator() {
     }
   };
 
-  const updateField = async (skuId, field, value) => {
-    const numValue = parseFloat(value) || 0;
-    
+  const updateField = (index, field, value) => {
+    const newData = [...cogsData];
+    newData[index] = { ...newData[index], [field]: value };
+    setCogsData(newData);
+    setHasChanges(true);
+  };
+
+  const saveAll = async () => {
+    setSaving(true);
     try {
       const token = localStorage.getItem('token');
-      await axios.put(
-        `${API}/cogs/${skuId}`,
-        { [field]: numValue },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          withCredentials: true
-        }
-      );
       
-      // Reload to get updated calculations
-      loadCOGSData();
-      toast.success('Saved');
+      for (const row of cogsData) {
+        await axios.put(
+          `${API}/cogs/${row.id}`,
+          {
+            primary_packaging_cost: parseFloat(row.primary_packaging_cost) || 0,
+            secondary_packaging_cost: parseFloat(row.secondary_packaging_cost) || 0,
+            manufacturing_variable_cost: parseFloat(row.manufacturing_variable_cost) || 0,
+            gross_margin: parseFloat(row.gross_margin) || 0,
+            outbound_logistics_cost: parseFloat(row.outbound_logistics_cost) || 0
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            withCredentials: true
+          }
+        );
+      }
+      
+      toast.success('All changes saved!');
+      setHasChanges(false);
+      loadCOGSData(); // Reload to get updated calculations
     } catch (error) {
       toast.error('Failed to save');
+    } finally {
+      setSaving(false);
     }
   };
 
