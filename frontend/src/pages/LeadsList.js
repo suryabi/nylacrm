@@ -519,10 +519,18 @@ export default function LeadsList() {
                       }
                     </TableCell>
                     <TableCell>
-                      {lead.next_followup_date 
-                        ? format(new Date(lead.next_followup_date), 'MMM d, yyyy')
-                        : '-'
-                      }
+                      {lead.next_followup_date ? (() => {
+                        const followupDate = new Date(lead.next_followup_date);
+                        const today = new Date();
+                        const diffDays = Math.ceil((followupDate - today) / (1000 * 60 * 60 * 24));
+                        const isUrgent = diffDays >= 0 && diffDays <= 3;
+                        
+                        return (
+                          <span className={`${isUrgent ? 'bg-amber-100 text-amber-800 px-2 py-1 rounded font-semibold' : ''}`}>
+                            {format(followupDate, 'MMM d, yyyy')}
+                          </span>
+                        );
+                      })() : '-'}
                     </TableCell>
                     <TableCell>
                       {lead.last_contact_method ? (
@@ -536,7 +544,6 @@ export default function LeadsList() {
                         {getStatusLabel(lead.status)}
                       </Badge>
                     </TableCell>
-                    <TableCell>{format(new Date(lead.created_at), 'MMM d, yyyy')}</TableCell>
                     <TableCell className="text-right">
                       <Button
                         variant="ghost"
