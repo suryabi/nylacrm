@@ -136,51 +136,75 @@ export default function COGSCalculator() {
                   <tr key={row.id} className="border-b hover:bg-secondary/20">
                     <td className="p-3 font-medium sticky left-0 bg-background">{row.sku_name}</td>
                     <td className="p-2">
-                      <Input
-                        type="number"
-                        value={row.primary_packaging_cost}
-                        onChange={e => updateField(row.id, 'primary_packaging_cost', e.target.value)}
-                        className="w-24 h-9 text-right"
-                        step="0.01"
+                      <input
+                        type="text"
+                        value={row.primary_packaging_cost || ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                            updateField(row.id, 'primary_packaging_cost', val);
+                          }
+                        }}
+                        className="w-24 h-9 text-right px-2 border rounded"
                       />
                     </td>
                     <td className="p-2">
-                      <Input
-                        type="number"
-                        value={row.secondary_packaging_cost}
-                        onChange={e => updateField(row.id, 'secondary_packaging_cost', e.target.value)}
-                        className="w-24 h-9 text-right"
-                        step="0.01"
+                      <input
+                        type="text"
+                        value={row.secondary_packaging_cost || ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                            updateField(row.id, 'secondary_packaging_cost', val);
+                          }
+                        }}
+                        className="w-24 h-9 text-right px-2 border rounded"
                       />
                     </td>
                     <td className="p-2">
-                      <Input
-                        type="number"
-                        value={row.manufacturing_variable_cost}
-                        onChange={e => updateField(row.id, 'manufacturing_variable_cost', e.target.value)}
-                        className="w-24 h-9 text-right"
-                        step="0.01"
+                      <input
+                        type="text"
+                        value={row.manufacturing_variable_cost || ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                            updateField(row.id, 'manufacturing_variable_cost', val);
+                          }
+                        }}
+                        className="w-24 h-9 text-right px-2 border rounded"
                       />
                     </td>
                     <td className="p-2">
-                      <Input
-                        type="number"
-                        value={row.gross_margin}
-                        onChange={e => updateField(row.id, 'gross_margin', e.target.value)}
-                        className="w-24 h-9 text-right"
-                        step="0.01"
+                      <input
+                        type="text"
+                        value={row.gross_margin || ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                            updateField(row.id, 'gross_margin', val);
+                          }
+                        }}
+                        className="w-24 h-9 text-right px-2 border rounded"
+                        placeholder="%"
                       />
                     </td>
                     <td className="p-2">
-                      <Input
-                        type="number"
-                        value={row.outbound_logistics_cost}
-                        onChange={e => updateField(row.id, 'outbound_logistics_cost', e.target.value)}
-                        className="w-24 h-9 text-right"
-                        step="0.01"
+                      <input
+                        type="text"
+                        value={row.outbound_logistics_cost || ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                            updateField(row.id, 'outbound_logistics_cost', val);
+                          }
+                        }}
+                        className="w-24 h-9 text-right px-2 border rounded"
                       />
                     </td>
                     <td className="p-3 text-right font-bold text-primary bg-green-50">{row.total_cogs?.toFixed(2)}</td>
+                    <td className="p-3 text-right font-bold text-primary bg-green-50">
+                      {((row.total_cogs || 0) * (row.gross_margin || 0) / 100).toFixed(2)}
+                    </td>
                     <td className="p-3 text-right font-bold text-primary bg-green-50">{row.ex_factory_price?.toFixed(2)}</td>
                     <td className="p-3 text-right font-bold text-green-600 bg-green-50">{row.minimum_landing_price?.toFixed(2)}</td>
                     <td className="p-3 text-xs text-muted-foreground">
