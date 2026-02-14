@@ -58,7 +58,7 @@ export default function Dashboard() {
       const response = await axios.get(`${API_URL}/users`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setSalesTeam(response.data.filter(u => ['Business Development Executive', 'Regional Sales Manager', 'National Sales Head'].includes(u.role) && u.is_active));
+      setSalesTeam(response.data.filter(u => ['Head of Business', 'Regional Sales Manager', 'National Sales Head'].includes(u.role) && u.is_active));
     } catch (error) {
       console.error('Failed to load team');
     }
