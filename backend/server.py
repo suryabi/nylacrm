@@ -618,7 +618,8 @@ async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: d
             
             # Calculate
             total_cogs = primary + secondary + manufacturing
-            ex_factory = total_cogs + margin
+            gross_margin_rupees = total_cogs * (margin / 100)  # Convert % to rupees
+            ex_factory = total_cogs + gross_margin_rupees
             landing_price = ex_factory + logistics
             
             update_data['total_cogs'] = total_cogs
