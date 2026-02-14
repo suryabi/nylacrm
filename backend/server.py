@@ -569,7 +569,8 @@ async def get_cogs_data(city: str, current_user: dict = Depends(get_current_user
         'Nyla – 660 ml / Gold',
         'Nyla – 330 ml / Gold',
         'Nyla – 660 ml / Sparkling',
-        'Nyla – 330 ml / Sparkling'
+        'Nyla – 330 ml / Sparkling',
+        '24 Brand'
     ]
     
     cogs_data = await db.cogs_data.find({'city': city}, {'_id': 0}).to_list(100)
