@@ -39,7 +39,7 @@ const DESIGNATIONS = [
   'Vice President',
   'National Sales Head',
   'Regional Sales Manager',
-  'Business Development Executive'
+  'Head of Business'
 ];
 
 const ROLE_MAPPING = {
@@ -48,7 +48,7 @@ const ROLE_MAPPING = {
   'Vice President': 'Vice President',
   'National Sales Head': 'National Sales Head',
   'Regional Sales Manager': 'Regional Sales Manager',
-  'Business Development Executive': 'Business Development Executive'
+  'Head of Business': 'Head of Business'
 };
 
 const TERRITORIES = [
