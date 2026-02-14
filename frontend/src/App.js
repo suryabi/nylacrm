@@ -29,6 +29,7 @@ import ReportsPage from './pages/ReportsPage';
 import SalesPortal from './pages/SalesPortal';
 import LeadDiscovery from './pages/LeadDiscovery';
 import COGSCalculator from './pages/COGSCalculator';
+import ProposalGenerator from './pages/ProposalGenerator';
 import '@/App.css';
 
 function ProtectedRoute({ children }) {
