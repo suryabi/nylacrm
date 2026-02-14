@@ -260,7 +260,7 @@ export default function LeadsList() {
   }
 
   if (assignedToFilter !== 'all') {
-    filteredLeads = filteredLeads.filter((lead) => lead.assigned_to === parseInt(assignedToFilter));
+    filteredLeads = filteredLeads.filter((lead) => lead.assigned_to === assignedToFilter);
   }
 
   const handleResetFilters = () => {
