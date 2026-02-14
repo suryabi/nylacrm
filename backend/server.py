@@ -558,6 +558,83 @@ async def setup_production_database_endpoint(request: Request):
         logger.error(f'Setup error: {str(e)}')
         raise HTTPException(status_code=500, detail=f'Setup failed: {str(e)}')
 
+
+@api_router.get("/cogs/{city}")
+async def get_cogs_data(city: str, current_user: dict = Depends(get_current_user)):
+    """Get COGS data for all SKUs in a city"""
+    
+    master_skus = [
+        'Nyla – 600 ml / Silver',
+        'Nyla – 330 ml / Silver',
+        'Nyla – 660 ml / Gold',
+        'Nyla – 330 ml / Gold',
+        'Nyla – 660 ml / Sparkling',
+        'Nyla – 330 ml / Sparkling'
+    ]
+    
+    cogs_data = await db.cogs_data.find({'city': city}, {'_id': 0}).to_list(100)
+    
+    # Create default data for SKUs that don't have data yet
+    existing_skus = [c['sku_name'] for c in cogs_data]
+    for sku in master_skus:
+        if sku not in existing_skus:
+            default_data = COGSData(sku_name=sku, city=city)
+            doc = default_data.model_dump()
+            doc['created_at'] = doc['created_at'].isoformat()
+            if doc.get('last_edited_at'):
+                doc['last_edited_at'] = doc['last_edited_at'].isoformat()
+            await db.cogs_data.insert_one(doc)
+            cogs_data.append(default_data.model_dump())
+    
+    # Get user names for last_edited_by
+    user_ids = [c.get('last_edited_by') for c in cogs_data if c.get('last_edited_by')]
+    users = await db.users.find({'id': {'$in': user_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(100)
+    user_map = {u['id']: u['name'] for u in users}
+    
+    # Add editor names
+    for data in cogs_data:
+        if data.get('last_edited_by'):
+            data['editor_name'] = user_map.get(data['last_edited_by'], 'Unknown')
+    
+    return {'cogs_data': cogs_data}
+
+@api_router.put("/cogs/{sku_id}")
+async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: dict = Depends(get_current_user)):
+    """Update COGS data for a SKU"""
+    
+    update_data = updates.model_dump(exclude_none=True)
+    
+    # Calculate computed values
+    if any(k in update_data for k in ['primary_packaging_cost', 'secondary_packaging_cost', 'manufacturing_variable_cost', 'gross_margin', 'outbound_logistics_cost']):
+        existing = await db.cogs_data.find_one({'id': sku_id}, {'_id': 0})
+        if existing:
+            # Merge with existing data
+            primary = update_data.get('primary_packaging_cost', existing.get('primary_packaging_cost', 0))
+            secondary = update_data.get('secondary_packaging_cost', existing.get('secondary_packaging_cost', 0))
+            manufacturing = update_data.get('manufacturing_variable_cost', existing.get('manufacturing_variable_cost', 0))
+            margin = update_data.get('gross_margin', existing.get('gross_margin', 0))
+            logistics = update_data.get('outbound_logistics_cost', existing.get('outbound_logistics_cost', 0))
+            
+            # Calculate
+            total_cogs = primary + secondary + manufacturing
+            ex_factory = total_cogs + margin
+            landing_price = ex_factory + logistics
+            
+            update_data['total_cogs'] = total_cogs
+            update_data['ex_factory_price'] = ex_factory
+            update_data['minimum_landing_price'] = landing_price
+    
+    # Track editor
+    update_data['last_edited_by'] = current_user['id']
+    update_data['last_edited_at'] = datetime.now(timezone.utc).isoformat()
+    
+    result = await db.cogs_data.update_one({'id': sku_id}, {'$set': update_data})
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail='COGS data not found')
+    
+    return {'message': 'COGS data updated successfully'}
+
 # ============= GOOGLE OAUTH AUTH ROUTES =============
 
 @api_router.post("/auth/google-callback")
