@@ -331,11 +331,16 @@ export default function LeadsList() {
       {/* Leads Table */}
       {filteredLeads.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-lg border border-border">
-          <p className="text-muted-foreground" data-testid="no-leads-message">
-            {searchQuery || statusFilter !== 'all'
+          <p className="text-muted-foreground mb-6" data-testid="no-leads-message">
+            {searchQuery || statusFilter !== 'all' || cityFilter !== 'all' || assignedToFilter !== 'all'
               ? 'No leads found matching your filters.'
               : 'No leads yet. Add your first lead to get started!'}
           </p>
+          {(searchQuery || statusFilter !== 'all' || cityFilter !== 'all' || assignedToFilter !== 'all') && (
+            <Button onClick={handleResetFilters} variant="outline" className="rounded-full">
+              Clear All Filters
+            </Button>
+          )}
         </div>
       ) : (
         <>
