@@ -14,21 +14,29 @@ Build a comprehensive, mobile-ready Sales CRM application for tracking leads, fo
 - **COGS Calculator**: Cost of Goods Sold and Minimum Landing Price by SKU/city
 - **Proposal Generator**: Rich text editor with editable templates
 - **Authentication**: Google Workspace OAuth 2.0
+- **Invoice Integration**: ActiveMQ subscription for invoice data from ERP
 
 ## Tech Stack
 - **Frontend**: React, Tailwind CSS, Shadcn UI, React Router
 - **Backend**: FastAPI, MongoDB (motor), Pydantic
-- **Integrations**: Claude Sonnet 4.5, Google Places API (New), Google OAuth
+- **Integrations**: Claude Sonnet 4.5, Google Places API (New), Google OAuth, Amazon MQ (ActiveMQ)
 
 ---
 
 ## What's Been Implemented
 
 ### Feb 17, 2026
+- **ActiveMQ Invoice Integration**:
+  - STOMP subscriber for Amazon MQ (`/app/backend/mq_subscriber.py`)
+  - Webhook fallback at `/api/invoices/webhook`
+  - Invoice data: gross value, net value, credit notes, invoice date
+  - Auto-matching via CA_LEAD_ID to our lead_id
+  - Lead totals auto-calculated
+  - UI: Invoice Value column in Leads List, Invoice Summary card in Lead Detail
+
 - **Lead ID System**: Unique 16-char ID format `NAME4-CITY-LYY-SEQ`
-  - Auto-generated on lead creation
-  - Displayed in Leads List (first column) and Lead Detail page
-  - Searchable and sortable
+
+- **Auth Fix**: Fixed login to use session tokens with cookies
 
 ### Previous Sessions
 - Full lead management with custom Nyla fields
@@ -41,8 +49,6 @@ Build a comprehensive, mobile-ready Sales CRM application for tracking leads, fo
 - COGS Calculator for SKU/city pricing
 - Proposal Generator with rich text editor
 - Google Workspace OAuth authentication
-- Role rename: "Business Development Executive" → "Head of Business"
-- Added "Jewellery Stores" to Lead Discovery categories
 
 ---
 
@@ -51,9 +57,10 @@ Build a comprehensive, mobile-ready Sales CRM application for tracking leads, fo
 ### P0 (Critical)
 - [ ] Complete "Sales Partner" role implementation
   - Backend: Mirror "Regional Sales Manager" permissions
-  - Frontend: Update navigation visibility in DashboardLayout.js
+  - Frontend: Update navigation visibility
 
 ### P1 (High)
+- [ ] Enable ActiveMQ in production (`ACTIVEMQ_ENABLED=true`)
 - [ ] User verification for custom proposal template
 - [ ] Re-implement Grid View for Sales Target module
 
@@ -65,18 +72,31 @@ Build a comprehensive, mobile-ready Sales CRM application for tracking leads, fo
 
 ## Key Files Reference
 - `/app/backend/server.py` - Main backend (all API routes)
-- `/app/frontend/src/pages/LeadsList.js` - Leads table with Lead ID column
-- `/app/frontend/src/pages/LeadDetail.js` - Lead detail with ID display
+- `/app/backend/mq_subscriber.py` - ActiveMQ invoice subscriber
+- `/app/frontend/src/pages/LeadsList.js` - Leads table with Invoice Value column
+- `/app/frontend/src/pages/LeadDetail.js` - Lead detail with Invoice Summary
 - `/app/frontend/src/pages/TeamManagement.js` - Team/role management
 - `/app/frontend/src/layouts/DashboardLayout.js` - Navigation sidebar
-- `/app/frontend/src/pages/SalesTargets.js` - Target planning (fragile)
 
 ## Database Collections
 - users, leads, activities, daily_status
+- invoices (NEW - stores invoice data from MQ)
 - target_plans, territory_targets, city_targets, resource_targets, sku_targets
 - cogs, user_sessions
+
+## Invoice Message Format (from ActiveMQ)
+```json
+{
+  "invoiceData": "17-02-2026",
+  "grossInvoiceValue": "31755.28",
+  "netInvoiceValue": "31195.82",
+  "C_LEAD_ID": "LEAD_3",
+  "CA_LEAD_ID": "LEAD_17",
+  "invoiceNo": "INV-34131",
+  "creditNoteValue": "559.46"
+}
+```
 
 ## Test Credentials
 - **Google OAuth**: Any @nylaairwater.earth email
 - **Fallback Admin**: admin@nylaairwater.earth / admin123
-- **Test Users**: surya123, vamsi123, karanabir123, manager123, priya123
