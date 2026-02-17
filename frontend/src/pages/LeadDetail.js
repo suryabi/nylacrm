@@ -175,6 +175,11 @@ export default function LeadDetail() {
               </Badge>
             )}
           </div>
+          {lead.lead_id && (
+            <p className="text-sm font-mono text-muted-foreground mt-1" data-testid="lead-unique-id">
+              ID: {lead.lead_id}
+            </p>
+          )}
           {lead.contact_person && (
             <p className="text-muted-foreground mt-1">Contact: {lead.contact_person}</p>
           )}
