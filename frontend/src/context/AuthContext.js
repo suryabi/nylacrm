@@ -65,7 +65,12 @@ export const AuthProvider = ({ children }) => {
     await axios.post(`${API_URL}/auth/register`, userData);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await axios.post(`${API_URL}/auth/logout`, {}, { withCredentials: true });
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
     localStorage.removeItem('token');
     setToken(null);
     setUser(null);
