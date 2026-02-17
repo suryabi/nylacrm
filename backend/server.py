@@ -3456,6 +3456,10 @@ async def get_target_resource_allocation_report(current_user: dict = Depends(get
     # Get all target plans
     plans = await db.target_plans.find({}, {'_id': 0}).to_list(100)
     
+    # Get all resource invoice summaries
+    resource_summaries = await db.resource_invoice_summary.find({}, {'_id': 0}).to_list(1000)
+    resource_invoice_map = {r['resource_id']: r.get('total_gross_invoice_value', 0) for r in resource_summaries}
+    
     report_data = []
     
     for plan in plans:
@@ -3475,6 +3479,13 @@ async def get_target_resource_allocation_report(current_user: dict = Depends(get
         for res_target in resource_targets:
             city_info = city_map.get(res_target['city_id'], {})
             user_info = user_map.get(res_target['resource_id'], {})
+            resource_id = res_target['resource_id']
+            
+            # Get actual achieved revenue from invoices
+            achieved_revenue = resource_invoice_map.get(resource_id, 0)
+            target_revenue = res_target['target_revenue']
+            tbd_revenue = target_revenue - achieved_revenue  # TBD = Target - Achieved
+            achievement_percentage = (achieved_revenue / target_revenue * 100) if target_revenue > 0 else 0
             
             report_data.append({
                 'target_name': plan['plan_name'],
@@ -3483,12 +3494,14 @@ async def get_target_resource_allocation_report(current_user: dict = Depends(get
                 'end_date': plan['end_date'],
                 'city': city_info.get('city', ''),
                 'state': city_info.get('state', ''),
+                'resource_id': resource_id,
                 'resource_name': user_info.get('name', 'Unknown'),
                 'designation': user_info.get('designation', ''),
                 'resource_territory': user_info.get('territory', ''),
-                'target_revenue': res_target['target_revenue'],
-                'achieved_revenue': 0,  # Placeholder
-                'tbd_revenue': res_target['target_revenue']
+                'target_revenue': target_revenue,
+                'achieved_revenue': achieved_revenue,
+                'tbd_revenue': tbd_revenue,
+                'achievement_percentage': round(achievement_percentage, 2)
             })
     
     return {'report_data': report_data, 'total_records': len(report_data)}
