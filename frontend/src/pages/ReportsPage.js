@@ -245,6 +245,11 @@ export default function ReportsPage() {
                       <th onClick={() => handleSort('tbd_revenue')} className="text-right p-3 font-semibold cursor-pointer hover:bg-secondary/80">
                         TBD {getSortIcon('tbd_revenue')}
                       </th>
+                      {selectedReport === 'target-resource' && (
+                        <th onClick={() => handleSort('achievement_percentage')} className="text-right p-3 font-semibold cursor-pointer hover:bg-secondary/80">
+                          % {getSortIcon('achievement_percentage')}
+                        </th>
+                      )}
                     </tr>
                     <tr className="bg-background">
                       <th className="p-2">
