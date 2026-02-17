@@ -378,6 +378,67 @@ export default function LeadDetail() {
             </div>
           </Card>
 
+          {/* Invoice Summary */}
+          {invoiceData && invoiceData.invoice_count > 0 && (
+            <Card className="p-6" data-testid="invoice-summary-card">
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Invoice Summary
+              </h2>
+              
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="bg-green-50 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground">Gross Invoice Value</p>
+                  <p className="text-lg font-semibold text-green-700 flex items-center">
+                    <IndianRupee className="h-4 w-4" />
+                    {invoiceData.total_gross_invoice_value?.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="bg-blue-50 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground">Net Invoice Value</p>
+                  <p className="text-lg font-semibold text-blue-700 flex items-center">
+                    <IndianRupee className="h-4 w-4" />
+                    {invoiceData.total_net_invoice_value?.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="bg-amber-50 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground">Credit Notes</p>
+                  <p className="text-lg font-semibold text-amber-700 flex items-center">
+                    <IndianRupee className="h-4 w-4" />
+                    {invoiceData.total_credit_note_value?.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground">Total Invoices</p>
+                  <p className="text-lg font-semibold text-gray-700">
+                    {invoiceData.invoice_count}
+                  </p>
+                </div>
+              </div>
+              
+              {/* Invoice List */}
+              {invoiceData.invoices && invoiceData.invoices.length > 0 && (
+                <div className="mt-4 pt-4 border-t">
+                  <p className="text-sm font-medium mb-2">Recent Invoices</p>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {invoiceData.invoices.slice(0, 5).map((inv) => (
+                      <div key={inv.id} className="flex justify-between items-center text-sm bg-gray-50 rounded p-2">
+                        <div>
+                          <span className="font-medium">{inv.invoice_no}</span>
+                          <span className="text-muted-foreground ml-2">{inv.invoice_date}</span>
+                        </div>
+                        <span className="font-medium text-green-600 flex items-center">
+                          <IndianRupee className="h-3 w-3" />
+                          {inv.gross_invoice_value?.toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
+          )}
+
           {/* Comments */}
           <Card className="p-6">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
