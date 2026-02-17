@@ -960,7 +960,7 @@ async def register(user_input: UserCreate):
     return user_obj
 
 @api_router.post("/auth/login")
-async def login(credentials: UserLogin):
+async def login(credentials: UserLogin, response: Response):
     user_doc = await db.users.find_one({'email': credentials.email}, {'_id': 0})
     if not user_doc or not verify_password(credentials.password, user_doc['password']):
         raise HTTPException(status_code=401, detail='Invalid credentials')
@@ -968,16 +968,36 @@ async def login(credentials: UserLogin):
     if not user_doc.get('is_active', True):
         raise HTTPException(status_code=401, detail='Account is inactive')
     
-    token = create_access_token(user_doc['id'], user_doc['email'], user_doc['role'])
+    # Create session token (same as Google OAuth flow)
+    session_token = str(uuid.uuid4())
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    
+    # Store session in database
+    await db.user_sessions.insert_one({
+        'user_id': user_doc['id'],
+        'session_token': session_token,
+        'expires_at': expires_at.isoformat(),
+        'created_at': datetime.now(timezone.utc).isoformat()
+    })
+    
+    # Set httpOnly cookie
+    response.set_cookie(
+        key='session_token',
+        value=session_token,
+        httponly=True,
+        secure=True,
+        samesite='none',
+        max_age=7*24*60*60,
+        path='/'
+    )
     
     user_doc.pop('password')
     if isinstance(user_doc['created_at'], str):
         user_doc['created_at'] = datetime.fromisoformat(user_doc['created_at'])
     
     return {
-        'access_token': token,
-        'token_type': 'bearer',
-        'user': user_doc
+        'user': user_doc,
+        'session_token': session_token
     }
 
 @api_router.get("/auth/me", response_model=User)
