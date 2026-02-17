@@ -350,6 +350,16 @@ export default function LeadsList() {
                 <TableRow>
                   <TableHead>
                     <button
+                      onClick={() => handleSort('lead_id')}
+                      className="flex items-center hover:text-foreground font-semibold"
+                      data-testid="sort-lead-id"
+                    >
+                      Lead ID
+                      {getSortIcon('lead_id')}
+                    </button>
+                  </TableHead>
+                  <TableHead>
+                    <button
                       onClick={() => handleSort('company')}
                       className="flex items-center hover:text-foreground font-semibold"
                       data-testid="sort-company"
