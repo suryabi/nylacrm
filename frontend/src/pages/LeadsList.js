@@ -500,6 +500,7 @@ export default function LeadsList() {
                     </select>
                   </TableHead>
                   <TableHead className="p-2"></TableHead>
+                  <TableHead className="p-2"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
