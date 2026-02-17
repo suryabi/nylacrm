@@ -381,89 +381,58 @@ export default function LeadDetail() {
           {/* Invoice Summary */}
           {invoiceData && invoiceData.invoice_count > 0 && (
             <Card className="p-6" data-testid="invoice-summary-card">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-5">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
                   <FileText className="h-5 w-5 text-primary" />
                   Invoice Summary
                 </h2>
-                <Badge variant="outline" className="text-sm">
-                  {invoiceData.invoice_count} Invoice{invoiceData.invoice_count > 1 ? 's' : ''}
-                </Badge>
+                <Badge variant="outline">{invoiceData.invoice_count} Invoices</Badge>
               </div>
               
-              {/* Summary Stats - Horizontal Layout */}
-              <div className="grid grid-cols-3 gap-3 mb-6">
-                <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
-                  <p className="text-xs font-medium text-green-600 uppercase tracking-wide mb-1">Gross Value</p>
-                  <p className="text-xl font-bold text-green-700 flex items-center">
-                    <IndianRupee className="h-4 w-4 mr-0.5" />
-                    {(invoiceData.total_gross_invoice_value / 100000)?.toLocaleString('en-IN', { maximumFractionDigits: 2 })}L
+              <div className="grid grid-cols-3 gap-3 mb-5">
+                <div className="bg-green-50 rounded-lg p-4 border border-green-100">
+                  <p className="text-xs text-green-600 font-medium mb-1">GROSS VALUE</p>
+                  <p className="text-lg font-bold text-green-700">
+                    ₹{(invoiceData.total_gross_invoice_value / 100000).toFixed(2)}L
                   </p>
                 </div>
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200">
-                  <p className="text-xs font-medium text-blue-600 uppercase tracking-wide mb-1">Net Value</p>
-                  <p className="text-xl font-bold text-blue-700 flex items-center">
-                    <IndianRupee className="h-4 w-4 mr-0.5" />
-                    {(invoiceData.total_net_invoice_value / 100000)?.toLocaleString('en-IN', { maximumFractionDigits: 2 })}L
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
+                  <p className="text-xs text-blue-600 font-medium mb-1">NET VALUE</p>
+                  <p className="text-lg font-bold text-blue-700">
+                    ₹{(invoiceData.total_net_invoice_value / 100000).toFixed(2)}L
                   </p>
                 </div>
-                <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-4 border border-amber-200">
-                  <p className="text-xs font-medium text-amber-600 uppercase tracking-wide mb-1">Credit Notes</p>
-                  <p className="text-xl font-bold text-amber-700 flex items-center">
-                    <IndianRupee className="h-4 w-4 mr-0.5" />
-                    {(invoiceData.total_credit_note_value / 100000)?.toLocaleString('en-IN', { maximumFractionDigits: 2 })}L
+                <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
+                  <p className="text-xs text-amber-600 font-medium mb-1">CREDIT NOTES</p>
+                  <p className="text-lg font-bold text-amber-700">
+                    ₹{(invoiceData.total_credit_note_value / 100000).toFixed(2)}L
                   </p>
                 </div>
               </div>
               
-              {/* Invoice Table */}
               {invoiceData.invoices && invoiceData.invoices.length > 0 && (
-                <div className="border rounded-xl overflow-hidden">
+                <div className="border rounded-lg overflow-hidden">
                   <table className="w-full text-sm">
-                    <thead className="bg-muted/50">
+                    <thead className="bg-muted">
                       <tr>
-                        <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Invoice #</th>
-                        <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Date</th>
-                        <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Gross</th>
-                        <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Net</th>
-                        <th className="text-right py-3 px-4 font-semibold text-muted-foreground">Credit</th>
+                        <th className="text-left py-2.5 px-3 font-medium">Invoice #</th>
+                        <th className="text-left py-2.5 px-3 font-medium">Date</th>
+                        <th className="text-right py-2.5 px-3 font-medium">Gross</th>
+                        <th className="text-right py-2.5 px-3 font-medium">Net</th>
+                        <th className="text-right py-2.5 px-3 font-medium">Credit</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y">
+                    <tbody>
                       {invoiceData.invoices.map((inv, idx) => (
-                        <tr key={inv.id || idx} className="hover:bg-muted/30 transition-colors">
-                          <td className="py-3 px-4">
-                            <span className="font-medium text-primary">{inv.invoice_no}</span>
-                          </td>
-                          <td className="py-3 px-4 text-muted-foreground">
-                            {inv.invoice_date}
-                          </td>
-                          <td className="py-3 px-4 text-right font-medium text-green-600">
-                            ₹{inv.gross_invoice_value?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                          </td>
-                          <td className="py-3 px-4 text-right font-medium text-blue-600">
-                            ₹{inv.net_invoice_value?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                          </td>
-                          <td className="py-3 px-4 text-right font-medium text-amber-600">
-                            ₹{inv.credit_note_value?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                          </td>
+                        <tr key={idx} className="border-t hover:bg-muted/30">
+                          <td className="py-2.5 px-3 font-medium text-primary">{inv.invoice_no}</td>
+                          <td className="py-2.5 px-3 text-muted-foreground">{inv.invoice_date}</td>
+                          <td className="py-2.5 px-3 text-right text-green-600">₹{inv.gross_invoice_value?.toLocaleString('en-IN')}</td>
+                          <td className="py-2.5 px-3 text-right text-blue-600">₹{inv.net_invoice_value?.toLocaleString('en-IN')}</td>
+                          <td className="py-2.5 px-3 text-right text-amber-600">₹{inv.credit_note_value?.toLocaleString('en-IN')}</td>
                         </tr>
                       ))}
                     </tbody>
-                    <tfoot className="bg-muted/30 border-t-2">
-                      <tr className="font-semibold">
-                        <td className="py-3 px-4" colSpan="2">Total</td>
-                        <td className="py-3 px-4 text-right text-green-700">
-                          ₹{invoiceData.total_gross_invoice_value?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                        </td>
-                        <td className="py-3 px-4 text-right text-blue-700">
-                          ₹{invoiceData.total_net_invoice_value?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                        </td>
-                        <td className="py-3 px-4 text-right text-amber-700">
-                          ₹{invoiceData.total_credit_note_value?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                        </td>
-                      </tr>
-                    </tfoot>
                   </table>
                 </div>
               )}
