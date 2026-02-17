@@ -84,6 +84,7 @@ class LeadStatus(BaseModel):
 class Lead(BaseModel):
     model_config = ConfigDict(extra="allow")  # Allow extra fields
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    lead_id: Optional[str] = None  # Unique formatted ID: NAME4-CITY-LYY-SEQ (16 chars)
     
     # Company & Contact
     company: str
