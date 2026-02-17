@@ -3339,7 +3339,7 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=['https://crm.nylaairwater.earth', 'https://pipeline-master-14.preview.emergentagent.com', 'http://localhost:3000'],
+    allow_origins=['https://crm.nylaairwater.earth', 'https://lead-tracker-pro-7.preview.emergentagent.com', 'http://localhost:3000'],
     allow_methods=["*"],
     allow_headers=["*"],
 )
