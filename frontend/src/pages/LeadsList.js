@@ -243,6 +243,7 @@ export default function LeadsList() {
   if (searchQuery) {
     filteredLeads = filteredLeads.filter(
       (lead) =>
+        (lead.lead_id && lead.lead_id.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (lead.company && lead.company.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (lead.contact_person && lead.contact_person.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (lead.name && lead.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
