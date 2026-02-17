@@ -5,40 +5,117 @@ import { toast } from 'sonner';
 import { Download, Printer, Bold, Italic, List, ListOrdered, Heading1, Heading2 } from 'lucide-react';
 
 const DEFAULT_TEMPLATES = {
+  'VYB Active': `<div style="font-family: Arial, sans-serif; line-height: 1.8;">
+<h1 style="color: #2d5a4d; border-bottom: 3px solid #2d5a4d; padding-bottom: 10px;">Nyla Air Water for VYB Active</h1>
+<h2 style="color: #4a7c6f;">Premium, Health-Forward & Sustainable Hydration</h2>
+<p style="color: #666; margin-bottom: 20px;">Tailored for a High-Performance Fitness & Wellness Experience</p>
+
+<h3 style="color: #2d5a4d; margin-top: 30px;">Executive Summary</h3>
+<p>Nyla proposes a premium still-water program for VYB Active, elevating member hydration across fitness zones, studios, sports courts, recovery spaces, café areas, and lounges.</p>
+<p>Made from air using advanced technology, Nyla water is purified through multi-stage refinement and lightly mineralized for balance — served in elegant, returnable glass with a lighter environmental footprint.</p>
+
+<h3 style="color: #2d5a4d; margin-top: 30px;">About Nyla</h3>
+<ul style="margin-left: 20px; line-height: 1.8;">
+  <li><strong>Air-derived purity:</strong> We extract pure water from ambient air, then enrich it with essential minerals</li>
+  <li><strong>Two curated profiles:</strong>
+    <ul style="margin-left: 20px;">
+      <li><strong>Balanced 7.5 pH (Silver):</strong> Neutral, crisp, refreshing — ideal for workouts</li>
+      <li><strong>Alkaline 8.5 pH (Gold):</strong> Smoother finish — excellent for post-training</li>
+    </ul>
+  </li>
+  <li><strong>Health & purity:</strong> Chlorine-free, smooth, meets global standards</li>
+  <li><strong>Sustainability:</strong> Reusable glass with reverse-logistics</li>
+</ul>
+
+<h3 style="color: #2d5a4d; margin-top: 30px;">Why Nyla Works for VYB Active</h3>
+<ul style="margin-left: 20px;">
+  <li><strong>Performance & Recovery:</strong> Balanced minerality enhances hydration</li>
+  <li><strong>Club Aesthetics:</strong> Premium glass bottles match luxury amenities</li>
+  <li><strong>Member Experience:</strong> Perfect for gym, classes, sports, spa areas</li>
+  <li><strong>Café Integration:</strong> Complements smoothies and healthy meals</li>
+</ul>
+
+<h3 style="color: #2d5a4d; margin-top: 30px;">Pricing — VYB Active Special Offer</h3>
+<table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+  <thead>
+    <tr style="background: #f0f0f0;">
+      <th style="border: 1px solid #ddd; padding: 12px; text-align: left;">Product</th>
+      <th style="border: 1px solid #ddd; padding: 12px; text-align: right;">Standard</th>
+      <th style="border: 1px solid #ddd; padding: 12px; text-align: right;">VYB Offer</th>
+      <th style="border: 1px solid #ddd; padding: 12px; text-align: right;">MRP</th>
+      <th style="border: 1px solid #ddd; padding: 12px; text-align: right;">Return Credit</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="border: 1px solid #ddd; padding: 10px;">660 ml Silver (7.5 pH)</td>
+      <td style="border: 1px solid #ddd; padding: 10px; text-align: right;">₹112</td>
+      <td style="border: 1px solid #ddd; padding: 10px; text-align: right; background: #e8f5e9; font-weight: bold;">₹96</td>
+      <td style="border: 1px solid #ddd; padding: 10px; text-align: right;">₹299</td>
+      <td style="border: 1px solid #ddd; padding: 10px; text-align: right;">₹25</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid #ddd; padding: 10px;">330 ml Silver (7.5 pH)</td>
+      <td style="border: 1px solid #ddd; padding: 10px; text-align: right;">₹68</td>
+      <td style="border: 1px solid #ddd; padding: 10px; text-align: right; background: #e8f5e9; font-weight: bold;">₹56</td>
+      <td style="border: 1px solid #ddd; padding: 10px; text-align: right;">₹149</td>
+      <td style="border: 1px solid #ddd; padding: 10px; text-align: right;">₹15</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid #ddd; padding: 10px;">660 ml Gold (8.5 pH)</td>
+      <td style="border: 1px solid #ddd; padding: 10px; text-align: right;">₹144</td>
+      <td style="border: 1px solid #ddd; padding: 10px; text-align: right; background: #e8f5e9; font-weight: bold;">₹118</td>
+      <td style="border: 1px solid #ddd; padding: 10px; text-align: right;">₹399</td>
+      <td style="border: 1px solid #ddd; padding: 10px; text-align: right;">₹25</td>
+    </tr>
+    <tr>
+      <td style="border: 1px solid #ddd; padding: 10px;">330 ml Gold (8.5 pH)</td>
+      <td style="border: 1px solid #ddd; padding: 10px; text-align: right;">₹78</td>
+      <td style="border: 1px solid #ddd; padding: 10px; text-align: right; background: #e8f5e9; font-weight: bold;">₹68</td>
+      <td style="border: 1px solid #ddd; padding: 10px; text-align: right;">₹199</td>
+      <td style="border: 1px solid #ddd; padding: 10px; text-align: right;">₹15</td>
+    </tr>
+  </tbody>
+</table>
+<p style="font-size: 12px; color: #666;">All prices + GST. Bottle return credits applied to next invoice.</p>
+
+<h3 style="color: #2d5a4d; margin-top: 30px;">Commercial Terms</h3>
+<ul style="margin-left: 20px;">
+  <li><strong>Lead Time:</strong> 2 working days from order</li>
+  <li><strong>Minimum:</strong> 20 crates per order (recommended)</li>
+  <li><strong>Payment:</strong> Net 30 days</li>
+  <li><strong>Bottle Credits:</strong> Adjusted against next invoice</li>
+</ul>
+
+<h3 style="color: #2d5a4d; margin-top: 30px;">Next Steps</h3>
+<p>We'd be delighted to arrange a product tasting for VYB Members and staff. Let's discuss how Nyla can enhance the VYB Active experience.</p>
+
+<p style="margin-top: 40px; border-top: 2px solid #2d5a4d; padding-top: 20px;">
+<strong>Contact:</strong><br/>
+Nyla Air Water<br/>
+CIN: U15549TG2022PTC165833<br/>
+Website: nylaairwater.earth<br/>
+Email: hello@nylaairwater.earth
+</p>
+</div>`,
+
   'Restaurant': `<h1>Business Proposal for [Restaurant Name]</h1>
 <h2>Nyla Air Water - Premium Water Solutions</h2>
 <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
 <h3>Executive Summary</h3>
-<p>We are pleased to present our proposal to provide premium bottled water solutions for your esteemed restaurant.</p>
-<h3>Product Offerings</h3>
-<ul>
-<li><strong>660 ml Silver</strong> - Premium still water for table service</li>
-<li><strong>330 ml Silver</strong> - Ideal for quick service</li>
-<li><strong>660 ml Sparkling</strong> - Perfect for cocktails</li>
-</ul>
-<h3>Pricing</h3>
-<p>Competitive pricing with volume discounts available.</p>`,
-
-  'Café': `<h1>Partnership Proposal - [Café Name]</h1>
-<h2>Nyla Air Water</h2>
-<p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-<h3>Introduction</h3>
-<p>Nyla Air Water is excited to propose a partnership with your café.</p>
+<p>We are pleased to present our proposal for premium bottled water.</p>
 <h3>Products</h3>
 <ul>
-<li><strong>330 ml Silver</strong> - Perfect for café customers</li>
-<li><strong>24 Brand</strong> - Custom branded bottles</li>
+<li><strong>660 ml Silver</strong> - Table service</li>
+<li><strong>330 ml Silver</strong> - Quick service</li>
 </ul>`,
 
   'Star Hotel': `<h1>Premium Water Solutions</h1>
 <h2>For [Hotel Name]</h2>
-<p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-<h3>Introduction</h3>
-<p>Nyla Air Water presents premium water solutions for luxury hospitality.</p>
 <h3>Product Portfolio</h3>
 <ol>
 <li><strong>660 ml Gold</strong> - Premium rooms</li>
-<li><strong>24 Brand</strong> - Custom branded water</li>
+<li><strong>24 Brand</strong> - Custom branded</li>
 </ol>`
 };
 
