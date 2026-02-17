@@ -186,6 +186,14 @@ class Lead(BaseModel):
     # Computed fields (added dynamically)
     last_contacted_date: Optional[str] = None
     last_contact_method: Optional[str] = None
+    
+    # Invoice fields (populated from ActiveMQ)
+    total_gross_invoice_value: Optional[float] = None
+    total_net_invoice_value: Optional[float] = None
+    total_credit_note_value: Optional[float] = None
+    invoice_count: Optional[int] = None
+    last_invoice_date: Optional[str] = None
+    last_invoice_no: Optional[str] = None
 
 class LeadCreate(BaseModel):
     company: str
