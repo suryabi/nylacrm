@@ -555,6 +555,13 @@ export default function LeadsList() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
+                      {lead.total_net_invoice_value ? (
+                        <span className="text-sm font-medium text-green-600">
+                          ₹{lead.total_net_invoice_value.toLocaleString('en-IN')}
+                        </span>
+                      ) : '-'}
+                    </TableCell>
+                    <TableCell className="text-right">
                       <Button
                         variant="ghost"
                         size="icon"
