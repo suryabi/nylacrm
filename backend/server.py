@@ -1210,8 +1210,143 @@ async def delete_lead(lead_id: str, current_user: dict = Depends(get_current_use
     await db.activities.delete_many({'lead_id': lead_id})
     await db.follow_ups.delete_many({'lead_id': lead_id})
     await db.comments.delete_many({'lead_id': lead_id})
+    await db.invoices.delete_many({'lead_uuid': lead_id})
     
     return {'message': 'Lead deleted successfully'}
+
+# ============= INVOICE ROUTES =============
+
+@api_router.get("/leads/{lead_id}/invoices")
+async def get_lead_invoices(lead_id: str, current_user: dict = Depends(get_current_user)):
+    """Get all invoices for a specific lead"""
+    lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+    
+    invoices = await db.invoices.find(
+        {'lead_uuid': lead_id},
+        {'_id': 0}
+    ).sort('received_at', -1).to_list(100)
+    
+    return {
+        'lead_id': lead.get('lead_id'),
+        'company': lead.get('company'),
+        'total_gross_invoice_value': lead.get('total_gross_invoice_value', 0),
+        'total_net_invoice_value': lead.get('total_net_invoice_value', 0),
+        'total_credit_note_value': lead.get('total_credit_note_value', 0),
+        'invoice_count': len(invoices),
+        'invoices': invoices
+    }
+
+@api_router.get("/invoices")
+async def get_all_invoices(
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all invoices with optional filtering"""
+    query = {}
+    if status:
+        query['status'] = status
+    
+    invoices = await db.invoices.find(
+        query,
+        {'_id': 0}
+    ).sort('received_at', -1).skip(skip).limit(limit).to_list(limit)
+    
+    total = await db.invoices.count_documents(query)
+    
+    return {
+        'total': total,
+        'invoices': invoices
+    }
+
+@api_router.get("/invoices/unmatched")
+async def get_unmatched_invoices(current_user: dict = Depends(get_current_user)):
+    """Get invoices that couldn't be matched to a lead"""
+    invoices = await db.invoices.find(
+        {'status': 'unmatched'},
+        {'_id': 0}
+    ).sort('received_at', -1).to_list(100)
+    
+    return {'invoices': invoices}
+
+@api_router.post("/invoices/match/{invoice_id}")
+async def match_invoice_to_lead(
+    invoice_id: str,
+    lead_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Manually match an unmatched invoice to a lead"""
+    # Find the invoice
+    invoice = await db.invoices.find_one({'id': invoice_id}, {'_id': 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail='Invoice not found')
+    
+    # Find the lead by formatted lead_id
+    lead = await db.leads.find_one({'lead_id': lead_id}, {'_id': 0})
+    if not lead:
+        # Try by UUID
+        lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+    
+    # Update invoice
+    await db.invoices.update_one(
+        {'id': invoice_id},
+        {
+            '$set': {
+                'lead_uuid': lead['id'],
+                'ca_lead_id': lead.get('lead_id'),
+                'status': 'matched'
+            }
+        }
+    )
+    
+    # Recalculate lead totals
+    all_invoices = await db.invoices.find({
+        'lead_uuid': lead['id'],
+        'status': 'matched'
+    }).to_list(1000)
+    
+    total_gross = sum(inv.get('gross_invoice_value', 0) for inv in all_invoices)
+    total_net = sum(inv.get('net_invoice_value', 0) for inv in all_invoices)
+    total_credit = sum(inv.get('credit_note_value', 0) for inv in all_invoices)
+    
+    await db.leads.update_one(
+        {'id': lead['id']},
+        {
+            '$set': {
+                'total_gross_invoice_value': total_gross,
+                'total_net_invoice_value': total_net,
+                'total_credit_note_value': total_credit,
+                'invoice_count': len(all_invoices),
+                'last_invoice_date': invoice.get('invoice_date'),
+                'last_invoice_no': invoice.get('invoice_no'),
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    return {'message': 'Invoice matched successfully', 'lead_id': lead.get('lead_id')}
+
+@api_router.get("/mq/status")
+async def get_mq_status(current_user: dict = Depends(get_current_user)):
+    """Get ActiveMQ connection status"""
+    if not MQ_AVAILABLE:
+        return {'status': 'unavailable', 'message': 'ActiveMQ subscriber module not loaded'}
+    
+    try:
+        is_connected = mq_subscriber.is_connected()
+        return {
+            'status': 'connected' if is_connected else 'disconnected',
+            'host': os.environ.get('ACTIVEMQ_HOST', 'not configured'),
+            'queue': os.environ.get('ACTIVEMQ_QUEUE', 'not configured')
+        }
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}
 
 # ============= ACTIVITIES ROUTES =============
 
