@@ -380,6 +380,7 @@ async def process_invoice_manually(invoice_data: dict, db) -> dict:
         
         # Store invoice linked to lead
         processed['lead_uuid'] = lead['id']
+        processed['assigned_to'] = lead.get('assigned_to')
         processed['status'] = 'matched'
         await db.invoices.insert_one(processed)
         
@@ -410,10 +411,40 @@ async def process_invoice_manually(invoice_data: dict, db) -> dict:
             }
         )
         
+        # Update resource (assigned_to) invoice totals for reporting
+        assigned_to = lead.get('assigned_to')
+        if assigned_to:
+            resource_summary = await db.resource_invoice_summary.find_one({'resource_id': assigned_to})
+            gross_value = processed.get('gross_invoice_value', 0)
+            
+            if resource_summary:
+                new_total = resource_summary.get('total_gross_invoice_value', 0) + gross_value
+                new_count = resource_summary.get('invoice_count', 0) + 1
+                
+                await db.resource_invoice_summary.update_one(
+                    {'resource_id': assigned_to},
+                    {
+                        '$set': {
+                            'total_gross_invoice_value': new_total,
+                            'invoice_count': new_count,
+                            'updated_at': datetime.now(timezone.utc).isoformat()
+                        }
+                    }
+                )
+            else:
+                await db.resource_invoice_summary.insert_one({
+                    'resource_id': assigned_to,
+                    'total_gross_invoice_value': gross_value,
+                    'invoice_count': 1,
+                    'created_at': datetime.now(timezone.utc).isoformat(),
+                    'updated_at': datetime.now(timezone.utc).isoformat()
+                })
+        
         return {
             'success': True,
             'lead_id': lead_id,
             'lead_company': lead.get('company'),
+            'assigned_to': assigned_to,
             'invoice_no': processed.get('invoice_no'),
             'totals': {
                 'gross': total_gross,
