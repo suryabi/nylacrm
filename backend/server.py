@@ -3451,6 +3451,30 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Import and start ActiveMQ subscriber
+try:
+    from mq_subscriber import start_mq_subscriber, stop_mq_subscriber, mq_subscriber
+    MQ_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"ActiveMQ subscriber not available: {e}")
+    MQ_AVAILABLE = False
+
+@app.on_event("startup")
+async def startup_event():
+    """Start ActiveMQ subscriber on app startup"""
+    if MQ_AVAILABLE:
+        try:
+            start_mq_subscriber()
+            logger.info("ActiveMQ subscriber started")
+        except Exception as e:
+            logger.error(f"Failed to start ActiveMQ subscriber: {e}")
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    if MQ_AVAILABLE:
+        try:
+            stop_mq_subscriber()
+            logger.info("ActiveMQ subscriber stopped")
+        except Exception as e:
+            logger.error(f"Error stopping ActiveMQ subscriber: {e}")
     client.close()
