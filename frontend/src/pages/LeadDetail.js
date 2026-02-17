@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { leadsAPI, activitiesAPI, commentsAPI, usersAPI } from '../utils/api';
+import axios from 'axios';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -8,7 +9,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
-import { ArrowLeft, Mail, Phone, Building2, User, MessageSquare, Send, Loader2 } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Building2, User, MessageSquare, Send, Loader2, FileText, IndianRupee } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Select,
@@ -19,6 +20,8 @@ import {
 } from '../components/ui/select';
 import ActivityTimeline from '../components/ActivityTimeline';
 import TimelineSummaryCompact from '../components/TimelineSummaryCompact';
+
+const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
 const statusColors = {
   new: 'bg-blue-100 text-blue-800',
