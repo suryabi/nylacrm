@@ -429,6 +429,15 @@ export default function LeadsList() {
                       type="text"
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
+                      placeholder="Search ID..."
+                      className="w-full px-2 py-1 text-xs border rounded"
+                    />
+                  </TableHead>
+                  <TableHead className="p-2">
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
                       placeholder="Search..."
                       className="w-full px-2 py-1 text-xs border rounded"
                     />
