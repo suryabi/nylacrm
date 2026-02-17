@@ -119,6 +119,7 @@ class InvoiceListener(stomp.ConnectionListener):
             
             # Store invoice in invoices collection
             invoice_data['lead_uuid'] = lead['id']
+            invoice_data['assigned_to'] = lead.get('assigned_to')
             invoice_data['status'] = 'matched'
             await self.db.invoices.insert_one(invoice_data)
             
