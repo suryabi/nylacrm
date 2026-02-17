@@ -332,9 +332,19 @@ export default function ReportsPage() {
                         <td className="text-right p-3 font-semibold text-green-600">
                           Rs {(row.achieved_revenue / 100000).toFixed(2)}L
                         </td>
-                        <td className="text-right p-3 font-semibold text-amber-600">
+                        <td className={`text-right p-3 font-semibold ${row.tbd_revenue <= 0 ? 'text-green-600' : 'text-amber-600'}`}>
                           Rs {(row.tbd_revenue / 100000).toFixed(2)}L
                         </td>
+                        {selectedReport === 'target-resource' && (
+                          <td className={`text-right p-3 font-semibold ${
+                            row.achievement_percentage >= 100 ? 'text-green-600' :
+                            row.achievement_percentage >= 75 ? 'text-blue-600' :
+                            row.achievement_percentage >= 50 ? 'text-amber-600' :
+                            'text-red-600'
+                          }`}>
+                            {row.achievement_percentage || 0}%
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
