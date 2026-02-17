@@ -235,6 +235,10 @@ mq_subscriber = ActiveMQSubscriber()
 
 def start_mq_subscriber():
     """Start the ActiveMQ subscriber in a background thread"""
+    if not ACTIVEMQ_ENABLED:
+        logger.info("ActiveMQ subscriber is disabled (ACTIVEMQ_ENABLED=false)")
+        return None
+        
     def run():
         try:
             mq_subscriber.connect()
@@ -249,7 +253,95 @@ def start_mq_subscriber():
 
 def stop_mq_subscriber():
     """Stop the ActiveMQ subscriber"""
-    mq_subscriber.disconnect()
+    if mq_subscriber.running:
+        mq_subscriber.disconnect()
+
+
+async def process_invoice_manually(invoice_data: dict, db) -> dict:
+    """
+    Process an invoice message manually (for testing or webhook fallback)
+    Returns result of the processing
+    """
+    try:
+        # Extract fields from invoice data
+        processed = {
+            'id': str(__import__('uuid').uuid4()),
+            'invoice_no': invoice_data.get('invoiceNo'),
+            'invoice_date': invoice_data.get('invoiceData'),  # Note: typo in source
+            'gross_invoice_value': float(invoice_data.get('grossInvoiceValue', 0)),
+            'net_invoice_value': float(invoice_data.get('netInvoiceValue', 0)),
+            'credit_note_value': float(invoice_data.get('creditNoteValue', 0)),
+            'c_lead_id': invoice_data.get('C_LEAD_ID'),
+            'ca_lead_id': invoice_data.get('CA_LEAD_ID'),
+            'received_at': datetime.now(timezone.utc).isoformat()
+        }
+        
+        lead_id = processed.get('ca_lead_id')
+        
+        if not lead_id:
+            return {'success': False, 'error': 'No CA_LEAD_ID in invoice message'}
+        
+        # Find lead by lead_id (our unique formatted ID)
+        lead = await db.leads.find_one({'lead_id': lead_id})
+        
+        if not lead:
+            # Store as unmatched invoice
+            processed['status'] = 'unmatched'
+            await db.invoices.insert_one(processed)
+            return {
+                'success': False, 
+                'error': f'Lead not found for lead_id: {lead_id}',
+                'invoice_stored': True,
+                'status': 'unmatched'
+            }
+        
+        # Store invoice linked to lead
+        processed['lead_uuid'] = lead['id']
+        processed['status'] = 'matched'
+        await db.invoices.insert_one(processed)
+        
+        # Calculate totals for the lead
+        all_invoices = await db.invoices.find({
+            'lead_uuid': lead['id'],
+            'status': 'matched'
+        }).to_list(1000)
+        
+        total_gross = sum(inv.get('gross_invoice_value', 0) for inv in all_invoices)
+        total_net = sum(inv.get('net_invoice_value', 0) for inv in all_invoices)
+        total_credit = sum(inv.get('credit_note_value', 0) for inv in all_invoices)
+        invoice_count = len(all_invoices)
+        
+        # Update lead with invoice summary
+        await db.leads.update_one(
+            {'id': lead['id']},
+            {
+                '$set': {
+                    'total_gross_invoice_value': total_gross,
+                    'total_net_invoice_value': total_net,
+                    'total_credit_note_value': total_credit,
+                    'invoice_count': invoice_count,
+                    'last_invoice_date': processed.get('invoice_date'),
+                    'last_invoice_no': processed.get('invoice_no'),
+                    'updated_at': datetime.now(timezone.utc).isoformat()
+                }
+            }
+        )
+        
+        return {
+            'success': True,
+            'lead_id': lead_id,
+            'lead_company': lead.get('company'),
+            'invoice_no': processed.get('invoice_no'),
+            'totals': {
+                'gross': total_gross,
+                'net': total_net,
+                'credit': total_credit,
+                'count': invoice_count
+            }
+        }
+        
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
 
 
 if __name__ == "__main__":
