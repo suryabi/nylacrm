@@ -393,19 +393,19 @@ export default function LeadDetail() {
                 <div className="bg-green-50 rounded-lg p-4 border border-green-100">
                   <p className="text-xs text-green-600 font-medium mb-1">GROSS VALUE</p>
                   <p className="text-lg font-bold text-green-700">
-                    ₹{(invoiceData.total_gross_invoice_value / 100000).toFixed(2)}L
+                    ₹{Math.round(invoiceData.total_gross_invoice_value / 1000)}K
                   </p>
                 </div>
                 <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
                   <p className="text-xs text-blue-600 font-medium mb-1">NET VALUE</p>
                   <p className="text-lg font-bold text-blue-700">
-                    ₹{(invoiceData.total_net_invoice_value / 100000).toFixed(2)}L
+                    ₹{Math.round(invoiceData.total_net_invoice_value / 1000)}K
                   </p>
                 </div>
                 <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
                   <p className="text-xs text-amber-600 font-medium mb-1">CREDIT NOTES</p>
                   <p className="text-lg font-bold text-amber-700">
-                    ₹{(invoiceData.total_credit_note_value / 100000).toFixed(2)}L
+                    ₹{Math.round(invoiceData.total_credit_note_value / 1000)}K
                   </p>
                 </div>
               </div>
@@ -423,15 +423,20 @@ export default function LeadDetail() {
                       </tr>
                     </thead>
                     <tbody>
-                      {invoiceData.invoices.map((inv, idx) => (
-                        <tr key={idx} className="border-t hover:bg-muted/30">
-                          <td className="py-2.5 px-3 font-medium text-primary">{inv.invoice_no}</td>
-                          <td className="py-2.5 px-3 text-muted-foreground">{inv.invoice_date}</td>
-                          <td className="py-2.5 px-3 text-right text-green-600">₹{inv.gross_invoice_value?.toLocaleString('en-IN')}</td>
-                          <td className="py-2.5 px-3 text-right text-blue-600">₹{inv.net_invoice_value?.toLocaleString('en-IN')}</td>
-                          <td className="py-2.5 px-3 text-right text-amber-600">₹{inv.credit_note_value?.toLocaleString('en-IN')}</td>
-                        </tr>
-                      ))}
+                      {invoiceData.invoices.map((inv, idx) => {
+                        const gross = Math.round(inv.gross_invoice_value || 0);
+                        const net = Math.round(inv.net_invoice_value || 0);
+                        const credit = Math.round(inv.credit_note_value || 0);
+                        return (
+                          <tr key={idx} className="border-t hover:bg-muted/30">
+                            <td className="py-2.5 px-3 font-medium text-primary">{inv.invoice_no}</td>
+                            <td className="py-2.5 px-3 text-muted-foreground">{inv.invoice_date}</td>
+                            <td className="py-2.5 px-3 text-right text-green-600">₹{gross}</td>
+                            <td className="py-2.5 px-3 text-right text-blue-600">₹{net}</td>
+                            <td className="py-2.5 px-3 text-right text-amber-600">₹{credit}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
