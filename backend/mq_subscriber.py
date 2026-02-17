@@ -41,12 +41,24 @@ class InvoiceListener(stomp.ConnectionListener):
     def __init__(self, db_client):
         self.db = db_client[db_name]
         self.loop = asyncio.new_event_loop()
+        self.subscriber = None
+    
+    def set_subscriber(self, subscriber):
+        """Set reference to subscriber for reconnect"""
+        self.subscriber = subscriber
         
     def on_connected(self, frame):
         logger.info("Connected to ActiveMQ broker")
+    
+    def on_heartbeat_timeout(self):
+        logger.warning("Heartbeat timeout detected")
         
     def on_disconnected(self):
         logger.warning("Disconnected from ActiveMQ broker")
+        # Trigger reconnect
+        if self.subscriber and self.subscriber.running:
+            logger.info("Scheduling reconnect...")
+            threading.Thread(target=self.subscriber.reconnect, daemon=True).start()
         
     def on_error(self, frame):
         logger.error(f"ActiveMQ Error: {frame.body}")
