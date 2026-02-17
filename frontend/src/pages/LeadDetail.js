@@ -60,6 +60,7 @@ export default function LeadDetail() {
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [invoiceData, setInvoiceData] = useState(null);
   
   // Activity creation state
   const [showActivityForm, setShowActivityForm] = useState(false);
@@ -85,6 +86,15 @@ export default function LeadDetail() {
       
       const usersRes = await usersAPI.getAll();
       setUsers(usersRes.data);
+      
+      // Fetch invoice data
+      try {
+        const invoiceRes = await axios.get(`${API_URL}/leads/${id}/invoices`, { withCredentials: true });
+        setInvoiceData(invoiceRes.data);
+      } catch (err) {
+        // Invoice data is optional, don't show error
+        console.log('No invoice data available');
+      }
     } catch (error) {
       toast.error('Failed to load lead details');
     } finally {
