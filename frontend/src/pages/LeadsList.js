@@ -420,6 +420,16 @@ export default function LeadsList() {
                       {getSortIcon('status')}
                     </button>
                   </TableHead>
+                  <TableHead>
+                    <button
+                      onClick={() => handleSort('total_net_invoice_value')}
+                      className="flex items-center hover:text-foreground font-semibold"
+                      data-testid="sort-invoice"
+                    >
+                      Invoice Value
+                      {getSortIcon('total_net_invoice_value')}
+                    </button>
+                  </TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
                 
