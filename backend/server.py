@@ -3594,25 +3594,29 @@ logger = logging.getLogger(__name__)
 
 # Import and start ActiveMQ subscriber
 try:
-    from mq_subscriber import start_mq_subscriber, stop_mq_subscriber, mq_subscriber
+    from mq_subscriber import start_mq_subscriber as _start_mq, stop_mq_subscriber as _stop_mq, mq_subscriber as _mq_sub
     MQ_AVAILABLE = True
+    mq_subscriber = _mq_sub
+    start_mq_subscriber = _start_mq
+    stop_mq_subscriber = _stop_mq
 except ImportError as e:
     logger.warning(f"ActiveMQ subscriber not available: {e}")
-    MQ_AVAILABLE = False
 
 @app.on_event("startup")
 async def startup_event():
     """Start ActiveMQ subscriber on app startup"""
-    if MQ_AVAILABLE:
+    global MQ_AVAILABLE
+    if MQ_AVAILABLE and start_mq_subscriber:
         try:
             start_mq_subscriber()
             logger.info("ActiveMQ subscriber started")
         except Exception as e:
             logger.error(f"Failed to start ActiveMQ subscriber: {e}")
+            MQ_AVAILABLE = False
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    if MQ_AVAILABLE:
+    if MQ_AVAILABLE and stop_mq_subscriber:
         try:
             stop_mq_subscriber()
             logger.info("ActiveMQ subscriber stopped")
