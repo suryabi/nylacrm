@@ -39,7 +39,7 @@ const DESIGNATIONS = [
   'Vice President',
   'National Sales Head',
   'Regional Sales Manager',
-  'Sales Partner',
+  'Partner - Sales',
   'Head of Business'
 ];
 
