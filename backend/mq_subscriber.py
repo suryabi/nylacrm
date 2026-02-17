@@ -151,8 +151,47 @@ class InvoiceListener(stomp.ConnectionListener):
             
             logger.info(f"Updated lead {lead_id} with invoice {invoice_data.get('invoice_no')}")
             
+            # Update resource (assigned_to) invoice totals for reporting
+            assigned_to = lead.get('assigned_to')
+            if assigned_to:
+                await self._update_resource_invoice_totals(assigned_to, invoice_data.get('gross_invoice_value', 0))
+            
         except Exception as e:
             logger.error(f"Error updating lead with invoice: {e}")
+    
+    async def _update_resource_invoice_totals(self, resource_id: str, gross_value: float):
+        """Update resource invoice totals for allocation reporting"""
+        try:
+            # Get or create resource invoice summary
+            resource_summary = await self.db.resource_invoice_summary.find_one({'resource_id': resource_id})
+            
+            if resource_summary:
+                new_total = resource_summary.get('total_gross_invoice_value', 0) + gross_value
+                new_count = resource_summary.get('invoice_count', 0) + 1
+                
+                await self.db.resource_invoice_summary.update_one(
+                    {'resource_id': resource_id},
+                    {
+                        '$set': {
+                            'total_gross_invoice_value': new_total,
+                            'invoice_count': new_count,
+                            'updated_at': datetime.now(timezone.utc).isoformat()
+                        }
+                    }
+                )
+            else:
+                await self.db.resource_invoice_summary.insert_one({
+                    'resource_id': resource_id,
+                    'total_gross_invoice_value': gross_value,
+                    'invoice_count': 1,
+                    'created_at': datetime.now(timezone.utc).isoformat(),
+                    'updated_at': datetime.now(timezone.utc).isoformat()
+                })
+            
+            logger.info(f"Updated resource {resource_id} invoice totals")
+            
+        except Exception as e:
+            logger.error(f"Error updating resource invoice totals: {e}")
 
 
 class ActiveMQSubscriber:
