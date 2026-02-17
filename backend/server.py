@@ -21,6 +21,12 @@ import httpx
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+# ActiveMQ globals (will be set on startup)
+MQ_AVAILABLE = False
+mq_subscriber = None
+start_mq_subscriber = None
+stop_mq_subscriber = None
+
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
