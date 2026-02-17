@@ -24,10 +24,11 @@ load_dotenv(ROOT_DIR / '.env')
 
 # ActiveMQ Configuration
 ACTIVEMQ_HOST = os.environ.get('ACTIVEMQ_HOST', 'b-98672ff4-9e09-4640-a671-2985257fb660-1.mq.us-west-2.amazonaws.com')
-ACTIVEMQ_PORT = int(os.environ.get('ACTIVEMQ_PORT', 61617))
+ACTIVEMQ_PORT = int(os.environ.get('ACTIVEMQ_PORT', 61614))
 ACTIVEMQ_USER = os.environ.get('ACTIVEMQ_USER', 'nyla-mq')
 ACTIVEMQ_PASSWORD = os.environ.get('ACTIVEMQ_PASSWORD', 'nylaXX0109##')
 ACTIVEMQ_QUEUE = os.environ.get('ACTIVEMQ_QUEUE', '/queue/invoices')
+ACTIVEMQ_ENABLED = os.environ.get('ACTIVEMQ_ENABLED', 'false').lower() == 'true'
 
 # MongoDB connection
 mongo_url = os.environ.get('MONGO_URL')
