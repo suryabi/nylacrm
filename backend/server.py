@@ -37,6 +37,59 @@ security = HTTPBearer()
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
+# ============= HELPER FUNCTIONS =============
+
+import re
+
+async def generate_lead_id(company: str, city: str) -> str:
+    """
+    Generate unique Lead ID in format: NAME4-CITY-LYY-SEQ (16 characters total)
+    - NAME4: First 4 characters of company name (uppercase, alphanumeric only)
+    - CITY: First 3 characters of city (uppercase, alphanumeric only)
+    - L: Literal 'L' for Lead
+    - YY: 2-digit year
+    - SEQ: 3-digit sequence number (001-999)
+    """
+    # Clean and extract first 4 chars of company name (uppercase, alphanumeric only)
+    clean_company = re.sub(r'[^a-zA-Z0-9]', '', company).upper()
+    name4 = clean_company[:4].ljust(4, 'X')  # Pad with X if less than 4 chars
+    
+    # Clean and extract first 3 chars of city (uppercase, alphanumeric only)
+    clean_city = re.sub(r'[^a-zA-Z0-9]', '', city).upper()
+    city3 = clean_city[:3].ljust(3, 'X')  # Pad with X if less than 3 chars
+    
+    # Get current 2-digit year
+    year2 = datetime.now().strftime('%y')
+    
+    # Build prefix for sequence lookup: NAME4-CITY-LYY-
+    prefix = f"{name4}-{city3}-L{year2}-"
+    
+    # Find the highest sequence number for this prefix
+    regex_pattern = f"^{re.escape(prefix)}\\d{{3}}$"
+    existing_leads = await db.leads.find(
+        {'lead_id': {'$regex': regex_pattern}},
+        {'lead_id': 1}
+    ).sort('lead_id', -1).limit(1).to_list(1)
+    
+    if existing_leads and existing_leads[0].get('lead_id'):
+        # Extract sequence number from last lead_id and increment
+        last_seq = int(existing_leads[0]['lead_id'][-3:])
+        next_seq = last_seq + 1
+    else:
+        next_seq = 1
+    
+    # Cap at 999, wrap to 001 if exceeded (or handle as error)
+    if next_seq > 999:
+        next_seq = 1  # Reset or raise error based on business logic
+    
+    # Format sequence as 3 digits
+    seq3 = str(next_seq).zfill(3)
+    
+    # Final Lead ID: NAME4-CITY-LYY-SEQ (16 characters)
+    lead_id = f"{name4}-{city3}-L{year2}-{seq3}"
+    
+    return lead_id
+
 # ============= MODELS =============
 
 class UserRole(BaseModel):
