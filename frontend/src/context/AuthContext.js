@@ -48,10 +48,15 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = async (email, password) => {
-    const response = await axios.post(`${API_URL}/auth/login`, { email, password });
-    const { access_token, user: userData } = response.data;
-    localStorage.setItem('token', access_token);
-    setToken(access_token);
+    const response = await axios.post(`${API_URL}/auth/login`, { email, password }, {
+      withCredentials: true  // Important: receive and store cookies
+    });
+    const { session_token, user: userData } = response.data;
+    // Store session token as backup (cookie is primary)
+    if (session_token) {
+      localStorage.setItem('token', session_token);
+      setToken(session_token);
+    }
     setUser(userData);
     return userData;
   };
