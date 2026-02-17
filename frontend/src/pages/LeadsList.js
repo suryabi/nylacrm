@@ -499,6 +499,9 @@ export default function LeadsList() {
                     onClick={() => navigate(`/leads/${lead.id}`)}
                     data-testid={`lead-row-${lead.id}`}
                   >
+                    <TableCell className="font-mono text-xs text-muted-foreground" data-testid={`lead-id-${lead.id}`}>
+                      {lead.lead_id || '-'}
+                    </TableCell>
                     <TableCell className="font-medium">{lead.company || lead.name}</TableCell>
                     <TableCell>{lead.city}</TableCell>
                     <TableCell>
