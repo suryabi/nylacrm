@@ -1345,14 +1345,55 @@ async def get_mq_status(current_user: dict = Depends(get_current_user)):
         return {'status': 'unavailable', 'message': 'ActiveMQ subscriber module not loaded'}
     
     try:
-        is_connected = mq_subscriber.is_connected()
+        is_connected = mq_subscriber.is_connected() if mq_subscriber else False
         return {
             'status': 'connected' if is_connected else 'disconnected',
             'host': os.environ.get('ACTIVEMQ_HOST', 'not configured'),
-            'queue': os.environ.get('ACTIVEMQ_QUEUE', 'not configured')
+            'queue': os.environ.get('ACTIVEMQ_QUEUE', 'not configured'),
+            'enabled': os.environ.get('ACTIVEMQ_ENABLED', 'false')
         }
     except Exception as e:
         return {'status': 'error', 'message': str(e)}
+
+class InvoiceWebhookPayload(BaseModel):
+    """Payload for invoice webhook (matches ActiveMQ message format)"""
+    invoiceData: str  # Note: typo from source system (should be invoiceDate)
+    grossInvoiceValue: str
+    netInvoiceValue: str
+    C_LEAD_ID: Optional[str] = None
+    CA_LEAD_ID: str  # Our lead_id to match
+    invoiceNo: str
+    creditNoteValue: str
+
+@api_router.post("/invoices/webhook")
+async def process_invoice_webhook(payload: InvoiceWebhookPayload):
+    """
+    Webhook endpoint for processing invoice messages.
+    Use this when ActiveMQ is not accessible or for testing.
+    No authentication required - validate via secret header in production.
+    """
+    try:
+        from mq_subscriber import process_invoice_manually
+        
+        invoice_data = payload.model_dump()
+        result = await process_invoice_manually(invoice_data, db)
+        
+        if result.get('success'):
+            return {
+                'status': 'success',
+                'message': f"Invoice {payload.invoiceNo} processed for lead {result.get('lead_id')}",
+                'details': result
+            }
+        else:
+            return {
+                'status': 'partial' if result.get('invoice_stored') else 'failed',
+                'message': result.get('error'),
+                'details': result
+            }
+    except ImportError:
+        raise HTTPException(status_code=500, detail='Invoice processing module not available')
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ============= ACTIVITIES ROUTES =============
 
