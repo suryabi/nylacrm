@@ -143,13 +143,16 @@ class InvoiceListener(stomp.ConnectionListener):
 
 
 class ActiveMQSubscriber:
-    """ActiveMQ Subscriber service"""
+    """ActiveMQ Subscriber service with auto-reconnect"""
     
     def __init__(self):
         self.connection = None
         self.listener = None
         self.running = False
         self.db_client = None
+        self.reconnect_attempts = 0
+        self.max_reconnect_attempts = 10
+        self.reconnect_delay = 5  # seconds
         
     def connect(self):
         """Establish connection to ActiveMQ"""
@@ -157,54 +160,82 @@ class ActiveMQSubscriber:
             # Create MongoDB client
             self.db_client = AsyncIOMotorClient(mongo_url)
             
-            # Create listener
+            # Create listener with reconnect callback
             self.listener = InvoiceListener(self.db_client)
+            self.listener.set_subscriber(self)
             
             # Start event loop in background thread
             loop_thread = threading.Thread(target=self._run_event_loop, daemon=True)
             loop_thread.start()
             
-            # Create STOMP connection with SSL
-            self.connection = stomp.Connection(
-                [(ACTIVEMQ_HOST, ACTIVEMQ_PORT)],
-                heartbeats=(10000, 10000)  # 10 second heartbeats
-            )
-            
-            # Configure SSL
-            ssl_context = ssl.create_default_context()
-            ssl_context.check_hostname = False
-            ssl_context.verify_mode = ssl.CERT_NONE  # Amazon MQ may require this
-            
-            self.connection.set_ssl(
-                for_hosts=[(ACTIVEMQ_HOST, ACTIVEMQ_PORT)],
-                ssl_version=ssl.PROTOCOL_TLS
-            )
-            
-            # Set listener
-            self.connection.set_listener('invoice_listener', self.listener)
-            
-            # Connect with credentials
-            logger.info(f"Connecting to ActiveMQ at {ACTIVEMQ_HOST}:{ACTIVEMQ_PORT}")
-            self.connection.connect(
-                ACTIVEMQ_USER,
-                ACTIVEMQ_PASSWORD,
-                wait=True,
-                headers={'client-id': 'nyla-crm-subscriber'}
-            )
-            
-            # Subscribe to queue
-            self.connection.subscribe(
-                destination=ACTIVEMQ_QUEUE,
-                id='invoice-sub-1',
-                ack='auto'
-            )
-            
-            self.running = True
-            logger.info(f"Subscribed to queue: {ACTIVEMQ_QUEUE}")
+            self._establish_connection()
             
         except Exception as e:
             logger.error(f"Failed to connect to ActiveMQ: {e}")
             raise
+    
+    def _establish_connection(self):
+        """Create and establish STOMP connection"""
+        # Create STOMP connection with SSL and longer heartbeats
+        self.connection = stomp.Connection(
+            [(ACTIVEMQ_HOST, ACTIVEMQ_PORT)],
+            heartbeats=(30000, 30000),  # 30 second heartbeats
+            reconnect_sleep_initial=5,
+            reconnect_sleep_increase=2,
+            reconnect_sleep_max=60,
+            reconnect_attempts_max=-1  # Infinite reconnect attempts
+        )
+        
+        # Configure SSL
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        self.connection.set_ssl(
+            for_hosts=[(ACTIVEMQ_HOST, ACTIVEMQ_PORT)],
+            ssl_version=ssl.PROTOCOL_TLS
+        )
+        
+        # Set listener
+        self.connection.set_listener('invoice_listener', self.listener)
+        
+        # Connect with credentials
+        logger.info(f"Connecting to ActiveMQ at {ACTIVEMQ_HOST}:{ACTIVEMQ_PORT}")
+        self.connection.connect(
+            ACTIVEMQ_USER,
+            ACTIVEMQ_PASSWORD,
+            wait=True,
+            headers={'client-id': 'nyla-crm-subscriber'}
+        )
+        
+        # Subscribe to queue
+        self.connection.subscribe(
+            destination=ACTIVEMQ_QUEUE,
+            id='invoice-sub-1',
+            ack='auto'
+        )
+        
+        self.running = True
+        self.reconnect_attempts = 0
+        logger.info(f"Subscribed to queue: {ACTIVEMQ_QUEUE}")
+    
+    def reconnect(self):
+        """Attempt to reconnect to ActiveMQ"""
+        if self.reconnect_attempts >= self.max_reconnect_attempts:
+            logger.error(f"Max reconnect attempts ({self.max_reconnect_attempts}) reached")
+            return
+        
+        self.reconnect_attempts += 1
+        logger.info(f"Attempting reconnect ({self.reconnect_attempts}/{self.max_reconnect_attempts})...")
+        
+        try:
+            time.sleep(self.reconnect_delay)
+            self._establish_connection()
+            logger.info("Reconnected successfully!")
+        except Exception as e:
+            logger.error(f"Reconnect failed: {e}")
+            # Schedule another reconnect attempt
+            threading.Thread(target=self.reconnect, daemon=True).start()
     
     def _run_event_loop(self):
         """Run asyncio event loop in background thread"""
