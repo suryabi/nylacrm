@@ -992,6 +992,11 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 async def create_lead(lead_input: LeadCreate, current_user: dict = Depends(get_current_user)):
     lead_data = lead_input.model_dump()
     lead_data['created_by'] = current_user['id']
+    
+    # Generate unique Lead ID
+    unique_lead_id = await generate_lead_id(lead_data['company'], lead_data['city'])
+    lead_data['lead_id'] = unique_lead_id
+    
     lead_obj = Lead(**lead_data)
     
     doc = lead_obj.model_dump()
