@@ -1278,6 +1278,46 @@ async def get_unmatched_invoices(current_user: dict = Depends(get_current_user))
     
     return {'invoices': invoices}
 
+@api_router.get("/resources/{resource_id}/invoice-summary")
+async def get_resource_invoice_summary(resource_id: str, current_user: dict = Depends(get_current_user)):
+    """Get invoice summary for a specific resource (sales person)"""
+    # Get user info
+    user = await db.users.find_one({'id': resource_id}, {'_id': 0, 'password': 0})
+    if not user:
+        raise HTTPException(status_code=404, detail='Resource not found')
+    
+    # Get resource invoice summary
+    summary = await db.resource_invoice_summary.find_one({'resource_id': resource_id}, {'_id': 0})
+    
+    # Get all invoices for leads assigned to this resource
+    invoices = await db.invoices.find(
+        {'assigned_to': resource_id, 'status': 'matched'},
+        {'_id': 0}
+    ).sort('received_at', -1).to_list(100)
+    
+    # Get resource targets
+    targets = await db.resource_targets.find({'resource_id': resource_id}, {'_id': 0}).to_list(100)
+    total_target = sum(t.get('target_revenue', 0) for t in targets)
+    
+    achieved = summary.get('total_gross_invoice_value', 0) if summary else 0
+    tbd = total_target - achieved
+    achievement_pct = (achieved / total_target * 100) if total_target > 0 else 0
+    
+    return {
+        'resource': {
+            'id': user['id'],
+            'name': user.get('name'),
+            'designation': user.get('designation'),
+            'territory': user.get('territory')
+        },
+        'target_revenue': total_target,
+        'achieved_revenue': achieved,
+        'tbd_revenue': tbd,
+        'achievement_percentage': round(achievement_pct, 2),
+        'invoice_count': summary.get('invoice_count', 0) if summary else 0,
+        'recent_invoices': invoices[:10]
+    }
+
 @api_router.post("/invoices/match/{invoice_id}")
 async def match_invoice_to_lead(
     invoice_id: str,
