@@ -301,6 +301,7 @@ export default function ReportsPage() {
                       <th className="p-2"></th>
                       <th className="p-2"></th>
                       <th className="p-2"></th>
+                      {selectedReport === 'target-resource' && <th className="p-2"></th>}
                     </tr>
                   </thead>
                   <tbody>
