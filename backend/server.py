@@ -1220,6 +1220,143 @@ async def delete_lead(lead_id: str, current_user: dict = Depends(get_current_use
     
     return {'message': 'Lead deleted successfully'}
 
+# ============= SALES REVENUE DASHBOARD =============
+
+@api_router.get("/sales-revenue/won-leads")
+async def get_won_leads_revenue(
+    time_filter: str = "lifetime",
+    resource_id: Optional[str] = None,
+    city: Optional[str] = None,
+    territory: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all WON leads with their invoice totals for the Sales Revenue Dashboard"""
+    from datetime import datetime, timedelta
+    from dateutil.relativedelta import relativedelta
+    
+    # Build base query for WON leads
+    query = {'status': 'won'}
+    
+    # Apply time filter
+    now = datetime.now(timezone.utc)
+    start_date = None
+    
+    if time_filter == "this_week":
+        start_date = now - timedelta(days=now.weekday())
+    elif time_filter == "last_week":
+        start_date = now - timedelta(days=now.weekday() + 7)
+        end_date = now - timedelta(days=now.weekday())
+    elif time_filter == "this_month":
+        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif time_filter == "last_month":
+        first_of_this_month = now.replace(day=1)
+        start_date = (first_of_this_month - relativedelta(months=1))
+        end_date = first_of_this_month
+    elif time_filter == "this_quarter":
+        quarter = (now.month - 1) // 3
+        start_date = now.replace(month=quarter * 3 + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif time_filter == "last_quarter":
+        quarter = (now.month - 1) // 3
+        if quarter == 0:
+            start_date = now.replace(year=now.year - 1, month=10, day=1)
+            end_date = now.replace(month=1, day=1)
+        else:
+            start_date = now.replace(month=(quarter - 1) * 3 + 1, day=1)
+            end_date = now.replace(month=quarter * 3 + 1, day=1)
+    elif time_filter == "last_3_months":
+        start_date = now - relativedelta(months=3)
+    elif time_filter == "last_6_months":
+        start_date = now - relativedelta(months=6)
+    elif time_filter == "this_year":
+        start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif time_filter == "last_year":
+        start_date = now.replace(year=now.year - 1, month=1, day=1)
+        end_date = now.replace(month=1, day=1)
+    
+    if start_date:
+        query['updated_at'] = {'$gte': start_date.isoformat()}
+        if 'end_date' in dir() and end_date:
+            query['updated_at']['$lt'] = end_date.isoformat()
+    
+    # Apply resource filter
+    if resource_id:
+        query['assigned_to'] = resource_id
+    
+    # Apply city filter
+    if city:
+        query['city'] = city
+    
+    # Apply territory filter (region)
+    if territory:
+        query['region'] = territory
+    
+    # Fetch won leads
+    leads = await db.leads.find(query, {'_id': 0}).sort('updated_at', -1).to_list(1000)
+    
+    # Get user info for assigned_to
+    user_ids = list(set([l.get('assigned_to') for l in leads if l.get('assigned_to')]))
+    users = await db.users.find({'id': {'$in': user_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(100)
+    user_map = {u['id']: u['name'] for u in users}
+    
+    # Build response with invoice data
+    result = []
+    total_gross = 0
+    total_net = 0
+    total_credit = 0
+    
+    for lead in leads:
+        gross = lead.get('total_gross_invoice_value', 0) or 0
+        net = lead.get('total_net_invoice_value', 0) or 0
+        credit = lead.get('total_credit_note_value', 0) or 0
+        
+        total_gross += gross
+        total_net += net
+        total_credit += credit
+        
+        result.append({
+            'id': lead['id'],
+            'lead_id': lead.get('lead_id'),
+            'company': lead.get('company'),
+            'city': lead.get('city'),
+            'territory': lead.get('region'),
+            'assigned_to': lead.get('assigned_to'),
+            'assigned_to_name': user_map.get(lead.get('assigned_to'), '-'),
+            'won_date': lead.get('updated_at'),
+            'invoice_count': lead.get('invoice_count', 0) or 0,
+            'gross_invoice_value': gross,
+            'net_invoice_value': net,
+            'credit_note_value': credit
+        })
+    
+    return {
+        'leads': result,
+        'summary': {
+            'total_leads': len(result),
+            'total_gross': total_gross,
+            'total_net': total_net,
+            'total_credit': total_credit
+        }
+    }
+
+@api_router.get("/sales-revenue/filters")
+async def get_revenue_filters(current_user: dict = Depends(get_current_user)):
+    """Get filter options for Sales Revenue Dashboard"""
+    # Get unique cities from won leads
+    cities = await db.leads.distinct('city', {'status': 'won'})
+    
+    # Get unique territories (regions)
+    territories = await db.leads.distinct('region', {'status': 'won'})
+    
+    # Get resources (users who have won leads assigned)
+    assigned_users = await db.leads.distinct('assigned_to', {'status': 'won', 'assigned_to': {'$ne': None}})
+    users = await db.users.find({'id': {'$in': assigned_users}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(100)
+    
+    return {
+        'cities': sorted([c for c in cities if c]),
+        'territories': sorted([t for t in territories if t]),
+        'resources': [{'id': u['id'], 'name': u['name']} for u in users]
+    }
+
 # ============= INVOICE ROUTES =============
 
 @api_router.get("/leads/{lead_id}/invoices")
