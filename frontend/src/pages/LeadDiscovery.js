@@ -35,6 +35,7 @@ const OUTLET_TYPES = [
 ];
 
 export default function LeadDiscovery() {
+  const { user, token } = useAuth();
   const [searchMode, setSearchMode] = React.useState('location'); // 'location' or 'outlet_name'
   const [selectedCity, setSelectedCity] = React.useState('');
   const [locationName, setLocationName] = React.useState('');
