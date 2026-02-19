@@ -799,6 +799,7 @@ async def google_oauth_callback(request: Request, response: Response):
     
     body = await request.json()
     code = body.get('code')
+    redirect_uri = body.get('redirect_uri')  # Accept redirect_uri from frontend
     
     if not code:
         raise HTTPException(status_code=400, detail='Authorization code required')
@@ -806,7 +807,9 @@ async def google_oauth_callback(request: Request, response: Response):
     try:
         client_id = os.environ['GOOGLE_OAUTH_CLIENT_ID']
         client_secret = os.environ['GOOGLE_OAUTH_CLIENT_SECRET']
-        redirect_uri = os.environ['GOOGLE_OAUTH_REDIRECT_URI']
+        # Use redirect_uri from request, fallback to env variable
+        if not redirect_uri:
+            redirect_uri = os.environ.get('GOOGLE_OAUTH_REDIRECT_URI', '')
         
         # Exchange code for tokens
         async with httpx.AsyncClient() as client:
