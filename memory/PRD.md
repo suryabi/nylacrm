@@ -39,6 +39,14 @@ Build a comprehensive, mobile-ready Sales CRM application with:
   - Added "Accounts" to sidebar navigation
   - Status: VERIFIED - All 16 backend tests passed, all UI flows working
 
+- **FEATURE**: Account Performance Report
+  - Created `/api/reports/account-performance` endpoint with filters: time_filter, territory, state, city, account_type
+  - Shows: Account name, Gross Invoice Total, Net Invoice Total, Bottle Credit, Contribution % (dynamic), Last Payment, Outstanding, Overdue
+  - Contribution % calculated on-the-fly based on filtered total revenue
+  - Added to Dashboard submenu alongside Resource Performance
+  - Click on account row navigates to account detail
+  - Status: VERIFIED - All 16 backend tests passed, all UI flows working
+
 ### Feb 19, 2026 (Session 1)
 - **BUG FIX**: Lead creation form now validates region field properly
   - Root cause: Form used `user.territory` ("All India") which backend rejected
