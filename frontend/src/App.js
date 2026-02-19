@@ -35,6 +35,8 @@ import TargetSKUReport from './pages/TargetSKUReport';
 import TargetResourceReport from './pages/TargetResourceReport';
 import SKUPerformance from './pages/SKUPerformance';
 import ResourcePerformance from './pages/ResourcePerformance';
+import AccountsList from './pages/AccountsList';
+import AccountDetail from './pages/AccountDetail';
 import '@/App.css';
 
 function ProtectedRoute({ children }) {
@@ -102,6 +104,8 @@ function AppRouter() {
           <Route path="/target-resource" element={<ProtectedRoute><TargetResourceReport /></ProtectedRoute>} />
           <Route path="/sku-performance" element={<ProtectedRoute><SKUPerformance /></ProtectedRoute>} />
           <Route path="/resource-performance" element={<ProtectedRoute><ResourcePerformance /></ProtectedRoute>} />
+          <Route path="/accounts" element={<ProtectedRoute><AccountsList /></ProtectedRoute>} />
+          <Route path="/accounts/:id" element={<ProtectedRoute><AccountDetail /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </>
