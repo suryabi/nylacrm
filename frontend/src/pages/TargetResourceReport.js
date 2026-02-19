@@ -26,7 +26,7 @@ export default function TargetResourceReport() {
   const loadReport = async () => {
     setLoading(true);
     try {
-      const res = await axios.get(API + '/reports/resource-allocation', { withCredentials: true });
+      const res = await axios.get(API + '/reports/target-resource-allocation', { withCredentials: true });
       setReportData(res.data.report_data || []);
     } catch (err) {
       toast.error('Failed to load report');
