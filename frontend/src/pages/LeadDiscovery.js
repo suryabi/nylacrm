@@ -107,12 +107,13 @@ export default function LeadDiscovery() {
     try {
       const token = localStorage.getItem('token');
       
-      // Fetch existing leads for duplicate check
-      const leadsRes = await axios.get(process.env.REACT_APP_BACKEND_URL + '/api/leads?limit=1000', {
+      // Fetch existing leads for duplicate check - use large page_size
+      const leadsRes = await axios.get(process.env.REACT_APP_BACKEND_URL + '/api/leads?page=1&page_size=100', {
         headers: { Authorization: `Bearer ${token}` },
         withCredentials: true
       });
-      setExistingLeads(leadsRes.data);
+      // Extract data from paginated response
+      setExistingLeads(leadsRes.data.data || []);
       
       // Call Google Places API via backend
       const searchRes = await axios.post(
