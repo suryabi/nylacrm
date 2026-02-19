@@ -294,8 +294,8 @@ export default function LeadDiscovery() {
         
         // Refresh existing leads list using leadsAPI
         try {
-          const leadsRes = await leadsAPI.getAll();
-          setExistingLeads(leadsRes.data);
+          const leadsRes = await leadsAPI.getAll({ pageSize: 100 });
+          setExistingLeads(leadsRes.data.data || []);
         } catch (refreshErr) {
           console.error('Failed to refresh leads list:', refreshErr);
         }
