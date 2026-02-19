@@ -613,6 +613,7 @@ export default function LeadDiscovery() {
                   Import New ({selectedOutlets.length})
                 </Button>
                 <Button onClick={() => handleImport(true)} variant="outline" className="rounded-full">
+                  <RefreshCw className="h-4 w-4 mr-2" />
                   Re-import All ({selectedOutlets.length})
                 </Button>
               </div>
