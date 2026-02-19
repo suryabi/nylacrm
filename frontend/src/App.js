@@ -37,6 +37,7 @@ import SKUPerformance from './pages/SKUPerformance';
 import ResourcePerformance from './pages/ResourcePerformance';
 import AccountsList from './pages/AccountsList';
 import AccountDetail from './pages/AccountDetail';
+import AccountPerformance from './pages/AccountPerformance';
 import '@/App.css';
 
 function ProtectedRoute({ children }) {
@@ -106,6 +107,7 @@ function AppRouter() {
           <Route path="/resource-performance" element={<ProtectedRoute><ResourcePerformance /></ProtectedRoute>} />
           <Route path="/accounts" element={<ProtectedRoute><AccountsList /></ProtectedRoute>} />
           <Route path="/accounts/:id" element={<ProtectedRoute><AccountDetail /></ProtectedRoute>} />
+          <Route path="/account-performance" element={<ProtectedRoute><AccountPerformance /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </>
