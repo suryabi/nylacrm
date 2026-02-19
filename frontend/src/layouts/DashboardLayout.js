@@ -6,15 +6,20 @@ import { LogOut, Menu, ChevronDown, ChevronRight } from 'lucide-react';
 
 const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
 
+// Dashboard submenu items
+const dashboardSubmenu = [
+  { name: 'Sales Overview', href: '/dashboard', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business'] },
+  { name: 'Revenue Report', href: '/sales-revenue', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager'] },
+];
+
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business'] },
+  { name: 'Dashboard', href: '/dashboard', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business'], hasSubmenu: true },
   { name: 'Leads', href: '/leads', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business'] },
   { name: 'Lead Discovery', href: '/lead-discovery', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business'] },
   { name: 'COGS Calculator', href: '/cogs-calculator', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head'] },
   { name: 'Proposals', href: '/proposals', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business'] },
   { name: 'Targets', href: '/targets', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager'] },
   { name: 'Reports', href: '/reports-new', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager'] },
-  { name: 'Sales Revenue', href: '/sales-revenue', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager'] },
   { name: 'Sales Portal', href: '/sales-portal', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business'] },
   { name: 'Daily Status', href: '/daily-status', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business'] },
   { name: 'Team Status', href: '/team-status', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager'] },
