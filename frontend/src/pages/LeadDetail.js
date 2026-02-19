@@ -497,6 +497,41 @@ export default function LeadDetail() {
                     data-testid="activity-description-input"
                   />
                 </div>
+                
+                {/* Status Update */}
+                <div className="space-y-2 pt-2 border-t">
+                  <Label>Update Lead Status</Label>
+                  <Select value={activityStatus} onValueChange={setActivityStatus}>
+                    <SelectTrigger data-testid="activity-status-select">
+                      <SelectValue placeholder="Keep current status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Keep current status</SelectItem>
+                      <SelectItem value="new">New</SelectItem>
+                      <SelectItem value="contacted">Contacted</SelectItem>
+                      <SelectItem value="qualified">Qualified</SelectItem>
+                      <SelectItem value="not_qualified">Not Qualified</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="proposal_stage">Proposal Stage</SelectItem>
+                      <SelectItem value="won">Won</SelectItem>
+                      <SelectItem value="lost">Lost</SelectItem>
+                      <SelectItem value="future_followup">Future Follow up</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {/* Follow-up Date */}
+                <div className="space-y-2">
+                  <Label>Next Follow-up Date</Label>
+                  <Input
+                    type="date"
+                    value={activityFollowUpDate}
+                    onChange={(e) => setActivityFollowUpDate(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    data-testid="activity-followup-date"
+                  />
+                </div>
+                
                 <Button type="submit" className="w-full h-12" disabled={submittingActivity} data-testid="submit-activity-button">
                   {submittingActivity ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : 'Log Activity'}
                 </Button>
