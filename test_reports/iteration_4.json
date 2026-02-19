@@ -1,0 +1,71 @@
+{
+  "summary": "Completed testing of Account Performance Report feature. All 16 backend API tests passed. Frontend UI testing confirmed: page loads correctly, filters work, summary cards display, data table shows all required columns, row click navigates to account detail.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "Backend: GET /api/reports/account-performance - endpoint exists (200)",
+    "Backend: Response structure has 'accounts' and 'summary' fields",
+    "Backend: Account data has all required fields (account_id, account_name, account_type, city, state, territory, gross_invoice_total, net_invoice_total, bottle_credit, contribution_pct, outstanding_balance, overdue_amount, last_payment_amount)",
+    "Backend: Summary has all required fields (total_gross, total_net, total_bottle_credit, total_outstanding, total_overdue, account_count)",
+    "Backend: time_filter=this_month works",
+    "Backend: time_filter=lifetime works",
+    "Backend: time_filter=this_quarter works",
+    "Backend: time_filter=last_6_months works",
+    "Backend: territory filter works",
+    "Backend: state filter works",
+    "Backend: city filter works",
+    "Backend: account_type filter works",
+    "Backend: Combined filters work",
+    "Backend: Contribution percentage calculation is valid (<=100%)",
+    "Backend: Unauthenticated access denied (401)",
+    "Backend: Accounts sorted by gross_invoice_total descending",
+    "Frontend: Account Performance page accessible at /account-performance",
+    "Frontend: Account Performance appears in Dashboard submenu navigation",
+    "Frontend: Page header shows 'Account Performance' with description",
+    "Frontend: Filters section shows Time Period, Territory, State, City, Account Type",
+    "Frontend: Reset button clears all filters",
+    "Frontend: Summary cards display: GROSS TOTAL, NET TOTAL, BOTTLE CREDIT, OUTSTANDING, OVERDUE, ACCOUNTS",
+    "Frontend: Data table shows all required columns",
+    "Frontend: Territory filter updates account list (South India shows 2 accounts)",
+    "Frontend: Account Type filter works (Tier 1 shows 1 account)",
+    "Frontend: Clicking account row navigates to /accounts/{account_id}",
+    "Frontend: Account detail page loads correctly with all sections"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_account_performance.py",
+    "/app/test_reports/pytest/account_performance_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Contribution % calculation is correct - based on filtered total gross revenue",
+    "Bottle Credit falls back to SKU pricing sum when no invoices exist (good design)",
+    "All data-testid attributes present for automated testing",
+    "Accounts sorted by gross_invoice_total descending as expected"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_account_performance.py"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16 tests passed)",
+    "frontend": "100% (all UI flows working)"
+  },
+  "test_credentials": {
+    "email": "admin@nylaairwater.earth",
+    "password": "admin123"
+  },
+  "seed_data_creation": "Used existing accounts: TOOP-HYD-A26-001 (Toopa Ice-creamery), LEAD-HYD-A26-001, EMPI-BEN-A26-001",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Account Performance feature is fully implemented. 3 accounts exist in the system. No invoices exist so all invoice totals show ₹0, but Bottle Credit shows values from SKU pricing (₹10 for Toopa Ice-creamery). Contribution % shows 0% when no invoices exist - this is correct behavior.",
+  "rca_of_the_issue": {
+    "root_cause": "N/A - Feature is newly implemented and working correctly",
+    "test_coverage": "Tested all 8 features in the request: page accessible, navigation, filters (5 types), summary cards (6 metrics), data table (10 columns), API structure, contribution % calculation, row click navigation"
+  }
+}
