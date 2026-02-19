@@ -518,7 +518,7 @@ export default function LeadsList() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedLeads.map((lead) => (
+                {displayLeads.map((lead) => (
                   <TableRow
                     key={lead.id}
                     className="cursor-pointer hover:bg-muted/50"
