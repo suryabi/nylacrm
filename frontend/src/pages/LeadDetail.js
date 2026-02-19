@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { leadsAPI, activitiesAPI, commentsAPI, usersAPI } from '../utils/api';
+import { leadsAPI, activitiesAPI, commentsAPI, usersAPI, accountsAPI } from '../utils/api';
 import axios from 'axios';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -9,7 +9,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
-import { ArrowLeft, Mail, Phone, Building2, User, MessageSquare, Send, Loader2 } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Building2, User, MessageSquare, Send, Loader2, ArrowRightCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Select,
@@ -73,6 +73,7 @@ export default function LeadDetail() {
   const [submittingActivity, setSubmittingActivity] = useState(false);
   const [activityStatus, setActivityStatus] = useState('');
   const [activityFollowUpDate, setActivityFollowUpDate] = useState('');
+  const [convertingToAccount, setConvertingToAccount] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -184,6 +185,25 @@ export default function LeadDetail() {
     }
   };
 
+  const handleConvertToAccount = async () => {
+    if (!lead || lead.status !== 'won') {
+      toast.error('Only won leads can be converted to accounts');
+      return;
+    }
+    
+    setConvertingToAccount(true);
+    try {
+      const response = await accountsAPI.convertFromLead(lead.id);
+      toast.success(`Account created: ${response.data.account_id}`);
+      navigate(`/accounts/${response.data.account_id}`);
+    } catch (error) {
+      const message = error.response?.data?.detail || 'Failed to convert lead to account';
+      toast.error(message);
+    } finally {
+      setConvertingToAccount(false);
+    }
+  };
+
   if (loading) {
     return <div className="flex justify-center py-12">Loading...</div>;
   }
@@ -191,6 +211,9 @@ export default function LeadDetail() {
   if (!lead) {
     return <div className="text-center py-12">Lead not found</div>;
   }
+
+  const isWonLead = lead.status === 'won' || lead.status === 'closed_won';
+  const canConvert = isWonLead && !lead.converted_to_account;
 
   const assignedUser = users.find(u => u.id === lead.assigned_to);
 
@@ -219,9 +242,36 @@ export default function LeadDetail() {
             <p className="text-muted-foreground mt-1">Contact: {lead.contact_person}</p>
           )}
         </div>
-        <Button onClick={() => navigate(`/leads/${id}/edit`)} data-testid="edit-lead-button">
-          Edit Lead
-        </Button>
+        <div className="flex items-center gap-2">
+          {canConvert && (
+            <Button
+              onClick={handleConvertToAccount}
+              disabled={convertingToAccount}
+              variant="default"
+              className="bg-emerald-600 hover:bg-emerald-700"
+              data-testid="convert-to-account-btn"
+            >
+              {convertingToAccount ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Converting...</>
+              ) : (
+                <><ArrowRightCircle className="h-4 w-4 mr-2" /> Convert to Account</>
+              )}
+            </Button>
+          )}
+          {lead.converted_to_account && lead.account_id && (
+            <Button
+              onClick={() => navigate(`/accounts/${lead.account_id}`)}
+              variant="outline"
+              className="border-emerald-500 text-emerald-700"
+              data-testid="view-account-btn"
+            >
+              <Building2 className="h-4 w-4 mr-2" /> View Account
+            </Button>
+          )}
+          <Button onClick={() => navigate(`/leads/${id}/edit`)} data-testid="edit-lead-button">
+            Edit Lead
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
