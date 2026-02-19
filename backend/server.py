@@ -4540,6 +4540,156 @@ async def get_resource_performance(
         }
     }
 
+@api_router.get("/reports/account-performance")
+async def get_account_performance(
+    time_filter: str = 'this_month',
+    territory: Optional[str] = None,
+    state: Optional[str] = None,
+    city: Optional[str] = None,
+    account_type: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get Account performance report.
+    Shows invoice totals, bottle credits, contribution %, and financial metrics.
+    """
+    start_date, end_date = get_time_filter_dates(time_filter)
+    
+    # Build account query
+    account_query = {}
+    if territory:
+        account_query['territory'] = territory
+    if state:
+        account_query['state'] = state
+    if city:
+        account_query['city'] = city
+    if account_type:
+        account_query['account_type'] = account_type
+    
+    # Fetch all accounts matching filters
+    accounts = await db.accounts.find(account_query, {'_id': 0}).to_list(500)
+    
+    # Build invoice date query
+    invoice_date_query = {}
+    if time_filter != 'lifetime':
+        invoice_date_query = {
+            'created_at': {
+                '$gte': start_date.isoformat(),
+                '$lte': end_date.isoformat()
+            }
+        }
+    
+    # Get all invoices within time range
+    all_invoices = await db.invoices.find(invoice_date_query, {'_id': 0}).to_list(5000)
+    
+    # Calculate total revenue for contribution percentage
+    total_gross_all = sum(inv.get('gross_amount', inv.get('total_amount', 0)) for inv in all_invoices)
+    
+    # Aggregate invoice data by account
+    account_invoices = {}
+    for inv in all_invoices:
+        # Match by lead_id or customer name
+        lead_id = inv.get('lead_id')
+        customer_name = inv.get('customer_name', '').lower()
+        
+        for acc in accounts:
+            acc_lead_id = acc.get('lead_id')
+            acc_name = acc.get('account_name', '').lower()
+            
+            # Match invoice to account
+            if (lead_id and acc_lead_id and lead_id == acc_lead_id) or \
+               (customer_name and acc_name and (customer_name in acc_name or acc_name in customer_name)):
+                acc_id = acc.get('account_id')
+                if acc_id not in account_invoices:
+                    account_invoices[acc_id] = {
+                        'gross_total': 0,
+                        'net_total': 0,
+                        'bottle_credit': 0,
+                        'invoice_count': 0
+                    }
+                
+                gross = inv.get('gross_amount', inv.get('total_amount', 0))
+                net = inv.get('net_amount', inv.get('total_amount', 0))
+                credit = inv.get('bottle_credit', 0)
+                
+                account_invoices[acc_id]['gross_total'] += gross
+                account_invoices[acc_id]['net_total'] += net
+                account_invoices[acc_id]['bottle_credit'] += credit
+                account_invoices[acc_id]['invoice_count'] += 1
+                break
+    
+    # Build performance data
+    accounts_data = []
+    summary_gross = 0
+    summary_net = 0
+    summary_bottle_credit = 0
+    summary_outstanding = 0
+    summary_overdue = 0
+    
+    for acc in accounts:
+        acc_id = acc.get('account_id')
+        inv_data = account_invoices.get(acc_id, {
+            'gross_total': 0,
+            'net_total': 0,
+            'bottle_credit': 0,
+            'invoice_count': 0
+        })
+        
+        # Calculate contribution percentage (based on filtered total)
+        contribution_pct = 0
+        if total_gross_all > 0:
+            contribution_pct = round((inv_data['gross_total'] / total_gross_all) * 100, 2)
+        
+        # Get financial data from account
+        outstanding = acc.get('outstanding_balance', 0)
+        overdue = acc.get('overdue_amount', 0)
+        last_payment = acc.get('last_payment_amount', 0)
+        
+        # Calculate bottle credit from SKU pricing if not in invoices
+        sku_pricing = acc.get('sku_pricing', [])
+        estimated_bottle_credit = sum(sku.get('return_bottle_credit', 0) for sku in sku_pricing)
+        bottle_credit = inv_data['bottle_credit'] if inv_data['bottle_credit'] > 0 else estimated_bottle_credit
+        
+        accounts_data.append({
+            'account_id': acc_id,
+            'account_name': acc.get('account_name', 'Unknown'),
+            'account_type': acc.get('account_type', ''),
+            'territory': acc.get('territory', ''),
+            'state': acc.get('state', ''),
+            'city': acc.get('city', ''),
+            'gross_invoice_total': inv_data['gross_total'],
+            'net_invoice_total': inv_data['net_total'],
+            'bottle_credit': bottle_credit,
+            'contribution_pct': contribution_pct,
+            'outstanding_balance': outstanding,
+            'overdue_amount': overdue,
+            'last_payment_amount': last_payment,
+            'invoice_count': inv_data['invoice_count']
+        })
+        
+        # Update summary
+        summary_gross += inv_data['gross_total']
+        summary_net += inv_data['net_total']
+        summary_bottle_credit += bottle_credit
+        summary_outstanding += outstanding
+        summary_overdue += overdue
+    
+    # Sort by gross invoice total (descending)
+    accounts_data.sort(key=lambda x: x['gross_invoice_total'], reverse=True)
+    
+    return {
+        'accounts': accounts_data,
+        'summary': {
+            'total_gross': summary_gross,
+            'total_net': summary_net,
+            'total_bottle_credit': summary_bottle_credit,
+            'total_outstanding': summary_outstanding,
+            'total_overdue': summary_overdue,
+            'account_count': len(accounts_data),
+            'total_revenue_base': total_gross_all  # For context on contribution calc
+        }
+    }
+
 # ============= INCLUDE ROUTER =============
 
 app.include_router(api_router)
