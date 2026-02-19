@@ -96,6 +96,8 @@ function AppRouter() {
           <Route path="/cogs-calculator" element={<ProtectedRoute><COGSCalculator /></ProtectedRoute>} />
           <Route path="/proposals" element={<ProtectedRoute><ProposalGenerator /></ProtectedRoute>} />
           <Route path="/sales-revenue" element={<ProtectedRoute><SalesRevenueDashboard /></ProtectedRoute>} />
+          <Route path="/target-sku" element={<ProtectedRoute><TargetSKUReport /></ProtectedRoute>} />
+          <Route path="/target-resource" element={<ProtectedRoute><TargetResourceReport /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </>
