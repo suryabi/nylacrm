@@ -1069,7 +1069,7 @@ async def create_lead(lead_input: LeadCreate, current_user: dict = Depends(get_c
 @api_router.get("/leads", response_model=List[Lead])
 async def get_leads(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 1000,
     status: Optional[str] = None,
     city: Optional[str] = None,
     state: Optional[str] = None,
