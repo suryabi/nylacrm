@@ -32,6 +32,12 @@ Build a comprehensive, mobile-ready Sales CRM application with:
   - Fix: Added `getInitialRegion()` validation + frontend required field checks
   - Status: VERIFIED - All tests passed
 
+- **BUG FIX**: Lead Discovery import not saving leads
+  - Root cause: Silent failures in import loop, no per-item error handling
+  - Fix: Added individual error tracking, accurate success/failure counts
+  - Added "Re-import All" feature for updating existing leads
+  - Status: VERIFIED - MTR lead imported successfully
+
 ### Previous Session (from handoff)
 - Resolved critical Babel/dev server error (craco.config.js fix)
 - Dashboard navigation overhaul (single dropdown menu)
