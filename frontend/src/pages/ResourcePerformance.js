@@ -65,7 +65,7 @@ export default function ResourcePerformance() {
   const fetchSalesTeam = async () => {
     try {
       const response = await axios.get(`${API_URL}/users`, { withCredentials: true });
-      const team = response.data.filter(u => ['Head of Business', 'Regional Sales Manager', 'National Sales Head'].includes(u.role) && u.is_active);
+      const team = response.data.filter(u => ['Head of Business', 'Regional Sales Manager', 'National Sales Head', 'Partner - Sales'].includes(u.role) && u.is_active);
       setSalesTeam(team);
     } catch (error) {
       console.error('Failed to load team');
