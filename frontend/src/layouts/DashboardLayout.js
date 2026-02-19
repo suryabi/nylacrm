@@ -38,7 +38,8 @@ export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(
     location.pathname === '/dashboard' || location.pathname === '/sales-revenue' || 
-    location.pathname === '/target-sku' || location.pathname === '/target-resource'
+    location.pathname === '/target-sku' || location.pathname === '/target-resource' ||
+    location.pathname === '/sku-performance' || location.pathname === '/resource-performance'
   );
 
   const handleLogout = () => {
@@ -49,7 +50,8 @@ export default function DashboardLayout({ children }) {
   const filteredNav = navigation.filter(item => item.roles.includes(user?.role));
   const filteredDashboardSubmenu = dashboardSubmenu.filter(item => item.roles.includes(user?.role));
   const isDashboardActive = location.pathname === '/dashboard' || location.pathname === '/sales-revenue' || 
-    location.pathname === '/target-sku' || location.pathname === '/target-resource';
+    location.pathname === '/target-sku' || location.pathname === '/target-resource' ||
+    location.pathname === '/sku-performance' || location.pathname === '/resource-performance';
 
   return (
     <div className="min-h-screen flex bg-background">
