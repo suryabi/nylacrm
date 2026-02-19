@@ -41,6 +41,9 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 - [x] Sales Revenue Dashboard with filters
 - [x] Invoice display on Lead Detail page
 - [x] Fixed Babel compilation error (disabled visual edits plugin)
+- [x] Dashboard dropdown navigation with:
+  - Sales Overview (pipeline metrics)
+  - Revenue Report (won deals tracking)
 
 ## Database Schema
 
