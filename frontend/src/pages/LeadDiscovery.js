@@ -202,33 +202,13 @@ export default function LeadDiscovery() {
       return;
     }
     
+    // Use user from AuthContext - no need to make another API call
+    if (!user || !user.id) {
+      toast.error('Session expired. Please login again.');
+      return;
+    }
+    
     try {
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        toast.error('Session expired. Please login again.');
-        return;
-      }
-      
-      // Get current user to assign leads
-      let currentUser;
-      try {
-        const userRes = await axios.get(process.env.REACT_APP_BACKEND_URL + '/api/auth/me', {
-          headers: { Authorization: `Bearer ${token}` },
-          withCredentials: true,
-          timeout: 10000
-        });
-        currentUser = userRes.data;
-      } catch (authError) {
-        console.error('Auth error:', authError);
-        if (authError.response?.status === 401) {
-          toast.error('Session expired. Please login again.');
-        } else {
-          toast.error('Failed to verify user session. Please try again.');
-        }
-        return;
-      }
-      
       const outletsToImport = results.filter(o => selectedOutlets.includes(o.id));
       
       let successCount = 0;
