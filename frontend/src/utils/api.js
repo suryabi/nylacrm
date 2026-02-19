@@ -9,7 +9,7 @@ const getAuthHeaders = () => {
 
 // Leads API
 export const leadsAPI = {
-  getAll: () => axios.get(`${API_URL}/leads`, { headers: getAuthHeaders() }),
+  getAll: (limit = 1000) => axios.get(`${API_URL}/leads?limit=${limit}`, { headers: getAuthHeaders() }),
   getById: (id) => axios.get(`${API_URL}/leads/${id}`, { headers: getAuthHeaders() }),
   create: (data) => axios.post(`${API_URL}/leads`, data, { headers: getAuthHeaders() }),
   update: (id, data) => axios.put(`${API_URL}/leads/${id}`, data, { headers: getAuthHeaders() }),
