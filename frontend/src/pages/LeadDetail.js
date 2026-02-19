@@ -356,46 +356,27 @@ export default function LeadDetail() {
             </Card>
           )}
 
-          {/* Lead Status */}
+          {/* Lead Status - Display Only */}
           <Card className="p-6">
             <h2 className="text-lg font-semibold mb-4">Lead Status</h2>
             <div className="flex items-center gap-4 mb-4">
               <Badge className={`${statusColors[lead.status]} text-sm px-3 py-1`}>
                 {getStatusLabel(lead.status)}
               </Badge>
-              <Select value={lead.status} onValueChange={handleStatusChange}>
-                <SelectTrigger className="w-[200px]" data-testid="status-selector">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="new">New</SelectItem>
-                  <SelectItem value="contacted">Contacted</SelectItem>
-                  <SelectItem value="qualified">Qualified</SelectItem>
-                  <SelectItem value="not_qualified">Not Qualified</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="proposal_stage">Proposal Stage</SelectItem>
-                  <SelectItem value="won">Won</SelectItem>
-                  <SelectItem value="lost">Lost</SelectItem>
-                  <SelectItem value="future_followup">Future Follow up</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
             
-            <div className="mt-4 pt-4 border-t">
-              <Label className="mb-2 block">Next Follow-up Date</Label>
-              <Input
-                type="date"
-                value={lead.next_followup_date || ''}
-                onChange={(e) => handleFollowUpChange(e.target.value)}
-                className="w-full"
-                min={new Date().toISOString().split('T')[0]}
-              />
-              {lead.next_followup_date && (
-                <p className="text-xs text-muted-foreground mt-2">
-                  Follow-up scheduled for: {format(new Date(lead.next_followup_date), 'MMM d, yyyy')}
+            {lead.next_followup_date && (
+              <div className="mt-4 pt-4 border-t">
+                <p className="text-sm text-muted-foreground">Next Follow-up</p>
+                <p className="font-medium">
+                  {format(new Date(lead.next_followup_date), 'MMM d, yyyy')}
                 </p>
-              )}
-            </div>
+              </div>
+            )}
+            
+            <p className="text-xs text-muted-foreground mt-4">
+              Update status and follow-up date when logging activities
+            </p>
           </Card>
 
           {/* Invoice Summary */}
