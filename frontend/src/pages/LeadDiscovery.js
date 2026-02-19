@@ -331,7 +331,14 @@ export default function LeadDiscovery() {
       
       let errorMsg = 'Failed to import leads';
       
-      if (error.response?.data?.detail) {
+      // Handle specific error codes
+      if (error.response?.status === 520) {
+        errorMsg = 'Server temporarily unavailable. Please wait a moment and try again.';
+      } else if (error.response?.status === 401) {
+        errorMsg = 'Session expired. Please login again.';
+      } else if (error.code === 'ECONNABORTED') {
+        errorMsg = 'Request timed out. Please try again.';
+      } else if (error.response?.data?.detail) {
         if (Array.isArray(error.response.data.detail)) {
           errorMsg = error.response.data.detail.map(e => `${e.loc?.join('.')}: ${e.msg}`).join(', ');
         } else {
