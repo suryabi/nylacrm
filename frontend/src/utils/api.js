@@ -7,9 +7,21 @@ const getAuthHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-// Leads API
+// Leads API with server-side pagination
 export const leadsAPI = {
-  getAll: (limit = 1000) => axios.get(`${API_URL}/leads?limit=${limit}`, { headers: getAuthHeaders() }),
+  getAll: (params = {}) => {
+    const { page = 1, pageSize = 25, status, city, state, country, region, search } = params;
+    const queryParams = new URLSearchParams();
+    queryParams.append('page', page);
+    queryParams.append('page_size', pageSize);
+    if (status) queryParams.append('status', status);
+    if (city) queryParams.append('city', city);
+    if (state) queryParams.append('state', state);
+    if (country) queryParams.append('country', country);
+    if (region) queryParams.append('region', region);
+    if (search) queryParams.append('search', search);
+    return axios.get(`${API_URL}/leads?${queryParams.toString()}`, { headers: getAuthHeaders() });
+  },
   getById: (id) => axios.get(`${API_URL}/leads/${id}`, { headers: getAuthHeaders() }),
   create: (data) => axios.post(`${API_URL}/leads`, data, { headers: getAuthHeaders() }),
   update: (id, data) => axios.put(`${API_URL}/leads/${id}`, data, { headers: getAuthHeaders() }),
