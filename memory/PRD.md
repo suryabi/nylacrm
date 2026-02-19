@@ -1,4 +1,4 @@
-# Nyla Air Water - Sales CRM PRD
+# Nyla Sales CRM - Product Requirements Document
 
 ## Original Problem Statement
 Build a comprehensive, mobile-ready Sales CRM application with:
@@ -7,89 +7,93 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 - Daily status updates and sales target planning
 - COGS calculator and proposal generator
 - Lead discovery and Google Workspace authentication
-- Unique Lead ID generation
-- ActiveMQ invoice integration for real-time data
-- Resource-based revenue tracking
-- Sales Revenue Dashboard
 
-## Architecture
-- **Frontend**: React with Tailwind CSS, Shadcn UI, React Router
-- **Backend**: FastAPI with Motor (MongoDB async driver)
-- **Database**: MongoDB
-- **Auth**: Session-based (cookie) + Google Workspace OAuth
-- **Integrations**: Google Places API, Claude Sonnet 4.5, ActiveMQ
+## User Personas
+- **National Sales Head**: Full access to all features, territories, and reports
+- **Regional Sales Manager / Partner - Sales**: Regional access and team management
+- **Sales Representative**: Individual lead and activity management
+
+## Core Requirements
+1. Lead Management (CRUD operations, status tracking, activity logging)
+2. Team Hierarchy (reporting structure, territory-based access)
+3. Dashboard & Reports (Sales Overview, Revenue Report, Target Reports, Performance Reports)
+4. Activity Tracking (calls, meetings, notes, follow-ups)
+5. Sales Targets (territory and SKU based planning)
+6. COGS Calculator
+7. Proposal Generator with customizable templates
+
+---
 
 ## What's Been Implemented
 
-### Core Features (Complete)
-- [x] Lead management (CRUD, status tracking)
-- [x] Team management with hierarchy
-- [x] Activity tracking (visits, calls, meetings)
-- [x] Main dashboard with analytics
-- [x] Daily status updates
-- [x] Sales target planning
-- [x] COGS Calculator
-- [x] Proposal Generator
-- [x] Lead Discovery (Google Places)
-- [x] Google Workspace OAuth
-- [x] Email/Password login (fixed)
+### Feb 19, 2026
+- **BUG FIX**: Lead creation form now validates region field properly
+  - Root cause: Form used `user.territory` ("All India") which backend rejected
+  - Fix: Added `getInitialRegion()` validation + frontend required field checks
+  - Status: VERIFIED - All tests passed
 
-### Recent Additions (Feb 2026)
-- [x] Unique Lead ID generation (NAME4-CITY-LYY-SEQ format)
-- [x] ActiveMQ invoice integration
-- [x] Resource-based revenue tracking
-- [x] Sales Revenue Dashboard with filters
-- [x] Invoice display on Lead Detail page
-- [x] Fixed Babel compilation error (disabled visual edits plugin)
-- [x] Dashboard dropdown navigation with:
-  - Sales Overview (pipeline metrics)
-  - Revenue Report (won deals tracking)
-- [x] Activity form enhanced with status & follow-up date fields
+### Previous Session (from handoff)
+- Resolved critical Babel/dev server error (craco.config.js fix)
+- Dashboard navigation overhaul (single dropdown menu)
+- Created SKU Performance and Resource Performance pages (MOCK DATA)
+- Redesigned Sales Overview page (chart-less, card-based)
+- Standardized SKUs and Partner-Sales role logic
+- Fixed CORS configuration for deployment
 
-## Database Schema
+---
 
-### leads
-- lead_id (string, unique formatted ID)
-- company_name, contact info, location
-- status, stage, assigned_to
-- total_gross_invoice_value, total_net_invoice_value
-- total_credit_note_value, invoice_count
+## Current Architecture
+```
+/app/
+├── backend/
+│   └── server.py         # FastAPI with MongoDB, CORS enabled
+├── frontend/
+│   ├── craco.config.js   # Babel fix applied
+│   └── src/
+│       ├── pages/
+│       │   ├── AddEditLead.js      # Lead form with validation
+│       │   ├── Dashboard.js        # Sales Overview
+│       │   ├── SKUPerformance.js   # MOCK DATA
+│       │   ├── ResourcePerformance.js # MOCK DATA
+│       │   └── reports/
+│       │       ├── TargetSKUReport.js
+│       │       └── TargetResourceReport.js
+│       └── layouts/
+│           └── DashboardLayout.js  # Navigation structure
+└── memory/
+    └── PRD.md (this file)
+```
 
-### invoices
-- lead_id, invoice_no, invoice_date
-- gross_value, net_value, credit_note_value
-- assigned_to (resource)
+---
 
-### resource_invoice_summary
-- resource_id
-- total_gross/net/credit_note values
-
-## Priority Backlog
+## Prioritized Backlog
 
 ### P0 - Critical
-- None currently
+1. ~~Lead creation bug~~ ✅ FIXED
+2. Implement Backend APIs for SKU Performance dashboard
+3. Implement Backend APIs for Resource Performance dashboard
+4. Verify deployment readiness
 
 ### P1 - High Priority
-- [ ] Complete "Partner - Sales" role implementation (permissions)
+- Partner - Sales role permissions audit (ensure equivalent to Regional Sales Manager)
+- Re-implement Grid View for Sales Targets module
 
 ### P2 - Medium Priority
-- [ ] User verification for custom Proposal Template
+- User verification for Custom Proposal Template
+- Google Workspace authentication
 
-### P3 - Future
-- [ ] Re-implement Grid View for Sales Target module
-- [ ] Refactor server.py into modular APIRouter structure
-- [ ] Component refactoring for large files
+### P3 - Low Priority/Future
+- Additional report customizations
+- Mobile responsiveness improvements
 
-## Key Files
-- `/app/backend/server.py` - Main API
-- `/app/backend/mq_subscriber.py` - ActiveMQ integration
-- `/app/frontend/src/pages/SalesRevenueDashboard.js` - Revenue dashboard
-- `/app/frontend/src/pages/LeadDetail.js` - Lead details with invoices
-- `/app/frontend/craco.config.js` - Webpack config (visual edits disabled)
+---
 
-## Credentials
-- Admin: admin@nylaairwater.earth / admin123
-- Google Workspace OAuth for regular users
+## Test Credentials
+- **Email**: admin@nylaairwater.earth
+- **Password**: admin123
 
-## Last Updated
-Feb 19, 2026 - Fixed Babel compilation error, system restored
+## 3rd Party Integrations
+- Claude Sonnet 4.5 (Emergent LLM Key) - Text revision
+- Google Places API - Lead Discovery
+- Google Workspace OAuth - Authentication (pending)
+- ActiveMQ - Invoice processing
