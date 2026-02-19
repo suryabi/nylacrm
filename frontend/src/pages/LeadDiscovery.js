@@ -157,11 +157,15 @@ export default function LeadDiscovery() {
     }
   };
 
-  const isAlreadyImported = (outlet) => {
-    return existingLeads.some(lead => 
+  const getExistingLead = (outlet) => {
+    return existingLeads.find(lead => 
       lead.company?.toLowerCase() === outlet.name?.toLowerCase() ||
       (lead.phone && outlet.phone && lead.phone === outlet.phone)
     );
+  };
+
+  const isAlreadyImported = (outlet) => {
+    return !!getExistingLead(outlet);
   };
 
   const toggleOutletSelection = (outletId) => {
