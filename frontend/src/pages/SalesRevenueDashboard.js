@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
-import { TrendingUp, IndianRupee, Filter, Loader2 } from 'lucide-react';
+import { TrendingUp, Filter, Loader2 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -23,6 +24,13 @@ const TIME_FILTERS = [
   { value: 'lifetime', label: 'Lifetime' }
 ];
 
+const TERRITORY_MAP = {
+  'North India': { states: { 'Delhi': ['New Delhi'], 'Uttar Pradesh': ['Noida'] } },
+  'South India': { states: { 'Karnataka': ['Bengaluru'], 'Tamil Nadu': ['Chennai'], 'Telangana': ['Hyderabad'] } },
+  'West India': { states: { 'Maharashtra': ['Mumbai', 'Pune'], 'Gujarat': ['Ahmedabad'] } },
+  'East India': { states: { 'West Bengal': ['Kolkata'] } }
+};
+
 function formatCurrency(value) {
   if (!value) return '₹0';
   const num = Math.round(value);
@@ -36,29 +44,33 @@ function formatCurrency(value) {
 }
 
 export default function SalesRevenueDashboard() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [applying, setApplying] = useState(false);
   const [data, setData] = useState({ leads: [], summary: {} });
-  const [filterOptions, setFilterOptions] = useState({ cities: [], territories: [], resources: [] });
+  const [salesTeam, setSalesTeam] = useState([]);
   
-  // Filter states
+  // Filter states - matching Sales Overview
   const [timeFilter, setTimeFilter] = useState('this_month');
-  const [resourceFilter, setResourceFilter] = useState('');
-  const [cityFilter, setCityFilter] = useState('');
-  const [territoryFilter, setTerritoryFilter] = useState('');
+  const [territoryFilter, setTerritoryFilter] = useState('all');
+  const [stateFilter, setStateFilter] = useState('all');
+  const [cityFilter, setCityFilter] = useState('all');
+  const [salesResource, setSalesResource] = useState('all');
 
   useEffect(() => {
-    fetchFilterOptions();
-    fetchData();
+    fetchSalesTeam();
   }, []);
 
-  const fetchFilterOptions = async () => {
+  useEffect(() => {
+    fetchData();
+  }, [timeFilter, territoryFilter, stateFilter, cityFilter, salesResource]);
+
+  const fetchSalesTeam = async () => {
     try {
-      const res = await axios.get(`${API_URL}/sales-revenue/filters`, { withCredentials: true });
-      setFilterOptions(res.data);
+      const response = await axios.get(`${API_URL}/users`, { withCredentials: true });
+      setSalesTeam(response.data.filter(u => ['Head of Business', 'Regional Sales Manager', 'National Sales Head'].includes(u.role) && u.is_active));
     } catch (error) {
-      console.error('Failed to load filter options');
+      console.error('Failed to load team');
     }
   };
 
@@ -67,9 +79,10 @@ export default function SalesRevenueDashboard() {
     try {
       const params = new URLSearchParams();
       params.append('time_filter', timeFilter);
-      if (resourceFilter) params.append('resource_id', resourceFilter);
-      if (cityFilter) params.append('city', cityFilter);
-      if (territoryFilter) params.append('territory', territoryFilter);
+      if (territoryFilter !== 'all') params.append('territory', territoryFilter);
+      if (stateFilter !== 'all') params.append('state', stateFilter);
+      if (cityFilter !== 'all') params.append('city', cityFilter);
+      if (salesResource !== 'all') params.append('resource_id', salesResource);
       
       const res = await axios.get(`${API_URL}/sales-revenue/won-leads?${params}`, { withCredentials: true });
       setData(res.data);
@@ -77,24 +90,33 @@ export default function SalesRevenueDashboard() {
       toast.error('Failed to load revenue data');
     } finally {
       setLoading(false);
-      setApplying(false);
     }
-  };
-
-  const handleApplyFilters = () => {
-    setApplying(true);
-    fetchData();
   };
 
   const handleResetFilters = () => {
     setTimeFilter('this_month');
-    setResourceFilter('');
-    setCityFilter('');
-    setTerritoryFilter('');
+    setTerritoryFilter('all');
+    setStateFilter('all');
+    setCityFilter('all');
+    setSalesResource('all');
   };
+
+  // Territory/State/City cascade - matching Sales Overview
+  const availableTerritories = user?.territory === 'All India' || ['ceo', 'director', 'vp', 'admin'].includes(user?.role)
+    ? ['All Territories', 'North India', 'South India', 'West India', 'East India']
+    : user?.territory ? ['All Territories', user.territory] : ['All Territories'];
+
+  const availableStates = territoryFilter !== 'all' && territoryFilter !== 'All Territories' && TERRITORY_MAP[territoryFilter]
+    ? ['All States', ...Object.keys(TERRITORY_MAP[territoryFilter].states)]
+    : ['All States'];
+
+  const availableCities = stateFilter !== 'all' && stateFilter !== 'All States' && territoryFilter !== 'all' && territoryFilter !== 'All Territories' && TERRITORY_MAP[territoryFilter]
+    ? ['All Cities', ...(TERRITORY_MAP[territoryFilter].states[stateFilter] || [])]
+    : ['All Cities'];
 
   return (
     <div className="p-6 max-w-7xl mx-auto" data-testid="sales-revenue-dashboard">
+      {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <TrendingUp className="h-6 w-6 text-primary" />
@@ -103,14 +125,14 @@ export default function SalesRevenueDashboard() {
         <p className="text-muted-foreground mt-1">Track revenue from won deals</p>
       </div>
 
-      {/* Filters */}
+      {/* Filters - matching Sales Overview */}
       <Card className="p-4 mb-6">
         <div className="flex items-center gap-2 mb-4">
           <Filter className="h-4 w-4 text-muted-foreground" />
           <span className="font-medium">Filters</span>
         </div>
         
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Time Period</label>
             <select
@@ -125,15 +147,28 @@ export default function SalesRevenueDashboard() {
           </div>
           
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">Resource</label>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Territory</label>
             <select
-              value={resourceFilter}
-              onChange={(e) => setResourceFilter(e.target.value)}
+              value={territoryFilter}
+              onChange={(e) => { setTerritoryFilter(e.target.value); setStateFilter('all'); setCityFilter('all'); }}
               className="w-full px-3 py-2 border rounded-lg bg-background text-sm"
             >
-              <option value="">All Resources</option>
-              {filterOptions.resources.map(r => (
-                <option key={r.id} value={r.id}>{r.name}</option>
+              {availableTerritories.map(t => (
+                <option key={t} value={t === 'All Territories' ? 'all' : t}>{t}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">State</label>
+            <select
+              value={stateFilter}
+              onChange={(e) => { setStateFilter(e.target.value); setCityFilter('all'); }}
+              disabled={territoryFilter === 'all'}
+              className="w-full px-3 py-2 border rounded-lg bg-background text-sm disabled:opacity-50"
+            >
+              {availableStates.map(s => (
+                <option key={s} value={s === 'All States' ? 'all' : s}>{s}</option>
               ))}
             </select>
           </div>
@@ -143,38 +178,34 @@ export default function SalesRevenueDashboard() {
             <select
               value={cityFilter}
               onChange={(e) => setCityFilter(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg bg-background text-sm"
+              disabled={stateFilter === 'all'}
+              className="w-full px-3 py-2 border rounded-lg bg-background text-sm disabled:opacity-50"
             >
-              <option value="">All Cities</option>
-              {filterOptions.cities.map(c => (
-                <option key={c} value={c}>{c}</option>
+              {availableCities.map(c => (
+                <option key={c} value={c === 'All Cities' ? 'all' : c}>{c}</option>
               ))}
             </select>
           </div>
           
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">Territory</label>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Sales Resource</label>
             <select
-              value={territoryFilter}
-              onChange={(e) => setTerritoryFilter(e.target.value)}
+              value={salesResource}
+              onChange={(e) => setSalesResource(e.target.value)}
               className="w-full px-3 py-2 border rounded-lg bg-background text-sm"
             >
-              <option value="">All Territories</option>
-              {filterOptions.territories.map(t => (
-                <option key={t} value={t}>{t}</option>
+              <option value="all">All Resources</option>
+              {salesTeam.map(m => (
+                <option key={m.id} value={m.id}>{m.name}</option>
               ))}
             </select>
           </div>
-        </div>
-        
-        <div className="flex gap-2">
-          <Button onClick={handleApplyFilters} disabled={applying}>
-            {applying && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Apply Filters
-          </Button>
-          <Button variant="outline" onClick={handleResetFilters}>
-            Reset
-          </Button>
+          
+          <div className="flex items-end">
+            <Button variant="outline" onClick={handleResetFilters} className="w-full">
+              Reset
+            </Button>
+          </div>
         </div>
       </Card>
 
