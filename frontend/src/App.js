@@ -33,6 +33,8 @@ import ProposalGenerator from './pages/ProposalGenerator';
 import SalesRevenueDashboard from './pages/SalesRevenueDashboard';
 import TargetSKUReport from './pages/TargetSKUReport';
 import TargetResourceReport from './pages/TargetResourceReport';
+import SKUPerformance from './pages/SKUPerformance';
+import ResourcePerformance from './pages/ResourcePerformance';
 import '@/App.css';
 
 function ProtectedRoute({ children }) {
