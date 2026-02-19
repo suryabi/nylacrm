@@ -2255,9 +2255,9 @@ async def generate_period_summary(request: dict, current_user: dict = Depends(ge
 
 @api_router.post("/users/create", response_model=User)
 async def create_team_member(user_input: UserCreate, current_user: dict = Depends(get_current_user)):
-    # Only admin/CEO can create users
-    if current_user['role'] not in ['admin', 'ceo']:
-        raise HTTPException(status_code=403, detail='Only admin can create team members')
+    # Only admin/CEO/Director/VP can create users
+    if current_user['role'] not in ['admin', 'ceo', 'CEO', 'Director', 'Vice President', 'National Sales Head']:
+        raise HTTPException(status_code=403, detail='Only leadership can create team members')
     
     # Check if user exists
     existing = await db.users.find_one({'email': user_input.email}, {'_id': 0})
@@ -2268,6 +2268,16 @@ async def create_team_member(user_input: UserCreate, current_user: dict = Depend
     hashed_pw = hash_password(user_input.password)
     user_data = user_input.model_dump()
     user_data.pop('password')
+    
+    # Sync role with designation if Partner - Sales
+    if user_data.get('designation') == 'Partner - Sales':
+        user_data['role'] = 'Partner - Sales'
+    elif user_data.get('designation') and user_data.get('designation') in [
+        'CEO', 'Director', 'Vice President', 'National Sales Head', 
+        'Regional Sales Manager', 'Head of Business'
+    ]:
+        user_data['role'] = user_data['designation']
+    
     user_obj = User(**user_data)
     
     doc = user_obj.model_dump()
