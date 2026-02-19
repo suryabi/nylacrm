@@ -75,6 +75,7 @@ export default function ResourcePerformance() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      const token = localStorage.getItem('token');
       const params = new URLSearchParams();
       params.append('time_filter', timeFilter);
       if (territoryFilter !== 'all') params.append('territory', territoryFilter);
@@ -82,12 +83,19 @@ export default function ResourcePerformance() {
       if (cityFilter !== 'all') params.append('city', cityFilter);
       if (resourceFilter !== 'all') params.append('resource_id', resourceFilter);
       
-      const res = await axios.get(`${API_URL}/reports/resource-performance?${params}`, { withCredentials: true });
+      const res = await axios.get(`${API_URL}/reports/resource-performance?${params}`, { 
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true 
+      });
       setData(res.data);
     } catch (error) {
       // If endpoint doesn't exist, fetch users and create mock data
       try {
-        const usersRes = await axios.get(`${API_URL}/users`, { withCredentials: true });
+        const token = localStorage.getItem('token');
+        const usersRes = await axios.get(`${API_URL}/users`, { 
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true 
+        });
         const team = usersRes.data.filter(u => ['Head of Business', 'Regional Sales Manager', 'National Sales Head'].includes(u.role) && u.is_active);
         
         const mockResources = team.map(member => ({
