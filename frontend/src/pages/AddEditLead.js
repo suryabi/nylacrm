@@ -61,7 +61,7 @@ const PRIORITY_STATES = [
 
 const OTHER_STATES = [];
 
-const SKUS = ['24 Brand', '660 ml Silver', '660 ml Gold', '330 ml Silver', '330 ml Gold', '660 Sparkling', '330 Sparkling'];
+const SKUS = ['660 ml / Silver / Nyla', '660 ml / Gold / Nyla', '330 ml / Silver / Nyla', '330 ml / Gold / Nyla', '660 ml / Sparkling', '300 ml / Sparkling', '24 Brand / 660 ml'];
 
 const LEAD_CATEGORIES = [
   'Restaurant',
