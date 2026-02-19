@@ -68,7 +68,7 @@ export default function SalesRevenueDashboard() {
   const fetchSalesTeam = async () => {
     try {
       const response = await axios.get(`${API_URL}/users`, { withCredentials: true });
-      setSalesTeam(response.data.filter(u => ['Head of Business', 'Regional Sales Manager', 'National Sales Head'].includes(u.role) && u.is_active));
+      setSalesTeam(response.data.filter(u => ['Head of Business', 'Regional Sales Manager', 'National Sales Head', 'Partner - Sales'].includes(u.role) && u.is_active));
     } catch (error) {
       console.error('Failed to load team');
     }
