@@ -38,6 +38,12 @@ Build a comprehensive, mobile-ready Sales CRM application with:
   - Added "Re-import All" feature for updating existing leads
   - Status: VERIFIED - MTR lead imported successfully
 
+- **BUG FIX**: Imported leads not showing in Leads list
+  - Root cause: 40+ older leads had NULL `lead_id` (showing as "-" in table)
+  - Fix: Ran database backfill script to generate lead_ids for all existing leads
+  - Also fixed 3 leads with missing city field
+  - Status: VERIFIED - All 59 leads now have proper Lead IDs
+
 ### Previous Session (from handoff)
 - Resolved critical Babel/dev server error (craco.config.js fix)
 - Dashboard navigation overhaul (single dropdown menu)
