@@ -36,8 +36,12 @@ export default function Login() {
   };
 
   const handleGoogleLogin = () => {
-    // Use your own Google OAuth
-    const clientId = '549668101765-dtjhf507bj613veeevblg6d578nva0r7.apps.googleusercontent.com';
+    // Use Google OAuth from environment variable
+    const clientId = process.env.REACT_APP_GOOGLE_OAUTH_CLIENT_ID;
+    if (!clientId) {
+      toast.error('Google OAuth is not configured');
+      return;
+    }
     const redirectUri = window.location.origin + '/auth/callback';
     const scope = 'email profile openid';
     const responseType = 'code';
