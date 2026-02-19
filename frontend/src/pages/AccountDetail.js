@@ -495,7 +495,7 @@ export default function AccountDetail() {
             <div className="space-y-3 text-sm">
               <div>
                 <p className="text-muted-foreground">Assigned To</p>
-                <p className="font-medium">{account.assigned_to || 'Unassigned'}</p>
+                <p className="font-medium">{getAssignedUserName()}</p>
               </div>
               <div>
                 <p className="text-muted-foreground">Created</p>
