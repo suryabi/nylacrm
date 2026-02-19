@@ -283,8 +283,8 @@ export default function LeadDiscovery() {
           const existingLead = getExistingLead(outlet);
           
           if (existingLead && forceReimport) {
-            // Update existing lead
-            await axios.put(
+            // Update existing lead with retry
+            await retryRequest(() => axios.put(
               `${process.env.REACT_APP_BACKEND_URL}/api/leads/${existingLead.id}`,
               leadData,
               {
@@ -292,11 +292,11 @@ export default function LeadDiscovery() {
                 withCredentials: true,
                 timeout: 15000
               }
-            );
+            ));
             updateCount++;
           } else if (!existingLead) {
-            // Create new lead
-            await axios.post(
+            // Create new lead with retry
+            await retryRequest(() => axios.post(
               process.env.REACT_APP_BACKEND_URL + '/api/leads',
               leadData,
               {
@@ -304,7 +304,7 @@ export default function LeadDiscovery() {
                 withCredentials: true,
                 timeout: 15000
               }
-            );
+            ));
             successCount++;
           } else {
             // Skip - already exists and not forcing re-import
