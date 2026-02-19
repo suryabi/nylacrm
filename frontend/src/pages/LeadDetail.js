@@ -69,6 +69,8 @@ export default function LeadDetail() {
   const [interactionMethod, setInteractionMethod] = useState('phone_call');
   const [activityDescription, setActivityDescription] = useState('');
   const [submittingActivity, setSubmittingActivity] = useState(false);
+  const [activityStatus, setActivityStatus] = useState('');
+  const [activityFollowUpDate, setActivityFollowUpDate] = useState('');
 
   useEffect(() => {
     fetchData();
