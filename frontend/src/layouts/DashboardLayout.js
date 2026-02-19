@@ -60,6 +60,50 @@ export default function DashboardLayout({ children }) {
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {filteredNav.map((item) => {
+              // Handle Dashboard with submenu
+              if (item.hasSubmenu && item.name === 'Dashboard') {
+                return (
+                  <div key={item.name}>
+                    <button
+                      onClick={() => setDashboardOpen(!dashboardOpen)}
+                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+                        isDashboardActive
+                          ? 'bg-primary text-white'
+                          : 'text-foreground-muted hover:bg-secondary hover:text-foreground'
+                      }`}
+                    >
+                      <span>{item.name}</span>
+                      {dashboardOpen ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
+                    </button>
+                    {dashboardOpen && (
+                      <div className="mt-1 ml-4 space-y-1">
+                        {filteredDashboardSubmenu.map((subItem) => {
+                          const isSubActive = location.pathname === subItem.href;
+                          return (
+                            <Link
+                              key={subItem.name}
+                              to={subItem.href}
+                              onClick={() => setSidebarOpen(false)}
+                              className={`block px-4 py-2 rounded-lg text-sm transition-colors ${
+                                isSubActive
+                                  ? 'bg-primary/20 text-primary font-medium'
+                                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                              }`}
+                            >
+                              {subItem.name}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              
               const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
               return (
                 <Link
