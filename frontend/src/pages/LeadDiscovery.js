@@ -272,7 +272,8 @@ export default function LeadDiscovery() {
               leadData,
               {
                 headers: { Authorization: `Bearer ${token}` },
-                withCredentials: true
+                withCredentials: true,
+                timeout: 15000
               }
             );
             updateCount++;
@@ -283,7 +284,8 @@ export default function LeadDiscovery() {
               leadData,
               {
                 headers: { Authorization: `Bearer ${token}` },
-                withCredentials: true
+                withCredentials: true,
+                timeout: 15000
               }
             );
             successCount++;
