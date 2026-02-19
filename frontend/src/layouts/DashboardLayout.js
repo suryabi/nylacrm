@@ -46,7 +46,8 @@ export default function DashboardLayout({ children }) {
 
   const filteredNav = navigation.filter(item => item.roles.includes(user?.role));
   const filteredDashboardSubmenu = dashboardSubmenu.filter(item => item.roles.includes(user?.role));
-  const isDashboardActive = location.pathname === '/dashboard' || location.pathname === '/sales-revenue';
+  const isDashboardActive = location.pathname === '/dashboard' || location.pathname === '/sales-revenue' || 
+    location.pathname === '/target-sku' || location.pathname === '/target-resource';
 
   return (
     <div className="min-h-screen flex bg-background">
