@@ -142,7 +142,7 @@ class LeadStatus(BaseModel):
 
 class PaginatedLeadsResponse(BaseModel):
     """Paginated response for leads list"""
-    data: List[Lead]
+    data: List['Lead']  # Forward reference
     total: int
     page: int
     page_size: int
