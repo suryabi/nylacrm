@@ -1677,6 +1677,239 @@ async def process_invoice_webhook(payload: InvoiceWebhookPayload):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============= ACCOUNTS ROUTES =============
+
+async def generate_account_id(account_name: str, city: str) -> str:
+    """Generate unique account ID in format: NAME4-CITY-AYY-SEQ"""
+    clean_name = re.sub(r'[^a-zA-Z0-9]', '', account_name).upper()
+    name4 = clean_name[:4].ljust(4, 'X')
+    
+    clean_city = re.sub(r'[^a-zA-Z0-9]', '', city).upper()
+    city3 = clean_city[:3].ljust(3, 'X')
+    
+    year2 = datetime.now().strftime('%y')
+    prefix = f"{name4}-{city3}-A{year2}-"
+    
+    regex_pattern = f"^{re.escape(prefix)}\\d{{3}}$"
+    existing = await db.accounts.find(
+        {'account_id': {'$regex': regex_pattern}},
+        {'account_id': 1}
+    ).sort('account_id', -1).limit(1).to_list(1)
+    
+    if existing and existing[0].get('account_id'):
+        last_seq = int(existing[0]['account_id'][-3:])
+        next_seq = last_seq + 1
+    else:
+        next_seq = 1
+    
+    seq3 = str(next_seq).zfill(3)
+    return f"{name4}-{city3}-A{year2}-{seq3}"
+
+@api_router.post("/accounts/convert-lead")
+async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depends(get_current_user)):
+    """Convert a won lead to an account"""
+    lead = await db.leads.find_one({'id': data.lead_id}, {'_id': 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+    
+    # Check if lead is won
+    if lead.get('status') not in ['won', 'closed_won']:
+        raise HTTPException(status_code=400, detail='Only won leads can be converted to accounts')
+    
+    # Check if already converted
+    if lead.get('converted_to_account'):
+        raise HTTPException(status_code=400, detail='Lead already converted to account')
+    
+    # Generate account ID
+    account_name = lead.get('company') or lead.get('name', 'Unknown')
+    city = lead.get('city', 'Unknown')
+    account_id = await generate_account_id(account_name, city)
+    
+    # Create account
+    account = Account(
+        account_id=account_id,
+        lead_id=lead.get('lead_id') or data.lead_id,
+        account_name=account_name,
+        city=city,
+        state=lead.get('state', ''),
+        territory=lead.get('region', ''),
+        assigned_to=lead.get('assigned_to'),
+        sku_pricing=[]
+    )
+    
+    doc = account.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    
+    await db.accounts.insert_one(doc)
+    
+    # Update lead to mark as converted
+    await db.leads.update_one(
+        {'id': data.lead_id},
+        {'$set': {
+            'converted_to_account': True,
+            'account_id': account_id,
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return account
+
+@api_router.get("/accounts", response_model=PaginatedAccountsResponse)
+async def get_accounts(
+    page: int = 1,
+    page_size: int = 25,
+    search: Optional[str] = None,
+    territory: Optional[str] = None,
+    account_type: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get paginated accounts list"""
+    page_size = min(max(1, page_size), 100)
+    page = max(1, page)
+    skip = (page - 1) * page_size
+    
+    query = {}
+    if territory:
+        query['territory'] = territory
+    if account_type:
+        query['account_type'] = account_type
+    if search:
+        query['$or'] = [
+            {'account_name': {'$regex': search, '$options': 'i'}},
+            {'contact_name': {'$regex': search, '$options': 'i'}},
+            {'account_id': {'$regex': search, '$options': 'i'}}
+        ]
+    
+    total = await db.accounts.count_documents(query)
+    total_pages = (total + page_size - 1) // page_size
+    
+    accounts = await db.accounts.find(query, {'_id': 0}).sort('created_at', -1).skip(skip).limit(page_size).to_list(page_size)
+    
+    # Convert datetime strings back to datetime objects
+    for account in accounts:
+        if isinstance(account.get('created_at'), str):
+            account['created_at'] = datetime.fromisoformat(account['created_at'])
+        if isinstance(account.get('updated_at'), str):
+            account['updated_at'] = datetime.fromisoformat(account['updated_at'])
+    
+    return PaginatedAccountsResponse(
+        data=accounts,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages
+    )
+
+@api_router.get("/accounts/{account_id}")
+async def get_account(account_id: str, current_user: dict = Depends(get_current_user)):
+    """Get single account by ID or account_id"""
+    account = await db.accounts.find_one(
+        {'$or': [{'id': account_id}, {'account_id': account_id}]},
+        {'_id': 0}
+    )
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+    
+    if isinstance(account.get('created_at'), str):
+        account['created_at'] = datetime.fromisoformat(account['created_at'])
+    if isinstance(account.get('updated_at'), str):
+        account['updated_at'] = datetime.fromisoformat(account['updated_at'])
+    
+    return account
+
+@api_router.put("/accounts/{account_id}")
+async def update_account(account_id: str, update_data: AccountUpdate, current_user: dict = Depends(get_current_user)):
+    """Update account details including SKU pricing"""
+    account = await db.accounts.find_one(
+        {'$or': [{'id': account_id}, {'account_id': account_id}]},
+        {'_id': 0}
+    )
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+    
+    update_dict = {k: v for k, v in update_data.model_dump().items() if v is not None}
+    
+    # Convert SKU pricing to dict format
+    if 'sku_pricing' in update_dict:
+        update_dict['sku_pricing'] = [
+            sku.model_dump() if hasattr(sku, 'model_dump') else sku 
+            for sku in update_dict['sku_pricing']
+        ]
+    
+    update_dict['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.accounts.update_one(
+        {'$or': [{'id': account_id}, {'account_id': account_id}]},
+        {'$set': update_dict}
+    )
+    
+    updated = await db.accounts.find_one(
+        {'$or': [{'id': account_id}, {'account_id': account_id}]},
+        {'_id': 0}
+    )
+    
+    return updated
+
+@api_router.get("/accounts/{account_id}/invoices")
+async def get_account_invoices(account_id: str, current_user: dict = Depends(get_current_user)):
+    """Get invoices for an account"""
+    account = await db.accounts.find_one(
+        {'$or': [{'id': account_id}, {'account_id': account_id}]},
+        {'_id': 0, 'lead_id': 1, 'account_name': 1}
+    )
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+    
+    # Find invoices by lead_id or account name
+    lead_id = account.get('lead_id')
+    account_name = account.get('account_name')
+    
+    query = {'$or': []}
+    if lead_id:
+        query['$or'].append({'lead_id': lead_id})
+    if account_name:
+        query['$or'].append({'customer_name': {'$regex': account_name, '$options': 'i'}})
+    
+    if not query['$or']:
+        return {'invoices': [], 'total_amount': 0, 'paid_amount': 0, 'outstanding': 0}
+    
+    invoices = await db.invoices.find(query, {'_id': 0}).sort('created_at', -1).to_list(100)
+    
+    total_amount = sum(inv.get('total_amount', 0) for inv in invoices)
+    paid_amount = sum(inv.get('paid_amount', 0) for inv in invoices)
+    
+    return {
+        'invoices': invoices,
+        'total_amount': total_amount,
+        'paid_amount': paid_amount,
+        'outstanding': total_amount - paid_amount
+    }
+
+@api_router.delete("/accounts/{account_id}")
+async def delete_account(account_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete an account"""
+    if current_user['role'] not in ['admin', 'National Sales Head', 'CEO', 'Director']:
+        raise HTTPException(status_code=403, detail='Only admins can delete accounts')
+    
+    account = await db.accounts.find_one(
+        {'$or': [{'id': account_id}, {'account_id': account_id}]},
+        {'_id': 0, 'lead_id': 1}
+    )
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+    
+    # Revert the lead conversion flag
+    if account.get('lead_id'):
+        await db.leads.update_one(
+            {'$or': [{'id': account['lead_id']}, {'lead_id': account['lead_id']}]},
+            {'$set': {'converted_to_account': False, 'account_id': None}}
+        )
+    
+    await db.accounts.delete_one({'$or': [{'id': account_id}, {'account_id': account_id}]})
+    
+    return {'message': 'Account deleted successfully'}
+
 # ============= ACTIVITIES ROUTES =============
 
 @api_router.post("/activities", response_model=Activity)
