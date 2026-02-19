@@ -7,7 +7,7 @@ import { Label } from '../components/ui/label';
 import { Checkbox } from '../components/ui/checkbox';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
-import { Search, MapPin, Star, DollarSign, Building2, Phone, Mail, Download } from 'lucide-react';
+import { Search, MapPin, Star, DollarSign, Building2, Phone, Mail, Download, RefreshCw } from 'lucide-react';
 
 // Demo data - will be replaced with Google Places API
 const DEMO_OUTLETS = [
