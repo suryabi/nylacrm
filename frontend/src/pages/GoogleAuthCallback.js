@@ -22,10 +22,11 @@ export default function GoogleAuthCallback() {
       }
 
       try {
-        // Exchange code for user session
+        // Exchange code for user session - send redirect_uri to match what was used in auth request
+        const redirectUri = window.location.origin + '/auth/callback';
         const response = await axios.post(
           `${API_URL}/auth/google-callback`,
-          { code },
+          { code, redirect_uri: redirectUri },
           { withCredentials: true }
         );
 
