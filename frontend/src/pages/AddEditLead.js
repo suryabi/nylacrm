@@ -200,6 +200,22 @@ export default function AddEditLead() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate required fields before submission
+    const requiredFields = [
+      { field: 'company', label: 'Company Name' },
+      { field: 'region', label: 'Region' },
+      { field: 'state', label: 'State' },
+      { field: 'city', label: 'City' }
+    ];
+    
+    for (const { field, label } of requiredFields) {
+      if (!formData[field] || formData[field].trim() === '') {
+        toast.error(`${label} is required`);
+        return;
+      }
+    }
+    
     setLoading(true);
     try {
       const submitData = {
@@ -209,6 +225,8 @@ export default function AddEditLead() {
         email: formData.email || null,
         phone: formData.phone || null,
         source: formData.source || null,
+        category: formData.category || null,
+        tier: formData.tier || null,
         current_water_brand: formData.current_water_brand || null,
         current_volume: formData.current_volume || null,
         estimated_value: formData.estimated_value ? parseFloat(formData.estimated_value) : null,
