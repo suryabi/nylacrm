@@ -4139,7 +4139,7 @@ async def get_resource_performance(
         if uid not in user_activities:
             user_activities[uid] = {'calls': 0, 'visits': 0, 'total': 0}
         user_activities[uid]['total'] += 1
-        method = act.get('interaction_method', '').lower()
+        method = (act.get('interaction_method') or '').lower()
         if 'call' in method or 'phone' in method:
             user_activities[uid]['calls'] += 1
         elif 'visit' in method or 'meeting' in method:
