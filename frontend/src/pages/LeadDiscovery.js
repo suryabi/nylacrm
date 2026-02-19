@@ -176,7 +176,7 @@ export default function LeadDiscovery() {
     }
   };
 
-  const handleImport = async () => {
+  const handleImport = async (forceReimport = false) => {
     if (selectedOutlets.length === 0) {
       toast.error('Please select at least one outlet to import');
       return;
@@ -194,55 +194,117 @@ export default function LeadDiscovery() {
       const currentUser = userRes.data;
       const outletsToImport = results.filter(o => selectedOutlets.includes(o.id));
       
+      let successCount = 0;
+      let updateCount = 0;
+      let failCount = 0;
+      const errors = [];
+      
       // Import each outlet as a lead
       for (const outlet of outletsToImport) {
-        // Extract city info from selected city
-        const cityStateMap = {
-          'Bengaluru': { state: 'Karnataka', territory: 'South India' },
-          'Chennai': { state: 'Tamil Nadu', territory: 'South India' },
-          'Hyderabad': { state: 'Telangana', territory: 'South India' },
-          'Mumbai': { state: 'Maharashtra', territory: 'West India' },
-          'Pune': { state: 'Maharashtra', territory: 'West India' },
-          'Delhi': { state: 'Delhi', territory: 'North India' },
-          'Kolkata': { state: 'West Bengal', territory: 'East India' },
-          'Ahmedabad': { state: 'Gujarat', territory: 'West India' }
-        };
+        try {
+          // Extract city info from selected city
+          const cityStateMap = {
+            'Bengaluru': { state: 'Karnataka', territory: 'South India' },
+            'Chennai': { state: 'Tamil Nadu', territory: 'South India' },
+            'Hyderabad': { state: 'Telangana', territory: 'South India' },
+            'Mumbai': { state: 'Maharashtra', territory: 'West India' },
+            'Pune': { state: 'Maharashtra', territory: 'West India' },
+            'Delhi': { state: 'Delhi', territory: 'North India' },
+            'Kolkata': { state: 'West Bengal', territory: 'East India' },
+            'Ahmedabad': { state: 'Gujarat', territory: 'West India' }
+          };
+          
+          const locationInfo = cityStateMap[selectedCity] || { state: 'Unknown', territory: 'Unknown' };
+          
+          // Calculate tier safely
+          const priceStr = outlet.price_range || '';
+          const priceLen = typeof priceStr === 'string' ? priceStr.length : 0;
+          const tier = priceLen >= 4 ? 'Tier 1' : priceLen >= 3 ? 'Tier 2' : 'Tier 3';
+          
+          const leadData = {
+            company: outlet.name,
+            contact_person: null,
+            email: null,
+            phone: outlet.phone || null,
+            category: outlet.type || 'Restaurant',
+            tier: tier,
+            city: selectedCity,
+            state: locationInfo.state,
+            country: 'India',
+            region: locationInfo.territory,
+            status: 'new',
+            source: 'Lead Discovery',
+            assigned_to: currentUser.id,
+            priority: (outlet.rating || 0) >= 4.5 ? 'high' : 'medium',
+            current_water_brand: null,
+            current_landing_price: null,
+            current_volume: null,
+            current_selling_price: null,
+            interested_skus: [],
+            notes: `Discovered via Lead Discovery. Rating: ${outlet.rating || 'N/A'}★, Price: ${outlet.price_range || 'N/A'}. Address: ${outlet.address || 'N/A'}`,
+            estimated_value: priceLen * 100000 || 100000
+          };
+          
+          // Check if lead exists and we're doing a re-import
+          const existingLead = getExistingLead(outlet);
+          
+          if (existingLead && forceReimport) {
+            // Update existing lead
+            await axios.put(
+              `${process.env.REACT_APP_BACKEND_URL}/api/leads/${existingLead.id}`,
+              leadData,
+              {
+                headers: { Authorization: `Bearer ${token}` },
+                withCredentials: true
+              }
+            );
+            updateCount++;
+          } else if (!existingLead) {
+            // Create new lead
+            await axios.post(
+              process.env.REACT_APP_BACKEND_URL + '/api/leads',
+              leadData,
+              {
+                headers: { Authorization: `Bearer ${token}` },
+                withCredentials: true
+              }
+            );
+            successCount++;
+          } else {
+            // Skip - already exists and not forcing re-import
+            continue;
+          }
+        } catch (err) {
+          console.error(`Failed to import ${outlet.name}:`, err.response?.data || err);
+          failCount++;
+          errors.push(`${outlet.name}: ${err.response?.data?.detail || err.message}`);
+        }
+      }
+      
+      // Show appropriate message
+      if (successCount > 0 || updateCount > 0) {
+        let message = '';
+        if (successCount > 0) message += `✓ ${successCount} new leads imported. `;
+        if (updateCount > 0) message += `✓ ${updateCount} leads updated. `;
+        toast.success(message.trim(), { duration: 5000 });
         
-        const locationInfo = cityStateMap[selectedCity] || { state: 'Unknown', territory: 'Unknown' };
-        
-        const leadData = {
-          company: outlet.name,
-          contact_person: null,  // null instead of empty string
-          email: null,  // null instead of empty string for EmailStr validation
-          phone: outlet.phone || null,
-          category: outlet.type,
-          tier: outlet.price_range.length >= 4 ? 'Tier 1' : outlet.price_range.length >= 3 ? 'Tier 2' : 'Tier 3',
-          city: selectedCity,  // Use selected city
-          state: locationInfo.state,  // Auto-populate state
-          country: 'India',
-          region: locationInfo.territory,  // Auto-populate territory
-          status: 'new',
-          source: 'Lead Discovery',  // Match exact dropdown option
-          assigned_to: currentUser.id,  // Assign to current logged-in user
-          priority: outlet.rating >= 4.5 ? 'high' : 'medium',
-          current_water_brand: null,
-          current_landing_price: null,
-          current_volume: null,
-          current_selling_price: null,
-          interested_skus: [],
-          notes: `Discovered via Lead Discovery. Rating: ${outlet.rating}★, Price: ${outlet.price_range}. Address: ${outlet.address}`,
-          estimated_value: outlet.price_range.length * 100000
-        };
-
-        await axios.post(process.env.REACT_APP_BACKEND_URL + '/api/leads', leadData, {
+        // Refresh existing leads list
+        const leadsRes = await axios.get(process.env.REACT_APP_BACKEND_URL + '/api/leads?limit=1000', {
           headers: { Authorization: `Bearer ${token}` },
           withCredentials: true
         });
+        setExistingLeads(leadsRes.data);
       }
       
-      toast.success(`✓ ${selectedOutlets.length} outlets imported as new leads! Check Leads page.`, {
-        duration: 5000
-      });
+      if (failCount > 0) {
+        toast.error(`${failCount} imports failed. Check console for details.`, { duration: 5000 });
+        console.error('Import errors:', errors);
+      }
+      
+      if (successCount === 0 && updateCount === 0 && failCount === 0) {
+        toast.info('All selected outlets were already imported. Use "Re-import" to update them.');
+      }
+      
       setSelectedOutlets([]);
     } catch (error) {
       console.error('Import error:', error);
@@ -252,7 +314,6 @@ export default function LeadDiscovery() {
       
       if (error.response?.data?.detail) {
         if (Array.isArray(error.response.data.detail)) {
-          // Pydantic validation errors
           errorMsg = error.response.data.detail.map(e => `${e.loc?.join('.')}: ${e.msg}`).join(', ');
         } else {
           errorMsg = error.response.data.detail;
