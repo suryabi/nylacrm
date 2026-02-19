@@ -75,7 +75,11 @@ export default function SKUPerformance() {
 
   const fetchSalesTeam = async () => {
     try {
-      const response = await axios.get(`${API_URL}/users`, { withCredentials: true });
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_URL}/users`, { 
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true 
+      });
       setSalesTeam(response.data.filter(u => ['Head of Business', 'Regional Sales Manager', 'National Sales Head', 'Partner - Sales'].includes(u.role) && u.is_active));
     } catch (error) {
       console.error('Failed to load team');
@@ -85,6 +89,7 @@ export default function SKUPerformance() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      const token = localStorage.getItem('token');
       const params = new URLSearchParams();
       params.append('time_filter', timeFilter);
       if (territoryFilter !== 'all') params.append('territory', territoryFilter);
@@ -93,7 +98,10 @@ export default function SKUPerformance() {
       if (salesResource !== 'all') params.append('resource_id', salesResource);
       if (skuFilter !== 'all') params.append('sku', skuFilter);
       
-      const res = await axios.get(`${API_URL}/reports/sku-performance?${params}`, { withCredentials: true });
+      const res = await axios.get(`${API_URL}/reports/sku-performance?${params}`, { 
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true 
+      });
       setData(res.data);
     } catch (error) {
       // If endpoint doesn't exist, use mock data
