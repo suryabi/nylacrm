@@ -663,7 +663,6 @@ export default function LeadDiscovery() {
                             checked={selectedOutlets.includes(outlet.id)}
                             onCheckedChange={() => toggleOutletSelection(outlet.id)}
                             onClick={e => e.stopPropagation()}
-                            disabled={alreadyImported}
                           />
                           <div>
                             <div className="flex items-center gap-2">
