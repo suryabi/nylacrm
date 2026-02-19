@@ -4021,8 +4021,11 @@ async def get_sku_performance(
                 sku_units[sku_name] = 0
             sku_leads_count[sku_name] += 1
             # Estimate units from invoice value if won
-            if lead.get('status') == 'closed_won' and lead.get('invoice_value'):
+            if lead.get('status') in ['closed_won', 'won'] and lead.get('invoice_value'):
                 sku_units[sku_name] += int(lead.get('invoice_value', 0) / 100)  # Rough estimate
+            elif lead.get('status') in ['closed_won', 'won']:
+                # Even if no invoice value, count as sold
+                sku_units[sku_name] += 10  # Default units per won deal
     
     # Build SKU performance data
     skus_data = []
