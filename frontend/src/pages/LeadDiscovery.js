@@ -8,6 +8,8 @@ import { Checkbox } from '../components/ui/checkbox';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { Search, MapPin, Star, DollarSign, Building2, Phone, Mail, Download, RefreshCw } from 'lucide-react';
+import { leadsAPI } from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 
 // Demo data - will be replaced with Google Places API
 const DEMO_OUTLETS = [
