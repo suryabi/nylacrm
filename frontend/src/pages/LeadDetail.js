@@ -30,6 +30,7 @@ const statusColors = {
   qualified: 'bg-green-100 text-green-800',
   not_qualified: 'bg-gray-100 text-gray-800',
   in_progress: 'bg-purple-100 text-purple-800',
+  trial_in_progress: 'bg-indigo-100 text-indigo-800',
   proposal_stage: 'bg-orange-100 text-orange-800',
   won: 'bg-emerald-100 text-emerald-800',
   lost: 'bg-red-100 text-red-800',
