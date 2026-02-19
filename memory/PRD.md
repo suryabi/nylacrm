@@ -44,6 +44,18 @@ Build a comprehensive, mobile-ready Sales CRM application with:
   - Also fixed 3 leads with missing city field
   - Status: VERIFIED - All 59 leads now have proper Lead IDs
 
+- **BUG FIX**: "Session expired" error during Lead Discovery import
+  - Root cause: Redundant /api/auth/me call that could fail
+  - Fix: Use AuthContext for user data, use centralized leadsAPI
+  - Status: VERIFIED
+
+- **FEATURE**: Implemented Server-Side Pagination
+  - Root cause: Previous limit of 100 leads was not scalable
+  - Fix: Full server-side pagination with PaginatedLeadsResponse model
+  - Backend returns total count, current page, and page_size
+  - Frontend fetches only current page with debounced search
+  - Status: VERIFIED - Works with 63 leads across 3 pages
+
 ### Previous Session (from handoff)
 - Resolved critical Babel/dev server error (craco.config.js fix)
 - Dashboard navigation overhaul (single dropdown menu)
