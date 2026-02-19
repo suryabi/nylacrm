@@ -3952,15 +3952,15 @@ async def get_sku_performance(
     if resource_id:
         lead_query['assigned_to'] = resource_id
     
-    # Standard SKU list
+    # Standard SKU list - updated to match actual data format
     SKU_OPTIONS = [
-        '660 ml / Silver / Nyla',
-        '660 ml / Gold / Nyla',
-        '330 ml / Silver / Nyla',
-        '330 ml / Gold / Nyla',
-        '660 ml / Sparkling',
-        '300 ml / Sparkling',
-        '24 Brand / 660 ml'
+        '660 ml Silver',
+        '660 ml Gold',
+        '330 ml Silver',
+        '330 ml Gold',
+        '660 Sparkling',
+        '330 Sparkling',
+        '24 Brand'
     ]
     
     # Get SKU targets for the time period
