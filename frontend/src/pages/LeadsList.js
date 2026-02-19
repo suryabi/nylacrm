@@ -88,13 +88,27 @@ export default function LeadsList() {
   const [leadToDelete, setLeadToDelete] = useState(null);
   const [timeFilter, setTimeFilter] = useState(null);
   
-  // Pagination state
+  // Server-side pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [totalLeads, setTotalLeads] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   
   // Sorting state - default to created_at desc
   const [sortField, setSortField] = useState('created_at');
   const [sortDirection, setSortDirection] = useState('desc');
+  
+  // Debounce search
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setCurrentPage(1); // Reset to first page on search
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   useEffect(() => {
     // Check for URL parameters from dashboard
@@ -117,9 +131,13 @@ export default function LeadsList() {
       }
     }
     
-    fetchLeads();
     fetchUsers();
   }, []);
+  
+  // Fetch leads when pagination or filters change
+  useEffect(() => {
+    fetchLeads();
+  }, [currentPage, itemsPerPage, debouncedSearch, statusFilter, cityFilter]);
 
   const fetchUsers = async () => {
     try {
@@ -136,10 +154,24 @@ export default function LeadsList() {
 
   const fetchLeads = async () => {
     try {
-      const response = await leadsAPI.getAll();
-      setLeads(response.data);
+      setLoading(true);
+      const params = {
+        page: currentPage,
+        pageSize: itemsPerPage,
+        search: debouncedSearch || undefined,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        city: cityFilter !== 'all' ? cityFilter : undefined,
+      };
+      
+      const response = await leadsAPI.getAll(params);
+      const { data, total, page, page_size, total_pages } = response.data;
+      
+      setLeads(data);
+      setTotalLeads(total);
+      setTotalPages(total_pages);
     } catch (error) {
       toast.error('Failed to load leads');
+      console.error('Error fetching leads:', error);
     } finally {
       setLoading(false);
     }
