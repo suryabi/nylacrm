@@ -482,12 +482,12 @@ export default function LeadDetail() {
                 {/* Status Update */}
                 <div className="space-y-2 pt-2 border-t">
                   <Label>Update Lead Status</Label>
-                  <Select value={activityStatus} onValueChange={setActivityStatus}>
+                  <Select value={activityStatus || "keep_current"} onValueChange={(val) => setActivityStatus(val === "keep_current" ? "" : val)}>
                     <SelectTrigger data-testid="activity-status-select">
                       <SelectValue placeholder="Keep current status" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Keep current status</SelectItem>
+                      <SelectItem value="keep_current">Keep current status</SelectItem>
                       <SelectItem value="new">New</SelectItem>
                       <SelectItem value="contacted">Contacted</SelectItem>
                       <SelectItem value="qualified">Qualified</SelectItem>
