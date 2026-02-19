@@ -328,7 +328,7 @@ export default function LeadsList() {
         <div>
           <h1 className="text-3xl font-semibold">Leads</h1>
           <p className="text-muted-foreground mt-1">
-            {filteredLeads.length} {filteredLeads.length === 1 ? 'lead' : 'leads'} found
+            {totalLeads} {totalLeads === 1 ? 'lead' : 'leads'} found
             {timeFilter && (
               <span className="ml-2 text-primary font-medium">
                 ({TIME_FILTERS.find(f => f.value === timeFilter)?.label || timeFilter})
@@ -343,7 +343,7 @@ export default function LeadsList() {
       </div>
 
       {/* Leads Table */}
-      {filteredLeads.length === 0 ? (
+      {displayLeads.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-lg border border-border">
           <p className="text-muted-foreground mb-6" data-testid="no-leads-message">
             {searchQuery || statusFilter !== 'all' || cityFilter !== 'all' || assignedToFilter !== 'all'
