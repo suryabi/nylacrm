@@ -49,6 +49,7 @@ const ROLE_MAPPING = {
   'Vice President': 'Vice President',
   'National Sales Head': 'National Sales Head',
   'Regional Sales Manager': 'Regional Sales Manager',
+  'Partner - Sales': 'Partner - Sales',
   'Head of Business': 'Head of Business'
 };
 
