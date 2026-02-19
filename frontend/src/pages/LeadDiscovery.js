@@ -176,6 +176,23 @@ export default function LeadDiscovery() {
     }
   };
 
+  // Helper function to retry failed requests
+  const retryRequest = async (fn, retries = 2, delay = 1000) => {
+    for (let i = 0; i <= retries; i++) {
+      try {
+        return await fn();
+      } catch (error) {
+        if (i === retries) throw error;
+        // Only retry on 5xx errors or network issues
+        if (error.response?.status >= 500 || !error.response) {
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          throw error;
+        }
+      }
+    }
+  };
+
   const handleImport = async (forceReimport = false) => {
     if (selectedOutlets.length === 0) {
       toast.error('Please select at least one outlet to import');
