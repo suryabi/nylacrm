@@ -607,10 +607,15 @@ export default function LeadDiscovery() {
               Search Results {results.length > 0 && `(${results.length})`}
             </h2>
             {selectedOutlets.length > 0 && (
-              <Button onClick={handleImport} className="rounded-full">
-                <Download className="h-4 w-4 mr-2" />
-                Import {selectedOutlets.length} Selected
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={() => handleImport(false)} className="rounded-full">
+                  <Download className="h-4 w-4 mr-2" />
+                  Import New ({selectedOutlets.length})
+                </Button>
+                <Button onClick={() => handleImport(true)} variant="outline" className="rounded-full">
+                  Re-import All ({selectedOutlets.length})
+                </Button>
+              </div>
             )}
           </div>
 
