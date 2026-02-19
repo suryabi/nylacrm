@@ -35,7 +35,8 @@ export default function DashboardLayout({ children }) {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(
-    location.pathname === '/dashboard' || location.pathname === '/sales-revenue'
+    location.pathname === '/dashboard' || location.pathname === '/sales-revenue' || 
+    location.pathname === '/target-sku' || location.pathname === '/target-resource'
   );
 
   const handleLogout = () => {
