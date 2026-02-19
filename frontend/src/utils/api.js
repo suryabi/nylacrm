@@ -58,3 +58,22 @@ export const analyticsAPI = {
   getDashboard: () => axios.get(`${API_URL}/analytics/dashboard`, { headers: getAuthHeaders() }),
   getReports: () => axios.get(`${API_URL}/analytics/reports`, { headers: getAuthHeaders() }),
 };
+
+// Accounts API with server-side pagination
+export const accountsAPI = {
+  getAll: (params = {}) => {
+    const { page = 1, pageSize = 25, search, territory, account_type } = params;
+    const queryParams = new URLSearchParams();
+    queryParams.append('page', page);
+    queryParams.append('page_size', pageSize);
+    if (search) queryParams.append('search', search);
+    if (territory) queryParams.append('territory', territory);
+    if (account_type) queryParams.append('account_type', account_type);
+    return axios.get(`${API_URL}/accounts?${queryParams.toString()}`, { headers: getAuthHeaders() });
+  },
+  getById: (id) => axios.get(`${API_URL}/accounts/${id}`, { headers: getAuthHeaders() }),
+  convertFromLead: (leadId) => axios.post(`${API_URL}/accounts/convert-lead`, { lead_id: leadId }, { headers: getAuthHeaders() }),
+  update: (id, data) => axios.put(`${API_URL}/accounts/${id}`, data, { headers: getAuthHeaders() }),
+  delete: (id) => axios.delete(`${API_URL}/accounts/${id}`, { headers: getAuthHeaders() }),
+  getInvoices: (id) => axios.get(`${API_URL}/accounts/${id}/invoices`, { headers: getAuthHeaders() }),
+};
