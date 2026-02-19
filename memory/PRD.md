@@ -44,6 +44,7 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 - [x] Dashboard dropdown navigation with:
   - Sales Overview (pipeline metrics)
   - Revenue Report (won deals tracking)
+- [x] Activity form enhanced with status & follow-up date fields
 
 ## Database Schema
 
