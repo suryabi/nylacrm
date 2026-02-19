@@ -647,14 +647,14 @@ export default function LeadDiscovery() {
                 return (
                   <Card
                     key={outlet.id}
-                    className={`p-4 border-2 rounded-xl transition-all ${
-                      alreadyImported
-                        ? 'border-green-300 bg-green-50 opacity-60'
+                    className={`p-4 border-2 rounded-xl transition-all cursor-pointer ${
+                      alreadyImported && !selectedOutlets.includes(outlet.id)
+                        ? 'border-green-300 bg-green-50'
                         : selectedOutlets.includes(outlet.id)
-                        ? 'border-primary bg-primary/5 cursor-pointer'
-                        : 'border-border hover:border-primary/50 cursor-pointer'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-primary/50'
                     }`}
-                    onClick={() => !alreadyImported && toggleOutletSelection(outlet.id)}
+                    onClick={() => toggleOutletSelection(outlet.id)}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
