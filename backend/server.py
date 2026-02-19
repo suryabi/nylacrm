@@ -3828,10 +3828,17 @@ async def get_preview_history(current_user: dict = Depends(get_current_user)):
 
 app.include_router(api_router)
 
+# CORS configuration - reads from environment variable for deployment flexibility
+cors_origins_env = os.environ.get('CORS_ORIGINS', '*')
+if cors_origins_env == '*':
+    cors_origins = ['*']
+else:
+    cors_origins = [origin.strip() for origin in cors_origins_env.split(',')]
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=['https://crm.nylaairwater.earth', 'https://crm-invoice-hub-2.preview.emergentagent.com', 'http://localhost:3000'],
+    allow_origins=cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
