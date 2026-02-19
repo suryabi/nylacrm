@@ -1842,13 +1842,13 @@ async def get_location_config():
             }
         ],
         'skus': [
-            '24 Brand',
-            '660 ml Silver',
-            '660 ml Gold',
-            '330 ml Silver',
-            '330 ml Gold',
-            '660 Sparkling',
-            '330 Sparkling'
+            '660 ml / Silver / Nyla',
+            '660 ml / Gold / Nyla',
+            '330 ml / Silver / Nyla',
+            '330 ml / Gold / Nyla',
+            '660 ml / Sparkling',
+            '300 ml / Sparkling',
+            '24 Brand / 660 ml'
         ]
     }
     return locations
