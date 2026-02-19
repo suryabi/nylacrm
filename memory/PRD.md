@@ -56,6 +56,17 @@ Build a comprehensive, mobile-ready Sales CRM application with:
   - Frontend fetches only current page with debounced search
   - Status: VERIFIED - Works with 63 leads across 3 pages
 
+- **FEATURE**: Implemented Backend APIs for Performance Dashboards
+  - Created `/api/reports/sku-performance` endpoint
+    - Returns SKU-wise targets, achieved revenue, units sold, leads count
+    - Supports filters: time_filter, territory, state, city, resource_id, sku
+  - Created `/api/reports/resource-performance` endpoint
+    - Returns resource-wise targets, achieved, leads, won deals, visits, calls
+    - Supports same filters plus resource filtering
+  - Added `get_time_filter_dates()` helper for date range calculations
+  - Updated frontend pages to use auth tokens
+  - Status: VERIFIED - Both dashboards showing real data
+
 ### Previous Session (from handoff)
 - Resolved critical Babel/dev server error (craco.config.js fix)
 - Dashboard navigation overhaul (single dropdown menu)
