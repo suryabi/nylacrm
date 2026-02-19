@@ -103,6 +103,15 @@ export default function AddEditLead() {
   const isEdit = !!id;
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState([]);
+  // Map user territory to valid region values
+  const getInitialRegion = () => {
+    const validRegions = ['North India', 'South India', 'West India', 'East India'];
+    if (user?.territory && validRegions.includes(user.territory)) {
+      return user.territory;
+    }
+    return ''; // User must select if territory doesn't match
+  };
+
   const [formData, setFormData] = useState({
     company: '',
     contact_person: '',
@@ -113,7 +122,7 @@ export default function AddEditLead() {
     city: '',
     state: '',
     country: 'India',
-    region: user?.territory || '',
+    region: getInitialRegion(),
     status: 'new',
     source: '',
     assigned_to: '',
