@@ -1074,17 +1074,31 @@ async def create_lead(lead_input: LeadCreate, current_user: dict = Depends(get_c
     
     return lead_obj
 
-@api_router.get("/leads", response_model=List[Lead])
+@api_router.get("/leads", response_model=PaginatedLeadsResponse)
 async def get_leads(
-    skip: int = 0,
-    limit: int = 1000,
+    page: int = 1,
+    page_size: int = 25,
     status: Optional[str] = None,
     city: Optional[str] = None,
     state: Optional[str] = None,
     country: Optional[str] = None,
     region: Optional[str] = None,
+    search: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
+    """
+    Get paginated leads list with server-side pagination.
+    
+    - page: Page number (1-indexed)
+    - page_size: Number of items per page (default 25, max 100)
+    - status, city, state, country, region: Filter options
+    - search: Search in company name, contact person, lead_id
+    """
+    # Validate and cap page_size to prevent abuse
+    page_size = min(max(1, page_size), 100)
+    page = max(1, page)
+    skip = (page - 1) * page_size
+    
     # Build query based on role and filters
     query = {}
     
@@ -1104,14 +1118,27 @@ async def get_leads(
     if region:
         query['region'] = region
     
-    leads = await db.leads.find(query, {'_id': 0}).skip(skip).limit(limit).to_list(limit)
+    # Add search filter
+    if search:
+        query['$or'] = [
+            {'company': {'$regex': search, '$options': 'i'}},
+            {'contact_person': {'$regex': search, '$options': 'i'}},
+            {'lead_id': {'$regex': search, '$options': 'i'}}
+        ]
+    
+    # Get total count for pagination
+    total = await db.leads.count_documents(query)
+    total_pages = (total + page_size - 1) // page_size  # Ceiling division
+    
+    # Fetch paginated leads
+    leads = await db.leads.find(query, {'_id': 0}).sort('created_at', -1).skip(skip).limit(page_size).to_list(page_size)
     
     # Get last activity for each lead
     lead_ids = [lead['id'] for lead in leads]
     activities = await db.activities.find(
         {'lead_id': {'$in': lead_ids}},
         {'_id': 0, 'lead_id': 1, 'created_at': 1, 'interaction_method': 1}
-    ).to_list(5000)
+    ).to_list(len(lead_ids) * 10)  # Reasonable limit per page
     
     # Group activities by lead_id and get the most recent
     lead_last_activity = {}
@@ -1146,7 +1173,13 @@ async def get_leads(
             lead['last_contacted_date'] = None
             lead['last_contact_method'] = None
     
-    return leads
+    return PaginatedLeadsResponse(
+        data=leads,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages
+    )
 
 @api_router.get("/leads/{lead_id}", response_model=Lead)
 async def get_lead(lead_id: str, current_user: dict = Depends(get_current_user)):
