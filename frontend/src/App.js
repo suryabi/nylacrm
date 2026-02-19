@@ -31,6 +31,8 @@ import LeadDiscovery from './pages/LeadDiscovery';
 import COGSCalculator from './pages/COGSCalculator';
 import ProposalGenerator from './pages/ProposalGenerator';
 import SalesRevenueDashboard from './pages/SalesRevenueDashboard';
+import TargetSKUReport from './pages/TargetSKUReport';
+import TargetResourceReport from './pages/TargetResourceReport';
 import '@/App.css';
 
 function ProtectedRoute({ children }) {
