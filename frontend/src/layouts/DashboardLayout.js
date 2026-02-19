@@ -33,6 +33,9 @@ export default function DashboardLayout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [dashboardOpen, setDashboardOpen] = useState(
+    location.pathname === '/dashboard' || location.pathname === '/sales-revenue'
+  );
 
   const handleLogout = () => {
     logout();
@@ -40,6 +43,8 @@ export default function DashboardLayout({ children }) {
   };
 
   const filteredNav = navigation.filter(item => item.roles.includes(user?.role));
+  const filteredDashboardSubmenu = dashboardSubmenu.filter(item => item.roles.includes(user?.role));
+  const isDashboardActive = location.pathname === '/dashboard' || location.pathname === '/sales-revenue';
 
   return (
     <div className="min-h-screen flex bg-background">
