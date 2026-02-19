@@ -30,14 +30,13 @@ const TERRITORY_MAP = {
 };
 
 const SKU_OPTIONS = [
-  '330 ml Silver',
-  '500 ml Silver',
-  '660 ml Silver',
-  '330 ml Gold',
-  '500 ml Gold',
-  '660 ml Gold',
-  '1L Silver',
-  '1L Gold'
+  '660 ml / Silver / Nyla',
+  '660 ml / Gold / Nyla',
+  '330 ml / Silver / Nyla',
+  '330 ml / Gold / Nyla',
+  '660 ml / Sparkling',
+  '300 ml / Sparkling',
+  '24 Brand / 660 ml'
 ];
 
 function formatCurrency(value) {
