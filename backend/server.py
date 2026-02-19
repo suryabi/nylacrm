@@ -255,6 +255,70 @@ class LeadUpdate(BaseModel):
     notes: Optional[str] = None
     estimated_value: Optional[float] = None
     next_followup_date: Optional[str] = None
+    # Account conversion flag
+    converted_to_account: Optional[bool] = False
+    account_id: Optional[str] = None
+
+# ============= ACCOUNT MODELS =============
+
+class AccountSKUPricing(BaseModel):
+    """SKU pricing and bottle credit for an account"""
+    sku: str
+    price_per_unit: float = 0.0
+    return_bottle_credit: float = 0.0
+
+class Account(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    account_id: str  # Formatted ID: NAME4-CITY-AYY-SEQ
+    lead_id: str  # Reference to original lead
+    
+    # Account Info
+    account_name: str
+    account_type: Optional[str] = None  # Tier 1, Tier 2, Tier 3
+    
+    # Contact Info
+    contact_name: Optional[str] = None
+    contact_number: Optional[str] = None
+    
+    # Location (copied from lead)
+    city: str
+    state: str
+    territory: str
+    
+    # Assignment
+    assigned_to: Optional[str] = None
+    
+    # SKU Pricing
+    sku_pricing: List[AccountSKUPricing] = []
+    
+    # Financial Tracking
+    outstanding_balance: float = 0.0
+    overdue_amount: float = 0.0
+    last_payment_date: Optional[str] = None
+    last_payment_amount: float = 0.0
+    
+    # Timestamps
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class AccountCreate(BaseModel):
+    lead_id: str
+
+class AccountUpdate(BaseModel):
+    account_name: Optional[str] = None
+    account_type: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_number: Optional[str] = None
+    sku_pricing: Optional[List[AccountSKUPricing]] = None
+
+class PaginatedAccountsResponse(BaseModel):
+    """Paginated response for accounts list"""
+    data: List['Account']
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
 
 class Activity(BaseModel):
     model_config = ConfigDict(extra="ignore")
