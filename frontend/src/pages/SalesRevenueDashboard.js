@@ -98,7 +98,7 @@ export default function SalesRevenueDashboard() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <TrendingUp className="h-6 w-6 text-primary" />
-          Sales Revenue Dashboard
+          Revenue Report
         </h1>
         <p className="text-muted-foreground mt-1">Track revenue from won deals</p>
       </div>

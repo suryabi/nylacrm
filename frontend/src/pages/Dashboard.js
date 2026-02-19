@@ -138,7 +138,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-4xl font-light text-foreground mb-2">Dashboard</h1>
+        <h1 className="text-4xl font-light text-foreground mb-2">Sales Overview</h1>
         <p className="text-foreground-muted">Overview of your sales pipeline</p>
       </div>
 
