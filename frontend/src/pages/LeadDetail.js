@@ -44,6 +44,7 @@ const getStatusLabel = (status) => {
     'qualified': 'Qualified',
     'not_qualified': 'Not Qualified',
     'in_progress': 'In Progress',
+    'trial_in_progress': 'Trial in Progress',
     'proposal_stage': 'Proposal Stage',
     'won': 'Won',
     'lost': 'Lost',
