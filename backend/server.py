@@ -2302,12 +2302,21 @@ async def delete_user(user_id: str, current_user: dict = Depends(get_current_use
 
 @api_router.put("/users/{user_id}")
 async def update_user(user_id: str, updates: dict, current_user: dict = Depends(get_current_user)):
-    if current_user['role'] not in ['CEO', 'Director', 'Vice President']:
+    if current_user['role'] not in ['CEO', 'Director', 'Vice President', 'National Sales Head']:
         raise HTTPException(status_code=403, detail='Only leadership can update users')
     
     # Remove sensitive fields
     updates.pop('password', None)
     updates.pop('id', None)
+    
+    # Sync role with designation if Partner - Sales
+    if updates.get('designation') == 'Partner - Sales':
+        updates['role'] = 'Partner - Sales'
+    elif updates.get('designation') and updates.get('designation') in [
+        'CEO', 'Director', 'Vice President', 'National Sales Head', 
+        'Regional Sales Manager', 'Head of Business'
+    ]:
+        updates['role'] = updates['designation']
     
     result = await db.users.update_one({'id': user_id}, {'$set': updates})
     
