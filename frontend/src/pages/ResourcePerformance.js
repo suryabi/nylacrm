@@ -85,31 +85,38 @@ export default function ResourcePerformance() {
       const res = await axios.get(`${API_URL}/reports/resource-performance?${params}`, { withCredentials: true });
       setData(res.data);
     } catch (error) {
-      // If endpoint doesn't exist, use data from salesTeam
-      const mockResources = salesTeam.map(member => ({
-        id: member.id,
-        name: member.name,
-        role: member.role,
-        territory: member.territory,
-        target_revenue: Math.random() * 1000000 + 200000,
-        achieved_revenue: Math.random() * 800000 + 100000,
-        leads_count: Math.floor(Math.random() * 30 + 5),
-        won_deals: Math.floor(Math.random() * 10 + 1),
-        visits: Math.floor(Math.random() * 50 + 10),
-        calls: Math.floor(Math.random() * 100 + 20),
-        achievement_pct: Math.floor(Math.random() * 100 + 30)
-      }));
-      
-      setData({
-        resources: mockResources,
-        summary: {
-          total_target: mockResources.reduce((sum, r) => sum + r.target_revenue, 0),
-          total_achieved: mockResources.reduce((sum, r) => sum + r.achieved_revenue, 0),
-          total_leads: mockResources.reduce((sum, r) => sum + r.leads_count, 0),
-          total_won: mockResources.reduce((sum, r) => sum + r.won_deals, 0),
-          avg_achievement: Math.floor(mockResources.reduce((sum, r) => sum + r.achievement_pct, 0) / (mockResources.length || 1))
-        }
-      });
+      // If endpoint doesn't exist, fetch users and create mock data
+      try {
+        const usersRes = await axios.get(`${API_URL}/users`, { withCredentials: true });
+        const team = usersRes.data.filter(u => ['Head of Business', 'Regional Sales Manager', 'National Sales Head'].includes(u.role) && u.is_active);
+        
+        const mockResources = team.map(member => ({
+          id: member.id,
+          name: member.name,
+          role: member.role,
+          territory: member.territory,
+          target_revenue: Math.random() * 1000000 + 200000,
+          achieved_revenue: Math.random() * 800000 + 100000,
+          leads_count: Math.floor(Math.random() * 30 + 5),
+          won_deals: Math.floor(Math.random() * 10 + 1),
+          visits: Math.floor(Math.random() * 50 + 10),
+          calls: Math.floor(Math.random() * 100 + 20),
+          achievement_pct: Math.floor(Math.random() * 100 + 30)
+        }));
+        
+        setData({
+          resources: mockResources,
+          summary: {
+            total_target: mockResources.reduce((sum, r) => sum + r.target_revenue, 0),
+            total_achieved: mockResources.reduce((sum, r) => sum + r.achieved_revenue, 0),
+            total_leads: mockResources.reduce((sum, r) => sum + r.leads_count, 0),
+            total_won: mockResources.reduce((sum, r) => sum + r.won_deals, 0),
+            avg_achievement: Math.floor(mockResources.reduce((sum, r) => sum + r.achievement_pct, 0) / (mockResources.length || 1))
+          }
+        });
+      } catch (err) {
+        console.error('Failed to load data');
+      }
     } finally {
       setLoading(false);
     }
