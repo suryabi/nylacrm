@@ -291,12 +291,13 @@ export default function LeadDiscovery() {
         if (updateCount > 0) message += `✓ ${updateCount} leads updated. `;
         toast.success(message.trim(), { duration: 5000 });
         
-        // Refresh existing leads list
-        const leadsRes = await axios.get(process.env.REACT_APP_BACKEND_URL + '/api/leads?limit=1000', {
-          headers: { Authorization: `Bearer ${token}` },
-          withCredentials: true
-        });
-        setExistingLeads(leadsRes.data);
+        // Refresh existing leads list using leadsAPI
+        try {
+          const leadsRes = await leadsAPI.getAll();
+          setExistingLeads(leadsRes.data);
+        } catch (refreshErr) {
+          console.error('Failed to refresh leads list:', refreshErr);
+        }
       }
       
       if (failCount > 0) {
