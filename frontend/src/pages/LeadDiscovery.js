@@ -251,7 +251,7 @@ export default function LeadDiscovery() {
             region: locationInfo.territory,
             status: 'new',
             source: 'Lead Discovery',
-            assigned_to: currentUser.id,
+            assigned_to: user.id,
             priority: (outlet.rating || 0) >= 4.5 ? 'high' : 'medium',
             current_water_brand: null,
             current_landing_price: null,
@@ -266,28 +266,12 @@ export default function LeadDiscovery() {
           const existingLead = getExistingLead(outlet);
           
           if (existingLead && forceReimport) {
-            // Update existing lead with retry
-            await retryRequest(() => axios.put(
-              `${process.env.REACT_APP_BACKEND_URL}/api/leads/${existingLead.id}`,
-              leadData,
-              {
-                headers: { Authorization: `Bearer ${token}` },
-                withCredentials: true,
-                timeout: 15000
-              }
-            ));
+            // Update existing lead with retry using leadsAPI
+            await retryRequest(() => leadsAPI.update(existingLead.id, leadData));
             updateCount++;
           } else if (!existingLead) {
-            // Create new lead with retry
-            await retryRequest(() => axios.post(
-              process.env.REACT_APP_BACKEND_URL + '/api/leads',
-              leadData,
-              {
-                headers: { Authorization: `Bearer ${token}` },
-                withCredentials: true,
-                timeout: 15000
-              }
-            ));
+            // Create new lead with retry using leadsAPI
+            await retryRequest(() => leadsAPI.create(leadData));
             successCount++;
           } else {
             // Skip - already exists and not forcing re-import
