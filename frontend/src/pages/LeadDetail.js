@@ -148,14 +148,31 @@ export default function LeadDetail() {
 
     setSubmittingActivity(true);
     try {
+      // First log the activity
       await activitiesAPI.create({
         lead_id: id,
         activity_type: activityType,
         description: activityDescription,
         interaction_method: interactionMethod
       });
-      toast.success('Activity added');
+      
+      // Update lead status and follow-up date if provided
+      const leadUpdates = {};
+      if (activityStatus) {
+        leadUpdates.status = activityStatus;
+      }
+      if (activityFollowUpDate) {
+        leadUpdates.next_followup_date = activityFollowUpDate;
+      }
+      
+      if (Object.keys(leadUpdates).length > 0) {
+        await leadsAPI.update(id, leadUpdates);
+      }
+      
+      toast.success('Activity logged successfully');
       setActivityDescription('');
+      setActivityStatus('');
+      setActivityFollowUpDate('');
       setShowActivityForm(false);
       fetchData();
     } catch (error) {
