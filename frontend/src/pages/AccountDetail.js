@@ -42,6 +42,7 @@ export default function AccountDetail() {
   const [isEditing, setIsEditing] = useState(false);
   const [invoiceData, setInvoiceData] = useState(null);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [users, setUsers] = useState([]);
   
   // Editable fields
   const [accountName, setAccountName] = useState('');
@@ -52,7 +53,23 @@ export default function AccountDetail() {
 
   useEffect(() => {
     fetchAccount();
+    fetchUsers();
   }, [id]);
+
+  const fetchUsers = async () => {
+    try {
+      const res = await usersAPI.getAll();
+      setUsers(res.data || []);
+    } catch (error) {
+      console.log('Could not load users');
+    }
+  };
+
+  const getAssignedUserName = () => {
+    if (!account?.assigned_to) return 'Unassigned';
+    const user = users.find(u => u.id === account.assigned_to);
+    return user ? `${user.name} - ${user.territory || 'No Territory'}` : account.assigned_to;
+  };
 
   const fetchAccount = async () => {
     setLoading(true);
