@@ -326,11 +326,11 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-emerald-600">WON</p>
-                  <p className="text-3xl font-bold text-emerald-700">{analytics?.leads_won || 0}</p>
+                  <p className="text-3xl font-bold text-emerald-700">{analytics?.status_distribution?.won || 0}</p>
                 </div>
                 <div className="ml-auto text-right">
                   <p className="text-2xl font-bold text-emerald-700">
-                    {totalLeads > 0 ? ((analytics?.leads_won || 0) / totalLeads * 100).toFixed(0) : 0}%
+                    {totalLeads > 0 ? ((analytics?.status_distribution?.won || 0) / totalLeads * 100).toFixed(0) : 0}%
                   </p>
                   <p className="text-xs text-emerald-600">win rate</p>
                 </div>
@@ -343,11 +343,11 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-red-600">LOST</p>
-                  <p className="text-3xl font-bold text-red-700">{analytics?.leads_lost || 0}</p>
+                  <p className="text-3xl font-bold text-red-700">{analytics?.status_distribution?.lost || 0}</p>
                 </div>
                 <div className="ml-auto text-right">
                   <p className="text-2xl font-bold text-red-700">
-                    {totalLeads > 0 ? ((analytics?.leads_lost || 0) / totalLeads * 100).toFixed(0) : 0}%
+                    {totalLeads > 0 ? ((analytics?.status_distribution?.lost || 0) / totalLeads * 100).toFixed(0) : 0}%
                   </p>
                   <p className="text-xs text-red-600">loss rate</p>
                 </div>
