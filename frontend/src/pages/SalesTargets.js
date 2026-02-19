@@ -735,26 +735,26 @@ function SKUForm({ planId, city }) {
     if (res.data.skus) {
       res.data.skus.forEach(sku => {
         const pct = sku.allocation_percentage?.toString() || '';
-        if (sku.sku_name === '660 ml Silver') setV1(pct);
-        if (sku.sku_name === '660 ml Gold') setV2(pct);
-        if (sku.sku_name === '330 ml Silver') setV3(pct);
-        if (sku.sku_name === '330 ml Gold') setV4(pct);
-        if (sku.sku_name === '660 Sparkling') setV5(pct);
-        if (sku.sku_name === '330 Sparkling') setV6(pct);
-        if (sku.sku_name === '24 Brand') setV7(pct);
+        if (sku.sku_name === '660 ml / Silver / Nyla') setV1(pct);
+        if (sku.sku_name === '660 ml / Gold / Nyla') setV2(pct);
+        if (sku.sku_name === '330 ml / Silver / Nyla') setV3(pct);
+        if (sku.sku_name === '330 ml / Gold / Nyla') setV4(pct);
+        if (sku.sku_name === '660 ml / Sparkling') setV5(pct);
+        if (sku.sku_name === '300 ml / Sparkling') setV6(pct);
+        if (sku.sku_name === '24 Brand / 660 ml') setV7(pct);
       });
     }
     setLoaded(true);
   };
 
   const skus = [
-    {name: '660 ml Silver', val: v1, set: setV1},
-    {name: '660 ml Gold', val: v2, set: setV2},
-    {name: '330 ml Silver', val: v3, set: setV3},
-    {name: '330 ml Gold', val: v4, set: setV4},
-    {name: '660 Sparkling', val: v5, set: setV5},
-    {name: '330 Sparkling', val: v6, set: setV6},
-    {name: '24 Brand', val: v7, set: setV7}
+    {name: '660 ml / Silver / Nyla', val: v1, set: setV1},
+    {name: '660 ml / Gold / Nyla', val: v2, set: setV2},
+    {name: '330 ml / Silver / Nyla', val: v3, set: setV3},
+    {name: '330 ml / Gold / Nyla', val: v4, set: setV4},
+    {name: '660 ml / Sparkling', val: v5, set: setV5},
+    {name: '300 ml / Sparkling', val: v6, set: setV6},
+    {name: '24 Brand / 660 ml', val: v7, set: setV7}
   ];
 
   const total = skus.reduce((s, sku) => s + (parseFloat(sku.val) || 0), 0);
