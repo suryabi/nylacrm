@@ -1,102 +1,91 @@
-# Nyla Sales CRM - Product Requirements Document
+# Nyla Air Water - Sales CRM PRD
 
 ## Original Problem Statement
-Build a comprehensive, mobile-ready Sales CRM application for tracking leads, follow-ups, and statuses for the Nyla water business.
+Build a comprehensive, mobile-ready Sales CRM application with:
+- Lead management and team hierarchy
+- Activity tracking and dashboards
+- Daily status updates and sales target planning
+- COGS calculator and proposal generator
+- Lead discovery and Google Workspace authentication
+- Unique Lead ID generation
+- ActiveMQ invoice integration for real-time data
+- Resource-based revenue tracking
+- Sales Revenue Dashboard
 
-## Core Requirements
-- **Lead Management**: Full CRUD with custom fields (current brand, SKUs interested)
-- **Team & Hierarchy**: Role-based access (CEO, Director, VP, etc.) with org chart
-- **Activity Tracking**: Visual timeline for lead activities (Call, Visit, Email)
-- **Dashboard & Reporting**: Filterable KPI tiles, sortable reports
-- **Daily Status Updates**: AI-powered text rewriting (Claude Sonnet 4.5)
-- **Sales Target Planning**: Hierarchical allocation (Country → Territory → City → Resource/SKU)
-- **Lead Discovery**: Google Places API integration with duplicate prevention
-- **COGS Calculator**: Cost of Goods Sold and Minimum Landing Price by SKU/city
-- **Proposal Generator**: Rich text editor with editable templates
-- **Authentication**: Google Workspace OAuth 2.0
-- **Invoice Integration**: ActiveMQ subscription for invoice data from ERP
-
-## Tech Stack
-- **Frontend**: React, Tailwind CSS, Shadcn UI, React Router
-- **Backend**: FastAPI, MongoDB (motor), Pydantic
-- **Integrations**: Claude Sonnet 4.5, Google Places API (New), Google OAuth, Amazon MQ (ActiveMQ)
-
----
+## Architecture
+- **Frontend**: React with Tailwind CSS, Shadcn UI, React Router
+- **Backend**: FastAPI with Motor (MongoDB async driver)
+- **Database**: MongoDB
+- **Auth**: Session-based (cookie) + Google Workspace OAuth
+- **Integrations**: Google Places API, Claude Sonnet 4.5, ActiveMQ
 
 ## What's Been Implemented
 
-### Feb 17, 2026
-- **ActiveMQ Invoice Integration**:
-  - STOMP subscriber for Amazon MQ (`/app/backend/mq_subscriber.py`)
-  - Webhook fallback at `/api/invoices/webhook`
-  - Invoice data: gross value, net value, credit notes, invoice date
-  - Auto-matching via CA_LEAD_ID to our lead_id
-  - Lead totals auto-calculated
-  - UI: Invoice Value column in Leads List, Invoice Summary card in Lead Detail
+### Core Features (Complete)
+- [x] Lead management (CRUD, status tracking)
+- [x] Team management with hierarchy
+- [x] Activity tracking (visits, calls, meetings)
+- [x] Main dashboard with analytics
+- [x] Daily status updates
+- [x] Sales target planning
+- [x] COGS Calculator
+- [x] Proposal Generator
+- [x] Lead Discovery (Google Places)
+- [x] Google Workspace OAuth
+- [x] Email/Password login (fixed)
 
-- **Lead ID System**: Unique 16-char ID format `NAME4-CITY-LYY-SEQ`
+### Recent Additions (Feb 2026)
+- [x] Unique Lead ID generation (NAME4-CITY-LYY-SEQ format)
+- [x] ActiveMQ invoice integration
+- [x] Resource-based revenue tracking
+- [x] Sales Revenue Dashboard with filters
+- [x] Invoice display on Lead Detail page
+- [x] Fixed Babel compilation error (disabled visual edits plugin)
 
-- **Auth Fix**: Fixed login to use session tokens with cookies
+## Database Schema
 
-### Previous Sessions
-- Full lead management with custom Nyla fields
-- Team hierarchy with org chart visualization
-- Activity timeline for each lead
-- Dashboard with filterable KPI tiles
-- Daily status updates with Claude AI rewriting
-- Sales target allocation system (percentage-based)
-- Lead Discovery with Google Places integration
-- COGS Calculator for SKU/city pricing
-- Proposal Generator with rich text editor
-- Google Workspace OAuth authentication
+### leads
+- lead_id (string, unique formatted ID)
+- company_name, contact info, location
+- status, stage, assigned_to
+- total_gross_invoice_value, total_net_invoice_value
+- total_credit_note_value, invoice_count
 
----
+### invoices
+- lead_id, invoice_no, invoice_date
+- gross_value, net_value, credit_note_value
+- assigned_to (resource)
 
-## Prioritized Backlog
+### resource_invoice_summary
+- resource_id
+- total_gross/net/credit_note values
 
-### P0 (Critical)
-- [ ] Complete "Sales Partner" role implementation
-  - Backend: Mirror "Regional Sales Manager" permissions
-  - Frontend: Update navigation visibility
+## Priority Backlog
 
-### P1 (High)
-- [ ] Enable ActiveMQ in production (`ACTIVEMQ_ENABLED=true`)
-- [ ] User verification for custom proposal template
+### P0 - Critical
+- None currently
+
+### P1 - High Priority
+- [ ] Complete "Partner - Sales" role implementation (permissions)
+
+### P2 - Medium Priority
+- [ ] User verification for custom Proposal Template
+
+### P3 - Future
 - [ ] Re-implement Grid View for Sales Target module
+- [ ] Refactor server.py into modular APIRouter structure
+- [ ] Component refactoring for large files
 
-### P2 (Medium)
-- [ ] Refactor SalesTargets.js (recurring Babel compilation errors)
-- [ ] Break down server.py into modular API routes
+## Key Files
+- `/app/backend/server.py` - Main API
+- `/app/backend/mq_subscriber.py` - ActiveMQ integration
+- `/app/frontend/src/pages/SalesRevenueDashboard.js` - Revenue dashboard
+- `/app/frontend/src/pages/LeadDetail.js` - Lead details with invoices
+- `/app/frontend/craco.config.js` - Webpack config (visual edits disabled)
 
----
+## Credentials
+- Admin: admin@nylaairwater.earth / admin123
+- Google Workspace OAuth for regular users
 
-## Key Files Reference
-- `/app/backend/server.py` - Main backend (all API routes)
-- `/app/backend/mq_subscriber.py` - ActiveMQ invoice subscriber
-- `/app/frontend/src/pages/LeadsList.js` - Leads table with Invoice Value column
-- `/app/frontend/src/pages/LeadDetail.js` - Lead detail with Invoice Summary
-- `/app/frontend/src/pages/TeamManagement.js` - Team/role management
-- `/app/frontend/src/layouts/DashboardLayout.js` - Navigation sidebar
-
-## Database Collections
-- users, leads, activities, daily_status
-- invoices (NEW - stores invoice data from MQ)
-- target_plans, territory_targets, city_targets, resource_targets, sku_targets
-- cogs, user_sessions
-
-## Invoice Message Format (from ActiveMQ)
-```json
-{
-  "invoiceData": "17-02-2026",
-  "grossInvoiceValue": "31755.28",
-  "netInvoiceValue": "31195.82",
-  "C_LEAD_ID": "LEAD_3",
-  "CA_LEAD_ID": "LEAD_17",
-  "invoiceNo": "INV-34131",
-  "creditNoteValue": "559.46"
-}
-```
-
-## Test Credentials
-- **Google OAuth**: Any @nylaairwater.earth email
-- **Fallback Admin**: admin@nylaairwater.earth / admin123
+## Last Updated
+Feb 19, 2026 - Fixed Babel compilation error, system restored
