@@ -495,6 +495,7 @@ export default function LeadsList() {
                       <option value="qualified">Qualified</option>
                       <option value="not_qualified">Not Qualified</option>
                       <option value="in_progress">In Progress</option>
+                      <option value="trial_in_progress">Trial in Progress</option>
                       <option value="proposal_stage">Proposal Stage</option>
                       <option value="won">Won</option>
                       <option value="lost">Lost</option>
