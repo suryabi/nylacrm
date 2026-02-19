@@ -140,6 +140,14 @@ class UserLogin(BaseModel):
 class LeadStatus(BaseModel):
     status: str  # 'new', 'contacted', 'qualified', 'proposal', 'closed_won', 'closed_lost'
 
+class PaginatedLeadsResponse(BaseModel):
+    """Paginated response for leads list"""
+    data: List[Lead]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
 class Lead(BaseModel):
     model_config = ConfigDict(extra="allow")  # Allow extra fields
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
