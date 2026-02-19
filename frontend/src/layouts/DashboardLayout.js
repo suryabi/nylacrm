@@ -19,6 +19,7 @@ const dashboardSubmenu = [
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'], hasSubmenu: true },
   { name: 'Leads', href: '/leads', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
+  { name: 'Accounts', href: '/accounts', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
   { name: 'Lead Discovery', href: '/lead-discovery', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
   { name: 'COGS Calculator', href: '/cogs-calculator', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head'] },
   { name: 'Proposals', href: '/proposals', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
