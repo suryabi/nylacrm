@@ -4,13 +4,14 @@ import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Users, TrendingUp, Phone, MapPin, UserPlus, CheckCircle, XCircle, RotateCcw } from 'lucide-react';
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { 
+  LayoutDashboard, Filter, Loader2, 
+  MapPin, Phone, UserPlus, CheckCircle, XCircle, TrendingUp,
+  Clock, MessageSquare, Target, ThumbsUp, ThumbsDown, Calendar
+} from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-const COLORS = ['hsl(155, 35%, 42%)', 'hsl(42, 85%, 65%)', 'hsl(25, 50%, 55%)', 'hsl(155, 25%, 60%)', 'hsl(35, 50%, 60%)'];
 
 const TIME_FILTERS = [
   { value: 'this_week', label: 'This Week' },
@@ -29,6 +30,32 @@ const TERRITORY_MAP = {
   'South India': { states: { 'Karnataka': ['Bengaluru'], 'Tamil Nadu': ['Chennai'], 'Telangana': ['Hyderabad'] } },
   'West India': { states: { 'Maharashtra': ['Mumbai', 'Pune'], 'Gujarat': ['Ahmedabad'] } },
   'East India': { states: { 'West Bengal': ['Kolkata'] } }
+};
+
+const STATUS_CONFIG = {
+  new: { label: 'New', color: 'blue', icon: UserPlus },
+  contacted: { label: 'Contacted', color: 'yellow', icon: MessageSquare },
+  qualified: { label: 'Qualified', color: 'green', icon: ThumbsUp },
+  not_qualified: { label: 'Not Qualified', color: 'gray', icon: ThumbsDown },
+  in_progress: { label: 'In Progress', color: 'purple', icon: Clock },
+  trial_in_progress: { label: 'Trial', color: 'indigo', icon: Target },
+  proposal_stage: { label: 'Proposal', color: 'orange', icon: TrendingUp },
+  won: { label: 'Won', color: 'emerald', icon: CheckCircle },
+  lost: { label: 'Lost', color: 'red', icon: XCircle },
+  future_followup: { label: 'Follow Up', color: 'slate', icon: Calendar },
+};
+
+const COLOR_CLASSES = {
+  blue: 'from-blue-50 to-blue-100 border-blue-200 text-blue-700',
+  yellow: 'from-yellow-50 to-yellow-100 border-yellow-200 text-yellow-700',
+  green: 'from-green-50 to-green-100 border-green-200 text-green-700',
+  gray: 'from-gray-50 to-gray-100 border-gray-200 text-gray-600',
+  purple: 'from-purple-50 to-purple-100 border-purple-200 text-purple-700',
+  indigo: 'from-indigo-50 to-indigo-100 border-indigo-200 text-indigo-700',
+  orange: 'from-orange-50 to-orange-100 border-orange-200 text-orange-700',
+  emerald: 'from-emerald-50 to-emerald-100 border-emerald-200 text-emerald-700',
+  red: 'from-red-50 to-red-100 border-red-200 text-red-700',
+  slate: 'from-slate-50 to-slate-100 border-slate-200 text-slate-700',
 };
 
 export default function Dashboard() {
@@ -54,10 +81,7 @@ export default function Dashboard() {
 
   const fetchSalesTeam = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_URL}/users`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await axios.get(`${API_URL}/users`, { withCredentials: true });
       setSalesTeam(response.data.filter(u => ['Head of Business', 'Regional Sales Manager', 'National Sales Head'].includes(u.role) && u.is_active));
     } catch (error) {
       console.error('Failed to load team');
@@ -67,7 +91,6 @@ export default function Dashboard() {
   const fetchAnalytics = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
       const params = new URLSearchParams({
         time_filter: timeFilter,
         ...(territoryFilter !== 'all' && { territory: territoryFilter }),
@@ -76,9 +99,7 @@ export default function Dashboard() {
         ...(salesResource !== 'all' && { sales_resource: salesResource })
       });
       
-      const response = await axios.get(`${API_URL}/analytics/dashboard?${params}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await axios.get(`${API_URL}/analytics/dashboard?${params}`, { withCredentials: true });
       setAnalytics(response.data);
     } catch (error) {
       toast.error('Failed to load analytics');
@@ -87,12 +108,8 @@ export default function Dashboard() {
     }
   };
 
-  const handleMetricClick = (metric) => {
-    const params = new URLSearchParams({ time_filter: timeFilter, metric });
-    navigate(`/leads?${params}`);
-  };
-
   const handleResetFilters = () => {
+    setTimeFilter('this_month');
     setTerritoryFilter('all');
     setStateFilter('all');
     setCityFilter('all');
@@ -111,152 +128,234 @@ export default function Dashboard() {
     ? ['All Cities', ...(TERRITORY_MAP[territoryFilter].states[stateFilter] || [])]
     : ['All Cities'];
 
-  if (loading) {
-    return <div className="flex items-center justify-center py-12"><p className="text-foreground-muted">Loading...</p></div>;
-  }
-
-  const statusData = Object.entries(analytics?.status_distribution || {}).map(([key, value]) => {
-    const labels = {
-      'new': 'New',
-      'contacted': 'Contacted',
-      'qualified': 'Qualified',
-      'not_qualified': 'Not Qualified',
-      'in_progress': 'In Progress',
-      'trial_in_progress': 'Trial in Progress',
-      'proposal_stage': 'Proposal Stage',
-      'won': 'Won',
-      'lost': 'Lost',
-      'future_followup': 'Future Follow up'
-    };
-    return {
-      name: labels[key] || key,
-      value
-    };
-  });
-
-  const hasActiveFilters = territoryFilter !== 'all' || stateFilter !== 'all' || cityFilter !== 'all' || salesResource !== 'all';
+  // Calculate total leads from status distribution
+  const totalLeads = analytics?.status_distribution 
+    ? Object.values(analytics.status_distribution).reduce((sum, val) => sum + val, 0)
+    : 0;
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-4xl font-light text-foreground mb-2">Sales Overview</h1>
-        <p className="text-foreground-muted">Overview of your sales pipeline</p>
+    <div className="p-6 max-w-7xl mx-auto" data-testid="sales-overview-dashboard">
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <LayoutDashboard className="h-6 w-6 text-primary" />
+          Sales Overview
+        </h1>
+        <p className="text-muted-foreground mt-1">Overview of your sales pipeline</p>
       </div>
 
-      <Card className="p-6 bg-card border border-border rounded-2xl">
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <div className="space-y-2">
-            <label className="text-xs text-muted-foreground font-medium">Time Period</label>
-            <Select value={timeFilter} onValueChange={setTimeFilter}>
-              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {TIME_FILTERS.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
+      {/* Filters */}
+      <Card className="p-4 mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <span className="font-medium">Filters</span>
+        </div>
+        
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Time Period</label>
+            <select
+              value={timeFilter}
+              onChange={(e) => setTimeFilter(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg bg-background text-sm"
+            >
+              {TIME_FILTERS.map(tf => (
+                <option key={tf.value} value={tf.value}>{tf.label}</option>
+              ))}
+            </select>
           </div>
-
-          <div className="space-y-2">
-            <label className="text-xs text-muted-foreground font-medium">Territory</label>
-            <Select value={territoryFilter} onValueChange={(v) => { setTerritoryFilter(v); setStateFilter('all'); setCityFilter('all'); }}>
-              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {availableTerritories.map(t => <SelectItem key={t} value={t === 'All Territories' ? 'all' : t}>{t}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Territory</label>
+            <select
+              value={territoryFilter}
+              onChange={(e) => { setTerritoryFilter(e.target.value); setStateFilter('all'); setCityFilter('all'); }}
+              className="w-full px-3 py-2 border rounded-lg bg-background text-sm"
+            >
+              {availableTerritories.map(t => (
+                <option key={t} value={t === 'All Territories' ? 'all' : t}>{t}</option>
+              ))}
+            </select>
           </div>
-
-          <div className="space-y-2">
-            <label className="text-xs text-muted-foreground font-medium">State</label>
-            <Select value={stateFilter} onValueChange={(v) => { setStateFilter(v); setCityFilter('all'); }} disabled={territoryFilter === 'all'}>
-              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {availableStates.map(s => <SelectItem key={s} value={s === 'All States' ? 'all' : s}>{s}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">State</label>
+            <select
+              value={stateFilter}
+              onChange={(e) => { setStateFilter(e.target.value); setCityFilter('all'); }}
+              disabled={territoryFilter === 'all'}
+              className="w-full px-3 py-2 border rounded-lg bg-background text-sm disabled:opacity-50"
+            >
+              {availableStates.map(s => (
+                <option key={s} value={s === 'All States' ? 'all' : s}>{s}</option>
+              ))}
+            </select>
           </div>
-
-          <div className="space-y-2">
-            <label className="text-xs text-muted-foreground font-medium">City</label>
-            <Select value={cityFilter} onValueChange={setCityFilter} disabled={stateFilter === 'all'}>
-              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {availableCities.map(c => <SelectItem key={c} value={c === 'All Cities' ? 'all' : c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">City</label>
+            <select
+              value={cityFilter}
+              onChange={(e) => setCityFilter(e.target.value)}
+              disabled={stateFilter === 'all'}
+              className="w-full px-3 py-2 border rounded-lg bg-background text-sm disabled:opacity-50"
+            >
+              {availableCities.map(c => (
+                <option key={c} value={c === 'All Cities' ? 'all' : c}>{c}</option>
+              ))}
+            </select>
           </div>
-
-          <div className="space-y-2">
-            <label className="text-xs text-muted-foreground font-medium">Sales Resource</label>
-            <Select value={salesResource} onValueChange={setSalesResource}>
-              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Resources</SelectItem>
-                {salesTeam.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Sales Resource</label>
+            <select
+              value={salesResource}
+              onChange={(e) => setSalesResource(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg bg-background text-sm"
+            >
+              <option value="all">All Resources</option>
+              {salesTeam.map(m => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
           </div>
-
+          
           <div className="flex items-end">
-            {hasActiveFilters && (
-              <Button variant="outline" onClick={handleResetFilters} className="h-10 w-full rounded-full">
-                <RotateCcw className="h-4 w-4 mr-2" />Reset
-              </Button>
-            )}
+            <Button variant="outline" onClick={handleResetFilters} className="w-full">
+              Reset
+            </Button>
           </div>
         </div>
       </Card>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <MetricCard title="Total Visits" value={analytics?.total_visits || 0} icon={MapPin} onClick={() => handleMetricClick('visits')} />
-        <MetricCard title="Unique Visits" value={analytics?.unique_visits || 0} icon={MapPin} onClick={() => handleMetricClick('unique_visits')} />
-        <MetricCard title="Total Calls" value={analytics?.total_calls || 0} icon={Phone} onClick={() => handleMetricClick('calls')} />
-        <MetricCard title="Unique Calls" value={analytics?.unique_calls || 0} icon={Phone} onClick={() => handleMetricClick('unique_calls')} />
-        <MetricCard title="New Leads" value={analytics?.new_leads_added || 0} icon={UserPlus} onClick={() => handleMetricClick('new_leads')} />
-        <MetricCard title="Leads Won" value={analytics?.leads_won || 0} icon={CheckCircle} onClick={() => handleMetricClick('won')} />
-        <MetricCard title="Leads Lost" value={analytics?.leads_lost || 0} icon={XCircle} onClick={() => handleMetricClick('lost')} />
-        <MetricCard title="Pipeline Value" value={`Rs ${((analytics?.pipeline_value || 0) / 100000).toFixed(1)}L`} icon={TrendingUp} />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-8 bg-card border rounded-2xl shadow-sm">
-          <h3 className="text-lg font-semibold mb-6">Lead Status Distribution</h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <PieChart>
-              <Pie data={statusData} cx="50%" cy="50%" labelLine={false} label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`} outerRadius={90} dataKey="value">
-                {statusData.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </Card>
-
-        <Card className="p-8 bg-card border rounded-2xl shadow-sm">
-          <h3 className="text-lg font-semibold mb-6">Lead Pipeline</h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={statusData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(35,15%,88%)" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Bar dataKey="value" fill="hsl(155,35%,42%)" radius={[8,8,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function MetricCard({ title, value, icon: Icon, onClick }) {
-  return (
-    <Card className={`p-5 bg-card border rounded-2xl shadow-sm hover:shadow-md transition-all ${onClick ? 'cursor-pointer hover:border-primary/50' : ''}`} onClick={onClick}>
-      <div className="flex items-start justify-between mb-3">
-        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-          <Icon className="h-5 w-5 text-primary" />
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      </div>
-      <p className="text-xs text-muted-foreground font-medium mb-1 uppercase tracking-wide">{title}</p>
-      <p className="text-2xl font-semibold text-foreground">{value}</p>
-    </Card>
+      ) : (
+        <>
+          {/* Activity Metrics */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <Card className="p-4 bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200">
+              <div className="flex items-center gap-2 mb-2">
+                <MapPin className="h-4 w-4 text-teal-600" />
+                <p className="text-xs font-medium text-teal-600">VISITS</p>
+              </div>
+              <p className="text-2xl font-bold text-teal-700">{analytics?.total_visits || 0}</p>
+              <p className="text-xs text-teal-600 mt-1">{analytics?.unique_visits || 0} unique</p>
+            </Card>
+            <Card className="p-4 bg-gradient-to-br from-cyan-50 to-cyan-100 border-cyan-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Phone className="h-4 w-4 text-cyan-600" />
+                <p className="text-xs font-medium text-cyan-600">CALLS</p>
+              </div>
+              <p className="text-2xl font-bold text-cyan-700">{analytics?.total_calls || 0}</p>
+              <p className="text-xs text-cyan-600 mt-1">{analytics?.unique_calls || 0} unique</p>
+            </Card>
+            <Card className="p-4 bg-gradient-to-br from-violet-50 to-violet-100 border-violet-200">
+              <div className="flex items-center gap-2 mb-2">
+                <UserPlus className="h-4 w-4 text-violet-600" />
+                <p className="text-xs font-medium text-violet-600">NEW LEADS</p>
+              </div>
+              <p className="text-2xl font-bold text-violet-700">{analytics?.new_leads_added || 0}</p>
+              <p className="text-xs text-violet-600 mt-1">this period</p>
+            </Card>
+            <Card className="p-4 bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp className="h-4 w-4 text-amber-600" />
+                <p className="text-xs font-medium text-amber-600">PIPELINE VALUE</p>
+              </div>
+              <p className="text-2xl font-bold text-amber-700">
+                ₹{((analytics?.pipeline_value || 0) / 100000).toFixed(1)}L
+              </p>
+              <p className="text-xs text-amber-600 mt-1">total value</p>
+            </Card>
+          </div>
+
+          {/* Lead Status Distribution */}
+          <Card className="p-4 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-semibold">Lead Status Distribution</h3>
+                <p className="text-sm text-muted-foreground">{totalLeads} total leads</p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+              {Object.entries(STATUS_CONFIG).map(([key, config]) => {
+                const count = analytics?.status_distribution?.[key] || 0;
+                const percentage = totalLeads > 0 ? ((count / totalLeads) * 100).toFixed(0) : 0;
+                const Icon = config.icon;
+                const colorClass = COLOR_CLASSES[config.color];
+                
+                return (
+                  <div
+                    key={key}
+                    onClick={() => navigate(`/leads?status=${key}`)}
+                    className={`p-3 rounded-xl bg-gradient-to-br border cursor-pointer hover:shadow-md transition-all ${colorClass}`}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <Icon className="h-4 w-4 opacity-70" />
+                      <span className="text-xs font-medium truncate">{config.label}</span>
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-xl font-bold">{count}</span>
+                      <span className="text-xs opacity-70">/ {totalLeads}</span>
+                    </div>
+                    <div className="mt-1">
+                      <div className="h-1.5 bg-white/50 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-current opacity-50 rounded-full transition-all"
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                      <p className="text-xs font-medium mt-1">{percentage}%</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          {/* Quick Summary */}
+          <div className="grid grid-cols-2 gap-4">
+            <Card className="p-4 bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-full bg-emerald-200 flex items-center justify-center">
+                  <CheckCircle className="h-6 w-6 text-emerald-700" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-emerald-600">WON</p>
+                  <p className="text-3xl font-bold text-emerald-700">{analytics?.leads_won || 0}</p>
+                </div>
+                <div className="ml-auto text-right">
+                  <p className="text-2xl font-bold text-emerald-700">
+                    {totalLeads > 0 ? ((analytics?.leads_won || 0) / totalLeads * 100).toFixed(0) : 0}%
+                  </p>
+                  <p className="text-xs text-emerald-600">win rate</p>
+                </div>
+              </div>
+            </Card>
+            <Card className="p-4 bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-full bg-red-200 flex items-center justify-center">
+                  <XCircle className="h-6 w-6 text-red-700" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-red-600">LOST</p>
+                  <p className="text-3xl font-bold text-red-700">{analytics?.leads_lost || 0}</p>
+                </div>
+                <div className="ml-auto text-right">
+                  <p className="text-2xl font-bold text-red-700">
+                    {totalLeads > 0 ? ((analytics?.leads_lost || 0) / totalLeads * 100).toFixed(0) : 0}%
+                  </p>
+                  <p className="text-xs text-red-600">loss rate</p>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
