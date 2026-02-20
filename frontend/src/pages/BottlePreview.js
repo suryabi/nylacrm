@@ -138,6 +138,11 @@ export default function BottlePreview() {
   const [logoShape, setLogoShape] = useState('original'); // 'original', 'circle', 'square'
   const [logoScale, setLogoScale] = useState(100); // percentage
 
+  // Logo position state (for dragging)
+  const [logoPosition, setLogoPosition] = useState({ x: 50, y: 50 }); // percentage from center
+  const [isDragging, setIsDragging] = useState(false);
+  const bottleContainerRef = useRef(null);
+
   const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
     setCroppedAreaPixels(croppedAreaPixels);
   }, []);
