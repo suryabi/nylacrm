@@ -194,6 +194,7 @@ export default function BottlePreview() {
     setCustomerName('');
     setLogoShape('original');
     setLogoScale(100);
+    setLogoPosition({ x: 50, y: 50 });
     setShowCropper(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -205,8 +206,69 @@ export default function BottlePreview() {
       setLogoPreview(originalLogo);
       setLogoShape('original');
       setLogoScale(100);
+      setLogoPosition({ x: 50, y: 50 });
       toast.success('Edits reset to original');
     }
+  };
+
+  // Drag handlers for logo positioning
+  const handleMouseDown = (e) => {
+    if (!logoPreview) return;
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleMouseMove = useCallback((e) => {
+    if (!isDragging || !bottleContainerRef.current) return;
+    
+    const container = bottleContainerRef.current;
+    const rect = container.getBoundingClientRect();
+    
+    // Calculate position as percentage
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    
+    // Clamp values between 10% and 90% to keep logo visible
+    setLogoPosition({
+      x: Math.max(10, Math.min(90, x)),
+      y: Math.max(15, Math.min(85, y))
+    });
+  }, [isDragging]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // Touch handlers for mobile
+  const handleTouchStart = (e) => {
+    if (!logoPreview) return;
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = useCallback((e) => {
+    if (!isDragging || !bottleContainerRef.current) return;
+    
+    const touch = e.touches[0];
+    const container = bottleContainerRef.current;
+    const rect = container.getBoundingClientRect();
+    
+    const x = ((touch.clientX - rect.left) / rect.width) * 100;
+    const y = ((touch.clientY - rect.top) / rect.height) * 100;
+    
+    setLogoPosition({
+      x: Math.max(10, Math.min(90, x)),
+      y: Math.max(15, Math.min(85, y))
+    });
+  }, [isDragging]);
+
+  const handleTouchEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // Reset position to center
+  const handleResetPosition = () => {
+    setLogoPosition({ x: 50, y: 50 });
+    toast.success('Logo position reset to center');
   };
 
   const handleOpenCropper = () => {
