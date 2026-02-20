@@ -119,7 +119,7 @@ export default function COGSCalculator() {
   };
 
   const exportToExcel = () => {
-    const headers = ['SKU', 'Primary Packaging', 'Secondary Packaging', 'Manufacturing Cost', 'Gross Margin', 'Outbound Logistics', 'Total COGS', 'Ex-Factory Price', 'Min Landing Price', 'Last Edited By'];
+    const headers = ['SKU', 'Primary Packaging', 'Secondary Packaging', 'Manufacturing Cost', 'Gross Margin %', 'Outbound Logistics', 'Distribution Cost %', 'Total COGS', 'Gross Margin ₹', 'Ex-Factory Price', 'Base Cost', 'Min Landing Price', 'Last Edited By'];
     const rows = cogsData.map(row => [
       row.sku_name,
       row.primary_packaging_cost,
@@ -127,8 +127,11 @@ export default function COGSCalculator() {
       row.manufacturing_variable_cost,
       row.gross_margin,
       row.outbound_logistics_cost,
+      row.distribution_cost || 0,
       row.total_cogs,
+      ((row.total_cogs || 0) * (row.gross_margin || 0) / 100).toFixed(2),
       row.ex_factory_price,
+      row.base_cost,
       row.minimum_landing_price,
       row.editor_name || '-'
     ]);
