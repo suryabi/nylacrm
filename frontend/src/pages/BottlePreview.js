@@ -665,6 +665,34 @@ export default function BottlePreview() {
                   </div>
                 </div>
 
+                {/* Position Controls */}
+                <div>
+                  <Label className="text-sm text-muted-foreground mb-2 block">
+                    <Move className="h-4 w-4 inline mr-1" />
+                    Logo Position
+                  </Label>
+                  <div className="bg-secondary/50 rounded-xl p-3 space-y-2">
+                    <p className="text-xs text-muted-foreground text-center">
+                      Drag the logo on the bottle to reposition it
+                    </p>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">X: {Math.round(logoPosition.x)}%</span>
+                      <span className="text-muted-foreground">Y: {Math.round(logoPosition.y)}%</span>
+                    </div>
+                    <Button
+                      onClick={handleResetPosition}
+                      variant="outline"
+                      size="sm"
+                      className="w-full h-9 rounded-lg text-xs"
+                      disabled={logoPosition.x === 50 && logoPosition.y === 50}
+                      data-testid="reset-position-btn"
+                    >
+                      <RotateCw className="h-3 w-3 mr-1" />
+                      Reset to Center
+                    </Button>
+                  </div>
+                </div>
+
                 {/* Reset Edits */}
                 <Button
                   onClick={handleResetEdits}
