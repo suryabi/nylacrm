@@ -48,6 +48,7 @@ export default function COGSCalculator() {
     const manufacturing = parseFloat(row.manufacturing_variable_cost) || 0;
     const marginPercent = parseFloat(row.gross_margin) || 0;
     const logistics = parseFloat(row.outbound_logistics_cost) || 0;
+    const distributionPercent = parseFloat(row.distribution_cost) || 0;
     
     // Calculate COGS
     const totalCOGS = primary + secondary + manufacturing;
@@ -58,13 +59,27 @@ export default function COGSCalculator() {
     // Calculate Ex-Factory Price
     const exFactory = totalCOGS + grossMarginRupees;
     
+    // Calculate Base Cost (what should remain after distribution cost is paid)
+    // Base Cost = Primary + Secondary + Mfg + Gross Margin (₹) + Logistics
+    const baseCost = primary + secondary + manufacturing + grossMarginRupees + logistics;
+    
     // Calculate Minimum Landing Price
-    const landingPrice = exFactory + logistics;
+    // Formula: Min Landing - (Min Landing × Distribution %) = Base Cost
+    // So: Min Landing = Base Cost / (1 - Distribution %)
+    let landingPrice;
+    if (distributionPercent >= 100) {
+      landingPrice = 0; // Invalid: distribution can't be 100% or more
+    } else if (distributionPercent > 0) {
+      landingPrice = baseCost / (1 - distributionPercent / 100);
+    } else {
+      landingPrice = baseCost; // No distribution cost
+    }
     
     // Update computed fields
     newData[index].total_cogs = totalCOGS;
     newData[index].ex_factory_price = exFactory;
     newData[index].minimum_landing_price = landingPrice;
+    newData[index].base_cost = baseCost;
     
     setCogsData(newData);
     setHasChanges(true);
