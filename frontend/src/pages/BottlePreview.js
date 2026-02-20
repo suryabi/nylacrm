@@ -741,8 +741,8 @@ export default function BottlePreview() {
 
         {/* Live Preview Section */}
         <div className="space-y-6">
-          <Card className="p-8 bg-gradient-to-br from-background to-secondary border border-border rounded-2xl">
-            <div className="flex justify-between items-center mb-6">
+          <Card className="p-6 bg-card border border-border rounded-2xl overflow-hidden">
+            <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold">Live Preview</h2>
               {logoPreview && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -754,7 +754,10 @@ export default function BottlePreview() {
             
             <div 
               ref={bottleContainerRef}
-              className={`relative bg-white rounded-2xl p-6 min-h-[600px] flex items-center justify-center select-none ${logoPreview ? 'cursor-move' : ''}`}
+              className={`relative rounded-xl min-h-[650px] flex items-center justify-center select-none ${logoPreview ? 'cursor-move' : ''}`}
+              style={{
+                background: 'linear-gradient(180deg, #6b7280 0%, #9ca3af 50%, #e5e7eb 100%)'
+              }}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
@@ -764,18 +767,17 @@ export default function BottlePreview() {
             >
               {!logoPreview ? (
                 <div className="text-center">
-                  <div className="h-24 w-24 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
-                    <Sparkles className="h-12 w-12 text-muted-foreground" />
+                  <div className="h-24 w-24 mx-auto mb-4 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
+                    <Sparkles className="h-12 w-12 text-white/70" />
                   </div>
-                  <p className="text-foreground-muted text-lg">Upload logo to see preview</p>
+                  <p className="text-white/80 text-lg font-medium">Upload logo to see preview</p>
                 </div>
               ) : (
-                <div className="relative w-full max-w-sm mx-auto">
+                <div className="relative w-full flex items-center justify-center py-4">
                   <img
                     src={BOTTLE_TEMPLATE}
                     alt="Nyla 24 Brand Clear Glass Bottle"
-                    className="w-full h-auto pointer-events-none"
-                    style={{ filter: 'drop-shadow(0 10px 30px rgba(0,0,0,0.1))' }}
+                    className="h-[580px] w-auto object-contain pointer-events-none"
                   />
                   
                   {/* Draggable Logo */}
@@ -785,8 +787,8 @@ export default function BottlePreview() {
                       left: `${logoPosition.x}%`,
                       top: `${logoPosition.y}%`,
                       transform: 'translate(-50%, -50%)',
-                      maxWidth: '60%',
-                      maxHeight: '40%'
+                      maxWidth: '35%',
+                      maxHeight: '25%'
                     }}
                     onMouseDown={handleMouseDown}
                     onTouchStart={handleTouchStart}
@@ -797,7 +799,7 @@ export default function BottlePreview() {
                       alt="Customer Logo"
                       className="max-h-full object-contain transition-transform duration-200 pointer-events-none"
                       style={{ 
-                        filter: `drop-shadow(0 2px 8px rgba(0,0,0,${isDragging ? '0.3' : '0.15'}))`,
+                        filter: `drop-shadow(0 2px 8px rgba(0,0,0,${isDragging ? '0.4' : '0.25'}))`,
                         transform: `scale(${logoScale / 100})`,
                         maxWidth: '150px',
                         maxHeight: '100px'
