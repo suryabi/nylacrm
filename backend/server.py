@@ -3475,6 +3475,141 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
         logger.error(f'Google Places API error: {str(e)}')
         raise HTTPException(status_code=500, detail=f'Search failed: {str(e)}')
 
+# ============= TRANSPORTATION CALCULATOR ROUTES =============
+
+@api_router.post("/transport/autocomplete")
+async def transport_autocomplete(params: dict, current_user: dict = Depends(get_current_user)):
+    """Autocomplete location names for transportation calculator"""
+    
+    input_text = params.get('input', '')
+    
+    if not input_text or len(input_text) < 3:
+        return {'predictions': []}
+    
+    try:
+        api_key = os.environ.get('GOOGLE_MAPS_API_KEY')
+        if not api_key:
+            return {'predictions': [], 'error': 'API key not configured'}
+        
+        async with httpx.AsyncClient() as client:
+            # Use Places API (New) - Text Search for autocomplete
+            text_search_url = "https://places.googleapis.com/v1/places:searchText"
+            
+            headers = {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': api_key,
+                'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.id,places.location'
+            }
+            
+            body = {
+                "textQuery": f"{input_text}, India",
+                "maxResultCount": 5
+            }
+            
+            response = await client.post(text_search_url, json=body, headers=headers)
+            data = response.json()
+            
+            if 'places' in data:
+                predictions = []
+                for place in data['places']:
+                    location = place.get('location', {})
+                    predictions.append({
+                        'description': place.get('formattedAddress', place.get('displayName', {}).get('text', '')),
+                        'place_id': place.get('id', ''),
+                        'name': place.get('displayName', {}).get('text', ''),
+                        'lat': location.get('latitude'),
+                        'lng': location.get('longitude')
+                    })
+                return {'predictions': predictions}
+            else:
+                return {'predictions': []}
+    
+    except Exception as e:
+        logger.error(f'Transport autocomplete error: {str(e)}')
+        return {'predictions': [], 'error': str(e)}
+
+@api_router.post("/transport/calculate-route")
+async def calculate_transport_route(params: dict, current_user: dict = Depends(get_current_user)):
+    """Calculate route between two locations using Google Directions API"""
+    
+    origin = params.get('origin', {})  # {lat, lng} or address string
+    destination = params.get('destination', {})  # {lat, lng} or address string
+    
+    if not origin or not destination:
+        raise HTTPException(status_code=400, detail='Origin and destination required')
+    
+    try:
+        api_key = os.environ.get('GOOGLE_MAPS_API_KEY')
+        if not api_key:
+            raise HTTPException(status_code=500, detail='Google Maps API key not configured')
+        
+        async with httpx.AsyncClient() as client:
+            # Build origin/destination strings
+            if isinstance(origin, dict) and 'lat' in origin:
+                origin_str = f"{origin['lat']},{origin['lng']}"
+            else:
+                origin_str = str(origin)
+            
+            if isinstance(destination, dict) and 'lat' in destination:
+                dest_str = f"{destination['lat']},{destination['lng']}"
+            else:
+                dest_str = str(destination)
+            
+            # Call Directions API
+            directions_url = "https://maps.googleapis.com/maps/api/directions/json"
+            params_dict = {
+                'origin': origin_str,
+                'destination': dest_str,
+                'key': api_key,
+                'mode': 'driving',
+                'region': 'in'
+            }
+            
+            response = await client.get(directions_url, params=params_dict)
+            data = response.json()
+            
+            if data.get('status') == 'OK' and data.get('routes'):
+                route = data['routes'][0]
+                leg = route['legs'][0]
+                
+                # Calculate distance in km
+                distance_meters = leg['distance']['value']
+                distance_km = distance_meters / 1000
+                
+                # Get duration
+                duration_text = leg['duration']['text']
+                duration_seconds = leg['duration']['value']
+                
+                # Estimate tolls based on distance and route summary
+                route_summary = route.get('summary', '').lower()
+                uses_highway = 'nh' in route_summary or 'highway' in route_summary or 'expressway' in route_summary or distance_km > 100
+                
+                toll_count = 0
+                if uses_highway and distance_km >= 50:
+                    toll_count = max(1, int(distance_km / 70))
+                
+                return {
+                    'success': True,
+                    'distance_km': round(distance_km, 1),
+                    'duration_text': duration_text,
+                    'duration_seconds': duration_seconds,
+                    'toll_count': toll_count,
+                    'route_summary': route.get('summary', ''),
+                    'start_address': leg.get('start_address', ''),
+                    'end_address': leg.get('end_address', ''),
+                    'polyline': route.get('overview_polyline', {}).get('points', '')
+                }
+            else:
+                error_msg = data.get('error_message', data.get('status', 'Unknown error'))
+                return {
+                    'success': False,
+                    'error': error_msg
+                }
+    
+    except Exception as e:
+        logger.error(f'Route calculation error: {str(e)}')
+        raise HTTPException(status_code=500, detail=f'Route calculation failed: {str(e)}')
+
 # ============= LEAVE MANAGEMENT ROUTES =============
 
 @api_router.post("/leave-requests", response_model=LeaveRequest)
