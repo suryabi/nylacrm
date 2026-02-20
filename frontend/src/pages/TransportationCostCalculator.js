@@ -79,40 +79,31 @@ export default function TransportationCostCalculator() {
       return;
     }
     
+    // Check for existing Google Maps errors
+    const checkForErrors = () => {
+      const errorElements = document.querySelectorAll('.gm-err-message, .gm-style-cc');
+      if (errorElements.length > 0) {
+        setMapError(true);
+        setManualMode(true);
+        return true;
+      }
+      return false;
+    };
+    
     // Check if script already loaded
     if (window.google && window.google.maps) {
-      initializeMap();
+      // Check if there's an error before initializing
+      setTimeout(() => {
+        if (!checkForErrors()) {
+          initializeMap();
+        }
+      }, 100);
       return;
     }
     
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places,geometry&callback=initGoogleMaps`;
-    script.async = true;
-    script.defer = true;
-    script.onerror = () => {
-      setMapError(true);
-      setManualMode(true);
-    };
-    
-    window.initGoogleMaps = () => {
-      try {
-        initializeMap();
-      } catch (error) {
-        console.error('Failed to initialize Google Maps:', error);
-        setMapError(true);
-        setManualMode(true);
-      }
-    };
-    
-    document.head.appendChild(script);
-    
-    // Check for Google Maps errors after a delay
-    setTimeout(() => {
-      if (!mapInstanceRef.current) {
-        setMapError(true);
-        setManualMode(true);
-      }
-    }, 5000);
+    // Set manual mode by default since we know the API has issues
+    setMapError(true);
+    setManualMode(true);
     
     return () => {
       delete window.initGoogleMaps;
