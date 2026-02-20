@@ -495,10 +495,12 @@ export default function LeadsList() {
                     onClick={() => navigate(`/leads/${lead.id}`)}
                     data-testid={`lead-row-${lead.id}`}
                   >
-                    <TableCell className="font-mono text-xs text-muted-foreground" data-testid={`lead-id-${lead.id}`}>
-                      {lead.lead_id || '-'}
+                    <TableCell data-testid={`lead-cell-${lead.id}`}>
+                      <div>
+                        <p className="font-medium text-primary">{lead.company || lead.name}</p>
+                        <p className="text-xs text-muted-foreground font-mono">{lead.lead_id || '-'}</p>
+                      </div>
                     </TableCell>
-                    <TableCell className="font-medium">{lead.company || lead.name}</TableCell>
                     <TableCell>{lead.city}</TableCell>
                     <TableCell>
                       {lead.assigned_to 
@@ -537,13 +539,6 @@ export default function LeadsList() {
                       <Badge className={statusColors[lead.status]}>
                         {getStatusLabel(lead.status)}
                       </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {lead.total_net_invoice_value ? (
-                        <span className="text-sm font-medium text-green-600">
-                          ₹{lead.total_net_invoice_value.toLocaleString('en-IN')}
-                        </span>
-                      ) : '-'}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button
