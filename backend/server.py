@@ -528,10 +528,12 @@ class COGSData(BaseModel):
     manufacturing_variable_cost: float = 0.0
     gross_margin: float = 0.0
     outbound_logistics_cost: float = 0.0
+    distribution_cost: float = 0.0  # Distribution cost percentage
     
     # Computed (stored for reference)
     total_cogs: float = 0.0
     ex_factory_price: float = 0.0
+    base_cost: float = 0.0
     minimum_landing_price: float = 0.0
     
     # Metadata
@@ -544,7 +546,8 @@ class COGSDataUpdate(BaseModel):
     secondary_packaging_cost: Optional[float] = None
     manufacturing_variable_cost: Optional[float] = None
     gross_margin: Optional[float] = None
-    outbound_logistics_cost: Optional[float] = None  # User enters percentage
+    outbound_logistics_cost: Optional[float] = None
+    distribution_cost: Optional[float] = None  # Distribution cost percentage
 
 class Invoice(BaseModel):
     """Invoice data received from ActiveMQ"""
