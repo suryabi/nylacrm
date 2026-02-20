@@ -8,7 +8,7 @@ import { Slider } from '../components/ui/slider';
 import { toast } from 'sonner';
 import { 
   Upload, Download, RotateCcw, Loader2, Sparkles, 
-  Crop, Circle, Square, Eraser, ZoomIn, Check, X
+  Crop, Circle, Square, Eraser, ZoomIn, Check, X, Move, RotateCw
 } from 'lucide-react';
 import axios from 'axios';
 
