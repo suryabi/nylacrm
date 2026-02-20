@@ -750,10 +750,24 @@ export default function BottlePreview() {
         {/* Live Preview Section */}
         <div className="space-y-6">
           <Card className="p-8 bg-gradient-to-br from-background to-secondary border border-border rounded-2xl">
-            <h2 className="text-lg font-semibold mb-6">Live Preview</h2>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg font-semibold">Live Preview</h2>
+              {logoPreview && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Move className="h-4 w-4" />
+                  <span>Drag logo to reposition</span>
+                </div>
+              )}
+            </div>
             
             <div 
-              className="relative bg-white rounded-2xl p-12 min-h-[600px] flex items-center justify-center"
+              ref={bottleContainerRef}
+              className={`relative bg-white rounded-2xl p-6 min-h-[600px] flex items-center justify-center select-none ${logoPreview ? 'cursor-move' : ''}`}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
               data-testid="bottle-preview-area"
             >
               {!logoPreview ? (
@@ -768,34 +782,41 @@ export default function BottlePreview() {
                   <img
                     src={BOTTLE_TEMPLATE}
                     alt="Nyla 24 Brand Clear Glass Bottle"
-                    className="w-full h-auto"
+                    className="w-full h-auto pointer-events-none"
                     style={{ filter: 'drop-shadow(0 10px 30px rgba(0,0,0,0.1))' }}
                   />
                   
+                  {/* Draggable Logo */}
                   <div
-                    className="absolute"
+                    className={`absolute cursor-grab active:cursor-grabbing transition-all duration-75 ${isDragging ? 'scale-105 z-10' : ''}`}
                     style={{
-                      top: LABEL_AREA.top,
-                      left: LABEL_AREA.left,
-                      width: LABEL_AREA.width,
-                      height: LABEL_AREA.height,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: '8px'
+                      left: `${logoPosition.x}%`,
+                      top: `${logoPosition.y}%`,
+                      transform: 'translate(-50%, -50%)',
+                      maxWidth: '60%',
+                      maxHeight: '40%'
                     }}
+                    onMouseDown={handleMouseDown}
+                    onTouchStart={handleTouchStart}
+                    data-testid="draggable-logo-container"
                   >
                     <img
                       src={logoPreview}
                       alt="Customer Logo"
-                      className="max-h-full object-contain transition-transform duration-200"
+                      className="max-h-full object-contain transition-transform duration-200 pointer-events-none"
                       style={{ 
-                        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))',
+                        filter: `drop-shadow(0 2px 8px rgba(0,0,0,${isDragging ? '0.3' : '0.15'}))`,
                         transform: `scale(${logoScale / 100})`,
-                        maxWidth: `${logoScale}%`
+                        maxWidth: '150px',
+                        maxHeight: '100px'
                       }}
                       data-testid="preview-logo-img"
                     />
+                    {isDragging && (
+                      <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-black/70 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                        Release to place
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -819,6 +840,11 @@ export default function BottlePreview() {
                 {logoScale !== 100 && (
                   <span className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-full">
                     Size: {logoScale}%
+                  </span>
+                )}
+                {(logoPosition.x !== 50 || logoPosition.y !== 50) && (
+                  <span className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-full">
+                    Position: {Math.round(logoPosition.x)}%, {Math.round(logoPosition.y)}%
                   </span>
                 )}
               </div>
