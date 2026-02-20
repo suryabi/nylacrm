@@ -34,11 +34,14 @@ Build a comprehensive, mobile-ready Sales CRM application with:
   - Shape changes: Original, Circle, Square options
   - Client-side background removal (threshold-based for white/light backgrounds)
   - Logo resizing with slider (30%-150% scale)
+  - **Draggable logo positioning**: Click and drag logo on bottle to reposition
+  - Position controls with X/Y coordinates and Reset to Center button
+  - Touch support for mobile drag
   - Live preview updates on bottle template
   - Reset Edits and Reset All functionality
   - Download edited logo
   - Save to History integration
-  - Status: VERIFIED - All 20 frontend tests passed (100% success rate)
+  - Status: VERIFIED - All 30 frontend tests passed (100% success rate)
 
 ### Feb 19, 2026 (Session 2)
 - **FEATURE**: Convert Lead to Account
