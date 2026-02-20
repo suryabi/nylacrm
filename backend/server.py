@@ -763,7 +763,7 @@ async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: d
     update_data = updates.model_dump(exclude_none=True)
     
     # Calculate computed values
-    if any(k in update_data for k in ['primary_packaging_cost', 'secondary_packaging_cost', 'manufacturing_variable_cost', 'gross_margin', 'outbound_logistics_cost']):
+    if any(k in update_data for k in ['primary_packaging_cost', 'secondary_packaging_cost', 'manufacturing_variable_cost', 'gross_margin', 'outbound_logistics_cost', 'distribution_cost']):
         existing = await db.cogs_data.find_one({'id': sku_id}, {'_id': 0})
         if existing:
             # Merge with existing data
@@ -772,15 +772,28 @@ async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: d
             manufacturing = update_data.get('manufacturing_variable_cost', existing.get('manufacturing_variable_cost', 0))
             margin = update_data.get('gross_margin', existing.get('gross_margin', 0))
             logistics = update_data.get('outbound_logistics_cost', existing.get('outbound_logistics_cost', 0))
+            distribution = update_data.get('distribution_cost', existing.get('distribution_cost', 0))
             
             # Calculate
             total_cogs = primary + secondary + manufacturing
             gross_margin_rupees = total_cogs * (margin / 100)  # Convert % to rupees
             ex_factory = total_cogs + gross_margin_rupees
-            landing_price = ex_factory + logistics
+            
+            # Base Cost = Primary + Secondary + Mfg + Gross Margin (₹) + Logistics
+            base_cost = primary + secondary + manufacturing + gross_margin_rupees + logistics
+            
+            # Minimum Landing = Base Cost / (1 - Distribution %)
+            # After paying distribution cost %, remaining amount = base cost
+            if distribution >= 100:
+                landing_price = 0  # Invalid: distribution can't be 100% or more
+            elif distribution > 0:
+                landing_price = base_cost / (1 - distribution / 100)
+            else:
+                landing_price = base_cost  # No distribution cost
             
             update_data['total_cogs'] = total_cogs
             update_data['ex_factory_price'] = ex_factory
+            update_data['base_cost'] = base_cost
             update_data['minimum_landing_price'] = landing_price
     
     # Track editor
