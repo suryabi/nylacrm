@@ -3,12 +3,10 @@ import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { 
   Truck, MapPin, Route, Fuel, Calculator, 
-  Package, DollarSign, Navigation, RefreshCw,
-  ChevronDown, Info
+  Navigation, RefreshCw, Info, AlertTriangle
 } from 'lucide-react';
 import {
   Select,
@@ -30,6 +28,7 @@ const DEFAULTS = {
   driverExpenses: 1500,
   loadingUnloading: 1000,
   maintenanceProvision: 500,
+  tollCostPerToll: 100,
 };
 
 const TRUCK_TYPES = [
@@ -47,6 +46,8 @@ export default function TransportationCostCalculator() {
   const [duration, setDuration] = useState('');
   const [tollCount, setTollCount] = useState(0);
   const [routeCalculated, setRouteCalculated] = useState(false);
+  const [mapError, setMapError] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
   
   // Vehicle & Cost inputs
   const [truckType, setTruckType] = useState('eicher_20ft');
@@ -58,6 +59,7 @@ export default function TransportationCostCalculator() {
   const [driverExpenses, setDriverExpenses] = useState(DEFAULTS.driverExpenses);
   const [loadingUnloading, setLoadingUnloading] = useState(DEFAULTS.loadingUnloading);
   const [maintenanceProvision, setMaintenanceProvision] = useState(DEFAULTS.maintenanceProvision);
+  const [tollCostPerToll, setTollCostPerToll] = useState(DEFAULTS.tollCostPerToll);
   
   // Refs
   const mapRef = useRef(null);
@@ -72,7 +74,8 @@ export default function TransportationCostCalculator() {
   // Load Google Maps Script
   useEffect(() => {
     if (!GOOGLE_MAPS_API_KEY) {
-      toast.error('Google Maps API key not configured');
+      setMapError(true);
+      setManualMode(true);
       return;
     }
     
@@ -86,12 +89,30 @@ export default function TransportationCostCalculator() {
     script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places,geometry&callback=initGoogleMaps`;
     script.async = true;
     script.defer = true;
+    script.onerror = () => {
+      setMapError(true);
+      setManualMode(true);
+    };
     
     window.initGoogleMaps = () => {
-      initializeMap();
+      try {
+        initializeMap();
+      } catch (error) {
+        console.error('Failed to initialize Google Maps:', error);
+        setMapError(true);
+        setManualMode(true);
+      }
     };
     
     document.head.appendChild(script);
+    
+    // Check for Google Maps errors after a delay
+    setTimeout(() => {
+      if (!mapInstanceRef.current) {
+        setMapError(true);
+        setManualMode(true);
+      }
+    }, 5000);
     
     return () => {
       delete window.initGoogleMaps;
@@ -99,72 +120,84 @@ export default function TransportationCostCalculator() {
   }, []);
   
   const initializeMap = () => {
-    if (!mapRef.current || !window.google) return;
-    
-    // Initialize map centered on India
-    mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
-      center: { lat: 20.5937, lng: 78.9629 },
-      zoom: 5,
-      mapTypeControl: false,
-      streetViewControl: false,
-      fullscreenControl: true,
-    });
-    
-    directionsServiceRef.current = new window.google.maps.DirectionsService();
-    directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
-      map: mapInstanceRef.current,
-      suppressMarkers: false,
-      polylineOptions: {
-        strokeColor: '#10B981',
-        strokeWeight: 5,
-      },
-    });
-    
-    // Initialize autocomplete for From location
-    if (fromInputRef.current) {
-      fromAutocompleteRef.current = new window.google.maps.places.Autocomplete(fromInputRef.current, {
-        componentRestrictions: { country: 'in' },
-        fields: ['formatted_address', 'geometry', 'name'],
-      });
-      
-      fromAutocompleteRef.current.addListener('place_changed', () => {
-        const place = fromAutocompleteRef.current.getPlace();
-        if (place.geometry) {
-          setFromLocation(place.formatted_address || place.name);
-          setFromCoords({
-            lat: place.geometry.location.lat(),
-            lng: place.geometry.location.lng(),
-          });
-        }
-      });
+    if (!mapRef.current || !window.google || !window.google.maps) {
+      setMapError(true);
+      setManualMode(true);
+      return;
     }
     
-    // Initialize autocomplete for To location
-    if (toInputRef.current) {
-      toAutocompleteRef.current = new window.google.maps.places.Autocomplete(toInputRef.current, {
-        componentRestrictions: { country: 'in' },
-        fields: ['formatted_address', 'geometry', 'name'],
+    try {
+      // Initialize map centered on India
+      mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
+        center: { lat: 20.5937, lng: 78.9629 },
+        zoom: 5,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: true,
       });
       
-      toAutocompleteRef.current.addListener('place_changed', () => {
-        const place = toAutocompleteRef.current.getPlace();
-        if (place.geometry) {
-          setToLocation(place.formatted_address || place.name);
-          setToCoords({
-            lat: place.geometry.location.lat(),
-            lng: place.geometry.location.lng(),
-          });
-        }
+      directionsServiceRef.current = new window.google.maps.DirectionsService();
+      directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
+        map: mapInstanceRef.current,
+        suppressMarkers: false,
+        polylineOptions: {
+          strokeColor: '#10B981',
+          strokeWeight: 5,
+        },
       });
+      
+      // Initialize autocomplete for From location
+      if (fromInputRef.current && window.google.maps.places) {
+        fromAutocompleteRef.current = new window.google.maps.places.Autocomplete(fromInputRef.current, {
+          componentRestrictions: { country: 'in' },
+          fields: ['formatted_address', 'geometry', 'name'],
+        });
+        
+        fromAutocompleteRef.current.addListener('place_changed', () => {
+          const place = fromAutocompleteRef.current.getPlace();
+          if (place.geometry) {
+            setFromLocation(place.formatted_address || place.name);
+            setFromCoords({
+              lat: place.geometry.location.lat(),
+              lng: place.geometry.location.lng(),
+            });
+          }
+        });
+      }
+      
+      // Initialize autocomplete for To location
+      if (toInputRef.current && window.google.maps.places) {
+        toAutocompleteRef.current = new window.google.maps.places.Autocomplete(toInputRef.current, {
+          componentRestrictions: { country: 'in' },
+          fields: ['formatted_address', 'geometry', 'name'],
+        });
+        
+        toAutocompleteRef.current.addListener('place_changed', () => {
+          const place = toAutocompleteRef.current.getPlace();
+          if (place.geometry) {
+            setToLocation(place.formatted_address || place.name);
+            setToCoords({
+              lat: place.geometry.location.lat(),
+              lng: place.geometry.location.lng(),
+            });
+          }
+        });
+      }
+      
+      setMapError(false);
+    } catch (error) {
+      console.error('Error initializing map:', error);
+      setMapError(true);
+      setManualMode(true);
     }
   };
   
   // Calculate route when both locations are set
   useEffect(() => {
-    if (fromCoords && toCoords && directionsServiceRef.current) {
+    if (fromCoords && toCoords && directionsServiceRef.current && !mapError) {
       calculateRoute();
     }
-  }, [fromCoords, toCoords]);
+  }, [fromCoords, toCoords, mapError]);
   
   const calculateRoute = () => {
     if (!directionsServiceRef.current || !fromCoords || !toCoords) return;
@@ -190,7 +223,6 @@ export default function TransportationCostCalculator() {
         setDuration(leg.duration.text);
         
         // Estimate toll count based on distance and route
-        // This is an approximation since Google doesn't provide exact toll count
         const estimatedTolls = estimateTollCount(distanceKm, route);
         setTollCount(estimatedTolls);
         
@@ -204,20 +236,25 @@ export default function TransportationCostCalculator() {
   
   // Estimate toll count based on distance and highway usage
   const estimateTollCount = (distanceKm, route) => {
-    // Rough estimate: 1 toll every 60-80 km on highways in India
-    // Check if route uses highways
-    const summary = route.summary.toLowerCase();
+    const summary = route?.summary?.toLowerCase() || '';
     const usesHighway = summary.includes('nh') || summary.includes('highway') || 
                         summary.includes('expressway') || distanceKm > 100;
     
     if (!usesHighway || distanceKm < 50) return 0;
     
-    // Estimate based on distance
-    const avgTollInterval = 70; // km
+    const avgTollInterval = 70;
     const estimatedTolls = Math.floor(distanceKm / avgTollInterval);
     
     return Math.max(1, estimatedTolls);
   };
+  
+  // Auto-estimate tolls when distance changes in manual mode
+  useEffect(() => {
+    if (manualMode && distance > 0) {
+      const estimatedTolls = Math.max(0, Math.floor(distance / 70));
+      setTollCount(estimatedTolls);
+    }
+  }, [distance, manualMode]);
   
   // Cost calculations
   const calculateCosts = useCallback(() => {
@@ -241,9 +278,8 @@ export default function TransportationCostCalculator() {
     const dieselReturn = (distance / mileageEmpty) * dieselPrice;
     const totalDiesel = dieselForward + dieselReturn;
     
-    // Toll cost estimation (average ₹80-120 per toll in India)
-    const avgTollCost = 100;
-    const tollsCost = tollCount * avgTollCost * 2; // Round trip
+    // Toll cost (round trip)
+    const tollsCost = tollCount * tollCostPerToll * 2;
     
     // Total cost
     const totalCost = totalDiesel + tollsCost + driverExpenses + loadingUnloading + maintenanceProvision;
@@ -264,7 +300,7 @@ export default function TransportationCostCalculator() {
       costPerCrate: Math.round(costPerCrate * 100) / 100,
       costPerBottle: Math.round(costPerBottle * 100) / 100,
     };
-  }, [distance, mileageLoaded, mileageEmpty, dieselPrice, tollCount, driverExpenses, loadingUnloading, maintenanceProvision, crates, bottles]);
+  }, [distance, mileageLoaded, mileageEmpty, dieselPrice, tollCount, tollCostPerToll, driverExpenses, loadingUnloading, maintenanceProvision, crates, bottles]);
   
   const costs = calculateCosts();
   
@@ -286,6 +322,7 @@ export default function TransportationCostCalculator() {
     setDriverExpenses(DEFAULTS.driverExpenses);
     setLoadingUnloading(DEFAULTS.loadingUnloading);
     setMaintenanceProvision(DEFAULTS.maintenanceProvision);
+    setTollCostPerToll(DEFAULTS.tollCostPerToll);
     
     if (directionsRendererRef.current) {
       directionsRendererRef.current.setDirections({ routes: [] });
@@ -322,6 +359,16 @@ export default function TransportationCostCalculator() {
               Route Selection
             </h2>
             
+            {mapError && (
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-amber-800">Google Maps not available</p>
+                  <p className="text-amber-700">Please enter distance and toll count manually below.</p>
+                </div>
+              </div>
+            )}
+            
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="fromLocation">From Location</Label>
@@ -334,6 +381,8 @@ export default function TransportationCostCalculator() {
                     placeholder="Enter origin city or address..."
                     className="w-full h-11 pl-10 pr-4 border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary"
                     data-testid="from-location-input"
+                    value={manualMode ? fromLocation : undefined}
+                    onChange={manualMode ? (e) => setFromLocation(e.target.value) : undefined}
                   />
                 </div>
               </div>
@@ -349,12 +398,44 @@ export default function TransportationCostCalculator() {
                     placeholder="Enter destination city or address..."
                     className="w-full h-11 pl-10 pr-4 border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary"
                     data-testid="to-location-input"
+                    value={manualMode ? toLocation : undefined}
+                    onChange={manualMode ? (e) => setToLocation(e.target.value) : undefined}
                   />
                 </div>
               </div>
               
-              {/* Route Info */}
-              {routeCalculated && (
+              {/* Manual Distance & Toll Input (when map is not available or in manual mode) */}
+              {(mapError || manualMode) && (
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                  <div className="space-y-2">
+                    <Label>Distance (One Way) *</Label>
+                    <div className="relative">
+                      <Input 
+                        type="number"
+                        value={distance}
+                        onChange={e => setDistance(parseFloat(e.target.value) || 0)}
+                        className="pr-12"
+                        placeholder="Enter distance"
+                        data-testid="manual-distance-input"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">km</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Number of Tolls (One Way)</Label>
+                    <Input 
+                      type="number"
+                      value={tollCount}
+                      onChange={e => setTollCount(parseInt(e.target.value) || 0)}
+                      placeholder="Enter toll count"
+                      data-testid="manual-toll-input"
+                    />
+                  </div>
+                </div>
+              )}
+              
+              {/* Route Info (when calculated from map) */}
+              {routeCalculated && !mapError && (
                 <div className="grid grid-cols-3 gap-3 pt-4 border-t">
                   <div className="bg-blue-50 p-3 rounded-lg text-center">
                     <p className="text-xs text-blue-600 font-medium">DISTANCE (One Way)</p>
@@ -373,19 +454,29 @@ export default function TransportationCostCalculator() {
             </div>
           </Card>
 
-          {/* Map */}
+          {/* Map or Placeholder */}
           <Card className="overflow-hidden">
-            <div 
-              ref={mapRef} 
-              className="w-full h-[400px] bg-muted"
-              data-testid="route-map"
-            >
-              {!GOOGLE_MAPS_API_KEY && (
-                <div className="h-full flex items-center justify-center text-muted-foreground">
-                  <p>Google Maps API key not configured</p>
+            {mapError ? (
+              <div className="w-full h-[300px] bg-gradient-to-br from-slate-100 to-slate-200 flex flex-col items-center justify-center p-6">
+                <div className="bg-white p-6 rounded-xl shadow-sm text-center max-w-md">
+                  <Route className="h-12 w-12 text-primary mx-auto mb-4" />
+                  <h3 className="font-semibold text-lg mb-2">Manual Distance Entry</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Enter the route distance and toll count in the fields above. 
+                    You can use Google Maps externally to find the distance.
+                  </p>
+                  <div className="text-xs text-muted-foreground bg-muted p-2 rounded">
+                    Tip: Average toll interval on Indian highways is ~70 km
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div 
+                ref={mapRef} 
+                className="w-full h-[400px] bg-muted"
+                data-testid="route-map"
+              />
+            )}
           </Card>
         </div>
 
@@ -416,19 +507,21 @@ export default function TransportationCostCalculator() {
                 </Select>
               </div>
               
-              {/* Distance (read-only) */}
-              <div className="space-y-2">
-                <Label>Distance (One Way)</Label>
-                <div className="relative">
-                  <Input 
-                    value={distance} 
-                    readOnly 
-                    className="bg-muted pr-12"
-                    data-testid="distance-input"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">km</span>
+              {/* Distance (read-only when calculated from map) */}
+              {!mapError && !manualMode && (
+                <div className="space-y-2">
+                  <Label>Distance (One Way)</Label>
+                  <div className="relative">
+                    <Input 
+                      value={distance} 
+                      readOnly 
+                      className="bg-muted pr-12"
+                      data-testid="distance-input"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">km</span>
+                  </div>
                 </div>
-              </div>
+              )}
               
               {/* Diesel Price */}
               <div className="space-y-2">
@@ -443,6 +536,21 @@ export default function TransportationCostCalculator() {
                     data-testid="diesel-price-input"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">/litre</span>
+                </div>
+              </div>
+              
+              {/* Toll Cost per Toll */}
+              <div className="space-y-2">
+                <Label>Cost per Toll</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
+                  <Input 
+                    type="number"
+                    value={tollCostPerToll}
+                    onChange={e => setTollCostPerToll(parseFloat(e.target.value) || 0)}
+                    className="pl-7"
+                    data-testid="toll-cost-input"
+                  />
                 </div>
               </div>
               
@@ -582,7 +690,7 @@ export default function TransportationCostCalculator() {
                 <div className="flex justify-between py-2 border-b">
                   <span className="text-muted-foreground flex items-center gap-2">
                     <Route className="h-4 w-4" />
-                    Tolls (Round Trip) - {tollCount * 2} tolls × ₹100
+                    Tolls (Round Trip) - {tollCount * 2} tolls × ₹{tollCostPerToll}
                   </span>
                   <span className="font-medium">₹{costs.tollsCost.toLocaleString()}</span>
                 </div>
@@ -634,8 +742,8 @@ export default function TransportationCostCalculator() {
           <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
             <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
             <p>
-              Toll count is estimated based on route distance. Actual tolls may vary.
               All calculations update in real-time as you modify inputs.
+              {mapError && ' Enter distance manually using Google Maps or any mapping service.'}
             </p>
           </div>
         </div>
