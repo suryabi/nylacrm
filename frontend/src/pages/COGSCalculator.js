@@ -98,7 +98,8 @@ export default function COGSCalculator() {
             secondary_packaging_cost: parseFloat(row.secondary_packaging_cost) || 0,
             manufacturing_variable_cost: parseFloat(row.manufacturing_variable_cost) || 0,
             gross_margin: parseFloat(row.gross_margin) || 0,
-            outbound_logistics_cost: parseFloat(row.outbound_logistics_cost) || 0
+            outbound_logistics_cost: parseFloat(row.outbound_logistics_cost) || 0,
+            distribution_cost: parseFloat(row.distribution_cost) || 0
           },
           {
             headers: { Authorization: `Bearer ${token}` },
