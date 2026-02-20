@@ -14,16 +14,8 @@ import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
-// Clear glass bottle template for 24 Brand SKU
-const BOTTLE_TEMPLATE = 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=600&q=90';
-
-// Label area dimensions (percentage of bottle image) - Designated safe area
-const LABEL_AREA = {
-  top: '35%',
-  left: '25%',
-  width: '50%',
-  height: '25%'
-};
+// Nyla clear glass bottle template for 24 Brand SKU
+const BOTTLE_TEMPLATE = 'https://customer-assets.emergentagent.com/job_ca75408a-cd0b-4269-9030-efa58b12f03d/artifacts/rf1l1h54_openart-image_1771607748625_c0aca619_1771607748679_e23df17c.png';
 
 // Helper function to create cropped image
 const createCroppedImage = async (imageSrc, pixelCrop, shape = 'rectangle') => {
