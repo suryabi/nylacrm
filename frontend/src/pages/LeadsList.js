@@ -364,21 +364,11 @@ export default function LeadsList() {
                 <TableRow>
                   <TableHead>
                     <button
-                      onClick={() => handleSort('lead_id')}
-                      className="flex items-center hover:text-foreground font-semibold"
-                      data-testid="sort-lead-id"
-                    >
-                      Lead ID
-                      {getSortIcon('lead_id')}
-                    </button>
-                  </TableHead>
-                  <TableHead>
-                    <button
                       onClick={() => handleSort('company')}
                       className="flex items-center hover:text-foreground font-semibold"
                       data-testid="sort-company"
                     >
-                      Company
+                      Lead
                       {getSortIcon('company')}
                     </button>
                   </TableHead>
@@ -433,16 +423,6 @@ export default function LeadsList() {
                       {getSortIcon('status')}
                     </button>
                   </TableHead>
-                  <TableHead>
-                    <button
-                      onClick={() => handleSort('total_net_invoice_value')}
-                      className="flex items-center hover:text-foreground font-semibold"
-                      data-testid="sort-invoice"
-                    >
-                      Invoice Value
-                      {getSortIcon('total_net_invoice_value')}
-                    </button>
-                  </TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
                 
@@ -453,16 +433,7 @@ export default function LeadsList() {
                       type="text"
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
-                      placeholder="Search ID..."
-                      className="w-full px-2 py-1 text-xs border rounded"
-                    />
-                  </TableHead>
-                  <TableHead className="p-2">
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      placeholder="Search..."
+                      placeholder="Search lead..."
                       className="w-full px-2 py-1 text-xs border rounded"
                     />
                   </TableHead>
@@ -513,7 +484,6 @@ export default function LeadsList() {
                       <option value="future_followup">Future Follow up</option>
                     </select>
                   </TableHead>
-                  <TableHead className="p-2"></TableHead>
                   <TableHead className="p-2"></TableHead>
                 </TableRow>
               </TableHeader>
