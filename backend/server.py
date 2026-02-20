@@ -3530,7 +3530,7 @@ async def transport_autocomplete(params: dict, current_user: dict = Depends(get_
 
 @api_router.post("/transport/calculate-route")
 async def calculate_transport_route(params: dict, current_user: dict = Depends(get_current_user)):
-    """Calculate route between two locations using Google Directions API"""
+    """Calculate route between two locations using Google Routes API (New)"""
     
     origin = params.get('origin', {})  # {lat, lng} or address string
     destination = params.get('destination', {})  # {lat, lng} or address string
@@ -3544,45 +3544,81 @@ async def calculate_transport_route(params: dict, current_user: dict = Depends(g
             raise HTTPException(status_code=500, detail='Google Maps API key not configured')
         
         async with httpx.AsyncClient() as client:
-            # Build origin/destination strings
-            if isinstance(origin, dict) and 'lat' in origin:
-                origin_str = f"{origin['lat']},{origin['lng']}"
-            else:
-                origin_str = str(origin)
+            # Use Routes API (New)
+            routes_url = "https://routes.googleapis.com/directions/v2:computeRoutes"
             
-            if isinstance(destination, dict) and 'lat' in destination:
-                dest_str = f"{destination['lat']},{destination['lng']}"
-            else:
-                dest_str = str(destination)
-            
-            # Call Directions API
-            directions_url = "https://maps.googleapis.com/maps/api/directions/json"
-            params_dict = {
-                'origin': origin_str,
-                'destination': dest_str,
-                'key': api_key,
-                'mode': 'driving',
-                'region': 'in'
+            headers = {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': api_key,
+                'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.description,routes.legs.startLocation,routes.legs.endLocation'
             }
             
-            response = await client.get(directions_url, params=params_dict)
+            # Build origin waypoint
+            if isinstance(origin, dict) and 'lat' in origin and origin['lat']:
+                origin_waypoint = {
+                    "location": {
+                        "latLng": {
+                            "latitude": float(origin['lat']),
+                            "longitude": float(origin['lng'])
+                        }
+                    }
+                }
+            else:
+                origin_waypoint = {
+                    "address": str(origin)
+                }
+            
+            # Build destination waypoint
+            if isinstance(destination, dict) and 'lat' in destination and destination['lat']:
+                dest_waypoint = {
+                    "location": {
+                        "latLng": {
+                            "latitude": float(destination['lat']),
+                            "longitude": float(destination['lng'])
+                        }
+                    }
+                }
+            else:
+                dest_waypoint = {
+                    "address": str(destination)
+                }
+            
+            body = {
+                "origin": origin_waypoint,
+                "destination": dest_waypoint,
+                "travelMode": "DRIVE",
+                "routingPreference": "TRAFFIC_AWARE",
+                "computeAlternativeRoutes": False,
+                "languageCode": "en-US",
+                "units": "METRIC"
+            }
+            
+            response = await client.post(routes_url, json=body, headers=headers)
             data = response.json()
             
-            if data.get('status') == 'OK' and data.get('routes'):
+            if 'routes' in data and len(data['routes']) > 0:
                 route = data['routes'][0]
-                leg = route['legs'][0]
                 
                 # Calculate distance in km
-                distance_meters = leg['distance']['value']
+                distance_meters = route.get('distanceMeters', 0)
                 distance_km = distance_meters / 1000
                 
                 # Get duration
-                duration_text = leg['duration']['text']
-                duration_seconds = leg['duration']['value']
+                duration_str = route.get('duration', '0s')
+                # Parse duration string like "12345s" to seconds
+                duration_seconds = int(duration_str.replace('s', '')) if duration_str else 0
                 
-                # Estimate tolls based on distance and route summary
-                route_summary = route.get('summary', '').lower()
-                uses_highway = 'nh' in route_summary or 'highway' in route_summary or 'expressway' in route_summary or distance_km > 100
+                # Convert to human readable
+                hours = duration_seconds // 3600
+                minutes = (duration_seconds % 3600) // 60
+                if hours > 0:
+                    duration_text = f"{hours} hr {minutes} min"
+                else:
+                    duration_text = f"{minutes} min"
+                
+                # Estimate tolls based on distance
+                route_description = route.get('description', '').lower()
+                uses_highway = 'nh' in route_description or 'highway' in route_description or 'expressway' in route_description or distance_km > 100
                 
                 toll_count = 0
                 if uses_highway and distance_km >= 50:
@@ -3594,13 +3630,10 @@ async def calculate_transport_route(params: dict, current_user: dict = Depends(g
                     'duration_text': duration_text,
                     'duration_seconds': duration_seconds,
                     'toll_count': toll_count,
-                    'route_summary': route.get('summary', ''),
-                    'start_address': leg.get('start_address', ''),
-                    'end_address': leg.get('end_address', ''),
-                    'polyline': route.get('overview_polyline', {}).get('points', '')
+                    'route_summary': route.get('description', ''),
                 }
             else:
-                error_msg = data.get('error_message', data.get('status', 'Unknown error'))
+                error_msg = data.get('error', {}).get('message', 'No route found')
                 return {
                     'success': False,
                     'error': error_msg
