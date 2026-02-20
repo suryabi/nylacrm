@@ -150,13 +150,14 @@ export default function TransportationCostCalculator() {
         setRouteCalculated(true);
         toast.success('Route calculated successfully');
       } else {
-        toast.error(res.data.error || 'Could not calculate route');
-        // Allow manual entry
+        // Route API not available - allow manual entry
+        toast.info('Please enter distance manually. You can find it using Google Maps.');
         setRouteCalculated(false);
       }
     } catch (error) {
       console.error('Route calculation error:', error);
-      toast.error('Route calculation failed. Enter distance manually.');
+      // Don't show error toast, just allow manual entry
+      toast.info('Enter distance manually using Google Maps or other mapping service.');
     } finally {
       setCalculating(false);
     }
