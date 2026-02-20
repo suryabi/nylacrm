@@ -198,10 +198,12 @@ export default function COGSCalculator() {
                   <th className="text-right p-3 font-semibold bg-primary/5">Mfg Cost (₹)</th>
                   <th className="text-right p-3 font-semibold bg-primary/5">Gross Margin (%)</th>
                   <th className="text-right p-3 font-semibold bg-primary/5">Logistics (₹)</th>
+                  <th className="text-right p-3 font-semibold bg-amber-50">Dist. Cost (%)</th>
                   <th className="text-right p-3 font-semibold bg-green-50">Total COGS (₹)</th>
                   <th className="text-right p-3 font-semibold bg-green-50">Gross Margin (₹)</th>
                   <th className="text-right p-3 font-semibold bg-green-50">Ex-Factory (₹)</th>
-                  <th className="text-right p-3 font-semibold bg-green-50">Min Landing (₹)</th>
+                  <th className="text-right p-3 font-semibold bg-blue-50">Base Cost (₹)</th>
+                  <th className="text-right p-3 font-semibold bg-emerald-100">Min Landing (₹)</th>
                   <th className="text-left p-3 font-semibold">Last Edited</th>
                 </tr>
               </thead>
@@ -279,12 +281,27 @@ export default function COGSCalculator() {
                         placeholder="0.00"
                       />
                     </td>
+                    <td className="p-2 bg-amber-50/50">
+                      <input
+                        type="text"
+                        value={row.distribution_cost || ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                            updateField(index, 'distribution_cost', val);
+                          }
+                        }}
+                        className="w-20 h-9 text-right px-2 border rounded bg-background"
+                        placeholder="%"
+                      />
+                    </td>
                     <td className="p-3 text-right font-bold text-primary bg-green-50">{row.total_cogs?.toFixed(2)}</td>
                     <td className="p-3 text-right font-bold text-primary bg-green-50">
                       {((row.total_cogs || 0) * (row.gross_margin || 0) / 100).toFixed(2)}
                     </td>
                     <td className="p-3 text-right font-bold text-primary bg-green-50">{row.ex_factory_price?.toFixed(2)}</td>
-                    <td className="p-3 text-right font-bold text-green-600 bg-green-50">{row.minimum_landing_price?.toFixed(2)}</td>
+                    <td className="p-3 text-right font-semibold text-blue-600 bg-blue-50">{row.base_cost?.toFixed(2) || '0.00'}</td>
+                    <td className="p-3 text-right font-bold text-emerald-700 bg-emerald-100">{row.minimum_landing_price?.toFixed(2)}</td>
                     <td className="p-3 text-xs text-muted-foreground">
                       {row.editor_name || '-'}
                       {row.last_edited_at && (
