@@ -718,29 +718,183 @@ async def setup_production_database_endpoint(request: Request):
         raise HTTPException(status_code=500, detail=f'Setup failed: {str(e)}')
 
 
-# ============= MASTER SKU LIST =============
+# ============= SKU MANAGEMENT =============
 
-MASTER_SKUS = [
-    {'sku': '20L Premium', 'category': 'Jar', 'unit': '20L'},
-    {'sku': '20L Regular', 'category': 'Jar', 'unit': '20L'},
-    {'sku': '1L Pack (12)', 'category': 'Bottle', 'unit': '1L x 12'},
-    {'sku': '500ml Pack (24)', 'category': 'Bottle', 'unit': '500ml x 24'},
-    {'sku': '250ml Pack (48)', 'category': 'Bottle', 'unit': '250ml x 48'},
-    {'sku': '5L Can', 'category': 'Can', 'unit': '5L'},
-    {'sku': '2L Bottle', 'category': 'Bottle', 'unit': '2L'},
-    {'sku': 'Nyla – 600 ml / Silver', 'category': 'Premium', 'unit': '600ml'},
-    {'sku': 'Nyla – 330 ml / Silver', 'category': 'Premium', 'unit': '330ml'},
-    {'sku': 'Nyla – 660 ml / Gold', 'category': 'Premium', 'unit': '660ml'},
-    {'sku': 'Nyla – 330 ml / Gold', 'category': 'Premium', 'unit': '330ml'},
-    {'sku': 'Nyla – 660 ml / Sparkling', 'category': 'Sparkling', 'unit': '660ml'},
-    {'sku': 'Nyla – 330 ml / Sparkling', 'category': 'Sparkling', 'unit': '330ml'},
-    {'sku': '24 Brand', 'category': 'White Label', 'unit': 'Custom'},
+class SKUModel(BaseModel):
+    """Master SKU Model for the product catalog"""
+    model_config = ConfigDict(extra="allow")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    sku_name: str  # e.g., "20L Premium", "Nyla – 600 ml / Silver"
+    category: str  # e.g., "Jar", "Bottle", "Premium", "Sparkling", "White Label"
+    unit: str  # e.g., "20L", "600ml", "1L x 12"
+    description: Optional[str] = None
+    is_active: bool = True
+    sort_order: int = 0  # For custom ordering in dropdowns
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_by: Optional[str] = None
+
+class SKUCreate(BaseModel):
+    sku_name: str
+    category: str
+    unit: str
+    description: Optional[str] = None
+    is_active: bool = True
+    sort_order: int = 0
+
+class SKUUpdate(BaseModel):
+    sku_name: Optional[str] = None
+    category: Optional[str] = None
+    unit: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+# Default SKUs to seed if database is empty
+DEFAULT_SKUS = [
+    {'sku_name': '20L Premium', 'category': 'Jar', 'unit': '20L', 'sort_order': 1},
+    {'sku_name': '20L Regular', 'category': 'Jar', 'unit': '20L', 'sort_order': 2},
+    {'sku_name': '1L Pack (12)', 'category': 'Bottle', 'unit': '1L x 12', 'sort_order': 3},
+    {'sku_name': '500ml Pack (24)', 'category': 'Bottle', 'unit': '500ml x 24', 'sort_order': 4},
+    {'sku_name': '250ml Pack (48)', 'category': 'Bottle', 'unit': '250ml x 48', 'sort_order': 5},
+    {'sku_name': '5L Can', 'category': 'Can', 'unit': '5L', 'sort_order': 6},
+    {'sku_name': '2L Bottle', 'category': 'Bottle', 'unit': '2L', 'sort_order': 7},
+    {'sku_name': 'Nyla – 600 ml / Silver', 'category': 'Premium', 'unit': '600ml', 'sort_order': 8},
+    {'sku_name': 'Nyla – 330 ml / Silver', 'category': 'Premium', 'unit': '330ml', 'sort_order': 9},
+    {'sku_name': 'Nyla – 660 ml / Gold', 'category': 'Premium', 'unit': '660ml', 'sort_order': 10},
+    {'sku_name': 'Nyla – 330 ml / Gold', 'category': 'Premium', 'unit': '330ml', 'sort_order': 11},
+    {'sku_name': 'Nyla – 660 ml / Sparkling', 'category': 'Sparkling', 'unit': '660ml', 'sort_order': 12},
+    {'sku_name': 'Nyla – 330 ml / Sparkling', 'category': 'Sparkling', 'unit': '330ml', 'sort_order': 13},
+    {'sku_name': '24 Brand', 'category': 'White Label', 'unit': 'Custom', 'sort_order': 14},
 ]
 
+async def seed_default_skus():
+    """Seed default SKUs if the collection is empty"""
+    count = await db.master_skus.count_documents({})
+    if count == 0:
+        for sku_data in DEFAULT_SKUS:
+            sku = SKUModel(**sku_data)
+            doc = sku.model_dump()
+            doc['created_at'] = doc['created_at'].isoformat()
+            doc['updated_at'] = doc['updated_at'].isoformat()
+            await db.master_skus.insert_one(doc)
+        print(f"Seeded {len(DEFAULT_SKUS)} default SKUs")
+
 @api_router.get("/master-skus")
-async def get_master_skus(current_user: dict = Depends(get_current_user)):
-    """Get the master list of all available SKUs"""
-    return {'skus': MASTER_SKUS}
+async def get_master_skus(
+    include_inactive: bool = False,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get the master list of all available SKUs from database"""
+    # Seed defaults if empty
+    await seed_default_skus()
+    
+    query = {} if include_inactive else {'is_active': {'$ne': False}}
+    skus = await db.master_skus.find(query, {'_id': 0}).sort('sort_order', 1).to_list(200)
+    
+    # Transform to expected format for backward compatibility
+    formatted_skus = []
+    for sku in skus:
+        formatted_skus.append({
+            'id': sku.get('id'),
+            'sku': sku.get('sku_name'),
+            'sku_name': sku.get('sku_name'),
+            'category': sku.get('category'),
+            'unit': sku.get('unit'),
+            'description': sku.get('description'),
+            'is_active': sku.get('is_active', True),
+            'sort_order': sku.get('sort_order', 0)
+        })
+    
+    return {'skus': formatted_skus}
+
+@api_router.post("/master-skus")
+async def create_sku(
+    sku_data: SKUCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new SKU in the master list"""
+    # Check for duplicate SKU name
+    existing = await db.master_skus.find_one({'sku_name': sku_data.sku_name})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"SKU '{sku_data.sku_name}' already exists")
+    
+    sku = SKUModel(**sku_data.model_dump(), created_by=current_user.get('id'))
+    doc = sku.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    
+    await db.master_skus.insert_one(doc)
+    
+    return {
+        'id': sku.id,
+        'sku': sku.sku_name,
+        'sku_name': sku.sku_name,
+        'category': sku.category,
+        'unit': sku.unit,
+        'description': sku.description,
+        'is_active': sku.is_active,
+        'sort_order': sku.sort_order
+    }
+
+@api_router.put("/master-skus/{sku_id}")
+async def update_sku(
+    sku_id: str,
+    sku_data: SKUUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update an existing SKU"""
+    existing = await db.master_skus.find_one({'id': sku_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="SKU not found")
+    
+    # Check for duplicate name if changing name
+    if sku_data.sku_name and sku_data.sku_name != existing.get('sku_name'):
+        duplicate = await db.master_skus.find_one({'sku_name': sku_data.sku_name, 'id': {'$ne': sku_id}})
+        if duplicate:
+            raise HTTPException(status_code=400, detail=f"SKU '{sku_data.sku_name}' already exists")
+    
+    update_dict = {k: v for k, v in sku_data.model_dump().items() if v is not None}
+    update_dict['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.master_skus.update_one({'id': sku_id}, {'$set': update_dict})
+    
+    updated = await db.master_skus.find_one({'id': sku_id}, {'_id': 0})
+    return {
+        'id': updated.get('id'),
+        'sku': updated.get('sku_name'),
+        'sku_name': updated.get('sku_name'),
+        'category': updated.get('category'),
+        'unit': updated.get('unit'),
+        'description': updated.get('description'),
+        'is_active': updated.get('is_active', True),
+        'sort_order': updated.get('sort_order', 0)
+    }
+
+@api_router.delete("/master-skus/{sku_id}")
+async def delete_sku(
+    sku_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete (or deactivate) a SKU"""
+    existing = await db.master_skus.find_one({'id': sku_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="SKU not found")
+    
+    # Soft delete by marking as inactive instead of hard delete
+    await db.master_skus.update_one(
+        {'id': sku_id}, 
+        {'$set': {'is_active': False, 'updated_at': datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {'message': 'SKU deactivated successfully', 'id': sku_id}
+
+@api_router.get("/sku-categories")
+async def get_sku_categories(current_user: dict = Depends(get_current_user)):
+    """Get list of unique SKU categories"""
+    await seed_default_skus()
+    categories = await db.master_skus.distinct('category')
+    return {'categories': sorted(categories)}
 
 @api_router.get("/cogs/{city}")
 async def get_cogs_data(city: str, current_user: dict = Depends(get_current_user)):
