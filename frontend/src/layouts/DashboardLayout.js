@@ -22,7 +22,7 @@ const navigation = [
   { name: 'Leads', href: '/leads', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
   { name: 'Accounts', href: '/accounts', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
   { name: 'Lead Discovery', href: '/lead-discovery', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-  { name: 'COGS Calculator', href: '/cogs-calculator', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head'] },
+  { name: 'COGS Calculator', href: '/cogs-calculator', roles: ['CEO', 'Director'] },
   { name: 'Transport Calculator', href: '/transportation-calculator', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager'] },
   { name: 'Proposals', href: '/proposals', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
   { name: 'Targets', href: '/targets', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
@@ -30,7 +30,7 @@ const navigation = [
   { name: 'Daily Status', href: '/daily-status', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
   { name: 'Team Status', href: '/team-status', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
   { name: 'Bottle Preview', href: '/bottle-preview', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-  { name: 'SKU Management', href: '/sku-management', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head'] },
+  { name: 'SKU Management', href: '/sku-management', roles: ['CEO', 'Director'] },
   { name: 'Leaves', href: '/leaves', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
   { name: 'Team', href: '/team', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
 ];
