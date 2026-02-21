@@ -77,3 +77,8 @@ export const accountsAPI = {
   delete: (id) => axios.delete(`${API_URL}/accounts/${id}`, { headers: getAuthHeaders() }),
   getInvoices: (id) => axios.get(`${API_URL}/accounts/${id}/invoices`, { headers: getAuthHeaders() }),
 };
+
+// Master SKUs API
+export const skusAPI = {
+  getMasterList: () => axios.get(`${API_URL}/master-skus`, { headers: getAuthHeaders() }),
+};
