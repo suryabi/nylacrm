@@ -186,6 +186,7 @@ class Lead(BaseModel):
     
     # Nyla Details
     interested_skus: Optional[List[str]] = []  # Multi-select SKUs
+    proposed_sku_pricing: Optional[List[dict]] = []  # Proposed pricing for this lead
     notes: Optional[str] = None
     
     # Follow-up tracking
@@ -252,6 +253,7 @@ class LeadUpdate(BaseModel):
     current_volume: Optional[str] = None
     current_selling_price: Optional[float] = None
     interested_skus: Optional[List[str]] = None
+    proposed_sku_pricing: Optional[List[dict]] = None  # Proposed pricing for this lead
     notes: Optional[str] = None
     estimated_value: Optional[float] = None
     next_followup_date: Optional[str] = None
