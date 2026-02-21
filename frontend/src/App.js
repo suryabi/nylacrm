@@ -40,6 +40,7 @@ import AccountDetail from './pages/AccountDetail';
 import AccountPerformance from './pages/AccountPerformance';
 import TransportationCostCalculator from './pages/TransportationCostCalculator';
 import SKUManagement from './pages/SKUManagement';
+import CompanyProfile from './pages/CompanyProfile';
 import '@/App.css';
 
 function ProtectedRoute({ children }) {
