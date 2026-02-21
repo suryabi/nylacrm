@@ -52,6 +52,18 @@ Build a comprehensive, mobile-ready Sales CRM application with:
   - Backend updated: `proposed_sku_pricing` field added to Lead model
   - Status: VERIFIED - All backend (10/10) and frontend (16/16) tests passed
 
+- **FEATURE**: SKU Management Module with Full CRUD
+  - New `/sku-management` page with complete SKU catalog management
+  - MongoDB-backed storage (`master_skus` collection) - no hardcoded data
+  - Full CRUD: Create, Read, Update, Soft-Delete SKUs
+  - Features: Search, category filter, show/hide inactive toggle
+  - SKUs grouped by category with color-coded badges
+  - Reactivate deactivated SKUs functionality
+  - Default 14 SKUs seeded on first load
+  - All app components (Lead Detail, Account Detail, COGS Calculator) now use master list
+  - Role-based access: CEO, Director, VP, National Sales Head only
+  - Status: VERIFIED - Backend (20/20) and Frontend (17/17) tests passed
+
 ### Feb 19, 2026 (Session 2)
 - **FEATURE**: Convert Lead to Account
   - Created Account entity with fields: account_id, account_name, contact info, location, SKU pricing, financial tracking
