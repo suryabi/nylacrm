@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { leadsAPI, activitiesAPI, commentsAPI, usersAPI, accountsAPI } from '../utils/api';
+import { leadsAPI, activitiesAPI, commentsAPI, usersAPI, accountsAPI, skusAPI } from '../utils/api';
 import axios from 'axios';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -9,7 +9,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
-import { ArrowLeft, Mail, Phone, Building2, User, MessageSquare, Send, Loader2, ArrowRightCircle } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Building2, User, MessageSquare, Send, Loader2, ArrowRightCircle, Plus, Trash2, Save, Package } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Select,
