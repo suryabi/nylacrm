@@ -286,6 +286,82 @@ export default function TransportationCostCalculator() {
         </Button>
       </div>
 
+      {/* Cost Breakdown Tiles - Always Visible at Top */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        {/* Total Landed Cost - Main Highlight */}
+        <Card className="col-span-2 p-4 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-emerald-100">TOTAL LANDED COST</p>
+              <p className="text-3xl font-bold mt-1" data-testid="total-cost">
+                ₹{costs.totalCost.toLocaleString()}
+              </p>
+            </div>
+            <Calculator className="h-10 w-10 text-emerald-200" />
+          </div>
+        </Card>
+
+        {/* Diesel Cost */}
+        <Card className="p-4 bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
+          <p className="text-xs font-medium text-amber-700">DIESEL (ROUND TRIP)</p>
+          <p className="text-xl font-bold text-amber-800 mt-1">
+            ₹{costs.totalDiesel.toLocaleString()}
+          </p>
+          <p className="text-xs text-amber-600 mt-1">
+            ↑ ₹{costs.dieselForward.toLocaleString()} + ↓ ₹{costs.dieselReturn.toLocaleString()}
+          </p>
+        </Card>
+
+        {/* Tolls */}
+        <Card className="p-4 bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200">
+          <p className="text-xs font-medium text-slate-600">TOLLS (R/T)</p>
+          <p className="text-xl font-bold text-slate-800 mt-1">
+            ₹{costs.tollsCost.toLocaleString()}
+          </p>
+          <p className="text-xs text-slate-500 mt-1">
+            {(parseInt(tollCount) || 0) * 2} tolls × ₹{tollCostPerToll}
+          </p>
+        </Card>
+
+        {/* Cost Per Crate */}
+        <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+          <p className="text-xs font-medium text-blue-600">COST / CRATE</p>
+          <p className="text-xl font-bold text-blue-700 mt-1" data-testid="cost-per-crate">
+            ₹{costs.costPerCrate.toFixed(2)}
+          </p>
+          <p className="text-xs text-blue-500 mt-1">{crates || 0} crates</p>
+        </Card>
+
+        {/* Cost Per Bottle */}
+        <Card className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+          <p className="text-xs font-medium text-purple-600">COST / BOTTLE</p>
+          <p className="text-xl font-bold text-purple-700 mt-1" data-testid="cost-per-bottle">
+            ₹{costs.costPerBottle.toFixed(2)}
+          </p>
+          <p className="text-xs text-purple-500 mt-1">{bottles || 0} bottles</p>
+        </Card>
+      </div>
+
+      {/* Additional Cost Details Row */}
+      <div className="grid grid-cols-4 gap-3">
+        <Card className="p-3 text-center">
+          <p className="text-xs text-muted-foreground">Driver Expenses</p>
+          <p className="text-lg font-semibold">₹{costs.driverExp.toLocaleString()}</p>
+        </Card>
+        <Card className="p-3 text-center">
+          <p className="text-xs text-muted-foreground">Loading/Unloading</p>
+          <p className="text-lg font-semibold">₹{costs.loadUnload.toLocaleString()}</p>
+        </Card>
+        <Card className="p-3 text-center">
+          <p className="text-xs text-muted-foreground">Maintenance</p>
+          <p className="text-lg font-semibold">₹{costs.maintenance.toLocaleString()}</p>
+        </Card>
+        <Card className="p-3 text-center">
+          <p className="text-xs text-muted-foreground">Round Trip Distance</p>
+          <p className="text-lg font-semibold text-primary">{distance ? `${parseFloat(distance) * 2} km` : '-'}</p>
+        </Card>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Column - Location & Route */}
         <div className="space-y-6">
@@ -446,9 +522,19 @@ export default function TransportationCostCalculator() {
               </div>
             </div>
           </Card>
+          
+          {/* Info Note - Moved to left column */}
+          <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
+            <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <p>
+              All calculations update in real-time as you modify inputs. 
+              Start typing location names to see suggestions from Google Places.
+              Toll count is estimated based on distance (~1 toll per 70km on highways).
+            </p>
+          </div>
         </div>
 
-        {/* Right Column - Inputs & Calculations */}
+        {/* Right Column - Vehicle & Cost Inputs */}
         <div className="space-y-6">
           {/* Vehicle & Cost Inputs */}
           <Card className="p-6">
@@ -593,99 +679,6 @@ export default function TransportationCostCalculator() {
               </div>
             </div>
           </Card>
-
-          {/* Cost Breakdown */}
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Calculator className="h-5 w-5 text-primary" />
-              Cost Breakdown (Round Trip)
-            </h2>
-            
-            <div className="space-y-3">
-              {/* Diesel Costs */}
-              <div className="bg-amber-50 p-4 rounded-lg space-y-2">
-                <div className="flex items-center gap-2 text-amber-700 font-medium">
-                  <Fuel className="h-4 w-4" />
-                  Diesel Costs
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Forward Trip:</span>
-                    <span className="font-medium">₹{costs.dieselForward.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Return Trip:</span>
-                    <span className="font-medium">₹{costs.dieselReturn.toLocaleString()}</span>
-                  </div>
-                </div>
-                <div className="flex justify-between pt-2 border-t border-amber-200">
-                  <span className="font-medium text-amber-800">Total Diesel:</span>
-                  <span className="font-bold text-amber-800">₹{costs.totalDiesel.toLocaleString()}</span>
-                </div>
-              </div>
-              
-              {/* Other Costs */}
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-muted-foreground flex items-center gap-2">
-                    <Route className="h-4 w-4" />
-                    Tolls (Round Trip) - {(parseInt(tollCount) || 0) * 2} tolls × ₹{tollCostPerToll}
-                  </span>
-                  <span className="font-medium">₹{costs.tollsCost.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-muted-foreground">Driver Expenses</span>
-                  <span className="font-medium">₹{costs.driverExp.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-muted-foreground">Loading & Unloading</span>
-                  <span className="font-medium">₹{costs.loadUnload.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-muted-foreground">Maintenance Provision</span>
-                  <span className="font-medium">₹{costs.maintenance.toLocaleString()}</span>
-                </div>
-              </div>
-              
-              {/* Total */}
-              <div className="bg-emerald-100 p-4 rounded-lg mt-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-lg font-semibold text-emerald-800">
-                    Full Landed Logistics Cost
-                  </span>
-                  <span className="text-2xl font-bold text-emerald-700" data-testid="total-cost">
-                    ₹{costs.totalCost.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-              
-              {/* Per Unit Costs */}
-              <div className="grid grid-cols-2 gap-3 mt-4">
-                <div className="bg-blue-50 p-3 rounded-lg text-center">
-                  <p className="text-xs text-blue-600 font-medium">COST PER CRATE</p>
-                  <p className="text-xl font-bold text-blue-700" data-testid="cost-per-crate">
-                    ₹{costs.costPerCrate.toFixed(2)}
-                  </p>
-                </div>
-                <div className="bg-purple-50 p-3 rounded-lg text-center">
-                  <p className="text-xs text-purple-600 font-medium">COST PER BOTTLE</p>
-                  <p className="text-xl font-bold text-purple-700" data-testid="cost-per-bottle">
-                    ₹{costs.costPerBottle.toFixed(2)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </Card>
-          
-          {/* Info Note */}
-          <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
-            <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
-            <p>
-              All calculations update in real-time as you modify inputs. 
-              Start typing location names to see suggestions from Google Places.
-              Toll count is estimated based on distance (~1 toll per 70km on highways).
-            </p>
-          </div>
         </div>
       </div>
     </div>
