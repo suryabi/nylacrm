@@ -31,6 +31,7 @@ const navigation = [
   { name: 'Team Status', href: '/team-status', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
   { name: 'Bottle Preview', href: '/bottle-preview', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
   { name: 'SKU Management', href: '/sku-management', roles: ['CEO', 'Director', 'National Sales Head'] },
+  { name: 'Company Profile', href: '/company-profile', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
   { name: 'Leaves', href: '/leaves', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
   { name: 'Team', href: '/team', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
 ];
