@@ -347,12 +347,14 @@ export default function AccountDetail() {
                               value={item.sku}
                               onValueChange={(val) => handleSKUChange(index, 'sku', val)}
                             >
-                              <SelectTrigger className="w-[180px]">
+                              <SelectTrigger className="w-[200px]" data-testid={`sku-select-${index}`}>
                                 <SelectValue placeholder="Select SKU" />
                               </SelectTrigger>
                               <SelectContent>
-                                {STANDARD_SKUS.map((sku) => (
-                                  <SelectItem key={sku} value={sku}>{sku}</SelectItem>
+                                {masterSkus.map((skuItem) => (
+                                  <SelectItem key={skuItem.sku} value={skuItem.sku}>
+                                    {skuItem.sku}
+                                  </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
