@@ -718,6 +718,30 @@ async def setup_production_database_endpoint(request: Request):
         raise HTTPException(status_code=500, detail=f'Setup failed: {str(e)}')
 
 
+# ============= MASTER SKU LIST =============
+
+MASTER_SKUS = [
+    {'sku': '20L Premium', 'category': 'Jar', 'unit': '20L'},
+    {'sku': '20L Regular', 'category': 'Jar', 'unit': '20L'},
+    {'sku': '1L Pack (12)', 'category': 'Bottle', 'unit': '1L x 12'},
+    {'sku': '500ml Pack (24)', 'category': 'Bottle', 'unit': '500ml x 24'},
+    {'sku': '250ml Pack (48)', 'category': 'Bottle', 'unit': '250ml x 48'},
+    {'sku': '5L Can', 'category': 'Can', 'unit': '5L'},
+    {'sku': '2L Bottle', 'category': 'Bottle', 'unit': '2L'},
+    {'sku': 'Nyla – 600 ml / Silver', 'category': 'Premium', 'unit': '600ml'},
+    {'sku': 'Nyla – 330 ml / Silver', 'category': 'Premium', 'unit': '330ml'},
+    {'sku': 'Nyla – 660 ml / Gold', 'category': 'Premium', 'unit': '660ml'},
+    {'sku': 'Nyla – 330 ml / Gold', 'category': 'Premium', 'unit': '330ml'},
+    {'sku': 'Nyla – 660 ml / Sparkling', 'category': 'Sparkling', 'unit': '660ml'},
+    {'sku': 'Nyla – 330 ml / Sparkling', 'category': 'Sparkling', 'unit': '330ml'},
+    {'sku': '24 Brand', 'category': 'White Label', 'unit': 'Custom'},
+]
+
+@api_router.get("/master-skus")
+async def get_master_skus(current_user: dict = Depends(get_current_user)):
+    """Get the master list of all available SKUs"""
+    return {'skus': MASTER_SKUS}
+
 @api_router.get("/cogs/{city}")
 async def get_cogs_data(city: str, current_user: dict = Depends(get_current_user)):
     """Get COGS data for all SKUs in a city"""
