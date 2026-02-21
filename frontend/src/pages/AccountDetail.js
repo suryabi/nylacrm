@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { accountsAPI, usersAPI } from '../utils/api';
+import { accountsAPI, usersAPI, skusAPI } from '../utils/api';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -16,16 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-
-const STANDARD_SKUS = [
-  '20L Premium',
-  '20L Regular',
-  '1L Pack (12)',
-  '500ml Pack (24)',
-  '250ml Pack (48)',
-  '5L Can',
-  '2L Bottle',
-];
 
 const accountTypeColors = {
   'Tier 1': 'bg-emerald-100 text-emerald-800',
