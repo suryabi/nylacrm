@@ -221,6 +221,41 @@ export default function LeadDetail() {
     }
   };
 
+  // SKU Pricing handlers
+  const handleAddProposedSKU = () => {
+    setProposedSkuPricing([...proposedSkuPricing, { sku: '', price_per_unit: 0, return_bottle_credit: 0 }]);
+    setIsEditingPricing(true);
+  };
+
+  const handleRemoveProposedSKU = (index) => {
+    setProposedSkuPricing(proposedSkuPricing.filter((_, i) => i !== index));
+  };
+
+  const handleProposedSKUChange = (index, field, value) => {
+    const updated = [...proposedSkuPricing];
+    updated[index] = { ...updated[index], [field]: field === 'sku' ? value : parseFloat(value) || 0 };
+    setProposedSkuPricing(updated);
+  };
+
+  const handleSaveProposedPricing = async () => {
+    setSavingPricing(true);
+    try {
+      await leadsAPI.update(id, { proposed_sku_pricing: proposedSkuPricing });
+      toast.success('Proposed SKU pricing saved');
+      setIsEditingPricing(false);
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to save pricing');
+    } finally {
+      setSavingPricing(false);
+    }
+  };
+
+  const handleCancelPricingEdit = () => {
+    setProposedSkuPricing(lead.proposed_sku_pricing || []);
+    setIsEditingPricing(false);
+  };
+
   if (loading) {
     return <div className="flex justify-center py-12">Loading...</div>;
   }
