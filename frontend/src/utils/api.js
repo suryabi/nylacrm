@@ -78,7 +78,12 @@ export const accountsAPI = {
   getInvoices: (id) => axios.get(`${API_URL}/accounts/${id}/invoices`, { headers: getAuthHeaders() }),
 };
 
-// Master SKUs API
+// Master SKUs API with full CRUD
 export const skusAPI = {
-  getMasterList: () => axios.get(`${API_URL}/master-skus`, { headers: getAuthHeaders() }),
+  getMasterList: (includeInactive = false) => 
+    axios.get(`${API_URL}/master-skus?include_inactive=${includeInactive}`, { headers: getAuthHeaders() }),
+  create: (data) => axios.post(`${API_URL}/master-skus`, data, { headers: getAuthHeaders() }),
+  update: (id, data) => axios.put(`${API_URL}/master-skus/${id}`, data, { headers: getAuthHeaders() }),
+  delete: (id) => axios.delete(`${API_URL}/master-skus/${id}`, { headers: getAuthHeaders() }),
+  getCategories: () => axios.get(`${API_URL}/sku-categories`, { headers: getAuthHeaders() }),
 };
