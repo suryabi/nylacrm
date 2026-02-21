@@ -41,7 +41,16 @@ Build a comprehensive, mobile-ready Sales CRM application with:
   - Reset Edits and Reset All functionality
   - Download edited logo
   - Save to History integration
+  - Updated bottle image to Nyla branded clear glass bottle
   - Status: VERIFIED - All 30 frontend tests passed (100% success rate)
+
+- **FEATURE**: Master SKU List API and SKU Pricing Enhancements
+  - Created `/api/master-skus` endpoint returning 14 standardized SKUs with category and unit info
+  - Account Detail page: SKU dropdown now populated from master SKU API
+  - Lead Detail page: Added "Proposed SKU Pricing" section for pre-sale pricing proposals
+  - SKUs include: 20L Premium/Regular, bottle packs, Nyla variants (Silver, Gold, Sparkling), 24 Brand
+  - Backend updated: `proposed_sku_pricing` field added to Lead model
+  - Status: VERIFIED - All backend (10/10) and frontend (16/16) tests passed
 
 ### Feb 19, 2026 (Session 2)
 - **FEATURE**: Convert Lead to Account
