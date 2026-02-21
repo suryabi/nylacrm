@@ -460,6 +460,157 @@ export default function LeadDetail() {
             </Card>
           )}
 
+          {/* Proposed SKU Pricing */}
+          <Card className="p-6" data-testid="proposed-sku-pricing-card">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Proposed SKU Pricing
+              </h2>
+              <div className="flex items-center gap-2">
+                {isEditingPricing ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleCancelPricingEdit}
+                      data-testid="cancel-pricing-btn"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveProposedPricing}
+                      disabled={savingPricing}
+                      data-testid="save-pricing-btn"
+                    >
+                      {savingPricing ? (
+                        <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Saving</>
+                      ) : (
+                        <><Save className="h-4 w-4 mr-1" /> Save</>
+                      )}
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsEditingPricing(true)}
+                    data-testid="edit-pricing-btn"
+                  >
+                    Edit Pricing
+                  </Button>
+                )}
+                {isEditingPricing && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleAddProposedSKU}
+                    data-testid="add-proposed-sku-btn"
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Add SKU
+                  </Button>
+                )}
+              </div>
+            </div>
+            
+            {proposedSkuPricing.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Package className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                <p>No proposed SKU pricing yet</p>
+                <p className="text-sm mt-1">Add pricing to share proposals with this lead</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleAddProposedSKU}
+                  className="mt-3"
+                  data-testid="add-first-sku-btn"
+                >
+                  <Plus className="h-4 w-4 mr-1" /> Add First SKU
+                </Button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full" data-testid="proposed-sku-table">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left px-3 py-2 text-sm font-medium">SKU</th>
+                      <th className="text-left px-3 py-2 text-sm font-medium">Price/Unit (₹)</th>
+                      <th className="text-left px-3 py-2 text-sm font-medium">Bottle Credit (₹)</th>
+                      {isEditingPricing && <th className="w-10"></th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {proposedSkuPricing.map((item, index) => (
+                      <tr key={index}>
+                        <td className="px-3 py-2">
+                          {isEditingPricing ? (
+                            <Select
+                              value={item.sku}
+                              onValueChange={(val) => handleProposedSKUChange(index, 'sku', val)}
+                            >
+                              <SelectTrigger className="w-[200px]" data-testid={`proposed-sku-select-${index}`}>
+                                <SelectValue placeholder="Select SKU" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {masterSkus.map((skuItem) => (
+                                  <SelectItem key={skuItem.sku} value={skuItem.sku}>
+                                    {skuItem.sku}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <span className="font-medium">{item.sku}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          {isEditingPricing ? (
+                            <Input
+                              type="number"
+                              value={item.price_per_unit}
+                              onChange={(e) => handleProposedSKUChange(index, 'price_per_unit', e.target.value)}
+                              className="w-24"
+                              data-testid={`proposed-price-input-${index}`}
+                            />
+                          ) : (
+                            <span>₹{item.price_per_unit?.toLocaleString()}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          {isEditingPricing ? (
+                            <Input
+                              type="number"
+                              value={item.return_bottle_credit}
+                              onChange={(e) => handleProposedSKUChange(index, 'return_bottle_credit', e.target.value)}
+                              className="w-24"
+                              data-testid={`proposed-credit-input-${index}`}
+                            />
+                          ) : (
+                            <span>₹{item.return_bottle_credit?.toLocaleString()}</span>
+                          )}
+                        </td>
+                        {isEditingPricing && (
+                          <td className="px-3 py-2">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => handleRemoveProposedSKU(index)}
+                              className="h-8 w-8 text-red-500 hover:text-red-700"
+                              data-testid={`remove-proposed-sku-${index}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+
           {/* Lead Status - Display Only */}
           <Card className="p-6">
             <h2 className="text-lg font-semibold mb-4">Lead Status</h2>
