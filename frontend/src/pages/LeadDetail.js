@@ -65,6 +65,12 @@ export default function LeadDetail() {
   const [submittingComment, setSubmittingComment] = useState(false);
   const [invoiceData, setInvoiceData] = useState(null);
   
+  // SKU Pricing state
+  const [masterSkus, setMasterSkus] = useState([]);
+  const [proposedSkuPricing, setProposedSkuPricing] = useState([]);
+  const [savingPricing, setSavingPricing] = useState(false);
+  const [isEditingPricing, setIsEditingPricing] = useState(false);
+  
   // Activity creation state
   const [showActivityForm, setShowActivityForm] = useState(false);
   const [activityType, setActivityType] = useState('call');
