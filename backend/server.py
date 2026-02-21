@@ -900,15 +900,10 @@ async def get_sku_categories(current_user: dict = Depends(get_current_user)):
 async def get_cogs_data(city: str, current_user: dict = Depends(get_current_user)):
     """Get COGS data for all SKUs in a city"""
     
-    master_skus = [
-        'Nyla – 600 ml / Silver',
-        'Nyla – 330 ml / Silver',
-        'Nyla – 660 ml / Gold',
-        'Nyla – 330 ml / Gold',
-        'Nyla – 660 ml / Sparkling',
-        'Nyla – 330 ml / Sparkling',
-        '24 Brand'
-    ]
+    # Get active SKUs from master list
+    await seed_default_skus()
+    master_sku_docs = await db.master_skus.find({'is_active': {'$ne': False}}, {'_id': 0, 'sku_name': 1}).to_list(200)
+    master_skus = [s['sku_name'] for s in master_sku_docs]
     
     cogs_data = await db.cogs_data.find({'city': city}, {'_id': 0}).to_list(100)
     
