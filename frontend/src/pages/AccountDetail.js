@@ -45,7 +45,17 @@ export default function AccountDetail() {
   useEffect(() => {
     fetchAccount();
     fetchUsers();
+    fetchMasterSkus();
   }, [id]);
+
+  const fetchMasterSkus = async () => {
+    try {
+      const res = await skusAPI.getMasterList();
+      setMasterSkus(res.data.skus || []);
+    } catch (error) {
+      console.log('Could not load master SKUs');
+    }
+  };
 
   const fetchUsers = async () => {
     try {
