@@ -83,12 +83,23 @@ export default function LeadDetail() {
 
   useEffect(() => {
     fetchData();
+    fetchMasterSkus();
   }, [id]);
+
+  const fetchMasterSkus = async () => {
+    try {
+      const res = await skusAPI.getMasterList();
+      setMasterSkus(res.data.skus || []);
+    } catch (error) {
+      console.log('Could not load master SKUs');
+    }
+  };
 
   const fetchData = async () => {
     try {
       const leadRes = await leadsAPI.getById(id);
       setLead(leadRes.data);
+      setProposedSkuPricing(leadRes.data.proposed_sku_pricing || []);
       
       const activitiesRes = await activitiesAPI.getByLeadId(id);
       setActivities(activitiesRes.data);
