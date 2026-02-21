@@ -33,6 +33,7 @@ export default function AccountDetail() {
   const [invoiceData, setInvoiceData] = useState(null);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [users, setUsers] = useState([]);
+  const [masterSkus, setMasterSkus] = useState([]);
   
   // Editable fields
   const [accountName, setAccountName] = useState('');
