@@ -87,3 +87,37 @@ export const skusAPI = {
   delete: (id) => axios.delete(`${API_URL}/master-skus/${id}`, { headers: getAuthHeaders() }),
   getCategories: () => axios.get(`${API_URL}/sku-categories`, { headers: getAuthHeaders() }),
 };
+
+// Files & Documents API
+export const filesAPI = {
+  // Categories
+  getCategories: () => axios.get(`${API_URL}/document-categories`, { headers: getAuthHeaders() }),
+  createCategory: (data) => axios.post(`${API_URL}/document-categories`, data, { headers: getAuthHeaders() }),
+  updateCategory: (id, data) => axios.put(`${API_URL}/document-categories/${id}`, data, { headers: getAuthHeaders() }),
+  deleteCategory: (id) => axios.delete(`${API_URL}/document-categories/${id}`, { headers: getAuthHeaders() }),
+  
+  // Subcategories
+  getSubcategories: (categoryId = null) => {
+    const url = categoryId 
+      ? `${API_URL}/document-subcategories?category_id=${categoryId}`
+      : `${API_URL}/document-subcategories`;
+    return axios.get(url, { headers: getAuthHeaders() });
+  },
+  createSubcategory: (data) => axios.post(`${API_URL}/document-subcategories`, data, { headers: getAuthHeaders() }),
+  updateSubcategory: (id, data) => axios.put(`${API_URL}/document-subcategories/${id}`, data, { headers: getAuthHeaders() }),
+  deleteSubcategory: (id) => axios.delete(`${API_URL}/document-subcategories/${id}`, { headers: getAuthHeaders() }),
+  
+  // Documents
+  getDocuments: (params = {}) => {
+    const queryParams = new URLSearchParams();
+    if (params.category_id) queryParams.append('category_id', params.category_id);
+    if (params.subcategory_id) queryParams.append('subcategory_id', params.subcategory_id);
+    const url = queryParams.toString() ? `${API_URL}/documents?${queryParams.toString()}` : `${API_URL}/documents`;
+    return axios.get(url, { headers: getAuthHeaders() });
+  },
+  getDocument: (id) => axios.get(`${API_URL}/documents/${id}`, { headers: getAuthHeaders() }),
+  uploadDocument: (formData) => axios.post(`${API_URL}/documents/upload`, formData, { 
+    headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' }
+  }),
+  deleteDocument: (id) => axios.delete(`${API_URL}/documents/${id}`, { headers: getAuthHeaders() }),
+};
