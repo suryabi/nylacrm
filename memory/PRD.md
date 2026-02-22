@@ -28,6 +28,31 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 
 ## What's Been Implemented
 
+### Feb 22, 2026 (Session 5)
+- **FEATURE**: Files & Documents Management Module
+  - New `/files-documents` page for centralized document management
+  - **Backend APIs**:
+    - `GET/POST/PUT/DELETE /api/document-categories` - Category CRUD
+    - `GET/POST/PUT/DELETE /api/document-subcategories` - Subcategory CRUD  
+    - `GET/POST/DELETE /api/documents` - Document management
+    - `POST /api/documents/upload` - File upload with multipart/form-data
+  - **Features**:
+    - Category & Subcategory organization (hierarchical structure)
+    - Key Users (Admin, CEO, Director) can manage categories
+    - All users can upload, view, and download documents
+    - Delete permission: Admin/CEO/Director + document uploader
+    - Supported file types: PDF, DOC, DOCX, PNG, JPG, JPEG, GIF, WEBP
+    - 5 MB file size limit per upload
+    - Document type icons/thumbnails (PDF icon, Doc icon, Image preview)
+    - Search and filter by category/subcategory
+    - Breadcrumb navigation for category hierarchy
+  - **UI Components**:
+    - Manage Categories modal (for key users only)
+    - Upload Document modal with category/subcategory selection
+    - Document card grid with hover actions (download, delete)
+    - Category filter dropdown with subcategory cascade
+  - Status: VERIFIED - All 23 backend tests passed (100% success rate)
+
 ### Feb 22, 2026 (Session 4)
 - **FEATURE**: Bottle Preview Phase 2 Enhancements
   - **Tabbed bottle view**: Added "Air Water Duo" (2 bottles) and "Air Water Single" tabs to switch between bottle images
