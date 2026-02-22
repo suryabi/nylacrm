@@ -174,7 +174,8 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 1. ~~Lead creation bug~~ ✅ FIXED
 2. ~~SKU/Resource Performance dashboards~~ ✅ IMPLEMENTED
 3. ~~Convert Lead to Account feature~~ ✅ IMPLEMENTED
-4. ~~Bottle Preview Enhancement~~ ✅ IMPLEMENTED (cropping, shapes, bg removal, resize)
+4. ~~Bottle Preview Enhancement Phase 1~~ ✅ IMPLEMENTED (cropping, shapes, bg removal, resize)
+5. ~~Bottle Preview Enhancement Phase 2~~ ✅ IMPLEMENTED (tabbed bottles, rounded square, color picker bg removal)
 
 ### P1 - High Priority
 - Implement Invoices functionality for Accounts
