@@ -51,6 +51,20 @@ function formatCurrency(value) {
   return '₹' + num.toLocaleString('en-IN');
 }
 
+function formatDate(dateStr) {
+  if (!dateStr) return '-';
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-IN', { 
+      day: '2-digit', 
+      month: 'short', 
+      year: 'numeric' 
+    });
+  } catch {
+    return '-';
+  }
+}
+
 export default function AccountPerformance() {
   const { user } = useAuth();
   const navigate = useNavigate();
