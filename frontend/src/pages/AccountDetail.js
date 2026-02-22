@@ -743,44 +743,90 @@ export default function AccountDetail() {
               Delivery Address
             </h2>
             
-            {/* Address Search */}
+            {/* Google Powered Address Search */}
             <div className="relative mb-4" ref={addressSearchRef}>
-              <Label className="text-sm mb-2 block">Search Address</Label>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-sm font-medium">Search Address</Label>
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <span>Powered by</span>
+                  <span className="font-semibold text-[#4285F4]">G</span>
+                  <span className="font-semibold text-[#EA4335]">o</span>
+                  <span className="font-semibold text-[#FBBC05]">o</span>
+                  <span className="font-semibold text-[#4285F4]">g</span>
+                  <span className="font-semibold text-[#34A853]">l</span>
+                  <span className="font-semibold text-[#EA4335]">e</span>
+                </div>
+              </div>
+              
+              {/* City context badge */}
+              {account?.city && (
+                <div className="mb-2">
+                  <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                    <MapPin className="h-3 w-3 mr-1" />
+                    Searching in {account.city}, {account.state}
+                  </Badge>
+                </div>
+              )}
+              
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-500" />
                 <Input
                   type="text"
-                  placeholder="Start typing to search address..."
+                  placeholder={`Search address in ${account?.city || 'your city'}...`}
                   value={addressSearchQuery}
                   onChange={(e) => handleAddressSearch(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 pr-10 border-blue-200 focus:border-blue-400 focus:ring-blue-400/20"
                   data-testid="address-search-input"
                 />
-                {isSearchingAddress && (
-                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                {isSearchingAddress ? (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-blue-500" />
+                ) : (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" className="text-muted-foreground">
+                      <path fill="#4285F4" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+                      <circle fill="white" cx="12" cy="9" r="2.5"/>
+                    </svg>
+                  </div>
                 )}
               </div>
               
               {/* Suggestions Dropdown */}
               {addressSuggestions.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                  {addressSuggestions.map((suggestion) => (
+                <div className="absolute z-20 w-full mt-1 bg-white border border-blue-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                  {addressSuggestions.map((suggestion, idx) => (
                     <button
                       key={suggestion.place_id}
-                      className="w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors border-b last:border-b-0"
+                      className={`w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors flex items-start gap-3 ${idx !== addressSuggestions.length - 1 ? 'border-b border-gray-100' : ''}`}
                       onClick={() => handleSelectAddress(suggestion.place_id, suggestion.description)}
                       data-testid={`address-suggestion-${suggestion.place_id}`}
                     >
-                      <p className="text-sm font-medium">{suggestion.structured_formatting?.main_text}</p>
-                      <p className="text-xs text-muted-foreground">{suggestion.structured_formatting?.secondary_text}</p>
+                      <MapPin className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{suggestion.structured_formatting?.main_text}</p>
+                        <p className="text-xs text-muted-foreground">{suggestion.structured_formatting?.secondary_text}</p>
+                      </div>
                     </button>
                   ))}
+                  <div className="px-4 py-2 bg-gray-50 text-xs text-muted-foreground flex items-center justify-end gap-1">
+                    <span>Powered by</span>
+                    <svg width="50" height="16" viewBox="0 0 50 16">
+                      <text x="0" y="12" fontSize="10" fontWeight="500">
+                        <tspan fill="#4285F4">G</tspan>
+                        <tspan fill="#EA4335">o</tspan>
+                        <tspan fill="#FBBC05">o</tspan>
+                        <tspan fill="#4285F4">g</tspan>
+                        <tspan fill="#34A853">l</tspan>
+                        <tspan fill="#EA4335">e</tspan>
+                      </text>
+                    </svg>
+                  </div>
                 </div>
               )}
             </div>
 
             {/* Address Fields */}
-            <div className="space-y-4">
+            <div className="space-y-4 pt-2 border-t">
+              <p className="text-xs text-muted-foreground">Address fields will auto-populate when you select from search</p>
               <div>
                 <Label className="text-xs text-muted-foreground">Address Line 1</Label>
                 <Input
