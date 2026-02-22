@@ -483,16 +483,55 @@ export default function BottlePreview() {
     }
   };
 
-  const handleRemoveBackground = async () => {
+  const handleRemoveWhiteBackground = async () => {
     if (!logoPreview) return;
 
     setProcessing(true);
     try {
-      const processedImage = await removeBackground(logoPreview, 230);
+      const processedImage = await removeWhiteBackground(logoPreview, 230);
       setLogoPreview(processedImage);
-      toast.success('Background removed! (Light/white backgrounds)');
+      toast.success('White background removed!');
     } catch (error) {
       toast.error('Failed to remove background');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Color picker mode handlers
+  const enableColorPickerMode = () => {
+    setIsColorPickerMode(true);
+    toast.info('Click on the logo to select a background color to remove');
+  };
+
+  const handleLogoClick = async (e) => {
+    if (!isColorPickerMode || !logoPreview) return;
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    try {
+      const color = await getPixelColor(logoPreview, x, y, rect.width, rect.height);
+      setSelectedBgColor(color);
+      setIsColorPickerMode(false);
+      toast.success(`Color selected: RGB(${color.r}, ${color.g}, ${color.b})`);
+    } catch (error) {
+      toast.error('Failed to pick color');
+      setIsColorPickerMode(false);
+    }
+  };
+
+  const handleApplyColorRemoval = async () => {
+    if (!logoPreview || !selectedBgColor) return;
+
+    setProcessing(true);
+    try {
+      const processedImage = await removeColorBackground(logoPreview, selectedBgColor, bgRemovalTolerance);
+      setLogoPreview(processedImage);
+      toast.success('Background color removed!');
+    } catch (error) {
+      toast.error('Failed to remove background color');
     } finally {
       setProcessing(false);
     }
