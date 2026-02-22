@@ -170,23 +170,24 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 ```
 /app/
 ├── backend/
-│   └── server.py         # FastAPI with MongoDB, Account models & APIs
+│   └── server.py         # FastAPI with MongoDB, Files & Documents APIs
 ├── frontend/
 │   ├── craco.config.js   # Babel fix applied
 │   └── src/
 │       ├── pages/
 │       │   ├── AddEditLead.js      # Lead form with validation
 │       │   ├── LeadDetail.js       # Convert to Account button
-│       │   ├── AccountsList.js     # NEW: Accounts list with pagination
-│       │   ├── AccountDetail.js    # NEW: Account detail with SKU pricing
+│       │   ├── AccountsList.js     # Accounts list with pagination
+│       │   ├── AccountDetail.js    # Account detail with SKU pricing
+│       │   ├── FilesDocuments.js   # NEW: Files & Documents management
 │       │   ├── Dashboard.js        # Sales Overview
 │       │   ├── SKUPerformance.js   # Live data
 │       │   ├── ResourcePerformance.js # Live data
-│       │   └── BottlePreview.js    # UPDATED: Logo editing tools
+│       │   └── BottlePreview.js    # Logo editing tools
 │       ├── utils/
-│       │   └── api.js              # accountsAPI added
+│       │   └── api.js              # filesAPI added
 │       └── layouts/
-│           └── DashboardLayout.js  # Accounts nav added
+│           └── DashboardLayout.js  # Files & Documents nav added
 └── memory/
     └── PRD.md (this file)
 ```
