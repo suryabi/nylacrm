@@ -5126,11 +5126,31 @@ async def get_account_performance(
 app.include_router(api_router)
 
 # CORS configuration - reads from environment variable for deployment flexibility
-cors_origins_env = os.environ.get('CORS_ORIGINS', '*')
-if cors_origins_env == '*':
-    cors_origins = ['*']
-else:
+# When credentials are enabled, we cannot use wildcard '*' - must specify exact origins
+cors_origins_env = os.environ.get('CORS_ORIGINS', '')
+
+# Default allowed origins for production and development
+default_origins = [
+    'https://crm.nylaairwater.earth',
+    'https://pipeline-master-14.emergent.host',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000'
+]
+
+if cors_origins_env and cors_origins_env != '*':
     cors_origins = [origin.strip() for origin in cors_origins_env.split(',')]
+else:
+    cors_origins = default_origins
+
+# Add the preview URL if set
+preview_url = os.environ.get('REACT_APP_BACKEND_URL', '')
+if preview_url and preview_url not in cors_origins:
+    # Extract just the origin (protocol + host)
+    from urllib.parse import urlparse
+    parsed = urlparse(preview_url)
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    if origin not in cors_origins:
+        cors_origins.append(origin)
 
 app.add_middleware(
     CORSMiddleware,
