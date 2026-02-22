@@ -66,7 +66,7 @@ export default function AccountDetail() {
     fetchMasterSkus();
   }, [id]);
 
-  // Search for address suggestions - restricted to account's city
+  // Search for address suggestions via backend API - restricted to account's city
   const handleAddressSearch = useCallback(async (query) => {
     setAddressSearchQuery(query);
     
@@ -78,43 +78,40 @@ export default function AccountDetail() {
 
     setIsSearchingAddress(true);
     
-    // Build search query with city context for better results
-    const cityContext = account?.city ? `, ${account.city}` : '';
-    const stateContext = account?.state ? `, ${account.state}` : '';
-    const searchQuery = query + cityContext + stateContext + ', India';
-
-    // Try to use Google Places API
-    if (autocompleteServiceRef.current) {
-      autocompleteServiceRef.current.getPlacePredictions(
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        `${process.env.REACT_APP_BACKEND_URL}/api/lead-discovery/autocomplete`,
         {
-          input: searchQuery,
-          componentRestrictions: { country: 'in' },
-          types: ['address', 'establishment', 'geocode']
+          input: query,
+          city: account?.city || ''
         },
-        (predictions, status) => {
-          setIsSearchingAddress(false);
-          if (status === 'OK' && predictions) {
-            // Filter results to prioritize those in the same city/state
-            const cityLower = (account?.city || '').toLowerCase();
-            const sortedPredictions = predictions.sort((a, b) => {
-              const aInCity = a.description.toLowerCase().includes(cityLower);
-              const bInCity = b.description.toLowerCase().includes(cityLower);
-              if (aInCity && !bInCity) return -1;
-              if (!aInCity && bInCity) return 1;
-              return 0;
-            });
-            setAddressSuggestions(sortedPredictions);
-          } else {
-            console.log('Places API status:', status);
-            setAddressSuggestions([]);
-          }
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
         }
       );
-    } else {
+      
+      const predictions = response.data.predictions || [];
+      
+      // Sort to prioritize results in the account's city
+      const cityLower = (account?.city || '').toLowerCase();
+      const sortedPredictions = predictions.sort((a, b) => {
+        const aInCity = a.description.toLowerCase().includes(cityLower);
+        const bInCity = b.description.toLowerCase().includes(cityLower);
+        if (aInCity && !bInCity) return -1;
+        if (!aInCity && bInCity) return 1;
+        return 0;
+      });
+      
+      setAddressSuggestions(sortedPredictions);
+    } catch (error) {
+      console.error('Address search error:', error);
+      setAddressSuggestions([]);
+    } finally {
       setIsSearchingAddress(false);
-      console.log('AutocompleteService not available');
     }
-  }, [account?.city, account?.state]);
+  }, [account?.city]);
 
   // Handle address selection from suggestions - use Geocoder for details
   const handleSelectAddress = (placeId, description) => {
