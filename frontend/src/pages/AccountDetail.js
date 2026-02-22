@@ -455,6 +455,17 @@ ${fullAddress}
                     data-testid="edit-contact-number"
                   />
                 </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>GST Number</Label>
+                  <Input
+                    value={gstNumber}
+                    onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
+                    placeholder="e.g., 29ABCDE1234F1Z5"
+                    maxLength={15}
+                    data-testid="edit-gst-number"
+                  />
+                  <p className="text-xs text-muted-foreground">15-character GST Identification Number</p>
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -477,6 +488,12 @@ ${fullAddress}
                     <p className="font-medium">{account.contact_number || '-'}</p>
                   </div>
                 </div>
+                {account.gst_number && (
+                  <div className="md:col-span-2">
+                    <p className="text-sm text-muted-foreground">GST Number</p>
+                    <p className="font-medium font-mono tracking-wider">{account.gst_number}</p>
+                  </div>
+                )}
               </div>
             )}
           </Card>
