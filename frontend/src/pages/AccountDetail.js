@@ -44,6 +44,23 @@ export default function AccountDetail() {
   const [contactName, setContactName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [skuPricing, setSkuPricing] = useState([]);
+  
+  // Delivery Address state
+  const [deliveryAddress, setDeliveryAddress] = useState({
+    address_line1: '',
+    address_line2: '',
+    city: '',
+    state: '',
+    pincode: '',
+    landmark: ''
+  });
+  const [addressSearchQuery, setAddressSearchQuery] = useState('');
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
+  const [savingAddress, setSavingAddress] = useState(false);
+  const addressSearchRef = useRef(null);
+  const autocompleteServiceRef = useRef(null);
+  const placesServiceRef = useRef(null);
 
   useEffect(() => {
     fetchAccount();
