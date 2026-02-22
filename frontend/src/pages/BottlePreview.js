@@ -95,14 +95,27 @@ const createImage = (url) =>
     image.src = url;
   });
 
-// Helper to fetch image as blob and create object URL (bypasses CORS for canvas)
+// Helper to fetch image as blob via backend proxy (bypasses CORS)
 const fetchImageAsBlob = async (url) => {
   try {
-    const response = await fetch(url);
+    // Use backend proxy to fetch the image
+    const proxyUrl = `${API_URL}/bottle-preview/proxy-image?url=${encodeURIComponent(url)}`;
+    const token = localStorage.getItem('token');
+    
+    const response = await fetch(proxyUrl, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status}`);
+    }
+    
     const blob = await response.blob();
     return URL.createObjectURL(blob);
   } catch (error) {
-    console.error('Failed to fetch image as blob:', error);
+    console.error('Failed to fetch image via proxy:', error);
     throw error;
   }
 };
