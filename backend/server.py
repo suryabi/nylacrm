@@ -5085,6 +5085,10 @@ async def get_account_performance(
     # Sort by gross invoice total (descending)
     accounts_data.sort(key=lambda x: x['gross_invoice_total'], reverse=True)
     
+    # Calculate overall average order
+    total_invoice_count = sum(acc['invoice_count'] for acc in accounts_data)
+    overall_avg_order = round(summary_gross / total_invoice_count, 2) if total_invoice_count > 0 else 0
+    
     return {
         'accounts': accounts_data,
         'summary': {
@@ -5094,7 +5098,9 @@ async def get_account_performance(
             'total_outstanding': summary_outstanding,
             'total_overdue': summary_overdue,
             'account_count': len(accounts_data),
-            'total_revenue_base': total_gross_all  # For context on contribution calc
+            'total_invoice_count': total_invoice_count,
+            'average_order_amount': overall_avg_order,
+            'total_revenue_base': filtered_total_gross  # For context on contribution calc
         }
     }
 
