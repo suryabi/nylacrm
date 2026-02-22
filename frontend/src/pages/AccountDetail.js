@@ -210,16 +210,15 @@ export default function AccountDetail() {
     
     const fullAddress = addressParts.join(', ');
     
-    // Create Google Maps search URL
+    // Create Google Maps share link (place format - similar to share from Google Maps)
     const mapsQuery = encodeURIComponent(`${fullAddress}, India`);
-    const googleMapsLink = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
+    const googleMapsLink = `https://www.google.com/maps/place/${mapsQuery}`;
     
-    // Format the text to copy
-    const textToCopy = `📍 ${outletName}
-
+    // Format the text to copy (clean format without emojis)
+    const textToCopy = `${outletName}
 ${fullAddress}
 
-🗺️ Google Maps: ${googleMapsLink}`;
+${googleMapsLink}`;
 
     // Copy to clipboard
     navigator.clipboard.writeText(textToCopy).then(() => {
