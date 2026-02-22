@@ -227,7 +227,7 @@ export default function AccountPerformance() {
       </Card>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
         <Card className="p-4 bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
           <p className="text-xs font-medium text-emerald-600 mb-1">GROSS TOTAL</p>
           <p className="text-xl font-bold text-emerald-700">{formatCurrency(data.summary.total_gross)}</p>
@@ -235,6 +235,10 @@ export default function AccountPerformance() {
         <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
           <p className="text-xs font-medium text-blue-600 mb-1">NET TOTAL</p>
           <p className="text-xl font-bold text-blue-700">{formatCurrency(data.summary.total_net)}</p>
+        </Card>
+        <Card className="p-4 bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200">
+          <p className="text-xs font-medium text-indigo-600 mb-1">AVG ORDER</p>
+          <p className="text-xl font-bold text-indigo-700">{formatCurrency(data.summary.average_order_amount)}</p>
         </Card>
         <Card className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
           <p className="text-xs font-medium text-purple-600 mb-1">BOTTLE CREDIT</p>
