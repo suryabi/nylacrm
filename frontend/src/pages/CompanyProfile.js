@@ -88,7 +88,7 @@ const CopyButton = ({ text, label }) => {
 };
 
 export default function CompanyProfile() {
-  const { basicDetails, msme, bankDetails, paymentQR, businessIdentity, principalAddress, directors } = COMPANY_DATA;
+  const { basicDetails, msme, bankDetails, paymentQR, businessIdentity, principalAddress, officeContact, directors } = COMPANY_DATA;
 
   const handleDownloadQR = () => {
     const link = document.createElement('a');
