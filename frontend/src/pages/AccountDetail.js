@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { accountsAPI, usersAPI, skusAPI } from '../utils/api';
 import { Button } from '../components/ui/button';
@@ -7,7 +7,10 @@ import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
-import { ArrowLeft, Building2, Phone, MapPin, Save, Loader2, Plus, Trash2, FileText } from 'lucide-react';
+import { 
+  ArrowLeft, Building2, Phone, MapPin, Save, Loader2, Plus, Trash2, FileText,
+  DollarSign, CreditCard, Calendar, AlertTriangle, TrendingUp, Truck, Search
+} from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Select,
