@@ -10,7 +10,7 @@ import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
 import { 
   ArrowLeft, Building2, Phone, MapPin, Save, Loader2, Plus, Trash2, FileText,
-  DollarSign, CreditCard, Calendar, AlertTriangle, TrendingUp, Truck, Search
+  DollarSign, CreditCard, Calendar, AlertTriangle, TrendingUp, Truck, Search, Copy, ExternalLink
 } from 'lucide-react';
 import { format } from 'date-fns';
 import {
