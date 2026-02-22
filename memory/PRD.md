@@ -28,6 +28,19 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 
 ## What's Been Implemented
 
+### Feb 22, 2026 (Session 4)
+- **FEATURE**: Bottle Preview Phase 2 Enhancements
+  - **Tabbed bottle view**: Added "Air Water Duo" (2 bottles) and "Air Water Single" tabs to switch between bottle images
+  - **Rounded Square shape**: Added new logo shape option alongside Original, Circle, and Square
+  - **Advanced background removal**: 
+    - "Remove White Background" button for quick white/light background removal
+    - "Pick Color from Logo" feature with eyedropper-style color selection
+    - Tolerance slider (10-100) for fine-tuning color removal sensitivity
+    - Color preview with RGB values display
+  - Cropper dialog updated with "Rounded" crop shape option (20% corner radius)
+  - Updated bottle templates to use actual Air Water product images
+  - Status: VERIFIED - All 29 frontend tests passed (100% success rate)
+
 ### Feb 20, 2026 (Session 3)
 - **FEATURE**: Enhanced Bottle Preview with Logo Editing Tools
   - Added logo cropping with react-easy-crop library
