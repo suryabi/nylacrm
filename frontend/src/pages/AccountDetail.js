@@ -66,16 +66,61 @@ export default function AccountDetail() {
     fetchAccount();
     fetchUsers();
     fetchMasterSkus();
-    initGooglePlaces();
   }, [id]);
 
-  // Initialize Google Places Autocomplete
+  // Initialize Google Places when account is loaded (need city for location bias)
+  useEffect(() => {
+    if (account?.city) {
+      initGooglePlaces();
+    }
+  }, [account?.city]);
+
+  // Load Google Maps Script and Initialize Places
   const initGooglePlaces = () => {
+    const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+    
+    if (!GOOGLE_MAPS_API_KEY) {
+      console.log('Google Maps API key not configured');
+      return;
+    }
+
+    // Check if script already loaded
+    if (window.google && window.google.maps && window.google.maps.places) {
+      setupPlacesServices();
+      return;
+    }
+
+    // Check if script is already being loaded
+    if (document.querySelector('script[src*="maps.googleapis.com"]')) {
+      // Wait for it to load
+      const checkGoogleMaps = setInterval(() => {
+        if (window.google && window.google.maps && window.google.maps.places) {
+          clearInterval(checkGoogleMaps);
+          setupPlacesServices();
+        }
+      }, 100);
+      return;
+    }
+
+    // Load script
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      setupPlacesServices();
+    };
+    document.head.appendChild(script);
+  };
+
+  const setupPlacesServices = () => {
     if (window.google && window.google.maps && window.google.maps.places) {
       autocompleteServiceRef.current = new window.google.maps.places.AutocompleteService();
       // Create a hidden div for PlacesService
       const mapDiv = document.createElement('div');
-      const map = new window.google.maps.Map(mapDiv, { center: { lat: 0, lng: 0 }, zoom: 1 });
+      mapDiv.style.display = 'none';
+      document.body.appendChild(mapDiv);
+      const map = new window.google.maps.Map(mapDiv, { center: { lat: 20.5937, lng: 78.9629 }, zoom: 5 });
       placesServiceRef.current = new window.google.maps.places.PlacesService(map);
     }
   };
