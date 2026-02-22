@@ -277,11 +277,10 @@ export default function AccountPerformance() {
                 <tr>
                   <th className="text-left py-3 px-4 font-semibold">Account</th>
                   <th className="text-left py-3 px-4 font-semibold">Type</th>
-                  <th className="text-left py-3 px-4 font-semibold">Location</th>
-                  <th className="text-right py-3 px-4 font-semibold">Gross Invoice</th>
-                  <th className="text-right py-3 px-4 font-semibold">Net Invoice</th>
+                  <th className="text-right py-3 px-4 font-semibold">Invoice Value</th>
+                  <th className="text-right py-3 px-4 font-semibold">Avg Order</th>
                   <th className="text-right py-3 px-4 font-semibold">Bottle Credit</th>
-                  <th className="text-right py-3 px-4 font-semibold">Contribution %</th>
+                  <th className="text-right py-3 px-4 font-semibold">Contribution</th>
                   <th className="text-right py-3 px-4 font-semibold">Last Payment</th>
                   <th className="text-right py-3 px-4 font-semibold">Outstanding</th>
                   <th className="text-right py-3 px-4 font-semibold">Overdue</th>
@@ -298,7 +297,8 @@ export default function AccountPerformance() {
                     <td className="py-3 px-4">
                       <div>
                         <p className="font-medium text-primary">{row.account_name}</p>
-                        <p className="text-xs text-muted-foreground font-mono">{row.account_id}</p>
+                        <p className="text-xs text-muted-foreground">{row.city}, {row.state}</p>
+                        <p className="text-xs text-muted-foreground/70 font-mono">{row.account_id}</p>
                       </div>
                     </td>
                     <td className="py-3 px-4">
@@ -310,17 +310,18 @@ export default function AccountPerformance() {
                         <span className="text-muted-foreground">-</span>
                       )}
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4 text-right">
                       <div>
-                        <p className="text-sm">{row.city}</p>
-                        <p className="text-xs text-muted-foreground">{row.state}</p>
+                        <p className="font-medium text-emerald-600">{formatCurrency(row.gross_invoice_total)}</p>
+                        <p className="text-xs text-blue-600">Net: {formatCurrency(row.net_invoice_total)}</p>
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-right font-medium text-emerald-600">
-                      {formatCurrency(row.gross_invoice_total)}
-                    </td>
-                    <td className="py-3 px-4 text-right font-medium text-blue-600">
-                      {formatCurrency(row.net_invoice_total)}
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <ShoppingCart className="h-3 w-3 text-indigo-400" />
+                        <span className="font-medium text-indigo-600">{formatCurrency(row.average_order_amount)}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{row.invoice_count} orders</p>
                     </td>
                     <td className="py-3 px-4 text-right text-purple-600">
                       {formatCurrency(row.bottle_credit)}
@@ -341,9 +342,12 @@ export default function AccountPerformance() {
                       </div>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <CreditCard className="h-3 w-3 text-muted-foreground" />
-                        <span>{formatCurrency(row.last_payment_amount)}</span>
+                      <div>
+                        <p className="font-medium">{formatCurrency(row.last_payment_amount)}</p>
+                        <p className="text-xs text-muted-foreground flex items-center justify-end gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {formatDate(row.last_payment_date)}
+                        </p>
                       </div>
                     </td>
                     <td className="py-3 px-4 text-right">
