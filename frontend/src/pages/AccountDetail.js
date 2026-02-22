@@ -924,7 +924,7 @@ ${googleMapsLink}`;
             {deliveryAddress.address_line1 && (
               <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                 <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([deliveryAddress.address_line1, deliveryAddress.city, deliveryAddress.state].filter(Boolean).join(', ') + ', India')}`}
+                  href={`https://www.google.com/maps/place/${encodeURIComponent([deliveryAddress.address_line1, deliveryAddress.city, deliveryAddress.state, deliveryAddress.pincode].filter(Boolean).join(', ') + ', India')}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 text-sm text-blue-700 hover:text-blue-800"
