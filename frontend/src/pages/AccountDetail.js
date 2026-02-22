@@ -113,78 +113,62 @@ export default function AccountDetail() {
     }
   }, [account?.city]);
 
-  // Handle address selection from suggestions - use Geocoder for details
-  const handleSelectAddress = (placeId, description) => {
-    if (!placesServiceRef.current) {
-      // Fallback: just use the description directly
-      setDeliveryAddress({
-        ...deliveryAddress,
-        address_line1: description,
-        city: account?.city || '',
-        state: account?.state || ''
-      });
-      setAddressSearchQuery(description);
-      setAddressSuggestions([]);
-      toast.success('Address selected');
-      return;
-    }
+  // Handle address selection from suggestions
+  const handleSelectAddress = async (placeId, description) => {
+    // Parse the address from the description
+    // The description typically contains the full formatted address
+    const parts = description.split(',').map(p => p.trim());
+    
+    let newAddress = {
+      address_line1: description,
+      address_line2: '',
+      city: account?.city || '',
+      state: account?.state || '',
+      pincode: '',
+      landmark: ''
+    };
 
-    // Use Geocoder to get address components from place_id
-    placesServiceRef.current.geocode(
-      { placeId: placeId },
-      (results, status) => {
-        if (status === window.google.maps.GeocoderStatus.OK && results && results[0]) {
-          const place = results[0];
-          const components = place.address_components || [];
-          let newAddress = {
-            address_line1: description,
-            address_line2: '',
-            city: '',
-            state: '',
-            pincode: '',
-            landmark: ''
-          };
-
-          components.forEach(comp => {
-            const types = comp.types;
-            if (types.includes('locality')) {
-              newAddress.city = comp.long_name;
-            } else if (types.includes('administrative_area_level_1')) {
-              newAddress.state = comp.long_name;
-            } else if (types.includes('postal_code')) {
-              newAddress.pincode = comp.long_name;
-            } else if (types.includes('sublocality_level_1') || types.includes('sublocality')) {
-              newAddress.address_line2 = comp.long_name;
-            } else if (types.includes('route') || types.includes('street_address')) {
-              // If we have a more specific street, use it
-              if (!newAddress.address_line1.includes(comp.long_name)) {
-                newAddress.address_line1 = comp.long_name + ', ' + newAddress.address_line1;
-              }
-            }
-          });
-
-          // Fallback to account's city/state if not found in geocode result
-          if (!newAddress.city) newAddress.city = account?.city || '';
-          if (!newAddress.state) newAddress.state = account?.state || '';
-
-          setDeliveryAddress(newAddress);
-          setAddressSearchQuery(description);
-          setAddressSuggestions([]);
-          toast.success('Address details populated');
-        } else {
-          // Fallback on geocode failure
-          setDeliveryAddress({
-            ...deliveryAddress,
-            address_line1: description,
-            city: account?.city || '',
-            state: account?.state || ''
-          });
-          setAddressSearchQuery(description);
-          setAddressSuggestions([]);
-          toast.success('Address selected');
+    // Try to extract city, state, pincode from description
+    if (parts.length >= 2) {
+      // Last part is usually country
+      // Second to last is usually state + pincode
+      // Third to last is usually city
+      const lastPart = parts[parts.length - 1];
+      const secondLast = parts[parts.length - 2];
+      
+      // Check for pincode (6 digit number in India)
+      const pincodeMatch = description.match(/\b(\d{6})\b/);
+      if (pincodeMatch) {
+        newAddress.pincode = pincodeMatch[1];
+      }
+      
+      // If we have enough parts, try to identify city
+      if (parts.length >= 3) {
+        const thirdLast = parts[parts.length - 3];
+        if (thirdLast && !thirdLast.match(/^\d+$/)) {
+          newAddress.city = thirdLast.replace(/\d{6}/, '').trim();
         }
       }
-    );
+      
+      // Try to get address line 1 (everything before city/state)
+      if (parts.length >= 4) {
+        newAddress.address_line1 = parts.slice(0, parts.length - 3).join(', ');
+        newAddress.address_line2 = parts[parts.length - 3];
+      }
+    }
+
+    // Use account's city/state if extraction failed
+    if (!newAddress.city || newAddress.city.length < 2) {
+      newAddress.city = account?.city || '';
+    }
+    if (!newAddress.state || newAddress.state.length < 2) {
+      newAddress.state = account?.state || '';
+    }
+
+    setDeliveryAddress(newAddress);
+    setAddressSearchQuery(description);
+    setAddressSuggestions([]);
+    toast.success('Address selected - please verify the details');
   };
 
   // Save delivery address
