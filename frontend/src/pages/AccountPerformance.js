@@ -6,7 +6,7 @@ import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
-import { Building2, Filter, Loader2, TrendingUp, DollarSign, AlertTriangle, CreditCard } from 'lucide-react';
+import { Building2, Filter, Loader2, TrendingUp, AlertTriangle, Calendar, ShoppingCart } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
