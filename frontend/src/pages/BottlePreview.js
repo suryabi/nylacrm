@@ -1005,19 +1005,44 @@ export default function BottlePreview() {
           <Card className="p-6 bg-card border border-border rounded-2xl overflow-hidden">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold">Live Preview</h2>
-              {logoPreview && (
+              {logoPreview && !isColorPickerMode && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Move className="h-4 w-4" />
                   <span>Drag logo to reposition</span>
                 </div>
               )}
+              {isColorPickerMode && (
+                <div className="flex items-center gap-2 text-xs text-primary animate-pulse">
+                  <Pipette className="h-4 w-4" />
+                  <span>Click on logo to pick color</span>
+                </div>
+              )}
             </div>
+            
+            {/* Bottle Tabs */}
+            <Tabs value={selectedBottle} onValueChange={setSelectedBottle} className="mb-4">
+              <TabsList className="grid w-full grid-cols-2 bg-secondary/50 rounded-xl p-1">
+                {BOTTLE_TEMPLATES.map((bottle) => (
+                  <TabsTrigger 
+                    key={bottle.id} 
+                    value={bottle.id}
+                    className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                    data-testid={`bottle-tab-${bottle.id}`}
+                  >
+                    <div className="text-center">
+                      <span className="font-medium text-sm">{bottle.name}</span>
+                      <span className="block text-xs text-muted-foreground">{bottle.description}</span>
+                    </div>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
             
             <div 
               ref={bottleContainerRef}
-              className={`relative rounded-xl min-h-[650px] flex items-center justify-center select-none ${logoPreview ? 'cursor-move' : ''}`}
+              className={`relative rounded-xl min-h-[550px] flex items-center justify-center select-none ${logoPreview && !isColorPickerMode ? 'cursor-move' : ''}`}
               style={{
-                background: 'linear-gradient(180deg, #6b7280 0%, #9ca3af 50%, #e5e7eb 100%)'
+                background: 'linear-gradient(180deg, #f8f9fa 0%, #e9ecef 50%, #dee2e6 100%)'
               }}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
@@ -1026,52 +1051,65 @@ export default function BottlePreview() {
               onTouchEnd={handleTouchEnd}
               data-testid="bottle-preview-area"
             >
-              {!logoPreview ? (
-                <div className="text-center">
-                  <div className="h-24 w-24 mx-auto mb-4 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
-                    <Sparkles className="h-12 w-12 text-white/70" />
-                  </div>
-                  <p className="text-white/80 text-lg font-medium">Upload logo to see preview</p>
-                </div>
-              ) : (
-                <div className="relative w-full flex items-center justify-center py-4">
+              {/* Bottle Image */}
+              <img
+                src={BOTTLE_TEMPLATES.find(b => b.id === selectedBottle)?.image}
+                alt={BOTTLE_TEMPLATES.find(b => b.id === selectedBottle)?.name}
+                className="max-h-[520px] w-auto object-contain pointer-events-none rounded-lg"
+                data-testid="bottle-image"
+              />
+              
+              {/* Logo Overlay - Only show if logo is uploaded */}
+              {logoPreview && (
+                <div
+                  className={`absolute transition-all duration-75 ${isDragging ? 'scale-105 z-10' : ''} ${isColorPickerMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
+                  style={{
+                    left: `${logoPosition.x}%`,
+                    top: `${logoPosition.y}%`,
+                    transform: 'translate(-50%, -50%)',
+                    maxWidth: '35%',
+                    maxHeight: '25%'
+                  }}
+                  onMouseDown={isColorPickerMode ? undefined : handleMouseDown}
+                  onTouchStart={isColorPickerMode ? undefined : handleTouchStart}
+                  onClick={isColorPickerMode ? handleLogoClick : undefined}
+                  data-testid="draggable-logo-container"
+                >
                   <img
-                    src={BOTTLE_TEMPLATE}
-                    alt="Nyla 24 Brand Clear Glass Bottle"
-                    className="h-[580px] w-auto object-contain pointer-events-none"
-                  />
-                  
-                  {/* Draggable Logo */}
-                  <div
-                    className={`absolute cursor-grab active:cursor-grabbing transition-all duration-75 ${isDragging ? 'scale-105 z-10' : ''}`}
-                    style={{
-                      left: `${logoPosition.x}%`,
-                      top: `${logoPosition.y}%`,
-                      transform: 'translate(-50%, -50%)',
-                      maxWidth: '35%',
-                      maxHeight: '25%'
+                    ref={logoImageRef}
+                    src={logoPreview}
+                    alt="Customer Logo"
+                    className={`max-h-full object-contain transition-transform duration-200 ${isColorPickerMode ? '' : 'pointer-events-none'}`}
+                    style={{ 
+                      filter: `drop-shadow(0 2px 8px rgba(0,0,0,${isDragging ? '0.4' : '0.25'}))`,
+                      transform: `scale(${logoScale / 100})`,
+                      maxWidth: '150px',
+                      maxHeight: '100px',
+                      cursor: isColorPickerMode ? 'crosshair' : 'inherit'
                     }}
-                    onMouseDown={handleMouseDown}
-                    onTouchStart={handleTouchStart}
-                    data-testid="draggable-logo-container"
-                  >
-                    <img
-                      src={logoPreview}
-                      alt="Customer Logo"
-                      className="max-h-full object-contain transition-transform duration-200 pointer-events-none"
-                      style={{ 
-                        filter: `drop-shadow(0 2px 8px rgba(0,0,0,${isDragging ? '0.4' : '0.25'}))`,
-                        transform: `scale(${logoScale / 100})`,
-                        maxWidth: '150px',
-                        maxHeight: '100px'
-                      }}
-                      data-testid="preview-logo-img"
-                    />
-                    {isDragging && (
-                      <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-black/70 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
-                        Release to place
-                      </div>
-                    )}
+                    data-testid="preview-logo-img"
+                  />
+                  {isDragging && (
+                    <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-black/70 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                      Release to place
+                    </div>
+                  )}
+                  {isColorPickerMode && (
+                    <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-primary text-white text-xs px-2 py-1 rounded whitespace-nowrap animate-pulse">
+                      Click to select color
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Placeholder when no logo */}
+              {!logoPreview && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="text-center bg-black/20 backdrop-blur-sm rounded-2xl p-6">
+                    <div className="h-16 w-16 mx-auto mb-3 rounded-full bg-white/30 backdrop-blur flex items-center justify-center">
+                      <Sparkles className="h-8 w-8 text-white" />
+                    </div>
+                    <p className="text-white text-sm font-medium">Upload logo to see preview</p>
                   </div>
                 </div>
               )}
@@ -1081,7 +1119,9 @@ export default function BottlePreview() {
               <div className="mt-6 text-center bg-primary/5 rounded-xl p-4">
                 <p className="text-sm text-muted-foreground">White-Label Preview for</p>
                 <p className="text-xl font-semibold text-foreground">{customerName}</p>
-                <p className="text-sm text-primary mt-1">Nyla 24 Brand • Clear Glass</p>
+                <p className="text-sm text-primary mt-1">
+                  {BOTTLE_TEMPLATES.find(b => b.id === selectedBottle)?.name} • Air Water
+                </p>
               </div>
             )}
 
@@ -1089,7 +1129,7 @@ export default function BottlePreview() {
               <div className="mt-4 flex flex-wrap gap-2 justify-center">
                 {logoShape !== 'original' && (
                   <span className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-full">
-                    Shape: {logoShape}
+                    Shape: {logoShape.replace('-', ' ')}
                   </span>
                 )}
                 {logoScale !== 100 && (
@@ -1102,6 +1142,15 @@ export default function BottlePreview() {
                     Position: {Math.round(logoPosition.x)}%, {Math.round(logoPosition.y)}%
                   </span>
                 )}
+                {selectedBgColor && (
+                  <span className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-full flex items-center gap-1">
+                    <span 
+                      className="w-3 h-3 rounded-full border border-white/50"
+                      style={{ backgroundColor: `rgb(${selectedBgColor.r}, ${selectedBgColor.g}, ${selectedBgColor.b})` }}
+                    />
+                    BG Color Selected
+                  </span>
+                )}
               </div>
             )}
           </Card>
@@ -1112,7 +1161,7 @@ export default function BottlePreview() {
         <div className="text-center">
           <h3 className="text-sm font-semibold mb-3 text-foreground">Perfect for Customer Presentations</h3>
           <p className="text-sm text-foreground-muted max-w-3xl mx-auto">
-            Show customers exactly how their brand will look on Nyla's premium clear glass bottle. 
+            Show customers exactly how their brand will look on Air Water's premium bottles. 
             Use the editing tools to crop, reshape, remove backgrounds, and resize logos for the perfect fit.
             Ideal for live demos, corporate gifting discussions, and closing white-label deals.
           </p>
