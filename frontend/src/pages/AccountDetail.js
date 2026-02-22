@@ -186,14 +186,28 @@ export default function AccountDetail() {
     );
   }, [account?.city, account?.state]);
 
-  // Handle address selection from suggestions
+  // Handle address selection from suggestions - use Geocoder for details
   const handleSelectAddress = (placeId, description) => {
-    if (!placesServiceRef.current) return;
+    if (!placesServiceRef.current) {
+      // Fallback: just use the description directly
+      setDeliveryAddress({
+        ...deliveryAddress,
+        address_line1: description,
+        city: account?.city || '',
+        state: account?.state || ''
+      });
+      setAddressSearchQuery(description);
+      setAddressSuggestions([]);
+      toast.success('Address selected');
+      return;
+    }
 
-    placesServiceRef.current.getDetails(
-      { placeId, fields: ['address_components', 'formatted_address'] },
-      (place, status) => {
-        if (status === window.google.maps.places.PlacesServiceStatus.OK && place) {
+    // Use Geocoder to get address components from place_id
+    placesServiceRef.current.geocode(
+      { placeId: placeId },
+      (results, status) => {
+        if (status === window.google.maps.GeocoderStatus.OK && results && results[0]) {
+          const place = results[0];
           const components = place.address_components || [];
           let newAddress = {
             address_line1: description,
@@ -214,13 +228,33 @@ export default function AccountDetail() {
               newAddress.pincode = comp.long_name;
             } else if (types.includes('sublocality_level_1') || types.includes('sublocality')) {
               newAddress.address_line2 = comp.long_name;
+            } else if (types.includes('route') || types.includes('street_address')) {
+              // If we have a more specific street, use it
+              if (!newAddress.address_line1.includes(comp.long_name)) {
+                newAddress.address_line1 = comp.long_name + ', ' + newAddress.address_line1;
+              }
             }
           });
+
+          // Fallback to account's city/state if not found in geocode result
+          if (!newAddress.city) newAddress.city = account?.city || '';
+          if (!newAddress.state) newAddress.state = account?.state || '';
 
           setDeliveryAddress(newAddress);
           setAddressSearchQuery(description);
           setAddressSuggestions([]);
           toast.success('Address details populated');
+        } else {
+          // Fallback on geocode failure
+          setDeliveryAddress({
+            ...deliveryAddress,
+            address_line1: description,
+            city: account?.city || '',
+            state: account?.state || ''
+          });
+          setAddressSearchQuery(description);
+          setAddressSuggestions([]);
+          toast.success('Address selected');
         }
       }
     );
