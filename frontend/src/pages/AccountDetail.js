@@ -59,8 +59,6 @@ export default function AccountDetail() {
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [savingAddress, setSavingAddress] = useState(false);
   const addressSearchRef = useRef(null);
-  const autocompleteServiceRef = useRef(null);
-  const placesServiceRef = useRef(null);
 
   useEffect(() => {
     fetchAccount();
