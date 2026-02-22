@@ -568,15 +568,64 @@ export default function BottlePreview() {
     }
   };
 
-  const handleDownload = () => {
-    if (!logoPreview) return;
-    
-    // Create a composite image with bottle and logo
-    const link = document.createElement('a');
-    link.download = `bottle-preview-${customerName || 'custom'}.png`;
-    link.href = logoPreview;
-    link.click();
-    toast.success('Logo downloaded!');
+  // Download composite image (bottle + logo)
+  const handleDownloadComposite = async () => {
+    if (!logoPreview) {
+      toast.error('Please upload a logo first');
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      // Get current bottle template
+      const currentBottle = BOTTLE_TEMPLATES.find(b => b.id === selectedBottle);
+      
+      // Load bottle image
+      const bottleImage = await createImage(currentBottle.image);
+      const logoImage = await createImage(logoPreview);
+      
+      // Create canvas for composite
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // Set canvas size to bottle image size
+      canvas.width = bottleImage.width;
+      canvas.height = bottleImage.height;
+      
+      // Draw bottle image
+      ctx.drawImage(bottleImage, 0, 0);
+      
+      // Calculate logo position and size based on current settings
+      const logoWidth = (logoImage.width * (logoScale / 100));
+      const logoHeight = (logoImage.height * (logoScale / 100));
+      
+      // Scale logo to fit reasonably on the bottle (max 25% of bottle width)
+      const maxLogoWidth = bottleImage.width * 0.25;
+      const scaleFactor = logoWidth > maxLogoWidth ? maxLogoWidth / logoWidth : 1;
+      const finalLogoWidth = logoWidth * scaleFactor;
+      const finalLogoHeight = logoHeight * scaleFactor;
+      
+      // Position logo based on logoPosition (percentage based)
+      const logoX = (logoPosition.x / 100) * bottleImage.width - (finalLogoWidth / 2);
+      const logoY = (logoPosition.y / 100) * bottleImage.height - (finalLogoHeight / 2);
+      
+      // Draw logo on bottle
+      ctx.drawImage(logoImage, logoX, logoY, finalLogoWidth, finalLogoHeight);
+      
+      // Create download link
+      const link = document.createElement('a');
+      const bottleName = currentBottle.name.replace(/\s+/g, '-').toLowerCase();
+      link.download = `${bottleName}-${customerName || 'custom'}-preview.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      
+      toast.success(`${currentBottle.name} preview downloaded!`);
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Failed to download preview');
+    } finally {
+      setProcessing(false);
+    }
   };
 
   return (
