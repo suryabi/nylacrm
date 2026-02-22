@@ -650,6 +650,14 @@ export default function BottlePreview() {
                 >
                   <Circle className="h-4 w-4 mr-2" /> Circle
                 </Button>
+                <Button
+                  variant={cropShape === 'rounded-rect' ? 'default' : 'outline'}
+                  onClick={() => setCropShape('rounded-rect')}
+                  className="flex-1"
+                  data-testid="crop-shape-rounded-btn"
+                >
+                  <RectangleHorizontal className="h-4 w-4 mr-2" /> Rounded
+                </Button>
               </div>
 
               <div className="flex gap-2">
