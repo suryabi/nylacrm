@@ -29,7 +29,6 @@ import ReportsPage from './pages/ReportsPage';
 import SalesPortal from './pages/SalesPortal';
 import LeadDiscovery from './pages/LeadDiscovery';
 import COGSCalculator from './pages/COGSCalculator';
-import ProposalGenerator from './pages/ProposalGenerator';
 import SalesRevenueDashboard from './pages/SalesRevenueDashboard';
 import TargetSKUReport from './pages/TargetSKUReport';
 import TargetResourceReport from './pages/TargetResourceReport';
@@ -103,7 +102,6 @@ function AppRouter() {
           <Route path="/sales-portal" element={<ProtectedRoute><SalesPortal /></ProtectedRoute>} />
           <Route path="/lead-discovery" element={<ProtectedRoute><LeadDiscovery /></ProtectedRoute>} />
           <Route path="/cogs-calculator" element={<ProtectedRoute><COGSCalculator /></ProtectedRoute>} />
-          <Route path="/proposals" element={<ProtectedRoute><ProposalGenerator /></ProtectedRoute>} />
           <Route path="/sales-revenue" element={<ProtectedRoute><SalesRevenueDashboard /></ProtectedRoute>} />
           <Route path="/target-sku" element={<ProtectedRoute><TargetSKUReport /></ProtectedRoute>} />
           <Route path="/target-resource" element={<ProtectedRoute><TargetResourceReport /></ProtectedRoute>} />
