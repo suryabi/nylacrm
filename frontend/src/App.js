@@ -115,6 +115,7 @@ function AppRouter() {
           <Route path="/transportation-calculator" element={<ProtectedRoute><TransportationCostCalculator /></ProtectedRoute>} />
           <Route path="/sku-management" element={<ProtectedRoute><SKUManagement /></ProtectedRoute>} />
           <Route path="/company-profile" element={<ProtectedRoute><CompanyProfile /></ProtectedRoute>} />
+          <Route path="/files-documents" element={<ProtectedRoute><FilesDocuments /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </>
