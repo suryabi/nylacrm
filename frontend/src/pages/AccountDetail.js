@@ -66,7 +66,112 @@ export default function AccountDetail() {
     fetchAccount();
     fetchUsers();
     fetchMasterSkus();
+    initGooglePlaces();
   }, [id]);
+
+  // Initialize Google Places Autocomplete
+  const initGooglePlaces = () => {
+    if (window.google && window.google.maps && window.google.maps.places) {
+      autocompleteServiceRef.current = new window.google.maps.places.AutocompleteService();
+      // Create a hidden div for PlacesService
+      const mapDiv = document.createElement('div');
+      const map = new window.google.maps.Map(mapDiv, { center: { lat: 0, lng: 0 }, zoom: 1 });
+      placesServiceRef.current = new window.google.maps.places.PlacesService(map);
+    }
+  };
+
+  // Search for address suggestions
+  const handleAddressSearch = useCallback((query) => {
+    setAddressSearchQuery(query);
+    
+    if (!query || query.length < 3) {
+      setAddressSuggestions([]);
+      return;
+    }
+
+    if (!autocompleteServiceRef.current) {
+      initGooglePlaces();
+      if (!autocompleteServiceRef.current) return;
+    }
+
+    setIsSearchingAddress(true);
+    autocompleteServiceRef.current.getPlacePredictions(
+      {
+        input: query,
+        componentRestrictions: { country: 'in' },
+        types: ['address']
+      },
+      (predictions, status) => {
+        setIsSearchingAddress(false);
+        if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
+          setAddressSuggestions(predictions);
+        } else {
+          setAddressSuggestions([]);
+        }
+      }
+    );
+  }, []);
+
+  // Handle address selection from suggestions
+  const handleSelectAddress = (placeId, description) => {
+    if (!placesServiceRef.current) return;
+
+    placesServiceRef.current.getDetails(
+      { placeId, fields: ['address_components', 'formatted_address'] },
+      (place, status) => {
+        if (status === window.google.maps.places.PlacesServiceStatus.OK && place) {
+          const components = place.address_components || [];
+          let newAddress = {
+            address_line1: description,
+            address_line2: '',
+            city: '',
+            state: '',
+            pincode: '',
+            landmark: ''
+          };
+
+          components.forEach(comp => {
+            const types = comp.types;
+            if (types.includes('locality')) {
+              newAddress.city = comp.long_name;
+            } else if (types.includes('administrative_area_level_1')) {
+              newAddress.state = comp.long_name;
+            } else if (types.includes('postal_code')) {
+              newAddress.pincode = comp.long_name;
+            } else if (types.includes('sublocality_level_1') || types.includes('sublocality')) {
+              newAddress.address_line2 = comp.long_name;
+            }
+          });
+
+          setDeliveryAddress(newAddress);
+          setAddressSearchQuery(description);
+          setAddressSuggestions([]);
+          toast.success('Address details populated');
+        }
+      }
+    );
+  };
+
+  // Save delivery address
+  const handleSaveDeliveryAddress = async () => {
+    if (!deliveryAddress.address_line1) {
+      toast.error('Please enter an address');
+      return;
+    }
+
+    setSavingAddress(true);
+    try {
+      await accountsAPI.update(id, {
+        delivery_address: deliveryAddress
+      });
+      toast.success('Delivery address saved successfully');
+      fetchAccount(); // Refresh account data
+    } catch (error) {
+      toast.error('Failed to save delivery address');
+    } finally {
+      setSavingAddress(false);
+    }
+  };
 
   const fetchMasterSkus = async () => {
     try {
