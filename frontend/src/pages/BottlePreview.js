@@ -1190,6 +1190,28 @@ export default function BottlePreview() {
                 )}
               </div>
             )}
+            
+            {/* Download Button - Below Bottle Preview */}
+            <div className="mt-6">
+              <Button
+                onClick={handleDownloadComposite}
+                className="w-full h-14 rounded-full text-base bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+                disabled={!logoPreview || processing}
+                data-testid="download-composite-btn"
+              >
+                {processing ? (
+                  <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Creating Preview...</>
+                ) : (
+                  <>
+                    <Download className="h-5 w-5 mr-2" />
+                    Download {BOTTLE_TEMPLATES.find(b => b.id === selectedBottle)?.name} Preview
+                  </>
+                )}
+              </Button>
+              <p className="text-xs text-muted-foreground text-center mt-2">
+                Downloads bottle image with your logo configured
+              </p>
+            </div>
           </Card>
         </div>
       </div>
