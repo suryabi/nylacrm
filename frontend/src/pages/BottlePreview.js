@@ -52,6 +52,22 @@ const createCroppedImage = async (imageSrc, pixelCrop, shape = 'rectangle') => {
       2 * Math.PI
     );
     ctx.clip();
+  } else if (shape === 'rounded-square') {
+    // Rounded square with border radius
+    const size = Math.min(pixelCrop.width, pixelCrop.height);
+    const radius = size * 0.2; // 20% corner radius
+    ctx.beginPath();
+    ctx.moveTo(radius, 0);
+    ctx.lineTo(pixelCrop.width - radius, 0);
+    ctx.quadraticCurveTo(pixelCrop.width, 0, pixelCrop.width, radius);
+    ctx.lineTo(pixelCrop.width, pixelCrop.height - radius);
+    ctx.quadraticCurveTo(pixelCrop.width, pixelCrop.height, pixelCrop.width - radius, pixelCrop.height);
+    ctx.lineTo(radius, pixelCrop.height);
+    ctx.quadraticCurveTo(0, pixelCrop.height, 0, pixelCrop.height - radius);
+    ctx.lineTo(0, radius);
+    ctx.quadraticCurveTo(0, 0, radius, 0);
+    ctx.closePath();
+    ctx.clip();
   }
 
   ctx.drawImage(
