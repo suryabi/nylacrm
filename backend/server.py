@@ -5019,6 +5019,13 @@ async def get_account_performance(
     summary_outstanding = 0
     summary_overdue = 0
     
+    # Calculate filtered total gross for accurate contribution %
+    filtered_total_gross = 0
+    for acc in accounts:
+        acc_id = acc.get('account_id')
+        inv_data = account_invoices.get(acc_id, {'gross_total': 0})
+        filtered_total_gross += inv_data['gross_total']
+    
     for acc in accounts:
         acc_id = acc.get('account_id')
         inv_data = account_invoices.get(acc_id, {
@@ -5028,15 +5035,21 @@ async def get_account_performance(
             'invoice_count': 0
         })
         
-        # Calculate contribution percentage (based on filtered total)
+        # Calculate contribution percentage (based on filtered accounts' total, not all invoices)
         contribution_pct = 0
-        if total_gross_all > 0:
-            contribution_pct = round((inv_data['gross_total'] / total_gross_all) * 100, 2)
+        if filtered_total_gross > 0:
+            contribution_pct = round((inv_data['gross_total'] / filtered_total_gross) * 100, 2)
+        
+        # Calculate average order amount
+        average_order = 0
+        if inv_data['invoice_count'] > 0:
+            average_order = round(inv_data['gross_total'] / inv_data['invoice_count'], 2)
         
         # Get financial data from account
         outstanding = acc.get('outstanding_balance', 0)
         overdue = acc.get('overdue_amount', 0)
         last_payment = acc.get('last_payment_amount', 0)
+        last_payment_date = acc.get('last_payment_date', '')
         
         # Calculate bottle credit from SKU pricing if not in invoices
         sku_pricing = acc.get('sku_pricing', [])
@@ -5054,9 +5067,11 @@ async def get_account_performance(
             'net_invoice_total': inv_data['net_total'],
             'bottle_credit': bottle_credit,
             'contribution_pct': contribution_pct,
+            'average_order_amount': average_order,
             'outstanding_balance': outstanding,
             'overdue_amount': overdue,
             'last_payment_amount': last_payment,
+            'last_payment_date': last_payment_date,
             'invoice_count': inv_data['invoice_count']
         })
         
