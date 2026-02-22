@@ -195,8 +195,8 @@ export default function AccountDetail() {
   };
 
   // Copy delivery address with outlet name and Google Maps link
-  // Copy delivery address with outlet name and Google Maps share link
-  const handleCopyDeliveryAddress = async () => {
+  // Copy delivery address with outlet name and Google Maps link
+  const handleCopyDeliveryAddress = () => {
     const outletName = account?.account_name || 'Unknown Outlet';
     
     // Build full address string
@@ -211,55 +211,29 @@ export default function AccountDetail() {
     
     const fullAddress = addressParts.join(', ');
     
-    // Show loading toast
-    const loadingToast = toast.loading('Generating share link...');
+    // Create Google Maps place link
+    const mapsQuery = encodeURIComponent(`${fullAddress}, India`);
+    const googleMapsLink = `https://www.google.com/maps/place/${mapsQuery}`;
     
-    try {
-      // Call backend to generate short link
-      const token = localStorage.getItem('token');
-      const response = await axios.post(
-        `${process.env.REACT_APP_BACKEND_URL}/api/maps/short-link`,
-        { address: fullAddress, name: outletName },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      const googleMapsLink = response.data.short_link;
-      
-      // Format the text to copy
-      const textToCopy = `${outletName}
+    // Format the text to copy
+    const textToCopy = `${outletName}
 ${fullAddress}
 
 ${googleMapsLink}`;
 
-      // Copy to clipboard
-      await navigator.clipboard.writeText(textToCopy);
-      toast.dismiss(loadingToast);
+    // Copy to clipboard
+    navigator.clipboard.writeText(textToCopy).then(() => {
       toast.success('Address copied to clipboard!');
-    } catch (error) {
-      toast.dismiss(loadingToast);
-      // Fallback to basic format
-      const mapsQuery = encodeURIComponent(`${fullAddress}, India`);
-      const fallbackLink = `https://www.google.com/maps/place/${mapsQuery}`;
-      
-      const textToCopy = `${outletName}
-${fullAddress}
-
-${fallbackLink}`;
-
-      try {
-        await navigator.clipboard.writeText(textToCopy);
-        toast.success('Address copied to clipboard!');
-      } catch {
-        // Final fallback for older browsers
-        const textArea = document.createElement('textarea');
-        textArea.value = textToCopy;
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-        toast.success('Address copied to clipboard!');
-      }
-    }
+    }).catch(() => {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = textToCopy;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      toast.success('Address copied to clipboard!');
+    });
   };
 
   const fetchMasterSkus = async () => {
