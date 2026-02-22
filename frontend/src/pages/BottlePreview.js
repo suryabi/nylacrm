@@ -813,23 +813,88 @@ export default function BottlePreview() {
                 {/* Background Removal */}
                 <div>
                   <Label className="text-sm text-muted-foreground mb-2 block">Background Removal</Label>
-                  <Button
-                    onClick={handleRemoveBackground}
-                    variant="outline"
-                    className="w-full h-12 rounded-xl"
-                    disabled={processing}
-                    data-testid="remove-bg-btn"
-                  >
-                    {processing ? (
-                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                    ) : (
-                      <Eraser className="h-5 w-5 mr-2" />
-                    )}
-                    Remove White Background
-                  </Button>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Best for logos with white/light backgrounds
-                  </p>
+                  <div className="space-y-3">
+                    {/* Quick white background removal */}
+                    <Button
+                      onClick={handleRemoveWhiteBackground}
+                      variant="outline"
+                      className="w-full h-12 rounded-xl"
+                      disabled={processing}
+                      data-testid="remove-white-bg-btn"
+                    >
+                      {processing ? (
+                        <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                      ) : (
+                        <Eraser className="h-5 w-5 mr-2" />
+                      )}
+                      Remove White Background
+                    </Button>
+                    
+                    {/* Color picker background removal */}
+                    <div className="bg-secondary/50 rounded-xl p-3 space-y-3">
+                      <p className="text-xs text-muted-foreground text-center font-medium">
+                        Or pick a specific color to remove
+                      </p>
+                      
+                      <Button
+                        onClick={enableColorPickerMode}
+                        variant={isColorPickerMode ? 'default' : 'outline'}
+                        className="w-full h-10 rounded-lg text-sm"
+                        disabled={processing}
+                        data-testid="color-picker-btn"
+                      >
+                        <Pipette className="h-4 w-4 mr-2" />
+                        {isColorPickerMode ? 'Click on logo to pick color...' : 'Pick Color from Logo'}
+                      </Button>
+                      
+                      {selectedBgColor && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <div 
+                              className="w-8 h-8 rounded-lg border border-border shadow-inner"
+                              style={{ backgroundColor: `rgb(${selectedBgColor.r}, ${selectedBgColor.g}, ${selectedBgColor.b})` }}
+                              data-testid="selected-color-preview"
+                            />
+                            <span className="text-xs text-muted-foreground">
+                              RGB({selectedBgColor.r}, {selectedBgColor.g}, {selectedBgColor.b})
+                            </span>
+                          </div>
+                          
+                          <div className="space-y-1">
+                            <Label className="text-xs text-muted-foreground">
+                              Tolerance: {bgRemovalTolerance}
+                            </Label>
+                            <Slider
+                              value={[bgRemovalTolerance]}
+                              min={10}
+                              max={100}
+                              step={5}
+                              onValueChange={(value) => setBgRemovalTolerance(value[0])}
+                              className="py-1"
+                              data-testid="tolerance-slider"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Higher = removes more similar colors
+                            </p>
+                          </div>
+                          
+                          <Button
+                            onClick={handleApplyColorRemoval}
+                            className="w-full h-10 rounded-lg text-sm"
+                            disabled={processing}
+                            data-testid="apply-color-removal-btn"
+                          >
+                            {processing ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Check className="h-4 w-4 mr-2" />
+                            )}
+                            Apply Color Removal
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Size Slider */}
