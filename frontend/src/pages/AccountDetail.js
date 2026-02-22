@@ -115,13 +115,18 @@ export default function AccountDetail() {
 
   const setupPlacesServices = () => {
     if (window.google && window.google.maps && window.google.maps.places) {
-      autocompleteServiceRef.current = new window.google.maps.places.AutocompleteService();
-      // Create a hidden div for PlacesService
-      const mapDiv = document.createElement('div');
-      mapDiv.style.display = 'none';
-      document.body.appendChild(mapDiv);
-      const map = new window.google.maps.Map(mapDiv, { center: { lat: 20.5937, lng: 78.9629 }, zoom: 5 });
-      placesServiceRef.current = new window.google.maps.places.PlacesService(map);
+      try {
+        autocompleteServiceRef.current = new window.google.maps.places.AutocompleteService();
+        // Create a hidden div for PlacesService
+        const mapDiv = document.createElement('div');
+        mapDiv.style.display = 'none';
+        document.body.appendChild(mapDiv);
+        const map = new window.google.maps.Map(mapDiv, { center: { lat: 20.5937, lng: 78.9629 }, zoom: 5 });
+        placesServiceRef.current = new window.google.maps.places.PlacesService(map);
+        console.log('Google Places services initialized');
+      } catch (error) {
+        console.error('Failed to initialize Google Places services:', error);
+      }
     }
   };
 
