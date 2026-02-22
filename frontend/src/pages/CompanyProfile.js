@@ -350,38 +350,75 @@ export default function CompanyProfile() {
       {/* Principal Place of Business */}
       <Card className="overflow-hidden">
         <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4">
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            Principal Place of Business
-          </h2>
-          <p className="text-amber-100 text-sm mt-1">Corporate Address</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                Principal Place of Business
+              </h2>
+              <p className="text-amber-100 text-sm mt-1">Corporate Address</p>
+            </div>
+            <a
+              href={principalAddress.googleMapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors"
+              data-testid="google-maps-link"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+              </svg>
+              <span className="font-medium">Open in Maps</span>
+              <ExternalLink className="h-4 w-4" />
+            </a>
+          </div>
         </div>
         <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Full Address Card */}
-            <div className="md:col-span-2 lg:col-span-1 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-5 border border-amber-200">
+            <div className="lg:col-span-1 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-5 border border-amber-200">
               <div className="flex items-start gap-3">
-                <div className="p-2 bg-amber-100 rounded-lg">
+                <div className="p-2 bg-amber-100 rounded-lg flex-shrink-0">
                   <MapPin className="h-5 w-5 text-amber-600" />
                 </div>
                 <div className="text-sm leading-relaxed flex-1">
+                  <p className="font-semibold text-foreground text-base">{principalAddress.buildingName}</p>
                   <p className="font-medium text-foreground">{principalAddress.floor}, {principalAddress.unitFlatNo}</p>
                   <p className="text-foreground">{principalAddress.buildingPlotNo}</p>
                   <p className="text-foreground">{principalAddress.roadStreet}</p>
                   <p className="text-foreground">{principalAddress.locality}</p>
+                  <p className="text-muted-foreground italic mt-1">{principalAddress.landmark}</p>
                   <p className="font-medium text-foreground mt-2">
                     {principalAddress.city}, {principalAddress.state} - {principalAddress.pinCode}
                   </p>
                 </div>
                 <CopyButton 
-                  text={`${principalAddress.floor}, ${principalAddress.unitFlatNo}, ${principalAddress.buildingPlotNo}, ${principalAddress.roadStreet}, ${principalAddress.locality}, ${principalAddress.city}, ${principalAddress.state} - ${principalAddress.pinCode}`} 
+                  text={`${principalAddress.buildingName}, ${principalAddress.floor}, ${principalAddress.unitFlatNo}, ${principalAddress.buildingPlotNo}, ${principalAddress.roadStreet}, ${principalAddress.locality}, ${principalAddress.landmark}, ${principalAddress.city}, ${principalAddress.state} - ${principalAddress.pinCode}`} 
                   label="Address" 
                 />
               </div>
+              
+              {/* Google Maps Button */}
+              <a
+                href={principalAddress.googleMapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-4 py-3 rounded-lg transition-all w-full"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                </svg>
+                <span className="font-medium">Get Directions</span>
+                <Navigation className="h-4 w-4" />
+              </a>
             </div>
 
             {/* Address Components */}
             <div className="space-y-3">
+              <div className="flex justify-between py-2 border-b border-dashed">
+                <span className="text-muted-foreground text-sm">Building</span>
+                <span className="font-semibold text-foreground text-sm">{principalAddress.buildingName}</span>
+              </div>
               <div className="flex justify-between py-2 border-b border-dashed">
                 <span className="text-muted-foreground text-sm">Floor</span>
                 <span className="font-medium text-foreground text-sm">{principalAddress.floor}</span>
@@ -391,12 +428,16 @@ export default function CompanyProfile() {
                 <span className="font-medium text-foreground text-sm">{principalAddress.unitFlatNo}</span>
               </div>
               <div className="flex justify-between py-2 border-b border-dashed">
-                <span className="text-muted-foreground text-sm">Building / Plot No.</span>
+                <span className="text-muted-foreground text-sm">Plot No.</span>
                 <span className="font-medium text-foreground text-sm">{principalAddress.buildingPlotNo}</span>
               </div>
-              <div className="flex justify-between py-2">
+              <div className="flex justify-between py-2 border-b border-dashed">
                 <span className="text-muted-foreground text-sm">Road / Street</span>
                 <span className="font-medium text-foreground text-sm text-right max-w-[50%]">{principalAddress.roadStreet}</span>
+              </div>
+              <div className="flex justify-between py-2">
+                <span className="text-muted-foreground text-sm">Landmark</span>
+                <span className="font-medium text-foreground text-sm text-right max-w-[50%]">{principalAddress.landmark}</span>
               </div>
             </div>
 
@@ -423,6 +464,44 @@ export default function CompanyProfile() {
                   <span className="font-mono font-semibold text-foreground">{principalAddress.pinCode}</span>
                   <CopyButton text={principalAddress.pinCode} label="PIN Code" />
                 </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Office Contact Person */}
+          <div className="mt-6 pt-6 border-t border-dashed">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-200">
+              <div className="flex items-center gap-2 mb-3">
+                <User className="h-5 w-5 text-blue-600" />
+                <h3 className="font-semibold text-foreground">Office Contact Person</h3>
+                <Badge className="bg-blue-100 text-blue-700 text-xs">{officeContact.purpose}</Badge>
+              </div>
+              <div className="flex flex-wrap items-center gap-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                    <span className="text-lg font-bold text-blue-600">{officeContact.name.charAt(0)}</span>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-foreground">{officeContact.name}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Phone className="h-4 w-4 text-blue-600" />
+                      <a 
+                        href={`tel:${officeContact.phone.replace(/\s/g, '')}`}
+                        className="font-mono text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        {officeContact.phone}
+                      </a>
+                      <CopyButton text={officeContact.phone.replace(/\s/g, '')} label="Phone" />
+                    </div>
+                  </div>
+                </div>
+                <a
+                  href={`tel:${officeContact.phone.replace(/\s/g, '')}`}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors ml-auto"
+                >
+                  <Phone className="h-4 w-4" />
+                  <span className="font-medium">Call Now</span>
+                </a>
               </div>
             </div>
           </div>
