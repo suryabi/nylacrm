@@ -876,19 +876,45 @@ ${fullAddress}
               </div>
             </div>
 
-            {/* Save Button */}
-            <Button
-              onClick={handleSaveDeliveryAddress}
-              className="w-full mt-4"
-              disabled={savingAddress || !deliveryAddress.address_line1}
-              data-testid="save-delivery-address-btn"
-            >
-              {savingAddress ? (
-                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
-              ) : (
-                <><Save className="h-4 w-4 mr-2" /> Save Delivery Address</>
-              )}
-            </Button>
+            {/* Action Buttons */}
+            <div className="flex gap-2 mt-4">
+              <Button
+                onClick={handleSaveDeliveryAddress}
+                className="flex-1"
+                disabled={savingAddress || !deliveryAddress.address_line1}
+                data-testid="save-delivery-address-btn"
+              >
+                {savingAddress ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
+                ) : (
+                  <><Save className="h-4 w-4 mr-2" /> Save</>
+                )}
+              </Button>
+              <Button
+                onClick={handleCopyDeliveryAddress}
+                variant="outline"
+                disabled={!deliveryAddress.address_line1}
+                data-testid="copy-delivery-address-btn"
+                title="Copy outlet name, address & Google Maps link"
+              >
+                <Copy className="h-4 w-4 mr-2" /> Copy
+              </Button>
+            </div>
+            
+            {/* Google Maps Link Preview */}
+            {deliveryAddress.address_line1 && (
+              <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([deliveryAddress.address_line1, deliveryAddress.city, deliveryAddress.state].filter(Boolean).join(', ') + ', India')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm text-blue-700 hover:text-blue-800"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  <span>Open in Google Maps</span>
+                </a>
+              </div>
+            )}
           </Card>
 
           {/* Account Details */}
