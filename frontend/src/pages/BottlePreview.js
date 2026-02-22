@@ -441,11 +441,41 @@ export default function BottlePreview() {
         ctx.drawImage(image, offsetX, offsetY, size, size, 0, 0, size, size);
 
         setLogoPreview(canvas.toDataURL('image/png'));
+      } else if (shape === 'rounded-square') {
+        // Create rounded square version
+        const image = await createImage(originalLogo);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const size = Math.min(image.width, image.height);
+        const radius = size * 0.2; // 20% corner radius
+        
+        canvas.width = size;
+        canvas.height = size;
+
+        // Draw rounded rectangle path
+        ctx.beginPath();
+        ctx.moveTo(radius, 0);
+        ctx.lineTo(size - radius, 0);
+        ctx.quadraticCurveTo(size, 0, size, radius);
+        ctx.lineTo(size, size - radius);
+        ctx.quadraticCurveTo(size, size, size - radius, size);
+        ctx.lineTo(radius, size);
+        ctx.quadraticCurveTo(0, size, 0, size - radius);
+        ctx.lineTo(0, radius);
+        ctx.quadraticCurveTo(0, 0, radius, 0);
+        ctx.closePath();
+        ctx.clip();
+
+        const offsetX = (image.width - size) / 2;
+        const offsetY = (image.height - size) / 2;
+        ctx.drawImage(image, offsetX, offsetY, size, size, 0, 0, size, size);
+
+        setLogoPreview(canvas.toDataURL('image/png'));
       } else {
         setLogoPreview(originalLogo);
       }
       setLogoShape(shape);
-      toast.success(`Shape changed to ${shape}`);
+      toast.success(`Shape changed to ${shape.replace('-', ' ')}`);
     } catch (error) {
       toast.error('Failed to change shape');
     } finally {
