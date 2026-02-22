@@ -209,6 +209,12 @@ export default function AccountDetail() {
       setContactNumber(data.contact_number || '');
       setSkuPricing(data.sku_pricing || []);
       
+      // Load delivery address if exists
+      if (data.delivery_address) {
+        setDeliveryAddress(data.delivery_address);
+        setAddressSearchQuery(data.delivery_address.address_line1 || '');
+      }
+      
       // Fetch invoices
       fetchInvoices(id);
     } catch (error) {
