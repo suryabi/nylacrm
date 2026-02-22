@@ -2024,7 +2024,7 @@ async def get_account(account_id: str, current_user: dict = Depends(get_current_
 
 @api_router.put("/accounts/{account_id}")
 async def update_account(account_id: str, update_data: AccountUpdate, current_user: dict = Depends(get_current_user)):
-    """Update account details including SKU pricing"""
+    """Update account details including SKU pricing and delivery address"""
     account = await db.accounts.find_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
         {'_id': 0}
@@ -2040,6 +2040,11 @@ async def update_account(account_id: str, update_data: AccountUpdate, current_us
             sku.model_dump() if hasattr(sku, 'model_dump') else sku 
             for sku in update_dict['sku_pricing']
         ]
+    
+    # Convert delivery address to dict format
+    if 'delivery_address' in update_dict and update_dict['delivery_address']:
+        if hasattr(update_dict['delivery_address'], 'model_dump'):
+            update_dict['delivery_address'] = update_dict['delivery_address'].model_dump()
     
     update_dict['updated_at'] = datetime.now(timezone.utc).isoformat()
     
