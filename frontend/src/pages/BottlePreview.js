@@ -385,7 +385,10 @@ export default function BottlePreview() {
 
     setProcessing(true);
     try {
-      const shapeType = cropShape === 'round' ? 'circle' : 'rectangle';
+      let shapeType = 'rectangle';
+      if (cropShape === 'round') shapeType = 'circle';
+      else if (cropShape === 'rounded-rect') shapeType = 'rounded-square';
+      
       const croppedImage = await createCroppedImage(originalLogo, croppedAreaPixels, shapeType);
       setLogoPreview(croppedImage);
       setOriginalLogo(croppedImage); // Update original for further edits
