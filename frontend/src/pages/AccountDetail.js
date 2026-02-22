@@ -66,64 +66,6 @@ export default function AccountDetail() {
     fetchMasterSkus();
   }, [id]);
 
-  // Initialize Google Places when account is loaded (need city for location bias)
-  useEffect(() => {
-    if (account?.city) {
-      initGooglePlaces();
-    }
-  }, [account?.city]);
-
-  // Load Google Maps Script and Initialize Places
-  const initGooglePlaces = () => {
-    const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
-    
-    if (!GOOGLE_MAPS_API_KEY) {
-      console.log('Google Maps API key not configured');
-      return;
-    }
-
-    // Check if script already loaded
-    if (window.google && window.google.maps && window.google.maps.places) {
-      setupPlacesServices();
-      return;
-    }
-
-    // Check if script is already being loaded
-    if (document.querySelector('script[src*="maps.googleapis.com"]')) {
-      // Wait for it to load
-      const checkGoogleMaps = setInterval(() => {
-        if (window.google && window.google.maps && window.google.maps.places) {
-          clearInterval(checkGoogleMaps);
-          setupPlacesServices();
-        }
-      }, 100);
-      return;
-    }
-
-    // Load script with only places library (no need for full maps)
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      setupPlacesServices();
-    };
-    document.head.appendChild(script);
-  };
-
-  const setupPlacesServices = () => {
-    if (window.google && window.google.maps && window.google.maps.places) {
-      try {
-        autocompleteServiceRef.current = new window.google.maps.places.AutocompleteService();
-        // Use Geocoder instead of PlacesService to avoid Map dependency
-        placesServiceRef.current = new window.google.maps.Geocoder();
-        console.log('Google Places services initialized (using Geocoder for details)');
-      } catch (error) {
-        console.error('Failed to initialize Google Places services:', error);
-      }
-    }
-  };
-
   // Search for address suggestions - restricted to account's city
   const handleAddressSearch = useCallback(async (query) => {
     setAddressSearchQuery(query);
