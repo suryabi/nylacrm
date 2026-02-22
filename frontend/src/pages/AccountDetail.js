@@ -588,39 +588,199 @@ export default function AccountDetail() {
           </Card>
         </div>
 
-        {/* Right Column - Financial Summary */}
+        {/* Right Column - Financial Summary & Delivery */}
         <div className="space-y-6">
-          {/* Financial Overview */}
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4">Financial Summary</h2>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center py-2 border-b">
-                <span className="text-muted-foreground">Outstanding Balance</span>
-                <span className={`font-semibold ${account.outstanding_balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                  ₹{account.outstanding_balance?.toLocaleString() || '0'}
-                </span>
+          {/* Enhanced Financial Summary */}
+          <Card className="p-6 bg-gradient-to-br from-slate-50 to-white border-slate-200" data-testid="financial-summary-card">
+            <h2 className="text-lg font-semibold mb-5 flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-primary" />
+              Financial Summary
+            </h2>
+            
+            {/* Total Order Value - Highlighted */}
+            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl p-4 mb-5 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-emerald-100 text-sm font-medium">Total Order Value</p>
+                  <p className="text-2xl font-bold mt-1">
+                    ₹{(invoiceData?.total_amount || account?.total_order_value || 0).toLocaleString()}
+                  </p>
+                </div>
+                <div className="bg-white/20 rounded-full p-3">
+                  <TrendingUp className="h-6 w-6" />
+                </div>
               </div>
-              <div className="flex justify-between items-center py-2 border-b">
-                <span className="text-muted-foreground">Overdue Amount</span>
-                <span className={`font-semibold ${account.overdue_amount > 0 ? 'text-red-600' : ''}`}>
-                  ₹{account.overdue_amount?.toLocaleString() || '0'}
-                </span>
+            </div>
+
+            {/* Financial Metrics Grid */}
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              {/* Outstanding Balance */}
+              <div className={`p-3 rounded-xl ${account?.outstanding_balance > 0 ? 'bg-amber-50 border border-amber-200' : 'bg-green-50 border border-green-200'}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <CreditCard className={`h-4 w-4 ${account?.outstanding_balance > 0 ? 'text-amber-600' : 'text-green-600'}`} />
+                  <span className="text-xs font-medium text-muted-foreground">Outstanding</span>
+                </div>
+                <p className={`text-lg font-bold ${account?.outstanding_balance > 0 ? 'text-amber-700' : 'text-green-700'}`}>
+                  ₹{(account?.outstanding_balance || 0).toLocaleString()}
+                </p>
               </div>
-              <div className="flex justify-between items-center py-2 border-b">
-                <span className="text-muted-foreground">Last Payment</span>
-                <span className="font-semibold">
-                  ₹{account.last_payment_amount?.toLocaleString() || '0'}
-                </span>
+
+              {/* Overdue Amount */}
+              <div className={`p-3 rounded-xl ${account?.overdue_amount > 0 ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <AlertTriangle className={`h-4 w-4 ${account?.overdue_amount > 0 ? 'text-red-600' : 'text-green-600'}`} />
+                  <span className="text-xs font-medium text-muted-foreground">Overdue</span>
+                </div>
+                <p className={`text-lg font-bold ${account?.overdue_amount > 0 ? 'text-red-700' : 'text-green-700'}`}>
+                  ₹{(account?.overdue_amount || 0).toLocaleString()}
+                </p>
               </div>
-              {account.last_payment_date && (
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-muted-foreground">Last Payment Date</span>
-                  <span className="text-sm">
-                    {format(new Date(account.last_payment_date), 'MMM d, yyyy')}
-                  </span>
+            </div>
+
+            {/* Last Payment Info */}
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Calendar className="h-4 w-4 text-blue-600" />
+                <span className="text-sm font-semibold text-blue-800">Last Payment</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-xs text-blue-600">Amount</p>
+                  <p className="text-xl font-bold text-blue-800">
+                    ₹{(account?.last_payment_amount || 0).toLocaleString()}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-blue-600">Date</p>
+                  <p className="text-sm font-semibold text-blue-800">
+                    {account?.last_payment_date 
+                      ? format(new Date(account.last_payment_date), 'MMM d, yyyy')
+                      : 'No payment yet'
+                    }
+                  </p>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Delivery Address Section */}
+          <Card className="p-6" data-testid="delivery-address-card">
+            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <Truck className="h-5 w-5 text-primary" />
+              Delivery Address
+            </h2>
+            
+            {/* Address Search */}
+            <div className="relative mb-4" ref={addressSearchRef}>
+              <Label className="text-sm mb-2 block">Search Address</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Start typing to search address..."
+                  value={addressSearchQuery}
+                  onChange={(e) => handleAddressSearch(e.target.value)}
+                  className="pl-10"
+                  data-testid="address-search-input"
+                />
+                {isSearchingAddress && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+              </div>
+              
+              {/* Suggestions Dropdown */}
+              {addressSuggestions.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {addressSuggestions.map((suggestion) => (
+                    <button
+                      key={suggestion.place_id}
+                      className="w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors border-b last:border-b-0"
+                      onClick={() => handleSelectAddress(suggestion.place_id, suggestion.description)}
+                      data-testid={`address-suggestion-${suggestion.place_id}`}
+                    >
+                      <p className="text-sm font-medium">{suggestion.structured_formatting?.main_text}</p>
+                      <p className="text-xs text-muted-foreground">{suggestion.structured_formatting?.secondary_text}</p>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
+
+            {/* Address Fields */}
+            <div className="space-y-4">
+              <div>
+                <Label className="text-xs text-muted-foreground">Address Line 1</Label>
+                <Input
+                  value={deliveryAddress.address_line1}
+                  onChange={(e) => setDeliveryAddress({...deliveryAddress, address_line1: e.target.value})}
+                  placeholder="Street address"
+                  data-testid="address-line1-input"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Address Line 2</Label>
+                <Input
+                  value={deliveryAddress.address_line2}
+                  onChange={(e) => setDeliveryAddress({...deliveryAddress, address_line2: e.target.value})}
+                  placeholder="Area, Locality"
+                  data-testid="address-line2-input"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground">City</Label>
+                  <Input
+                    value={deliveryAddress.city}
+                    onChange={(e) => setDeliveryAddress({...deliveryAddress, city: e.target.value})}
+                    placeholder="City"
+                    data-testid="address-city-input"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">State</Label>
+                  <Input
+                    value={deliveryAddress.state}
+                    onChange={(e) => setDeliveryAddress({...deliveryAddress, state: e.target.value})}
+                    placeholder="State"
+                    data-testid="address-state-input"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Pincode</Label>
+                  <Input
+                    value={deliveryAddress.pincode}
+                    onChange={(e) => setDeliveryAddress({...deliveryAddress, pincode: e.target.value})}
+                    placeholder="Pincode"
+                    data-testid="address-pincode-input"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Landmark</Label>
+                  <Input
+                    value={deliveryAddress.landmark}
+                    onChange={(e) => setDeliveryAddress({...deliveryAddress, landmark: e.target.value})}
+                    placeholder="Landmark"
+                    data-testid="address-landmark-input"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Save Button */}
+            <Button
+              onClick={handleSaveDeliveryAddress}
+              className="w-full mt-4"
+              disabled={savingAddress || !deliveryAddress.address_line1}
+              data-testid="save-delivery-address-btn"
+            >
+              {savingAddress ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
+              ) : (
+                <><Save className="h-4 w-4 mr-2" /> Save Delivery Address</>
+              )}
+            </Button>
           </Card>
 
           {/* Account Details */}
