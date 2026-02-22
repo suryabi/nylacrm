@@ -770,7 +770,7 @@ export default function BottlePreview() {
                 {/* Shape Selection */}
                 <div>
                   <Label className="text-sm text-muted-foreground mb-2 block">Logo Shape</Label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <Button
                       onClick={() => handleShapeChange('original')}
                       variant={logoShape === 'original' ? 'default' : 'outline'}
@@ -797,6 +797,15 @@ export default function BottlePreview() {
                       data-testid="shape-square-btn"
                     >
                       <Square className="h-4 w-4 mr-1" /> Square
+                    </Button>
+                    <Button
+                      onClick={() => handleShapeChange('rounded-square')}
+                      variant={logoShape === 'rounded-square' ? 'default' : 'outline'}
+                      className="h-12 rounded-xl"
+                      disabled={processing}
+                      data-testid="shape-rounded-square-btn"
+                    >
+                      <RectangleHorizontal className="h-4 w-4 mr-1" /> Rounded
                     </Button>
                   </div>
                 </div>
