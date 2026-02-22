@@ -102,9 +102,9 @@ export default function AccountDetail() {
       return;
     }
 
-    // Load script
+    // Load script with only places library (no need for full maps)
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`;
     script.async = true;
     script.defer = true;
     script.onload = () => {
@@ -117,13 +117,9 @@ export default function AccountDetail() {
     if (window.google && window.google.maps && window.google.maps.places) {
       try {
         autocompleteServiceRef.current = new window.google.maps.places.AutocompleteService();
-        // Create a hidden div for PlacesService
-        const mapDiv = document.createElement('div');
-        mapDiv.style.display = 'none';
-        document.body.appendChild(mapDiv);
-        const map = new window.google.maps.Map(mapDiv, { center: { lat: 20.5937, lng: 78.9629 }, zoom: 5 });
-        placesServiceRef.current = new window.google.maps.places.PlacesService(map);
-        console.log('Google Places services initialized');
+        // Use Geocoder instead of PlacesService to avoid Map dependency
+        placesServiceRef.current = new window.google.maps.Geocoder();
+        console.log('Google Places services initialized (using Geocoder for details)');
       } catch (error) {
         console.error('Failed to initialize Google Places services:', error);
       }
