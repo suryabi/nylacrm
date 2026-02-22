@@ -5121,6 +5121,356 @@ async def get_account_performance(
         }
     }
 
+# ============= FILES & DOCUMENTS MODULE =============
+
+# Models
+class DocumentCategory(BaseModel):
+    """Category for organizing documents"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    description: Optional[str] = None
+    created_by: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class DocumentSubCategory(BaseModel):
+    """Sub-category under a category"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    category_id: str
+    name: str
+    description: Optional[str] = None
+    created_by: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class Document(BaseModel):
+    """Document metadata"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    category_id: str
+    subcategory_id: Optional[str] = None
+    document_type: str  # 'pdf', 'doc', 'docx', 'image'
+    file_name: str
+    file_size: int  # in bytes
+    content_type: str
+    file_data: str  # base64 encoded file
+    uploaded_by: str
+    uploaded_by_name: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+# Key user roles that can manage categories
+KEY_USER_ROLES = ['admin', 'Admin', 'CEO', 'Director']
+
+def is_key_user(role: str) -> bool:
+    """Check if user has key user (admin) privileges"""
+    return role in KEY_USER_ROLES
+
+# Category endpoints
+@api_router.get("/document-categories")
+async def get_document_categories(current_user: dict = Depends(get_current_user)):
+    """Get all document categories"""
+    categories = await db.document_categories.find({}, {'_id': 0}).sort('name', 1).to_list(100)
+    return {'categories': categories}
+
+@api_router.post("/document-categories")
+async def create_document_category(data: dict, current_user: dict = Depends(get_current_user)):
+    """Create a new document category (key users only)"""
+    if not is_key_user(current_user['role']):
+        raise HTTPException(status_code=403, detail='Only Admin, CEO, and Director can create categories')
+    
+    # Check for duplicate name
+    existing = await db.document_categories.find_one({'name': {'$regex': f"^{data['name']}$", '$options': 'i'}})
+    if existing:
+        raise HTTPException(status_code=400, detail='Category with this name already exists')
+    
+    category = DocumentCategory(
+        name=data['name'],
+        description=data.get('description', ''),
+        created_by=current_user['id']
+    )
+    
+    doc = category.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    
+    await db.document_categories.insert_one(doc)
+    
+    return {'category': {k: v for k, v in doc.items() if k != '_id'}}
+
+@api_router.put("/document-categories/{category_id}")
+async def update_document_category(category_id: str, data: dict, current_user: dict = Depends(get_current_user)):
+    """Update a document category (key users only)"""
+    if not is_key_user(current_user['role']):
+        raise HTTPException(status_code=403, detail='Only Admin, CEO, and Director can update categories')
+    
+    # Check if exists
+    existing = await db.document_categories.find_one({'id': category_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail='Category not found')
+    
+    # Check for duplicate name (excluding current)
+    if 'name' in data:
+        duplicate = await db.document_categories.find_one({
+            'name': {'$regex': f"^{data['name']}$", '$options': 'i'},
+            'id': {'$ne': category_id}
+        })
+        if duplicate:
+            raise HTTPException(status_code=400, detail='Category with this name already exists')
+    
+    updates = {
+        'updated_at': datetime.now(timezone.utc).isoformat()
+    }
+    if 'name' in data:
+        updates['name'] = data['name']
+    if 'description' in data:
+        updates['description'] = data['description']
+    
+    await db.document_categories.update_one({'id': category_id}, {'$set': updates})
+    
+    return {'message': 'Category updated successfully'}
+
+@api_router.delete("/document-categories/{category_id}")
+async def delete_document_category(category_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a document category (key users only)"""
+    if not is_key_user(current_user['role']):
+        raise HTTPException(status_code=403, detail='Only Admin, CEO, and Director can delete categories')
+    
+    # Check if has documents
+    doc_count = await db.documents.count_documents({'category_id': category_id})
+    if doc_count > 0:
+        raise HTTPException(status_code=400, detail=f'Cannot delete category with {doc_count} document(s). Move or delete documents first.')
+    
+    # Delete subcategories first
+    await db.document_subcategories.delete_many({'category_id': category_id})
+    
+    # Delete category
+    result = await db.document_categories.delete_one({'id': category_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail='Category not found')
+    
+    return {'message': 'Category and its subcategories deleted successfully'}
+
+# SubCategory endpoints
+@api_router.get("/document-subcategories")
+async def get_document_subcategories(category_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """Get document subcategories, optionally filtered by category"""
+    query = {}
+    if category_id:
+        query['category_id'] = category_id
+    
+    subcategories = await db.document_subcategories.find(query, {'_id': 0}).sort('name', 1).to_list(500)
+    return {'subcategories': subcategories}
+
+@api_router.post("/document-subcategories")
+async def create_document_subcategory(data: dict, current_user: dict = Depends(get_current_user)):
+    """Create a new document subcategory (key users only)"""
+    if not is_key_user(current_user['role']):
+        raise HTTPException(status_code=403, detail='Only Admin, CEO, and Director can create subcategories')
+    
+    # Verify category exists
+    category = await db.document_categories.find_one({'id': data['category_id']})
+    if not category:
+        raise HTTPException(status_code=404, detail='Parent category not found')
+    
+    # Check for duplicate name within category
+    existing = await db.document_subcategories.find_one({
+        'category_id': data['category_id'],
+        'name': {'$regex': f"^{data['name']}$", '$options': 'i'}
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail='Subcategory with this name already exists in this category')
+    
+    subcategory = DocumentSubCategory(
+        category_id=data['category_id'],
+        name=data['name'],
+        description=data.get('description', ''),
+        created_by=current_user['id']
+    )
+    
+    doc = subcategory.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    
+    await db.document_subcategories.insert_one(doc)
+    
+    return {'subcategory': {k: v for k, v in doc.items() if k != '_id'}}
+
+@api_router.put("/document-subcategories/{subcategory_id}")
+async def update_document_subcategory(subcategory_id: str, data: dict, current_user: dict = Depends(get_current_user)):
+    """Update a document subcategory (key users only)"""
+    if not is_key_user(current_user['role']):
+        raise HTTPException(status_code=403, detail='Only Admin, CEO, and Director can update subcategories')
+    
+    existing = await db.document_subcategories.find_one({'id': subcategory_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail='Subcategory not found')
+    
+    # Check for duplicate name within category (excluding current)
+    if 'name' in data:
+        duplicate = await db.document_subcategories.find_one({
+            'category_id': existing['category_id'],
+            'name': {'$regex': f"^{data['name']}$", '$options': 'i'},
+            'id': {'$ne': subcategory_id}
+        })
+        if duplicate:
+            raise HTTPException(status_code=400, detail='Subcategory with this name already exists in this category')
+    
+    updates = {
+        'updated_at': datetime.now(timezone.utc).isoformat()
+    }
+    if 'name' in data:
+        updates['name'] = data['name']
+    if 'description' in data:
+        updates['description'] = data['description']
+    
+    await db.document_subcategories.update_one({'id': subcategory_id}, {'$set': updates})
+    
+    return {'message': 'Subcategory updated successfully'}
+
+@api_router.delete("/document-subcategories/{subcategory_id}")
+async def delete_document_subcategory(subcategory_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a document subcategory (key users only)"""
+    if not is_key_user(current_user['role']):
+        raise HTTPException(status_code=403, detail='Only Admin, CEO, and Director can delete subcategories')
+    
+    # Check if has documents
+    doc_count = await db.documents.count_documents({'subcategory_id': subcategory_id})
+    if doc_count > 0:
+        raise HTTPException(status_code=400, detail=f'Cannot delete subcategory with {doc_count} document(s). Move or delete documents first.')
+    
+    result = await db.document_subcategories.delete_one({'id': subcategory_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail='Subcategory not found')
+    
+    return {'message': 'Subcategory deleted successfully'}
+
+# Document endpoints
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
+
+ALLOWED_DOCUMENT_TYPES = {
+    'application/pdf': 'pdf',
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'image/png': 'image',
+    'image/jpeg': 'image',
+    'image/jpg': 'image',
+    'image/gif': 'image',
+    'image/webp': 'image'
+}
+
+@api_router.get("/documents")
+async def get_documents(
+    category_id: Optional[str] = None,
+    subcategory_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get documents filtered by category/subcategory"""
+    query = {}
+    if category_id:
+        query['category_id'] = category_id
+    if subcategory_id:
+        query['subcategory_id'] = subcategory_id
+    
+    # Don't include file_data in list response for performance
+    documents = await db.documents.find(query, {'_id': 0, 'file_data': 0}).sort('created_at', -1).to_list(1000)
+    
+    return {'documents': documents}
+
+@api_router.post("/documents/upload")
+async def upload_document(
+    file: UploadFile = File(...),
+    name: str = None,
+    category_id: str = None,
+    subcategory_id: str = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload a new document"""
+    
+    # Validate file type
+    if file.content_type not in ALLOWED_DOCUMENT_TYPES:
+        raise HTTPException(
+            status_code=400, 
+            detail=f'File type not allowed. Allowed types: PDF, DOC, DOCX, PNG, JPG, GIF, WEBP'
+        )
+    
+    # Read file
+    contents = await file.read()
+    
+    # Validate file size
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=400, 
+            detail=f'File size exceeds 5 MB limit. Your file is {round(len(contents) / (1024*1024), 2)} MB'
+        )
+    
+    # Verify category exists
+    if not category_id:
+        raise HTTPException(status_code=400, detail='Category is required')
+    
+    category = await db.document_categories.find_one({'id': category_id})
+    if not category:
+        raise HTTPException(status_code=404, detail='Category not found')
+    
+    # Verify subcategory if provided
+    if subcategory_id:
+        subcategory = await db.document_subcategories.find_one({'id': subcategory_id, 'category_id': category_id})
+        if not subcategory:
+            raise HTTPException(status_code=404, detail='Subcategory not found in selected category')
+    
+    # Get document type
+    doc_type = ALLOWED_DOCUMENT_TYPES[file.content_type]
+    
+    # Encode file to base64
+    file_data = base64.b64encode(contents).decode('utf-8')
+    
+    # Create document record
+    document = Document(
+        name=name or file.filename,
+        category_id=category_id,
+        subcategory_id=subcategory_id,
+        document_type=doc_type,
+        file_name=file.filename,
+        file_size=len(contents),
+        content_type=file.content_type,
+        file_data=file_data,
+        uploaded_by=current_user['id'],
+        uploaded_by_name=current_user['name']
+    )
+    
+    doc = document.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    
+    await db.documents.insert_one(doc)
+    
+    # Return without file_data for response
+    response = {k: v for k, v in doc.items() if k not in ['_id', 'file_data']}
+    
+    return {'document': response, 'message': 'Document uploaded successfully'}
+
+@api_router.get("/documents/{document_id}")
+async def get_document(document_id: str, current_user: dict = Depends(get_current_user)):
+    """Get a single document with file data for download"""
+    document = await db.documents.find_one({'id': document_id}, {'_id': 0})
+    if not document:
+        raise HTTPException(status_code=404, detail='Document not found')
+    
+    return {'document': document}
+
+@api_router.delete("/documents/{document_id}")
+async def delete_document(document_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a document (uploader or key users only)"""
+    document = await db.documents.find_one({'id': document_id})
+    if not document:
+        raise HTTPException(status_code=404, detail='Document not found')
+    
+    # Check permission: uploader or key user
+    if document['uploaded_by'] != current_user['id'] and not is_key_user(current_user['role']):
+        raise HTTPException(status_code=403, detail='Only the uploader, Admin, CEO, or Director can delete this document')
+    
+    await db.documents.delete_one({'id': document_id})
+    
+    return {'message': 'Document deleted successfully'}
+
 # ============= INCLUDE ROUTER =============
 
 app.include_router(api_router)
