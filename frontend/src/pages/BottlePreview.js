@@ -1012,28 +1012,16 @@ export default function BottlePreview() {
 
           {/* Action Buttons */}
           <Card className="p-6 bg-card border border-border rounded-2xl">
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                onClick={handleReset}
-                variant="outline"
-                className="h-14 rounded-full text-base"
-                disabled={!logoPreview}
-                data-testid="reset-all-btn"
-              >
-                <RotateCcw className="h-5 w-5 mr-2" />
-                Reset All
-              </Button>
-              <Button
-                onClick={handleDownload}
-                variant="outline"
-                className="h-14 rounded-full text-base"
-                disabled={!logoPreview}
-                data-testid="download-btn"
-              >
-                <Download className="h-5 w-5 mr-2" />
-                Download
-              </Button>
-            </div>
+            <Button
+              onClick={handleReset}
+              variant="outline"
+              className="w-full h-14 rounded-full text-base"
+              disabled={!logoPreview}
+              data-testid="reset-all-btn"
+            >
+              <RotateCcw className="h-5 w-5 mr-2" />
+              Reset All
+            </Button>
             <Button
               onClick={handleSave}
               className="w-full h-14 rounded-full mt-3 text-base"
