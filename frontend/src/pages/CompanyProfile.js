@@ -6,7 +6,8 @@ import { toast } from 'sonner';
 import { 
   Building2, FileText, MapPin, Users, Calendar, 
   CheckCircle2, Award, Globe, Shield, Briefcase,
-  Copy, Download, CreditCard, QrCode, Landmark, BadgeCheck
+  Copy, Download, CreditCard, QrCode, Landmark, BadgeCheck,
+  Phone, User, ExternalLink, Navigation
 } from 'lucide-react';
 
 // Company Data
@@ -37,15 +38,23 @@ const COMPANY_DATA = {
     constitution: 'Private Limited Company'
   },
   principalAddress: {
+    buildingName: 'Sri Laxmi Towers',
     floor: 'Third Floor',
     unitFlatNo: 'Unit C',
     buildingPlotNo: 'Plot No. 78',
+    landmark: 'Opp. Kapston Security Services',
     roadStreet: 'Kavuri Hills Phase 2 Road',
     locality: 'Madhapur',
     city: 'Hyderabad',
     district: 'Hyderabad',
     state: 'Telangana',
-    pinCode: '500033'
+    pinCode: '500033',
+    googleMapsUrl: 'https://maps.app.goo.gl/Av6NUVdv5vEhSsap8'
+  },
+  officeContact: {
+    name: 'Sanju Benny',
+    phone: '+91 7702 153 284',
+    purpose: 'For Couriers / Parcels or directions'
   },
   directors: [
     { name: 'SURYA YADAVALLI', designation: 'Director', residentState: 'Andhra Pradesh' },
