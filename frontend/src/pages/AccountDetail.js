@@ -193,6 +193,48 @@ export default function AccountDetail() {
     }
   };
 
+  // Copy delivery address with outlet name and Google Maps link
+  const handleCopyDeliveryAddress = () => {
+    const outletName = account?.account_name || 'Unknown Outlet';
+    
+    // Build full address string
+    const addressParts = [
+      deliveryAddress.address_line1,
+      deliveryAddress.address_line2,
+      deliveryAddress.landmark,
+      deliveryAddress.city,
+      deliveryAddress.state,
+      deliveryAddress.pincode
+    ].filter(part => part && part.trim());
+    
+    const fullAddress = addressParts.join(', ');
+    
+    // Create Google Maps search URL
+    const mapsQuery = encodeURIComponent(`${fullAddress}, India`);
+    const googleMapsLink = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
+    
+    // Format the text to copy
+    const textToCopy = `📍 ${outletName}
+
+${fullAddress}
+
+🗺️ Google Maps: ${googleMapsLink}`;
+
+    // Copy to clipboard
+    navigator.clipboard.writeText(textToCopy).then(() => {
+      toast.success('Address copied to clipboard!');
+    }).catch(() => {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = textToCopy;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      toast.success('Address copied to clipboard!');
+    });
+  };
+
   const fetchMasterSkus = async () => {
     try {
       const res = await skusAPI.getMasterList();
