@@ -5,17 +5,32 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Slider } from '../components/ui/slider';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import { 
   Upload, Download, RotateCcw, Loader2, Sparkles, 
-  Crop, Circle, Square, Eraser, ZoomIn, Check, X, Move, RotateCw
+  Crop, Circle, Square, Eraser, ZoomIn, Check, X, Move, RotateCw, RectangleHorizontal,
+  Pipette
 } from 'lucide-react';
 import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
-// Nyla clear glass bottle template for 24 Brand SKU
-const BOTTLE_TEMPLATE = 'https://customer-assets.emergentagent.com/job_ca75408a-cd0b-4269-9030-efa58b12f03d/artifacts/rf1l1h54_openart-image_1771607748625_c0aca619_1771607748679_e23df17c.png';
+// Bottle templates - Air Water bottles
+const BOTTLE_TEMPLATES = [
+  {
+    id: 'bottle1',
+    name: 'Air Water Duo',
+    description: 'Front & Back View',
+    image: 'https://customer-assets.emergentagent.com/job_ca75408a-cd0b-4269-9030-efa58b12f03d/artifacts/c9fvt4g7_WhatsApp%20Image%202026-02-21%20at%203.39.21%20PM.jpeg'
+  },
+  {
+    id: 'bottle2',
+    name: 'Air Water Single',
+    description: 'Premium View',
+    image: 'https://customer-assets.emergentagent.com/job_ca75408a-cd0b-4269-9030-efa58b12f03d/artifacts/5thitm9j_WhatsApp%20Image%202026-02-21%20at%203.52.35%20PM.jpeg'
+  }
+];
 
 // Helper function to create cropped image
 const createCroppedImage = async (imageSrc, pixelCrop, shape = 'rectangle') => {
