@@ -599,12 +599,17 @@ export default function BottlePreview() {
     }
 
     setProcessing(true);
+    let bottleBlobUrl = null;
+    
     try {
       // Get current bottle template
       const currentBottle = BOTTLE_TEMPLATES.find(b => b.id === selectedBottle);
       
-      // Load bottle image
-      const bottleImage = await createImage(currentBottle.image);
+      // Fetch bottle image as blob to bypass CORS restrictions
+      bottleBlobUrl = await fetchImageAsBlob(currentBottle.image);
+      const bottleImage = await createImageFromBlob(bottleBlobUrl);
+      
+      // Logo is already a data URL, so it can be loaded directly
       const logoImage = await createImage(logoPreview);
       
       // Create canvas for composite
@@ -647,6 +652,10 @@ export default function BottlePreview() {
       console.error('Download error:', error);
       toast.error('Failed to download preview');
     } finally {
+      // Clean up blob URL to free memory
+      if (bottleBlobUrl) {
+        URL.revokeObjectURL(bottleBlobUrl);
+      }
       setProcessing(false);
     }
   };
