@@ -95,6 +95,29 @@ const createImage = (url) =>
     image.src = url;
   });
 
+// Helper to fetch image as blob and create object URL (bypasses CORS for canvas)
+const fetchImageAsBlob = async (url) => {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  } catch (error) {
+    console.error('Failed to fetch image as blob:', error);
+    throw error;
+  }
+};
+
+// Helper to load image from blob URL
+const createImageFromBlob = (blobUrl) =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener('load', () => {
+      resolve(image);
+    });
+    image.addEventListener('error', (error) => reject(error));
+    image.src = blobUrl;
+  });
+
 // Simple client-side background removal (basic threshold-based for white backgrounds)
 const removeWhiteBackground = async (imageSrc, threshold = 240) => {
   const image = await createImage(imageSrc);
