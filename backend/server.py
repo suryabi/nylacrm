@@ -5379,9 +5379,9 @@ async def get_documents(
 @api_router.post("/documents/upload")
 async def upload_document(
     file: UploadFile = File(...),
-    name: str = None,
-    category_id: str = None,
-    subcategory_id: str = None,
+    name: str = Form(None),
+    category_id: str = Form(None),
+    subcategory_id: str = Form(None),
     current_user: dict = Depends(get_current_user)
 ):
     """Upload a new document"""
