@@ -3719,6 +3719,73 @@ async def transport_autocomplete(params: dict, current_user: dict = Depends(get_
         logger.error(f'Transport autocomplete error: {str(e)}')
         return {'predictions': [], 'error': str(e)}
 
+@api_router.post("/maps/short-link")
+async def generate_maps_short_link(params: dict, current_user: dict = Depends(get_current_user)):
+    """Generate a short Google Maps share link for an address"""
+    
+    address = params.get('address', '')
+    name = params.get('name', '')
+    
+    if not address:
+        raise HTTPException(status_code=400, detail='Address is required')
+    
+    try:
+        api_key = os.environ.get('GOOGLE_MAPS_API_KEY')
+        if not api_key:
+            # Fallback to long URL format
+            encoded_address = urllib.parse.quote(f"{address}, India")
+            return {'short_link': f"https://www.google.com/maps/place/{encoded_address}", 'is_short': False}
+        
+        async with httpx.AsyncClient() as client:
+            # First, geocode the address to get coordinates
+            geocode_url = "https://maps.googleapis.com/maps/api/geocode/json"
+            geocode_params = {
+                'address': f"{address}, India",
+                'key': api_key
+            }
+            
+            geocode_response = await client.get(geocode_url, params=geocode_params)
+            geocode_data = geocode_response.json()
+            
+            if geocode_data.get('status') == 'OK' and geocode_data.get('results'):
+                location = geocode_data['results'][0]['geometry']['location']
+                lat = location['lat']
+                lng = location['lng']
+                
+                # Create a Google Maps URL with coordinates (more reliable format)
+                # Format: https://www.google.com/maps?q=lat,lng
+                maps_url = f"https://www.google.com/maps?q={lat},{lng}"
+                
+                # Try to shorten using Firebase Dynamic Links or return coordinate-based URL
+                # Since maps.app.goo.gl requires Firebase Dynamic Links which is being deprecated,
+                # we'll use the coordinate-based URL which is reliable and shareable
+                
+                # Alternative: Use TinyURL or similar service for shortening
+                try:
+                    # Try TinyURL API (free, no auth required)
+                    tinyurl_response = await client.get(
+                        f"https://tinyurl.com/api-create.php?url={urllib.parse.quote(maps_url)}",
+                        timeout=5.0
+                    )
+                    if tinyurl_response.status_code == 200:
+                        short_url = tinyurl_response.text.strip()
+                        return {'short_link': short_url, 'is_short': True, 'coordinates': {'lat': lat, 'lng': lng}}
+                except:
+                    pass
+                
+                # Return the coordinate-based URL if shortening fails
+                return {'short_link': maps_url, 'is_short': False, 'coordinates': {'lat': lat, 'lng': lng}}
+            else:
+                # Fallback to address-based URL
+                encoded_address = urllib.parse.quote(f"{address}, India")
+                return {'short_link': f"https://www.google.com/maps/place/{encoded_address}", 'is_short': False}
+    
+    except Exception as e:
+        logger.error(f'Maps short link error: {str(e)}')
+        # Fallback to address-based URL
+        encoded_address = urllib.parse.quote(f"{address}, India")
+        return {'short_link': f"https://www.google.com/maps/place/{encoded_address}", 'is_short': False}
+
 @api_router.post("/transport/calculate-route")
 async def calculate_transport_route(params: dict, current_user: dict = Depends(get_current_user)):
     """Calculate route between two locations using Google Routes API (New)"""
