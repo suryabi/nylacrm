@@ -375,7 +375,7 @@ export default function AccountPerformance() {
 
       {/* Info Note */}
       <p className="text-xs text-muted-foreground mt-4 text-center">
-        Contribution % is calculated based on the total gross revenue across all accounts for the selected filters.
+        Contribution % and Average Order are calculated based on the selected filters.
         Click on an account row to view details.
       </p>
     </div>
