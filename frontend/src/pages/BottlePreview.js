@@ -212,22 +212,31 @@ export default function BottlePreview() {
   const [saving, setSaving] = useState(false);
   const [processing, setProcessing] = useState(false);
   const fileInputRef = useRef(null);
+  
+  // Bottle template state
+  const [selectedBottle, setSelectedBottle] = useState(BOTTLE_TEMPLATES[0].id);
 
   // Cropping state
   const [showCropper, setShowCropper] = useState(false);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
-  const [cropShape, setCropShape] = useState('rect'); // 'rect' or 'round'
+  const [cropShape, setCropShape] = useState('rect'); // 'rect', 'round', or 'rounded-rect'
 
   // Logo style state
-  const [logoShape, setLogoShape] = useState('original'); // 'original', 'circle', 'square'
+  const [logoShape, setLogoShape] = useState('original'); // 'original', 'circle', 'square', 'rounded-square'
   const [logoScale, setLogoScale] = useState(100); // percentage
 
   // Logo position state (for dragging)
   const [logoPosition, setLogoPosition] = useState({ x: 50, y: 50 }); // percentage from center
   const [isDragging, setIsDragging] = useState(false);
   const bottleContainerRef = useRef(null);
+  
+  // Background removal state
+  const [isColorPickerMode, setIsColorPickerMode] = useState(false);
+  const [selectedBgColor, setSelectedBgColor] = useState(null);
+  const [bgRemovalTolerance, setBgRemovalTolerance] = useState(30);
+  const logoImageRef = useRef(null);
 
   const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
     setCroppedAreaPixels(croppedAreaPixels);
