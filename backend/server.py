@@ -307,12 +307,22 @@ class Account(BaseModel):
 class AccountCreate(BaseModel):
     lead_id: str
 
+class DeliveryAddress(BaseModel):
+    """Delivery address for an account"""
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
+    landmark: Optional[str] = None
+
 class AccountUpdate(BaseModel):
     account_name: Optional[str] = None
     account_type: Optional[str] = None
     contact_name: Optional[str] = None
     contact_number: Optional[str] = None
     sku_pricing: Optional[List[AccountSKUPricing]] = None
+    delivery_address: Optional[DeliveryAddress] = None
 
 class PaginatedAccountsResponse(BaseModel):
     """Paginated response for accounts list"""
