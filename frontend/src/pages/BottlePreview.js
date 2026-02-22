@@ -291,6 +291,9 @@ export default function BottlePreview() {
     setLogoScale(100);
     setLogoPosition({ x: 50, y: 50 });
     setShowCropper(false);
+    setIsColorPickerMode(false);
+    setSelectedBgColor(null);
+    setBgRemovalTolerance(30);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -302,6 +305,7 @@ export default function BottlePreview() {
       setLogoShape('original');
       setLogoScale(100);
       setLogoPosition({ x: 50, y: 50 });
+      setSelectedBgColor(null);
       toast.success('Edits reset to original');
     }
   };
