@@ -127,20 +127,13 @@ export default function AccountDetail() {
   };
 
   // Search for address suggestions - restricted to account's city
-  const handleAddressSearch = useCallback((query) => {
+  const handleAddressSearch = useCallback(async (query) => {
     setAddressSearchQuery(query);
     
     if (!query || query.length < 3) {
       setAddressSuggestions([]);
+      setIsSearchingAddress(false);
       return;
-    }
-
-    if (!autocompleteServiceRef.current) {
-      initGooglePlaces();
-      if (!autocompleteServiceRef.current) {
-        toast.error('Address search not available. Please check API configuration.');
-        return;
-      }
     }
 
     setIsSearchingAddress(true);
@@ -150,40 +143,37 @@ export default function AccountDetail() {
     const stateContext = account?.state ? `, ${account.state}` : '';
     const searchQuery = query + cityContext + stateContext + ', India';
 
-    autocompleteServiceRef.current.getPlacePredictions(
-      {
-        input: searchQuery,
-        componentRestrictions: { country: 'in' },
-        types: ['address', 'establishment', 'geocode'],
-        // Location bias towards the account's city region
-        ...(account?.city && {
-          locationBias: {
-            radius: 50000, // 50km radius
-            center: { lat: 20.5937, lng: 78.9629 } // Will be overridden by city context in query
-          }
-        })
-      },
-      (predictions, status) => {
-        setIsSearchingAddress(false);
-        if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
-          // Filter results to prioritize those in the same city/state
-          const cityLower = (account?.city || '').toLowerCase();
-          const sortedPredictions = predictions.sort((a, b) => {
-            const aInCity = a.description.toLowerCase().includes(cityLower);
-            const bInCity = b.description.toLowerCase().includes(cityLower);
-            if (aInCity && !bInCity) return -1;
-            if (!aInCity && bInCity) return 1;
-            return 0;
-          });
-          setAddressSuggestions(sortedPredictions);
-        } else {
-          setAddressSuggestions([]);
-          if (status !== window.google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+    // Try to use Google Places API
+    if (autocompleteServiceRef.current) {
+      autocompleteServiceRef.current.getPlacePredictions(
+        {
+          input: searchQuery,
+          componentRestrictions: { country: 'in' },
+          types: ['address', 'establishment', 'geocode']
+        },
+        (predictions, status) => {
+          setIsSearchingAddress(false);
+          if (status === 'OK' && predictions) {
+            // Filter results to prioritize those in the same city/state
+            const cityLower = (account?.city || '').toLowerCase();
+            const sortedPredictions = predictions.sort((a, b) => {
+              const aInCity = a.description.toLowerCase().includes(cityLower);
+              const bInCity = b.description.toLowerCase().includes(cityLower);
+              if (aInCity && !bInCity) return -1;
+              if (!aInCity && bInCity) return 1;
+              return 0;
+            });
+            setAddressSuggestions(sortedPredictions);
+          } else {
             console.log('Places API status:', status);
+            setAddressSuggestions([]);
           }
         }
-      }
-    );
+      );
+    } else {
+      setIsSearchingAddress(false);
+      console.log('AutocompleteService not available');
+    }
   }, [account?.city, account?.state]);
 
   // Handle address selection from suggestions - use Geocoder for details
