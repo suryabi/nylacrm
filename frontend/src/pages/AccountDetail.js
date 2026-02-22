@@ -309,6 +309,7 @@ ${fullAddress}
         account_type: accountType || null,
         contact_name: contactName || null,
         contact_number: contactNumber || null,
+        gst_number: gstNumber || null,
         sku_pricing: skuPricing,
       });
       toast.success('Account updated successfully');
