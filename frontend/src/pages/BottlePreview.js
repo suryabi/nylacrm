@@ -95,8 +95,8 @@ const createImage = (url) =>
     image.src = url;
   });
 
-// Simple client-side background removal (basic threshold-based)
-const removeBackground = async (imageSrc, threshold = 240) => {
+// Simple client-side background removal (basic threshold-based for white backgrounds)
+const removeWhiteBackground = async (imageSrc, threshold = 240) => {
   const image = await createImage(imageSrc);
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
@@ -122,6 +122,69 @@ const removeBackground = async (imageSrc, threshold = 240) => {
 
   ctx.putImageData(imageData, 0, 0);
   return canvas.toDataURL('image/png');
+};
+
+// Advanced background removal with color tolerance
+const removeColorBackground = async (imageSrc, targetColor, tolerance = 30) => {
+  const image = await createImage(imageSrc);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  canvas.width = image.width;
+  canvas.height = image.height;
+  ctx.drawImage(image, 0, 0);
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  // Parse target color
+  const targetR = targetColor.r;
+  const targetG = targetColor.g;
+  const targetB = targetColor.b;
+
+  // Remove pixels close to the target color
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+
+    // Calculate color distance
+    const distance = Math.sqrt(
+      Math.pow(r - targetR, 2) +
+      Math.pow(g - targetG, 2) +
+      Math.pow(b - targetB, 2)
+    );
+
+    // If the pixel is close enough to target color, make it transparent
+    if (distance <= tolerance) {
+      // Gradual transparency based on distance for smoother edges
+      const alpha = Math.min(255, Math.max(0, (distance / tolerance) * 255));
+      data[i + 3] = Math.round(alpha);
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  return canvas.toDataURL('image/png');
+};
+
+// Get pixel color from click position
+const getPixelColor = async (imageSrc, x, y, width, height) => {
+  const image = await createImage(imageSrc);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  canvas.width = image.width;
+  canvas.height = image.height;
+  ctx.drawImage(image, 0, 0);
+
+  // Scale coordinates to actual image size
+  const scaleX = image.width / width;
+  const scaleY = image.height / height;
+  const actualX = Math.floor(x * scaleX);
+  const actualY = Math.floor(y * scaleY);
+
+  const pixel = ctx.getImageData(actualX, actualY, 1, 1).data;
+  return { r: pixel[0], g: pixel[1], b: pixel[2] };
 };
 
 // Resize image
