@@ -270,6 +270,7 @@ ${fullAddress}
       setAccountType(data.account_type || '');
       setContactName(data.contact_name || '');
       setContactNumber(data.contact_number || '');
+      setGstNumber(data.gst_number || '');
       setSkuPricing(data.sku_pricing || []);
       
       // Load delivery address if exists
