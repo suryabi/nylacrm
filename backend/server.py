@@ -4440,6 +4440,37 @@ async def get_target_sku_allocation_report(current_user: dict = Depends(get_curr
 
 # ============= BOTTLE PREVIEW ROUTES =============
 
+@api_router.get("/bottle-preview/proxy-image")
+async def proxy_bottle_image(url: str, current_user: dict = Depends(get_current_user)):
+    """Proxy external bottle images to avoid CORS issues"""
+    
+    # Validate URL - only allow specific domains
+    allowed_domains = ['customer-assets.emergentagent.com']
+    from urllib.parse import urlparse
+    parsed_url = urlparse(url)
+    
+    if parsed_url.netloc not in allowed_domains:
+        raise HTTPException(status_code=400, detail='URL domain not allowed')
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            
+            # Determine content type
+            content_type = response.headers.get('content-type', 'image/jpeg')
+            
+            return Response(
+                content=response.content,
+                media_type=content_type,
+                headers={
+                    'Cache-Control': 'public, max-age=86400',  # Cache for 24 hours
+                    'Access-Control-Allow-Origin': '*'
+                }
+            )
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=500, detail=f'Failed to fetch image: {str(e)}')
+
 @api_router.post("/bottle-preview/upload-logo")
 async def upload_customer_logo(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     """Upload customer logo for bottle preview"""
