@@ -321,6 +321,7 @@ class AccountUpdate(BaseModel):
     account_type: Optional[str] = None
     contact_name: Optional[str] = None
     contact_number: Optional[str] = None
+    gst_number: Optional[str] = None
     sku_pricing: Optional[List[AccountSKUPricing]] = None
     delivery_address: Optional[DeliveryAddress] = None
 
