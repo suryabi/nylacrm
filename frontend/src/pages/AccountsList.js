@@ -1,33 +1,92 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { accountsAPI } from '../utils/api';
+import { useAuth } from '../context/AuthContext';
+import axios from 'axios';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
-import { Search, Building2, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { format } from 'date-fns';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select';
+import { 
+  Search, Building2, ChevronLeft, ChevronRight, Loader2, 
+  Filter, Users, Calendar, Phone, User, MapPin 
+} from 'lucide-react';
 
-const accountTypeColors = {
-  'Tier 1': 'bg-emerald-100 text-emerald-800',
-  'Tier 2': 'bg-blue-100 text-blue-800',
-  'Tier 3': 'bg-gray-100 text-gray-800',
+const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
+
+const TERRITORY_MAP = {
+  'North India': { states: { 'Delhi': ['New Delhi'], 'Uttar Pradesh': ['Noida'] } },
+  'South India': { states: { 'Karnataka': ['Bengaluru'], 'Tamil Nadu': ['Chennai'], 'Telangana': ['Hyderabad'] } },
+  'West India': { states: { 'Maharashtra': ['Mumbai', 'Pune'], 'Gujarat': ['Ahmedabad'] } },
+  'East India': { states: { 'West Bengal': ['Kolkata'] } }
 };
 
+const ACCOUNT_TYPES = ['Tier 1', 'Tier 2', 'Tier 3'];
+
+const CATEGORIES = [
+  'Restaurant',
+  'Bar & Kitchen',
+  'Star Hotel',
+  'Fine Dining',
+  'QSR',
+  'Cloud Kitchen',
+  'Cafe',
+  'Catering',
+  'Corporate',
+  'Retail',
+  'Institution',
+  'Other'
+];
+
+const accountTypeColors = {
+  'Tier 1': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  'Tier 2': 'bg-blue-100 text-blue-800 border-blue-200',
+  'Tier 3': 'bg-gray-100 text-gray-800 border-gray-200',
+};
+
+function formatDate(dateStr) {
+  if (!dateStr) return '-';
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-IN', { 
+      day: '2-digit', 
+      month: 'short', 
+      year: 'numeric' 
+    });
+  } catch {
+    return '-';
+  }
+}
+
+function calculateAccountAge(createdAt) {
+  if (!createdAt) return '-';
+  try {
+    const created = new Date(createdAt);
+    const now = new Date();
+    const diffMs = now - created;
+    const diffMonths = Math.floor(diffMs / (1000 * 60 * 60 * 24 * 30.44));
+    if (diffMonths < 1) return 'New';
+    if (diffMonths === 1) return '1 month';
+    return `${diffMonths} months`;
+  } catch {
+    return '-';
+  }
+}
+
 export default function AccountsList() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [accounts, setAccounts] = useState([]);
+  const [stats, setStats] = useState({ total_accounts: 0, by_type: {}, by_category: {} });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Filter states - matching AccountPerformance
+  const [territoryFilter, setTerritoryFilter] = useState('all');
+  const [stateFilter, setStateFilter] = useState('all');
+  const [cityFilter, setCityFilter] = useState('all');
   const [accountTypeFilter, setAccountTypeFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -38,14 +97,22 @@ export default function AccountsList() {
   const fetchAccounts = useCallback(async () => {
     setLoading(true);
     try {
-      const params = {
-        page: currentPage,
-        pageSize,
-        search: searchTerm || undefined,
-        account_type: accountTypeFilter !== 'all' ? accountTypeFilter : undefined,
-      };
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams();
+      params.append('page', currentPage);
+      params.append('page_size', pageSize);
+      if (searchTerm) params.append('search', searchTerm);
+      if (territoryFilter !== 'all') params.append('territory', territoryFilter);
+      if (stateFilter !== 'all') params.append('state', stateFilter);
+      if (cityFilter !== 'all') params.append('city', cityFilter);
+      if (accountTypeFilter !== 'all') params.append('account_type', accountTypeFilter);
+      if (categoryFilter !== 'all') params.append('category', categoryFilter);
       
-      const response = await accountsAPI.getAll(params);
+      const response = await axios.get(`${API_URL}/accounts?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      
       setAccounts(response.data.data || []);
       setTotalCount(response.data.total || 0);
       setTotalPages(response.data.total_pages || 1);
@@ -55,7 +122,25 @@ export default function AccountsList() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, searchTerm, accountTypeFilter]);
+  }, [currentPage, searchTerm, territoryFilter, stateFilter, cityFilter, accountTypeFilter, categoryFilter]);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams();
+      if (territoryFilter !== 'all') params.append('territory', territoryFilter);
+      if (stateFilter !== 'all') params.append('state', stateFilter);
+      if (cityFilter !== 'all') params.append('city', cityFilter);
+      
+      const response = await axios.get(`${API_URL}/accounts/stats/summary?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setStats(response.data);
+    } catch (error) {
+      console.error('Failed to load stats');
+    }
+  }, [territoryFilter, stateFilter, cityFilter]);
 
   useEffect(() => {
     const delayDebounce = setTimeout(() => {
@@ -64,102 +149,244 @@ export default function AccountsList() {
     return () => clearTimeout(delayDebounce);
   }, [fetchAccounts]);
 
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
   const handleSearchChange = (value) => {
     setSearchTerm(value);
     setCurrentPage(1);
   };
 
-  const handleFilterChange = (value) => {
-    setAccountTypeFilter(value);
+  const handleResetFilters = () => {
+    setTerritoryFilter('all');
+    setStateFilter('all');
+    setCityFilter('all');
+    setAccountTypeFilter('all');
+    setCategoryFilter('all');
+    setSearchTerm('');
     setCurrentPage(1);
   };
 
+  // Territory access based on user role
+  const availableTerritories = user?.territory === 'All India' || ['ceo', 'director', 'vp', 'admin', 'CEO', 'Director', 'Vice President', 'National Sales Head'].includes(user?.role)
+    ? ['All Territories', 'North India', 'South India', 'West India', 'East India']
+    : user?.territory ? ['All Territories', user.territory] : ['All Territories'];
+
+  const availableStates = territoryFilter !== 'all' && territoryFilter !== 'All Territories' && TERRITORY_MAP[territoryFilter]
+    ? ['All States', ...Object.keys(TERRITORY_MAP[territoryFilter].states)]
+    : ['All States'];
+
+  const availableCities = stateFilter !== 'all' && stateFilter !== 'All States' && territoryFilter !== 'all' && territoryFilter !== 'All Territories' && TERRITORY_MAP[territoryFilter]
+    ? ['All Cities', ...(TERRITORY_MAP[territoryFilter].states[stateFilter] || [])]
+    : ['All Cities'];
+
   return (
-    <div className="space-y-6" data-testid="accounts-list-page">
+    <div className="p-6 max-w-7xl mx-auto" data-testid="accounts-list-page">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold">Accounts</h1>
-          <p className="text-muted-foreground mt-1">
-            {totalCount} account{totalCount !== 1 ? 's' : ''} total
-          </p>
-        </div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Building2 className="h-6 w-6 text-primary" />
+          Accounts
+        </h1>
+        <p className="text-muted-foreground mt-1">Manage and track your customer accounts</p>
       </div>
 
-      {/* Filters */}
-      <Card className="p-4">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search accounts..."
-              value={searchTerm}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="pl-10"
-              data-testid="search-accounts-input"
-            />
+      {/* Filters Card */}
+      <Card className="p-4 mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <span className="font-medium">Filters</span>
+        </div>
+        
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 mb-4">
+          {/* Search */}
+          <div className="lg:col-span-2">
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Search</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search accounts..."
+                value={searchTerm}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                className="pl-10 h-10"
+                data-testid="search-accounts-input"
+              />
+            </div>
           </div>
-          <Select value={accountTypeFilter} onValueChange={handleFilterChange}>
-            <SelectTrigger className="w-full sm:w-[180px]" data-testid="account-type-filter">
-              <SelectValue placeholder="Account Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="Tier 1">Tier 1</SelectItem>
-              <SelectItem value="Tier 2">Tier 2</SelectItem>
-              <SelectItem value="Tier 3">Tier 3</SelectItem>
-            </SelectContent>
-          </Select>
+          
+          {/* Territory */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Territory</label>
+            <select
+              value={territoryFilter}
+              onChange={(e) => { setTerritoryFilter(e.target.value); setStateFilter('all'); setCityFilter('all'); setCurrentPage(1); }}
+              className="w-full px-3 py-2 border rounded-lg bg-background text-sm h-10"
+              data-testid="territory-filter"
+            >
+              {availableTerritories.map(t => (
+                <option key={t} value={t === 'All Territories' ? 'all' : t}>{t}</option>
+              ))}
+            </select>
+          </div>
+          
+          {/* State */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">State</label>
+            <select
+              value={stateFilter}
+              onChange={(e) => { setStateFilter(e.target.value); setCityFilter('all'); setCurrentPage(1); }}
+              disabled={territoryFilter === 'all'}
+              className="w-full px-3 py-2 border rounded-lg bg-background text-sm h-10 disabled:opacity-50"
+              data-testid="state-filter"
+            >
+              {availableStates.map(s => (
+                <option key={s} value={s === 'All States' ? 'all' : s}>{s}</option>
+              ))}
+            </select>
+          </div>
+          
+          {/* City */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">City</label>
+            <select
+              value={cityFilter}
+              onChange={(e) => { setCityFilter(e.target.value); setCurrentPage(1); }}
+              disabled={stateFilter === 'all'}
+              className="w-full px-3 py-2 border rounded-lg bg-background text-sm h-10 disabled:opacity-50"
+              data-testid="city-filter"
+            >
+              {availableCities.map(c => (
+                <option key={c} value={c === 'All Cities' ? 'all' : c}>{c}</option>
+              ))}
+            </select>
+          </div>
+          
+          {/* Account Type */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Account Type</label>
+            <select
+              value={accountTypeFilter}
+              onChange={(e) => { setAccountTypeFilter(e.target.value); setCurrentPage(1); }}
+              className="w-full px-3 py-2 border rounded-lg bg-background text-sm h-10"
+              data-testid="account-type-filter"
+            >
+              <option value="all">All Types</option>
+              {ACCOUNT_TYPES.map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+          
+          {/* Reset Button */}
+          <div className="flex items-end">
+            <Button variant="outline" onClick={handleResetFilters} className="w-full h-10" data-testid="reset-filters-btn">
+              Reset
+            </Button>
+          </div>
         </div>
       </Card>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-6">
+        {/* Total Accounts */}
+        <Card className="p-4 bg-gradient-to-br from-slate-50 to-slate-100 border-slate-200">
+          <p className="text-xs font-medium text-slate-600 mb-1">TOTAL</p>
+          <p className="text-2xl font-bold text-slate-700">{stats.total_accounts || 0}</p>
+          <p className="text-xs text-slate-500 mt-1">accounts</p>
+        </Card>
+        
+        {/* By Type */}
+        <Card className="p-4 bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
+          <p className="text-xs font-medium text-emerald-600 mb-1">TIER 1</p>
+          <p className="text-2xl font-bold text-emerald-700">{stats.by_type?.['Tier 1'] || 0}</p>
+          <p className="text-xs text-emerald-500 mt-1">premium</p>
+        </Card>
+        
+        <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+          <p className="text-xs font-medium text-blue-600 mb-1">TIER 2</p>
+          <p className="text-2xl font-bold text-blue-700">{stats.by_type?.['Tier 2'] || 0}</p>
+          <p className="text-xs text-blue-500 mt-1">standard</p>
+        </Card>
+        
+        <Card className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200">
+          <p className="text-xs font-medium text-gray-600 mb-1">TIER 3</p>
+          <p className="text-2xl font-bold text-gray-700">{stats.by_type?.['Tier 3'] || 0}</p>
+          <p className="text-xs text-gray-500 mt-1">basic</p>
+        </Card>
+        
+        {/* Top Categories */}
+        {Object.entries(stats.by_category || {})
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 4)
+          .map(([category, count], idx) => {
+            const colors = [
+              'from-purple-50 to-purple-100 border-purple-200 text-purple-600',
+              'from-amber-50 to-amber-100 border-amber-200 text-amber-600',
+              'from-rose-50 to-rose-100 border-rose-200 text-rose-600',
+              'from-cyan-50 to-cyan-100 border-cyan-200 text-cyan-600'
+            ];
+            const colorClass = colors[idx] || colors[0];
+            return (
+              <Card key={category} className={`p-4 bg-gradient-to-br ${colorClass.split(' ').slice(0, 3).join(' ')}`}>
+                <p className={`text-xs font-medium mb-1 ${colorClass.split(' ').slice(-1)[0]}`}>
+                  {category?.toUpperCase() || 'OTHER'}
+                </p>
+                <p className={`text-2xl font-bold ${colorClass.split(' ').slice(-1)[0].replace('text-', 'text-').replace('-600', '-700')}`}>
+                  {count}
+                </p>
+              </Card>
+            );
+          })}
+      </div>
 
       {/* Accounts Table */}
       <Card className="overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : accounts.length === 0 ? (
-          <div className="text-center py-12">
-            <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <div className="text-center py-12 text-muted-foreground">
+            <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p className="text-lg font-medium">No accounts found</p>
-            <p className="text-muted-foreground mt-1">
-              Convert won leads to create accounts
-            </p>
+            <p className="text-sm mt-2">Convert won leads to create accounts</p>
           </div>
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full" data-testid="accounts-table">
-                <thead className="bg-muted/50">
+              <table className="w-full text-sm" data-testid="accounts-table">
+                <thead className="bg-muted">
                   <tr>
-                    <th className="text-left px-4 py-3 text-sm font-medium">Account ID</th>
-                    <th className="text-left px-4 py-3 text-sm font-medium">Account Name</th>
-                    <th className="text-left px-4 py-3 text-sm font-medium">Type</th>
-                    <th className="text-left px-4 py-3 text-sm font-medium">Contact</th>
-                    <th className="text-left px-4 py-3 text-sm font-medium">Location</th>
-                    <th className="text-left px-4 py-3 text-sm font-medium">Outstanding</th>
-                    <th className="text-left px-4 py-3 text-sm font-medium">Created</th>
+                    <th className="text-left py-3 px-4 font-semibold">Account</th>
+                    <th className="text-left py-3 px-4 font-semibold">Type</th>
+                    <th className="text-left py-3 px-4 font-semibold">Contact</th>
+                    <th className="text-left py-3 px-4 font-semibold">Location</th>
+                    <th className="text-left py-3 px-4 font-semibold">Account Age</th>
+                    <th className="text-left py-3 px-4 font-semibold">Onboarded</th>
+                    <th className="text-left py-3 px-4 font-semibold">Sales Contact</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border">
-                  {accounts.map((account) => (
-                    <tr
-                      key={account.id}
+                <tbody>
+                  {accounts.map((account, idx) => (
+                    <tr 
+                      key={account.id || idx} 
+                      className="border-t hover:bg-muted/50 transition-colors cursor-pointer"
                       onClick={() => navigate(`/accounts/${account.account_id}`)}
-                      className="hover:bg-muted/30 cursor-pointer transition-colors"
                       data-testid={`account-row-${account.account_id}`}
                     >
-                      <td className="px-4 py-3">
-                        <span className="font-mono text-sm text-primary">{account.account_id}</span>
+                      <td className="py-3 px-4">
+                        <div>
+                          <p className="font-medium text-primary">{account.account_name}</p>
+                          <p className="text-xs text-muted-foreground font-mono">{account.account_id}</p>
+                          {account.category && (
+                            <Badge variant="outline" className="mt-1 text-xs">
+                              {account.category}
+                            </Badge>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-4 py-3">
-                        <p className="font-medium">{account.account_name}</p>
-                        {account.contact_name && (
-                          <p className="text-sm text-muted-foreground">{account.contact_name}</p>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
+                      <td className="py-3 px-4">
                         {account.account_type ? (
                           <Badge className={accountTypeColors[account.account_type] || 'bg-gray-100'}>
                             {account.account_type}
@@ -168,24 +395,58 @@ export default function AccountsList() {
                           <span className="text-muted-foreground">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
-                        {account.contact_number || <span className="text-muted-foreground">-</span>}
+                      <td className="py-3 px-4">
+                        <div>
+                          {account.contact_name && (
+                            <p className="font-medium flex items-center gap-1">
+                              <User className="h-3 w-3 text-muted-foreground" />
+                              {account.contact_name}
+                            </p>
+                          )}
+                          {account.contact_number && (
+                            <p className="text-sm text-muted-foreground flex items-center gap-1">
+                              <Phone className="h-3 w-3" />
+                              {account.contact_number}
+                            </p>
+                          )}
+                          {!account.contact_name && !account.contact_number && (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-4 py-3">
-                        <p className="text-sm">{account.city}</p>
-                        <p className="text-xs text-muted-foreground">{account.state}</p>
+                      <td className="py-3 px-4">
+                        <div className="flex items-start gap-1">
+                          <MapPin className="h-3 w-3 text-muted-foreground mt-0.5" />
+                          <div>
+                            <p className="text-sm">{account.city}</p>
+                            <p className="text-xs text-muted-foreground">{account.state}</p>
+                          </div>
+                        </div>
                       </td>
-                      <td className="px-4 py-3">
-                        {account.outstanding_balance > 0 ? (
-                          <span className="text-red-600 font-medium">
-                            ₹{account.outstanding_balance.toLocaleString()}
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3 text-muted-foreground" />
+                          <span className={`font-medium ${
+                            calculateAccountAge(account.created_at) === 'New' 
+                              ? 'text-emerald-600' 
+                              : ''
+                          }`}>
+                            {calculateAccountAge(account.created_at)}
                           </span>
-                        ) : (
-                          <span className="text-green-600">₹0</span>
-                        )}
+                        </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">
-                        {account.created_at && format(new Date(account.created_at), 'MMM d, yyyy')}
+                      <td className="py-3 px-4">
+                        <p className="text-sm">{formatDate(account.created_at)}</p>
+                      </td>
+                      <td className="py-3 px-4">
+                        {account.sales_person_name ? (
+                          <div className="flex items-center gap-1">
+                            <Users className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-sm">{account.sales_person_name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -197,7 +458,7 @@ export default function AccountsList() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between px-4 py-3 border-t border-border">
                 <p className="text-sm text-muted-foreground">
-                  Page {currentPage} of {totalPages}
+                  Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, totalCount)} of {totalCount} accounts
                 </p>
                 <div className="flex items-center gap-2">
                   <Button
@@ -208,7 +469,11 @@ export default function AccountsList() {
                     data-testid="prev-page-btn"
                   >
                     <ChevronLeft className="h-4 w-4" />
+                    Previous
                   </Button>
+                  <span className="text-sm text-muted-foreground px-2">
+                    Page {currentPage} of {totalPages}
+                  </span>
                   <Button
                     variant="outline"
                     size="sm"
@@ -216,6 +481,7 @@ export default function AccountsList() {
                     disabled={currentPage === totalPages}
                     data-testid="next-page-btn"
                   >
+                    Next
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
@@ -224,6 +490,11 @@ export default function AccountsList() {
           </>
         )}
       </Card>
+
+      {/* Info Note */}
+      <p className="text-xs text-muted-foreground mt-4 text-center">
+        Click on an account row to view details. Account Age is calculated from the onboarding date.
+      </p>
     </div>
   );
 }
