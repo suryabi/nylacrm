@@ -525,6 +525,131 @@ export default function TeamManagement() {
           </Card>
         </div>
       )}
+
+      {/* Activity Details Dialog */}
+      <Dialog open={activityDialogOpen} onOpenChange={setActivityDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-primary" />
+              Session Activity - {selectedUserActivity?.userName}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedUserActivity && (
+            <div className="space-y-6">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <p className="text-xs text-blue-600 font-medium mb-1">Last Active</p>
+                  <p className="text-lg font-semibold text-blue-900">
+                    {formatRelativeTime(selectedUserActivity.last_active)}
+                  </p>
+                </div>
+                <div className="bg-emerald-50 p-4 rounded-lg">
+                  <p className="text-xs text-emerald-600 font-medium mb-1">Session Duration</p>
+                  <p className="text-lg font-semibold text-emerald-900">
+                    {formatDuration(selectedUserActivity.total_time_seconds)}
+                  </p>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <p className="text-xs text-purple-600 font-medium mb-1">Session Start</p>
+                  <p className="text-lg font-semibold text-purple-900">
+                    {selectedUserActivity.session_start 
+                      ? new Date(selectedUserActivity.session_start).toLocaleTimeString() 
+                      : 'N/A'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Pages Visited */}
+              <div>
+                <h4 className="font-semibold mb-3 flex items-center gap-2">
+                  <Eye className="h-4 w-4" />
+                  Pages Visited
+                </h4>
+                {selectedUserActivity.pages_visited?.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedUserActivity.pages_visited
+                      .sort((a, b) => b.total_time_seconds - a.total_time_seconds)
+                      .map((page, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                        <div>
+                          <p className="font-medium">{getPageName(page.page)}</p>
+                          <p className="text-xs text-muted-foreground">{page.page}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">{formatDuration(page.total_time_seconds)}</p>
+                          <p className="text-xs text-muted-foreground">{page.visit_count} visits</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm">No page visits recorded</p>
+                )}
+              </div>
+
+              {/* Actions Performed */}
+              <div>
+                <h4 className="font-semibold mb-3 flex items-center gap-2">
+                  <MousePointer className="h-4 w-4" />
+                  Actions Performed
+                </h4>
+                {selectedUserActivity.actions?.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedUserActivity.actions
+                      .sort((a, b) => b.count - a.count)
+                      .slice(0, 10)
+                      .map((action, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                        <div>
+                          <p className="font-medium text-sm">
+                            {action.action.replace(/_/g, ' ').replace('navigated to ', '')}
+                          </p>
+                        </div>
+                        <Badge variant="secondary">{action.count}x</Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm">No actions recorded</p>
+                )}
+              </div>
+
+              {/* Recent Events Timeline */}
+              <div>
+                <h4 className="font-semibold mb-3 flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Recent Activity Timeline
+                </h4>
+                {selectedUserActivity.events?.length > 0 ? (
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {selectedUserActivity.events
+                      .slice(-20)
+                      .reverse()
+                      .map((event, idx) => (
+                      <div key={idx} className="flex items-center gap-3 py-2 border-b border-muted last:border-0">
+                        <div className={`h-2 w-2 rounded-full ${event.type === 'action' ? 'bg-blue-500' : 'bg-green-500'}`} />
+                        <p className="text-sm flex-1">
+                          {event.action 
+                            ? event.action.replace(/_/g, ' ')
+                            : `Viewed ${getPageName(event.page)}`}
+                        </p>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(event.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm">No recent events</p>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
