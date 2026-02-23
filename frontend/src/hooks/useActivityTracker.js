@@ -118,7 +118,7 @@ export const PAGE_NAMES = {
   '/leads': 'Leads',
   '/leads/add': 'Add Lead',
   '/accounts': 'Accounts',
-  '/team-management': 'Team Management',
+  '/team': 'Team Management',
   '/team-status': 'Team Status',
   '/daily-status': 'Daily Status',
   '/targets': 'Sales Targets',
