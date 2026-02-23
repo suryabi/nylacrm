@@ -289,6 +289,8 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 5. ~~Bottle Preview Enhancement Phase 2~~ ✅ IMPLEMENTED (tabbed bottles, rounded square, color picker bg removal)
 6. ~~Files & Documents Module~~ ✅ IMPLEMENTED (categories, subcategories, upload, download, permissions)
 7. ~~Brand Comparison Calculator~~ ✅ IMPLEMENTED (return credit per-bottle & total sample display, 75% default bottle return)
+8. ~~Team Activity Tracking~~ ✅ IMPLEMENTED (last active, session time, pages visited, actions performed)
+9. ~~PWA Support~~ ✅ IMPLEMENTED (installable, offline support, push notifications)
 
 ### P1 - High Priority
 - Implement Invoices functionality for Accounts
@@ -299,6 +301,7 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 ### P2 - Medium Priority
 - User verification for Custom Proposal Template
 - Google Workspace authentication as alternative login
+- Refactor `/app/backend/server.py` into smaller APIRouter modules
 
 ### P3 - Low Priority/Future
 - Additional report customizations
