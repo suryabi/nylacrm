@@ -25,6 +25,17 @@ import InvoiceSummaryCard from '../components/InvoiceSummaryCard';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
+// Roles that can approve/reject proposals
+const PROPOSAL_APPROVER_ROLES = ['CEO', 'Director', 'Vice President', 'National Sales Head'];
+
+const proposalStatusConfig = {
+  pending_review: { label: 'Pending Review', color: 'bg-yellow-100 text-yellow-800', icon: Clock },
+  changes_requested: { label: 'Changes Requested', color: 'bg-orange-100 text-orange-800', icon: AlertCircle },
+  revised: { label: 'Revised', color: 'bg-blue-100 text-blue-800', icon: Clock },
+  approved: { label: 'Approved', color: 'bg-green-100 text-green-800', icon: CheckCircle },
+  rejected: { label: 'Rejected', color: 'bg-red-100 text-red-800', icon: XCircle }
+};
+
 const statusColors = {
   new: 'bg-blue-100 text-blue-800',
   contacted: 'bg-yellow-100 text-yellow-800',
