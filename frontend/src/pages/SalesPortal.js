@@ -340,7 +340,13 @@ export default function SalesPortal() {
               {renderInputField('Bottle Return Credit (₹)', 'returnCredit', competitor, handleCompetitorChange)}
             </div>
 
-            {renderCalculatedField('Total Return Credit (₹)', competitorCalc.totalReturnCredit)}
+            <div className="grid grid-cols-2 gap-4">
+              {renderCalculatedField('Return Credit / Bottle (₹)', competitorCalc.returnCreditPerBottle)}
+              {renderCalculatedField(
+                `Total Return Credit (${sampleSize.toLocaleString()} bottles)`, 
+                `₹${competitorTotalReturnCredit.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+              )}
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               {renderCalculatedField(
