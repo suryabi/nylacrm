@@ -125,6 +125,7 @@ const toTitleCase = (str) => {
 
 export default function TeamManagement() {
   const [users, setUsers] = useState([]);
+  const [teamActivity, setTeamActivity] = useState({});
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState('table'); // 'table' or 'chart'
@@ -132,9 +133,12 @@ export default function TeamManagement() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
+  const [activityDialogOpen, setActivityDialogOpen] = useState(false);
+  const [selectedUserActivity, setSelectedUserActivity] = useState(null);
 
   useEffect(() => {
     fetchUsers();
+    fetchTeamActivity();
   }, []);
 
   const fetchUsers = async () => {
@@ -145,6 +149,38 @@ export default function TeamManagement() {
       toast.error('Failed to load team members');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTeamActivity = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}/api/activity/team`,
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      // Convert array to object keyed by user_id
+      const activityMap = {};
+      response.data.forEach(item => {
+        activityMap[item.user_id] = item;
+      });
+      setTeamActivity(activityMap);
+    } catch (error) {
+      console.error('Failed to load team activity:', error);
+    }
+  };
+
+  const viewUserActivity = async (user) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}/api/activity/user/${user.id}`,
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      setSelectedUserActivity({ ...response.data, userName: user.name });
+      setActivityDialogOpen(true);
+    } catch (error) {
+      toast.error('Failed to load user activity');
     }
   };
 
