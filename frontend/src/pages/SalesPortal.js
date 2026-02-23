@@ -148,6 +148,13 @@ export default function SalesPortal() {
   const profitDifference = nylaTotalProfit - competitorTotalProfit;
   const isNylaWinner = nylaTotalProfit > competitorTotalProfit;
 
+  // Calculate return credit for sample size
+  const competitorReturnCreditPerBottle = parseFloat(competitorCalc.totalReturnCredit) || 0;
+  const nylaReturnCreditPerBottle = parseFloat(nylaCalc.totalReturnCredit) || 0;
+  const competitorTotalReturnCredit = competitorReturnCreditPerBottle * sampleSize;
+  const nylaTotalReturnCredit = nylaReturnCreditPerBottle * sampleSize;
+  const returnCreditDifference = nylaTotalReturnCredit - competitorTotalReturnCredit;
+
   const renderInputField = (label, field, data, onChange, disabled = false, highlight = false) => (
     <div className="space-y-2">
       <Label className="text-sm text-muted-foreground">{label}</Label>
