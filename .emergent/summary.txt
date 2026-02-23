@@ -1,66 +1,85 @@
 <analysis>**original_problem_statement:**
 The user wants to build a comprehensive, mobile-ready Sales CRM application. The main goal of this session was to continue adding features as requested by the user.
 
-Key features implemented in this session include:
-*   **Bottle Preview Enhancements:** Added logo cropping, resizing, shape-changing, and drag-to-position functionality.
-*   **SKU Management Module:** Implemented a full CRUD module for managing a master list of SKUs, moving away from a hardcoded list.
-*   **SKU Pricing in Leads:** Added functionality to save proposed SKU pricing directly within a lead.
-*   **Company Profile Page:** Created a detailed, well-designed page to display company information, including GST, banking, MSME details, and a downloadable QR code.
-*   **UI/UX Improvements:** Refactored the Transportation Cost Calculator for better usability and applied role-based access control to specific modules.
-
-The user has now requested another set of enhancements for the Bottle Preview page, which is the immediate next task.
+PRODUCT REQUIREMENTS added in this session:
+1.  **Files & Documents Management Module**: Create a module for users to upload, download, and organize documents using categories and sub-categories, with access control for key users (Admins, CEOs, Directors).
+2.  **Remove Proposals Module**: The existing top-level Proposals module should be removed entirely.
+3.  **Proposal Section in Lead Details**: Build a new proposal management section within the Lead Details page. It needs an upload feature, status tracking (Pending Review, Changes Requested, Revised, Approved/Rejected), a review/commenting system for approvers (CEO, Director, VP, National Sales Head), a download option, and the ability to replace an existing proposal which would restart the approval cycle.
+4.  **Lead Status Workflow Enhancement**:
+    *   Rename the lead status Proposal Stage to Proposal Shared.
+    *   Add a new status: Proposal Approved by Customer.
+    *   Implement strict validation rules:
+        *   Moving a lead to Proposal Shared requires an already approved proposal.
+        *   Moving a lead to Proposal Approved by Customer is only possible from the Proposal Shared status.
+        *   Moving a lead to WON is only possible from the Proposal Approved by Customer status.
+5.  **UI/UX Overhaul**:
+    *   **Estimated Deal Value Field**: On the Add/Edit Lead page, this field should not have a default value and the number input spinner arrows should be hidden.
+    *   **Navigation Redesign**: Reorganize the main navigation menu into logical groups (Core, Lead & Sales Ops, Pricing, Product, Documents, Organization).
+    *   **Corporate Theme**: Give the entire application a more professional corporate look and feel.
+6.  **Sales Portal - Brand Comparison Calculator**:
+    *   Implement a native version of a brand comparison calculator from an external URL (), removing the iframe.
+    *   Enhance the calculator with several features:
+        *   Set GST to 5% on both sides.
+        *   Move the comparison summary to the top.
+        *   Add a Sample Size input (default 1000) and show the total profit difference for that sample size.
+        *   Highlight the winner with subtle animations.
+        *   Set default Bottle Return Credit to 0 for the competitor and 15 for Nyla.
+        *   Update calculation to show return credit per bottle and total return credit for the sample size.
+7.  **Bug Fix**: Fix a production bug where downloading the bottle preview image failed with a 401 error due to an incorrect API URL being used.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack Sales CRM application (React/FastAPI/MongoDB) with a wide range of features. The application now includes a full CRUD SKU management system that populates SKU selection dropdowns application-wide. A comprehensive company profile page has been added. The Bottle Preview module has advanced image editing features like cropping, resizing, and draggable positioning. Role-based access controls have been implemented for sensitive modules like COGS and SKU Management. The agent has just received new requirements to further enhance the Bottle Preview page.
+A full-stack Sales CRM application (React/FastAPI/MongoDB). The application has a redesigned corporate UI with a logically grouped navigation sidebar. Key features include lead management, account management, a new Files & Documents module, and an enhanced Sales Portal with a native Brand Comparison Calculator. The lead management workflow now includes a detailed, role-based proposal approval system directly on the lead details page and a stricter, validated status progression. A critical production bug related to image downloads has been resolved.
 
 **Last working item**:
--   **Last item agent was working:** The agent acknowledged a new user request to enhance the bottle preview page further. The request includes adding a tabbed view for two different bottle images, a rounded square crop option for the logo, and the ability to remove a specific background color from the logo.
--   **Status:** NOT STARTED
+-   **Last item agent was working:** The agent was updating the client-side calculation logic in the Brand Comparison Calculator on the Sales Portal page (). The user requested that the calculator should explicitly show both the average return credit per bottle and the total return credit calculated for the selected sample size.
+-   **Status:** IN PROGRESS
 -   **Agent Testing Done:** N
--   **Which testing method agent to use?** Frontend testing agent
+-   **Which testing method agent to use?** screenshot tool
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   **Issue 1:** Incomplete Partner - Sales Role Permissions (P1)
--   **Issue 2:** User Verification for Custom Proposal Template (P2)
+-   **Issue 1:** Update Brand Comparison Calculator logic (P0)
+-   **Issue 2:** Incomplete Partner - Sales Role Permissions (P1)
 
 **Issues Detail:**
 -   **Issue 1:**
-    -   **Description:** The Partner - Sales role should have the same access level as a Regional Sales Manager, but this has not been audited and verified across all backend endpoints and frontend components.
+    -   **Description:** The Brand Comparison Calculator in  needs its calculation logic updated. It should display the return bottle credit on a per-bottle basis and also calculate the total return bottle credit based on the user-defined sample size.
+    -   **Attempted fixes:** The agent started to implement the change by modifying the  file.
     -   **Next debug checklist:**
-        1.  **Backend ():** Search for all permission checks and ensure Partner - Sales is included where Regional Sales Manager is present.
-        2.  **Frontend (Global):** Perform a global search for role-based logic (Regional Sales Manager) to find any UI elements that need updating.
+        1.  Open .
+        2.  Locate the  function and the component's state.
+        3.  Modify the logic to calculate and store return credit per bottle and total return credit for sample size as separate values.
+        4.  Update the UI to display these new calculated values clearly in both the individual brand cards and the top summary section.
+    -   **Why fix this issue and what will be achieved with the fix?** To provide a more granular and accurate financial comparison for sales pitches.
+    -   **Status:** IN PROGRESS
+    -   **Is recurring issue?** N
+    -   **Should Test frontend/backend/both after fix?** frontend
+    -   **Blocked on other issue:** None
+
+-   **Issue 2:**
+    -   **Description:** The Partner - Sales role should have the same access level as a Regional Sales Manager, but this has not been audited and verified across all backend endpoints and frontend components. This is a carry-over task.
+    -   **Attempted fixes:** None in this session.
+    -   **Next debug checklist:**
+        1.  **Backend ():** Globally search for all role-based permission checks (e.g., in  decorators) and ensure Partner - Sales is included wherever Regional Sales Manager is present.
+        2.  **Frontend (Global):** Perform a global search for any role-based conditional rendering logic tied to Regional Sales Manager and update it to include Partner - Sales.
     -   **Why fix this issue and what will be achieved with the fix?** To make the Partner - Sales role fully functional with the correct application-wide permissions.
     -   **Status:** NOT STARTED
     -   **Is recurring issue?** N
     -   **Should Test frontend/backend/both after fix?** both
     -   **Blocked on other issue:** None
--   **Issue 2:**
-    -   **Description:** A feature allowing a custom DOCX file to be used as a proposal template was previously implemented but is awaiting user testing and confirmation.
-    -   **Next debug checklist:**
-        1.  Ask the user to test the Proposal Generator functionality.
-        2.  Confirm the custom template loads, is editable, and exports correctly.
-    -   **Why fix this issue and what will be achieved with the fix?** To validate that the custom proposal template feature meets the user's expectations.
-    -   **Status:** USER VERIFICATION PENDING
-    -   **Is recurring issue?** N
-    -   **Should Test frontend/backend/both after fix?** frontend
-    -   **Blocked on other issue:** None
 
 **In progress Task List**:
--   **Task 1:** Enhance Bottle Preview Page (Phase 2) (P0)
+-   **Task 1:** Update Brand Comparison Calculator logic (P0)
 
 **Task Detail:**
 -   **Task 1:**
-    -   **Where to resume:** Modify .
-    -   **What will be achieved with this?** The user will be able to:
-        1.  Switch between two different bottle images using a tabbed interface.
-        2.  Select a rounded square shape for the logo crop.
-        3.  Remove a specific background color from the uploaded logo, using a color picker for selection.
-    -   **Status:** NOT STARTED
+    -   **Where to resume:** Edit the  function and JSX in .
+    -   **What will be achieved with this?** The calculator will accurately display both per-bottle and total sample size return credit values.
+    -   **Status:** IN PROGRESS
     -   **Should Test frontend/backend/both after fix?** frontend
-    -   **Blocked on something:** None. The color-specific background removal may require researching a new library or a more advanced  implementation than what is currently used.
+    -   **Blocked on something:** None
 
 **Upcoming and Future Tasks**
 -   **Upcoming Tasks:**
@@ -71,16 +90,18 @@ A full-stack Sales CRM application (React/FastAPI/MongoDB) with a wide range of 
     -   **P2:** Implement Google Workspace authentication as a full, alternative login method.
 
 **Completed work in this session**
--   **Bottle Preview Enhancements (Phase 1) (DONE):** Implemented logo upload, cropping (), shape-changing, resizing, and drag-to-position () features in .
--   **Master SKU Management (DONE):** Created a full CRUD module for SKUs. This involved creating backend endpoints in  and a new frontend page at . All hardcoded SKU lists were replaced with API calls to this new master list.
--   **Proposed SKU Pricing for Leads (DONE):** Updated the backend Lead model to include  and added the corresponding UI section to .
--   **Company Profile Page (DONE):** Created a new page at  to display detailed company information, including GST, banking, contact info, and a Google Maps link.
--   **Role-Based Access Control (DONE):** Restricted access to the COGS Calculator and SKU Management modules to specific user roles (CEO, Director, National Sales Head) by updating .
--   **Transportation Calculator UI Refactor (DONE):** Reorganized  to place the cost breakdown section at the top for better visibility.
+-   **UI/UX Overhaul (DONE):** Redesigned the entire application with a new corporate theme, including a dark grouped navigation sidebar () and new global styles ().
+-   **Brand Comparison Calculator (DONE):** Replaced the  iframe with a fully native, client-side calculator with advanced features like sample size calculation and animated winner announcements.
+-   **Files & Documents Module (DONE):** Implemented a complete CRUD module for document management, including backend endpoints in  and a new frontend page at .
+-   **Lead Proposal Module (DONE):** Integrated a new proposal approval workflow directly into , with corresponding backend logic in .
+-   **Lead Status Workflow Update (DONE):** Renamed statuses and added strict backend and frontend validation for lead status transitions in  and multiple frontend files (, , etc.).
+-   **'Estimated Deal Value' Field Fix (DONE):** Updated the input field in  to hide spinner arrows and remove the default value.
+-   **Production Download Bug Fix (DONE):** Fixed a critical bug preventing bottle preview downloads in production by switching to relative API URLs in .
+-   **'Proposals' Module Removal (DONE):** Deleted the old  page and removed all associated routes and navigation links.
+-   **Deployment Health Check (DONE):** Ran and passed a full health check, confirming the app is ready for deployment.
 
 **Earlier issues found/mentioned but not fixed**
--   **Issue 1:** Incomplete Partner - Sales Role Permissions (Carried over from the previous session).
--   **Issue 2:** User Verification for Custom Proposal Template (Carried over from the previous session).
+-   **Issue 1:** Incomplete Partner - Sales Role Permissions (carried over from the previous session). This is now listed in the All Pending/In progress Issue list.
 
 **Known issue recurrence from previous fork**
 -   None.
@@ -89,22 +110,20 @@ A full-stack Sales CRM application (React/FastAPI/MongoDB) with a wide range of 
 
 
 **Key Technical Concepts**
--   **Client-Side Image Manipulation:** Utilized  and HTML  for advanced image editing features like cropping, resizing, and basic background removal.
--   **Drag and Drop:** Implemented logo repositioning using .
--   **Centralized Data Management:** Migrated from hardcoded data to a database-backed master list for SKUs, accessible via a new set of CRUD APIs.
--   **Frontend Role-Based Access Control (RBAC):** Conditionally rendered navigation links and routes based on user roles stored in the auth context.
--   **UI/UX Refactoring:** Improved user experience by reorganizing page layouts based on user feedback (e.g., Transportation Calculator).
+-   **Client-Side Calculations:** The Brand Comparison Calculator was implemented purely in React, with all logic handled on the frontend for instant feedback without API calls.
+-   **Role-Based UI/Logic:** The new proposal and document modules implement logic based on user roles for actions like approving proposals or managing document categories.
+-   **Relative API URLs for Production:** Fixed a critical deployment issue by switching from absolute URLs () to relative URLs () for same-origin API calls, making the frontend build environment-agnostic.
+-   **CSS Theming with Variables:** The application's look and feel was changed by updating CSS variables in  and redesigning the main layout component.
+-   **Stateful Workflow Validation:** Implemented complex validation logic in both the backend () and frontend () to enforce a strict state machine for lead status transitions.
 
 **key DB schema**
--   **leads**: Added a new field  (Array of objects) to store pricing proposals before conversion.
--   **skus**: A new collection was created to serve as the master list for all SKUs, with fields for , , , etc.
+-   **documents**: (New Collection) 
+-   **categories**: (New Collection) 
+-   **subcategories**: (New Collection) 
+-   **leads**: The schema was updated to include a  object: .
 
 **changes in tech stack**
--   **Frontend Libraries Added:**
-    -   : For logo cropping UI.
-    -   : For moving the logo on the bottle preview.
-    -   : Used for the logo size slider.
-    -   : Used for background texture on the Bottle Preview page.
+-   None.
 
 **All files of reference**
 -   
@@ -120,46 +139,59 @@ A full-stack Sales CRM application (React/FastAPI/MongoDB) with a wide range of 
 -   
 
 **Areas that need refactoring**:
--   : This file has become critically oversized. The P2 task to break it down into separate  modules (, , , etc.) should be prioritized after the current feature is complete to ensure maintainability.
+-   : This monolithic file continues to grow. The P2 task to break it into separate  modules is now highly recommended for maintainability.
+-   : This component is very large. The new Proposal section and the Activity section could be extracted into their own components to improve readability and state management.
 
 **key api endpoints**
--    (GET, POST): Get all SKUs or create a new one.
--    (PUT, DELETE): Update or delete a specific SKU.
--    (PUT): Endpoint updated to save .
+-   **Files & Documents Module:**
+    -    (and associated PUT/DELETE)
+    -    (and associated PUT/DELETE)
+    -   
+    -   
+    -   
+-   **Lead Proposal Module:**
+    -   
+    -   
+    -   
+    -   
+-   **Lead Status Update:**
+    -   : Updated with new validation logic for status transitions.
 
 **Critical Info for New Agent**
--   The highest priority task (P0) is to implement the **Phase 2 enhancements for the Bottle Preview page**.
--   The most challenging part of the new request will be implementing the **specific-color background removal**. The current implementation only handles white/light backgrounds. You will need to research and implement a more advanced technique, likely using a color picker to select the target color and then manipulating the image data on an HTML .
--   The refactoring of the monolithic  is now more urgent than ever. Plan to address this after the Bottle Preview task.
+-   The immediate priority is to finish the user's last request: updating the calculation logic in the Brand Comparison Calculator ().
+-   The UI has been significantly redesigned. The new navigation structure is defined in  and the theme colors are in .
+-   The lead status workflow is now very specific and has backend validation. Refer to the  function in  and  in  before making any related changes.
+-   The production issue with  was fixed by using relative URLs (). Maintain this pattern for any new same-origin API calls.
 
 **documents and test reports created in this job**
--   
--   
 -   
 -   
 -    (updated)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User:** Implement a full CRUD SKU management module. **Status: Done.**
-2.  **User:** Rearrange the Transport Calculator page to have cost breakdown tiles at the top. **Status: Done.**
-3.  **User:** Restrict COGS Calculator and SKU Management to CEO, Admin, and Director roles. **Status: Done.**
-4.  **User:** Create an elegant Company Profile page with GST details. **Status: Done.**
-5.  **User:** Add MSME, bank details, and a downloadable QR code to the Company Profile page. **Status: Done.**
-6.  **User:** Add more address details, contact person, and a Google Maps link to the Company Profile page. **Status: Done.**
-7.  **User:** Requests new Bottle Preview enhancements: tabbed images, rounded square crop, and specific color background removal. **Status: NOT STARTED.**
+1.  **User:** Update the brand calculator: GST to 5%, summary on top, add sample size, highlight winner, set default return credits. **Status: Done.**
+2.  **User:** Update the calculator again: show return credit per bottle and total return credit for the sample size. **Status: IN PROGRESS.**
+3.  **User:** Redesign the navigation and app theme to a corporate look. Also, fix the Estimated Deal Value input. **Status: Done.**
+4.  **User:** Implement a Brand Comparison Calculator based on an external site. **Status: Done.**
+5.  **User:** Build a proposal section in the lead details page with an approval workflow. **Status: Done.**
+6.  **User:** Provided choices for proposal implementation (roles, statuses, file types). **Status: Done.**
+7.  **User:** Add new lead statuses (Proposal Approved by Customer) and rename others (Proposal Shared) with specific transition rules. **Status: Done.**
+8.  **User:** Allow replacing an approved proposal, which should restart the approval cycle. **Status: Done.**
+9.  **User:** Asked about the redeploy option vs. deploy. **Status: Answered.**
+10. **User:** Confirmed the fix for the bottle preview download was ready to deploy. **Status: Answered.**
 
 **Project Health Check:**
 -   **Broken**: None.
--   **Mocked**: The Google Maps route visualization and automatic distance calculation in the Transportation Calculator remains non-functional due to API key limitations. The manual distance entry fallback is working correctly.
+-   **Mocked**: Google Maps functionality relies on a user-provided API key that may not have all required APIs enabled in Google Cloud Console. This does not break the core application.
 
 **3rd Party Integrations**
--   **Google Places API**: Used for location autocomplete. (User API Key)
+-   **Google Places API**: Used for location autocomplete via a backend proxy. (User API Key)
 -   **Google Workspace OAuth**: Used for login. (User-provided OAuth Client ID/Secret)
 -   **Claude Sonnet 4.5**: (Emergent LLM Key)
 -   **ActiveMQ**: For real-time invoice processing.
 
 **Testing status**
--   **Testing agent used after significant changes**: YES. The testing agent was used successfully to validate all major features implemented in this session, including Bottle Preview v1, SKU Pricing, and the full SKU Management CRUD module.
+-   **Testing agent used after significant changes**: YES (for Files & Documents and Lead Proposal modules).
 -   **Troubleshoot agent used after agent stuck in loop**: NO
 -   **Test files created**: None.
 -   **Known regressions**: None.
@@ -169,4 +201,4 @@ A full-stack Sales CRM application (React/FastAPI/MongoDB) with a wide range of 
 -   **Password**: 
 
 **What agent forgot to execute**
--   The two pending items from the previous fork (Incomplete Partner - Sales Role Permissions and Custom Proposal Template verification) were not addressed as the agent prioritized the user's new, high-priority feature requests. These have been carried forward.</analysis>
+-   The task from the initial handoff to audit and fix permissions for the Partner - Sales role was not addressed during this session.</analysis>
