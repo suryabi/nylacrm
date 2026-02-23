@@ -1267,6 +1267,205 @@ async def logout_user(request: Request, response: Response):
     
     return {'message': 'Logged out successfully'}
 
+# ============= USER ACTIVITY TRACKING =============
+
+@api_router.post("/activity/heartbeat")
+async def activity_heartbeat(data: ActivityHeartbeat, request: Request):
+    """Record user activity heartbeat - called every 30 seconds from frontend"""
+    try:
+        user = await get_current_user_from_cookie_or_header(request)
+    except:
+        return {'status': 'skipped', 'reason': 'not authenticated'}
+    
+    user_id = user['id']
+    session_token = request.cookies.get('session_token') or request.headers.get('Authorization', '').replace('Bearer ', '')
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Get or create activity record for this session
+    activity = await db.user_activity.find_one({
+        'user_id': user_id,
+        'session_id': session_token
+    }, {'_id': 0})
+    
+    if not activity:
+        # Create new activity record
+        activity = {
+            'user_id': user_id,
+            'session_id': session_token,
+            'session_start': now,
+            'last_active': now,
+            'total_time_seconds': 0,
+            'pages_visited': [],
+            'actions': [],
+            'events': []
+        }
+        await db.user_activity.insert_one(activity)
+    
+    # Calculate time since last heartbeat
+    last_active = activity.get('last_active', now)
+    if isinstance(last_active, str):
+        last_active_dt = datetime.fromisoformat(last_active.replace('Z', '+00:00'))
+    else:
+        last_active_dt = last_active
+    
+    now_dt = datetime.now(timezone.utc)
+    time_diff = (now_dt - last_active_dt).total_seconds()
+    
+    # Only count time if less than 60 seconds (user was active)
+    time_to_add = min(time_diff, 60) if time_diff < 120 else 0
+    
+    # Update pages visited
+    pages_visited = activity.get('pages_visited', [])
+    page_found = False
+    for page in pages_visited:
+        if page['page'] == data.current_page:
+            page['visit_count'] += 1
+            page['total_time_seconds'] += int(time_to_add)
+            page['last_visit'] = now
+            page_found = True
+            break
+    
+    if not page_found:
+        pages_visited.append({
+            'page': data.current_page,
+            'visit_count': 1,
+            'total_time_seconds': int(time_to_add),
+            'first_visit': now,
+            'last_visit': now
+        })
+    
+    # Update actions if provided
+    actions = activity.get('actions', [])
+    if data.action:
+        action_found = False
+        for action in actions:
+            if action['action'] == data.action:
+                action['count'] += 1
+                action['last_at'] = now
+                action_found = True
+                break
+        
+        if not action_found:
+            actions.append({
+                'action': data.action,
+                'count': 1,
+                'first_at': now,
+                'last_at': now
+            })
+    
+    # Add event to timeline (keep last 100 events)
+    events = activity.get('events', [])
+    event = {
+        'type': 'action' if data.action else 'page_view',
+        'page': data.current_page,
+        'action': data.action,
+        'timestamp': now
+    }
+    events.append(event)
+    if len(events) > 100:
+        events = events[-100:]
+    
+    # Update activity record
+    await db.user_activity.update_one(
+        {'user_id': user_id, 'session_id': session_token},
+        {'$set': {
+            'last_active': now,
+            'total_time_seconds': activity.get('total_time_seconds', 0) + int(time_to_add),
+            'pages_visited': pages_visited,
+            'actions': actions,
+            'events': events
+        }}
+    )
+    
+    # Also update the user's last_active field
+    await db.users.update_one(
+        {'id': user_id},
+        {'$set': {'last_active': now}}
+    )
+    
+    return {'status': 'ok', 'time_added': int(time_to_add)}
+
+@api_router.get("/activity/my-session")
+async def get_my_session_activity(request: Request):
+    """Get current user's session activity"""
+    user = await get_current_user_from_cookie_or_header(request)
+    session_token = request.cookies.get('session_token') or request.headers.get('Authorization', '').replace('Bearer ', '')
+    
+    activity = await db.user_activity.find_one({
+        'user_id': user['id'],
+        'session_id': session_token
+    }, {'_id': 0})
+    
+    if not activity:
+        return {
+            'session_start': datetime.now(timezone.utc).isoformat(),
+            'last_active': datetime.now(timezone.utc).isoformat(),
+            'total_time_seconds': 0,
+            'pages_visited': [],
+            'actions': [],
+            'events': []
+        }
+    
+    return activity
+
+@api_router.get("/activity/user/{user_id}")
+async def get_user_activity(user_id: str, current_user: dict = Depends(get_current_user)):
+    """Get a specific user's last session activity (for team management view)"""
+    # Get the user's most recent activity record
+    activity = await db.user_activity.find_one(
+        {'user_id': user_id},
+        {'_id': 0},
+        sort=[('last_active', -1)]
+    )
+    
+    # Get user's last_active from users collection
+    user_doc = await db.users.find_one({'id': user_id}, {'_id': 0, 'last_active': 1})
+    last_active = user_doc.get('last_active') if user_doc else None
+    
+    if not activity:
+        return {
+            'user_id': user_id,
+            'last_active': last_active,
+            'session_start': None,
+            'total_time_seconds': 0,
+            'pages_visited': [],
+            'actions': [],
+            'events': []
+        }
+    
+    activity['last_active'] = last_active or activity.get('last_active')
+    return activity
+
+@api_router.get("/activity/team")
+async def get_team_activity(current_user: dict = Depends(get_current_user)):
+    """Get activity summary for all team members"""
+    # Get all users
+    users = await db.users.find({}, {'_id': 0, 'id': 1, 'name': 1, 'last_active': 1}).to_list(1000)
+    
+    result = []
+    for user in users:
+        # Get most recent activity for each user
+        activity = await db.user_activity.find_one(
+            {'user_id': user['id']},
+            {'_id': 0, 'session_start': 1, 'total_time_seconds': 1, 'pages_visited': 1, 'actions': 1, 'events': 1},
+            sort=[('last_active', -1)]
+        )
+        
+        result.append({
+            'user_id': user['id'],
+            'name': user.get('name', 'Unknown'),
+            'last_active': user.get('last_active'),
+            'session': activity if activity else {
+                'session_start': None,
+                'total_time_seconds': 0,
+                'pages_visited': [],
+                'actions': [],
+                'events': []
+            }
+        })
+    
+    return result
+
 # ============= AUTH ROUTES =============
 
 @api_router.post("/auth/register", response_model=User)
