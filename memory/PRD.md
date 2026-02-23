@@ -256,12 +256,13 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 4. ~~Bottle Preview Enhancement Phase 1~~ ✅ IMPLEMENTED (cropping, shapes, bg removal, resize)
 5. ~~Bottle Preview Enhancement Phase 2~~ ✅ IMPLEMENTED (tabbed bottles, rounded square, color picker bg removal)
 6. ~~Files & Documents Module~~ ✅ IMPLEMENTED (categories, subcategories, upload, download, permissions)
+7. ~~Brand Comparison Calculator~~ ✅ IMPLEMENTED (return credit per-bottle & total sample display, 75% default bottle return)
 
 ### P1 - High Priority
 - Implement Invoices functionality for Accounts
-- Update Account List Page UI (if user provides requirements)
+- Partner - Sales role permissions audit (same permissions as Regional Sales Manager)
 - Re-implement Grid View for Sales Targets module
-- Partner - Sales role permissions audit
+- Update Account List Page UI (if user provides requirements)
 
 ### P2 - Medium Priority
 - User verification for Custom Proposal Template
