@@ -68,6 +68,7 @@ const getStatusLabel = (status) => {
 export default function LeadDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [lead, setLead] = useState(null);
   const [activities, setActivities] = useState([]);
   const [comments, setComments] = useState([]);
@@ -92,10 +93,18 @@ export default function LeadDetail() {
   const [activityStatus, setActivityStatus] = useState('');
   const [activityFollowUpDate, setActivityFollowUpDate] = useState('');
   const [convertingToAccount, setConvertingToAccount] = useState(false);
+  
+  // Proposal state
+  const [proposal, setProposal] = useState(null);
+  const [proposalLoading, setProposalLoading] = useState(false);
+  const [uploadingProposal, setUploadingProposal] = useState(false);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewingProposal, setReviewingProposal] = useState(false);
 
   useEffect(() => {
     fetchData();
     fetchMasterSkus();
+    fetchProposal();
   }, [id]);
 
   const fetchMasterSkus = async () => {
