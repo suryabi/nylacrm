@@ -348,20 +348,31 @@ export default function TeamManagement() {
             <TableRow>
               <TableHead>Name & Designation</TableHead>
               <TableHead>Contact</TableHead>
-              <TableHead>Location</TableHead>
               <TableHead>Territory</TableHead>
-              <TableHead>Role</TableHead>
+              <TableHead>Last Active</TableHead>
+              <TableHead>Session Time</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedUsers.map((user) => (
+            {sortedUsers.map((user) => {
+              const activity = teamActivity[user.id];
+              const lastActive = activity?.last_active;
+              const sessionTime = activity?.session?.total_time_seconds || 0;
+              const isOnlineNow = lastActive && (new Date() - new Date(lastActive)) < 120000; // Within 2 mins
+              
+              return (
               <TableRow key={user.id} data-testid={`team-member-${user.id}`}>
                 <TableCell>
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold">
-                      {user.name && user.name[0] ? user.name[0].toUpperCase() : '?'}
+                    <div className="relative">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold">
+                        {user.name && user.name[0] ? user.name[0].toUpperCase() : '?'}
+                      </div>
+                      {isOnlineNow && (
+                        <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 bg-green-500 rounded-full border-2 border-white" title="Online now" />
+                      )}
                     </div>
                     <div>
                       <p className="font-medium">{user.name}</p>
@@ -378,13 +389,29 @@ export default function TeamManagement() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  {user.city && user.state ? `${user.city}, ${user.state}` : '-'}
+                  <span className="text-sm">{user.territory || '-'}</span>
+                  {user.city && user.state && (
+                    <p className="text-xs text-muted-foreground">{user.city}, {user.state}</p>
+                  )}
                 </TableCell>
-                <TableCell>{user.territory || '-'}</TableCell>
                 <TableCell>
-                  <Badge variant="outline" className="capitalize">
-                    {user.role ? user.role.replace('_', ' ') : 'N/A'}
-                  </Badge>
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className={`text-sm ${isOnlineNow ? 'text-green-600 font-medium' : ''}`}>
+                      {isOnlineNow ? 'Online' : formatRelativeTime(lastActive)}
+                    </span>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1.5">
+                    <Activity className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-sm">{formatDuration(sessionTime)}</span>
+                  </div>
+                  {activity?.session?.pages_visited?.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {activity.session.pages_visited.length} pages
+                    </p>
+                  )}
                 </TableCell>
                 <TableCell>
                   <Badge className={user.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
@@ -392,7 +419,15 @@ export default function TeamManagement() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
+                  <div className="flex justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => viewUserActivity(user)}
+                      title="View activity details"
+                    >
+                      <Eye className="h-4 w-4 text-blue-600" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -435,7 +470,8 @@ export default function TeamManagement() {
                   </div>
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
       </Card>
