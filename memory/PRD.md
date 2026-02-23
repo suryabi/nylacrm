@@ -317,6 +317,7 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 7. ~~Brand Comparison Calculator~~ ✅ IMPLEMENTED (return credit per-bottle & total sample display, 75% default bottle return)
 8. ~~Team Activity Tracking~~ ✅ IMPLEMENTED (last active, session time, pages visited, actions performed)
 9. ~~PWA Support~~ ✅ IMPLEMENTED (installable, offline support, push notifications)
+10. ~~Accounts List Redesign~~ ✅ IMPLEMENTED (filters, stats cards, new columns, visual overhaul)
 
 ### P1 - High Priority
 - Implement Invoices functionality for Accounts
