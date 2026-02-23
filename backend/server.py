@@ -5471,6 +5471,229 @@ async def delete_document(document_id: str, current_user: dict = Depends(get_cur
     
     return {'message': 'Document deleted successfully'}
 
+# ============= LEAD PROPOSALS MODULE =============
+
+# Roles that can approve/reject proposals
+PROPOSAL_APPROVER_ROLES = ['CEO', 'Director', 'Vice President', 'National Sales Head']
+
+# Proposal statuses
+PROPOSAL_STATUSES = ['pending_review', 'changes_requested', 'revised', 'approved', 'rejected']
+
+# Allowed file types for proposals
+ALLOWED_PROPOSAL_TYPES = {
+    'application/pdf': 'pdf',
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx'
+}
+
+MAX_PROPOSAL_SIZE = 5 * 1024 * 1024  # 5 MB
+
+class ProposalReviewComment(BaseModel):
+    """Review comment on a proposal"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    reviewer_id: str
+    reviewer_name: str
+    action: str  # 'approved', 'rejected', 'changes_requested', 'comment'
+    comment: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class LeadProposal(BaseModel):
+    """Proposal document for a lead"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    lead_id: str
+    file_name: str
+    file_size: int
+    content_type: str
+    document_type: str  # 'pdf', 'doc', 'docx'
+    file_data: str  # base64 encoded
+    status: str = 'pending_review'  # pending_review, changes_requested, revised, approved, rejected
+    uploaded_by: str
+    uploaded_by_name: str
+    uploaded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    reviewed_by: Optional[str] = None
+    reviewed_by_name: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    review_comments: List[dict] = []
+    version: int = 1
+
+def can_approve_proposal(role: str) -> bool:
+    """Check if user role can approve/reject proposals"""
+    return role in PROPOSAL_APPROVER_ROLES
+
+@api_router.get("/leads/{lead_id}/proposal")
+async def get_lead_proposal(lead_id: str, current_user: dict = Depends(get_current_user)):
+    """Get the current proposal for a lead"""
+    # Verify lead exists
+    lead = await db.leads.find_one({'id': lead_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+    
+    # Get proposal without file_data for listing
+    proposal = await db.lead_proposals.find_one(
+        {'lead_id': lead_id},
+        {'_id': 0, 'file_data': 0}
+    )
+    
+    if not proposal:
+        return {'proposal': None}
+    
+    return {'proposal': proposal}
+
+@api_router.post("/leads/{lead_id}/proposal")
+async def upload_lead_proposal(
+    lead_id: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload a proposal for a lead (replaces existing)"""
+    # Verify lead exists
+    lead = await db.leads.find_one({'id': lead_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+    
+    # Validate file type
+    if file.content_type not in ALLOWED_PROPOSAL_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail='Only PDF and DOC/DOCX files are allowed for proposals'
+        )
+    
+    # Read and validate file size
+    contents = await file.read()
+    if len(contents) > MAX_PROPOSAL_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f'File size exceeds 5 MB limit. Your file is {round(len(contents) / (1024*1024), 2)} MB'
+        )
+    
+    # Check if there's an existing proposal
+    existing = await db.lead_proposals.find_one({'lead_id': lead_id})
+    version = 1
+    
+    if existing:
+        version = existing.get('version', 1) + 1
+        # Delete existing proposal
+        await db.lead_proposals.delete_one({'lead_id': lead_id})
+    
+    # Determine status for new/revised proposal
+    status = 'revised' if existing and existing.get('status') == 'changes_requested' else 'pending_review'
+    
+    # Create new proposal
+    proposal = LeadProposal(
+        lead_id=lead_id,
+        file_name=file.filename,
+        file_size=len(contents),
+        content_type=file.content_type,
+        document_type=ALLOWED_PROPOSAL_TYPES[file.content_type],
+        file_data=base64.b64encode(contents).decode('utf-8'),
+        status=status,
+        uploaded_by=current_user['id'],
+        uploaded_by_name=current_user['name'],
+        version=version
+    )
+    
+    doc = proposal.model_dump()
+    doc['uploaded_at'] = doc['uploaded_at'].isoformat()
+    
+    await db.lead_proposals.insert_one(doc)
+    
+    # Return without file_data
+    response = {k: v for k, v in doc.items() if k not in ['_id', 'file_data']}
+    
+    return {'proposal': response, 'message': f'Proposal v{version} uploaded successfully'}
+
+@api_router.get("/leads/{lead_id}/proposal/download")
+async def download_lead_proposal(lead_id: str, current_user: dict = Depends(get_current_user)):
+    """Download the proposal document for a lead"""
+    proposal = await db.lead_proposals.find_one({'lead_id': lead_id}, {'_id': 0})
+    
+    if not proposal:
+        raise HTTPException(status_code=404, detail='No proposal found for this lead')
+    
+    return {'proposal': proposal}
+
+@api_router.delete("/leads/{lead_id}/proposal")
+async def delete_lead_proposal(lead_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a proposal (only uploader and only when pending_review)"""
+    proposal = await db.lead_proposals.find_one({'lead_id': lead_id})
+    
+    if not proposal:
+        raise HTTPException(status_code=404, detail='No proposal found for this lead')
+    
+    # Check if user is the uploader
+    if proposal['uploaded_by'] != current_user['id']:
+        raise HTTPException(status_code=403, detail='Only the uploader can delete this proposal')
+    
+    # Check if status is pending_review
+    if proposal['status'] != 'pending_review':
+        raise HTTPException(
+            status_code=400,
+            detail='Proposal can only be deleted while in Pending Review status'
+        )
+    
+    await db.lead_proposals.delete_one({'lead_id': lead_id})
+    
+    return {'message': 'Proposal deleted successfully'}
+
+@api_router.put("/leads/{lead_id}/proposal/review")
+async def review_lead_proposal(
+    lead_id: str,
+    review_data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Review a proposal (approve, reject, or request changes)"""
+    # Check if user can approve
+    if not can_approve_proposal(current_user['role']):
+        raise HTTPException(
+            status_code=403,
+            detail='Only CEO, Director, VP, or National Sales Head can review proposals'
+        )
+    
+    proposal = await db.lead_proposals.find_one({'lead_id': lead_id})
+    
+    if not proposal:
+        raise HTTPException(status_code=404, detail='No proposal found for this lead')
+    
+    action = review_data.get('action')  # 'approved', 'rejected', 'changes_requested'
+    comment = review_data.get('comment', '')
+    
+    if action not in ['approved', 'rejected', 'changes_requested']:
+        raise HTTPException(status_code=400, detail='Invalid review action')
+    
+    # Create review comment
+    review_comment = {
+        'id': str(uuid.uuid4()),
+        'reviewer_id': current_user['id'],
+        'reviewer_name': current_user['name'],
+        'action': action,
+        'comment': comment,
+        'created_at': datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Determine new status
+    new_status = action  # 'approved', 'rejected', or 'changes_requested'
+    
+    # Update proposal
+    update_data = {
+        'status': new_status,
+        'reviewed_by': current_user['id'],
+        'reviewed_by_name': current_user['name'],
+        'reviewed_at': datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.lead_proposals.update_one(
+        {'lead_id': lead_id},
+        {
+            '$set': update_data,
+            '$push': {'review_comments': review_comment}
+        }
+    )
+    
+    # Get updated proposal
+    updated = await db.lead_proposals.find_one({'lead_id': lead_id}, {'_id': 0, 'file_data': 0})
+    
+    return {'proposal': updated, 'message': f'Proposal {action.replace("_", " ")}'}
+
 # ============= INCLUDE ROUTER =============
 
 app.include_router(api_router)
