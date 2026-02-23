@@ -2221,10 +2221,13 @@ async def get_accounts(
     page_size: int = 25,
     search: Optional[str] = None,
     territory: Optional[str] = None,
+    state: Optional[str] = None,
+    city: Optional[str] = None,
     account_type: Optional[str] = None,
+    category: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get paginated accounts list"""
+    """Get paginated accounts list with enhanced filters"""
     page_size = min(max(1, page_size), 100)
     page = max(1, page)
     skip = (page - 1) * page_size
@@ -2232,8 +2235,14 @@ async def get_accounts(
     query = {}
     if territory:
         query['territory'] = territory
+    if state:
+        query['state'] = state
+    if city:
+        query['city'] = city
     if account_type:
         query['account_type'] = account_type
+    if category:
+        query['category'] = category
     if search:
         query['$or'] = [
             {'account_name': {'$regex': search, '$options': 'i'}},
@@ -2246,12 +2255,34 @@ async def get_accounts(
     
     accounts = await db.accounts.find(query, {'_id': 0}).sort('created_at', -1).skip(skip).limit(page_size).to_list(page_size)
     
-    # Convert datetime strings back to datetime objects
+    # Get user names for assigned_to field and category from original leads
+    user_ids = list(set(a.get('assigned_to') for a in accounts if a.get('assigned_to')))
+    lead_ids = list(set(a.get('lead_id') for a in accounts if a.get('lead_id')))
+    
+    user_map = {}
+    if user_ids:
+        users = await db.users.find({'id': {'$in': user_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(len(user_ids))
+        user_map = {u['id']: u['name'] for u in users}
+    
+    lead_map = {}
+    if lead_ids:
+        leads = await db.leads.find({'id': {'$in': lead_ids}}, {'_id': 0, 'id': 1, 'category': 1}).to_list(len(lead_ids))
+        lead_map = {l['id']: l.get('category') for l in leads}
+    
+    # Enrich account data
     for account in accounts:
+        # Convert datetime strings back to datetime objects
         if isinstance(account.get('created_at'), str):
             account['created_at'] = datetime.fromisoformat(account['created_at'])
         if isinstance(account.get('updated_at'), str):
             account['updated_at'] = datetime.fromisoformat(account['updated_at'])
+        
+        # Add sales person name
+        account['sales_person_name'] = user_map.get(account.get('assigned_to'), None)
+        
+        # Add category from lead if not already set
+        if not account.get('category') and account.get('lead_id'):
+            account['category'] = lead_map.get(account.get('lead_id'))
     
     return PaginatedAccountsResponse(
         data=accounts,
