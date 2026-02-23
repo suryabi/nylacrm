@@ -559,10 +559,11 @@ export default function AddEditLead() {
               <Input
                 id="estimated_value"
                 type="number"
-                placeholder="500000"
+                placeholder="Enter estimated value"
                 value={formData.estimated_value}
                 onChange={(e) => updateField('estimated_value', e.target.value)}
                 data-testid="lead-value-input"
+                className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
             </div>
           </div>
