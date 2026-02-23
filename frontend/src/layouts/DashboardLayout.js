@@ -2,7 +2,13 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
-import { LogOut, Menu, ChevronDown, ChevronRight } from 'lucide-react';
+import { 
+  LogOut, Menu, ChevronDown, ChevronRight, 
+  LayoutDashboard, Users, Building2, Store,
+  Search, Target, CalendarDays, UsersRound,
+  Calculator, Truck, Package, Droplets,
+  FolderOpen, Building, UserCog, CalendarOff
+} from 'lucide-react';
 
 const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
 
@@ -17,23 +23,54 @@ const dashboardSubmenu = [
   { name: 'Target x Resource', href: '/target-resource', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
 ];
 
-const navigation = [
-  { name: 'Dashboard', href: '/dashboard', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'], hasSubmenu: true },
-  { name: 'Leads', href: '/leads', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-  { name: 'Accounts', href: '/accounts', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-  { name: 'Lead Discovery', href: '/lead-discovery', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-  { name: 'COGS Calculator', href: '/cogs-calculator', roles: ['CEO', 'Director', 'National Sales Head'] },
-  { name: 'Transport Calculator', href: '/transportation-calculator', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager'] },
-  { name: 'Targets', href: '/targets', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
-  { name: 'Sales Portal', href: '/sales-portal', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-  { name: 'Daily Status', href: '/daily-status', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-  { name: 'Team Status', href: '/team-status', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
-  { name: 'Bottle Preview', href: '/bottle-preview', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-  { name: 'SKU Management', href: '/sku-management', roles: ['CEO', 'Director', 'National Sales Head'] },
-  { name: 'Company Profile', href: '/company-profile', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-  { name: 'Files & Documents', href: '/files-documents', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'admin', 'Admin'] },
-  { name: 'Leaves', href: '/leaves', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-  { name: 'Team', href: '/team', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
+// Grouped navigation structure
+const navigationGroups = [
+  {
+    title: 'Core',
+    items: [
+      { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'], hasSubmenu: true },
+      { name: 'Leads', href: '/leads', icon: Users, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
+      { name: 'Accounts', href: '/accounts', icon: Building2, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
+      { name: 'Sales Portal', href: '/sales-portal', icon: Store, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
+    ]
+  },
+  {
+    title: 'Lead & Sales Operations',
+    items: [
+      { name: 'Lead Discovery', href: '/lead-discovery', icon: Search, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
+      { name: 'Targets', href: '/targets', icon: Target, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
+      { name: 'Daily Status', href: '/daily-status', icon: CalendarDays, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
+      { name: 'Team Status', href: '/team-status', icon: UsersRound, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
+    ]
+  },
+  {
+    title: 'Pricing & Logistics',
+    items: [
+      { name: 'COGS Calculator', href: '/cogs-calculator', icon: Calculator, roles: ['CEO', 'Director', 'National Sales Head'] },
+      { name: 'Transport Calculator', href: '/transportation-calculator', icon: Truck, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager'] },
+    ]
+  },
+  {
+    title: 'Product & SKU',
+    items: [
+      { name: 'SKU Management', href: '/sku-management', icon: Package, roles: ['CEO', 'Director', 'National Sales Head'] },
+      { name: 'Bottle Preview', href: '/bottle-preview', icon: Droplets, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
+    ]
+  },
+  {
+    title: 'Documents',
+    items: [
+      { name: 'Files & Documents', href: '/files-documents', icon: FolderOpen, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'admin', 'Admin'] },
+    ]
+  },
+  {
+    title: 'Organization',
+    items: [
+      { name: 'Company Profile', href: '/company-profile', icon: Building, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
+      { name: 'Team', href: '/team', icon: UserCog, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
+      { name: 'Leaves', href: '/leaves', icon: CalendarOff, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
+    ]
+  },
 ];
 
 export default function DashboardLayout({ children }) {
@@ -47,110 +84,149 @@ export default function DashboardLayout({ children }) {
     location.pathname === '/sku-performance' || location.pathname === '/resource-performance' ||
     location.pathname === '/account-performance'
   );
+  const [collapsedGroups, setCollapsedGroups] = useState({});
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  const filteredNav = navigation.filter(item => item.roles.includes(user?.role));
+  const toggleGroup = (title) => {
+    setCollapsedGroups(prev => ({ ...prev, [title]: !prev[title] }));
+  };
+
   const filteredDashboardSubmenu = dashboardSubmenu.filter(item => item.roles.includes(user?.role));
   const isDashboardActive = location.pathname === '/dashboard' || location.pathname === '/sales-revenue' || 
     location.pathname === '/target-sku' || location.pathname === '/target-resource' ||
     location.pathname === '/sku-performance' || location.pathname === '/resource-performance' ||
     location.pathname === '/account-performance';
 
+  // Filter navigation groups based on user role
+  const filteredGroups = navigationGroups.map(group => ({
+    ...group,
+    items: group.items.filter(item => item.roles.includes(user?.role))
+  })).filter(group => group.items.length > 0);
+
   return (
-    <div className="min-h-screen flex bg-background">
+    <div className="min-h-screen flex bg-slate-50">
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border transform transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 transform transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="p-6 border-b border-border">
-            <img src={NYLA_LOGO} alt="Nyla" className="h-12 mx-auto rounded-full" />
-            <p className="text-center text-sm text-muted-foreground mt-2">Sales CRM</p>
+          <div className="p-5 border-b border-slate-700/50">
+            <div className="flex items-center gap-3">
+              <img src={NYLA_LOGO} alt="Nyla" className="h-10 w-10 rounded-lg object-cover" />
+              <div>
+                <h1 className="text-white font-bold text-lg tracking-tight">Nyla</h1>
+                <p className="text-slate-400 text-xs">Sales CRM</p>
+              </div>
+            </div>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-            {filteredNav.map((item) => {
-              // Handle Dashboard with submenu
-              if (item.hasSubmenu && item.name === 'Dashboard') {
-                return (
-                  <div key={item.name}>
-                    <button
-                      onClick={() => setDashboardOpen(!dashboardOpen)}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-                        isDashboardActive
-                          ? 'bg-primary text-white'
-                          : 'text-foreground-muted hover:bg-secondary hover:text-foreground'
-                      }`}
-                    >
-                      <span>{item.name}</span>
-                      {dashboardOpen ? (
-                        <ChevronDown className="h-4 w-4" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4" />
-                      )}
-                    </button>
-                    {dashboardOpen && (
-                      <div className="mt-1 ml-4 space-y-1">
-                        {filteredDashboardSubmenu.map((subItem) => {
-                          const isSubActive = location.pathname === subItem.href;
-                          return (
-                            <Link
-                              key={subItem.name}
-                              to={subItem.href}
-                              onClick={() => setSidebarOpen(false)}
-                              className={`block px-4 py-2 rounded-lg text-sm transition-colors ${
-                                isSubActive
-                                  ? 'bg-primary/20 text-primary font-medium'
-                                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+          <nav className="flex-1 py-4 overflow-y-auto scrollbar-thin">
+            {filteredGroups.map((group, groupIndex) => (
+              <div key={group.title} className={groupIndex > 0 ? 'mt-2' : ''}>
+                {/* Group Header */}
+                <button
+                  onClick={() => toggleGroup(group.title)}
+                  className="w-full flex items-center justify-between px-5 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider hover:text-slate-300 transition-colors"
+                >
+                  <span>{group.title}</span>
+                  <ChevronDown className={`h-3 w-3 transition-transform ${collapsedGroups[group.title] ? '-rotate-90' : ''}`} />
+                </button>
+
+                {/* Group Items */}
+                {!collapsedGroups[group.title] && (
+                  <div className="mt-1 space-y-0.5 px-3">
+                    {group.items.map((item) => {
+                      const Icon = item.icon;
+                      
+                      // Handle Dashboard with submenu
+                      if (item.hasSubmenu && item.name === 'Dashboard') {
+                        return (
+                          <div key={item.name}>
+                            <button
+                              onClick={() => setDashboardOpen(!dashboardOpen)}
+                              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                                isDashboardActive
+                                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30'
+                                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                               }`}
                             >
-                              {subItem.name}
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    )}
+                              <span className="flex items-center gap-3">
+                                <Icon className="h-4 w-4" />
+                                {item.name}
+                              </span>
+                              {dashboardOpen ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                            </button>
+                            {dashboardOpen && (
+                              <div className="mt-1 ml-7 space-y-0.5 border-l border-slate-700 pl-3">
+                                {filteredDashboardSubmenu.map((subItem) => {
+                                  const isSubActive = location.pathname === subItem.href;
+                                  return (
+                                    <Link
+                                      key={subItem.name}
+                                      to={subItem.href}
+                                      onClick={() => setSidebarOpen(false)}
+                                      className={`block px-3 py-2 rounded-md text-sm transition-all ${
+                                        isSubActive
+                                          ? 'bg-emerald-600/20 text-emerald-400 font-medium'
+                                          : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                                      }`}
+                                    >
+                                      {subItem.name}
+                                    </Link>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      
+                      const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
+                      return (
+                        <Link
+                          key={item.name}
+                          to={item.href}
+                          onClick={() => setSidebarOpen(false)}
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                            isActive
+                              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30'
+                              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                          }`}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.name}
+                        </Link>
+                      );
+                    })}
                   </div>
-                );
-              }
-              
-              const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  onClick={() => setSidebarOpen(false)}
-                  className={`block px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-primary text-white'
-                      : 'text-foreground-muted hover:bg-secondary hover:text-foreground'
-                  }`}
-                >
-                  {item.name}
-                </Link>
-              );
-            })}
+                )}
+              </div>
+            ))}
           </nav>
 
           {/* User Section */}
-          <div className="p-4 border-t border-border">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold">
+          <div className="p-4 border-t border-slate-700/50">
+            <div className="flex items-center gap-3 mb-3 px-2">
+              <div className="h-9 w-9 rounded-lg bg-emerald-600/20 flex items-center justify-center text-emerald-400 font-semibold text-sm">
                 {user?.name?.[0]?.toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.name}</p>
-                <p className="text-xs text-muted-foreground truncate capitalize">{user?.role?.replace('_', ' ')}</p>
+                <p className="text-sm font-medium text-white truncate">{user?.name}</p>
+                <p className="text-xs text-slate-400 truncate capitalize">{user?.role?.replace('_', ' ')}</p>
               </div>
             </div>
             <Button
               onClick={handleLogout}
-              variant="outline"
-              className="w-full justify-start rounded-xl"
+              variant="ghost"
+              className="w-full justify-start text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg"
             >
               <LogOut className="h-4 w-4 mr-2" />
               Logout
@@ -162,7 +238,7 @@ export default function DashboardLayout({ children }) {
       {/* Backdrop for mobile */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -170,24 +246,29 @@ export default function DashboardLayout({ children }) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 lg:ml-64">
         {/* Top Bar (Mobile) */}
-        <header className="bg-card border-b border-border px-6 py-4 lg:hidden sticky top-0 z-30">
+        <header className="bg-white border-b border-slate-200 px-4 py-3 lg:hidden sticky top-0 z-30 shadow-sm">
           <div className="flex items-center justify-between">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setSidebarOpen(true)}
-              className="rounded-full"
+              className="rounded-lg hover:bg-slate-100"
             >
-              <Menu className="h-6 w-6" />
+              <Menu className="h-5 w-5 text-slate-600" />
             </Button>
-            <img src={NYLA_LOGO} alt="Nyla" className="h-8 rounded-full" />
+            <div className="flex items-center gap-2">
+              <img src={NYLA_LOGO} alt="Nyla" className="h-8 w-8 rounded-lg" />
+              <span className="font-bold text-slate-800">Nyla CRM</span>
+            </div>
             <div className="w-10" />
           </div>
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-6 lg:p-8 overflow-auto">
-          {children}
+        <main className="flex-1 p-4 lg:p-6 overflow-auto bg-slate-50">
+          <div className="max-w-[1600px] mx-auto">
+            {children}
+          </div>
         </main>
       </div>
     </div>
