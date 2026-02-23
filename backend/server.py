@@ -577,6 +577,30 @@ class Invoice(BaseModel):
     status: str = 'matched'  # 'matched' or 'unmatched'
     received_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+class UserActivityEvent(BaseModel):
+    """Single activity event within a session"""
+    type: str  # 'page_view', 'action'
+    page: Optional[str] = None
+    action: Optional[str] = None
+    timestamp: str
+
+class UserActivity(BaseModel):
+    """User activity tracking for current session"""
+    model_config = ConfigDict(extra="ignore")
+    user_id: str
+    session_id: str
+    session_start: str
+    last_active: str
+    total_time_seconds: int = 0
+    pages_visited: List[dict] = []  # [{page, visit_count, total_time_seconds}]
+    actions: List[dict] = []  # [{action, count, last_at}]
+    events: List[UserActivityEvent] = []
+
+class ActivityHeartbeat(BaseModel):
+    """Heartbeat data sent from frontend"""
+    current_page: str
+    action: Optional[str] = None
+
 # ============= HELPERS =============
 
 def hash_password(password: str) -> str:
