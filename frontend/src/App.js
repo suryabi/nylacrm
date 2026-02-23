@@ -42,6 +42,12 @@ import SKUManagement from './pages/SKUManagement';
 import CompanyProfile from './pages/CompanyProfile';
 import FilesDocuments from './pages/FilesDocuments';
 import '@/App.css';
+import { useActivityTracker } from './hooks/useActivityTracker';
+
+function ActivityTrackerWrapper({ children }) {
+  useActivityTracker();
+  return children;
+}
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -54,7 +60,13 @@ function ProtectedRoute({ children }) {
     return <Navigate to="/login" replace />;
   }
 
-  return <DashboardLayout>{children}</DashboardLayout>;
+  return (
+    <DashboardLayout>
+      <ActivityTrackerWrapper>
+        {children}
+      </ActivityTrackerWrapper>
+    </DashboardLayout>
+  );
 }
 
 function App() {
