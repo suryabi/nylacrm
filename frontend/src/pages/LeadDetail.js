@@ -116,6 +116,123 @@ export default function LeadDetail() {
     }
   };
 
+  const fetchProposal = async () => {
+    setProposalLoading(true);
+    try {
+      const res = await axios.get(`${API_URL}/leads/${id}/proposal`, { withCredentials: true });
+      setProposal(res.data.proposal);
+    } catch (error) {
+      console.log('Could not load proposal');
+    } finally {
+      setProposalLoading(false);
+    }
+  };
+
+  const handleProposalUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Only PDF and DOC/DOCX files are allowed');
+      return;
+    }
+
+    // Validate file size (5 MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File size exceeds 5 MB limit');
+      return;
+    }
+
+    setUploadingProposal(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await axios.post(`${API_URL}/leads/${id}/proposal`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        withCredentials: true
+      });
+
+      toast.success(res.data.message || 'Proposal uploaded successfully');
+      fetchProposal();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to upload proposal');
+    } finally {
+      setUploadingProposal(false);
+      e.target.value = ''; // Reset file input
+    }
+  };
+
+  const handleProposalDownload = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/leads/${id}/proposal/download`, { withCredentials: true });
+      const proposalData = res.data.proposal;
+
+      // Decode base64 and create download
+      const byteCharacters = atob(proposalData.file_data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: proposalData.content_type });
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = proposalData.file_name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success('Download started');
+    } catch (error) {
+      toast.error('Failed to download proposal');
+    }
+  };
+
+  const handleProposalDelete = async () => {
+    if (!window.confirm('Are you sure you want to delete this proposal?')) return;
+
+    try {
+      await axios.delete(`${API_URL}/leads/${id}/proposal`, { withCredentials: true });
+      toast.success('Proposal deleted successfully');
+      setProposal(null);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete proposal');
+    }
+  };
+
+  const handleProposalReview = async (action) => {
+    if (!reviewComment.trim() && action !== 'approved') {
+      toast.error('Please provide a comment for your review');
+      return;
+    }
+
+    setReviewingProposal(true);
+    try {
+      const res = await axios.put(`${API_URL}/leads/${id}/proposal/review`, {
+        action,
+        comment: reviewComment
+      }, { withCredentials: true });
+
+      toast.success(res.data.message || `Proposal ${action.replace('_', ' ')}`);
+      setReviewComment('');
+      fetchProposal();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to review proposal');
+    } finally {
+      setReviewingProposal(false);
+    }
+  };
+
+  const canApproveProposal = PROPOSAL_APPROVER_ROLES.includes(user?.role);
+  const canDeleteProposal = proposal && proposal.uploaded_by === user?.id && proposal.status === 'pending_review';
+  const canUploadNewProposal = !proposal || ['changes_requested', 'rejected'].includes(proposal?.status) || proposal?.uploaded_by === user?.id;
+
   const fetchData = async () => {
     try {
       const leadRes = await leadsAPI.getById(id);
