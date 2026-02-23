@@ -29,7 +29,8 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
-import { Plus, Loader2, Edit, Trash2 } from 'lucide-react';
+import { Plus, Loader2, Edit, Trash2, Clock, Activity, Eye, MousePointer } from 'lucide-react';
+import { formatDuration, formatRelativeTime, getPageName } from '../hooks/useActivityTracker';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
