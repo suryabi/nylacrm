@@ -2292,6 +2292,52 @@ async def get_accounts(
         total_pages=total_pages
     )
 
+@api_router.get("/accounts/stats/summary")
+async def get_accounts_stats(
+    territory: Optional[str] = None,
+    state: Optional[str] = None,
+    city: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get account statistics for dashboard metrics"""
+    query = {}
+    if territory:
+        query['territory'] = territory
+    if state:
+        query['state'] = state
+    if city:
+        query['city'] = city
+    
+    # Total accounts
+    total_accounts = await db.accounts.count_documents(query)
+    
+    # Accounts by type
+    type_pipeline = [
+        {'$match': query},
+        {'$group': {'_id': '$account_type', 'count': {'$sum': 1}}}
+    ]
+    type_results = await db.accounts.aggregate(type_pipeline).to_list(10)
+    by_type = {r['_id'] or 'Unassigned': r['count'] for r in type_results}
+    
+    # Get categories from leads for all accounts
+    all_accounts = await db.accounts.find(query, {'_id': 0, 'lead_id': 1}).to_list(10000)
+    lead_ids = [a['lead_id'] for a in all_accounts if a.get('lead_id')]
+    
+    by_category = {}
+    if lead_ids:
+        category_pipeline = [
+            {'$match': {'id': {'$in': lead_ids}}},
+            {'$group': {'_id': '$category', 'count': {'$sum': 1}}}
+        ]
+        category_results = await db.leads.aggregate(category_pipeline).to_list(20)
+        by_category = {r['_id'] or 'Uncategorized': r['count'] for r in category_results}
+    
+    return {
+        'total_accounts': total_accounts,
+        'by_type': by_type,
+        'by_category': by_category
+    }
+
 @api_router.get("/accounts/{account_id}")
 async def get_account(account_id: str, current_user: dict = Depends(get_current_user)):
     """Get single account by ID or account_id"""
