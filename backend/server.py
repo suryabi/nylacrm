@@ -2323,18 +2323,26 @@ async def get_accounts_stats(
     type_results = await db.accounts.aggregate(type_pipeline).to_list(10)
     by_type = {r['_id'] or 'Unassigned': r['count'] for r in type_results}
     
-    # Get categories from leads for all accounts
-    all_accounts = await db.accounts.find(query, {'_id': 0, 'lead_id': 1}).to_list(10000)
-    lead_ids = [a['lead_id'] for a in all_accounts if a.get('lead_id')]
+    # Accounts by category (directly from accounts collection)
+    category_pipeline = [
+        {'$match': {**query, 'category': {'$ne': None}}},
+        {'$group': {'_id': '$category', 'count': {'$sum': 1}}}
+    ]
+    category_results = await db.accounts.aggregate(category_pipeline).to_list(20)
+    by_category = {r['_id']: r['count'] for r in category_results if r['_id']}
     
-    by_category = {}
-    if lead_ids:
-        category_pipeline = [
-            {'$match': {'id': {'$in': lead_ids}}},
-            {'$group': {'_id': '$category', 'count': {'$sum': 1}}}
-        ]
-        category_results = await db.leads.aggregate(category_pipeline).to_list(20)
-        by_category = {r['_id'] or 'Uncategorized': r['count'] for r in category_results}
+    # If no categories found in accounts, try to get from linked leads (for backward compatibility)
+    if not by_category:
+        all_accounts = await db.accounts.find(query, {'_id': 0, 'lead_id': 1}).to_list(10000)
+        lead_ids = [a['lead_id'] for a in all_accounts if a.get('lead_id')]
+        
+        if lead_ids:
+            lead_category_pipeline = [
+                {'$match': {'id': {'$in': lead_ids}, 'category': {'$ne': None}}},
+                {'$group': {'_id': '$category', 'count': {'$sum': 1}}}
+            ]
+            lead_category_results = await db.leads.aggregate(lead_category_pipeline).to_list(20)
+            by_category = {r['_id']: r['count'] for r in lead_category_results if r['_id']}
     
     return {
         'total_accounts': total_accounts,
