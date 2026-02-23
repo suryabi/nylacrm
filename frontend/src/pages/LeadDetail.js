@@ -233,7 +233,8 @@ export default function LeadDetail() {
 
   const canApproveProposal = PROPOSAL_APPROVER_ROLES.includes(user?.role);
   const canDeleteProposal = proposal && proposal.uploaded_by === user?.id && proposal.status === 'pending_review';
-  const canUploadNewProposal = !proposal || ['changes_requested', 'rejected'].includes(proposal?.status) || proposal?.uploaded_by === user?.id;
+  // Allow replacing proposal: when no proposal, when changes requested/rejected, when user is uploader, OR when approved (to allow re-submission)
+  const canUploadNewProposal = !proposal || ['changes_requested', 'rejected', 'approved'].includes(proposal?.status) || proposal?.uploaded_by === user?.id;
 
   const fetchData = async () => {
     try {
