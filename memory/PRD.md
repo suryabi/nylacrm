@@ -28,6 +28,38 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 
 ## What's Been Implemented
 
+### Feb 23, 2026 (Session 6)
+- **FEATURE**: Lead Proposal Section Module
+  - Added proposal management within Lead Detail page
+  - **Backend APIs**:
+    - `GET /api/leads/{lead_id}/proposal` - Get current proposal
+    - `POST /api/leads/{lead_id}/proposal` - Upload proposal (replaces existing)
+    - `GET /api/leads/{lead_id}/proposal/download` - Download with file data
+    - `DELETE /api/leads/{lead_id}/proposal` - Delete (uploader only, pending_review only)
+    - `PUT /api/leads/{lead_id}/proposal/review` - Approve/Reject/Request Changes
+  - **Features**:
+    - Upload PDF or DOC/DOCX proposals (5 MB limit)
+    - Status workflow: Pending Review → Changes Requested → Revised → Approved/Rejected
+    - Approver roles: CEO, Director, VP, National Sales Head
+    - Uploader can delete only when in Pending Review status
+    - Download available at all stages
+    - Version tracking on re-uploads
+    - Review history with comments displayed
+    - Single active proposal per lead (new upload replaces old)
+  - **UI Components**:
+    - Proposal card with file info, status badge, download button
+    - Review actions (Approve, Request Changes, Reject) for approvers
+    - Review comment input with validation
+    - Review history timeline with icons
+    - Upload/Replace proposal button
+  - Status: VERIFIED - All 16 backend tests passed (100% success rate)
+
+- **FIX**: BottlePreview production CORS issue
+  - Changed API_URL from hardcoded env variable to relative `/api` URL
+  - Now works correctly on any domain (preview, production, custom)
+
+- **REMOVED**: Proposals menu item (per user request)
+
 ### Feb 22, 2026 (Session 5)
 - **FEATURE**: Files & Documents Management Module
   - New `/files-documents` page for centralized document management
