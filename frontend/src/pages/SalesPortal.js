@@ -282,6 +282,48 @@ export default function SalesPortal() {
               </div>
             </div>
 
+            {/* Return Credit Comparison Row */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 pt-4 border-t border-slate-200">
+              {/* Return Credit Difference */}
+              <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-center">
+                <p className="text-sm text-muted-foreground mb-1">
+                  {returnCreditDifference >= 0 ? 'Extra Return Credit with Nyla' : 'Extra Return Credit with Your Brand'}
+                </p>
+                <p className={`text-2xl font-bold ${returnCreditDifference >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
+                  {returnCreditDifference >= 0 ? '+' : '-'}₹{Math.abs(returnCreditDifference).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  for {sampleSize.toLocaleString()} bottles
+                </p>
+              </div>
+
+              {/* Your Brand Return Credit */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center">
+                <p className="text-sm text-muted-foreground mb-1">Your Brand Return Credit</p>
+                <p className="text-xl font-bold text-slate-700">
+                  ₹{competitorTotalReturnCredit.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  ₹{competitorReturnCreditPerBottle.toFixed(2)}/bottle
+                </p>
+              </div>
+
+              {/* Nyla Return Credit */}
+              <div className={`p-4 rounded-xl border text-center ${
+                returnCreditDifference >= 0 
+                  ? 'bg-blue-50 border-blue-200' 
+                  : 'bg-slate-50 border-slate-200'
+              }`}>
+                <p className="text-sm text-muted-foreground mb-1">Nyla Return Credit</p>
+                <p className={`text-xl font-bold ${returnCreditDifference >= 0 ? 'text-blue-600' : 'text-slate-700'}`}>
+                  ₹{nylaTotalReturnCredit.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  ₹{nylaReturnCreditPerBottle.toFixed(2)}/bottle
+                </p>
+              </div>
+            </div>
+
             {/* Savings Message */}
             {isNylaWinner && (
               <div className={`mt-4 p-3 rounded-lg bg-emerald-100 border border-emerald-200 text-center ${
