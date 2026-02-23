@@ -407,7 +407,14 @@ export default function SalesPortal() {
               {renderInputField('Bottle Return Credit (₹)', 'returnCredit', nyla, handleNylaChange)}
             </div>
 
-            {renderCalculatedField('Total Return Credit (₹)', nylaCalc.totalReturnCredit)}
+            <div className="grid grid-cols-2 gap-4">
+              {renderCalculatedField('Return Credit / Bottle (₹)', nylaCalc.returnCreditPerBottle, true)}
+              {renderCalculatedField(
+                `Total Return Credit (${sampleSize.toLocaleString()} bottles)`, 
+                `₹${nylaTotalReturnCredit.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`,
+                true
+              )}
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               {renderCalculatedField(
