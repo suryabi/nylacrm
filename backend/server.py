@@ -2185,7 +2185,7 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
     city = lead.get('city', 'Unknown')
     account_id = await generate_account_id(account_name, city)
     
-    # Create account
+    # Create account with category and contact info from lead
     account = Account(
         account_id=account_id,
         lead_id=lead.get('lead_id') or data.lead_id,
@@ -2194,10 +2194,14 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
         state=lead.get('state', ''),
         territory=lead.get('region', ''),
         assigned_to=lead.get('assigned_to'),
+        contact_name=lead.get('contact_person') or lead.get('name'),
+        contact_number=lead.get('phone'),
         sku_pricing=[]
     )
     
     doc = account.model_dump()
+    # Add category from lead (extra field allowed by model)
+    doc['category'] = lead.get('category')
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
     
