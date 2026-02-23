@@ -29,6 +29,32 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 ## What's Been Implemented
 
 ### Feb 23, 2026 (Session 7)
+- **FEATURE**: Accounts List Page Redesign
+  - Complete visual overhaul to match Account Performance page style
+  - **New Filters** (same as Account Performance):
+    - Search (account name, contact, ID)
+    - Territory, State, City (cascading dropdowns)
+    - Account Type (Tier 1/2/3)
+    - Reset button
+  - **Statistics Cards** above the grid:
+    - Total accounts count
+    - Accounts by type (Tier 1, Tier 2, Tier 3)
+    - Top categories breakdown
+  - **Updated Table Columns**:
+    - Account (name, ID, category badge)
+    - Type (Tier badge with color coding)
+    - Contact (name + phone combined in one column)
+    - Location (city, state)
+    - Account Age (calculated in months from created_at)
+    - Onboarded (created_at date)
+    - Sales Contact (assigned sales person name)
+    - Removed: Outstanding Amount
+  - **Backend enhancements**:
+    - Extended `/api/accounts` with state, city, category filters
+    - Added `sales_person_name` field to account responses
+    - New `/api/accounts/stats/summary` endpoint for metrics
+  - Status: VERIFIED via screenshot testing
+
 - **FEATURE**: Team Activity Tracking
   - Added "Last Active" column to Team Management table showing when user last performed any action
   - Added "Session Time" column showing time spent in current/latest session
