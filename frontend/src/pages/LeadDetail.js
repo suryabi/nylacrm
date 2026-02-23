@@ -914,6 +914,188 @@ export default function LeadDetail() {
             </Card>
           )}
 
+          {/* Proposal Section */}
+          <Card className="p-6" data-testid="proposal-section">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Proposal</h2>
+              {proposal && (
+                <Badge className={proposalStatusConfig[proposal.status]?.color || 'bg-gray-100'}>
+                  {proposalStatusConfig[proposal.status]?.label || proposal.status}
+                </Badge>
+              )}
+            </div>
+
+            {proposalLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : !proposal ? (
+              <div className="text-center py-8">
+                <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="text-muted-foreground mb-4">No proposal uploaded yet</p>
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept=".pdf,.doc,.docx"
+                    onChange={handleProposalUpload}
+                    disabled={uploadingProposal}
+                    data-testid="proposal-upload-input"
+                  />
+                  <Button asChild disabled={uploadingProposal}>
+                    <span>
+                      {uploadingProposal ? (
+                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading...</>
+                      ) : (
+                        <><Upload className="mr-2 h-4 w-4" /> Upload Proposal</>
+                      )}
+                    </span>
+                  </Button>
+                </label>
+                <p className="text-xs text-muted-foreground mt-2">PDF or DOC/DOCX (Max 5 MB)</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Proposal File Info */}
+                <div className="flex items-start gap-4 p-4 bg-muted/50 rounded-lg">
+                  <FileText className="h-10 w-10 text-primary flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{proposal.file_name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Version {proposal.version} • {(proposal.file_size / 1024).toFixed(1)} KB
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Uploaded by {proposal.uploaded_by_name} on {format(new Date(proposal.uploaded_at), 'MMM d, yyyy h:mm a')}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleProposalDownload}
+                      data-testid="proposal-download-btn"
+                    >
+                      <Download className="h-4 w-4 mr-1" /> Download
+                    </Button>
+                    {canDeleteProposal && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={handleProposalDelete}
+                        data-testid="proposal-delete-btn"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Review Comments History */}
+                {proposal.review_comments && proposal.review_comments.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium text-muted-foreground">Review History</p>
+                    {proposal.review_comments.map((comment, idx) => {
+                      const StatusIcon = proposalStatusConfig[comment.action]?.icon || MessageSquare;
+                      return (
+                        <div key={comment.id || idx} className="flex gap-3 p-3 border rounded-lg">
+                          <StatusIcon className={`h-5 w-5 flex-shrink-0 ${
+                            comment.action === 'approved' ? 'text-green-600' :
+                            comment.action === 'rejected' ? 'text-red-600' :
+                            comment.action === 'changes_requested' ? 'text-orange-600' : 'text-muted-foreground'
+                          }`} />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">{comment.reviewer_name}</span>
+                              <Badge variant="outline" className="text-xs capitalize">
+                                {comment.action.replace('_', ' ')}
+                              </Badge>
+                            </div>
+                            {comment.comment && (
+                              <p className="text-sm text-muted-foreground mt-1">{comment.comment}</p>
+                            )}
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {format(new Date(comment.created_at), 'MMM d, yyyy h:mm a')}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Review Actions (for approvers) */}
+                {canApproveProposal && ['pending_review', 'revised'].includes(proposal.status) && (
+                  <div className="border-t pt-4 space-y-3">
+                    <p className="text-sm font-medium">Review Proposal</p>
+                    <Textarea
+                      placeholder="Add comments or suggested changes..."
+                      value={reviewComment}
+                      onChange={(e) => setReviewComment(e.target.value)}
+                      rows={3}
+                      data-testid="review-comment-input"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => handleProposalReview('approved')}
+                        disabled={reviewingProposal}
+                        className="bg-green-600 hover:bg-green-700"
+                        data-testid="proposal-approve-btn"
+                      >
+                        <CheckCircle className="h-4 w-4 mr-1" /> Approve
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => handleProposalReview('changes_requested')}
+                        disabled={reviewingProposal || !reviewComment.trim()}
+                        className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                        data-testid="proposal-changes-btn"
+                      >
+                        <AlertCircle className="h-4 w-4 mr-1" /> Request Changes
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => handleProposalReview('rejected')}
+                        disabled={reviewingProposal || !reviewComment.trim()}
+                        className="text-red-600 border-red-300 hover:bg-red-50"
+                        data-testid="proposal-reject-btn"
+                      >
+                        <XCircle className="h-4 w-4 mr-1" /> Reject
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Upload New/Revised Proposal */}
+                {canUploadNewProposal && proposal.status !== 'approved' && (
+                  <div className="border-t pt-4">
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept=".pdf,.doc,.docx"
+                        onChange={handleProposalUpload}
+                        disabled={uploadingProposal}
+                        data-testid="proposal-reupload-input"
+                      />
+                      <Button variant="outline" asChild disabled={uploadingProposal}>
+                        <span>
+                          {uploadingProposal ? (
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading...</>
+                          ) : (
+                            <><Upload className="mr-2 h-4 w-4" /> 
+                              {proposal.status === 'changes_requested' ? 'Upload Revised Proposal' : 'Replace Proposal'}
+                            </>
+                          )}
+                        </span>
+                      </Button>
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
+
           <Card className="p-6">
             <h2 className="text-lg font-semibold mb-4">Activity Timeline</h2>
             <ActivityTimeline activities={activities} />
