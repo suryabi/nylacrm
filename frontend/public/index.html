@@ -3,16 +3,53 @@
     <head>
         <meta charset="utf-8" />
         <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
-        <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <meta name="theme-color" content="#000000" />
-        <meta name="description" content="Nyla Air Water Sales CRM" />
+        <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+        <meta name="theme-color" content="#10b981" />
+        <meta name="description" content="Nyla Air Water Sales CRM - Track leads, close deals, grow revenue" />
+        
+        <!-- PWA Meta Tags -->
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Nyla CRM" />
+        <meta name="application-name" content="Nyla CRM" />
+        <meta name="msapplication-TileColor" content="#10b981" />
+        <meta name="msapplication-config" content="none" />
+        
+        <!-- PWA Manifest -->
+        <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+        
+        <!-- Apple Touch Icons -->
+        <link rel="apple-touch-icon" href="%PUBLIC_URL%/icons/icon-192x192.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="%PUBLIC_URL%/icons/icon-152x152.png" />
+        <link rel="apple-touch-icon" sizes="144x144" href="%PUBLIC_URL%/icons/icon-144x144.png" />
+        <link rel="apple-touch-icon" sizes="128x128" href="%PUBLIC_URL%/icons/icon-128x128.png" />
+        <link rel="apple-touch-icon" sizes="72x72" href="%PUBLIC_URL%/icons/icon-72x72.png" />
+        
+        <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap" rel="stylesheet" />
+        
         <title>Nyla Sales CRM</title>
     </head>
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
         <div id="root"></div>
+        
+        <!-- Service Worker Registration -->
+        <script>
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('/sw.js')
+                        .then(function(registration) {
+                            console.log('ServiceWorker registered:', registration.scope);
+                        })
+                        .catch(function(error) {
+                            console.log('ServiceWorker registration failed:', error);
+                        });
+                });
+            }
+        </script>
     </body>
 </html>
