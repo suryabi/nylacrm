@@ -1479,6 +1479,29 @@ async def update_lead(lead_id: str, lead_update: LeadUpdate, current_user: dict 
         raise HTTPException(status_code=403, detail='Access denied')
     
     update_data = {k: v for k, v in lead_update.model_dump().items() if v is not None}
+    
+    # Status transition validation
+    if 'status' in update_data and update_data['status'] != lead.get('status'):
+        new_status = update_data['status']
+        current_status = lead.get('status')
+        
+        # Validation 1: "proposal_shared" requires an approved proposal
+        if new_status == 'proposal_shared':
+            proposal = await db.lead_proposals.find_one({'lead_id': lead_id})
+            if not proposal or proposal.get('status') != 'approved':
+                raise HTTPException(
+                    status_code=400, 
+                    detail='Cannot set status to "Proposal Shared" without an approved proposal. Please get the proposal approved first.'
+                )
+        
+        # Validation 2: "won" can only be set from "proposal_approved_by_customer"
+        if new_status == 'won':
+            if current_status != 'proposal_approved_by_customer':
+                raise HTTPException(
+                    status_code=400,
+                    detail='Lead can only be marked as "Won" from "Proposal Approved by Customer" status.'
+                )
+    
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
     # Track status change
