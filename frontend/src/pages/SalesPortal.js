@@ -78,23 +78,23 @@ export default function SalesPortal() {
     // Profit Margin Per Unit = Selling - Landing
     const profitMarginPerUnit = sellingPrice - landingPrice;
 
-    // Total Return Credit = (% Return / 100) * Return Credit
-    const totalReturnCredit = (percentageReturn / 100) * returnCredit;
+    // Return Credit Per Bottle = (% Return / 100) * Return Credit
+    const returnCreditPerBottle = (percentageReturn / 100) * returnCredit;
 
     // Total Profit Margin % = Profit Margin + (Return Credit contribution)
     const returnCreditContribution = landingPrice > 0 
-      ? (totalReturnCredit / landingPrice) * 100 
+      ? (returnCreditPerBottle / landingPrice) * 100 
       : 0;
     const totalProfitMargin = profitMargin + returnCreditContribution;
 
-    // Total Profit Margin Per Unit = Profit Per Unit + Total Return Credit
-    const totalProfitMarginPerUnit = profitMarginPerUnit + totalReturnCredit;
+    // Total Profit Margin Per Unit = Profit Per Unit + Return Credit Per Bottle
+    const totalProfitMarginPerUnit = profitMarginPerUnit + returnCreditPerBottle;
 
     return {
       landingPrice: landingPrice.toFixed(2),
       profitMargin: profitMargin.toFixed(2),
       profitMarginPerUnit: profitMarginPerUnit.toFixed(2),
-      totalReturnCredit: totalReturnCredit.toFixed(2),
+      returnCreditPerBottle: returnCreditPerBottle.toFixed(2),
       totalProfitMargin: totalProfitMargin.toFixed(2),
       totalProfitMarginPerUnit: totalProfitMarginPerUnit.toFixed(2)
     };
