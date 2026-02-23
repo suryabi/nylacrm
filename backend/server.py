@@ -1494,7 +1494,15 @@ async def update_lead(lead_id: str, lead_update: LeadUpdate, current_user: dict 
                     detail='Cannot set status to "Proposal Shared" without an approved proposal. Please get the proposal approved first.'
                 )
         
-        # Validation 2: "won" can only be set from "proposal_approved_by_customer"
+        # Validation 2: "proposal_approved_by_customer" can only be set from "proposal_shared"
+        if new_status == 'proposal_approved_by_customer':
+            if current_status != 'proposal_shared':
+                raise HTTPException(
+                    status_code=400,
+                    detail='Lead can only be marked as "Proposal Approved by Customer" from "Proposal Shared" status.'
+                )
+        
+        # Validation 3: "won" can only be set from "proposal_approved_by_customer"
         if new_status == 'won':
             if current_status != 'proposal_approved_by_customer':
                 raise HTTPException(
