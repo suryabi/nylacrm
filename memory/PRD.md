@@ -54,6 +54,15 @@ Build a comprehensive, mobile-ready Sales CRM application with:
     - Upload/Replace proposal button
   - Status: VERIFIED - All 16 backend tests passed (100% success rate)
 
+- **FEATURE**: Lead Status Workflow Enhancement
+  - Added new status: "Proposal Approved by Customer"
+  - Renamed "Proposal Stage" → "Proposal Shared"
+  - **Validation Rules**:
+    - "Proposal Shared" requires an approved proposal document
+    - "Won" can only be set from "Proposal Approved by Customer" status
+  - Updated across all pages: LeadDetail, LeadsList, Dashboard, AddEditLead
+  - Status flow: ... → Proposal Shared → Proposal Approved by Customer → Won
+
 - **FIX**: BottlePreview production CORS issue
   - Changed API_URL from hardcoded env variable to relative `/api` URL
   - Now works correctly on any domain (preview, production, custom)
