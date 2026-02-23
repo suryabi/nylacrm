@@ -2367,6 +2367,41 @@ async def get_account(account_id: str, current_user: dict = Depends(get_current_
     
     return account
 
+@api_router.post("/accounts/migrate-categories")
+async def migrate_account_categories(current_user: dict = Depends(get_current_user)):
+    """Migrate categories from leads to existing accounts (one-time migration)"""
+    # Get all accounts without category
+    accounts = await db.accounts.find({'category': {'$exists': False}}, {'_id': 0, 'lead_id': 1, 'account_id': 1}).to_list(10000)
+    
+    if not accounts:
+        # Also check for null categories
+        accounts = await db.accounts.find({'category': None}, {'_id': 0, 'lead_id': 1, 'account_id': 1}).to_list(10000)
+    
+    updated_count = 0
+    for account in accounts:
+        lead_id = account.get('lead_id')
+        if lead_id:
+            # Find the lead and get its category
+            lead = await db.leads.find_one(
+                {'$or': [{'id': lead_id}, {'lead_id': lead_id}]},
+                {'_id': 0, 'category': 1, 'contact_person': 1, 'name': 1, 'phone': 1}
+            )
+            if lead and lead.get('category'):
+                update_data = {'category': lead['category']}
+                # Also update contact info if missing
+                if not account.get('contact_name') and (lead.get('contact_person') or lead.get('name')):
+                    update_data['contact_name'] = lead.get('contact_person') or lead.get('name')
+                if not account.get('contact_number') and lead.get('phone'):
+                    update_data['contact_number'] = lead['phone']
+                
+                await db.accounts.update_one(
+                    {'account_id': account['account_id']},
+                    {'$set': update_data}
+                )
+                updated_count += 1
+    
+    return {'message': f'Updated {updated_count} accounts with categories from leads', 'updated': updated_count}
+
 @api_router.put("/accounts/{account_id}")
 async def update_account(account_id: str, update_data: AccountUpdate, current_user: dict = Depends(get_current_user)):
     """Update account details including SKU pricing and delivery address"""
