@@ -14,7 +14,8 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
+// Use relative URL for API calls to work in both preview and production
+const API_URL = '/api';
 
 // Bottle templates - Air Water bottles
 const BOTTLE_TEMPLATES = [
