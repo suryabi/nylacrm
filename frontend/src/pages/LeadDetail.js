@@ -1072,7 +1072,7 @@ export default function LeadDetail() {
                 )}
 
                 {/* Upload New/Revised Proposal */}
-                {canUploadNewProposal && proposal.status !== 'approved' && (
+                {canUploadNewProposal && (
                   <div className="border-t pt-4">
                     <label className="cursor-pointer">
                       <input
@@ -1089,12 +1089,19 @@ export default function LeadDetail() {
                             <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading...</>
                           ) : (
                             <><Upload className="mr-2 h-4 w-4" /> 
-                              {proposal.status === 'changes_requested' ? 'Upload Revised Proposal' : 'Replace Proposal'}
+                              {proposal.status === 'changes_requested' ? 'Upload Revised Proposal' : 
+                               proposal.status === 'approved' ? 'Upload New Proposal (will require re-approval)' : 
+                               'Replace Proposal'}
                             </>
                           )}
                         </span>
                       </Button>
                     </label>
+                    {proposal.status === 'approved' && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Uploading a new proposal will reset the approval status and require a new review cycle.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
