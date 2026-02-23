@@ -41,7 +41,7 @@ export default function SalesPortal() {
     landingPrice: 0,
     profitMargin: 0,
     profitMarginPerUnit: 0,
-    totalReturnCredit: 0,
+    returnCreditPerBottle: 0,
     totalProfitMargin: 0,
     totalProfitMarginPerUnit: 0
   });
@@ -51,7 +51,7 @@ export default function SalesPortal() {
     landingPrice: 0,
     profitMargin: 0,
     profitMarginPerUnit: 0,
-    totalReturnCredit: 0,
+    returnCreditPerBottle: 0,
     totalProfitMargin: 0,
     totalProfitMarginPerUnit: 0
   });
