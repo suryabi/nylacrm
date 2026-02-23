@@ -28,6 +28,18 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 
 ## What's Been Implemented
 
+### Feb 23, 2026 (Session 7)
+- **FIX**: Brand Comparison Calculator - Return Credit Display Update
+  - Updated `SalesPortal.js` to show return credit breakdown:
+    - "Return Credit / Bottle (₹)" - shows per-bottle return credit based on % bottle returns
+    - "Total Return Credit (X bottles)" - shows total return credit for the sample size
+  - Added Return Credit Comparison row in summary section:
+    - Shows "Extra Return Credit with Nyla/Your Brand" difference
+    - Displays both per-bottle and total sample values for each brand
+  - Changed default "% Bottle Returns" from 100 to **75** for both brands
+  - Calculation: Return Credit/Bottle = (% Bottle Returns / 100) × Bottle Return Credit
+  - Status: VERIFIED via screenshot testing
+
 ### Feb 23, 2026 (Session 6)
 - **FEATURE**: Lead Proposal Section Module
   - Added proposal management within Lead Detail page
