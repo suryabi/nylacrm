@@ -148,9 +148,9 @@ export default function SalesPortal() {
   const profitDifference = nylaTotalProfit - competitorTotalProfit;
   const isNylaWinner = nylaTotalProfit > competitorTotalProfit;
 
-  // Calculate return credit for sample size
-  const competitorReturnCreditPerBottle = parseFloat(competitorCalc.totalReturnCredit) || 0;
-  const nylaReturnCreditPerBottle = parseFloat(nylaCalc.totalReturnCredit) || 0;
+  // Calculate return credit - per bottle and total for sample size
+  const competitorReturnCreditPerBottle = parseFloat(competitorCalc.returnCreditPerBottle) || 0;
+  const nylaReturnCreditPerBottle = parseFloat(nylaCalc.returnCreditPerBottle) || 0;
   const competitorTotalReturnCredit = competitorReturnCreditPerBottle * sampleSize;
   const nylaTotalReturnCredit = nylaReturnCreditPerBottle * sampleSize;
   const returnCreditDifference = nylaTotalReturnCredit - competitorTotalReturnCredit;
