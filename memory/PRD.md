@@ -29,6 +29,38 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 ## What's Been Implemented
 
 ### Feb 23, 2026 (Session 7)
+- **FEATURE**: Team Activity Tracking
+  - Added "Last Active" column to Team Management table showing when user last performed any action
+  - Added "Session Time" column showing time spent in current/latest session
+  - Online indicator (green dot) for users active within last 2 minutes
+  - Activity Details Dialog (click Eye icon) showing:
+    - Session summary (Last Active, Duration, Session Start)
+    - Pages Visited with time spent and visit count
+    - Actions Performed with count
+    - Recent Activity Timeline with timestamps
+  - **Backend APIs**:
+    - `POST /api/activity/heartbeat` - Records user activity every 30 seconds
+    - `GET /api/activity/my-session` - Get current user's session activity
+    - `GET /api/activity/user/{user_id}` - Get specific user's last session
+    - `GET /api/activity/team` - Get activity summary for all team members
+  - **Frontend**:
+    - Created `useActivityTracker` hook for automatic heartbeat tracking
+    - Updated `TeamManagement.js` with new columns and Activity Dialog
+  - Status: VERIFIED via screenshot testing
+
+- **FEATURE**: PWA (Progressive Web App) Support
+  - App is now installable on mobile/desktop devices
+  - Offline support with service worker caching
+  - Push notification capability enabled
+  - **Assets created**:
+    - `/public/manifest.json` - PWA manifest with app metadata
+    - `/public/sw.js` - Service worker with caching strategies
+    - `/public/offline.html` - Offline fallback page
+    - `/public/icons/` - App icons in multiple sizes (72-512px)
+  - Updated `index.html` with PWA meta tags and service worker registration
+  - Caching strategies: Cache-first for static assets, Network-first for API calls
+  - Status: VERIFIED - manifest, service worker, and icons all serving correctly
+
 - **FIX**: Brand Comparison Calculator - Return Credit Display Update
   - Updated `SalesPortal.js` to show return credit breakdown:
     - "Return Credit / Bottle (₹)" - shows per-bottle return credit based on % bottle returns
