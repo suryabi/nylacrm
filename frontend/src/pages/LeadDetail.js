@@ -890,7 +890,8 @@ export default function LeadDetail() {
                       <SelectItem value="not_qualified">Not Qualified</SelectItem>
                       <SelectItem value="in_progress">In Progress</SelectItem>
                       <SelectItem value="trial_in_progress">Trial in Progress</SelectItem>
-                      <SelectItem value="proposal_stage">Proposal Stage</SelectItem>
+                      <SelectItem value="proposal_shared">Proposal Shared</SelectItem>
+                      <SelectItem value="proposal_approved_by_customer">Proposal Approved by Customer</SelectItem>
                       <SelectItem value="won">Won</SelectItem>
                       <SelectItem value="lost">Lost</SelectItem>
                       <SelectItem value="future_followup">Future Follow up</SelectItem>
