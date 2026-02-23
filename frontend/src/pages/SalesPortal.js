@@ -13,7 +13,7 @@ const DEFAULT_NYLA = {
   buyingPrice: 11,
   percentageGST: 5,
   sellingPrice: 20,
-  percentageReturn: 100,
+  percentageReturn: 75,
   returnCredit: 15
 };
 
@@ -22,7 +22,7 @@ const DEFAULT_COMPETITOR = {
   buyingPrice: '',
   percentageGST: 5,
   sellingPrice: '',
-  percentageReturn: 100,
+  percentageReturn: 75,
   returnCredit: 0
 };
 
