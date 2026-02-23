@@ -271,7 +271,8 @@ export default function LeadDetail() {
       toast.success('Status updated');
       fetchData();
     } catch (error) {
-      toast.error('Failed to update status');
+      const errorMessage = error.response?.data?.detail || 'Failed to update status';
+      toast.error(errorMessage);
     }
   };
 
