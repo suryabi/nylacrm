@@ -58,6 +58,9 @@ Build a comprehensive, mobile-ready Sales CRM application with:
     - Text is converted to bullet format (• ) when saving
     - Recent Updates section displays items with styled bullet points
     - Placeholder text updated to guide users: "Enter each item on a new line..."
+  - **Added**: Activity Summary line when fetching activities
+    - First line shows: "SUMMARY: Customer Visits: X | Phone Calls: Y | Messages/Emails: Z"
+    - Counts customer_visit, phone_call/call, and sms/whatsapp/email activities
   - Status: IMPLEMENTED
 
 ### Feb 24, 2026 (Session 8)
