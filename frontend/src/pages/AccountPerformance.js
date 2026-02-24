@@ -7,6 +7,7 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { Building2, Filter, Loader2, TrendingUp, AlertTriangle, Calendar, ShoppingCart } from 'lucide-react';
+import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -23,13 +24,6 @@ const TIME_FILTERS = [
   { value: 'last_year', label: 'Last Year' },
   { value: 'lifetime', label: 'Lifetime' }
 ];
-
-const TERRITORY_MAP = {
-  'North India': { states: { 'Delhi': ['New Delhi'], 'Uttar Pradesh': ['Noida'] } },
-  'South India': { states: { 'Karnataka': ['Bengaluru'], 'Tamil Nadu': ['Chennai'], 'Telangana': ['Hyderabad'] } },
-  'West India': { states: { 'Maharashtra': ['Mumbai', 'Pune'], 'Gujarat': ['Ahmedabad'] } },
-  'East India': { states: { 'West Bengal': ['Kolkata'] } }
-};
 
 const ACCOUNT_TYPES = ['Tier 1', 'Tier 2', 'Tier 3'];
 
