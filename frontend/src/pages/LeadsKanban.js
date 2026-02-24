@@ -488,6 +488,16 @@ export default function LeadsKanban() {
     setActivityDialogOpen(true);
   };
   
+  // Handle "Move to" action from card dropdown
+  const handleMoveToStatus = (lead, fromStatus, toStatus) => {
+    setPendingStatusChange({
+      lead: lead,
+      fromStatus: fromStatus,
+      toStatus: toStatus
+    });
+    setActivityDialogOpen(true);
+  };
+  
   // Handle activity submission and status update
   const handleActivitySubmit = async ({ interactionMethod, description }) => {
     if (!pendingStatusChange) return;
