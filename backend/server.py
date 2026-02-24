@@ -1690,7 +1690,7 @@ async def get_leads(
         query['assigned_to'] = assigned_to
     
     # Add time filter
-    if time_filter and time_filter != 'all':
+    if time_filter and time_filter != 'all' and time_filter != 'lifetime':
         now = datetime.now(timezone.utc)
         start_date = None
         end_date = None
@@ -1737,11 +1737,14 @@ async def get_leads(
         elif time_filter == 'this_year':
             start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
         
+        # Convert datetime to ISO string for MongoDB string comparison (created_at is stored as ISO string)
         if start_date:
+            start_date_str = start_date.isoformat()
             if end_date:
-                query['created_at'] = {'$gte': start_date, '$lte': end_date}
+                end_date_str = end_date.isoformat()
+                query['created_at'] = {'$gte': start_date_str, '$lte': end_date_str}
             else:
-                query['created_at'] = {'$gte': start_date}
+                query['created_at'] = {'$gte': start_date_str}
     
     # Add search filter
     if search:
