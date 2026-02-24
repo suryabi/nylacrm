@@ -412,6 +412,7 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 15. ~~Server-Side Filtering for Leads List~~ ✅ FIXED (time_filter, territory, assigned_to filters now server-side)
 
 ### P1 - High Priority
+- Build out Production modules (Maintenance, Inventory, Quality Control, Assets, Vendors) - currently placeholders
 - Implement Invoices functionality for Accounts
 - Re-implement Grid View for Sales Targets module
 
