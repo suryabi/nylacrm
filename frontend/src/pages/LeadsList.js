@@ -261,72 +261,8 @@ export default function LeadsList() {
     window.history.replaceState({}, '', '/leads');
   };
 
-  // Client-side filtering for assigned_to and time (server doesn't support these yet)
-  let filteredLeads = leads;
-  
-  // Apply time filter
-  if (timeFilter && timeFilter !== 'this_week') {
-    const now = new Date();
-    let startDate;
-    let endDate;
-    
-    switch(timeFilter) {
-      case 'this_week':
-        startDate = new Date(now);
-        startDate.setDate(now.getDate() - now.getDay());
-        break;
-      case 'last_week':
-        startDate = new Date(now);
-        startDate.setDate(now.getDate() - now.getDay() - 7);
-        endDate = new Date(startDate);
-        endDate.setDate(startDate.getDate() + 6);
-        break;
-      case 'this_month':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
-      case 'last_month':
-        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        endDate = new Date(now.getFullYear(), now.getMonth(), 0);
-        break;
-      case 'last_3_months':
-        startDate = new Date(now);
-        startDate.setMonth(now.getMonth() - 3);
-        break;
-      case 'last_6_months':
-        startDate = new Date(now);
-        startDate.setMonth(now.getMonth() - 6);
-        break;
-      case 'this_quarter':
-        const quarter = Math.floor(now.getMonth() / 3);
-        startDate = new Date(now.getFullYear(), quarter * 3, 1);
-        break;
-      case 'last_quarter':
-        const lastQ = Math.floor(now.getMonth() / 3) - 1;
-        startDate = new Date(now.getFullYear(), lastQ * 3, 1);
-        endDate = new Date(now.getFullYear(), (lastQ + 1) * 3, 0);
-        break;
-      default: // lifetime
-        break;
-    }
-    
-    if (startDate) {
-      filteredLeads = filteredLeads.filter(lead => {
-        const leadDate = new Date(lead.created_at);
-        if (endDate) {
-          return leadDate >= startDate && leadDate <= endDate;
-        }
-        return leadDate >= startDate;
-      });
-    }
-  }
-
-  // Apply assigned_to filter (client-side)
-  if (assignedToFilter !== 'all') {
-    filteredLeads = filteredLeads.filter((lead) => lead.assigned_to === assignedToFilter);
-  }
-
-  // Sort leads (client-side for current page)
-  filteredLeads = [...filteredLeads].sort((a, b) => {
+  // All filtering is now done server-side. Only client-side sorting remains for the current page.
+  let sortedLeads = [...leads].sort((a, b) => {
     let aVal = a[sortField];
     let bVal = b[sortField];
     
@@ -345,8 +281,8 @@ export default function LeadsList() {
     }
   });
 
-  // For display - use filtered leads (after client-side filters applied)
-  const displayLeads = filteredLeads;
+  // For display - use sorted leads (server already filtered)
+  const displayLeads = sortedLeads;
   const displayTotal = totalLeads; // Use server total for pagination info
 
   const handlePageChange = (page) => {
