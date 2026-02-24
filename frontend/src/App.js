@@ -137,6 +137,13 @@ function AppRouter() {
           <Route path="/sku-management" element={<ProtectedRoute><SKUManagement /></ProtectedRoute>} />
           <Route path="/company-profile" element={<ProtectedRoute><CompanyProfile /></ProtectedRoute>} />
           <Route path="/files-documents" element={<ProtectedRoute><FilesDocuments /></ProtectedRoute>} />
+          
+          {/* Production Context Routes */}
+          <Route path="/maintenance" element={<ProtectedRoute><Maintenance /></ProtectedRoute>} />
+          <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
+          <Route path="/quality-control" element={<ProtectedRoute><QualityControl /></ProtectedRoute>} />
+          <Route path="/assets" element={<ProtectedRoute><Assets /></ProtectedRoute>} />
+          <Route path="/vendors" element={<ProtectedRoute><Vendors /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </>
