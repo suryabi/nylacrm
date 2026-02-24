@@ -372,7 +372,7 @@ export default function LeadsList() {
           </h1>
           <p className="text-muted-foreground mt-1">
             {totalLeads} {totalLeads === 1 ? 'lead' : 'leads'} found
-            {timeFilter !== 'all' && (
+            {timeFilter !== 'this_week' && (
               <span className="ml-2 text-primary font-medium">
                 ({TIME_FILTERS.find(f => f.value === timeFilter)?.label || timeFilter})
               </span>
