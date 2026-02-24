@@ -395,11 +395,11 @@ export default function LeadsKanban() {
       
       // Log activity
       await axios.post(
-        `${API_URL}/api/leads/${lead.id}/activity`,
+        `${API_URL}/api/activities`,
         {
-          type: activityTypeMap[interactionMethod] || 'note',
-          description: description,
-          interaction_method: interactionMethod
+          lead_id: lead.id,
+          activity_type: activityTypeMap[interactionMethod] || 'note',
+          description: description
         },
         { headers, withCredentials: true }
       );
