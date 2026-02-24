@@ -106,11 +106,13 @@ export default function LeadsList() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [territoryFilter, setTerritoryFilter] = useState('all');
+  const [stateFilter, setStateFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
   const [assignedToFilter, setAssignedToFilter] = useState('all');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
-  const [timeFilter, setTimeFilter] = useState(null);
+  const [timeFilter, setTimeFilter] = useState('all');
   
   // Server-side pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -124,6 +126,15 @@ export default function LeadsList() {
   
   // Debounce search
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  
+  // Get available states and cities based on selection
+  const availableStates = territoryFilter === 'all' 
+    ? ['All States']
+    : ['All States', ...(TERRITORY_STATES[territoryFilter] || [])];
+  
+  const availableCities = stateFilter === 'all'
+    ? ['All Cities']
+    : ['All Cities', ...(STATE_CITIES[stateFilter] || [])];
   
   // Debounce search input
   useEffect(() => {
