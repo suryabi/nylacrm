@@ -55,6 +55,13 @@ export default function SalesRevenueDashboard() {
     fetchSalesTeam();
   }, []);
 
+  // Master locations from API
+  const { 
+    territories: masterTerritories, 
+    getStateNamesByTerritoryName, 
+    getCityNamesByStateName 
+  } = useMasterLocations();
+
   useEffect(() => {
     fetchData();
   }, [timeFilter, territoryFilter, stateFilter, cityFilter, salesResource]);
@@ -95,17 +102,17 @@ export default function SalesRevenueDashboard() {
     setSalesResource('all');
   };
 
-  // Territory/State/City cascade - matching Sales Overview
-  const availableTerritories = user?.territory === 'All India' || ['ceo', 'director', 'vp', 'admin'].includes(user?.role)
-    ? ['All Territories', 'North India', 'South India', 'West India', 'East India']
+  // Territory/State/City cascade from master locations
+  const availableTerritories = user?.territory === 'All India' || ['CEO', 'Director', 'Vice President', 'System Admin'].includes(user?.role)
+    ? ['All Territories', ...masterTerritories.map(t => t.name)]
     : user?.territory ? ['All Territories', user.territory] : ['All Territories'];
 
-  const availableStates = territoryFilter !== 'all' && territoryFilter !== 'All Territories' && TERRITORY_MAP[territoryFilter]
-    ? ['All States', ...Object.keys(TERRITORY_MAP[territoryFilter].states)]
+  const availableStates = territoryFilter !== 'all' && territoryFilter !== 'All Territories'
+    ? ['All States', ...getStateNamesByTerritoryName(territoryFilter)]
     : ['All States'];
 
-  const availableCities = stateFilter !== 'all' && stateFilter !== 'All States' && territoryFilter !== 'all' && territoryFilter !== 'All Territories' && TERRITORY_MAP[territoryFilter]
-    ? ['All Cities', ...(TERRITORY_MAP[territoryFilter].states[stateFilter] || [])]
+  const availableCities = stateFilter !== 'all' && stateFilter !== 'All States'
+    ? ['All Cities', ...getCityNamesByStateName(stateFilter)]
     : ['All Cities'];
 
   return (
