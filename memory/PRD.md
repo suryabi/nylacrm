@@ -45,6 +45,13 @@ Build a comprehensive, mobile-ready Sales CRM application with:
     - All filter changes trigger server-side refetch
   - Status: VERIFIED - 100% test success rate (8/8 backend tests, all frontend filter API calls verified)
 
+- **FIX**: Daily Status "Fetch Activities" Button Not Working
+  - **Problem**: Clicking "Fetch Today's Lead Activities" button was not returning any activities
+  - **Root Cause**: `NoneType` error in `/api/daily-status/auto-populate/{status_date}` endpoint when activity `interaction_method` or `activity_type` was `None`
+  - **Fix**: Added null-safe handling: `interaction_raw = activity.get('interaction_method') or activity.get('activity_type') or 'activity'`
+  - **Verification**: Tested with today's date - successfully loaded 5 activities from 3 leads
+  - Status: VERIFIED - Activities now populate correctly in "Today's Updates" field
+
 ### Feb 24, 2026 (Session 8)
 - **FEATURE**: Digital Signature on Approved Proposals
   - When a PDF proposal is approved, system automatically stamps the document
