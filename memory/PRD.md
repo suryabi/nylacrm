@@ -28,6 +28,23 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 
 ## What's Been Implemented
 
+### Feb 24, 2026 (Session 9 - Current)
+- **FIX (P0)**: Server-Side Filtering for Leads List
+  - **Problem**: Filters on Leads List page were performing client-side filtering instead of server-side, causing incorrect data display and performance issues
+  - **Root Cause**: Frontend was fetching all data and filtering locally instead of passing filter parameters to backend
+  - **Changes Made**:
+    - Updated `api.js`: `leadsAPI.getAll()` now passes `time_filter`, `territory`, `state`, `assigned_to` parameters
+    - Updated `LeadsList.js`: 
+      - `fetchLeads()` now includes all filters in API params
+      - `useEffect` dependencies include all filter state variables
+      - Removed client-side filtering code (70+ lines)
+    - Updated `server.py`: Fixed date comparison by converting datetime to ISO string for MongoDB string comparison
+  - **Verification**: 
+    - Backend API correctly filters (this_week=2, this_month=53, lifetime=66 leads)
+    - Frontend displays correct counts matching server response
+    - All filter changes trigger server-side refetch
+  - Status: VERIFIED - 100% test success rate (8/8 backend tests, all frontend filter API calls verified)
+
 ### Feb 24, 2026 (Session 8)
 - **FEATURE**: Digital Signature on Approved Proposals
   - When a PDF proposal is approved, system automatically stamps the document
