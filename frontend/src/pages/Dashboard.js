@@ -119,16 +119,16 @@ export default function Dashboard() {
     setSalesResource('all');
   };
 
-  const availableTerritories = user?.territory === 'All India' || ['ceo', 'director', 'vp', 'admin'].includes(user?.role)
-    ? ['All Territories', 'North India', 'South India', 'West India', 'East India']
+  const availableTerritories = user?.territory === 'All India' || ['CEO', 'Director', 'Vice President', 'System Admin'].includes(user?.role)
+    ? ['All Territories', ...masterTerritories.map(t => t.name)]
     : user?.territory ? ['All Territories', user.territory] : ['All Territories'];
 
-  const availableStates = territoryFilter !== 'all' && territoryFilter !== 'All Territories' && TERRITORY_MAP[territoryFilter]
-    ? ['All States', ...Object.keys(TERRITORY_MAP[territoryFilter].states)]
+  const availableStates = territoryFilter !== 'all' && territoryFilter !== 'All Territories'
+    ? ['All States', ...getStateNamesByTerritoryName(territoryFilter)]
     : ['All States'];
 
-  const availableCities = stateFilter !== 'all' && stateFilter !== 'All States' && territoryFilter !== 'all' && territoryFilter !== 'All Territories' && TERRITORY_MAP[territoryFilter]
-    ? ['All Cities', ...(TERRITORY_MAP[territoryFilter].states[stateFilter] || [])]
+  const availableCities = stateFilter !== 'all' && stateFilter !== 'All States'
+    ? ['All Cities', ...getCityNamesByStateName(stateFilter)]
     : ['All Cities'];
 
   // Calculate total leads from status distribution
