@@ -5,18 +5,113 @@ import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
 import { Card } from '../components/ui/card';
 import { toast } from 'sonner';
-import { Calendar, Send, Loader2, Download } from 'lucide-react';
+import { Calendar, Send, Loader2, Download, Phone, MapPin, Mail, MessageSquare, Activity } from 'lucide-react';
 import { format } from 'date-fns';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
-// Simple status section without AI revision
-const StatusSection = ({ title, value, onChange, placeholder, disabled }) => {
+// Styled activity display component with highlighted headers
+const StyledActivityDisplay = ({ text, onChange }) => {
+  if (!text) {
+    return (
+      <Textarea
+        value=""
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="What did you accomplish today? Enter each item on a new line..."
+        rows={8}
+        className="text-base resize-none"
+      />
+    );
+  }
+
+  const lines = text.split('\n').filter(line => line.trim());
+  
+  return (
+    <div className="border rounded-lg p-4 bg-background min-h-[200px] space-y-2">
+      {lines.map((line, index) => {
+        const trimmedLine = line.trim();
+        
+        // Summary line - highlighted with gradient background
+        if (trimmedLine.startsWith('[SUMMARY]')) {
+          const summaryText = trimmedLine.replace('[SUMMARY]', '').trim();
+          return (
+            <div key={index} className="bg-gradient-to-r from-primary/20 to-primary/5 rounded-lg p-3 mb-3">
+              <div className="flex items-center gap-2">
+                <Activity className="h-5 w-5 text-primary" />
+                <span className="font-bold text-primary text-base">{summaryText}</span>
+              </div>
+            </div>
+          );
+        }
+        
+        // Section headers - highlighted
+        if (trimmedLine.startsWith('[HEADER]')) {
+          const headerText = trimmedLine.replace('[HEADER]', '').trim();
+          const iconMap = {
+            'CUSTOMER VISITS': <MapPin className="h-4 w-4" />,
+            'PHONE CALLS': <Phone className="h-4 w-4" />,
+            'EMAILS': <Mail className="h-4 w-4" />,
+            'WHATSAPP': <MessageSquare className="h-4 w-4" />,
+            'SMS': <MessageSquare className="h-4 w-4" />,
+            'OTHER ACTIVITIES': <Activity className="h-4 w-4" />
+          };
+          return (
+            <div key={index} className="flex items-center gap-2 mt-4 mb-2 pb-1 border-b border-primary/30">
+              <span className="text-primary">{iconMap[headerText] || <Activity className="h-4 w-4" />}</span>
+              <span className="font-semibold text-sm text-primary uppercase tracking-wide">{headerText}</span>
+            </div>
+          );
+        }
+        
+        // Regular bullet items
+        if (trimmedLine.startsWith('•')) {
+          const itemText = trimmedLine.replace('•', '').trim();
+          return (
+            <div key={index} className="flex items-start gap-2 pl-2">
+              <span className="text-muted-foreground mt-1">•</span>
+              <span className="text-sm leading-relaxed">{itemText}</span>
+            </div>
+          );
+        }
+        
+        // Any other line
+        return (
+          <div key={index} className="text-sm pl-2">{trimmedLine}</div>
+        );
+      })}
+      
+      {/* Edit hint */}
+      <div className="pt-3 mt-3 border-t">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="text-xs text-muted-foreground"
+          onClick={() => {
+            // Convert back to editable format
+            const editableText = text
+              .replace(/\[SUMMARY\]\s*/g, '📊 SUMMARY: ')
+              .replace(/\[HEADER\]\s*/g, '\n📌 ');
+            onChange(editableText);
+          }}
+        >
+          Click to edit manually
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+// Simple status section with styled display option
+const StatusSection = ({ title, value, onChange, placeholder, disabled, showStyledView }) => {
+  const hasSpecialFormatting = value && (value.includes('[SUMMARY]') || value.includes('[HEADER]'));
+  
   return (
     <Card className={`p-5 ${disabled ? 'bg-muted/30' : ''}`}>
       <label className="block text-sm font-semibold mb-3">{title}</label>
       {disabled ? (
         <p className="text-sm text-muted-foreground italic">Action items not available for past dates</p>
+      ) : hasSpecialFormatting ? (
+        <StyledActivityDisplay text={value} onChange={onChange} />
       ) : (
         <Textarea
           value={value}
@@ -30,43 +125,71 @@ const StatusSection = ({ title, value, onChange, placeholder, disabled }) => {
   );
 };
 
-// Helper function to convert text to bullet format
+// Helper function to convert text to bullet format (preserve special markers)
 const convertToBulletFormat = (text) => {
   if (!text || !text.trim()) return '';
   
-  // Split by double newlines (paragraph breaks) or single newlines
-  const lines = text.split(/\n\n|\n/).filter(line => line.trim());
+  const lines = text.split(/\n/).filter(line => line.trim());
   
-  // Format each line as a bullet point if not already
   return lines.map(line => {
     const trimmedLine = line.trim();
+    // Preserve special markers
+    if (trimmedLine.startsWith('[SUMMARY]') || trimmedLine.startsWith('[HEADER]')) {
+      return trimmedLine;
+    }
     // Skip if already has bullet or is empty
     if (trimmedLine.startsWith('•') || trimmedLine.startsWith('-') || trimmedLine.startsWith('*')) {
+      return trimmedLine;
+    }
+    // Skip emoji prefixed lines (manual edits)
+    if (trimmedLine.startsWith('📊') || trimmedLine.startsWith('📌')) {
       return trimmedLine;
     }
     return `• ${trimmedLine}`;
   }).join('\n');
 };
 
-// Helper function to render bulleted content
+// Helper function to render bulleted content with styling
 const BulletedContent = ({ text }) => {
   if (!text) return null;
   
   const lines = text.split('\n').filter(line => line.trim());
   
   return (
-    <ul className="space-y-2 text-sm">
+    <div className="space-y-1.5">
       {lines.map((line, index) => {
-        // Remove bullet character if present for clean display
-        const cleanLine = line.replace(/^[•\-\*]\s*/, '').trim();
+        const trimmedLine = line.trim();
+        
+        // Summary line
+        if (trimmedLine.startsWith('[SUMMARY]') || trimmedLine.startsWith('📊')) {
+          const summaryText = trimmedLine.replace('[SUMMARY]', '').replace('📊 SUMMARY:', '').trim();
+          return (
+            <div key={index} className="bg-primary/10 rounded px-2 py-1 mb-2">
+              <span className="font-semibold text-primary text-sm">{summaryText}</span>
+            </div>
+          );
+        }
+        
+        // Header line
+        if (trimmedLine.startsWith('[HEADER]') || trimmedLine.startsWith('📌')) {
+          const headerText = trimmedLine.replace('[HEADER]', '').replace('📌', '').trim();
+          return (
+            <div key={index} className="font-semibold text-xs text-primary uppercase mt-2 mb-1">
+              {headerText}
+            </div>
+          );
+        }
+        
+        // Regular bullet
+        const cleanLine = trimmedLine.replace(/^[•\-\*]\s*/, '').trim();
         return (
-          <li key={index} className="flex items-start gap-2">
-            <span className="text-primary mt-1">•</span>
+          <div key={index} className="flex items-start gap-2 text-sm">
+            <span className="text-primary mt-0.5">•</span>
             <span className="leading-relaxed">{cleanLine}</span>
-          </li>
+          </div>
         );
       })}
-    </ul>
+    </div>
   );
 };
 
