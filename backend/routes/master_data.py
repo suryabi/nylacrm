@@ -38,7 +38,7 @@ async def create_master_sku(request: Request, current_user: dict = Depends(get_c
     }
     
     await db.master_skus.insert_one(sku_doc)
-    del sku_doc['_id'] if '_id' in sku_doc else None
+    sku_doc.pop('_id', None)
     return sku_doc
 
 @router.put("/master-skus/{sku_id}")
