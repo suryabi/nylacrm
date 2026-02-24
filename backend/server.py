@@ -3164,8 +3164,6 @@ async def get_team_status_rollup(
     end_datetime = datetime.fromisoformat(f'{target_date}T23:59:59').replace(tzinfo=timezone.utc).isoformat()
     
     # Map statuses to users with metrics
-    user_map = {u['id']: u for u in direct_reports}
-    
     team_statuses = []
     for status in statuses:
         user_info = user_map.get(status['user_id'])
