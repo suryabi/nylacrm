@@ -365,11 +365,17 @@ export default function LeadsKanban() {
       const headers = { Authorization: `Bearer ${token}` };
       
       const [leadsRes, usersRes] = await Promise.all([
-        axios.get(`${API_URL}/api/leads?pageSize=500`, { headers, withCredentials: true }),
+        axios.get(`${API_URL}/api/leads?page_size=500`, { headers, withCredentials: true }),
         axios.get(`${API_URL}/api/users`, { headers, withCredentials: true })
       ]);
       
-      setLeads(leadsRes.data.data || []);
+      // Map API response fields to component expected fields
+      const mappedLeads = (leadsRes.data.data || []).map(lead => ({
+        ...lead,
+        company_name: lead.company || lead.company_name,
+        contact_name: lead.contact_person || lead.contact_name,
+      }));
+      setLeads(mappedLeads);
       setUsers(usersRes.data || []);
     } catch (error) {
       console.error('Failed to fetch data:', error);
