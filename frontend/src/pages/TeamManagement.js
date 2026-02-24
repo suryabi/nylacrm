@@ -907,6 +907,7 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
     state: user?.state || '',
     territory: user?.territory || '',
     role: user?.role || 'sales_rep',
+    department: user?.department || 'sales',
     reports_to: user?.reports_to || '',
     is_active: user?.is_active ?? true
   });
