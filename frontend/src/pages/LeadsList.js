@@ -169,10 +169,10 @@ export default function LeadsList() {
     fetchUsers();
   }, []);
   
-  // Fetch leads when pagination or filters change
+  // Fetch leads when pagination or filters change - ALL filters trigger server-side refetch
   useEffect(() => {
     fetchLeads();
-  }, [currentPage, itemsPerPage, debouncedSearch, statusFilter, cityFilter]);
+  }, [currentPage, itemsPerPage, debouncedSearch, statusFilter, cityFilter, stateFilter, territoryFilter, assignedToFilter, timeFilter]);
 
   const fetchUsers = async () => {
     try {
@@ -190,12 +190,17 @@ export default function LeadsList() {
   const fetchLeads = async () => {
     try {
       setLoading(true);
+      // Pass ALL filters to the backend for server-side filtering
       const params = {
         page: currentPage,
         pageSize: itemsPerPage,
         search: debouncedSearch || undefined,
         status: statusFilter !== 'all' ? statusFilter : undefined,
         city: cityFilter !== 'all' ? cityFilter : undefined,
+        state: stateFilter !== 'all' ? stateFilter : undefined,
+        territory: territoryFilter !== 'all' ? territoryFilter : undefined,
+        assigned_to: assignedToFilter !== 'all' ? assignedToFilter : undefined,
+        time_filter: timeFilter !== 'lifetime' ? timeFilter : undefined,
       };
       
       const response = await leadsAPI.getAll(params);
