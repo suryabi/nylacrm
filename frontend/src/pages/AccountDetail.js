@@ -2,15 +2,18 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { accountsAPI, usersAPI, skusAPI } from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
 import { toast } from 'sonner';
 import { 
   ArrowLeft, Building2, Phone, MapPin, Save, Loader2, Plus, Trash2, FileText,
-  DollarSign, CreditCard, Calendar, AlertTriangle, TrendingUp, Truck, Search, Copy, ExternalLink
+  DollarSign, CreditCard, Calendar, AlertTriangle, TrendingUp, Truck, Search, Copy, ExternalLink,
+  Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck
 } from 'lucide-react';
 import { format } from 'date-fns';
 import {
@@ -20,6 +23,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+
+const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
+
+// Roles that can approve/reject contracts
+const CONTRACT_APPROVER_ROLES = ['ceo', 'CEO', 'director', 'Director', 'vp', 'Vice President', 'national_sales_head', 'National Sales Head', 'admin'];
+
+const contractStatusConfig = {
+  'pending_review': { label: 'Pending Review', color: 'bg-amber-100 text-amber-800 border-amber-200', icon: Clock },
+  'changes_requested': { label: 'Changes Requested', color: 'bg-orange-100 text-orange-800 border-orange-200', icon: MessageSquare },
+  'revised': { label: 'Revised', color: 'bg-blue-100 text-blue-800 border-blue-200', icon: FileText },
+  'approved': { label: 'Approved', color: 'bg-emerald-100 text-emerald-800 border-emerald-200', icon: CheckCircle },
+  'rejected': { label: 'Rejected', color: 'bg-red-100 text-red-800 border-red-200', icon: XCircle },
+};
 
 const accountTypeColors = {
   'Tier 1': 'bg-emerald-100 text-emerald-800',
