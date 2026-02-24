@@ -1,0 +1,62 @@
+{
+  "summary": "Frontend testing of Kanban board feature. Fixed API endpoint issue (was calling /api/leads/{id}/activity but should be /api/activities). All 11 status columns load correctly, drag-and-drop triggers Activity Log dialog, filters work (Search, City, Assigned To, Category, Reset), navigation between Kanban/List views works.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Activity Log Dialog", "issues": ["Minor: Console warning about missing Description or aria-describedby for DialogContent - does not affect functionality"]}
+    ]
+  },
+  "passed_tests": [
+    "Kanban board loads with all 11 lead status columns (new, contacted, qualified, in_progress, trial_in_progress, proposal_shared, proposal_approved_by_customer, won, lost, not_qualified, future_followup)",
+    "Lead cards display company name, lead ID, contact location, category, and assigned user",
+    "Search filter works - filters leads by company name/contact/lead ID",
+    "City filter works",
+    "Assigned To filter works",
+    "Category filter works",
+    "Reset button appears when filters applied and clears all filters",
+    "Drag and drop lead from one status to another triggers Activity Log dialog",
+    "Activity Log dialog shows correct from/to status badges",
+    "Activity Log dialog has all 6 interaction methods (Call, Visit, Email, WhatsApp, SMS, Other)",
+    "Submitting activity log successfully updates lead status and creates activity record",
+    "Cancel button on dialog closes it without changing status",
+    "List View button navigates to /leads",
+    "Kanban View button in /leads navigates to /leads/kanban",
+    "Clicking on a lead card navigates to lead detail page",
+    "Pipeline link in sidebar navigates to Kanban view"
+  ],
+  "test_report_links": [
+    "/app/frontend/src/pages/LeadsKanban.js"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fixed bug: Activity API endpoint was incorrect - changed from /api/leads/{id}/activity to /api/activities with lead_id in body",
+    "All data-testid attributes present for testing",
+    "Proper error handling with toast notifications",
+    "Uses HTML5 drag and drop API correctly"
+  ],
+  "updated_files": [
+    "/app/frontend/src/pages/LeadsKanban.js"
+  ],
+  "success_rate": {
+    "frontend": "100% (16/16 tests passed)"
+  },
+  "test_credentials": {
+    "email": "admin@nylaairwater.earth",
+    "password": "admin123"
+  },
+  "seed_data_creation": "None - used existing lead data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Kanban board feature fully tested. Fixed API endpoint for activity logging. Drag-and-drop works with Activity Log dialog popup. All 11 status columns present. Navigation between Kanban/List views works. Lead cards show company_name, lead_id, city, category, assigned_to.",
+  "fix_applied": {
+    "file": "/app/frontend/src/pages/LeadsKanban.js",
+    "issue": "Activity log API call was using wrong endpoint /api/leads/{id}/activity",
+    "fix": "Changed to POST /api/activities with lead_id in request body - matches backend endpoint",
+    "verified": "Tested and confirmed working - lead status updates and activity is logged"
+  }
+}
