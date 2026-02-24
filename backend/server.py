@@ -3032,8 +3032,10 @@ async def auto_populate_from_activities(status_date: str, current_user: dict = D
         formatted_lines = []
         for activity in activities:
             lead_name = lead_map.get(activity['lead_id'], 'Unknown Lead')
-            interaction = activity.get('interaction_method', activity.get('activity_type', 'activity')).replace('_', ' ').title()
-            description = activity.get('description', '')
+            # Handle None values for interaction_method and activity_type
+            interaction_raw = activity.get('interaction_method') or activity.get('activity_type') or 'activity'
+            interaction = interaction_raw.replace('_', ' ').title()
+            description = activity.get('description') or ''
             
             formatted_lines.append(f"{lead_name}: {interaction} - {description}")
         
