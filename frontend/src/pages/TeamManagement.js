@@ -56,13 +56,10 @@ const ROLE_MAPPING = {
 };
 
 const DEPARTMENTS = [
-  'Uttar Pradesh',
-  'West Bengal'
+  'Sales',
+  'Production',
+  'Both (Admin)'
 ];
-
-const OTHER_STATES = [];
-
-const INDIAN_STATES = [...PRIORITY_STATES, ...OTHER_STATES];
 
 const toTitleCase = (str) => {
   if (!str) return '';
@@ -83,6 +80,14 @@ export default function TeamManagement() {
   const [userToDelete, setUserToDelete] = useState(null);
   const [activityDialogOpen, setActivityDialogOpen] = useState(false);
   const [selectedUserActivity, setSelectedUserActivity] = useState(null);
+  
+  // Master locations from API
+  const { 
+    territories, 
+    stateNames,
+    getStateNamesByTerritoryName, 
+    getCityNamesByStateName 
+  } = useMasterLocations();
 
   useEffect(() => {
     fetchUsers();
