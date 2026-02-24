@@ -46,6 +46,7 @@ const accountTypeColors = {
 export default function AccountDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [account, setAccount] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -54,6 +55,15 @@ export default function AccountDetail() {
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [users, setUsers] = useState([]);
   const [masterSkus, setMasterSkus] = useState([]);
+  
+  // Contract state
+  const [contract, setContract] = useState(null);
+  const [loadingContract, setLoadingContract] = useState(false);
+  const [uploadingContract, setUploadingContract] = useState(false);
+  const [reviewingContract, setReviewingContract] = useState(false);
+  const [reviewComment, setReviewComment] = useState('');
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const contractInputRef = useRef(null);
   
   // Editable fields
   const [accountName, setAccountName] = useState('');
