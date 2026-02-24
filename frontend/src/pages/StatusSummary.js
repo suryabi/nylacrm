@@ -43,6 +43,13 @@ export default function StatusSummary() {
   const [allUsers, setAllUsers] = useState([]);
   const [statuses, setStatuses] = useState([]);
   
+  // Master locations from API
+  const { 
+    territories, 
+    getStateNamesByTerritoryName, 
+    getCityNamesByStateName 
+  } = useMasterLocations();
+  
   // Filters
   const [territoryFilter, setTerritoryFilter] = useState('All Territories');
   const [stateFilter, setStateFilter] = useState('All States');
@@ -52,14 +59,14 @@ export default function StatusSummary() {
   const today = format(new Date(), 'yyyy-MM-dd');
   const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
 
-  // Get available states and cities based on selection
+  // Get available states and cities from master locations
   const availableStates = territoryFilter === 'All Territories' 
     ? ['All States']
-    : ['All States', ...(TERRITORY_STATES[territoryFilter] || [])];
+    : ['All States', ...getStateNamesByTerritoryName(territoryFilter)];
   
   const availableCities = stateFilter === 'All States'
     ? ['All Cities']
-    : ['All Cities', ...(STATE_CITIES[stateFilter] || [])];
+    : ['All Cities', ...getCityNamesByStateName(stateFilter)];
 
   useEffect(() => {
     fetchAllUsers();
