@@ -15,7 +15,7 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
-  const [email, setEmail] = useState('admin@nylalife.com');
+  const [email, setEmail] = useState('admin@nylaairwater.earth');
   const [password, setPassword] = useState('admin123');
   const [loading, setLoading] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
