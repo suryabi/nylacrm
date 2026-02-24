@@ -31,6 +31,7 @@ import {
 } from '../components/ui/table';
 import { Plus, Loader2, Edit, Trash2, Clock, Activity, Eye, MousePointer } from 'lucide-react';
 import { formatDuration, formatRelativeTime, getPageName } from '../hooks/useActivityTracker';
+import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -54,60 +55,7 @@ const ROLE_MAPPING = {
   'Head of Business': 'Head of Business'
 };
 
-const TERRITORIES = [
-  'All India',
-  'North India',
-  'South India',
-  'West India',
-  'East India'
-];
-
-const TERRITORY_LOCATIONS = {
-  'North India': {
-    states: {
-      'Delhi': ['New Delhi'],
-      'Uttar Pradesh': ['Noida']
-    }
-  },
-  'South India': {
-    states: {
-      'Karnataka': ['Bengaluru'],
-      'Tamil Nadu': ['Chennai'],
-      'Telangana': ['Hyderabad']
-    }
-  },
-  'West India': {
-    states: {
-      'Maharashtra': ['Mumbai', 'Pune'],
-      'Gujarat': ['Ahmedabad']
-    }
-  },
-  'East India': {
-    states: {
-      'West Bengal': ['Kolkata']
-    }
-  },
-  'All India': {
-    states: {
-      'Delhi': ['New Delhi'],
-      'Uttar Pradesh': ['Noida'],
-      'Karnataka': ['Bengaluru'],
-      'Tamil Nadu': ['Chennai'],
-      'Telangana': ['Hyderabad'],
-      'Maharashtra': ['Mumbai', 'Pune'],
-      'Gujarat': ['Ahmedabad'],
-      'West Bengal': ['Kolkata']
-    }
-  }
-};
-
-const PRIORITY_STATES = [
-  'Telangana',
-  'Tamil Nadu',
-  'Delhi',
-  'Maharashtra',
-  'Gujarat',
-  'Karnataka',
+const DEPARTMENTS = [
   'Uttar Pradesh',
   'West Bengal'
 ];
