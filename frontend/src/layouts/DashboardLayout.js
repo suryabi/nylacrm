@@ -31,6 +31,7 @@ const navigationGroups = [
     items: [
       { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'], hasSubmenu: true },
       { name: 'Leads', href: '/leads', icon: Users, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
+      { name: 'Pipeline', href: '/leads/kanban', icon: Kanban, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
       { name: 'Accounts', href: '/accounts', icon: Building2, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
       { name: 'Sales Portal', href: '/sales-portal', icon: Store, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
     ]
