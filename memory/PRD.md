@@ -63,6 +63,12 @@ Build a comprehensive, mobile-ready Sales CRM application with:
     - Counts customer_visit, phone_call/call, and sms/whatsapp/email activities
   - Status: IMPLEMENTED
 
+- **FIX**: Team Status - Team Members Dropdown Not Populated
+  - **Problem**: Team Member dropdown was empty or only showing members who submitted status
+  - **Root Cause**: Dropdown was populated from `rollupData.team_statuses` instead of `allUsers`
+  - **Fix**: Changed to use `allUsers` list filtered by `is_active` status
+  - Status: VERIFIED - Dropdown now shows all active team members
+
 ### Feb 24, 2026 (Session 8)
 - **FEATURE**: Digital Signature on Approved Proposals
   - When a PDF proposal is approved, system automatically stamps the document
