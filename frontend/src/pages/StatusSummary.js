@@ -196,8 +196,9 @@ export default function StatusSummary() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {TERRITORIES.map(t => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  <SelectItem value="All Territories">All Territories</SelectItem>
+                  {territories.map(t => (
+                    <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
