@@ -757,6 +757,19 @@ function AddTeamMemberForm({ onSuccess }) {
           </Select>
         </div>
         <div className="space-y-2">
+          <Label htmlFor="department">Department *</Label>
+          <Select value={formData.department} onValueChange={(v) => setFormData(prev => ({ ...prev, department: v }))}>
+            <SelectTrigger data-testid="team-department-select">
+              <SelectValue placeholder="Select department" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="sales">Sales</SelectItem>
+              <SelectItem value="production">Production</SelectItem>
+              <SelectItem value="both">Both (Admin)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
           <Label htmlFor="email">Email *</Label>
           <Input
             id="email"
