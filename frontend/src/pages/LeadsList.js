@@ -627,68 +627,6 @@ export default function LeadsList() {
                   </TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-                
-                {/* Filter Row */}
-                <TableRow className="bg-background">
-                  <TableHead className="p-2">
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      placeholder="Search lead..."
-                      className="w-full px-2 py-1 text-xs border rounded"
-                    />
-                  </TableHead>
-                  <TableHead className="p-2">
-                    <select
-                      value={cityFilter}
-                      onChange={e => setCityFilter(e.target.value)}
-                      className="w-full px-2 py-1 text-xs border rounded bg-background"
-                    >
-                      <option value="all">All</option>
-                      <option value="Bengaluru">Bengaluru</option>
-                      <option value="Chennai">Chennai</option>
-                      <option value="Hyderabad">Hyderabad</option>
-                      <option value="Mumbai">Mumbai</option>
-                      <option value="Pune">Pune</option>
-                      <option value="New Delhi">New Delhi</option>
-                    </select>
-                  </TableHead>
-                  <TableHead className="p-2">
-                    <select
-                      value={assignedToFilter}
-                      onChange={e => setAssignedToFilter(e.target.value)}
-                      className="w-full px-2 py-1 text-xs border rounded bg-background"
-                    >
-                      <option value="all">All</option>
-                      {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
-                  </TableHead>
-                  <TableHead className="p-2"></TableHead>
-                  <TableHead className="p-2"></TableHead>
-                  <TableHead className="p-2"></TableHead>
-                  <TableHead className="p-2">
-                    <select
-                      value={statusFilter}
-                      onChange={e => setStatusFilter(e.target.value)}
-                      className="w-full px-2 py-1 text-xs border rounded bg-background"
-                    >
-                      <option value="all">All</option>
-                      <option value="new">New</option>
-                      <option value="contacted">Contacted</option>
-                      <option value="qualified">Qualified</option>
-                      <option value="not_qualified">Not Qualified</option>
-                      <option value="in_progress">In Progress</option>
-                      <option value="trial_in_progress">Trial in Progress</option>
-                      <option value="proposal_shared">Proposal Shared</option>
-                      <option value="proposal_approved_by_customer">Proposal Approved</option>
-                      <option value="won">Won</option>
-                      <option value="lost">Lost</option>
-                      <option value="future_followup">Future Follow up</option>
-                    </select>
-                  </TableHead>
-                  <TableHead className="p-2"></TableHead>
-                </TableRow>
               </TableHeader>
               <TableBody>
                 {displayLeads.map((lead) => (
