@@ -3074,36 +3074,37 @@ async def auto_populate_from_activities(status_date: str, current_user: dict = D
             summary_parts.append(f"Other: {len(grouped_activities['other'])}")
         
         summary_line = " | ".join(summary_parts) if summary_parts else "Activities logged"
-        formatted_sections.append(f"SUMMARY: {summary_line}")
+        # Use special markers for highlighting in frontend
+        formatted_sections.append(f"[SUMMARY] {summary_line}")
         
-        # Add grouped sections
+        # Add grouped sections with special header markers
         if grouped_activities['customer_visit']:
-            formatted_sections.append("\nCUSTOMER VISITS:")
+            formatted_sections.append("\n[HEADER] CUSTOMER VISITS")
             for item in grouped_activities['customer_visit']:
                 formatted_sections.append(f"• {item}")
         
         if grouped_activities['phone_call']:
-            formatted_sections.append("\nPHONE CALLS:")
+            formatted_sections.append("\n[HEADER] PHONE CALLS")
             for item in grouped_activities['phone_call']:
                 formatted_sections.append(f"• {item}")
         
         if grouped_activities['email']:
-            formatted_sections.append("\nEMAILS:")
+            formatted_sections.append("\n[HEADER] EMAILS")
             for item in grouped_activities['email']:
                 formatted_sections.append(f"• {item}")
         
         if grouped_activities['whatsapp']:
-            formatted_sections.append("\nWHATSAPP:")
+            formatted_sections.append("\n[HEADER] WHATSAPP")
             for item in grouped_activities['whatsapp']:
                 formatted_sections.append(f"• {item}")
         
         if grouped_activities['sms']:
-            formatted_sections.append("\nSMS:")
+            formatted_sections.append("\n[HEADER] SMS")
             for item in grouped_activities['sms']:
                 formatted_sections.append(f"• {item}")
         
         if grouped_activities['other']:
-            formatted_sections.append("\nOTHER ACTIVITIES:")
+            formatted_sections.append("\n[HEADER] OTHER ACTIVITIES")
             for item in grouped_activities['other']:
                 formatted_sections.append(f"• {item}")
         
