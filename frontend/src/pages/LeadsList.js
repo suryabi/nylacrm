@@ -359,7 +359,7 @@ export default function LeadsList() {
   }
 
   const hasActiveFilters = searchQuery || statusFilter !== 'all' || territoryFilter !== 'all' || 
-    stateFilter !== 'all' || cityFilter !== 'all' || assignedToFilter !== 'all' || timeFilter !== 'all';
+    stateFilter !== 'all' || cityFilter !== 'all' || assignedToFilter !== 'all' || timeFilter !== 'this_week';
 
   return (
     <div className="space-y-6" data-testid="leads-list-page">
