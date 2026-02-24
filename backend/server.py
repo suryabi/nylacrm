@@ -1641,9 +1641,12 @@ async def get_leads(
     status: Optional[str] = None,
     city: Optional[str] = None,
     state: Optional[str] = None,
+    territory: Optional[str] = None,
     country: Optional[str] = None,
     region: Optional[str] = None,
     search: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    time_filter: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -1651,8 +1654,10 @@ async def get_leads(
     
     - page: Page number (1-indexed)
     - page_size: Number of items per page (default 25, max 100)
-    - status, city, state, country, region: Filter options
+    - status, city, state, territory, country, region: Filter options
     - search: Search in company name, contact person, lead_id
+    - assigned_to: Filter by assigned user ID
+    - time_filter: Filter by time period (this_week, last_week, this_month, last_month, etc.)
     """
     # Validate and cap page_size to prevent abuse
     page_size = min(max(1, page_size), 100)
@@ -1667,16 +1672,76 @@ async def get_leads(
         query['assigned_to'] = current_user['id']
     
     # Add location filters
-    if status:
+    if status and status != 'all':
         query['status'] = status
-    if city:
+    if city and city != 'all':
         query['city'] = city
-    if state:
+    if state and state != 'all':
         query['state'] = state
-    if country:
+    if territory and territory != 'all':
+        query['territory'] = territory
+    if country and country != 'all':
         query['country'] = country
-    if region:
+    if region and region != 'all':
         query['region'] = region
+    
+    # Add assigned_to filter
+    if assigned_to and assigned_to != 'all':
+        query['assigned_to'] = assigned_to
+    
+    # Add time filter
+    if time_filter and time_filter != 'all':
+        now = datetime.now(timezone.utc)
+        start_date = None
+        end_date = None
+        
+        if time_filter == 'this_week':
+            # Start of this week (Monday)
+            start_date = now - timedelta(days=now.weekday())
+            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == 'last_week':
+            # Last week Monday to Sunday
+            start_date = now - timedelta(days=now.weekday() + 7)
+            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_date = start_date + timedelta(days=6, hours=23, minutes=59, seconds=59)
+        elif time_filter == 'this_month':
+            start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == 'last_month':
+            # First day of last month
+            first_of_this_month = now.replace(day=1)
+            last_month = first_of_this_month - timedelta(days=1)
+            start_date = last_month.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_date = first_of_this_month - timedelta(seconds=1)
+        elif time_filter == 'last_3_months':
+            start_date = now - timedelta(days=90)
+            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == 'last_6_months':
+            start_date = now - timedelta(days=180)
+            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == 'this_quarter':
+            quarter = (now.month - 1) // 3
+            start_date = now.replace(month=quarter * 3 + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == 'last_quarter':
+            quarter = (now.month - 1) // 3 - 1
+            if quarter < 0:
+                quarter = 3
+                year = now.year - 1
+            else:
+                year = now.year
+            start_date = datetime(year, quarter * 3 + 1, 1, tzinfo=timezone.utc)
+            end_month = (quarter + 1) * 3
+            if end_month > 12:
+                end_date = datetime(year + 1, 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
+            else:
+                end_date = datetime(year, end_month + 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
+        elif time_filter == 'this_year':
+            start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        if start_date:
+            if end_date:
+                query['created_at'] = {'$gte': start_date, '$lte': end_date}
+            else:
+                query['created_at'] = {'$gte': start_date}
     
     # Add search filter
     if search:
