@@ -606,22 +606,47 @@ export default function LeadsKanban() {
       </div>
       
       {/* Kanban Board */}
-      <div className="flex-1 overflow-x-auto pb-4">
-        <div className="flex gap-4 min-w-max">
-          {LEAD_STATUSES.map((status) => (
-            <KanbanColumn
-              key={status.id}
-              status={status}
-              leads={leadsByStatus[status.id] || []}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              onCardClick={handleCardClick}
-              users={users}
-              isDropTarget={dropTargetStatus === status.id}
-            />
-          ))}
+      <div className="flex-1 relative">
+        {/* Scroll Left Button */}
+        <button
+          onClick={() => scrollContainerRef.current?.scrollBy({ left: -300, behavior: 'smooth' })}
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white shadow-lg rounded-full p-2 border border-gray-200 transition-all hover:scale-110"
+          data-testid="scroll-left-btn"
+        >
+          <ChevronLeft className="w-5 h-5 text-gray-600" />
+        </button>
+        
+        {/* Scroll Right Button */}
+        <button
+          onClick={() => scrollContainerRef.current?.scrollBy({ left: 300, behavior: 'smooth' })}
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white shadow-lg rounded-full p-2 border border-gray-200 transition-all hover:scale-110"
+          data-testid="scroll-right-btn"
+        >
+          <ChevronRight className="w-5 h-5 text-gray-600" />
+        </button>
+        
+        <div 
+          ref={scrollContainerRef}
+          className="overflow-x-auto pb-4 px-8 scroll-smooth"
+          onDragOver={handleContainerDragOver}
+          onDragLeave={stopAutoScroll}
+        >
+          <div className="flex gap-4 min-w-max">
+            {LEAD_STATUSES.map((status) => (
+              <KanbanColumn
+                key={status.id}
+                status={status}
+                leads={leadsByStatus[status.id] || []}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                onCardClick={handleCardClick}
+                users={users}
+                isDropTarget={dropTargetStatus === status.id}
+              />
+            ))}
+          </div>
         </div>
       </div>
       
