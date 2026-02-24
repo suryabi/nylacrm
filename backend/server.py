@@ -3028,6 +3028,31 @@ async def auto_populate_from_activities(status_date: str, current_user: dict = D
         
         lead_map = {l['id']: l.get('company') or l.get('name') for l in leads}
         
+        # Count activities by type for summary
+        visits_count = 0
+        calls_count = 0
+        messages_count = 0  # SMS, WhatsApp, Email combined
+        
+        for activity in activities:
+            interaction_method = (activity.get('interaction_method') or activity.get('activity_type') or '').lower()
+            if interaction_method == 'customer_visit':
+                visits_count += 1
+            elif interaction_method == 'phone_call':
+                calls_count += 1
+            elif interaction_method in ['sms', 'whatsapp', 'email']:
+                messages_count += 1
+        
+        # Build summary line
+        summary_parts = []
+        if visits_count > 0:
+            summary_parts.append(f"Customer Visits: {visits_count}")
+        if calls_count > 0:
+            summary_parts.append(f"Phone Calls: {calls_count}")
+        if messages_count > 0:
+            summary_parts.append(f"Messages/Emails: {messages_count}")
+        
+        summary_line = " | ".join(summary_parts) if summary_parts else "Activities logged"
+        
         # Format activities by lead
         formatted_lines = []
         for activity in activities:
@@ -3039,12 +3064,18 @@ async def auto_populate_from_activities(status_date: str, current_user: dict = D
             
             formatted_lines.append(f"{lead_name}: {interaction} - {description}")
         
-        formatted_text = '\n\n'.join(formatted_lines)
+        # Combine summary + activities
+        formatted_text = f"SUMMARY: {summary_line}\n\n" + '\n\n'.join(formatted_lines)
         
         return {
             'formatted_text': formatted_text,
             'activity_count': len(activities),
-            'leads_contacted': len(lead_map)
+            'leads_contacted': len(lead_map),
+            'summary': {
+                'visits': visits_count,
+                'calls': calls_count,
+                'messages': messages_count
+            }
         }
         
     except Exception as e:
