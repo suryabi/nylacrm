@@ -866,6 +866,13 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
     is_active: user?.is_active ?? true
   });
 
+  // Master locations from API
+  const { 
+    territories, 
+    getStateNamesByTerritoryName, 
+    getCityNamesByStateName 
+  } = useMasterLocations();
+
   React.useEffect(() => {
     const fetchManagers = async () => {
       try {
