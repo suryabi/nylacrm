@@ -351,14 +351,27 @@ function CitiesPage({ plan, onBack }) {
 }
 
 function CityForm({ planId, territory, onUpdate }) {
-  const CITY_MAP = {
-    'South India': [{s: 'Karnataka', c: 'Bengaluru'}, {s: 'Tamil Nadu', c: 'Chennai'}, {s: 'Telangana', c: 'Hyderabad'}],
-    'West India': [{s: 'Maharashtra', c: 'Mumbai'}, {s: 'Maharashtra', c: 'Pune'}, {s: 'Gujarat', c: 'Ahmedabad'}],
-    'North India': [{s: 'Delhi', c: 'New Delhi'}, {s: 'Uttar Pradesh', c: 'Noida'}],
-    'East India': [{s: 'West Bengal', c: 'Kolkata'}]
+  // Master locations from API
+  const { territories, states, cities: masterCities } = useMasterLocations();
+  
+  // Build city list for the selected territory from master locations
+  const getCitiesForTerritory = () => {
+    const territoryObj = territories.find(t => t.name === territory.territory);
+    if (!territoryObj) return [];
+    
+    const territoryStates = states.filter(s => s.territory_id === territoryObj.id);
+    const cityList = [];
+    
+    for (const state of territoryStates) {
+      const stateCities = masterCities.filter(c => c.state_id === state.id);
+      for (const city of stateCities) {
+        cityList.push({ s: state.name, c: city.name });
+      }
+    }
+    return cityList;
   };
 
-  const cities = CITY_MAP[territory.territory] || [];
+  const cities = getCitiesForTerritory();
   const [vals, setVals] = React.useState({});
   const [loaded, setLoaded] = React.useState(false);
 
