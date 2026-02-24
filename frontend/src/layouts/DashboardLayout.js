@@ -117,6 +117,7 @@ const productionNavigationGroups = [
 
 export default function DashboardLayout({ children }) {
   const { user, logout } = useAuth();
+  const { currentContext, switchContext, canAccessBothContexts } = useAppContext();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -136,6 +137,19 @@ export default function DashboardLayout({ children }) {
   const toggleGroup = (title) => {
     setCollapsedGroups(prev => ({ ...prev, [title]: !prev[title] }));
   };
+
+  const handleContextSwitch = (newContext) => {
+    switchContext(newContext);
+    // Navigate to appropriate default page
+    if (newContext === 'production') {
+      navigate('/maintenance');
+    } else {
+      navigate('/dashboard');
+    }
+  };
+
+  // Select navigation groups based on current context
+  const navigationGroups = currentContext === 'production' ? productionNavigationGroups : salesNavigationGroups;
 
   const filteredDashboardSubmenu = dashboardSubmenu.filter(item => item.roles.includes(user?.role));
   const isDashboardActive = location.pathname === '/dashboard' || location.pathname === '/sales-revenue' || 
