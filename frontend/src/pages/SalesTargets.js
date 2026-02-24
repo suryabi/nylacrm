@@ -6,6 +6,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
 import { Plus, ArrowLeft, CheckCircle2, AlertCircle, Edit, Trash2 } from 'lucide-react';
+import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API = process.env.REACT_APP_BACKEND_URL + '/api';
 
