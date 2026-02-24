@@ -3037,9 +3037,9 @@ async def auto_populate_from_activities(status_date: str, current_user: dict = D
             interaction_method = (activity.get('interaction_method') or activity.get('activity_type') or '').lower()
             if interaction_method == 'customer_visit':
                 visits_count += 1
-            elif interaction_method == 'phone_call':
+            elif interaction_method in ['phone_call', 'call']:
                 calls_count += 1
-            elif interaction_method in ['sms', 'whatsapp', 'email']:
+            elif interaction_method in ['sms', 'whatsapp', 'email', 'message']:
                 messages_count += 1
         
         # Build summary line
