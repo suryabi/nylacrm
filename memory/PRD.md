@@ -69,6 +69,15 @@ Build a comprehensive, mobile-ready Sales CRM application with:
   - **Fix**: Changed to use `allUsers` list filtered by `is_active` status
   - Status: VERIFIED - Dropdown now shows all active team members
 
+- **REFACTOR**: Replaced Team Status with Status Summary
+  - **Removed**: TeamStatusFeed.js (complex weekly/monthly views, AI summary)
+  - **Added**: StatusSummary.js - Simplified daily status viewer
+    - Default: Yesterday selected
+    - Filters: Territory, State, City, Resource dropdowns
+    - Shows each team member's daily updates in card format with bullet points
+    - Date picker for any past date
+  - Status: IMPLEMENTED
+
 ### Feb 24, 2026 (Session 8)
 - **FEATURE**: Digital Signature on Approved Proposals
   - When a PDF proposal is approved, system automatically stamps the document
