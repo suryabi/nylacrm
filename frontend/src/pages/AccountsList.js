@@ -11,15 +11,9 @@ import {
   Search, Building2, ChevronLeft, ChevronRight, Loader2, 
   Filter, Users, Calendar, Phone, User, MapPin 
 } from 'lucide-react';
+import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-
-const TERRITORY_MAP = {
-  'North India': { states: { 'Delhi': ['New Delhi'], 'Uttar Pradesh': ['Noida'] } },
-  'South India': { states: { 'Karnataka': ['Bengaluru'], 'Tamil Nadu': ['Chennai'], 'Telangana': ['Hyderabad'] } },
-  'West India': { states: { 'Maharashtra': ['Mumbai', 'Pune'], 'Gujarat': ['Ahmedabad'] } },
-  'East India': { states: { 'West Bengal': ['Kolkata'] } }
-};
 
 const ACCOUNT_TYPES = ['Tier 1', 'Tier 2', 'Tier 3'];
 
