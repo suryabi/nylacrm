@@ -28,6 +28,28 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 
 ## What's Been Implemented
 
+### Feb 24, 2026 (Session 8)
+- **FEATURE**: Digital Signature on Approved Proposals
+  - When a PDF proposal is approved, system automatically stamps the document
+  - Signature format: "Approved by: {approver_name}  |  Date: {Month DD, YYYY}"
+  - Subtle appearance: 8pt Helvetica, gray color (0.4, 0.4, 0.4 alpha 0.8)
+  - Position: Bottom center of last page, 30 points from bottom
+  - Only PDF files are stamped; DOCX files are approved without stamping
+  - Uses `reportlab` for PDF generation and `PyPDF2` for merging
+  - Backend function: `stamp_pdf_with_signature()` in `server.py`
+  - Status: VERIFIED - 100% test success rate (9/9 tests)
+
+- **FIX**: Partner - Sales Role Permissions Alignment
+  - Aligned "Partner - Sales" role permissions with "Regional Sales Manager"
+  - **Backend updates**:
+    - Added to sales target calculation (₹1,500,000 target)
+  - **Frontend updates**:
+    - `ResourcePerformance.js`: Added to team filter
+    - `TeamManagement.js`: Added to "reports_to" dropdown (create & edit)
+    - `SalesTargets.js`: Added to sales team filter
+    - `DashboardLayout.js`: Added to Transport Calculator access
+  - Status: IMPLEMENTED
+
 ### Feb 23, 2026 (Session 7)
 - **FIX**: Toast Notification Visibility & Error Messages
   - Repositioned toasts to `top-center` for better visibility
