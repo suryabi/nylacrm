@@ -239,19 +239,8 @@ export default function LeadDiscovery() {
       // Import each outlet as a lead
       for (const outlet of outletsToImport) {
         try {
-          // Extract city info from selected city
-          const cityStateMap = {
-            'Bengaluru': { state: 'Karnataka', territory: 'South India' },
-            'Chennai': { state: 'Tamil Nadu', territory: 'South India' },
-            'Hyderabad': { state: 'Telangana', territory: 'South India' },
-            'Mumbai': { state: 'Maharashtra', territory: 'West India' },
-            'Pune': { state: 'Maharashtra', territory: 'West India' },
-            'Delhi': { state: 'Delhi', territory: 'North India' },
-            'Kolkata': { state: 'West Bengal', territory: 'East India' },
-            'Ahmedabad': { state: 'Gujarat', territory: 'West India' }
-          };
-          
-          const locationInfo = cityStateMap[selectedCity] || { state: 'Unknown', territory: 'Unknown' };
+          // Get location info from master locations
+          const locationInfo = getLocationInfoForCity(selectedCity);
           
           // Calculate tier safely
           const priceStr = outlet.price_range || '';
