@@ -327,6 +327,155 @@ ${googleMapsLink}`;
     }
   };
 
+  const fetchContract = async (accountId) => {
+    setLoadingContract(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_URL}/accounts/${accountId}/contract`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setContract(response.data.contract);
+    } catch (error) {
+      console.log('No contract available');
+    } finally {
+      setLoadingContract(false);
+    }
+  };
+
+  const handleContractUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Only PDF and DOC/DOCX files are allowed');
+      return;
+    }
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File size must be less than 5 MB');
+      return;
+    }
+
+    setUploadingContract(true);
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await axios.post(
+        `${API_URL}/accounts/${account.account_id}/contract`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          },
+          withCredentials: true
+        }
+      );
+
+      setContract(response.data.contract);
+      toast.success(response.data.message || 'Contract uploaded successfully');
+    } catch (error) {
+      const errorMessage = error.response?.data?.detail || 'Failed to upload contract';
+      toast.error(errorMessage, { description: 'Please try again', duration: 6000 });
+    } finally {
+      setUploadingContract(false);
+      if (contractInputRef.current) {
+        contractInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleContractDownload = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(
+        `${API_URL}/accounts/${account.account_id}/contract/download`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
+        }
+      );
+
+      const contractData = response.data.contract;
+      if (!contractData?.file_data) {
+        toast.error('Contract file not found');
+        return;
+      }
+
+      // Decode base64 and create download
+      const byteCharacters = atob(contractData.file_data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: contractData.content_type });
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = contractData.file_name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error('Failed to download contract');
+    }
+  };
+
+  const handleContractDelete = async () => {
+    if (!window.confirm('Are you sure you want to delete this contract?')) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(
+        `${API_URL}/accounts/${account.account_id}/contract`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
+        }
+      );
+      setContract(null);
+      toast.success('Contract deleted successfully');
+    } catch (error) {
+      const errorMessage = error.response?.data?.detail || 'Failed to delete contract';
+      toast.error(errorMessage, { duration: 6000 });
+    }
+  };
+
+  const handleContractReview = async (action) => {
+    setReviewingContract(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.put(
+        `${API_URL}/accounts/${account.account_id}/contract/review`,
+        { action, comment: reviewComment },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
+        }
+      );
+      setContract(response.data.contract);
+      setReviewComment('');
+      setShowReviewForm(false);
+      toast.success(response.data.message || `Contract ${action.replace('_', ' ')}`);
+    } catch (error) {
+      const errorMessage = error.response?.data?.detail || 'Failed to review contract';
+      toast.error(errorMessage, { duration: 6000 });
+    } finally {
+      setReviewingContract(false);
+    }
+  };
+
+  const canApproveContract = user && CONTRACT_APPROVER_ROLES.includes(user.role);
+
   const handleSave = async () => {
     setSaving(true);
     try {
