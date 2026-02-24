@@ -269,11 +269,14 @@ export default function LeadDetail() {
   const handleStatusChange = async (newStatus) => {
     try {
       await leadsAPI.update(id, { status: newStatus });
-      toast.success('Status updated');
+      toast.success('Status updated successfully');
       fetchData();
     } catch (error) {
       const errorMessage = error.response?.data?.detail || 'Failed to update status';
-      toast.error(errorMessage);
+      toast.error(errorMessage, {
+        description: 'Status change was not saved',
+        duration: 6000
+      });
     }
   };
 
