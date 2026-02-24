@@ -49,6 +49,7 @@ import Inventory from './pages/Inventory';
 import QualityControl from './pages/QualityControl';
 import Assets from './pages/Assets';
 import Vendors from './pages/Vendors';
+import MasterLocations from './pages/MasterLocations';
 import '@/App.css';
 import { useActivityTracker } from './hooks/useActivityTracker';
 
