@@ -940,12 +940,13 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
     }
   };
 
-  const territoryStates = formData.territory && TERRITORY_LOCATIONS[formData.territory] 
-    ? Object.keys(TERRITORY_LOCATIONS[formData.territory].states)
+  // Get available states and cities from master locations
+  const territoryStates = formData.territory 
+    ? getStateNamesByTerritoryName(formData.territory)
     : [];
 
-  const stateCities = formData.state && formData.territory && TERRITORY_LOCATIONS[formData.territory]
-    ? TERRITORY_LOCATIONS[formData.territory].states[formData.state] || []
+  const stateCities = formData.state 
+    ? getCityNamesByStateName(formData.state)
     : [];
 
   if (!user) return null;
