@@ -64,11 +64,20 @@ export default function AddEditLead() {
   const isEdit = !!id;
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState([]);
+  
+  // Master locations from API
+  const { 
+    territories: masterTerritories, 
+    getStateNamesByTerritoryName, 
+    getCityNamesByStateName 
+  } = useMasterLocations();
+  
   // Map user territory to valid region values
   const getInitialRegion = () => {
-    const validRegions = ['North India', 'South India', 'West India', 'East India'];
-    if (user?.territory && validRegions.includes(user.territory)) {
-      return user.territory;
+    // Check if user territory matches any master territory
+    if (user?.territory && masterTerritories.length > 0) {
+      const matchingTerritory = masterTerritories.find(t => t.name === user.territory);
+      if (matchingTerritory) return user.territory;
     }
     return ''; // User must select if territory doesn't match
   };
@@ -83,7 +92,7 @@ export default function AddEditLead() {
     city: '',
     state: '',
     country: 'India',
-    region: getInitialRegion(),
+    region: '',
     status: 'new',
     source: '',
     assigned_to: '',
@@ -96,6 +105,16 @@ export default function AddEditLead() {
     notes: '',
     estimated_value: ''
   });
+  
+  // Set initial region when user or masterTerritories change
+  useEffect(() => {
+    if (!isEdit && masterTerritories.length > 0 && !formData.region) {
+      const initialRegion = getInitialRegion();
+      if (initialRegion) {
+        setFormData(prev => ({ ...prev, region: initialRegion }));
+      }
+    }
+  }, [user, masterTerritories]);
 
   useEffect(() => {
     fetchUsers();
