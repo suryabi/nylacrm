@@ -626,6 +626,13 @@ function AddTeamMemberForm({ onSuccess }) {
     is_active: true
   });
 
+  // Master locations from API
+  const { 
+    territories, 
+    getStateNamesByTerritoryName, 
+    getCityNamesByStateName 
+  } = useMasterLocations();
+
   React.useEffect(() => {
     const fetchManagers = async () => {
       try {
