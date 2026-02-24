@@ -358,15 +358,21 @@ export default function LeadsList() {
     return <div className="flex justify-center py-12">Loading leads...</div>;
   }
 
+  const hasActiveFilters = searchQuery || statusFilter !== 'all' || territoryFilter !== 'all' || 
+    stateFilter !== 'all' || cityFilter !== 'all' || assignedToFilter !== 'all' || timeFilter !== 'all';
+
   return (
     <div className="space-y-6" data-testid="leads-list-page">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold">Leads</h1>
+          <h1 className="text-3xl font-semibold flex items-center gap-3">
+            <Filter className="w-8 h-8 text-primary" />
+            Leads
+          </h1>
           <p className="text-muted-foreground mt-1">
             {totalLeads} {totalLeads === 1 ? 'lead' : 'leads'} found
-            {timeFilter && (
+            {timeFilter !== 'all' && (
               <span className="ml-2 text-primary font-medium">
                 ({TIME_FILTERS.find(f => f.value === timeFilter)?.label || timeFilter})
               </span>
@@ -391,15 +397,162 @@ export default function LeadsList() {
         </div>
       </div>
 
+      {/* Filters Section - Outside Grid */}
+      <Card className="p-4 bg-white">
+        <div className="flex items-center gap-2 mb-3">
+          <Filter className="w-4 h-4 text-muted-foreground" />
+          <span className="text-sm font-medium text-muted-foreground">Filters</span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+          {/* Time Period */}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Time Period</label>
+            <Select value={timeFilter} onValueChange={setTimeFilter}>
+              <SelectTrigger className="h-9" data-testid="leads-time-filter">
+                <SelectValue placeholder="All Time" />
+              </SelectTrigger>
+              <SelectContent>
+                {TIME_FILTERS.map(filter => (
+                  <SelectItem key={filter.value} value={filter.value}>{filter.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Territory */}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Territory</label>
+            <Select value={territoryFilter} onValueChange={(v) => {
+              setTerritoryFilter(v);
+              setStateFilter('all');
+              setCityFilter('all');
+            }}>
+              <SelectTrigger className="h-9" data-testid="leads-territory-filter">
+                <SelectValue placeholder="All Territories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Territories</SelectItem>
+                {TERRITORIES.map(territory => (
+                  <SelectItem key={territory} value={territory}>{territory}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* State */}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">State</label>
+            <Select value={stateFilter} onValueChange={(v) => {
+              setStateFilter(v);
+              setCityFilter('all');
+            }}>
+              <SelectTrigger className="h-9" data-testid="leads-state-filter">
+                <SelectValue placeholder="All States" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All States</SelectItem>
+                {territoryFilter !== 'all' && TERRITORY_STATES[territoryFilter]?.map(state => (
+                  <SelectItem key={state} value={state}>{state}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* City */}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">City</label>
+            <Select value={cityFilter} onValueChange={setCityFilter}>
+              <SelectTrigger className="h-9" data-testid="leads-city-filter">
+                <SelectValue placeholder="All Cities" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Cities</SelectItem>
+                {stateFilter !== 'all' && STATE_CITIES[stateFilter]?.map(city => (
+                  <SelectItem key={city} value={city}>{city}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Status */}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Status</label>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-9" data-testid="leads-status-filter">
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="new">New</SelectItem>
+                <SelectItem value="contacted">Contacted</SelectItem>
+                <SelectItem value="qualified">Qualified</SelectItem>
+                <SelectItem value="not_qualified">Not Qualified</SelectItem>
+                <SelectItem value="in_progress">In Progress</SelectItem>
+                <SelectItem value="trial_in_progress">Trial in Progress</SelectItem>
+                <SelectItem value="proposal_shared">Proposal Shared</SelectItem>
+                <SelectItem value="proposal_approved_by_customer">Proposal Approved</SelectItem>
+                <SelectItem value="won">Won</SelectItem>
+                <SelectItem value="lost">Lost</SelectItem>
+                <SelectItem value="future_followup">Future Follow up</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Assigned To */}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Sales Resource</label>
+            <Select value={assignedToFilter} onValueChange={setAssignedToFilter}>
+              <SelectTrigger className="h-9" data-testid="leads-assigned-filter">
+                <SelectValue placeholder="All Resources" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Resources</SelectItem>
+                {users.map(u => (
+                  <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Reset Button */}
+          <div className="space-y-1 flex flex-col justify-end">
+            <Button 
+              variant="outline" 
+              onClick={handleResetFilters}
+              className="h-9 w-full"
+              disabled={!hasActiveFilters}
+              data-testid="leads-reset-filters"
+            >
+              Reset
+            </Button>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="mt-3 pt-3 border-t">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search by company name, contact, or lead ID..."
+              className="pl-9 h-9"
+              data-testid="leads-search-input"
+            />
+          </div>
+        </div>
+      </Card>
+
       {/* Leads Table */}
       {displayLeads.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-lg border border-border">
           <p className="text-muted-foreground mb-6" data-testid="no-leads-message">
-            {searchQuery || statusFilter !== 'all' || cityFilter !== 'all' || assignedToFilter !== 'all'
+            {hasActiveFilters
               ? 'No leads found matching your filters.'
               : 'No leads yet. Add your first lead to get started!'}
           </p>
-          {(searchQuery || statusFilter !== 'all' || cityFilter !== 'all' || assignedToFilter !== 'all') && (
+          {hasActiveFilters && (
             <Button onClick={handleResetFilters} variant="outline" className="rounded-full">
               Clear All Filters
             </Button>
