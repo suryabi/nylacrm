@@ -56,13 +56,27 @@ Build a comprehensive, mobile-ready Sales CRM application with:
   - **Lead cards** display: Company name, Lead ID, contact, location, category, assigned user
   - **Filters**: Search, City, Assigned To, Category, Reset button
   - **Activity Log Dialog**: Triggered when dragging lead between statuses
-    - Shows from/to status change visually
-    - Interaction method selection (Call, Visit, Email, WhatsApp, SMS, Other)
-    - Description field for logging activity
-    - Creates activity record and updates status on submit
-  - **Navigation**: Toggle between List/Kanban views, "Pipeline" link in sidebar
-  - Files: `LeadsKanban.js`, updated `App.js`, `DashboardLayout.js`, `LeadsList.js`
+  - **Move To Dropdown**: Quick status change via arrow icon on each card (no dragging needed)
+  - **Scroll Buttons**: Left/right arrows for easy navigation across columns
+  - **Auto-scroll**: When dragging near edges, board scrolls automatically
   - Status: VERIFIED - 100% test success rate (16/16 tests)
+
+- **FEATURE**: Sales/Production Context Switching
+  - **Context Switcher**: Toggle buttons in sidebar (Sales | Production)
+  - **Access Rules**:
+    - CEO, Director: Can access both contexts
+    - Users: Based on department field (Sales, Production, or Both)
+  - **Department Field**: Added to User model and Team Management forms
+  - **Production Modules** (placeholder pages):
+    - Maintenance: Equipment scheduling and tracking
+    - Inventory: Stock management with levels and alerts
+    - Quality Control: QC test tracking with TDS/pH values
+    - Assets: Company asset tracking
+    - Vendors: Supplier management
+  - **Shared Module**: SKU Management accessible in both contexts
+  - **Navigation**: Context-aware sidebar navigation
+  - Files: `AppContextContext.js`, `DashboardLayout.js`, Production pages
+  - Status: VERIFIED - 100% test success rate (25/25 tests)
 
 ### Feb 23, 2026 (Session 7)
 - **FIX**: Toast Notification Visibility & Error Messages
