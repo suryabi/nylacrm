@@ -6551,6 +6551,348 @@ async def review_account_contract(
     
     return {'contract': updated, 'message': f'Contract {action.replace("_", " ")}'}
 
+# ============= MASTER LOCATIONS API =============
+
+class Territory(BaseModel):
+    id: Optional[str] = None
+    name: str
+    code: str  # e.g., "north_india", "south_india"
+    is_active: bool = True
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+class State(BaseModel):
+    id: Optional[str] = None
+    name: str
+    code: str  # e.g., "karnataka", "tamil_nadu"
+    territory_id: str
+    is_active: bool = True
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+class City(BaseModel):
+    id: Optional[str] = None
+    name: str
+    code: str  # e.g., "bengaluru", "chennai"
+    state_id: str
+    is_active: bool = True
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+# Initialize default territories, states, and cities if not exists
+@app.on_event("startup")
+async def init_master_locations():
+    """Initialize default Indian territories, states, and cities"""
+    
+    # Check if territories already exist
+    existing_count = await db.master_territories.count_documents({})
+    if existing_count > 0:
+        return  # Already initialized
+    
+    # Default territories
+    territories_data = [
+        {"name": "North India", "code": "north_india"},
+        {"name": "South India", "code": "south_india"},
+        {"name": "West India", "code": "west_india"},
+        {"name": "East India", "code": "east_india"},
+        {"name": "Central India", "code": "central_india"},
+    ]
+    
+    territory_map = {}
+    for t in territories_data:
+        territory_id = str(uuid.uuid4())
+        territory_map[t["code"]] = territory_id
+        await db.master_territories.insert_one({
+            "id": territory_id,
+            "name": t["name"],
+            "code": t["code"],
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        })
+    
+    # Default states by territory
+    states_data = {
+        "north_india": [
+            {"name": "Delhi NCR", "code": "delhi_ncr"},
+            {"name": "Uttar Pradesh", "code": "uttar_pradesh"},
+            {"name": "Punjab", "code": "punjab"},
+            {"name": "Haryana", "code": "haryana"},
+            {"name": "Rajasthan", "code": "rajasthan"},
+            {"name": "Himachal Pradesh", "code": "himachal_pradesh"},
+            {"name": "Uttarakhand", "code": "uttarakhand"},
+            {"name": "Jammu & Kashmir", "code": "jammu_kashmir"},
+        ],
+        "south_india": [
+            {"name": "Karnataka", "code": "karnataka"},
+            {"name": "Tamil Nadu", "code": "tamil_nadu"},
+            {"name": "Kerala", "code": "kerala"},
+            {"name": "Andhra Pradesh", "code": "andhra_pradesh"},
+            {"name": "Telangana", "code": "telangana"},
+        ],
+        "west_india": [
+            {"name": "Maharashtra", "code": "maharashtra"},
+            {"name": "Gujarat", "code": "gujarat"},
+            {"name": "Goa", "code": "goa"},
+        ],
+        "east_india": [
+            {"name": "West Bengal", "code": "west_bengal"},
+            {"name": "Bihar", "code": "bihar"},
+            {"name": "Odisha", "code": "odisha"},
+            {"name": "Jharkhand", "code": "jharkhand"},
+            {"name": "Assam", "code": "assam"},
+        ],
+        "central_india": [
+            {"name": "Madhya Pradesh", "code": "madhya_pradesh"},
+            {"name": "Chhattisgarh", "code": "chhattisgarh"},
+        ],
+    }
+    
+    state_map = {}
+    for territory_code, states in states_data.items():
+        territory_id = territory_map[territory_code]
+        for s in states:
+            state_id = str(uuid.uuid4())
+            state_map[s["code"]] = state_id
+            await db.master_states.insert_one({
+                "id": state_id,
+                "name": s["name"],
+                "code": s["code"],
+                "territory_id": territory_id,
+                "is_active": True,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            })
+    
+    # Default cities by state
+    cities_data = {
+        "delhi_ncr": ["New Delhi", "Gurugram", "Noida", "Faridabad", "Ghaziabad"],
+        "uttar_pradesh": ["Lucknow", "Kanpur", "Agra", "Varanasi", "Prayagraj", "Meerut"],
+        "punjab": ["Chandigarh", "Ludhiana", "Amritsar", "Jalandhar", "Patiala"],
+        "haryana": ["Gurugram", "Faridabad", "Panipat", "Ambala", "Karnal"],
+        "rajasthan": ["Jaipur", "Jodhpur", "Udaipur", "Kota", "Ajmer"],
+        "karnataka": ["Bengaluru", "Mysuru", "Hubli", "Mangaluru", "Belgaum"],
+        "tamil_nadu": ["Chennai", "Coimbatore", "Madurai", "Tiruchirappalli", "Salem"],
+        "kerala": ["Thiruvananthapuram", "Kochi", "Kozhikode", "Thrissur", "Kollam"],
+        "andhra_pradesh": ["Visakhapatnam", "Vijayawada", "Guntur", "Nellore", "Tirupati"],
+        "telangana": ["Hyderabad", "Warangal", "Nizamabad", "Karimnagar", "Khammam"],
+        "maharashtra": ["Mumbai", "Pune", "Nagpur", "Nashik", "Aurangabad", "Thane"],
+        "gujarat": ["Ahmedabad", "Surat", "Vadodara", "Rajkot", "Gandhinagar"],
+        "goa": ["Panaji", "Margao", "Vasco da Gama"],
+        "west_bengal": ["Kolkata", "Howrah", "Durgapur", "Asansol", "Siliguri"],
+        "bihar": ["Patna", "Gaya", "Bhagalpur", "Muzaffarpur", "Darbhanga"],
+        "odisha": ["Bhubaneswar", "Cuttack", "Rourkela", "Berhampur", "Sambalpur"],
+        "madhya_pradesh": ["Bhopal", "Indore", "Jabalpur", "Gwalior", "Ujjain"],
+        "chhattisgarh": ["Raipur", "Bhilai", "Bilaspur", "Korba", "Durg"],
+    }
+    
+    for state_code, cities in cities_data.items():
+        if state_code not in state_map:
+            continue
+        state_id = state_map[state_code]
+        for city_name in cities:
+            city_code = city_name.lower().replace(" ", "_").replace("'", "")
+            await db.master_cities.insert_one({
+                "id": str(uuid.uuid4()),
+                "name": city_name,
+                "code": city_code,
+                "state_id": state_id,
+                "is_active": True,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            })
+    
+    logger.info("Master locations initialized with default Indian territories, states, and cities")
+
+# Get all locations (hierarchical)
+@api_router.get("/master-locations")
+async def get_master_locations(current_user: dict = Depends(get_current_user)):
+    """Get all territories with their states and cities"""
+    
+    territories = await db.master_territories.find({'is_active': True}, {'_id': 0}).sort('name', 1).to_list(100)
+    states = await db.master_states.find({'is_active': True}, {'_id': 0}).sort('name', 1).to_list(500)
+    cities = await db.master_cities.find({'is_active': True}, {'_id': 0}).sort('name', 1).to_list(5000)
+    
+    # Build hierarchical structure
+    state_cities = {}
+    for city in cities:
+        state_id = city['state_id']
+        if state_id not in state_cities:
+            state_cities[state_id] = []
+        state_cities[state_id].append(city)
+    
+    territory_states = {}
+    for state in states:
+        territory_id = state['territory_id']
+        if territory_id not in territory_states:
+            territory_states[territory_id] = []
+        state['cities'] = state_cities.get(state['id'], [])
+        territory_states[territory_id].append(state)
+    
+    result = []
+    for territory in territories:
+        territory['states'] = territory_states.get(territory['id'], [])
+        result.append(territory)
+    
+    return result
+
+# Get flat lists for dropdowns
+@api_router.get("/master-locations/flat")
+async def get_master_locations_flat(current_user: dict = Depends(get_current_user)):
+    """Get flat lists of territories, states, and cities for dropdowns"""
+    
+    territories = await db.master_territories.find({'is_active': True}, {'_id': 0}).sort('name', 1).to_list(100)
+    states = await db.master_states.find({'is_active': True}, {'_id': 0}).sort('name', 1).to_list(500)
+    cities = await db.master_cities.find({'is_active': True}, {'_id': 0}).sort('name', 1).to_list(5000)
+    
+    # Create lookup maps
+    territory_map = {t['id']: t['name'] for t in territories}
+    state_map = {s['id']: {'name': s['name'], 'territory_id': s['territory_id']} for s in states}
+    
+    # Add territory name to states
+    for state in states:
+        state['territory_name'] = territory_map.get(state['territory_id'], '')
+    
+    # Add state and territory names to cities
+    for city in cities:
+        state_info = state_map.get(city['state_id'], {})
+        city['state_name'] = state_info.get('name', '')
+        city['territory_id'] = state_info.get('territory_id', '')
+        city['territory_name'] = territory_map.get(city.get('territory_id'), '')
+    
+    return {
+        'territories': territories,
+        'states': states,
+        'cities': cities
+    }
+
+# CRUD for Territories
+@api_router.post("/master-locations/territories")
+async def create_territory(territory: Territory, current_user: dict = Depends(get_current_user)):
+    """Create a new territory"""
+    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    territory_data = territory.model_dump()
+    territory_data['id'] = str(uuid.uuid4())
+    territory_data['created_at'] = datetime.now(timezone.utc).isoformat()
+    territory_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.master_territories.insert_one(territory_data)
+    del territory_data['_id'] if '_id' in territory_data else None
+    
+    return territory_data
+
+@api_router.put("/master-locations/territories/{territory_id}")
+async def update_territory(territory_id: str, territory: Territory, current_user: dict = Depends(get_current_user)):
+    """Update a territory"""
+    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    update_data = territory.model_dump(exclude_unset=True)
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.master_territories.update_one({'id': territory_id}, {'$set': update_data})
+    
+    updated = await db.master_territories.find_one({'id': territory_id}, {'_id': 0})
+    return updated
+
+@api_router.delete("/master-locations/territories/{territory_id}")
+async def delete_territory(territory_id: str, current_user: dict = Depends(get_current_user)):
+    """Soft delete a territory"""
+    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    await db.master_territories.update_one(
+        {'id': territory_id}, 
+        {'$set': {'is_active': False, 'updated_at': datetime.now(timezone.utc).isoformat()}}
+    )
+    return {'message': 'Territory deleted'}
+
+# CRUD for States
+@api_router.post("/master-locations/states")
+async def create_state(state: State, current_user: dict = Depends(get_current_user)):
+    """Create a new state"""
+    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    state_data = state.model_dump()
+    state_data['id'] = str(uuid.uuid4())
+    state_data['created_at'] = datetime.now(timezone.utc).isoformat()
+    state_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.master_states.insert_one(state_data)
+    
+    return {k: v for k, v in state_data.items() if k != '_id'}
+
+@api_router.put("/master-locations/states/{state_id}")
+async def update_state(state_id: str, state: State, current_user: dict = Depends(get_current_user)):
+    """Update a state"""
+    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    update_data = state.model_dump(exclude_unset=True)
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.master_states.update_one({'id': state_id}, {'$set': update_data})
+    
+    updated = await db.master_states.find_one({'id': state_id}, {'_id': 0})
+    return updated
+
+@api_router.delete("/master-locations/states/{state_id}")
+async def delete_state(state_id: str, current_user: dict = Depends(get_current_user)):
+    """Soft delete a state"""
+    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    await db.master_states.update_one(
+        {'id': state_id}, 
+        {'$set': {'is_active': False, 'updated_at': datetime.now(timezone.utc).isoformat()}}
+    )
+    return {'message': 'State deleted'}
+
+# CRUD for Cities
+@api_router.post("/master-locations/cities")
+async def create_city(city: City, current_user: dict = Depends(get_current_user)):
+    """Create a new city"""
+    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    city_data = city.model_dump()
+    city_data['id'] = str(uuid.uuid4())
+    city_data['created_at'] = datetime.now(timezone.utc).isoformat()
+    city_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.master_cities.insert_one(city_data)
+    
+    return {k: v for k, v in city_data.items() if k != '_id'}
+
+@api_router.put("/master-locations/cities/{city_id}")
+async def update_city(city_id: str, city: City, current_user: dict = Depends(get_current_user)):
+    """Update a city"""
+    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    update_data = city.model_dump(exclude_unset=True)
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.master_cities.update_one({'id': city_id}, {'$set': update_data})
+    
+    updated = await db.master_cities.find_one({'id': city_id}, {'_id': 0})
+    return updated
+
+@api_router.delete("/master-locations/cities/{city_id}")
+async def delete_city(city_id: str, current_user: dict = Depends(get_current_user)):
+    """Soft delete a city"""
+    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    await db.master_cities.update_one(
+        {'id': city_id}, 
+        {'$set': {'is_active': False, 'updated_at': datetime.now(timezone.utc).isoformat()}}
+    )
+    return {'message': 'City deleted'}
+
 # ============= INCLUDE ROUTER =============
 
 app.include_router(api_router)
