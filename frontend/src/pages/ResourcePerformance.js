@@ -96,7 +96,7 @@ export default function ResourcePerformance() {
           headers: { Authorization: `Bearer ${token}` },
           withCredentials: true 
         });
-        const team = usersRes.data.filter(u => ['Head of Business', 'Regional Sales Manager', 'National Sales Head'].includes(u.role) && u.is_active);
+        const team = usersRes.data.filter(u => ['Head of Business', 'Regional Sales Manager', 'National Sales Head', 'Partner - Sales'].includes(u.role) && u.is_active);
         
         const mockResources = team.map(member => ({
           id: member.id,
