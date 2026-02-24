@@ -305,8 +305,9 @@ ${googleMapsLink}`;
         setAddressSearchQuery(data.delivery_address.address_line1 || '');
       }
       
-      // Fetch invoices
+      // Fetch invoices and contract
       fetchInvoices(id);
+      fetchContract(data.account_id || id);
     } catch (error) {
       toast.error('Failed to load account details');
       navigate('/accounts');
