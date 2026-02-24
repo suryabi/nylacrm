@@ -846,101 +846,169 @@ export default function LeadDetail() {
 
         {/* Right Column - Activity Timeline */}
         <div className="space-y-6">
-          {/* Add Activity Button */}
-          <Card className="p-6">
-            <Button
-              onClick={() => setShowActivityForm(!showActivityForm)}
-              variant={showActivityForm ? 'outline' : 'default'}
-              className="w-full"
-              data-testid="toggle-activity-form"
-            >
-              {showActivityForm ? 'Cancel' : '+ Log Activity'}
-            </Button>
-          </Card>
+          {/* Log Activity Section - Featured Component */}
+          <Card className={`overflow-hidden transition-all duration-300 ${showActivityForm ? 'ring-2 ring-primary/20 shadow-lg' : 'hover:shadow-md'}`}>
+            {/* Header with gradient */}
+            <div className={`p-4 ${showActivityForm ? 'bg-gradient-to-r from-primary/10 via-primary/5 to-transparent' : 'bg-gradient-to-r from-emerald-500 to-teal-500'}`}>
+              <Button
+                onClick={() => setShowActivityForm(!showActivityForm)}
+                variant={showActivityForm ? 'outline' : 'ghost'}
+                className={`w-full h-12 text-base font-semibold transition-all ${
+                  showActivityForm 
+                    ? 'bg-white hover:bg-gray-50 border-2' 
+                    : 'bg-white/10 hover:bg-white/20 text-white border-white/30'
+                }`}
+                data-testid="toggle-activity-form"
+              >
+                {showActivityForm ? (
+                  <>
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Cancel
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Log Activity
+                  </>
+                )}
+              </Button>
+            </div>
 
-          {/* Activity Form */}
-          {showActivityForm && (
-            <Card className="p-6">
-              <h3 className="text-sm font-semibold mb-4">Log New Activity</h3>
-              <form onSubmit={handleAddActivity} className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Interaction Method *</Label>
-                  <Select value={interactionMethod} onValueChange={(value) => {
-                    setInteractionMethod(value);
-                    // Auto-set activity type based on interaction method
-                    if (value === 'phone_call') setActivityType('call');
-                    else if (value === 'customer_visit') setActivityType('visit');
-                    else if (value === 'email') setActivityType('email');
-                    else if (value === 'whatsapp' || value === 'sms') setActivityType('call');
-                    else setActivityType('note');
-                  }}>
-                    <SelectTrigger data-testid="interaction-method-select">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="phone_call">📞 Phone Call</SelectItem>
-                      <SelectItem value="customer_visit">🚗 Customer Visit</SelectItem>
-                      <SelectItem value="email">✉️ Email</SelectItem>
-                      <SelectItem value="whatsapp">💬 WhatsApp</SelectItem>
-                      <SelectItem value="sms">📱 SMS</SelectItem>
-                      <SelectItem value="other">📝 Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Description *</Label>
-                  <Textarea
-                    value={activityDescription}
-                    onChange={(e) => setActivityDescription(e.target.value)}
-                    placeholder="Describe what happened during this interaction..."
-                    rows={4}
-                    required
-                    data-testid="activity-description-input"
-                  />
-                </div>
-                
-                {/* Status Update */}
-                <div className="space-y-2 pt-2 border-t">
-                  <Label>Update Lead Status</Label>
-                  <Select value={activityStatus || "keep_current"} onValueChange={(val) => setActivityStatus(val === "keep_current" ? "" : val)}>
-                    <SelectTrigger data-testid="activity-status-select">
-                      <SelectValue placeholder="Keep current status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="keep_current">Keep current status</SelectItem>
-                      <SelectItem value="new">New</SelectItem>
-                      <SelectItem value="contacted">Contacted</SelectItem>
-                      <SelectItem value="qualified">Qualified</SelectItem>
-                      <SelectItem value="not_qualified">Not Qualified</SelectItem>
-                      <SelectItem value="in_progress">In Progress</SelectItem>
-                      <SelectItem value="trial_in_progress">Trial in Progress</SelectItem>
-                      <SelectItem value="proposal_shared">Proposal Shared</SelectItem>
-                      <SelectItem value="proposal_approved_by_customer">Proposal Approved by Customer</SelectItem>
-                      <SelectItem value="won">Won</SelectItem>
-                      <SelectItem value="lost">Lost</SelectItem>
-                      <SelectItem value="future_followup">Future Follow up</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                {/* Follow-up Date */}
-                <div className="space-y-2">
-                  <Label>Next Follow-up Date</Label>
-                  <Input
-                    type="date"
-                    value={activityFollowUpDate}
-                    onChange={(e) => setActivityFollowUpDate(e.target.value)}
-                    min={new Date().toISOString().split('T')[0]}
-                    data-testid="activity-followup-date"
-                  />
-                </div>
-                
-                <Button type="submit" className="w-full h-12" disabled={submittingActivity} data-testid="submit-activity-button">
-                  {submittingActivity ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : 'Log Activity'}
-                </Button>
-              </form>
-            </Card>
-          )}
+            {/* Activity Form - Expanded */}
+            {showActivityForm && (
+              <div className="p-6 bg-gradient-to-b from-gray-50/50 to-white">
+                <form onSubmit={handleAddActivity} className="space-y-5">
+                  {/* Interaction Method - Prominent Selection */}
+                  <div className="space-y-3">
+                    <Label className="text-sm font-semibold text-gray-700">How did you interact? *</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { value: 'phone_call', icon: '📞', label: 'Call', color: 'hover:bg-blue-50 hover:border-blue-300' },
+                        { value: 'customer_visit', icon: '🚗', label: 'Visit', color: 'hover:bg-green-50 hover:border-green-300' },
+                        { value: 'email', icon: '✉️', label: 'Email', color: 'hover:bg-purple-50 hover:border-purple-300' },
+                        { value: 'whatsapp', icon: '💬', label: 'WhatsApp', color: 'hover:bg-emerald-50 hover:border-emerald-300' },
+                        { value: 'sms', icon: '📱', label: 'SMS', color: 'hover:bg-orange-50 hover:border-orange-300' },
+                        { value: 'other', icon: '📝', label: 'Other', color: 'hover:bg-gray-50 hover:border-gray-300' },
+                      ].map((method) => (
+                        <button
+                          key={method.value}
+                          type="button"
+                          onClick={() => {
+                            setInteractionMethod(method.value);
+                            if (method.value === 'phone_call') setActivityType('call');
+                            else if (method.value === 'customer_visit') setActivityType('visit');
+                            else if (method.value === 'email') setActivityType('email');
+                            else if (method.value === 'whatsapp' || method.value === 'sms') setActivityType('call');
+                            else setActivityType('note');
+                          }}
+                          className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${
+                            interactionMethod === method.value
+                              ? 'bg-primary/10 border-primary shadow-sm'
+                              : `bg-white border-gray-200 ${method.color}`
+                          }`}
+                          data-testid={`interaction-${method.value}`}
+                        >
+                          <span className="text-xl">{method.icon}</span>
+                          <span className={`text-xs font-medium ${interactionMethod === method.value ? 'text-primary' : 'text-gray-600'}`}>
+                            {method.label}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Description - Larger textarea */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-gray-700">What happened? *</Label>
+                    <Textarea
+                      value={activityDescription}
+                      onChange={(e) => setActivityDescription(e.target.value)}
+                      placeholder="Describe the key points of this interaction..."
+                      rows={4}
+                      required
+                      className="resize-none bg-white border-2 border-gray-200 focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-xl text-base"
+                      data-testid="activity-description-input"
+                    />
+                  </div>
+                  
+                  {/* Status & Follow-up in a highlighted section */}
+                  <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4 space-y-4 border border-amber-100">
+                    <div className="flex items-center gap-2 text-amber-700">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      <span className="text-xs font-semibold uppercase tracking-wide">Quick Actions</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Status Update */}
+                      <div className="space-y-2">
+                        <Label className="text-xs font-medium text-gray-600">Update Status</Label>
+                        <Select value={activityStatus || "keep_current"} onValueChange={(val) => setActivityStatus(val === "keep_current" ? "" : val)}>
+                          <SelectTrigger className="bg-white h-10" data-testid="activity-status-select">
+                            <SelectValue placeholder="Keep current" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="keep_current">Keep current status</SelectItem>
+                            <SelectItem value="new">New</SelectItem>
+                            <SelectItem value="contacted">Contacted</SelectItem>
+                            <SelectItem value="qualified">Qualified</SelectItem>
+                            <SelectItem value="not_qualified">Not Qualified</SelectItem>
+                            <SelectItem value="in_progress">In Progress</SelectItem>
+                            <SelectItem value="trial_in_progress">Trial in Progress</SelectItem>
+                            <SelectItem value="proposal_shared">Proposal Shared</SelectItem>
+                            <SelectItem value="proposal_approved_by_customer">Proposal Approved</SelectItem>
+                            <SelectItem value="won">Won</SelectItem>
+                            <SelectItem value="lost">Lost</SelectItem>
+                            <SelectItem value="future_followup">Future Follow up</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      {/* Follow-up Date */}
+                      <div className="space-y-2">
+                        <Label className="text-xs font-medium text-gray-600">Next Follow-up</Label>
+                        <Input
+                          type="date"
+                          value={activityFollowUpDate}
+                          onChange={(e) => setActivityFollowUpDate(e.target.value)}
+                          min={new Date().toISOString().split('T')[0]}
+                          className="bg-white h-10"
+                          data-testid="activity-followup-date"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Submit Button - Prominent */}
+                  <Button 
+                    type="submit" 
+                    className="w-full h-14 text-base font-semibold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 shadow-lg shadow-emerald-500/25 rounded-xl transition-all hover:shadow-xl hover:shadow-emerald-500/30" 
+                    disabled={submittingActivity} 
+                    data-testid="submit-activity-button"
+                  >
+                    {submittingActivity ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> 
+                        Saving Activity...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Save Activity
+                      </>
+                    )}
+                  </Button>
+                </form>
+              </div>
+            )}
+          </Card>
 
           {/* Proposal Section */}
           <Card className="p-6" data-testid="proposal-section">
