@@ -233,7 +233,11 @@ export default function DailyStatusUpdate() {
       
       fetchPastStatuses();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to save status');
+      const errorMessage = error.response?.data?.detail || 'Failed to save status';
+      toast.error(errorMessage, {
+        description: 'Your status update was not saved',
+        duration: 6000
+      });
     } finally {
       setLoading(false);
     }
