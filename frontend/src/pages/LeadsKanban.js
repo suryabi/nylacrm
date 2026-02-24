@@ -319,6 +319,15 @@ export default function LeadsKanban() {
     fetchData();
   }, [fetchData]);
   
+  // Cleanup auto-scroll on unmount
+  useEffect(() => {
+    return () => {
+      if (autoScrollIntervalRef.current) {
+        clearInterval(autoScrollIntervalRef.current);
+      }
+    };
+  }, []);
+  
   // Filter leads
   const filteredLeads = leads.filter(lead => {
     if (searchQuery) {
