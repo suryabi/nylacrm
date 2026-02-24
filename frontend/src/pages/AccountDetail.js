@@ -1135,6 +1135,196 @@ ${googleMapsLink}`;
               </div>
             </div>
           </Card>
+
+          {/* Signed Contract Section */}
+          <Card className="overflow-hidden">
+            <div className="p-4 bg-gradient-to-r from-indigo-500 to-purple-500">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <FileCheck className="h-5 w-5" />
+                Signed Contract
+              </h2>
+              <p className="text-sm text-white/80 mt-1">Customer signed agreement document</p>
+            </div>
+            
+            <div className="p-6">
+              {loadingContract ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : contract ? (
+                <div className="space-y-4">
+                  {/* Contract Status Badge */}
+                  <div className="flex items-center justify-between">
+                    <Badge className={`${contractStatusConfig[contract.status]?.color || 'bg-gray-100'} border px-3 py-1`}>
+                      {React.createElement(contractStatusConfig[contract.status]?.icon || Clock, { className: 'h-3.5 w-3.5 mr-1.5 inline' })}
+                      {contractStatusConfig[contract.status]?.label || contract.status}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">v{contract.version}</span>
+                  </div>
+
+                  {/* Contract Info */}
+                  <div className="bg-muted/30 rounded-lg p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium text-sm">{contract.file_name}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <p>Uploaded by {contract.uploaded_by_name} on {format(new Date(contract.uploaded_at), 'MMM d, yyyy h:mm a')}</p>
+                      <p>Size: {(contract.file_size / 1024).toFixed(1)} KB</p>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2">
+                    <Button onClick={handleContractDownload} variant="outline" size="sm" className="flex-1">
+                      <Download className="h-4 w-4 mr-1.5" /> Download
+                    </Button>
+                    {contract.status === 'pending_review' && contract.uploaded_by === user?.id && (
+                      <Button onClick={handleContractDelete} variant="outline" size="sm" className="text-red-600 hover:text-red-700">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Replace Contract Button - visible when changes requested */}
+                  {contract.status === 'changes_requested' && (
+                    <div className="border-t pt-4">
+                      <p className="text-sm text-orange-600 mb-2">Changes were requested. Upload a revised contract:</p>
+                      <label className="w-full">
+                        <input
+                          ref={contractInputRef}
+                          type="file"
+                          accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                          onChange={handleContractUpload}
+                          className="hidden"
+                          data-testid="replace-contract-input"
+                        />
+                        <Button asChild variant="outline" className="w-full" disabled={uploadingContract}>
+                          <span>
+                            {uploadingContract ? (
+                              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Uploading...</>
+                            ) : (
+                              <><Upload className="h-4 w-4 mr-2" /> Upload Revised Contract</>
+                            )}
+                          </span>
+                        </Button>
+                      </label>
+                    </div>
+                  )}
+
+                  {/* Review Section for Approvers */}
+                  {canApproveContract && ['pending_review', 'revised'].includes(contract.status) && (
+                    <div className="border-t pt-4">
+                      {!showReviewForm ? (
+                        <Button onClick={() => setShowReviewForm(true)} className="w-full bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600">
+                          <MessageSquare className="h-4 w-4 mr-2" /> Review Contract
+                        </Button>
+                      ) : (
+                        <div className="space-y-3 bg-indigo-50 p-4 rounded-lg border border-indigo-200">
+                          <Label className="text-sm font-medium">Review Comments (optional)</Label>
+                          <Textarea
+                            value={reviewComment}
+                            onChange={(e) => setReviewComment(e.target.value)}
+                            placeholder="Add comments about the contract..."
+                            rows={3}
+                            className="bg-white"
+                            data-testid="contract-review-comment"
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={() => handleContractReview('approved')}
+                              className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                              disabled={reviewingContract}
+                              data-testid="approve-contract-btn"
+                            >
+                              {reviewingContract ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-1" />}
+                              Approve
+                            </Button>
+                            <Button
+                              onClick={() => handleContractReview('changes_requested')}
+                              variant="outline"
+                              className="flex-1 border-orange-300 text-orange-600 hover:bg-orange-50"
+                              disabled={reviewingContract}
+                              data-testid="request-changes-contract-btn"
+                            >
+                              <MessageSquare className="h-4 w-4 mr-1" /> Request Changes
+                            </Button>
+                            <Button
+                              onClick={() => handleContractReview('rejected')}
+                              variant="outline"
+                              className="flex-1 border-red-300 text-red-600 hover:bg-red-50"
+                              disabled={reviewingContract}
+                              data-testid="reject-contract-btn"
+                            >
+                              <XCircle className="h-4 w-4 mr-1" /> Reject
+                            </Button>
+                          </div>
+                          <Button variant="ghost" onClick={() => setShowReviewForm(false)} className="w-full text-muted-foreground">
+                            Cancel
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Review History */}
+                  {contract.review_comments?.length > 0 && (
+                    <div className="border-t pt-4">
+                      <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                        <MessageSquare className="h-4 w-4" /> Review History
+                      </h4>
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {contract.review_comments.map((comment, idx) => (
+                          <div key={comment.id || idx} className="bg-muted/30 rounded-lg p-3 text-sm">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-medium">{comment.reviewer_name}</span>
+                              <Badge variant="outline" className={`text-xs ${
+                                comment.action === 'approved' ? 'border-emerald-300 text-emerald-700' :
+                                comment.action === 'rejected' ? 'border-red-300 text-red-700' :
+                                'border-orange-300 text-orange-700'
+                              }`}>
+                                {comment.action.replace('_', ' ')}
+                              </Badge>
+                            </div>
+                            {comment.comment && <p className="text-muted-foreground">{comment.comment}</p>}
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {format(new Date(comment.created_at), 'MMM d, yyyy h:mm a')}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* No Contract - Upload Button */
+                <div className="text-center py-8">
+                  <FileCheck className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                  <p className="text-muted-foreground mb-4">No contract uploaded yet</p>
+                  <label className="inline-block">
+                    <input
+                      ref={contractInputRef}
+                      type="file"
+                      accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      onChange={handleContractUpload}
+                      className="hidden"
+                      data-testid="upload-contract-input"
+                    />
+                    <Button asChild className="bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600" disabled={uploadingContract}>
+                      <span>
+                        {uploadingContract ? (
+                          <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Uploading...</>
+                        ) : (
+                          <><Upload className="h-4 w-4 mr-2" /> Upload Signed Contract</>
+                        )}
+                      </span>
+                    </Button>
+                  </label>
+                  <p className="text-xs text-muted-foreground mt-2">PDF or DOC/DOCX (Max 5 MB)</p>
+                </div>
+              )}
+            </div>
+          </Card>
         </div>
       </div>
     </div>
