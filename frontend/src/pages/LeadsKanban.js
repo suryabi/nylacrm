@@ -341,6 +341,45 @@ export default function LeadsKanban() {
     return acc;
   }, {});
   
+  // Auto-scroll function for drag operations
+  const startAutoScroll = (direction) => {
+    if (autoScrollIntervalRef.current) return;
+    
+    const scrollSpeed = 15;
+    autoScrollIntervalRef.current = setInterval(() => {
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollLeft += direction === 'right' ? scrollSpeed : -scrollSpeed;
+      }
+    }, 16);
+  };
+  
+  const stopAutoScroll = () => {
+    if (autoScrollIntervalRef.current) {
+      clearInterval(autoScrollIntervalRef.current);
+      autoScrollIntervalRef.current = null;
+    }
+  };
+  
+  // Handle drag over the scroll container for auto-scroll
+  const handleContainerDragOver = (e) => {
+    if (!draggedLead) return;
+    
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    
+    const rect = container.getBoundingClientRect();
+    const mouseX = e.clientX;
+    const edgeSize = 100; // pixels from edge to trigger scroll
+    
+    if (mouseX < rect.left + edgeSize) {
+      startAutoScroll('left');
+    } else if (mouseX > rect.right - edgeSize) {
+      startAutoScroll('right');
+    } else {
+      stopAutoScroll();
+    }
+  };
+  
   // Drag handlers
   const handleDragStart = (e, lead) => {
     setDraggedLead(lead);
@@ -350,6 +389,7 @@ export default function LeadsKanban() {
   const handleDragEnd = () => {
     setDraggedLead(null);
     setDropTargetStatus(null);
+    stopAutoScroll();
   };
   
   const handleDragOver = (e) => {
