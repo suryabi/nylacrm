@@ -727,6 +727,7 @@ export default function LeadsKanban() {
                 onCardClick={handleCardClick}
                 users={users}
                 isDropTarget={dropTargetStatus === status.id}
+                onMoveToStatus={handleMoveToStatus}
               />
             ))}
           </div>
