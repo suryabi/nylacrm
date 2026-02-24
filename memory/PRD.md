@@ -29,6 +29,26 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 ## What's Been Implemented
 
 ### Feb 23, 2026 (Session 7)
+- **FIX**: Toast Notification Visibility & Error Messages
+  - Repositioned toasts to `top-center` for better visibility
+  - Enabled `richColors` - error toasts now have red background, success green
+  - Extended duration to 5 seconds (6 seconds for errors)
+  - Added close button for manual dismissal
+  - Expanded toast size for readability
+  - **Activity Logging Errors**:
+    - Now shows actual API error detail message (user-friendly)
+    - Added validation message "Please enter an activity description"
+    - Added description subtitle for context
+  - Files updated: `sonner.jsx`, `LeadDetail.js`, `DailyStatusUpdate.js`
+  - Status: IMPLEMENTED
+
+- **FEATURE**: Account Category Integration
+  - Lead-to-Account conversion now copies category, contact name, phone from lead
+  - Added migration endpoint to backfill existing accounts with categories
+  - Category stats now display in Accounts page stats cards
+  - Category badge shows on each account row
+  - Status: VERIFIED
+
 - **FEATURE**: Accounts List Page Redesign
   - Complete visual overhaul to match Account Performance page style
   - **New Filters** (same as Account Performance):
