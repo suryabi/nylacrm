@@ -241,19 +241,23 @@ export default function AddEditLead() {
     }
   };
 
-  const regionStates = formData.region ? Object.keys(LOCATIONS[formData.region]?.states || {}) : [];
+  // Get states based on selected region from master locations
+  const regionStates = formData.region 
+    ? getStateNamesByTerritoryName(formData.region) 
+    : [];
   
-  // Add current state if not in list
+  // Add current state if not in list (for edit mode compatibility)
   const availableStates = [...regionStates];
   if (formData.state && !availableStates.includes(formData.state)) {
     availableStates.push(formData.state);
   }
 
-  const stateCities = formData.state && formData.region 
-    ? LOCATIONS[formData.region]?.states[formData.state] || []
+  // Get cities based on selected state from master locations
+  const stateCities = formData.state 
+    ? getCityNamesByStateName(formData.state) 
     : [];
   
-  // Add current city if not in list
+  // Add current city if not in list (for edit mode compatibility)
   const availableCities = [...stateCities];
   if (formData.city && !availableCities.includes(formData.city)) {
     availableCities.push(formData.city);
