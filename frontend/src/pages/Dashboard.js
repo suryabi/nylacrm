@@ -67,6 +67,13 @@ export default function Dashboard() {
   const [cityFilter, setCityFilter] = useState('all');
   const [salesResource, setSalesResource] = useState('all');
 
+  // Master locations from API
+  const { 
+    territories: masterTerritories, 
+    getStateNamesByTerritoryName, 
+    getCityNamesByStateName 
+  } = useMasterLocations();
+
   useEffect(() => {
     fetchSalesTeam();
   }, []);
