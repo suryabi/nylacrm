@@ -80,9 +80,11 @@ function ProtectedRoute({ children }) {
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <AppRouter />
-      </BrowserRouter>
+      <AppContextProvider>
+        <BrowserRouter>
+          <AppRouter />
+        </BrowserRouter>
+      </AppContextProvider>
     </AuthProvider>
   );
 }
