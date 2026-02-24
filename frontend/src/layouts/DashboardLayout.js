@@ -174,10 +174,42 @@ export default function DashboardLayout({ children }) {
               <img src={NYLA_LOGO} alt="Nyla" className="h-10 w-10 rounded-lg object-cover" />
               <div>
                 <h1 className="text-white font-bold text-lg tracking-tight">Nyla</h1>
-                <p className="text-slate-400 text-xs">Sales CRM</p>
+                <p className="text-slate-400 text-xs">{currentContext === 'production' ? 'Production' : 'Sales CRM'}</p>
               </div>
             </div>
           </div>
+          
+          {/* Context Switcher */}
+          {canAccessBothContexts && (
+            <div className="px-4 py-3 border-b border-slate-700/50">
+              <div className="flex items-center gap-2 bg-slate-800 rounded-lg p-1">
+                <button
+                  onClick={() => handleContextSwitch('sales')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-xs font-medium transition-all ${
+                    currentContext === 'sales'
+                      ? 'bg-primary text-white'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                  }`}
+                  data-testid="context-switch-sales"
+                >
+                  <Store className="w-3.5 h-3.5" />
+                  Sales
+                </button>
+                <button
+                  onClick={() => handleContextSwitch('production')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-xs font-medium transition-all ${
+                    currentContext === 'production'
+                      ? 'bg-primary text-white'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                  }`}
+                  data-testid="context-switch-production"
+                >
+                  <Factory className="w-3.5 h-3.5" />
+                  Production
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Navigation */}
           <nav className="flex-1 py-4 overflow-y-auto scrollbar-thin">
