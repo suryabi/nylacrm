@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
-import { Plus, Search, Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Search, Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid, List } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Table,
