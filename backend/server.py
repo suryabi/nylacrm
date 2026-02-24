@@ -101,6 +101,67 @@ async def generate_lead_id(company: str, city: str) -> str:
     
     return lead_id
 
+
+def stamp_pdf_with_signature(pdf_data: bytes, approver_name: str, approval_date: str) -> bytes:
+    """
+    Stamp a PDF document with a digital signature (text overlay) at the bottom of the last page.
+    
+    Args:
+        pdf_data: The original PDF as bytes
+        approver_name: Name of the person who approved
+        approval_date: Date of approval
+    
+    Returns:
+        The stamped PDF as bytes
+    """
+    # Read the original PDF
+    pdf_reader = PdfReader(io.BytesIO(pdf_data))
+    pdf_writer = PdfWriter()
+    
+    # Copy all pages except the last one
+    for i, page in enumerate(pdf_reader.pages[:-1]):
+        pdf_writer.add_page(page)
+    
+    # Get the last page
+    last_page = pdf_reader.pages[-1]
+    page_width = float(last_page.mediabox.width)
+    page_height = float(last_page.mediabox.height)
+    
+    # Create a stamp overlay with the signature text
+    stamp_buffer = io.BytesIO()
+    stamp_canvas = canvas.Canvas(stamp_buffer, pagesize=(page_width, page_height))
+    
+    # Set font and color for the signature - subtle gray text
+    stamp_canvas.setFont("Helvetica", 8)
+    stamp_canvas.setFillColor(Color(0.4, 0.4, 0.4, alpha=0.8))  # Gray color
+    
+    # Signature text
+    signature_text = f"Approved by: {approver_name}  |  Date: {approval_date}"
+    
+    # Position at bottom center of the page (30 points from bottom)
+    text_width = stamp_canvas.stringWidth(signature_text, "Helvetica", 8)
+    x_position = (page_width - text_width) / 2
+    y_position = 30
+    
+    stamp_canvas.drawString(x_position, y_position, signature_text)
+    stamp_canvas.save()
+    
+    # Merge the stamp with the last page
+    stamp_buffer.seek(0)
+    stamp_pdf = PdfReader(stamp_buffer)
+    stamp_page = stamp_pdf.pages[0]
+    
+    last_page.merge_page(stamp_page)
+    pdf_writer.add_page(last_page)
+    
+    # Write the final PDF to bytes
+    output_buffer = io.BytesIO()
+    pdf_writer.write(output_buffer)
+    output_buffer.seek(0)
+    
+    return output_buffer.read()
+
+
 # ============= MODELS =============
 
 class UserRole(BaseModel):
