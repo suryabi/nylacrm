@@ -306,7 +306,10 @@ export default function LeadDetail() {
 
   const handleAddActivity = async (e) => {
     e.preventDefault();
-    if (!activityDescription.trim()) return;
+    if (!activityDescription.trim()) {
+      toast.error('Please enter an activity description');
+      return;
+    }
 
     setSubmittingActivity(true);
     try {
@@ -338,7 +341,15 @@ export default function LeadDetail() {
       setShowActivityForm(false);
       fetchData();
     } catch (error) {
-      toast.error('Failed to add activity');
+      console.error('Activity error:', error);
+      const errorMessage = error.response?.data?.detail 
+        || error.response?.data?.message 
+        || error.message 
+        || 'Failed to add activity. Please try again.';
+      toast.error(errorMessage, {
+        description: 'Unable to log activity',
+        duration: 6000
+      });
     } finally {
       setSubmittingActivity(false);
     }
