@@ -376,6 +376,7 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 10. ~~Accounts List Redesign~~ ✅ IMPLEMENTED (filters, stats cards, new columns, visual overhaul)
 11. ~~Digital Signature on Approved Proposals~~ ✅ IMPLEMENTED (auto-stamp PDF with approver name & date)
 12. ~~Partner - Sales Role Permissions~~ ✅ IMPLEMENTED (aligned with Regional Sales Manager)
+13. ~~Leads Kanban Board~~ ✅ IMPLEMENTED (drag-drop pipeline with activity logging)
 
 ### P1 - High Priority
 - Implement Invoices functionality for Accounts
