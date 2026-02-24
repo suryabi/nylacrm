@@ -54,6 +54,24 @@ export default function LeadDiscovery() {
   const [existingLeads, setExistingLeads] = React.useState([]);
   const [currentPage, setCurrentPage] = React.useState(1);
   const [itemsPerPage] = React.useState(10);
+  
+  // Master locations from API
+  const { territories, states, cities } = useMasterLocations();
+  
+  // Helper to find state and territory for a city
+  const getLocationInfoForCity = (cityName) => {
+    const cityObj = cities.find(c => c.name === cityName);
+    if (!cityObj) return { state: 'Unknown', territory: 'Unknown' };
+    
+    const stateObj = states.find(s => s.id === cityObj.state_id);
+    if (!stateObj) return { state: 'Unknown', territory: 'Unknown' };
+    
+    const territoryObj = territories.find(t => t.id === stateObj.territory_id);
+    return {
+      state: stateObj.name,
+      territory: territoryObj?.name || 'Unknown'
+    };
+  };
 
   // Debounced autocomplete
   React.useEffect(() => {
