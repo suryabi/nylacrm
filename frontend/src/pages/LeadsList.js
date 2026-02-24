@@ -338,10 +338,22 @@ export default function LeadsList() {
             )}
           </p>
         </div>
-        <Button onClick={() => navigate('/leads/new')} data-testid="add-lead-button">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Lead
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => navigate('/leads/kanban')} 
+            data-testid="kanban-view-button"
+            className="gap-2"
+          >
+            <LayoutGrid className="h-4 w-4" />
+            Kanban View
+          </Button>
+          <Button onClick={() => navigate('/leads/new')} data-testid="add-lead-button">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Lead
+          </Button>
+        </div>
       </div>
 
       {/* Leads Table */}
