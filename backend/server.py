@@ -6779,7 +6779,8 @@ async def create_territory(territory: Territory, current_user: dict = Depends(ge
     territory_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
     await db.master_territories.insert_one(territory_data)
-    del territory_data['_id'] if '_id' in territory_data else None
+    if '_id' in territory_data:
+        del territory_data['_id']
     
     return territory_data
 
