@@ -3192,9 +3192,14 @@ async def get_team_status_rollup(
                 created_at = status['created_at'].isoformat()
                 
             team_statuses.append({
+                'id': status.get('id', ''),
+                'user_id': status['user_id'],
                 'user_name': user_info['name'],
+                'user_role': user_info.get('role', ''),
                 'user_designation': user_info.get('designation', ''),
                 'user_territory': user_info.get('territory', ''),
+                'user_city': user_info.get('city', ''),
+                'user_state': user_info.get('state', ''),
                 'status_date': status['status_date'],
                 'yesterday_updates': status.get('yesterday_updates', ''),
                 'today_actions': status.get('today_actions', ''),
