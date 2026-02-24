@@ -1025,6 +1025,19 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
           />
         </div>
         <div className="space-y-2">
+          <Label htmlFor="edit-department">Department *</Label>
+          <Select value={formData.department} onValueChange={(v) => setFormData(prev => ({ ...prev, department: v }))}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select department" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="sales">Sales</SelectItem>
+              <SelectItem value="production">Production</SelectItem>
+              <SelectItem value="both">Both (Admin)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
           <Label htmlFor="edit-phone">Phone Number *</Label>
           <Input
             id="edit-phone"
