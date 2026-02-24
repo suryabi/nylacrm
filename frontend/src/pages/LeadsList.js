@@ -260,7 +260,7 @@ export default function LeadsList() {
   let filteredLeads = leads;
   
   // Apply time filter
-  if (timeFilter && timeFilter !== 'all') {
+  if (timeFilter && timeFilter !== 'this_week') {
     const now = new Date();
     let startDate;
     let endDate;
