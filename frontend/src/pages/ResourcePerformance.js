@@ -48,7 +48,7 @@ export default function ResourcePerformance() {
   const [salesTeam, setSalesTeam] = useState([]);
   
   // Filter states
-  const [timeFilter, setTimeFilter] = useState('this_month');
+  const [timeFilter, setTimeFilter] = useState('this_week');
   const [territoryFilter, setTerritoryFilter] = useState('all');
   const [stateFilter, setStateFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');

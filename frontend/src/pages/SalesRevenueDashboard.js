@@ -51,7 +51,7 @@ export default function SalesRevenueDashboard() {
   const [salesTeam, setSalesTeam] = useState([]);
   
   // Filter states - matching Sales Overview
-  const [timeFilter, setTimeFilter] = useState('this_month');
+  const [timeFilter, setTimeFilter] = useState('this_week');
   const [territoryFilter, setTerritoryFilter] = useState('all');
   const [stateFilter, setStateFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');

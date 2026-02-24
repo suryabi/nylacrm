@@ -67,7 +67,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [salesTeam, setSalesTeam] = useState([]);
   
-  const [timeFilter, setTimeFilter] = useState('this_month');
+  const [timeFilter, setTimeFilter] = useState('this_week');
   const [territoryFilter, setTerritoryFilter] = useState('all');
   const [stateFilter, setStateFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
