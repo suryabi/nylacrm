@@ -360,12 +360,12 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 8. ~~Team Activity Tracking~~ ✅ IMPLEMENTED (last active, session time, pages visited, actions performed)
 9. ~~PWA Support~~ ✅ IMPLEMENTED (installable, offline support, push notifications)
 10. ~~Accounts List Redesign~~ ✅ IMPLEMENTED (filters, stats cards, new columns, visual overhaul)
+11. ~~Digital Signature on Approved Proposals~~ ✅ IMPLEMENTED (auto-stamp PDF with approver name & date)
+12. ~~Partner - Sales Role Permissions~~ ✅ IMPLEMENTED (aligned with Regional Sales Manager)
 
 ### P1 - High Priority
 - Implement Invoices functionality for Accounts
-- Partner - Sales role permissions audit (same permissions as Regional Sales Manager)
 - Re-implement Grid View for Sales Targets module
-- Update Account List Page UI (if user provides requirements)
 
 ### P2 - Medium Priority
 - User verification for Custom Proposal Template
