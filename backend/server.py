@@ -3221,7 +3221,7 @@ async def get_team_status_rollup(
     return {
         'team_statuses': team_statuses,
         'date': target_date,
-        'total_reports': len(direct_reports),
+        'total_reports': len(user_ids),
         'statuses_received': len(team_statuses)
     }
 
