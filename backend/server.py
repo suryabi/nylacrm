@@ -5342,7 +5342,7 @@ async def get_resource_performance(
                 target = 5000000
             elif role in ['Vice President', 'National Sales Head']:
                 target = 3000000
-            elif role in ['Regional Sales Manager', 'Head of Business']:
+            elif role in ['Regional Sales Manager', 'Head of Business', 'Partner - Sales']:
                 target = 1500000
             else:
                 target = 800000
