@@ -6124,6 +6124,31 @@ async def review_lead_proposal(
         'reviewed_at': datetime.now(timezone.utc).isoformat()
     }
     
+    # If approved and it's a PDF, stamp the document with digital signature
+    if action == 'approved' and proposal.get('content_type') == 'application/pdf':
+        try:
+            # Decode the original PDF
+            original_pdf_data = base64.b64decode(proposal['file_data'])
+            
+            # Format the approval date
+            approval_date = datetime.now(timezone.utc).strftime('%B %d, %Y')
+            
+            # Stamp the PDF with approver's signature
+            stamped_pdf_data = stamp_pdf_with_signature(
+                original_pdf_data,
+                current_user['name'],
+                approval_date
+            )
+            
+            # Update the file_data with the stamped PDF
+            update_data['file_data'] = base64.b64encode(stamped_pdf_data).decode('utf-8')
+            update_data['file_size'] = len(stamped_pdf_data)
+            
+            logging.info(f"Digital signature added to proposal for lead {lead_id}")
+        except Exception as e:
+            logging.error(f"Failed to stamp PDF with signature: {str(e)}")
+            # Continue with approval even if stamping fails
+    
     await db.lead_proposals.update_one(
         {'lead_id': lead_id},
         {
