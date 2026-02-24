@@ -286,6 +286,10 @@ export default function LeadsKanban() {
   const [activityDialogOpen, setActivityDialogOpen] = useState(false);
   const [pendingStatusChange, setPendingStatusChange] = useState(null);
   
+  // Scroll container ref for auto-scroll during drag
+  const scrollContainerRef = useRef(null);
+  const autoScrollIntervalRef = useRef(null);
+  
   // Get unique values for filters
   const cities = [...new Set(leads.map(l => l.city).filter(Boolean))].sort();
   const categories = [...new Set(leads.map(l => l.category).filter(Boolean))].sort();
