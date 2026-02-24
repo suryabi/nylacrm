@@ -102,6 +102,20 @@ Build a comprehensive, mobile-ready Sales CRM application with:
   - **Default Data**: Pre-populated with 5 Indian territories, 23 states, 90 cities
   - Status: IMPLEMENTED
 
+- **REFACTOR (P0)**: Application-wide Master Locations Integration
+  - **Purpose**: Replace all hardcoded location data with dynamic data from Master Locations module
+  - **Updated Files**:
+    - `AddEditLead.js`: Region dropdown now shows territories from master locations; State/City cascade correctly
+    - `AccountsList.js`: Territory, State, City filter dropdowns use master locations
+    - `AccountPerformance.js`: Territory, State, City filter dropdowns use master locations
+    - `TeamManagement.js`: Add/Edit team member forms use master locations for Territory, State, City
+    - `SalesTargets.js`: CityForm component fetches and displays cities from master locations
+    - `LeadDiscovery.js`: City-to-State-to-Territory mapping now uses master locations data
+  - **Removed**: All hardcoded location arrays (`TERRITORY_MAP`, `LOCATIONS`, `CITY_MAP`, `cityStateMap`)
+  - **Testing**: 100% success rate - 15 tests passed across all 6 pages
+  - **Cascading Verified**: Territory → State → City dropdowns work correctly on all pages
+  - Status: VERIFIED - 100% test success rate
+
 ### Feb 24, 2026 (Session 8)
 - **FEATURE**: Digital Signature on Approved Proposals
   - When a PDF proposal is approved, system automatically stamps the document
