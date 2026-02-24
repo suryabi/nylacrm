@@ -283,13 +283,19 @@ export default function LeadDetail() {
       toast.success('Next follow-up date updated');
       fetchData();
     } catch (error) {
-      toast.error('Failed to update follow-up date');
+      const errorMessage = error.response?.data?.detail || 'Failed to update follow-up date';
+      toast.error(errorMessage, {
+        description: 'Please try again or contact support'
+      });
     }
   };
 
   const handleAddComment = async (e) => {
     e.preventDefault();
-    if (!newComment.trim()) return;
+    if (!newComment.trim()) {
+      toast.error('Please enter a comment');
+      return;
+    }
 
     setSubmittingComment(true);
     try {
@@ -298,7 +304,10 @@ export default function LeadDetail() {
       setNewComment('');
       fetchData();
     } catch (error) {
-      toast.error('Failed to add comment');
+      const errorMessage = error.response?.data?.detail || 'Failed to add comment';
+      toast.error(errorMessage, {
+        description: 'Unable to save comment'
+      });
     } finally {
       setSubmittingComment(false);
     }
