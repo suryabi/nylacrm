@@ -408,6 +408,8 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 11. ~~Digital Signature on Approved Proposals~~ ✅ IMPLEMENTED (auto-stamp PDF with approver name & date)
 12. ~~Partner - Sales Role Permissions~~ ✅ IMPLEMENTED (aligned with Regional Sales Manager)
 13. ~~Leads Kanban Board~~ ✅ IMPLEMENTED (drag-drop pipeline with activity logging)
+14. ~~Sales/Production Context Switching~~ ✅ IMPLEMENTED (context switcher, department field, production modules)
+15. ~~Server-Side Filtering for Leads List~~ ✅ FIXED (time_filter, territory, assigned_to filters now server-side)
 
 ### P1 - High Priority
 - Implement Invoices functionality for Accounts
