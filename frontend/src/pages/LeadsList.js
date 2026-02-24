@@ -361,8 +361,8 @@ export default function LeadsList() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Territories</SelectItem>
-                {TERRITORIES.map(territory => (
-                  <SelectItem key={territory} value={territory}>{territory}</SelectItem>
+                {territories.map(territory => (
+                  <SelectItem key={territory.id} value={territory.name}>{territory.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -380,7 +380,7 @@ export default function LeadsList() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All States</SelectItem>
-                {territoryFilter !== 'all' && TERRITORY_STATES[territoryFilter]?.map(state => (
+                {territoryFilter !== 'all' && getStateNamesByTerritoryName(territoryFilter).map(state => (
                   <SelectItem key={state} value={state}>{state}</SelectItem>
                 ))}
               </SelectContent>
@@ -396,7 +396,7 @@ export default function LeadsList() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Cities</SelectItem>
-                {stateFilter !== 'all' && STATE_CITIES[stateFilter]?.map(city => (
+                {stateFilter !== 'all' && getCityNamesByStateName(stateFilter).map(city => (
                   <SelectItem key={city} value={city}>{city}</SelectItem>
                 ))}
               </SelectContent>
