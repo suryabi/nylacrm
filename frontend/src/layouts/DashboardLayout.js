@@ -7,7 +7,8 @@ import {
   LayoutDashboard, Users, Building2, Store,
   Search, Target, CalendarDays, UsersRound,
   Calculator, Truck, Package, Droplets,
-  FolderOpen, Building, UserCog, CalendarOff
+  FolderOpen, Building, UserCog, CalendarOff,
+  Kanban
 } from 'lucide-react';
 
 const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
