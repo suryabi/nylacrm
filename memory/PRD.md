@@ -31,7 +31,7 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 ### Feb 24, 2026 (Session 8)
 - **FEATURE**: Digital Signature on Approved Proposals
   - When a PDF proposal is approved, system automatically stamps the document
-  - Signature format: "Approved by: {approver_name}  |  Date: {Month DD, YYYY}"
+  - Signature format: "Approved by: {approver_name}  |  Date: {Month DD, YYYY at HH:MM AM/PM IST}"
   - Subtle appearance: 8pt Helvetica, gray color (0.4, 0.4, 0.4 alpha 0.8)
   - Position: Bottom center of last page, 30 points from bottom
   - Only PDF files are stamped; DOCX files are approved without stamping
@@ -49,6 +49,20 @@ Build a comprehensive, mobile-ready Sales CRM application with:
     - `SalesTargets.js`: Added to sales team filter
     - `DashboardLayout.js`: Added to Transport Calculator access
   - Status: IMPLEMENTED
+
+- **FEATURE**: Leads Kanban Board (Pipeline View)
+  - New `/leads/kanban` page with drag-and-drop lead management
+  - **11 status columns**: New, Contacted, Qualified, In Progress, Trial, Proposal Shared, Proposal Approved, Won, Lost, Not Qualified, Future Follow-up
+  - **Lead cards** display: Company name, Lead ID, contact, location, category, assigned user
+  - **Filters**: Search, City, Assigned To, Category, Reset button
+  - **Activity Log Dialog**: Triggered when dragging lead between statuses
+    - Shows from/to status change visually
+    - Interaction method selection (Call, Visit, Email, WhatsApp, SMS, Other)
+    - Description field for logging activity
+    - Creates activity record and updates status on submit
+  - **Navigation**: Toggle between List/Kanban views, "Pipeline" link in sidebar
+  - Files: `LeadsKanban.js`, updated `App.js`, `DashboardLayout.js`, `LeadsList.js`
+  - Status: VERIFIED - 100% test success rate (16/16 tests)
 
 ### Feb 23, 2026 (Session 7)
 - **FIX**: Toast Notification Visibility & Error Messages
