@@ -99,6 +99,7 @@ function AppRouter() {
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/dashboard-preview" element={<ProtectedRoute><DashboardPreview /></ProtectedRoute>} />
           <Route path="/leads" element={<ProtectedRoute><LeadsList /></ProtectedRoute>} />
+          <Route path="/leads/kanban" element={<ProtectedRoute><LeadsKanban /></ProtectedRoute>} />
           <Route path="/leads/new" element={<ProtectedRoute><AddEditLead /></ProtectedRoute>} />
           <Route path="/leads/:id" element={<ProtectedRoute><LeadDetail /></ProtectedRoute>} />
           <Route path="/leads/:id/edit" element={<ProtectedRoute><AddEditLead /></ProtectedRoute>} />
