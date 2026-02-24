@@ -44,7 +44,7 @@ const salesNavigationGroups = [
       { name: 'Lead Discovery', href: '/lead-discovery', icon: Search, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
       { name: 'Targets', href: '/targets', icon: Target, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
       { name: 'Daily Status', href: '/daily-status', icon: CalendarDays, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-      { name: 'Team Status', href: '/team-status', icon: UsersRound, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
+      { name: 'Status Summary', href: '/status-summary', icon: UsersRound, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
     ]
   },
   {
