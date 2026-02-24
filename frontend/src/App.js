@@ -22,7 +22,7 @@ import Reports from './pages/Reports';
 import LocationAnalytics from './pages/LocationAnalytics';
 import TeamManagement from './pages/TeamManagement';
 import DailyStatusUpdate from './pages/DailyStatusUpdate';
-import TeamStatusFeed from './pages/TeamStatusFeed';
+import StatusSummary from './pages/StatusSummary';
 import DashboardPreview from './pages/DashboardPreview';
 import BottlePreview from './pages/BottlePreview';
 import LeaveManagement from './pages/LeaveManagement';
