@@ -94,6 +94,14 @@ export default function LeadsList() {
   const [leadToDelete, setLeadToDelete] = useState(null);
   const [timeFilter, setTimeFilter] = useState('this_week');
   
+  // Master locations from API
+  const { 
+    territories, 
+    getStateNamesByTerritoryName, 
+    getCityNamesByStateName,
+    loading: locationsLoading 
+  } = useMasterLocations();
+  
   // Server-side pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
@@ -107,14 +115,14 @@ export default function LeadsList() {
   // Debounce search
   const [debouncedSearch, setDebouncedSearch] = useState('');
   
-  // Get available states and cities based on selection
+  // Get available states and cities from master locations
   const availableStates = territoryFilter === 'all' 
     ? ['All States']
-    : ['All States', ...(TERRITORY_STATES[territoryFilter] || [])];
+    : ['All States', ...getStateNamesByTerritoryName(territoryFilter)];
   
   const availableCities = stateFilter === 'all'
     ? ['All Cities']
-    : ['All Cities', ...(STATE_CITIES[stateFilter] || [])];
+    : ['All Cities', ...getCityNamesByStateName(stateFilter)];
   
   // Debounce search input
   useEffect(() => {
