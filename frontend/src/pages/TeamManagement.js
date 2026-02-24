@@ -667,6 +667,7 @@ function AddTeamMemberForm({ onSuccess }) {
     state: '',
     territory: '',
     role: 'sales_rep',
+    department: 'sales',
     password: '',
     reports_to: '',
     is_active: true
