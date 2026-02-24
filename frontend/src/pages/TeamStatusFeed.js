@@ -158,12 +158,14 @@ export default function TeamStatusFeed() {
     filteredData = filteredData.filter(s => s.user_name === memberFilter);
   }
 
-  // Get unique members for filter
-  const allMembers = viewMode === 'daily'
-    ? (rollupData?.team_statuses || []).map(s => s.user_name)
-    : (rollupData?.statuses || []).map(s => s.user_name || 'Unknown');
+  // Get unique members for filter - use allUsers list instead of just those who submitted
+  const teamMembers = allUsers
+    .filter(u => u.is_active)
+    .map(u => u.name)
+    .filter(Boolean)
+    .sort();
   
-  const uniqueMembers = ['All Members', ...new Set(allMembers)];
+  const uniqueMembers = ['All Members', ...new Set(teamMembers)];
 
   // Calculate completion stats
   const submittedCount = viewMode === 'daily' ? rollupData?.statuses_received || 0 : filteredData.length;
