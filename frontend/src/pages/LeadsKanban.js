@@ -57,58 +57,120 @@ const INTERACTION_METHODS = [
 ];
 
 // Lead Card Component
-const LeadCard = ({ lead, onDragStart, onDragEnd, onClick, users }) => {
+// Lead Card Component with Move To action
+const LeadCard = ({ lead, onDragStart, onDragEnd, onClick, users, onMoveToStatus, currentStatus }) => {
   const assignedUser = users.find(u => u.id === lead.assigned_to);
+  const [showMoveMenu, setShowMoveMenu] = useState(false);
+  
+  const handleMoveClick = (e, targetStatus) => {
+    e.stopPropagation();
+    setShowMoveMenu(false);
+    if (targetStatus !== currentStatus) {
+      onMoveToStatus(lead, currentStatus, targetStatus);
+    }
+  };
   
   return (
     <div
       draggable
       onDragStart={(e) => onDragStart(e, lead)}
       onDragEnd={onDragEnd}
-      onClick={() => onClick(lead)}
-      className="bg-white rounded-lg border border-gray-200 p-3 mb-2 cursor-grab active:cursor-grabbing hover:shadow-md transition-all duration-200 group"
+      className="bg-white rounded-lg border border-gray-200 p-3 mb-2 cursor-grab active:cursor-grabbing hover:shadow-md transition-all duration-200 group relative"
       data-testid={`kanban-lead-card-${lead.id}`}
     >
       <div className="flex items-start justify-between mb-2">
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onClick(lead)}>
           <h4 className="font-semibold text-sm text-gray-900 truncate group-hover:text-primary transition-colors">
             {lead.company_name || 'Unnamed Lead'}
           </h4>
           <p className="text-xs text-gray-500 truncate">{lead.lead_id}</p>
         </div>
-        <GripVertical className="w-4 h-4 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+        
+        {/* Move To Button */}
+        <div className="relative">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowMoveMenu(!showMoveMenu);
+            }}
+            className="p-1 rounded hover:bg-gray-100 transition-colors"
+            title="Move to status"
+            data-testid={`move-lead-btn-${lead.id}`}
+          >
+            <ArrowRight className="w-4 h-4 text-gray-400 hover:text-primary" />
+          </button>
+          
+          {/* Move To Dropdown */}
+          {showMoveMenu && (
+            <>
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMoveMenu(false);
+                }}
+              />
+              <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50 w-48 max-h-64 overflow-y-auto">
+                <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 border-b border-gray-100">
+                  Move to...
+                </div>
+                {LEAD_STATUSES.map((status) => (
+                  <button
+                    key={status.id}
+                    onClick={(e) => handleMoveClick(e, status.id)}
+                    disabled={status.id === currentStatus}
+                    className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors ${
+                      status.id === currentStatus 
+                        ? 'bg-gray-50 text-gray-400 cursor-not-allowed' 
+                        : 'hover:bg-gray-50 text-gray-700'
+                    }`}
+                    data-testid={`move-to-${status.id}`}
+                  >
+                    <div className={`w-2 h-2 rounded-full ${status.color}`}></div>
+                    <span>{status.label}</span>
+                    {status.id === currentStatus && (
+                      <span className="ml-auto text-xs text-gray-400">(current)</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
       
-      {lead.contact_name && (
-        <div className="flex items-center gap-1.5 text-xs text-gray-600 mb-1">
-          <User className="w-3 h-3" />
-          <span className="truncate">{lead.contact_name}</span>
-        </div>
-      )}
-      
-      {lead.city && (
-        <div className="flex items-center gap-1.5 text-xs text-gray-600 mb-1">
-          <MapPin className="w-3 h-3" />
-          <span className="truncate">{lead.city}{lead.state ? `, ${lead.state}` : ''}</span>
-        </div>
-      )}
-      
-      {lead.category && (
-        <Badge variant="outline" className="text-xs mt-2 bg-gray-50">
-          {lead.category}
-        </Badge>
-      )}
-      
-      {assignedUser && (
-        <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
-          <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
-            <span className="text-[10px] font-medium text-primary">
-              {assignedUser.name?.charAt(0)?.toUpperCase() || '?'}
-            </span>
+      <div onClick={() => onClick(lead)} className="cursor-pointer">
+        {lead.contact_name && (
+          <div className="flex items-center gap-1.5 text-xs text-gray-600 mb-1">
+            <User className="w-3 h-3" />
+            <span className="truncate">{lead.contact_name}</span>
           </div>
-          <span className="truncate">{assignedUser.name}</span>
-        </div>
-      )}
+        )}
+        
+        {lead.city && (
+          <div className="flex items-center gap-1.5 text-xs text-gray-600 mb-1">
+            <MapPin className="w-3 h-3" />
+            <span className="truncate">{lead.city}{lead.state ? `, ${lead.state}` : ''}</span>
+          </div>
+        )}
+        
+        {lead.category && (
+          <Badge variant="outline" className="text-xs mt-2 bg-gray-50">
+            {lead.category}
+          </Badge>
+        )}
+        
+        {assignedUser && (
+          <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
+            <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
+              <span className="text-[10px] font-medium text-primary">
+                {assignedUser.name?.charAt(0)?.toUpperCase() || '?'}
+              </span>
+            </div>
+            <span className="truncate">{assignedUser.name}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
