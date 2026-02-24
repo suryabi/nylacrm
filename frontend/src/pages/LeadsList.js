@@ -34,27 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
-
-// Territory and location data
-const TERRITORIES = ['All India', 'North India', 'South India', 'East India', 'West India'];
-const TERRITORY_STATES = {
-  'All India': [],
-  'North India': ['Delhi NCR', 'Uttar Pradesh', 'Punjab', 'Haryana', 'Rajasthan', 'Himachal Pradesh', 'Uttarakhand', 'Jammu & Kashmir'],
-  'South India': ['Karnataka', 'Tamil Nadu', 'Kerala', 'Andhra Pradesh', 'Telangana'],
-  'East India': ['West Bengal', 'Bihar', 'Odisha', 'Jharkhand', 'Assam'],
-  'West India': ['Maharashtra', 'Gujarat', 'Goa', 'Madhya Pradesh']
-};
-
-const STATE_CITIES = {
-  'Karnataka': ['Bengaluru', 'Mysuru', 'Hubli', 'Mangaluru'],
-  'Tamil Nadu': ['Chennai', 'Coimbatore', 'Madurai'],
-  'Telangana': ['Hyderabad', 'Warangal', 'Nizamabad'],
-  'Maharashtra': ['Mumbai', 'Pune', 'Nagpur', 'Nashik'],
-  'Delhi NCR': ['New Delhi', 'Gurugram', 'Noida', 'Faridabad'],
-  'Gujarat': ['Ahmedabad', 'Surat', 'Vadodara'],
-  'West Bengal': ['Kolkata', 'Howrah', 'Durgapur'],
-  'Uttar Pradesh': ['Lucknow', 'Noida', 'Kanpur', 'Agra'],
-};
+import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const statusColors = {
   new: 'bg-blue-100 text-blue-800',
