@@ -10,6 +10,7 @@ import {
   MapPin, Phone, UserPlus, CheckCircle, XCircle, TrendingUp,
   Clock, MessageSquare, Target, ThumbsUp, ThumbsDown, Calendar
 } from 'lucide-react';
+import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -24,13 +25,6 @@ const TIME_FILTERS = [
   { value: 'last_quarter', label: 'Last Quarter' },
   { value: 'lifetime', label: 'Lifetime' },
 ];
-
-const TERRITORY_MAP = {
-  'North India': { states: { 'Delhi': ['New Delhi'], 'Uttar Pradesh': ['Noida'] } },
-  'South India': { states: { 'Karnataka': ['Bengaluru'], 'Tamil Nadu': ['Chennai'], 'Telangana': ['Hyderabad'] } },
-  'West India': { states: { 'Maharashtra': ['Mumbai', 'Pune'], 'Gujarat': ['Ahmedabad'] } },
-  'East India': { states: { 'West Bengal': ['Kolkata'] } }
-};
 
 const STATUS_CONFIG = {
   new: { label: 'New', color: 'blue', icon: UserPlus },
