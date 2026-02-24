@@ -18,48 +18,9 @@ import { Card } from '../components/ui/card';
 import { toast } from 'sonner';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-
-const LOCATIONS = {
-  'North India': {
-    states: {
-      'Delhi': ['New Delhi'],
-      'Uttar Pradesh': ['Noida']
-    }
-  },
-  'South India': {
-    states: {
-      'Karnataka': ['Bengaluru'],
-      'Tamil Nadu': ['Chennai'],
-      'Telangana': ['Hyderabad']
-    }
-  },
-  'West India': {
-    states: {
-      'Maharashtra': ['Mumbai', 'Pune'],
-      'Gujarat': ['Ahmedabad']
-    }
-  },
-  'East India': {
-    states: {
-      'West Bengal': ['Kolkata']
-    }
-  }
-};
-
-const PRIORITY_STATES = [
-  'Telangana',
-  'Tamil Nadu',
-  'Delhi',
-  'Maharashtra',
-  'Gujarat',
-  'Karnataka',
-  'Uttar Pradesh',
-  'West Bengal'
-];
-
-const OTHER_STATES = [];
 
 const SKUS = ['660 ml / Silver / Nyla', '660 ml / Gold / Nyla', '330 ml / Silver / Nyla', '330 ml / Gold / Nyla', '660 ml / Sparkling', '300 ml / Sparkling', '24 Brand / 660 ml'];
 
