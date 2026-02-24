@@ -76,7 +76,10 @@ Build a comprehensive, mobile-ready Sales CRM application with:
     - Filters: Territory, State, City, Resource dropdowns
     - Shows each team member's daily updates in card format with bullet points
     - Date picker for any past date
-  - Status: IMPLEMENTED
+  - **FIX**: Backend API was only showing direct reports' statuses
+    - Updated `/api/daily-status/team-rollup` to show ALL team statuses for high-level roles (CEO, Director, VP, National Sales Head)
+    - Added user_role, user_city, user_state fields to response
+  - Status: IMPLEMENTED & VERIFIED
 
 ### Feb 24, 2026 (Session 8)
 - **FEATURE**: Digital Signature on Approved Proposals
