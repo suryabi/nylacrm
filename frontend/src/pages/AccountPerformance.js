@@ -65,6 +65,13 @@ export default function AccountPerformance() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({ accounts: [], summary: {} });
   
+  // Master locations from API
+  const { 
+    territories: masterTerritories, 
+    getStateNamesByTerritoryName, 
+    getCityNamesByStateName 
+  } = useMasterLocations();
+  
   // Filter states
   const [timeFilter, setTimeFilter] = useState('this_week');
   const [territoryFilter, setTerritoryFilter] = useState('all');
@@ -108,16 +115,20 @@ export default function AccountPerformance() {
     setAccountTypeFilter('all');
   };
 
-  const availableTerritories = user?.territory === 'All India' || ['ceo', 'director', 'vp', 'admin', 'National Sales Head'].includes(user?.role)
-    ? ['All Territories', 'North India', 'South India', 'West India', 'East India']
+  // Build territory options from master locations
+  const allTerritoryNames = masterTerritories.map(t => t.name);
+  const availableTerritories = user?.territory === 'All India' || ['ceo', 'director', 'vp', 'admin', 'CEO', 'Director', 'Vice President', 'National Sales Head'].includes(user?.role)
+    ? ['All Territories', ...allTerritoryNames]
     : user?.territory ? ['All Territories', user.territory] : ['All Territories'];
 
-  const availableStates = territoryFilter !== 'all' && territoryFilter !== 'All Territories' && TERRITORY_MAP[territoryFilter]
-    ? ['All States', ...Object.keys(TERRITORY_MAP[territoryFilter].states)]
+  // Get states based on selected territory from master locations
+  const availableStates = territoryFilter !== 'all' && territoryFilter !== 'All Territories'
+    ? ['All States', ...getStateNamesByTerritoryName(territoryFilter)]
     : ['All States'];
 
-  const availableCities = stateFilter !== 'all' && stateFilter !== 'All States' && territoryFilter !== 'all' && territoryFilter !== 'All Territories' && TERRITORY_MAP[territoryFilter]
-    ? ['All Cities', ...(TERRITORY_MAP[territoryFilter].states[stateFilter] || [])]
+  // Get cities based on selected state from master locations
+  const availableCities = stateFilter !== 'all' && stateFilter !== 'All States'
+    ? ['All Cities', ...getCityNamesByStateName(stateFilter)]
     : ['All Cities'];
 
   return (

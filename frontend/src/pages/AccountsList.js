@@ -75,6 +75,13 @@ export default function AccountsList() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
+  // Master locations from API
+  const { 
+    territories: masterTerritories, 
+    getStateNamesByTerritoryName, 
+    getCityNamesByStateName 
+  } = useMasterLocations();
+  
   // Filter states - matching AccountPerformance
   const [territoryFilter, setTerritoryFilter] = useState('all');
   const [stateFilter, setStateFilter] = useState('all');
@@ -162,17 +169,20 @@ export default function AccountsList() {
     setCurrentPage(1);
   };
 
-  // Territory access based on user role
+  // Build territory options from master locations
+  const allTerritoryNames = masterTerritories.map(t => t.name);
   const availableTerritories = user?.territory === 'All India' || ['ceo', 'director', 'vp', 'admin', 'CEO', 'Director', 'Vice President', 'National Sales Head'].includes(user?.role)
-    ? ['All Territories', 'North India', 'South India', 'West India', 'East India']
+    ? ['All Territories', ...allTerritoryNames]
     : user?.territory ? ['All Territories', user.territory] : ['All Territories'];
 
-  const availableStates = territoryFilter !== 'all' && territoryFilter !== 'All Territories' && TERRITORY_MAP[territoryFilter]
-    ? ['All States', ...Object.keys(TERRITORY_MAP[territoryFilter].states)]
+  // Get states based on selected territory from master locations
+  const availableStates = territoryFilter !== 'all' && territoryFilter !== 'All Territories'
+    ? ['All States', ...getStateNamesByTerritoryName(territoryFilter)]
     : ['All States'];
 
-  const availableCities = stateFilter !== 'all' && stateFilter !== 'All States' && territoryFilter !== 'all' && territoryFilter !== 'All Territories' && TERRITORY_MAP[territoryFilter]
-    ? ['All Cities', ...(TERRITORY_MAP[territoryFilter].states[stateFilter] || [])]
+  // Get cities based on selected state from master locations
+  const availableCities = stateFilter !== 'all' && stateFilter !== 'All States'
+    ? ['All Cities', ...getCityNamesByStateName(stateFilter)]
     : ['All Cities'];
 
   return (
