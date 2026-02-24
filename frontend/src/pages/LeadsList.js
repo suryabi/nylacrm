@@ -259,8 +259,8 @@ export default function LeadsList() {
   // Client-side filtering for assigned_to and time (server doesn't support these yet)
   let filteredLeads = leads;
   
-  // Apply time filter if set from dashboard (client-side for now)
-  if (timeFilter) {
+  // Apply time filter
+  if (timeFilter && timeFilter !== 'all') {
     const now = new Date();
     let startDate;
     let endDate;
