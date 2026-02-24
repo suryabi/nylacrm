@@ -61,6 +61,10 @@ Build a comprehensive, mobile-ready Sales CRM application with:
   - **Added**: Activity Summary line when fetching activities
     - First line shows: "SUMMARY: Customer Visits: X | Phone Calls: Y | Messages/Emails: Z"
     - Counts customer_visit, phone_call/call, and sms/whatsapp/email activities
+  - **Added**: Grouped Activities by Interaction Method
+    - Activities grouped into: CUSTOMER VISITS, PHONE CALLS, EMAILS, WHATSAPP, SMS, OTHER
+    - Each group has highlighted header with icon
+    - Summary line has gradient background
   - Status: IMPLEMENTED
 
 - **FIX**: Team Status - Team Members Dropdown Not Populated
@@ -80,6 +84,23 @@ Build a comprehensive, mobile-ready Sales CRM application with:
     - Updated `/api/daily-status/team-rollup` to show ALL team statuses for high-level roles (CEO, Director, VP, National Sales Head)
     - Added user_role, user_city, user_state fields to response
   - Status: IMPLEMENTED & VERIFIED
+
+- **BRANDING**: Updated sidebar brand name from "Nyla" to "Nyla Air Water"
+
+- **FEATURE**: Master Locations Module
+  - **Purpose**: Centralized management of Indian territories, states, and cities
+  - **Backend APIs**:
+    - `GET /api/master-locations` - Hierarchical data (territories with nested states and cities)
+    - `GET /api/master-locations/flat` - Flat lists for dropdowns
+    - `POST/PUT/DELETE` for territories, states, and cities
+  - **Frontend**: `/app/frontend/src/pages/MasterLocations.js`
+    - Tree view with expandable territories → states → cities
+    - Stats cards showing counts (5 Territories, 23 States, 90 Cities)
+    - Search functionality
+    - CRUD operations with dialogs
+  - **Hook**: `/app/frontend/src/hooks/useMasterLocations.js` for consuming across the app
+  - **Default Data**: Pre-populated with 5 Indian territories, 23 states, 90 cities
+  - Status: IMPLEMENTED
 
 ### Feb 24, 2026 (Session 8)
 - **FEATURE**: Digital Signature on Approved Proposals
