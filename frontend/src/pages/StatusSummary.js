@@ -10,30 +10,65 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Calendar, Users, Loader2, User, MapPin } from 'lucide-react';
+import { Calendar, Users, Loader2, User, MapPin, Phone, Mail, MessageSquare, Activity } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
-// Helper to render bulleted content
+// Helper to render bulleted content with proper formatting for headers and summary
 const BulletedContent = ({ text }) => {
   if (!text) return <p className="text-sm text-muted-foreground italic">No updates provided</p>;
   
   const lines = text.split('\n').filter(line => line.trim());
   
   return (
-    <ul className="space-y-1.5">
+    <div className="space-y-2">
       {lines.map((line, index) => {
-        const cleanLine = line.replace(/^[•\-\*]\s*/, '').trim();
+        const trimmedLine = line.trim();
+        
+        // Summary line - highlighted with gradient background
+        if (trimmedLine.startsWith('[SUMMARY]') || trimmedLine.startsWith('📊')) {
+          const summaryText = trimmedLine.replace('[SUMMARY]', '').replace('📊 SUMMARY:', '').trim();
+          return (
+            <div key={index} className="bg-gradient-to-r from-primary/20 to-primary/5 rounded-lg p-3 mb-3">
+              <div className="flex items-center gap-2">
+                <Activity className="h-5 w-5 text-primary" />
+                <span className="font-bold text-primary text-sm">{summaryText}</span>
+              </div>
+            </div>
+          );
+        }
+        
+        // Section headers - highlighted with icons
+        if (trimmedLine.startsWith('[HEADER]') || trimmedLine.startsWith('📌')) {
+          const headerText = trimmedLine.replace('[HEADER]', '').replace('📌', '').trim();
+          const iconMap = {
+            'CUSTOMER VISITS': <MapPin className="h-4 w-4" />,
+            'PHONE CALLS': <Phone className="h-4 w-4" />,
+            'EMAILS': <Mail className="h-4 w-4" />,
+            'WHATSAPP': <MessageSquare className="h-4 w-4" />,
+            'SMS': <MessageSquare className="h-4 w-4" />,
+            'OTHER ACTIVITIES': <Activity className="h-4 w-4" />
+          };
+          return (
+            <div key={index} className="flex items-center gap-2 mt-4 mb-2 pb-1 border-b border-primary/30">
+              <span className="text-primary">{iconMap[headerText] || <Activity className="h-4 w-4" />}</span>
+              <span className="font-semibold text-sm text-primary uppercase tracking-wide">{headerText}</span>
+            </div>
+          );
+        }
+        
+        // Regular bullet items
+        const cleanLine = trimmedLine.replace(/^[•\-\*]\s*/, '').trim();
         return (
-          <li key={index} className="flex items-start gap-2 text-sm">
+          <div key={index} className="flex items-start gap-2 text-sm pl-2">
             <span className="text-primary mt-0.5">•</span>
             <span className="leading-relaxed">{cleanLine}</span>
-          </li>
+          </div>
         );
       })}
-    </ul>
+    </div>
   );
 };
 
