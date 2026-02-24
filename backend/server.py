@@ -6130,8 +6130,11 @@ async def review_lead_proposal(
             # Decode the original PDF
             original_pdf_data = base64.b64decode(proposal['file_data'])
             
-            # Format the approval date and time
-            approval_datetime = datetime.now(timezone.utc).strftime('%B %d, %Y at %I:%M %p UTC')
+            # Format the approval date and time in IST (UTC+5:30)
+            utc_now = datetime.now(timezone.utc)
+            ist_offset = timedelta(hours=5, minutes=30)
+            ist_now = utc_now + ist_offset
+            approval_datetime = ist_now.strftime('%B %d, %Y at %I:%M %p IST')
             
             # Stamp the PDF with approver's signature
             stamped_pdf_data = stamp_pdf_with_signature(
