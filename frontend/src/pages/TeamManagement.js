@@ -767,8 +767,8 @@ function AddTeamMemberForm({ onSuccess }) {
               <SelectValue placeholder="Select territory" />
             </SelectTrigger>
             <SelectContent>
-              {TERRITORIES.map(territory => (
-                <SelectItem key={territory} value={territory}>{territory}</SelectItem>
+              {territories.map(territory => (
+                <SelectItem key={territory.id} value={territory.name}>{territory.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
