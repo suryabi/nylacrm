@@ -112,7 +112,7 @@ export default function LeadsList() {
   const [assignedToFilter, setAssignedToFilter] = useState('all');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
-  const [timeFilter, setTimeFilter] = useState('all');
+  const [timeFilter, setTimeFilter] = useState('this_week');
   
   // Server-side pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -251,7 +251,7 @@ export default function LeadsList() {
     setStateFilter('all');
     setCityFilter('all');
     setAssignedToFilter('all');
-    setTimeFilter('all');
+    setTimeFilter('this_week');
     setCurrentPage(1);
     window.history.replaceState({}, '', '/leads');
   };
