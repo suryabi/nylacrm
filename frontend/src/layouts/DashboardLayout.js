@@ -171,9 +171,9 @@ export default function DashboardLayout({ children }) {
           {/* Logo */}
           <div className="p-5 border-b border-slate-700/50">
             <div className="flex items-center gap-3">
-              <img src={NYLA_LOGO} alt="Nyla" className="h-10 w-10 rounded-lg object-cover" />
+              <img src={NYLA_LOGO} alt="Nyla Air Water" className="h-10 w-10 rounded-lg object-cover" />
               <div>
-                <h1 className="text-white font-bold text-lg tracking-tight">Nyla</h1>
+                <h1 className="text-white font-bold text-lg tracking-tight">Nyla Air Water</h1>
                 <p className="text-slate-400 text-xs">{currentContext === 'production' ? 'Production' : 'Sales CRM'}</p>
               </div>
             </div>
@@ -345,8 +345,8 @@ export default function DashboardLayout({ children }) {
               <Menu className="h-5 w-5 text-slate-600" />
             </Button>
             <div className="flex items-center gap-2">
-              <img src={NYLA_LOGO} alt="Nyla" className="h-8 w-8 rounded-lg" />
-              <span className="font-bold text-slate-800">Nyla CRM</span>
+              <img src={NYLA_LOGO} alt="Nyla Air Water" className="h-8 w-8 rounded-lg" />
+              <span className="font-bold text-slate-800">Nyla Air Water</span>
             </div>
             <div className="w-10" />
           </div>
