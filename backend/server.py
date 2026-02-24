@@ -3123,27 +3123,41 @@ async def get_team_status_rollup(
     status_date: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get daily status rollup for team members reporting to current user"""
-    
-    # Find all users who report to current user
-    direct_reports = await db.users.find(
-        {'reports_to': current_user['id']},
-        {'_id': 0, 'id': 1, 'name': 1, 'designation': 1, 'territory': 1}
-    ).to_list(100)
+    """Get daily status rollup for team members"""
     
     target_date = status_date or datetime.now(timezone.utc).strftime('%Y-%m-%d')
     
-    if not direct_reports:
-        return {'team_statuses': [], 'date': target_date, 'total_reports': 0, 'statuses_received': 0}
+    # For high-level roles, show ALL team statuses (not just direct reports)
+    high_level_roles = ['CEO', 'Director', 'Vice President', 'National Sales Head', 'System Admin']
     
-    # Get statuses for all direct reports
-    user_ids = [u['id'] for u in direct_reports]
+    if current_user.get('role') in high_level_roles:
+        # Get all active users' statuses
+        all_users = await db.users.find(
+            {'is_active': True},
+            {'_id': 0, 'id': 1, 'name': 1, 'role': 1, 'designation': 1, 'territory': 1, 'city': 1, 'state': 1}
+        ).to_list(500)
+        user_ids = [u['id'] for u in all_users]
+        user_map = {u['id']: u for u in all_users}
+    else:
+        # For other roles, show only direct reports
+        direct_reports = await db.users.find(
+            {'reports_to': current_user['id']},
+            {'_id': 0, 'id': 1, 'name': 1, 'role': 1, 'designation': 1, 'territory': 1, 'city': 1, 'state': 1}
+        ).to_list(100)
+        
+        if not direct_reports:
+            return {'team_statuses': [], 'date': target_date, 'total_reports': 0, 'statuses_received': 0}
+        
+        user_ids = [u['id'] for u in direct_reports]
+        user_map = {u['id']: u for u in direct_reports}
+    
+    # Get statuses for all target users
     query = {
         'user_id': {'$in': user_ids},
         'status_date': target_date
     }
     
-    statuses = await db.daily_status.find(query, {'_id': 0}).to_list(100)
+    statuses = await db.daily_status.find(query, {'_id': 0}).to_list(500)
     
     # Get activity metrics for the day
     start_datetime = datetime.fromisoformat(f'{target_date}T00:00:00').replace(tzinfo=timezone.utc).isoformat()
