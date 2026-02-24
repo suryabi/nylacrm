@@ -247,9 +247,11 @@ export default function LeadsList() {
   const handleResetFilters = () => {
     setSearchQuery('');
     setStatusFilter('all');
+    setTerritoryFilter('all');
+    setStateFilter('all');
     setCityFilter('all');
     setAssignedToFilter('all');
-    setTimeFilter(null);
+    setTimeFilter('all');
     setCurrentPage(1);
     window.history.replaceState({}, '', '/leads');
   };
