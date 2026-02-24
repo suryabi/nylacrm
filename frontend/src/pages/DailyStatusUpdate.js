@@ -4,61 +4,69 @@ import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
 import { Card } from '../components/ui/card';
-import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
-import { Calendar, Sparkles, RotateCcw, Send, Loader2, Download } from 'lucide-react';
+import { Calendar, Send, Loader2, Download } from 'lucide-react';
 import { format } from 'date-fns';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
-const StatusSection = ({ title, value, onChange, onRevise, onUndo, isRevised, isRevising, placeholder }) => {
+// Simple status section without AI revision
+const StatusSection = ({ title, value, onChange, placeholder, disabled }) => {
   return (
-    <Card className="p-5">
-      <div className="flex items-center justify-between mb-3">
-        <label className="text-sm font-semibold">{title}</label>
-        {isRevised && (
-          <Badge className="bg-purple-100 text-purple-800 text-xs">
-            <Sparkles className="h-3 w-3 mr-1" />
-            AI Revised
-          </Badge>
-        )}
-      </div>
-      
-      <Textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        rows={6}
-        className="text-base resize-none mb-3"
-      />
-
-      <div className="flex gap-3">
-        <Button
-          type="button"
-          variant="outline"
-          className="flex-1 h-11"
-          onClick={onRevise}
-          disabled={isRevising || !value.trim()}
-        >
-          {isRevising ? (
-            <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Revising...</>
-          ) : (
-            <><Sparkles className="h-4 w-4 mr-2" /> Revise with AI</>
-          )}
-        </Button>
-        
-        {isRevised && (
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 px-4"
-            onClick={onUndo}
-          >
-            <RotateCcw className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
+    <Card className={`p-5 ${disabled ? 'bg-muted/30' : ''}`}>
+      <label className="block text-sm font-semibold mb-3">{title}</label>
+      {disabled ? (
+        <p className="text-sm text-muted-foreground italic">Action items not available for past dates</p>
+      ) : (
+        <Textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          rows={6}
+          className="text-base resize-none"
+        />
+      )}
     </Card>
+  );
+};
+
+// Helper function to convert text to bullet format
+const convertToBulletFormat = (text) => {
+  if (!text || !text.trim()) return '';
+  
+  // Split by double newlines (paragraph breaks) or single newlines
+  const lines = text.split(/\n\n|\n/).filter(line => line.trim());
+  
+  // Format each line as a bullet point if not already
+  return lines.map(line => {
+    const trimmedLine = line.trim();
+    // Skip if already has bullet or is empty
+    if (trimmedLine.startsWith('•') || trimmedLine.startsWith('-') || trimmedLine.startsWith('*')) {
+      return trimmedLine;
+    }
+    return `• ${trimmedLine}`;
+  }).join('\n');
+};
+
+// Helper function to render bulleted content
+const BulletedContent = ({ text }) => {
+  if (!text) return null;
+  
+  const lines = text.split('\n').filter(line => line.trim());
+  
+  return (
+    <ul className="space-y-2 text-sm">
+      {lines.map((line, index) => {
+        // Remove bullet character if present for clean display
+        const cleanLine = line.replace(/^[•\-\*]\s*/, '').trim();
+        return (
+          <li key={index} className="flex items-start gap-2">
+            <span className="text-primary mt-1">•</span>
+            <span className="leading-relaxed">{cleanLine}</span>
+          </li>
+        );
+      })}
+    </ul>
   );
 };
 
@@ -68,21 +76,10 @@ export default function DailyStatusUpdate() {
   const [loading, setLoading] = useState(false);
   const [pastStatuses, setPastStatuses] = useState([]);
   
-  // Three sections state
+  // Three sections state (simplified - removed AI revision state)
   const [yesterdayUpdates, setYesterdayUpdates] = useState('');
-  const [yesterdayOriginal, setYesterdayOriginal] = useState('');
-  const [yesterdayRevised, setYesterdayRevised] = useState(false);
-  const [revisingYesterday, setRevisingYesterday] = useState(false);
-  
   const [todayActions, setTodayActions] = useState('');
-  const [todayOriginal, setTodayOriginal] = useState('');
-  const [todayRevised, setTodayRevised] = useState(false);
-  const [revisingToday, setRevisingToday] = useState(false);
-  
   const [helpNeeded, setHelpNeeded] = useState('');
-  const [helpOriginal, setHelpOriginal] = useState('');
-  const [helpRevised, setHelpRevised] = useState(false);
-  const [revisingHelp, setRevisingHelp] = useState(false);
 
   useEffect(() => {
     fetchPastStatuses();
@@ -107,29 +104,13 @@ export default function DailyStatusUpdate() {
   const loadExistingStatus = useCallback(() => {
     const existing = pastStatuses.find(s => s.status_date === selectedDate);
     if (existing) {
-      // Load existing saved status
       setYesterdayUpdates(existing.yesterday_updates || '');
-      setYesterdayOriginal(existing.yesterday_original || '');
-      setYesterdayRevised(existing.yesterday_ai_revised || false);
-      
       setTodayActions(existing.today_actions || '');
-      setTodayOriginal(existing.today_original || '');
-      setTodayRevised(existing.today_ai_revised || false);
-      
       setHelpNeeded(existing.help_needed || '');
-      setHelpOriginal(existing.help_original || '');
-      setHelpRevised(existing.help_ai_revised || false);
     } else {
-      // Reset all fields for new date
       setYesterdayUpdates('');
-      setYesterdayOriginal('');
-      setYesterdayRevised(false);
       setTodayActions('');
-      setTodayOriginal('');
-      setTodayRevised(false);
       setHelpNeeded('');
-      setHelpOriginal('');
-      setHelpRevised(false);
     }
   }, [selectedDate, pastStatuses]);
 
@@ -148,50 +129,14 @@ export default function DailyStatusUpdate() {
       }
       
       if (response.data.formatted_text) {
-        // Always populate the FIRST section (Yesterday's/Today's Updates)
-        // The section title is dynamic based on selected date
-        setYesterdayUpdates(response.data.formatted_text);
-        
+        // Convert to bullet format before setting
+        setYesterdayUpdates(convertToBulletFormat(response.data.formatted_text));
         toast.success(`Loaded ${response.data.activity_count} activities from ${response.data.leads_contacted} leads`);
       }
     } catch (error) {
       toast.error('Failed to fetch activities');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const reviseSection = async (text, setRevising, setText, setOriginal, setRevised) => {
-    if (!text.trim()) {
-      toast.error('Please write something first');
-      return;
-    }
-
-    setRevising(true);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.post(
-        `${API_URL}/daily-status/revise`,
-        { text },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      setOriginal(text);
-      setText(response.data.revised);
-      setRevised(true);
-      toast.success('Revised by AI!');
-    } catch (error) {
-      toast.error('AI revision failed');
-    } finally {
-      setRevising(false);
-    }
-  };
-
-  const undoSection = (original, setText, setRevised) => {
-    if (original) {
-      setText(original);
-      setRevised(false);
-      toast.success('Restored original');
     }
   };
 
@@ -206,17 +151,18 @@ export default function DailyStatusUpdate() {
       const token = localStorage.getItem('token');
       const existing = pastStatuses.find(s => s.status_date === selectedDate);
       
+      // Convert all sections to bullet format before saving
       const data = {
         status_date: selectedDate,
-        yesterday_updates: yesterdayUpdates,
-        yesterday_original: yesterdayRevised ? yesterdayOriginal : null,
-        yesterday_ai_revised: yesterdayRevised,
-        today_actions: todayActions,
-        today_original: todayRevised ? todayOriginal : null,
-        today_ai_revised: todayRevised,
-        help_needed: helpNeeded,
-        help_original: helpRevised ? helpOriginal : null,
-        help_ai_revised: helpRevised
+        yesterday_updates: convertToBulletFormat(yesterdayUpdates),
+        yesterday_original: null,
+        yesterday_ai_revised: false,
+        today_actions: convertToBulletFormat(todayActions),
+        today_original: null,
+        today_ai_revised: false,
+        help_needed: convertToBulletFormat(helpNeeded),
+        help_original: null,
+        help_ai_revised: false
       };
 
       if (existing) {
@@ -260,8 +206,6 @@ export default function DailyStatusUpdate() {
   const secondSectionTitle = isToday
     ? "Tomorrow's Action Items & Follow-ups"
     : "Today's Action Items & Follow-ups";
-  
-  const secondSectionDisabled = isPastDate;
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-8 px-4" data-testid="daily-status-page">
@@ -340,42 +284,24 @@ export default function DailyStatusUpdate() {
         title={firstSectionTitle}
         value={yesterdayUpdates}
         onChange={setYesterdayUpdates}
-        onRevise={() => reviseSection(yesterdayUpdates, setRevisingYesterday, setYesterdayUpdates, setYesterdayOriginal, setYesterdayRevised)}
-        onUndo={() => undoSection(yesterdayOriginal, setYesterdayUpdates, setYesterdayRevised)}
-        isRevised={yesterdayRevised}
-        isRevising={revisingYesterday}
-        placeholder={isToday ? "What did you accomplish today? Meetings, client visits, deals closed..." : "What did you accomplish on this day? Meetings, client visits, deals closed..."}
+        placeholder={isToday ? "What did you accomplish today? Enter each item on a new line..." : "What did you accomplish on this day? Enter each item on a new line..."}
       />
 
       {/* Section 2: Today's / Tomorrow's Action Items (Disabled for past dates) */}
-      {!secondSectionDisabled ? (
-        <StatusSection
-          title={secondSectionTitle}
-          value={todayActions}
-          onChange={setTodayActions}
-          onRevise={() => reviseSection(todayActions, setRevisingToday, setTodayActions, setTodayOriginal, setTodayRevised)}
-          onUndo={() => undoSection(todayOriginal, setTodayActions, setTodayRevised)}
-          isRevised={todayRevised}
-          isRevising={revisingToday}
-          placeholder={isToday ? "What are your plans for tomorrow? Follow-ups scheduled, client meetings, proposals to send..." : "What are your plans for today? Follow-ups scheduled, client meetings, proposals to send..."}
-        />
-      ) : (
-        <Card className="p-5 bg-muted/30">
-          <p className="text-sm font-semibold text-muted-foreground mb-2">{secondSectionTitle}</p>
-          <p className="text-sm text-muted-foreground italic">Action items not available for past dates</p>
-        </Card>
-      )}
+      <StatusSection
+        title={secondSectionTitle}
+        value={todayActions}
+        onChange={setTodayActions}
+        disabled={isPastDate}
+        placeholder={isToday ? "What are your plans for tomorrow? Enter each item on a new line..." : "What are your plans for today? Enter each item on a new line..."}
+      />
 
       {/* Section 3: Help Needed from Team */}
       <StatusSection
         title="Help Needed from the Team"
         value={helpNeeded}
         onChange={setHelpNeeded}
-        onRevise={() => reviseSection(helpNeeded, setRevisingHelp, setHelpNeeded, setHelpOriginal, setHelpRevised)}
-        onUndo={() => undoSection(helpOriginal, setHelpNeeded, setHelpRevised)}
-        isRevised={helpRevised}
-        isRevising={revisingHelp}
-        placeholder="Do you need support from colleagues? Resources, approvals, technical assistance..."
+        placeholder="Do you need support from colleagues? Enter each item on a new line..."
       />
 
       {/* Submit Button - Prominent & Mobile-Friendly */}
@@ -393,7 +319,7 @@ export default function DailyStatusUpdate() {
         )}
       </Button>
 
-      {/* Past Statuses */}
+      {/* Past Statuses - with bulleted display */}
       {pastStatuses.length > 0 && (
         <div className="space-y-4 mt-8">
           <h2 className="text-xl font-bold">Recent Updates</h2>
@@ -408,46 +334,22 @@ export default function DailyStatusUpdate() {
 
               {status.yesterday_updates && (
                 <div className="mb-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <p className="text-sm font-semibold text-muted-foreground">Yesterday&apos;s Updates</p>
-                    {status.yesterday_ai_revised && (
-                      <Badge variant="outline" className="text-xs">
-                        <Sparkles className="h-3 w-3 mr-1" />
-                        AI
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{status.yesterday_updates}</p>
+                  <p className="text-sm font-semibold text-muted-foreground mb-2">Updates</p>
+                  <BulletedContent text={status.yesterday_updates} />
                 </div>
               )}
 
               {status.today_actions && (
                 <div className="mb-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <p className="text-sm font-semibold text-muted-foreground">Today&apos;s Action Items</p>
-                    {status.today_ai_revised && (
-                      <Badge variant="outline" className="text-xs">
-                        <Sparkles className="h-3 w-3 mr-1" />
-                        AI
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{status.today_actions}</p>
+                  <p className="text-sm font-semibold text-muted-foreground mb-2">Action Items</p>
+                  <BulletedContent text={status.today_actions} />
                 </div>
               )}
 
               {status.help_needed && (
                 <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <p className="text-sm font-semibold text-muted-foreground">Help Needed</p>
-                    {status.help_ai_revised && (
-                      <Badge variant="outline" className="text-xs">
-                        <Sparkles className="h-3 w-3 mr-1" />
-                        AI
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{status.help_needed}</p>
+                  <p className="text-sm font-semibold text-muted-foreground mb-2">Help Needed</p>
+                  <BulletedContent text={status.help_needed} />
                 </div>
               )}
             </Card>
