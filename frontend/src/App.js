@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { AppContextProvider } from './context/AppContextContext';
 import { Toaster } from './components/ui/sonner';
 import axios from 'axios';
 import DashboardLayout from './layouts/DashboardLayout';
@@ -42,6 +43,12 @@ import TransportationCostCalculator from './pages/TransportationCostCalculator';
 import SKUManagement from './pages/SKUManagement';
 import CompanyProfile from './pages/CompanyProfile';
 import FilesDocuments from './pages/FilesDocuments';
+// Production Context Pages
+import Maintenance from './pages/Maintenance';
+import Inventory from './pages/Inventory';
+import QualityControl from './pages/QualityControl';
+import Assets from './pages/Assets';
+import Vendors from './pages/Vendors';
 import '@/App.css';
 import { useActivityTracker } from './hooks/useActivityTracker';
 
