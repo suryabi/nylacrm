@@ -353,26 +353,39 @@ export default function AddEditLead() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="region">Region *</Label>
-              <Select value={formData.region} onValueChange={(v) => updateField('region', v)} required>
+              <Select 
+                value={formData.region} 
+                onValueChange={(v) => {
+                  // Reset state and city when region changes
+                  setFormData(prev => ({ ...prev, region: v, state: '', city: '' }));
+                }} 
+                required
+              >
                 <SelectTrigger data-testid="lead-region-select">
                   <SelectValue placeholder="Select region" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="North India">North India</SelectItem>
-                  <SelectItem value="South India">South India</SelectItem>
-                  <SelectItem value="West India">West India</SelectItem>
-                  <SelectItem value="East India">East India</SelectItem>
+                  {masterTerritories.map(territory => (
+                    <SelectItem key={territory.id} value={territory.name}>{territory.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="state">State *</Label>
-              <Select value={formData.state} onValueChange={(v) => updateField('state', v)} required>
+              <Select 
+                value={formData.state} 
+                onValueChange={(v) => {
+                  // Reset city when state changes
+                  setFormData(prev => ({ ...prev, state: v, city: '' }));
+                }} 
+                disabled={!formData.region}
+                required
+              >
                 <SelectTrigger data-testid="lead-state-select">
                   <SelectValue placeholder="Select state" />
                 </SelectTrigger>
                 <SelectContent>
-                  <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Available States</div>
                   {availableStates.map(state => (
                     <SelectItem key={state} value={state}>{state}</SelectItem>
                   ))}
