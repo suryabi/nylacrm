@@ -12,29 +12,9 @@ import {
 import { toast } from 'sonner';
 import { Calendar, Users, Loader2, User, MapPin } from 'lucide-react';
 import { format, subDays } from 'date-fns';
+import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-
-const TERRITORIES = ['All Territories', 'North India', 'South India', 'West India', 'East India', 'Central India'];
-
-const TERRITORY_STATES = {
-  'North India': ['Delhi NCR', 'Uttar Pradesh', 'Punjab', 'Haryana', 'Rajasthan', 'Himachal Pradesh', 'Uttarakhand'],
-  'South India': ['Karnataka', 'Tamil Nadu', 'Kerala', 'Andhra Pradesh', 'Telangana'],
-  'East India': ['West Bengal', 'Bihar', 'Odisha', 'Jharkhand', 'Assam'],
-  'West India': ['Maharashtra', 'Gujarat', 'Goa', 'Madhya Pradesh'],
-  'Central India': ['Madhya Pradesh', 'Chhattisgarh']
-};
-
-const STATE_CITIES = {
-  'Karnataka': ['Bengaluru', 'Mysuru', 'Hubli', 'Mangaluru'],
-  'Tamil Nadu': ['Chennai', 'Coimbatore', 'Madurai'],
-  'Telangana': ['Hyderabad', 'Warangal', 'Nizamabad'],
-  'Maharashtra': ['Mumbai', 'Pune', 'Nagpur', 'Nashik'],
-  'Delhi NCR': ['New Delhi', 'Gurugram', 'Noida', 'Faridabad'],
-  'Gujarat': ['Ahmedabad', 'Surat', 'Vadodara'],
-  'West Bengal': ['Kolkata', 'Howrah', 'Durgapur'],
-  'Uttar Pradesh': ['Lucknow', 'Noida', 'Kanpur', 'Agra'],
-};
 
 // Helper to render bulleted content
 const BulletedContent = ({ text }) => {
