@@ -79,24 +79,6 @@ const StyledActivityDisplay = ({ text, onChange }) => {
           <div key={index} className="text-sm pl-2">{trimmedLine}</div>
         );
       })}
-      
-      {/* Edit hint */}
-      <div className="pt-3 mt-3 border-t">
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          className="text-xs text-muted-foreground"
-          onClick={() => {
-            // Convert back to editable format
-            const editableText = text
-              .replace(/\[SUMMARY\]\s*/g, '📊 SUMMARY: ')
-              .replace(/\[HEADER\]\s*/g, '\n📌 ');
-            onChange(editableText);
-          }}
-        >
-          Click to edit manually
-        </Button>
-      </div>
     </div>
   );
 };
