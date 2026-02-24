@@ -13,6 +13,7 @@ import Dashboard from './pages/Dashboard';
 // CRITICAL: Configure axios to always send credentials (cookies) with all requests
 axios.defaults.withCredentials = true;
 import LeadsList from './pages/LeadsList';
+import LeadsKanban from './pages/LeadsKanban';
 import LeadDetail from './pages/LeadDetail';
 import AddEditLead from './pages/AddEditLead';
 import FollowUps from './pages/FollowUps';
