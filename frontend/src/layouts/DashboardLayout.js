@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useAppContext } from '../context/AppContextContext';
 import { Button } from '../components/ui/button';
 import { 
   LogOut, Menu, ChevronDown, ChevronRight, 
@@ -8,7 +9,8 @@ import {
   Search, Target, CalendarDays, UsersRound,
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
-  Kanban
+  Kanban, Wrench, Box, ShieldCheck, Boxes,
+  Factory, ArrowLeftRight
 } from 'lucide-react';
 
 const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
@@ -24,8 +26,8 @@ const dashboardSubmenu = [
   { name: 'Target x Resource', href: '/target-resource', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
 ];
 
-// Grouped navigation structure
-const navigationGroups = [
+// Sales Context Navigation
+const salesNavigationGroups = [
   {
     title: 'Core',
     items: [
@@ -71,6 +73,44 @@ const navigationGroups = [
       { name: 'Company Profile', href: '/company-profile', icon: Building, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
       { name: 'Team', href: '/team', icon: UserCog, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
       { name: 'Leaves', href: '/leaves', icon: CalendarOff, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
+    ]
+  },
+];
+
+// Production Context Navigation
+const productionNavigationGroups = [
+  {
+    title: 'Production',
+    items: [
+      { name: 'Maintenance', href: '/maintenance', icon: Wrench, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff'] },
+      { name: 'Inventory', href: '/inventory', icon: Boxes, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff'] },
+      { name: 'Quality Control', href: '/quality-control', icon: ShieldCheck, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff'] },
+    ]
+  },
+  {
+    title: 'Assets & Vendors',
+    items: [
+      { name: 'Assets', href: '/assets', icon: Box, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor'] },
+      { name: 'Vendors', href: '/vendors', icon: Truck, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor'] },
+    ]
+  },
+  {
+    title: 'Product & SKU',
+    items: [
+      { name: 'SKU Management', href: '/sku-management', icon: Package, roles: ['CEO', 'Director', 'Vice President', 'Production Manager'] },
+    ]
+  },
+  {
+    title: 'Documents',
+    items: [
+      { name: 'Files & Documents', href: '/files-documents', icon: FolderOpen, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff'] },
+    ]
+  },
+  {
+    title: 'Organization',
+    items: [
+      { name: 'Company Profile', href: '/company-profile', icon: Building, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor'] },
+      { name: 'Team', href: '/team', icon: UserCog, roles: ['CEO', 'Director', 'Vice President', 'Production Manager'] },
     ]
   },
 ];
