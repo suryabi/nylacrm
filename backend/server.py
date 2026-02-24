@@ -3001,7 +3001,7 @@ async def update_daily_status(
 
 @api_router.get("/daily-status/auto-populate/{status_date}")
 async def auto_populate_from_activities(status_date: str, current_user: dict = Depends(get_current_user)):
-    """Auto-populate daily status from logged lead activities"""
+    """Auto-populate daily status from logged lead activities, grouped by interaction method"""
     
     try:
         # Get all activities created by user on this date
@@ -3028,52 +3028,94 @@ async def auto_populate_from_activities(status_date: str, current_user: dict = D
         
         lead_map = {l['id']: l.get('company') or l.get('name') for l in leads}
         
-        # Count activities by type for summary
-        visits_count = 0
-        calls_count = 0
-        messages_count = 0  # SMS, WhatsApp, Email combined
+        # Group activities by interaction method
+        grouped_activities = {
+            'customer_visit': [],
+            'phone_call': [],
+            'email': [],
+            'whatsapp': [],
+            'sms': [],
+            'other': []
+        }
         
-        for activity in activities:
-            interaction_method = (activity.get('interaction_method') or activity.get('activity_type') or '').lower()
-            if interaction_method == 'customer_visit':
-                visits_count += 1
-            elif interaction_method in ['phone_call', 'call']:
-                calls_count += 1
-            elif interaction_method in ['sms', 'whatsapp', 'email', 'message']:
-                messages_count += 1
-        
-        # Build summary line
-        summary_parts = []
-        if visits_count > 0:
-            summary_parts.append(f"Customer Visits: {visits_count}")
-        if calls_count > 0:
-            summary_parts.append(f"Phone Calls: {calls_count}")
-        if messages_count > 0:
-            summary_parts.append(f"Messages/Emails: {messages_count}")
-        
-        summary_line = " | ".join(summary_parts) if summary_parts else "Activities logged"
-        
-        # Format activities by lead
-        formatted_lines = []
         for activity in activities:
             lead_name = lead_map.get(activity['lead_id'], 'Unknown Lead')
-            # Handle None values for interaction_method and activity_type
-            interaction_raw = activity.get('interaction_method') or activity.get('activity_type') or 'activity'
-            interaction = interaction_raw.replace('_', ' ').title()
             description = activity.get('description') or ''
+            interaction_method = (activity.get('interaction_method') or activity.get('activity_type') or '').lower()
             
-            formatted_lines.append(f"{lead_name}: {interaction} - {description}")
+            activity_text = f"{lead_name} - {description}" if description else lead_name
+            
+            if interaction_method == 'customer_visit':
+                grouped_activities['customer_visit'].append(activity_text)
+            elif interaction_method in ['phone_call', 'call']:
+                grouped_activities['phone_call'].append(activity_text)
+            elif interaction_method == 'email':
+                grouped_activities['email'].append(activity_text)
+            elif interaction_method == 'whatsapp':
+                grouped_activities['whatsapp'].append(activity_text)
+            elif interaction_method == 'sms':
+                grouped_activities['sms'].append(activity_text)
+            else:
+                grouped_activities['other'].append(activity_text)
         
-        # Combine summary + activities
-        formatted_text = f"SUMMARY: {summary_line}\n\n" + '\n\n'.join(formatted_lines)
+        # Build formatted text grouped by interaction type
+        formatted_sections = []
+        
+        # Summary counts
+        summary_parts = []
+        if grouped_activities['customer_visit']:
+            summary_parts.append(f"Visits: {len(grouped_activities['customer_visit'])}")
+        if grouped_activities['phone_call']:
+            summary_parts.append(f"Calls: {len(grouped_activities['phone_call'])}")
+        messages_count = len(grouped_activities['email']) + len(grouped_activities['whatsapp']) + len(grouped_activities['sms'])
+        if messages_count > 0:
+            summary_parts.append(f"Messages: {messages_count}")
+        if grouped_activities['other']:
+            summary_parts.append(f"Other: {len(grouped_activities['other'])}")
+        
+        summary_line = " | ".join(summary_parts) if summary_parts else "Activities logged"
+        formatted_sections.append(f"SUMMARY: {summary_line}")
+        
+        # Add grouped sections
+        if grouped_activities['customer_visit']:
+            formatted_sections.append("\nCUSTOMER VISITS:")
+            for item in grouped_activities['customer_visit']:
+                formatted_sections.append(f"• {item}")
+        
+        if grouped_activities['phone_call']:
+            formatted_sections.append("\nPHONE CALLS:")
+            for item in grouped_activities['phone_call']:
+                formatted_sections.append(f"• {item}")
+        
+        if grouped_activities['email']:
+            formatted_sections.append("\nEMAILS:")
+            for item in grouped_activities['email']:
+                formatted_sections.append(f"• {item}")
+        
+        if grouped_activities['whatsapp']:
+            formatted_sections.append("\nWHATSAPP:")
+            for item in grouped_activities['whatsapp']:
+                formatted_sections.append(f"• {item}")
+        
+        if grouped_activities['sms']:
+            formatted_sections.append("\nSMS:")
+            for item in grouped_activities['sms']:
+                formatted_sections.append(f"• {item}")
+        
+        if grouped_activities['other']:
+            formatted_sections.append("\nOTHER ACTIVITIES:")
+            for item in grouped_activities['other']:
+                formatted_sections.append(f"• {item}")
+        
+        formatted_text = '\n'.join(formatted_sections)
         
         return {
             'formatted_text': formatted_text,
             'activity_count': len(activities),
             'leads_contacted': len(lead_map),
             'summary': {
-                'visits': visits_count,
-                'calls': calls_count,
+                'visits': len(grouped_activities['customer_visit']),
+                'calls': len(grouped_activities['phone_call']),
                 'messages': messages_count
             }
         }
