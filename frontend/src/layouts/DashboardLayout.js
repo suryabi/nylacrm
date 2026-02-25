@@ -358,26 +358,26 @@ export default function DashboardLayout({ children }) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 lg:ml-64">
         {/* Top Bar (Mobile) */}
-        <header className="bg-white border-b border-slate-200 px-4 py-3 lg:hidden sticky top-0 z-30 shadow-sm">
+        <header className="bg-card border-b border-border px-4 py-3 lg:hidden sticky top-0 z-30 shadow-sm">
           <div className="flex items-center justify-between">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setSidebarOpen(true)}
-              className="rounded-lg hover:bg-slate-100"
+              className="rounded-lg hover:bg-secondary"
             >
-              <Menu className="h-5 w-5 text-slate-600" />
+              <Menu className="h-5 w-5 text-foreground" />
             </Button>
             <div className="flex items-center gap-2">
               <img src={NYLA_LOGO} alt="Nyla Air Water" className="h-8 w-8 rounded-lg" />
-              <span className="font-bold text-slate-800">Nyla Air Water</span>
+              <span className="font-bold text-foreground">Nyla Air Water</span>
             </div>
             <div className="w-10" />
           </div>
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-4 lg:p-6 overflow-auto bg-slate-50">
+        <main className="flex-1 p-4 lg:p-6 overflow-auto bg-background">
           <div className="max-w-[1600px] mx-auto">
             {children}
           </div>
