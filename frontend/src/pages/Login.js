@@ -163,10 +163,40 @@ export default function Login() {
                 Sign in with Google Workspace
               </Button>
 
-              <div className="mt-8 p-4 bg-primary/5 border border-primary/20 rounded-lg text-center">
-                <p className="text-sm text-muted-foreground">
-                  Use your company email (@nylaairwater.earth) to sign in
-                </p>
+              <div className="mt-8 p-4 bg-primary/5 border border-primary/20 rounded-lg">
+                <p className="text-sm font-medium text-center mb-3">Test Credentials</p>
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between items-center p-2 bg-background rounded border">
+                    <div>
+                      <span className="font-medium">Director:</span>
+                      <span className="ml-2 text-muted-foreground">admin@nylaairwater.earth / admin123</span>
+                    </div>
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="sm"
+                      className="h-6 text-xs"
+                      onClick={() => { setEmail('admin@nylaairwater.earth'); setPassword('admin123'); }}
+                    >
+                      Use
+                    </Button>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-background rounded border">
+                    <div>
+                      <span className="font-medium">National Sales Head:</span>
+                      <span className="ml-2 text-muted-foreground">nsh@nylaairwater.earth / nsh123</span>
+                    </div>
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="sm"
+                      className="h-6 text-xs"
+                      onClick={() => { setEmail('nsh@nylaairwater.earth'); setPassword('nsh123'); }}
+                    >
+                      Use
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           ) : (
