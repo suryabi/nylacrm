@@ -206,9 +206,13 @@ export default function COGSCalculator() {
               <thead className="bg-secondary">
                 <tr className="border-b">
                   <th className="text-left p-3 font-semibold sticky left-0 bg-secondary">SKU</th>
-                  <th className="text-right p-3 font-semibold bg-primary/5">Primary Pkg (₹)</th>
-                  <th className="text-right p-3 font-semibold bg-primary/5">Secondary Pkg (₹)</th>
-                  <th className="text-right p-3 font-semibold bg-primary/5">Mfg Cost (₹)</th>
+                  {canSeeCostDetails && (
+                    <>
+                      <th className="text-right p-3 font-semibold bg-primary/5">Primary Pkg (₹)</th>
+                      <th className="text-right p-3 font-semibold bg-primary/5">Secondary Pkg (₹)</th>
+                      <th className="text-right p-3 font-semibold bg-primary/5">Mfg Cost (₹)</th>
+                    </>
+                  )}
                   <th className="text-right p-3 font-semibold bg-primary/5">Gross Margin (%)</th>
                   <th className="text-right p-3 font-semibold bg-primary/5">Logistics (₹)</th>
                   <th className="text-right p-3 font-semibold bg-amber-50">Dist. Cost (%)</th>
