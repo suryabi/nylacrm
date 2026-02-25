@@ -41,17 +41,17 @@ const STATUS_CONFIG = {
 };
 
 const COLOR_CLASSES = {
-  blue: 'from-blue-50 to-blue-100 border-blue-200 text-blue-700',
-  yellow: 'from-yellow-50 to-yellow-100 border-yellow-200 text-yellow-700',
-  green: 'from-green-50 to-green-100 border-green-200 text-green-700',
-  gray: 'from-gray-50 to-gray-100 border-gray-200 text-gray-600',
-  purple: 'from-purple-50 to-purple-100 border-purple-200 text-purple-700',
-  indigo: 'from-indigo-50 to-indigo-100 border-indigo-200 text-indigo-700',
-  orange: 'from-orange-50 to-orange-100 border-orange-200 text-orange-700',
-  teal: 'from-teal-50 to-teal-100 border-teal-200 text-teal-700',
-  emerald: 'from-emerald-50 to-emerald-100 border-emerald-200 text-emerald-700',
-  red: 'from-red-50 to-red-100 border-red-200 text-red-700',
-  slate: 'from-slate-50 to-slate-100 border-slate-200 text-slate-700',
+  blue: 'from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 border-blue-200 dark:border-blue-700/50 text-blue-700 dark:text-blue-400',
+  yellow: 'from-yellow-50 to-yellow-100 dark:from-yellow-900/30 dark:to-yellow-800/20 border-yellow-200 dark:border-yellow-700/50 text-yellow-700 dark:text-yellow-400',
+  green: 'from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/20 border-green-200 dark:border-green-700/50 text-green-700 dark:text-green-400',
+  gray: 'from-gray-50 to-gray-100 dark:from-gray-900/30 dark:to-gray-800/20 border-gray-200 dark:border-gray-700/50 text-gray-600 dark:text-gray-400',
+  purple: 'from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 border-purple-200 dark:border-purple-700/50 text-purple-700 dark:text-purple-400',
+  indigo: 'from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/20 border-indigo-200 dark:border-indigo-700/50 text-indigo-700 dark:text-indigo-400',
+  orange: 'from-orange-50 to-orange-100 dark:from-orange-900/30 dark:to-orange-800/20 border-orange-200 dark:border-orange-700/50 text-orange-700 dark:text-orange-400',
+  teal: 'from-teal-50 to-teal-100 dark:from-teal-900/30 dark:to-teal-800/20 border-teal-200 dark:border-teal-700/50 text-teal-700 dark:text-teal-400',
+  emerald: 'from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/20 border-emerald-200 dark:border-emerald-700/50 text-emerald-700 dark:text-emerald-400',
+  red: 'from-red-50 to-red-100 dark:from-red-900/30 dark:to-red-800/20 border-red-200 dark:border-red-700/50 text-red-700 dark:text-red-400',
+  slate: 'from-slate-50 to-slate-100 dark:from-slate-900/30 dark:to-slate-800/20 border-slate-200 dark:border-slate-700/50 text-slate-700 dark:text-slate-400',
 };
 
 export default function Dashboard() {
