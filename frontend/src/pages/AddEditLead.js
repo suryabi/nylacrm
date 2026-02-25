@@ -247,6 +247,7 @@ export default function AddEditLead() {
     : [];
   
   // Add current state if not in list (for edit mode compatibility)
+  // This ensures the dropdown shows the value even if master locations haven't loaded
   const availableStates = [...regionStates];
   if (formData.state && !availableStates.includes(formData.state)) {
     availableStates.push(formData.state);
@@ -258,9 +259,16 @@ export default function AddEditLead() {
     : [];
   
   // Add current city if not in list (for edit mode compatibility)
+  // This ensures the dropdown shows the value even if master locations haven't loaded
   const availableCities = [...stateCities];
   if (formData.city && !availableCities.includes(formData.city)) {
     availableCities.push(formData.city);
+  }
+  
+  // Get territory options - include current region if not in master territories
+  const territoryOptions = [...masterTerritories];
+  if (formData.region && !territoryOptions.find(t => t.name === formData.region)) {
+    territoryOptions.push({ id: formData.region, name: formData.region });
   }
 
   return (
