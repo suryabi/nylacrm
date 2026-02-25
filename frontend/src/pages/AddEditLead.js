@@ -362,7 +362,8 @@ export default function AddEditLead() {
             <div className="space-y-2">
               <Label htmlFor="region">Region *</Label>
               <Select 
-                value={formData.region} 
+                key={`region-${formData.region}`}
+                value={formData.region || undefined}
                 onValueChange={(v) => {
                   // Reset state and city when region changes
                   setFormData(prev => ({ ...prev, region: v, state: '', city: '' }));
@@ -382,7 +383,8 @@ export default function AddEditLead() {
             <div className="space-y-2">
               <Label htmlFor="state">State *</Label>
               <Select 
-                value={formData.state} 
+                key={`state-${formData.state}-${formData.region}`}
+                value={formData.state || undefined}
                 onValueChange={(v) => {
                   // Reset city when state changes
                   setFormData(prev => ({ ...prev, state: v, city: '' }));
@@ -403,7 +405,8 @@ export default function AddEditLead() {
             <div className="space-y-2">
               <Label htmlFor="city">City *</Label>
               <Select 
-                value={formData.city} 
+                key={`city-${formData.city}-${formData.state}`}
+                value={formData.city || undefined}
                 onValueChange={(v) => updateField('city', v)}
                 disabled={!formData.state}
                 required
