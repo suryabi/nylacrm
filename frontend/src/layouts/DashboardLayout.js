@@ -120,6 +120,7 @@ const productionNavigationGroups = [
 export default function DashboardLayout({ children }) {
   const { user, logout } = useAuth();
   const { currentContext, switchContext, canAccessBothContexts } = useAppContext();
+  const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
