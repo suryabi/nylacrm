@@ -134,24 +134,33 @@ export default function COGSCalculator() {
   };
 
   const exportToExcel = () => {
-    const headers = ['SKU', 'Primary Packaging', 'Secondary Packaging', 'Manufacturing Cost', 'Gross Margin %', 'Outbound Logistics', 'Distribution Cost %', 'Total COGS', 'Gross Margin ₹', 'Ex-Factory Price', 'Base Cost', 'Min Landing Price', 'Last Edited By'];
-    const rows = cogsData.map(row => [
-      row.sku_name,
-      row.primary_packaging_cost,
-      row.secondary_packaging_cost,
-      row.manufacturing_variable_cost,
-      row.gross_margin,
-      row.outbound_logistics_cost,
-      row.distribution_cost || 0,
-      row.total_cogs,
-      ((row.total_cogs || 0) * (row.gross_margin || 0) / 100).toFixed(2),
-      row.ex_factory_price,
-      row.base_cost,
-      row.minimum_landing_price,
-      row.editor_name || '-'
-    ]);
+    // Headers depend on user role
+    const headers = canSeeCostDetails
+      ? ['SKU', 'Primary Packaging', 'Secondary Packaging', 'Manufacturing Cost', 'Gross Margin %', 'Outbound Logistics', 'Distribution Cost %', 'Total COGS', 'Gross Margin ₹', 'Ex-Factory Price', 'Base Cost', 'Min Landing Price', 'Last Edited By']
+      : ['SKU', 'Gross Margin %', 'Outbound Logistics', 'Distribution Cost %', 'Total COGS', 'Gross Margin ₹', 'Ex-Factory Price', 'Base Cost', 'Min Landing Price', 'Last Edited By'];
+    
+    const rows = cogsData.map(row => {
+      const baseRow = [
+        row.sku_name,
+        ...(canSeeCostDetails ? [
+          row.primary_packaging_cost,
+          row.secondary_packaging_cost,
+          row.manufacturing_variable_cost,
+        ] : []),
+        row.gross_margin,
+        row.outbound_logistics_cost,
+        row.distribution_cost || 0,
+        row.total_cogs,
+        ((row.total_cogs || 0) * (row.gross_margin || 0) / 100).toFixed(2),
+        row.ex_factory_price,
+        row.base_cost,
+        row.minimum_landing_price,
+        row.editor_name || '-'
+      ];
+      return baseRow;
+    });
 
-    const csv = [headers, ...rows].map(r => r.join(',')).join('\\n');
+    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
