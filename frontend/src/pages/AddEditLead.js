@@ -373,7 +373,7 @@ export default function AddEditLead() {
                   <SelectValue placeholder="Select region" />
                 </SelectTrigger>
                 <SelectContent>
-                  {masterTerritories.map(territory => (
+                  {territoryOptions.map(territory => (
                     <SelectItem key={territory.id} value={territory.name}>{territory.name}</SelectItem>
                   ))}
                 </SelectContent>
