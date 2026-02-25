@@ -38,7 +38,7 @@
         --chart-5: 155 50% 55%;
     }
     
-    .dark {
+    :root.dark {
         /* Dark Mode - Dark Aqua Blue Theme */
         --background: 200 35% 8%;
         --background-secondary: 200 30% 12%;
