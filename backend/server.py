@@ -6935,15 +6935,23 @@ async def update_state(state_id: str, state: State, current_user: dict = Depends
 
 @api_router.delete("/master-locations/states/{state_id}")
 async def delete_state(state_id: str, current_user: dict = Depends(get_current_user)):
-    """Soft delete a state"""
+    """Soft delete a state and all its cities"""
     if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
         raise HTTPException(status_code=403, detail="Not authorized")
     
+    # Soft delete the state
     await db.master_states.update_one(
         {'id': state_id}, 
         {'$set': {'is_active': False, 'updated_at': datetime.now(timezone.utc).isoformat()}}
     )
-    return {'message': 'State deleted'}
+    
+    # Cascade: Also soft delete all cities under this state
+    await db.master_cities.update_many(
+        {'state_id': state_id, 'is_active': True},
+        {'$set': {'is_active': False, 'updated_at': datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {'message': 'State and its cities deleted'}
 
 # CRUD for Cities
 @api_router.post("/master-locations/cities")
