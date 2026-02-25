@@ -314,6 +314,26 @@ export default function DashboardLayout({ children }) {
                 <p className="text-xs text-slate-400 truncate capitalize">{user?.role?.replace('_', ' ')}</p>
               </div>
             </div>
+            
+            {/* Theme Toggle */}
+            <Button
+              onClick={toggleTheme}
+              variant="ghost"
+              className="w-full justify-start text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg mb-1"
+            >
+              {theme === 'dark' ? (
+                <>
+                  <Sun className="h-4 w-4 mr-2" />
+                  Light Mode
+                </>
+              ) : (
+                <>
+                  <Moon className="h-4 w-4 mr-2" />
+                  Dark Mode
+                </>
+              )}
+            </Button>
+            
             <Button
               onClick={handleLogout}
               variant="ghost"
