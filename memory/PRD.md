@@ -28,7 +28,31 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 
 ## What's Been Implemented
 
-### Feb 24, 2026 (Session 9 - Current)
+### Feb 25, 2026 (Session 10 - Current)
+- **FEATURE**: Dark/Light Mode Theme Toggle
+  - **Purpose**: User-requested theme switching with dark aqua blue color scheme
+  - **Implementation**:
+    - `ThemeContext.js`: React context for managing theme state with localStorage persistence
+    - `index.css`: CSS variables for both light and dark themes using HSL colors
+      - Light mode: `--background: 195 30% 98%`, `--card: 0 0% 100%`
+      - Dark mode: `--background: 200 35% 8%`, `--card: 200 30% 12%`
+    - `DashboardLayout.js`: Theme toggle button with Sun/Moon icons in sidebar user section
+    - `index.html`: Script to prevent flash of wrong theme before React loads
+  - **Theme Colors**:
+    - Primary: HSL(185, 70%, 35%) - Aqua/teal accent
+    - Dark background: rgb(13, 23, 28) - Deep dark aqua blue
+    - Dark cards: rgb(21, 34, 40) - Slightly lighter dark blue
+    - Light background: rgb(248, 251, 251) - Light aqua tint
+  - **Features**:
+    - Persists theme preference in localStorage
+    - Respects system preference (prefers-color-scheme) on first visit
+    - Smooth 0.2s transition animations
+    - Sidebar maintains dark aqua blue in both modes (consistent branding)
+    - Toggle button shows "Dark Mode"/"Light Mode" based on current state
+  - **Files Modified**: `ThemeContext.js`, `index.css`, `DashboardLayout.js`, `index.html`, `Dashboard.js`
+  - Status: VERIFIED - 100% test success rate (13/13 tests)
+
+### Feb 24, 2026 (Session 9)
 - **FIX (P0)**: Server-Side Filtering for Leads List
   - **Problem**: Filters on Leads List page were performing client-side filtering instead of server-side, causing incorrect data display and performance issues
   - **Root Cause**: Frontend was fetching all data and filtering locally instead of passing filter parameters to backend
