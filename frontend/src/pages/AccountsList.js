@@ -624,10 +624,13 @@ export default function AccountsList() {
           </>
         )}
       </Card>
+      )}
 
       {/* Info Note */}
       <p className="text-xs text-muted-foreground mt-4 text-center">
-        Click on an account row to view details. Account Age is calculated from the onboarding date.
+        {viewMode === 'gallery' 
+          ? 'Click on a logo to view account details. Hover to see category and type.'
+          : 'Click on an account row to view details. Account Age is calculated from the onboarding date.'}
       </p>
     </div>
   );
