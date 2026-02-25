@@ -16,7 +16,12 @@ export default function COGSCalculator() {
   const { cities } = useMasterLocations();
   
   // Check if user can see sensitive cost columns (CEO, Director only)
-  const canSeeCostDetails = ['ceo', 'director', 'CEO', 'Director'].includes(user?.role);
+  // Using case-insensitive check for role
+  const userRole = user?.role || '';
+  const canSeeCostDetails = ['ceo', 'director'].includes(userRole.toLowerCase());
+  
+  // Debug log
+  console.log('COGS Calculator - User Role:', userRole, '| Can see cost details:', canSeeCostDetails);
   
   const [selectedCity, setSelectedCity] = React.useState('');
   const [cogsData, setCogsData] = React.useState([]);
