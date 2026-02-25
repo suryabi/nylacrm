@@ -94,6 +94,9 @@ export default function AccountsList() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 25;
+  
+  // View mode state
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'gallery'
 
   const fetchAccounts = useCallback(async () => {
     setLoading(true);
