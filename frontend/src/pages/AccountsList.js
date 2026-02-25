@@ -9,7 +9,7 @@ import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { 
   Search, Building2, ChevronLeft, ChevronRight, Loader2, 
-  Filter, Users, Calendar, Phone, User, MapPin 
+  Filter, Users, Calendar, Phone, User, MapPin, LayoutGrid, List, Image as ImageIcon
 } from 'lucide-react';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 
