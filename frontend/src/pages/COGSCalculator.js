@@ -349,10 +349,14 @@ export default function COGSCalculator() {
       <Card className="p-6 bg-primary/5 border-primary/20 rounded-2xl">
         <h3 className="font-semibold mb-3">Formulas:</h3>
         <ul className="text-sm text-muted-foreground space-y-1">
-          <li>• <strong>Total COGS</strong> = Primary Packaging + Secondary Packaging + Manufacturing Cost</li>
-          <li>• <strong>Gross Margin (₹)</strong> = Total COGS × Gross Margin %</li>
-          <li>• <strong>Ex-Factory Price</strong> = Total COGS + Gross Margin (₹)</li>
-          <li>• <strong>Base Cost</strong> = Primary Pkg + Secondary Pkg + Mfg Cost + Gross Margin (₹) + Logistics</li>
+          {canSeeCostDetails && (
+            <>
+              <li>• <strong>Total COGS</strong> = Primary Packaging + Secondary Packaging + Manufacturing Cost</li>
+              <li>• <strong>Gross Margin (₹)</strong> = Total COGS × Gross Margin %</li>
+              <li>• <strong>Ex-Factory Price</strong> = Total COGS + Gross Margin (₹)</li>
+              <li>• <strong>Base Cost</strong> = Primary Pkg + Secondary Pkg + Mfg Cost + Gross Margin (₹) + Logistics</li>
+            </>
+          )}
           <li>• <strong>Minimum Landing Price</strong> = Base Cost ÷ (1 - Distribution Cost %)</li>
           <li className="text-xs text-muted-foreground/80 mt-2 pl-4">
             → After paying Distribution Cost %, the remaining amount equals Base Cost
