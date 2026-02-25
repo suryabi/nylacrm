@@ -228,48 +228,52 @@ export default function COGSCalculator() {
                 {cogsData.map((row, index) => (
                   <tr key={row.id} className="border-b hover:bg-secondary/20">
                     <td className="p-3 font-medium sticky left-0 bg-background">{row.sku_name}</td>
-                    <td className="p-2">
-                      <input
-                        type="text"
-                        value={row.primary_packaging_cost || ''}
-                        onChange={e => {
-                          const val = e.target.value;
-                          if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                            updateField(index, 'primary_packaging_cost', val);
-                          }
-                        }}
-                        className="w-24 h-9 text-right px-2 border rounded bg-background"
-                        placeholder="0.00"
-                      />
-                    </td>
-                    <td className="p-2">
-                      <input
-                        type="text"
-                        value={row.secondary_packaging_cost || ''}
-                        onChange={e => {
-                          const val = e.target.value;
-                          if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                            updateField(index, 'secondary_packaging_cost', val);
-                          }
-                        }}
-                        className="w-24 h-9 text-right px-2 border rounded bg-background"
-                        placeholder="0.00"
-                      />
-                    </td>
-                    <td className="p-2">
-                      <input
-                        type="text"
-                        value={row.manufacturing_variable_cost || ''}
-                        onChange={e => {
-                          const val = e.target.value;
-                          if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                            updateField(index, 'manufacturing_variable_cost', val);
-                          }
-                        }}
-                        className="w-24 h-9 text-right px-2 border rounded bg-background"
-                        placeholder="0.00"
-                      />
-                    </td>
+                    {canSeeCostDetails && (
+                      <>
+                        <td className="p-2">
+                          <input
+                            type="text"
+                            value={row.primary_packaging_cost || ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                updateField(index, 'primary_packaging_cost', val);
+                              }
+                            }}
+                            className="w-24 h-9 text-right px-2 border rounded bg-background"
+                            placeholder="0.00"
+                          />
+                        </td>
+                        <td className="p-2">
+                          <input
+                            type="text"
+                            value={row.secondary_packaging_cost || ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                updateField(index, 'secondary_packaging_cost', val);
+                              }
+                            }}
+                            className="w-24 h-9 text-right px-2 border rounded bg-background"
+                            placeholder="0.00"
+                          />
+                        </td>
+                        <td className="p-2">
+                          <input
+                            type="text"
+                            value={row.manufacturing_variable_cost || ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                updateField(index, 'manufacturing_variable_cost', val);
+                              }
+                            }}
+                            className="w-24 h-9 text-right px-2 border rounded bg-background"
+                            placeholder="0.00"
+                          />
+                        </td>
+                      </>
+                    )}
                     <td className="p-2">
                       <input
                         type="text"
