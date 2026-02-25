@@ -84,11 +84,12 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <AppContextProvider>
-        <BrowserRouter>
-          <AppRouter />
-        </BrowserRouter>
-      </AppContextProvider>
-    </AuthProvider>
+          <BrowserRouter>
+            <AppRouter />
+          </BrowserRouter>
+        </AppContextProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 
