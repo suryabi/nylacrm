@@ -48,6 +48,13 @@ security = HTTPBearer()
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
+# Static files for logos
+from fastapi.staticfiles import StaticFiles
+import os
+logos_dir = '/app/backend/static/logos'
+os.makedirs(logos_dir, exist_ok=True)
+app.mount("/api/static", StaticFiles(directory="/app/backend/static"), name="static")
+
 # ============= HELPER FUNCTIONS =============
 
 import re
