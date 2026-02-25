@@ -347,20 +347,147 @@ export default function AccountsList() {
           })}
       </div>
 
-      {/* Accounts Table */}
-      <Card className="overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : accounts.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p className="text-lg font-medium">No accounts found</p>
-            <p className="text-sm mt-2">Convert won leads to create accounts</p>
-          </div>
-        ) : (
-          <>
+      {/* View Mode Toggle */}
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-muted-foreground">
+          Showing {accounts.length} of {totalCount} accounts
+        </p>
+        <div className="flex items-center gap-2 bg-muted rounded-lg p-1">
+          <Button
+            variant={viewMode === 'list' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setViewMode('list')}
+            className="h-8"
+          >
+            <List className="h-4 w-4 mr-1" />
+            List
+          </Button>
+          <Button
+            variant={viewMode === 'gallery' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setViewMode('gallery')}
+            className="h-8"
+          >
+            <LayoutGrid className="h-4 w-4 mr-1" />
+            Logo Gallery
+          </Button>
+        </div>
+      </div>
+
+      {/* Accounts Display */}
+      {viewMode === 'gallery' ? (
+        /* Logo Gallery View */
+        <Card className="p-6">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : accounts.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <ImageIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium">No accounts found</p>
+              <p className="text-sm mt-2">Convert won leads to create accounts</p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                {accounts.map((account, idx) => (
+                  <div
+                    key={account.id || idx}
+                    onClick={() => navigate(`/accounts/${account.account_id}`)}
+                    className="group cursor-pointer"
+                  >
+                    <div className="relative aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-200 hover:border-primary/50 transition-all duration-300 hover:shadow-xl hover:scale-105">
+                      {account.logo_url ? (
+                        <img
+                          src={`${process.env.REACT_APP_BACKEND_URL}${account.logo_url}`}
+                          alt={account.account_name}
+                          className="w-full h-full object-contain p-4"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-br from-primary/5 via-primary/10 to-primary/5">
+                          <div className="text-center">
+                            <p className="text-lg font-bold text-primary/80 leading-tight line-clamp-3">
+                              {account.account_name?.split(' ').slice(0, 3).join(' ')}
+                            </p>
+                            {account.account_name?.split(' ').length > 3 && (
+                              <p className="text-sm text-primary/60 mt-1">
+                                {account.account_name?.split(' ').slice(3).join(' ')}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {/* Hover overlay */}
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end">
+                        <div className="w-full p-3 text-white">
+                          <p className="text-xs font-medium truncate">{account.account_name}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            {account.category && (
+                              <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full">
+                                {account.category}
+                              </span>
+                            )}
+                            {account.account_type && (
+                              <span className="text-[10px] bg-primary/60 px-2 py-0.5 rounded-full">
+                                {account.account_type}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-2 text-center">
+                      <p className="text-xs font-medium text-muted-foreground truncate">
+                        {account.city}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Pagination for Gallery */}
+              <div className="flex items-center justify-between mt-6 pt-6 border-t">
+                <p className="text-sm text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </Card>
+      ) : (
+        /* List View */
+        <Card className="overflow-hidden">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : accounts.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium">No accounts found</p>
+              <p className="text-sm mt-2">Convert won leads to create accounts</p>
+            </div>
+          ) : (
+            <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm" data-testid="accounts-table">
                 <thead className="bg-muted">
