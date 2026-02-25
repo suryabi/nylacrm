@@ -221,7 +221,7 @@ export default function DashboardLayout({ children }) {
                 {/* Group Header */}
                 <button
                   onClick={() => toggleGroup(group.title)}
-                  className="w-full flex items-center justify-between px-5 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider hover:text-slate-300 transition-colors"
+                  className="w-full flex items-center justify-between px-5 py-2 text-xs font-semibold text-white/50 uppercase tracking-wider hover:text-white/70 transition-colors"
                 >
                   <span>{group.title}</span>
                   <ChevronDown className={`h-3 w-3 transition-transform ${collapsedGroups[group.title] ? '-rotate-90' : ''}`} />
@@ -241,8 +241,8 @@ export default function DashboardLayout({ children }) {
                               onClick={() => setDashboardOpen(!dashboardOpen)}
                               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                                 isDashboardActive
-                                  ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30'
-                                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                                  ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/30'
+                                  : 'text-white/80 hover:bg-white/10 hover:text-white'
                               }`}
                             >
                               <span className="flex items-center gap-3">
@@ -256,7 +256,7 @@ export default function DashboardLayout({ children }) {
                               )}
                             </button>
                             {dashboardOpen && (
-                              <div className="mt-1 ml-7 space-y-0.5 border-l border-slate-700 pl-3">
+                              <div className="mt-1 ml-7 space-y-0.5 border-l border-white/20 pl-3">
                                 {filteredDashboardSubmenu.map((subItem) => {
                                   const isSubActive = location.pathname === subItem.href;
                                   return (
@@ -266,8 +266,8 @@ export default function DashboardLayout({ children }) {
                                       onClick={() => setSidebarOpen(false)}
                                       className={`block px-3 py-2 rounded-md text-sm transition-all ${
                                         isSubActive
-                                          ? 'bg-emerald-600/20 text-emerald-400 font-medium'
-                                          : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                                          ? 'bg-primary/20 text-primary font-medium'
+                                          : 'text-white/60 hover:bg-white/10 hover:text-white/90'
                                       }`}
                                     >
                                       {subItem.name}
@@ -288,8 +288,8 @@ export default function DashboardLayout({ children }) {
                           onClick={() => setSidebarOpen(false)}
                           className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                             isActive
-                              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30'
-                              : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                              ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/30'
+                              : 'text-white/80 hover:bg-white/10 hover:text-white'
                           }`}
                         >
                           <Icon className="h-4 w-4" />
