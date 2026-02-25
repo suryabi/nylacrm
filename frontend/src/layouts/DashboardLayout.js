@@ -167,31 +167,31 @@ export default function DashboardLayout({ children }) {
   })).filter(group => group.items.length > 0);
 
   return (
-    <div className="min-h-screen flex bg-slate-50">
+    <div className="min-h-screen flex bg-background">
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 transform transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[hsl(200,35%,12%)] dark:bg-[hsl(200,40%,8%)] transform transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="p-5 border-b border-slate-700/50">
+          <div className="p-5 border-b border-white/10">
             <div className="flex items-center gap-3">
               <img src={NYLA_LOGO} alt="Nyla Air Water" className="h-10 w-10 rounded-lg object-cover" />
               <div>
                 <h1 className="text-white font-bold text-lg tracking-tight">Nyla Air Water</h1>
-                <p className="text-slate-400 text-xs">{currentContext === 'production' ? 'Production' : 'Sales CRM'}</p>
+                <p className="text-white/60 text-xs">{currentContext === 'production' ? 'Production' : 'Sales CRM'}</p>
               </div>
             </div>
           </div>
           
           {/* Context Switcher */}
           {canAccessBothContexts && (
-            <div className="px-4 py-3 border-b border-slate-700/50">
-              <div className="flex items-center gap-2 bg-slate-800 rounded-lg p-1">
+            <div className="px-4 py-3 border-b border-white/10">
+              <div className="flex items-center gap-2 bg-white/5 rounded-lg p-1">
                 <button
                   onClick={() => handleContextSwitch('sales')}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-xs font-medium transition-all ${
                     currentContext === 'sales'
                       ? 'bg-primary text-white'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                      : 'text-white/60 hover:text-white hover:bg-white/10'
                   }`}
                   data-testid="context-switch-sales"
                 >
@@ -203,7 +203,7 @@ export default function DashboardLayout({ children }) {
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-xs font-medium transition-all ${
                     currentContext === 'production'
                       ? 'bg-primary text-white'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                      : 'text-white/60 hover:text-white hover:bg-white/10'
                   }`}
                   data-testid="context-switch-production"
                 >
