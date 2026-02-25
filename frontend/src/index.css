@@ -6,29 +6,68 @@
 
 @layer base {
     :root {
-        /* Corporate slate/emerald theme */
-        --background: 210 40% 98%;
-        --background-secondary: 210 30% 96%;
-        --foreground: 222 47% 11%;
-        --foreground-muted: 215 16% 47%;
+        /* Light Mode - Dark Aqua Blue Theme */
+        --background: 195 30% 98%;
+        --background-secondary: 195 25% 95%;
+        --foreground: 200 50% 10%;
+        --foreground-muted: 200 20% 40%;
         --card: 0 0% 100%;
-        --card-foreground: 222 47% 11%;
+        --card-foreground: 200 50% 10%;
         --popover: 0 0% 100%;
-        --popover-foreground: 222 47% 11%;
-        --primary: 160 84% 39%;
+        --popover-foreground: 200 50% 10%;
+        --primary: 185 70% 35%;
         --primary-foreground: 0 0% 100%;
-        --secondary: 210 40% 96%;
-        --secondary-foreground: 222 47% 11%;
-        --muted: 215 20% 65%;
-        --muted-foreground: 215 16% 47%;
-        --accent: 160 84% 39%;
+        --secondary: 195 30% 94%;
+        --secondary-foreground: 200 50% 15%;
+        --muted: 195 20% 90%;
+        --muted-foreground: 200 15% 45%;
+        --accent: 185 70% 35%;
         --accent-foreground: 0 0% 100%;
         --destructive: 0 84% 60%;
         --destructive-foreground: 0 0% 100%;
-        --border: 214 32% 91%;
-        --input: 214 32% 91%;
-        --ring: 160 84% 39%;
+        --border: 195 25% 88%;
+        --input: 195 25% 88%;
+        --ring: 185 70% 35%;
         --radius: 0.5rem;
+        
+        /* Chart colors */
+        --chart-1: 185 70% 40%;
+        --chart-2: 195 65% 50%;
+        --chart-3: 175 60% 45%;
+        --chart-4: 165 55% 50%;
+        --chart-5: 155 50% 55%;
+    }
+    
+    .dark {
+        /* Dark Mode - Dark Aqua Blue Theme */
+        --background: 200 35% 8%;
+        --background-secondary: 200 30% 12%;
+        --foreground: 195 30% 95%;
+        --foreground-muted: 195 20% 65%;
+        --card: 200 30% 12%;
+        --card-foreground: 195 30% 95%;
+        --popover: 200 30% 14%;
+        --popover-foreground: 195 30% 95%;
+        --primary: 185 65% 45%;
+        --primary-foreground: 200 50% 8%;
+        --secondary: 200 25% 18%;
+        --secondary-foreground: 195 25% 90%;
+        --muted: 200 20% 22%;
+        --muted-foreground: 195 15% 60%;
+        --accent: 185 65% 45%;
+        --accent-foreground: 200 50% 8%;
+        --destructive: 0 70% 50%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 200 25% 22%;
+        --input: 200 25% 22%;
+        --ring: 185 65% 45%;
+        
+        /* Chart colors for dark mode */
+        --chart-1: 185 65% 50%;
+        --chart-2: 195 60% 55%;
+        --chart-3: 175 55% 50%;
+        --chart-4: 165 50% 55%;
+        --chart-5: 155 45% 60%;
     }
 }
 
