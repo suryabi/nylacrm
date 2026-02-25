@@ -158,7 +158,7 @@ export default function AddEditLead() {
         current_selling_price: lead.current_selling_price || '',
         interested_skus: lead.interested_skus || [],
         notes: lead.notes || '',
-        estimated_value: lead.estimated_value || ''
+        estimated_value: lead.estimated_value || 50000
       });
     } catch (error) {
       toast.error('Failed to load lead');
