@@ -58,11 +58,20 @@ export default function LeadDiscovery() {
   // Master locations from API
   const { territories, states, cities } = useMasterLocations();
   
-  // Helper to find state and territory for a city
+  // Helper to find state and territory for a city (uses enriched data from API)
   const getLocationInfoForCity = (cityName) => {
     const cityObj = cities.find(c => c.name === cityName);
     if (!cityObj) return { state: 'Unknown', territory: 'Unknown' };
     
+    // Use enriched data directly from API if available
+    if (cityObj.state_name && cityObj.territory_name) {
+      return {
+        state: cityObj.state_name,
+        territory: cityObj.territory_name
+      };
+    }
+    
+    // Fallback to lookup by IDs
     const stateObj = states.find(s => s.id === cityObj.state_id);
     if (!stateObj) return { state: 'Unknown', territory: 'Unknown' };
     
