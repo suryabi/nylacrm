@@ -4,9 +4,15 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Separator } from '../components/ui/separator';
 import { Badge } from '../components/ui/badge';
-import { Scale, TrendingUp, Trophy, Sparkles, Package } from 'lucide-react';
+import { Scale, TrendingUp, Trophy, Sparkles, Package, Droplets, Leaf, Globe } from 'lucide-react';
 
 const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
+
+// Bottle size options
+const BOTTLE_SIZES = [
+  { value: 660, label: '660 ml' },
+  { value: 330, label: '330 ml' }
+];
 
 // Default Nyla values
 const DEFAULT_NYLA = {
@@ -27,6 +33,9 @@ const DEFAULT_COMPETITOR = {
 };
 
 export default function SalesPortal() {
+  // Bottle size selection (mandatory)
+  const [bottleSize, setBottleSize] = useState(660);
+  
   // Sample size for calculations
   const [sampleSize, setSampleSize] = useState(1000);
 
@@ -128,32 +137,35 @@ export default function SalesPortal() {
     setNyla(prev => ({ ...prev, [field]: value }));
   };
 
-  // Compare values and return styling
-  const getComparisonStyle = (competitorVal, nylaVal, higherIsBetter = true) => {
-    const comp = parseFloat(competitorVal) || 0;
-    const ny = parseFloat(nylaVal) || 0;
-    
-    if (comp === 0 && ny === 0) return '';
-    
-    if (higherIsBetter) {
-      return ny > comp ? 'text-emerald-600 font-semibold' : ny < comp ? 'text-red-600' : '';
-    } else {
-      return ny < comp ? 'text-emerald-600 font-semibold' : ny > comp ? 'text-red-600' : '';
-    }
-  };
-
-  // Calculate total profit for sample size
-  const competitorTotalProfit = (parseFloat(competitorCalc.totalProfitMarginPerUnit) || 0) * sampleSize;
-  const nylaTotalProfit = (parseFloat(nylaCalc.totalProfitMarginPerUnit) || 0) * sampleSize;
-  const profitDifference = nylaTotalProfit - competitorTotalProfit;
-  const isNylaWinner = nylaTotalProfit > competitorTotalProfit;
-
-  // Calculate return credit - per bottle and total for sample size
+  // Calculate total values for sample size
+  const competitorLandingPrice = parseFloat(competitorCalc.landingPrice) || 0;
+  const nylaLandingPrice = parseFloat(nylaCalc.landingPrice) || 0;
+  
+  // Total Purchase/Landed Cost
+  const competitorTotalCost = competitorLandingPrice * sampleSize;
+  const nylaTotalCost = nylaLandingPrice * sampleSize;
+  
+  // Top Line (Revenue)
+  const competitorTopLine = (parseFloat(competitor.sellingPrice) || 0) * sampleSize;
+  const nylaTopLine = (parseFloat(nyla.sellingPrice) || 0) * sampleSize;
+  
+  // Return Credit
   const competitorReturnCreditPerBottle = parseFloat(competitorCalc.returnCreditPerBottle) || 0;
   const nylaReturnCreditPerBottle = parseFloat(nylaCalc.returnCreditPerBottle) || 0;
   const competitorTotalReturnCredit = competitorReturnCreditPerBottle * sampleSize;
   const nylaTotalReturnCredit = nylaReturnCreditPerBottle * sampleSize;
-  const returnCreditDifference = nylaTotalReturnCredit - competitorTotalReturnCredit;
+  
+  // Bottom Line (Profit)
+  const competitorTotalProfit = (parseFloat(competitorCalc.totalProfitMarginPerUnit) || 0) * sampleSize;
+  const nylaTotalProfit = (parseFloat(nylaCalc.totalProfitMarginPerUnit) || 0) * sampleSize;
+  
+  const profitDifference = nylaTotalProfit - competitorTotalProfit;
+  const isNylaWinner = nylaTotalProfit > competitorTotalProfit;
+
+  // Sustainability Impact Calculation
+  // Formula: Number of Bottles × 3 × Selected Bottle Size (in ml, converted to litres)
+  const groundwaterSavedMonthly = (sampleSize * 3 * bottleSize) / 1000; // Convert to litres
+  const groundwaterSavedYearly = groundwaterSavedMonthly * 12;
 
   const renderInputField = (label, field, data, onChange, disabled = false, highlight = false) => (
     <div className="space-y-2">
@@ -163,318 +175,308 @@ export default function SalesPortal() {
         value={data[field]}
         onChange={(e) => onChange(field, e.target.value)}
         disabled={disabled}
-        className={`${disabled ? 'bg-muted/50' : ''} ${highlight ? 'border-emerald-500 bg-emerald-50/50' : ''}`}
+        className={`${disabled ? 'bg-muted/50' : ''} ${highlight ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/20' : ''}`}
         placeholder={`Enter ${label.toLowerCase()}`}
       />
     </div>
   );
 
-  const renderCalculatedField = (label, value, highlight = false, comparisonClass = '') => (
+  const renderCalculatedField = (label, value, highlight = false) => (
     <div className="space-y-2">
       <Label className="text-sm text-muted-foreground">{label}</Label>
-      <div className={`px-3 py-2 rounded-md border ${highlight ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
-        <span className={`font-medium ${comparisonClass}`}>
+      <div className={`px-3 py-2 rounded-md border ${highlight ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-700' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
+        <span className="font-medium">
           {value || '0.00'}
         </span>
       </div>
     </div>
   );
 
+  const hasCompetitorData = competitor.buyingPrice && competitor.sellingPrice;
+
   return (
     <div className="space-y-6" data-testid="sales-portal-page">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-3">
-            <Scale className="h-7 w-7 text-emerald-600" />
+            <Scale className="h-7 w-7 text-primary" />
             Brand Comparison Calculator
           </h1>
           <p className="text-muted-foreground mt-1">Compare profit margins between your brand and Nyla</p>
         </div>
-        
-        {/* Sample Size Input */}
-        <div className="flex items-center gap-3 bg-slate-100 px-4 py-2 rounded-lg">
-          <Package className="h-5 w-5 text-slate-600" />
-          <Label className="text-sm font-medium whitespace-nowrap">Sample Size:</Label>
-          <Input
-            type="number"
-            value={sampleSize}
-            onChange={(e) => setSampleSize(parseInt(e.target.value) || 0)}
-            className="w-28 h-9"
-            min="1"
-          />
-          <span className="text-sm text-muted-foreground">bottles</span>
-        </div>
       </div>
 
-      {/* Comparison Summary - NOW AT TOP */}
-      {(competitor.buyingPrice && competitor.sellingPrice) && (
-        <Card className={`border-2 overflow-hidden transition-all duration-500 ${
-          isNylaWinner ? 'border-emerald-400 bg-gradient-to-r from-emerald-50 to-white' : 'border-orange-400 bg-gradient-to-r from-orange-50 to-white'
-        }`}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Trophy className={`h-6 w-6 ${isNylaWinner ? 'text-emerald-600' : 'text-orange-600'}`} />
-              Comparison Summary
-              <span className="text-sm font-normal text-muted-foreground ml-2">
-                (for {sampleSize.toLocaleString()} bottles)
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Winner Card */}
-              <div className={`relative p-4 rounded-xl text-center ${
-                isNylaWinner 
-                  ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white' 
-                  : 'bg-gradient-to-br from-orange-500 to-orange-600 text-white'
-              } ${showWinnerAnimation ? 'animate-pulse' : ''}`}>
-                {showWinnerAnimation && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Sparkles className={`h-16 w-16 opacity-20 ${showWinnerAnimation ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }} />
-                  </div>
-                )}
-                <div className="relative z-10">
-                  <Trophy className="h-8 w-8 mx-auto mb-2" />
-                  <p className="text-sm opacity-90 mb-1">Winner</p>
-                  <p className="text-xl font-bold">
-                    {isNylaWinner ? 'Nyla Air Water' : 'Your Brand'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Profit Difference */}
-              <div className="p-4 rounded-xl bg-white border-2 border-slate-200 text-center">
-                <p className="text-sm text-muted-foreground mb-1">
-                  {isNylaWinner ? 'Extra Profit with Nyla' : 'Extra Profit with Your Brand'}
-                </p>
-                <p className={`text-3xl font-bold ${isNylaWinner ? 'text-emerald-600' : 'text-orange-600'}`}>
-                  {isNylaWinner ? '+' : '-'}₹{Math.abs(profitDifference).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  for {sampleSize.toLocaleString()} bottles
-                </p>
-              </div>
-
-              {/* Your Brand Total */}
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center">
-                <p className="text-sm text-muted-foreground mb-1">Your Brand Profit</p>
-                <p className="text-2xl font-bold text-slate-700">
-                  ₹{competitorTotalProfit.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  ₹{competitorCalc.totalProfitMarginPerUnit}/bottle
-                </p>
-              </div>
-
-              {/* Nyla Total */}
-              <div className={`p-4 rounded-xl border text-center ${
-                isNylaWinner 
-                  ? 'bg-emerald-50 border-emerald-200' 
-                  : 'bg-slate-50 border-slate-200'
-              }`}>
-                <p className="text-sm text-muted-foreground mb-1">Nyla Profit</p>
-                <p className={`text-2xl font-bold ${isNylaWinner ? 'text-emerald-600' : 'text-slate-700'}`}>
-                  ₹{nylaTotalProfit.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  ₹{nylaCalc.totalProfitMarginPerUnit}/bottle
-                </p>
+      {/* Bottle Size & Sample Size Selection */}
+      <Card className="border-primary/30 bg-gradient-to-r from-primary/5 to-transparent">
+        <CardContent className="pt-6">
+          <div className="flex flex-wrap items-center gap-6">
+            {/* Bottle Size Selection */}
+            <div className="flex items-center gap-3">
+              <Droplets className="h-5 w-5 text-primary" />
+              <Label className="text-sm font-semibold whitespace-nowrap">Bottle Size:</Label>
+              <div className="flex gap-2">
+                {BOTTLE_SIZES.map(size => (
+                  <button
+                    key={size.value}
+                    onClick={() => setBottleSize(size.value)}
+                    data-testid={`bottle-size-${size.value}`}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                      bottleSize === size.value
+                        ? 'bg-primary text-primary-foreground shadow-md'
+                        : 'bg-secondary hover:bg-secondary/80 text-secondary-foreground'
+                    }`}
+                  >
+                    {size.label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Return Credit Comparison Row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 pt-4 border-t border-slate-200">
-              {/* Return Credit Difference */}
-              <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-center">
-                <p className="text-sm text-muted-foreground mb-1">
-                  {returnCreditDifference >= 0 ? 'Extra Return Credit with Nyla' : 'Extra Return Credit with Your Brand'}
-                </p>
-                <p className={`text-2xl font-bold ${returnCreditDifference >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
-                  {returnCreditDifference >= 0 ? '+' : '-'}₹{Math.abs(returnCreditDifference).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  for {sampleSize.toLocaleString()} bottles
-                </p>
-              </div>
+            <Separator orientation="vertical" className="h-8 hidden md:block" />
 
-              {/* Your Brand Return Credit */}
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center">
-                <p className="text-sm text-muted-foreground mb-1">Your Brand Return Credit</p>
-                <p className="text-xl font-bold text-slate-700">
-                  ₹{competitorTotalReturnCredit.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  ₹{competitorReturnCreditPerBottle.toFixed(2)}/bottle
-                </p>
-              </div>
-
-              {/* Nyla Return Credit */}
-              <div className={`p-4 rounded-xl border text-center ${
-                returnCreditDifference >= 0 
-                  ? 'bg-blue-50 border-blue-200' 
-                  : 'bg-slate-50 border-slate-200'
-              }`}>
-                <p className="text-sm text-muted-foreground mb-1">Nyla Return Credit</p>
-                <p className={`text-xl font-bold ${returnCreditDifference >= 0 ? 'text-blue-600' : 'text-slate-700'}`}>
-                  ₹{nylaTotalReturnCredit.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  ₹{nylaReturnCreditPerBottle.toFixed(2)}/bottle
-                </p>
-              </div>
+            {/* Sample Size Input */}
+            <div className="flex items-center gap-3">
+              <Package className="h-5 w-5 text-muted-foreground" />
+              <Label className="text-sm font-semibold whitespace-nowrap">Monthly Volume:</Label>
+              <Input
+                type="number"
+                value={sampleSize}
+                onChange={(e) => setSampleSize(parseInt(e.target.value) || 0)}
+                className="w-28 h-9"
+                min="1"
+                data-testid="sample-size-input"
+              />
+              <span className="text-sm text-muted-foreground">bottles</span>
             </div>
+          </div>
+        </CardContent>
+      </Card>
 
-            {/* Savings Message */}
-            {isNylaWinner && (
-              <div className={`mt-4 p-3 rounded-lg bg-emerald-100 border border-emerald-200 text-center ${
-                showWinnerAnimation ? 'animate-bounce' : ''
-              }`} style={{ animationDuration: '2s', animationIterationCount: '2' }}>
-                <p className="text-emerald-800 font-medium">
-                  🎉 By choosing <strong>Nyla</strong>, you save <strong>₹{Math.abs(profitDifference).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</strong> on every {sampleSize.toLocaleString()} bottles!
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
+      {/* Input Forms - Side by Side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Competitor (Your Brand) Card */}
-        <Card className="border-slate-300">
-          <CardHeader className="pb-4 bg-slate-50/50 border-b">
+        <Card className="border-slate-300 dark:border-slate-600">
+          <CardHeader className="pb-4 bg-slate-50/50 dark:bg-slate-800/50 border-b">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 text-sm font-bold">
+              <div className="h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 text-sm font-bold">
                 ?
               </div>
-              Your Brand
+              Current Brand
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-6 space-y-6">
-            {/* Pricing Section */}
+          <CardContent className="pt-6 space-y-4">
             <div className="grid grid-cols-2 gap-4">
               {renderInputField('Buying Price (₹)', 'buyingPrice', competitor, handleCompetitorChange)}
               {renderInputField('GST %', 'percentageGST', competitor, handleCompetitorChange)}
             </div>
-
             {renderCalculatedField('Landing Price (₹)', competitorCalc.landingPrice)}
             {renderInputField('Selling Price (₹)', 'sellingPrice', competitor, handleCompetitorChange)}
-
-            <div className="grid grid-cols-2 gap-4">
-              {renderCalculatedField(
-                'Profit Margin %', 
-                competitorCalc.profitMargin,
-                false,
-                getComparisonStyle(competitorCalc.profitMargin, nylaCalc.profitMargin)
-              )}
-              {renderCalculatedField(
-                'Profit Margin / Unit (₹)', 
-                competitorCalc.profitMarginPerUnit,
-                false,
-                getComparisonStyle(competitorCalc.profitMarginPerUnit, nylaCalc.profitMarginPerUnit)
-              )}
-            </div>
-
             <Separator />
-
-            {/* Bottle Returns Section */}
             <div className="grid grid-cols-2 gap-4">
               {renderInputField('% Bottle Returns', 'percentageReturn', competitor, handleCompetitorChange)}
-              {renderInputField('Bottle Return Credit (₹)', 'returnCredit', competitor, handleCompetitorChange)}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              {renderCalculatedField('Return Credit / Bottle (₹)', competitorCalc.returnCreditPerBottle)}
-              {renderCalculatedField(
-                `Total Return Credit (${sampleSize.toLocaleString()} bottles)`, 
-                `₹${competitorTotalReturnCredit.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              {renderCalculatedField(
-                'Total Profit Margin %', 
-                competitorCalc.totalProfitMargin,
-                true,
-                getComparisonStyle(competitorCalc.totalProfitMargin, nylaCalc.totalProfitMargin)
-              )}
-              {renderCalculatedField(
-                'Total Profit / Unit (₹)', 
-                competitorCalc.totalProfitMarginPerUnit,
-                true,
-                getComparisonStyle(competitorCalc.totalProfitMarginPerUnit, nylaCalc.totalProfitMarginPerUnit)
-              )}
+              {renderInputField('Return Credit (₹)', 'returnCredit', competitor, handleCompetitorChange)}
             </div>
           </CardContent>
         </Card>
 
         {/* Nyla Card */}
-        <Card className="border-emerald-300 bg-gradient-to-br from-emerald-50/30 to-white">
-          <CardHeader className="pb-4 bg-emerald-50/50 border-b border-emerald-200">
+        <Card className="border-emerald-300 dark:border-emerald-700 bg-gradient-to-br from-emerald-50/30 dark:from-emerald-900/20 to-transparent">
+          <CardHeader className="pb-4 bg-emerald-50/50 dark:bg-emerald-900/30 border-b border-emerald-200 dark:border-emerald-800">
             <CardTitle className="flex items-center gap-3 text-lg">
               <img src={NYLA_LOGO} alt="Nyla" className="h-8 w-8 rounded-full object-cover" />
-              <span className="text-emerald-700">Nyla Air Water</span>
+              <span className="text-emerald-700 dark:text-emerald-400">Nyla Air Water</span>
               <Badge className="bg-emerald-600 ml-auto">Recommended</Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-6 space-y-6">
-            {/* Pricing Section */}
+          <CardContent className="pt-6 space-y-4">
             <div className="grid grid-cols-2 gap-4">
               {renderInputField('Buying Price (₹)', 'buyingPrice', nyla, handleNylaChange)}
               {renderInputField('GST %', 'percentageGST', nyla, handleNylaChange)}
             </div>
-
-            {renderCalculatedField('Landing Price (₹)', nylaCalc.landingPrice)}
+            {renderCalculatedField('Landing Price (₹)', nylaCalc.landingPrice, true)}
             {renderInputField('Selling Price (₹)', 'sellingPrice', nyla, handleNylaChange)}
-
-            <div className="grid grid-cols-2 gap-4">
-              {renderCalculatedField(
-                'Profit Margin %', 
-                nylaCalc.profitMargin,
-                false,
-                getComparisonStyle(nylaCalc.profitMargin, competitorCalc.profitMargin)
-              )}
-              {renderCalculatedField(
-                'Profit Margin / Unit (₹)', 
-                nylaCalc.profitMarginPerUnit,
-                false,
-                getComparisonStyle(nylaCalc.profitMarginPerUnit, competitorCalc.profitMarginPerUnit)
-              )}
-            </div>
-
-            <Separator className="bg-emerald-200" />
-
-            {/* Bottle Returns Section */}
+            <Separator className="bg-emerald-200 dark:bg-emerald-800" />
             <div className="grid grid-cols-2 gap-4">
               {renderInputField('% Bottle Returns', 'percentageReturn', nyla, handleNylaChange)}
-              {renderInputField('Bottle Return Credit (₹)', 'returnCredit', nyla, handleNylaChange)}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              {renderCalculatedField('Return Credit / Bottle (₹)', nylaCalc.returnCreditPerBottle, true)}
-              {renderCalculatedField(
-                `Total Return Credit (${sampleSize.toLocaleString()} bottles)`, 
-                `₹${nylaTotalReturnCredit.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`,
-                true
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              {renderCalculatedField(
-                'Total Profit Margin %', 
-                nylaCalc.totalProfitMargin,
-                true,
-                getComparisonStyle(nylaCalc.totalProfitMargin, competitorCalc.totalProfitMargin)
-              )}
-              {renderCalculatedField(
-                'Total Profit / Unit (₹)', 
-                nylaCalc.totalProfitMarginPerUnit,
-                true,
-                getComparisonStyle(nylaCalc.totalProfitMarginPerUnit, competitorCalc.totalProfitMarginPerUnit)
-              )}
+              {renderInputField('Return Credit (₹)', 'returnCredit', nyla, handleNylaChange)}
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Metrics Comparison - Side by Side */}
+      {hasCompetitorData && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* A. With Current Brand */}
+          <Card className="border-slate-300 dark:border-slate-600">
+            <CardHeader className="pb-3 bg-slate-100 dark:bg-slate-800 border-b">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <div className="h-6 w-6 rounded-full bg-slate-300 dark:bg-slate-600 flex items-center justify-center text-xs font-bold">A</div>
+                With Current Brand
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">For {sampleSize.toLocaleString()} bottles/month</p>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-4">
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                <p className="text-sm text-muted-foreground mb-1">Total Purchase Cost</p>
+                <p className="text-2xl font-bold text-slate-700 dark:text-slate-200">
+                  ₹{competitorTotalCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </p>
+                <p className="text-xs text-muted-foreground">₹{competitorCalc.landingPrice}/bottle</p>
+              </div>
+              
+              <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                <p className="text-sm text-muted-foreground mb-1">Top Line (Revenue)</p>
+                <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">
+                  ₹{competitorTopLine.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </p>
+                <p className="text-xs text-muted-foreground">₹{competitor.sellingPrice || 0}/bottle</p>
+              </div>
+              
+              <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
+                <p className="text-sm text-muted-foreground mb-1">Return Bottle Credit</p>
+                <p className="text-2xl font-bold text-purple-700 dark:text-purple-400">
+                  ₹{competitorTotalReturnCredit.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </p>
+                <p className="text-xs text-muted-foreground">₹{competitorReturnCreditPerBottle.toFixed(2)}/bottle</p>
+              </div>
+              
+              <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                <p className="text-sm text-muted-foreground mb-1">Bottom Line (Profit)</p>
+                <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">
+                  ₹{competitorTotalProfit.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </p>
+                <p className="text-xs text-muted-foreground">₹{competitorCalc.totalProfitMarginPerUnit}/bottle</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* B. With Nyla */}
+          <Card className={`border-2 transition-all ${isNylaWinner ? 'border-emerald-400 dark:border-emerald-600' : 'border-slate-300 dark:border-slate-600'}`}>
+            <CardHeader className={`pb-3 border-b ${isNylaWinner ? 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 dark:bg-slate-800'}`}>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <div className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold ${isNylaWinner ? 'bg-emerald-500 text-white' : 'bg-slate-300 dark:bg-slate-600'}`}>B</div>
+                With Nyla
+                {isNylaWinner && <Trophy className="h-5 w-5 text-emerald-600 dark:text-emerald-400 ml-2" />}
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">For {sampleSize.toLocaleString()} bottles/month</p>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-4">
+              <div className={`p-4 rounded-xl border ${isNylaWinner ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
+                <p className="text-sm text-muted-foreground mb-1">Total Landed Cost</p>
+                <p className={`text-2xl font-bold ${nylaTotalCost < competitorTotalCost ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-200'}`}>
+                  ₹{nylaTotalCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  {nylaTotalCost < competitorTotalCost && <span className="text-sm ml-2">↓ Save ₹{(competitorTotalCost - nylaTotalCost).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>}
+                </p>
+                <p className="text-xs text-muted-foreground">₹{nylaCalc.landingPrice}/bottle</p>
+              </div>
+              
+              <div className={`p-4 rounded-xl border ${nylaTopLine > competitorTopLine ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
+                <p className="text-sm text-muted-foreground mb-1">Top Line (Revenue)</p>
+                <p className={`text-2xl font-bold ${nylaTopLine > competitorTopLine ? 'text-blue-700 dark:text-blue-400' : 'text-slate-700 dark:text-slate-200'}`}>
+                  ₹{nylaTopLine.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </p>
+                <p className="text-xs text-muted-foreground">₹{nyla.sellingPrice}/bottle</p>
+              </div>
+              
+              <div className={`p-4 rounded-xl border ${nylaTotalReturnCredit > competitorTotalReturnCredit ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700'}`}>
+                <p className="text-sm text-muted-foreground mb-1">Return Bottle Credit</p>
+                <p className={`text-2xl font-bold ${nylaTotalReturnCredit > competitorTotalReturnCredit ? 'text-purple-700 dark:text-purple-400' : 'text-slate-700 dark:text-slate-200'}`}>
+                  ₹{nylaTotalReturnCredit.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  {nylaTotalReturnCredit > competitorTotalReturnCredit && <span className="text-sm ml-2">↑ +₹{(nylaTotalReturnCredit - competitorTotalReturnCredit).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>}
+                </p>
+                <p className="text-xs text-muted-foreground">₹{nylaReturnCreditPerBottle.toFixed(2)}/bottle</p>
+              </div>
+              
+              <div className={`p-4 rounded-xl border ${isNylaWinner ? 'bg-emerald-100 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-700' : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'}`}>
+                <p className="text-sm text-muted-foreground mb-1">Bottom Line (Profit)</p>
+                <p className={`text-2xl font-bold ${isNylaWinner ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                  ₹{nylaTotalProfit.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  {isNylaWinner && <span className="text-sm ml-2">↑ +₹{profitDifference.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>}
+                </p>
+                <p className="text-xs text-muted-foreground">₹{nylaCalc.totalProfitMarginPerUnit}/bottle</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Winner Summary */}
+      {hasCompetitorData && isNylaWinner && (
+        <Card className={`border-2 border-emerald-400 dark:border-emerald-600 overflow-hidden ${showWinnerAnimation ? 'animate-pulse' : ''}`} style={{ animationDuration: '2s', animationIterationCount: '2' }}>
+          <CardContent className="p-6 bg-gradient-to-r from-emerald-50 dark:from-emerald-900/30 to-white dark:to-transparent">
+            <div className="flex items-center justify-center gap-4 text-center">
+              <Trophy className="h-10 w-10 text-emerald-600 dark:text-emerald-400" />
+              <div>
+                <p className="text-lg font-semibold text-emerald-800 dark:text-emerald-300">
+                  By choosing <strong>Nyla Air Water</strong>, you earn an extra
+                </p>
+                <p className="text-4xl font-bold text-emerald-600 dark:text-emerald-400">
+                  ₹{Math.abs(profitDifference).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </p>
+                <p className="text-sm text-muted-foreground">per month on {sampleSize.toLocaleString()} bottles</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Sustainability Impact Section */}
+      <Card className="border-2 border-teal-300 dark:border-teal-700 bg-gradient-to-br from-teal-50 dark:from-teal-900/20 to-cyan-50 dark:to-cyan-900/10">
+        <CardHeader className="border-b border-teal-200 dark:border-teal-800">
+          <CardTitle className="flex items-center gap-3 text-xl text-teal-800 dark:text-teal-300">
+            <div className="p-2 bg-teal-100 dark:bg-teal-900/50 rounded-full">
+              <Globe className="h-6 w-6 text-teal-600 dark:text-teal-400" />
+            </div>
+            Sustainability Impact
+          </CardTitle>
+          <p className="text-sm text-teal-700 dark:text-teal-400">Positive environmental impact by switching to Nyla Air Water</p>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Monthly Impact */}
+            <div className="p-6 rounded-2xl bg-gradient-to-br from-cyan-100 dark:from-cyan-900/30 to-teal-100 dark:to-teal-900/30 border border-teal-200 dark:border-teal-800">
+              <div className="flex items-center gap-3 mb-4">
+                <Droplets className="h-8 w-8 text-cyan-600 dark:text-cyan-400" />
+                <div>
+                  <p className="text-sm font-medium text-teal-700 dark:text-teal-400">Monthly Groundwater Saved</p>
+                  <p className="text-xs text-muted-foreground">({sampleSize.toLocaleString()} bottles × 3 × {bottleSize}ml)</p>
+                </div>
+              </div>
+              <p className="text-4xl font-bold text-cyan-700 dark:text-cyan-300">
+                {groundwaterSavedMonthly.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                <span className="text-xl font-normal ml-2">litres</span>
+              </p>
+            </div>
+
+            {/* Yearly Impact */}
+            <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-100 dark:from-emerald-900/30 to-green-100 dark:to-green-900/30 border border-emerald-200 dark:border-emerald-800">
+              <div className="flex items-center gap-3 mb-4">
+                <Leaf className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+                <div>
+                  <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Yearly Groundwater Saved</p>
+                  <p className="text-xs text-muted-foreground">(Monthly × 12 months)</p>
+                </div>
+              </div>
+              <p className="text-4xl font-bold text-emerald-700 dark:text-emerald-300">
+                {groundwaterSavedYearly.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                <span className="text-xl font-normal ml-2">litres</span>
+              </p>
+            </div>
+          </div>
+
+          {/* Environmental Message */}
+          <div className="mt-6 p-4 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 text-white text-center">
+            <p className="text-lg font-medium">
+              By choosing Nyla Air Water, you help preserve <strong>{(groundwaterSavedYearly / 1000).toLocaleString('en-IN', { maximumFractionDigits: 1 })} kilolitres</strong> of groundwater annually
+            </p>
+            <p className="text-sm opacity-90 mt-1">
+              A sustainable choice for future generations
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
