@@ -81,8 +81,9 @@ function ProtectedRoute({ children }) {
 
 function App() {
   return (
-    <AuthProvider>
-      <AppContextProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppContextProvider>
         <BrowserRouter>
           <AppRouter />
         </BrowserRouter>
