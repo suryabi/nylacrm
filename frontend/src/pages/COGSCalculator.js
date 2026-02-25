@@ -6,15 +6,30 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
 import { Download, Save } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API = process.env.REACT_APP_BACKEND_URL + '/api';
 
 export default function COGSCalculator() {
-  const [selectedCity, setSelectedCity] = React.useState('Bengaluru');
+  const { user } = useAuth();
+  const { cities } = useMasterLocations();
+  
+  // Check if user can see sensitive cost columns (CEO, Director only)
+  const canSeeCostDetails = ['ceo', 'director', 'CEO', 'Director'].includes(user?.role);
+  
+  const [selectedCity, setSelectedCity] = React.useState('');
   const [cogsData, setCogsData] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [hasChanges, setHasChanges] = React.useState(false);
+  
+  // Set default city when cities load
+  React.useEffect(() => {
+    if (cities.length > 0 && !selectedCity) {
+      setSelectedCity(cities[0].name);
+    }
+  }, [cities]);
 
   React.useEffect(() => {
     if (selectedCity) {
