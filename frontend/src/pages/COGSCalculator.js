@@ -191,12 +191,10 @@ export default function COGSCalculator() {
             onChange={e => setSelectedCity(e.target.value)}
             className="w-full max-w-xs h-12 px-4 rounded-xl border bg-background"
           >
-            <option value="Bengaluru">Bengaluru</option>
-            <option value="Chennai">Chennai</option>
-            <option value="Hyderabad">Hyderabad</option>
-            <option value="Mumbai">Mumbai</option>
-            <option value="Pune">Pune</option>
-            <option value="Delhi">Delhi</option>
+            <option value="">Choose a city...</option>
+            {cities.map(city => (
+              <option key={city.id} value={city.name}>{city.name}</option>
+            ))}
           </select>
         </div>
 
