@@ -8,11 +8,9 @@ const ThemeContext = createContext({
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
-    // Check localStorage first
+    // Check localStorage first, default to 'light' if not set
     const savedTheme = localStorage.getItem('theme');
-    const initialTheme = savedTheme || (
-      window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-    );
+    const initialTheme = savedTheme || 'light';
     
     // Apply immediately to prevent flash of wrong theme
     const root = window.document.documentElement;

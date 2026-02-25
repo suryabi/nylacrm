@@ -36,8 +36,7 @@
         <!-- Prevent flash of wrong theme by applying theme before React loads -->
         <script>
             (function() {
-                const theme = localStorage.getItem('theme') || 
-                    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+                const theme = localStorage.getItem('theme') || 'light';
                 document.documentElement.classList.add(theme);
             })();
         </script>
