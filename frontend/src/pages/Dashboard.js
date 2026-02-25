@@ -239,39 +239,39 @@ export default function Dashboard() {
         <>
           {/* Activity Metrics */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <Card className="p-4 bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200">
+            <Card className="p-4 bg-gradient-to-br from-teal-50 to-teal-100 dark:from-teal-900/30 dark:to-teal-800/20 border-teal-200 dark:border-teal-700/50">
               <div className="flex items-center gap-2 mb-2">
-                <MapPin className="h-4 w-4 text-teal-600" />
-                <p className="text-xs font-medium text-teal-600">VISITS</p>
+                <MapPin className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                <p className="text-xs font-medium text-teal-600 dark:text-teal-400">VISITS</p>
               </div>
-              <p className="text-2xl font-bold text-teal-700">{analytics?.total_visits || 0}</p>
-              <p className="text-xs text-teal-600 mt-1">{analytics?.unique_visits || 0} unique</p>
+              <p className="text-2xl font-bold text-teal-700 dark:text-teal-300">{analytics?.total_visits || 0}</p>
+              <p className="text-xs text-teal-600 dark:text-teal-400 mt-1">{analytics?.unique_visits || 0} unique</p>
             </Card>
-            <Card className="p-4 bg-gradient-to-br from-cyan-50 to-cyan-100 border-cyan-200">
+            <Card className="p-4 bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-900/30 dark:to-cyan-800/20 border-cyan-200 dark:border-cyan-700/50">
               <div className="flex items-center gap-2 mb-2">
-                <Phone className="h-4 w-4 text-cyan-600" />
-                <p className="text-xs font-medium text-cyan-600">CALLS</p>
+                <Phone className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
+                <p className="text-xs font-medium text-cyan-600 dark:text-cyan-400">CALLS</p>
               </div>
-              <p className="text-2xl font-bold text-cyan-700">{analytics?.total_calls || 0}</p>
-              <p className="text-xs text-cyan-600 mt-1">{analytics?.unique_calls || 0} unique</p>
+              <p className="text-2xl font-bold text-cyan-700 dark:text-cyan-300">{analytics?.total_calls || 0}</p>
+              <p className="text-xs text-cyan-600 dark:text-cyan-400 mt-1">{analytics?.unique_calls || 0} unique</p>
             </Card>
-            <Card className="p-4 bg-gradient-to-br from-violet-50 to-violet-100 border-violet-200">
+            <Card className="p-4 bg-gradient-to-br from-violet-50 to-violet-100 dark:from-violet-900/30 dark:to-violet-800/20 border-violet-200 dark:border-violet-700/50">
               <div className="flex items-center gap-2 mb-2">
-                <UserPlus className="h-4 w-4 text-violet-600" />
-                <p className="text-xs font-medium text-violet-600">NEW LEADS</p>
+                <UserPlus className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                <p className="text-xs font-medium text-violet-600 dark:text-violet-400">NEW LEADS</p>
               </div>
-              <p className="text-2xl font-bold text-violet-700">{analytics?.new_leads_added || 0}</p>
-              <p className="text-xs text-violet-600 mt-1">this period</p>
+              <p className="text-2xl font-bold text-violet-700 dark:text-violet-300">{analytics?.new_leads_added || 0}</p>
+              <p className="text-xs text-violet-600 dark:text-violet-400 mt-1">this period</p>
             </Card>
-            <Card className="p-4 bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
+            <Card className="p-4 bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/30 dark:to-amber-800/20 border-amber-200 dark:border-amber-700/50">
               <div className="flex items-center gap-2 mb-2">
-                <TrendingUp className="h-4 w-4 text-amber-600" />
-                <p className="text-xs font-medium text-amber-600">PIPELINE VALUE</p>
+                <TrendingUp className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <p className="text-xs font-medium text-amber-600 dark:text-amber-400">PIPELINE VALUE</p>
               </div>
-              <p className="text-2xl font-bold text-amber-700">
+              <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
                 ₹{((analytics?.pipeline_value || 0) / 100000).toFixed(1)}L
               </p>
-              <p className="text-xs text-amber-600 mt-1">total value</p>
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">total value</p>
             </Card>
           </div>
 
