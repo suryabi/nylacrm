@@ -643,6 +643,15 @@ ${googleMapsLink}`;
                   />
                   <p className="text-xs text-muted-foreground">15-character GST Identification Number</p>
                 </div>
+                <div className="md:col-span-2 pt-4 border-t">
+                  <LogoUploader
+                    accountId={account.id || account.account_id}
+                    currentLogo={account.logo_url ? `${process.env.REACT_APP_BACKEND_URL}${account.logo_url}` : null}
+                    onLogoUpdate={(newLogoUrl) => {
+                      fetchAccount();
+                    }}
+                  />
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -669,6 +678,23 @@ ${googleMapsLink}`;
                   <div className="md:col-span-2">
                     <p className="text-sm text-muted-foreground">GST Number</p>
                     <p className="font-medium font-mono tracking-wider">{account.gst_number}</p>
+                  </div>
+                )}
+                {account.logo_url && (
+                  <div className="md:col-span-2 pt-4 border-t">
+                    <p className="text-sm text-muted-foreground mb-2">Account Logo</p>
+                    <div className="w-24 h-24 border rounded-lg overflow-hidden bg-gray-50">
+                      <img 
+                        src={`${process.env.REACT_APP_BACKEND_URL}${account.logo_url}`}
+                        alt="Account logo"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    {account.logo_width_mm && account.logo_height_mm && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Dimensions: {account.logo_width_mm}mm x {account.logo_height_mm}mm
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
