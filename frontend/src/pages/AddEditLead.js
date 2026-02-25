@@ -103,7 +103,7 @@ export default function AddEditLead() {
     current_selling_price: '',
     interested_skus: [],
     notes: '',
-    estimated_value: ''
+    estimated_value: 50000
   });
   
   // Set initial region when user or masterTerritories change
