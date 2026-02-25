@@ -143,4 +143,57 @@
     * {
         transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;
     }
+    /* Theme-aware metric cards */
+    .metric-card {
+        @apply p-4 rounded-xl border;
+    }
+    .metric-card-teal {
+        @apply bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200;
+    }
+    .dark .metric-card-teal {
+        @apply from-teal-900/30 to-teal-800/20 border-teal-700/50;
+    }
+    .metric-card-cyan {
+        @apply bg-gradient-to-br from-cyan-50 to-cyan-100 border-cyan-200;
+    }
+    .dark .metric-card-cyan {
+        @apply from-cyan-900/30 to-cyan-800/20 border-cyan-700/50;
+    }
+    .metric-card-violet {
+        @apply bg-gradient-to-br from-violet-50 to-violet-100 border-violet-200;
+    }
+    .dark .metric-card-violet {
+        @apply from-violet-900/30 to-violet-800/20 border-violet-700/50;
+    }
+    .metric-card-amber {
+        @apply bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200;
+    }
+    .dark .metric-card-amber {
+        @apply from-amber-900/30 to-amber-800/20 border-amber-700/50;
+    }
+    /* Theme-aware text colors for metric cards */
+    .text-metric-teal {
+        @apply text-teal-600;
+    }
+    .dark .text-metric-teal {
+        @apply text-teal-400;
+    }
+    .text-metric-cyan {
+        @apply text-cyan-600;
+    }
+    .dark .text-metric-cyan {
+        @apply text-cyan-400;
+    }
+    .text-metric-violet {
+        @apply text-violet-600;
+    }
+    .dark .text-metric-violet {
+        @apply text-violet-400;
+    }
+    .text-metric-amber {
+        @apply text-amber-600;
+    }
+    .dark .text-metric-amber {
+        @apply text-amber-400;
+    }
 }
