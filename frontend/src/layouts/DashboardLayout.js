@@ -304,14 +304,14 @@ export default function DashboardLayout({ children }) {
           </nav>
 
           {/* User Section */}
-          <div className="p-4 border-t border-slate-700/50">
+          <div className="p-4 border-t border-white/10">
             <div className="flex items-center gap-3 mb-3 px-2">
-              <div className="h-9 w-9 rounded-lg bg-emerald-600/20 flex items-center justify-center text-emerald-400 font-semibold text-sm">
+              <div className="h-9 w-9 rounded-lg bg-primary/20 flex items-center justify-center text-primary font-semibold text-sm">
                 {user?.name?.[0]?.toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white truncate">{user?.name}</p>
-                <p className="text-xs text-slate-400 truncate capitalize">{user?.role?.replace('_', ' ')}</p>
+                <p className="text-xs text-white/60 truncate capitalize">{user?.role?.replace('_', ' ')}</p>
               </div>
             </div>
             
@@ -319,7 +319,8 @@ export default function DashboardLayout({ children }) {
             <Button
               onClick={toggleTheme}
               variant="ghost"
-              className="w-full justify-start text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg mb-1"
+              data-testid="theme-toggle-btn"
+              className="w-full justify-start text-white/60 hover:text-white hover:bg-white/10 rounded-lg mb-1"
             >
               {theme === 'dark' ? (
                 <>
@@ -337,7 +338,7 @@ export default function DashboardLayout({ children }) {
             <Button
               onClick={handleLogout}
               variant="ghost"
-              className="w-full justify-start text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg"
+              className="w-full justify-start text-white/60 hover:text-white hover:bg-white/10 rounded-lg"
             >
               <LogOut className="h-4 w-4 mr-2" />
               Logout
