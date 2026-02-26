@@ -1092,6 +1092,93 @@ async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: d
     
     return {'message': 'COGS data updated successfully'}
 
+class CopyCostsRequest(BaseModel):
+    source_city: str
+    cost_data: list  # List of {sku_name, primary_packaging_cost, secondary_packaging_cost, manufacturing_variable_cost}
+
+@api_router.post("/cogs/copy-costs-to-all-cities")
+async def copy_costs_to_all_cities(request: CopyCostsRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Copy Primary Packaging, Secondary Packaging, and Manufacturing costs from one city to all other cities.
+    Only CEO, Director, and System Admin can perform this action.
+    """
+    # Check permission
+    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
+        raise HTTPException(status_code=403, detail="Only CEO, Director, or System Admin can copy costs to all cities")
+    
+    source_city = request.source_city
+    cost_data = request.cost_data
+    
+    # Get all active cities except source
+    all_cities = await db.master_cities.find({'is_active': True}, {'name': 1}).to_list(5000)
+    target_cities = [c['name'] for c in all_cities if c['name'] != source_city]
+    
+    if not target_cities:
+        raise HTTPException(status_code=400, detail="No other cities to copy to")
+    
+    # Create a map of SKU name to costs
+    cost_map = {item['sku_name']: {
+        'primary_packaging_cost': item.get('primary_packaging_cost', 0),
+        'secondary_packaging_cost': item.get('secondary_packaging_cost', 0),
+        'manufacturing_variable_cost': item.get('manufacturing_variable_cost', 0)
+    } for item in cost_data}
+    
+    cities_updated = 0
+    
+    for city in target_cities:
+        # Get all COGS data for this city
+        city_cogs = await db.cogs_data.find({'city': city}).to_list(5000)
+        
+        for cogs_row in city_cogs:
+            sku_name = cogs_row.get('sku_name')
+            if sku_name in cost_map:
+                costs = cost_map[sku_name]
+                
+                # Get existing values for recalculation
+                primary = costs['primary_packaging_cost']
+                secondary = costs['secondary_packaging_cost']
+                manufacturing = costs['manufacturing_variable_cost']
+                margin = cogs_row.get('gross_margin', 0)
+                logistics = cogs_row.get('outbound_logistics_cost', 0)
+                distribution = cogs_row.get('distribution_cost', 0)
+                
+                # Recalculate
+                total_cogs = primary + secondary + manufacturing
+                gross_margin_rupees = total_cogs * (margin / 100) if margin else 0
+                ex_factory = total_cogs + gross_margin_rupees
+                base_cost = primary + secondary + manufacturing + gross_margin_rupees + logistics
+                
+                if distribution >= 100:
+                    landing_price = 0
+                elif distribution > 0:
+                    landing_price = base_cost / (1 - distribution / 100)
+                else:
+                    landing_price = base_cost
+                
+                # Update only the 3 cost fields + recalculated fields
+                await db.cogs_data.update_one(
+                    {'id': cogs_row['id']},
+                    {'$set': {
+                        'primary_packaging_cost': primary,
+                        'secondary_packaging_cost': secondary,
+                        'manufacturing_variable_cost': manufacturing,
+                        'total_cogs': total_cogs,
+                        'ex_factory_price': ex_factory,
+                        'base_cost': base_cost,
+                        'minimum_landing_price': landing_price,
+                        'last_edited_by': current_user['id'],
+                        'last_edited_at': datetime.now(timezone.utc).isoformat()
+                    }}
+                )
+        
+        cities_updated += 1
+    
+    return {
+        'message': f'Costs copied successfully',
+        'source_city': source_city,
+        'cities_updated': cities_updated
+    }
+
 # ============= GOOGLE OAUTH AUTH ROUTES =============
 
 @api_router.post("/auth/google-callback")
