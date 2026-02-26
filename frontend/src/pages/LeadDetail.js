@@ -564,6 +564,17 @@ export default function LeadDetail() {
                 </div>
               )}
             </div>
+            
+            {/* Logo Uploader */}
+            <div className="mt-6 pt-4 border-t">
+              <LogoUploader
+                entityType="leads"
+                entityId={lead.id}
+                currentLogo={lead.logo_url ? `${process.env.REACT_APP_BACKEND_URL}${lead.logo_url}` : null}
+                onLogoUpdate={() => fetchData()}
+                label="Company Logo"
+              />
+            </div>
           </Card>
 
           {/* Location Information */}
