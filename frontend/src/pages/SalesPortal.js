@@ -16,9 +16,9 @@ const BOTTLE_SIZES = [
 
 // Default Nyla values
 const DEFAULT_NYLA = {
-  buyingPrice: 11,
+  buyingPrice: 130,
   percentageGST: 5,
-  sellingPrice: 20,
+  sellingPrice: 250,
   percentageReturn: 75,
   returnCredit: 15
 };
