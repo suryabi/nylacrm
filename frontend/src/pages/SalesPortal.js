@@ -163,15 +163,15 @@ export default function SalesPortal() {
                 <div className="h-6 w-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-bold">?</div>
                 <span className="text-sm font-semibold">Current Brand</span>
               </div>
-              <CompactInput label="Buy Price" field="buyingPrice" data={competitor} onChange={handleCompetitorChange} />
-              <CompactInput label="GST %" field="percentageGST" data={competitor} onChange={handleCompetitorChange} />
+              <CompactInput label="Buy Price" field="buyingPrice" data={competitor} onChange={handleCompetitorChange} testId="competitor-buy-price" />
+              <CompactInput label="GST %" field="percentageGST" data={competitor} onChange={handleCompetitorChange} testId="competitor-gst" />
               <div className="flex items-center gap-2 py-1 px-2 bg-slate-50 dark:bg-slate-800 rounded text-xs">
                 <span className="text-muted-foreground w-20">Landing</span>
                 <span className="font-semibold">₹{competitorCalc.landingPrice}</span>
               </div>
-              <CompactInput label="Sell Price" field="sellingPrice" data={competitor} onChange={handleCompetitorChange} />
-              <CompactInput label="Return %" field="percentageReturn" data={competitor} onChange={handleCompetitorChange} />
-              <CompactInput label="Return Cr." field="returnCredit" data={competitor} onChange={handleCompetitorChange} />
+              <CompactInput label="Sell Price" field="sellingPrice" data={competitor} onChange={handleCompetitorChange} testId="competitor-sell-price" />
+              <CompactInput label="Return %" field="percentageReturn" data={competitor} onChange={handleCompetitorChange} testId="competitor-return-pct" />
+              <CompactInput label="Return Cr." field="returnCredit" data={competitor} onChange={handleCompetitorChange} testId="competitor-return-credit" />
             </CardContent>
           </Card>
 
