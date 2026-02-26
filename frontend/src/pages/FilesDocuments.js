@@ -896,6 +896,36 @@ export default function FilesDocuments() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Image Preview Modal */}
+      <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
+          <DialogHeader className="p-4 pb-2 border-b">
+            <DialogTitle className="flex items-center justify-between pr-8">
+              <span className="truncate">{previewImage?.name}</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="relative flex items-center justify-center bg-black/5 dark:bg-black/20 p-4 min-h-[300px] max-h-[70vh] overflow-auto">
+            {previewImage && (
+              <img 
+                src={`${API_URL}/documents/${previewImage.id}/download`}
+                alt={previewImage.name}
+                className="max-w-full max-h-[65vh] object-contain rounded shadow-lg"
+              />
+            )}
+          </div>
+          <DialogFooter className="p-4 pt-2 border-t">
+            <Button variant="outline" onClick={() => setPreviewImage(null)}>
+              <X className="h-4 w-4 mr-2" />
+              Close
+            </Button>
+            <Button onClick={() => previewImage && handleDownloadDocument(previewImage)}>
+              <Download className="h-4 w-4 mr-2" />
+              Download
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
