@@ -78,6 +78,9 @@ export default function FilesDocuments() {
   const [editingCategory, setEditingCategory] = useState(null);
   const [editingSubcategory, setEditingSubcategory] = useState(null);
   
+  // Image preview state
+  const [previewImage, setPreviewImage] = useState(null);
+  
   const [uploading, setUploading] = useState(false);
 
   const canManageCategories = isKeyUser(user?.role);
