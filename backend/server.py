@@ -1099,12 +1099,12 @@ class CopyCostsRequest(BaseModel):
 @api_router.post("/cogs/copy-costs-to-all-cities")
 async def copy_costs_to_all_cities(request: CopyCostsRequest, current_user: dict = Depends(get_current_user)):
     """
-    Copy Primary Packaging, Secondary Packaging, and Manufacturing costs from one city to all other cities.
+    Copy all input field values from one city to all other cities.
     Only CEO, Director, and System Admin can perform this action.
     """
     # Check permission
     if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
-        raise HTTPException(status_code=403, detail="Only CEO, Director, or System Admin can copy costs to all cities")
+        raise HTTPException(status_code=403, detail="Only CEO, Director, or System Admin can copy values to all cities")
     
     source_city = request.source_city
     cost_data = request.cost_data
@@ -1116,11 +1116,14 @@ async def copy_costs_to_all_cities(request: CopyCostsRequest, current_user: dict
     if not target_cities:
         raise HTTPException(status_code=400, detail="No other cities to copy to")
     
-    # Create a map of SKU name to costs
+    # Create a map of SKU name to all input values
     cost_map = {item['sku_name']: {
         'primary_packaging_cost': item.get('primary_packaging_cost', 0),
         'secondary_packaging_cost': item.get('secondary_packaging_cost', 0),
-        'manufacturing_variable_cost': item.get('manufacturing_variable_cost', 0)
+        'manufacturing_variable_cost': item.get('manufacturing_variable_cost', 0),
+        'gross_margin': item.get('gross_margin', 0),
+        'outbound_logistics_cost': item.get('outbound_logistics_cost', 0),
+        'distribution_cost': item.get('distribution_cost', 0)
     } for item in cost_data}
     
     cities_updated = 0
@@ -1132,17 +1135,17 @@ async def copy_costs_to_all_cities(request: CopyCostsRequest, current_user: dict
         for cogs_row in city_cogs:
             sku_name = cogs_row.get('sku_name')
             if sku_name in cost_map:
-                costs = cost_map[sku_name]
+                values = cost_map[sku_name]
                 
-                # Get existing values for recalculation
-                primary = costs['primary_packaging_cost']
-                secondary = costs['secondary_packaging_cost']
-                manufacturing = costs['manufacturing_variable_cost']
-                margin = cogs_row.get('gross_margin', 0)
-                logistics = cogs_row.get('outbound_logistics_cost', 0)
-                distribution = cogs_row.get('distribution_cost', 0)
+                # Get all input values
+                primary = values['primary_packaging_cost']
+                secondary = values['secondary_packaging_cost']
+                manufacturing = values['manufacturing_variable_cost']
+                margin = values['gross_margin']
+                logistics = values['outbound_logistics_cost']
+                distribution = values['distribution_cost']
                 
-                # Recalculate
+                # Recalculate computed fields
                 total_cogs = primary + secondary + manufacturing
                 gross_margin_rupees = total_cogs * (margin / 100) if margin else 0
                 ex_factory = total_cogs + gross_margin_rupees
@@ -1155,13 +1158,16 @@ async def copy_costs_to_all_cities(request: CopyCostsRequest, current_user: dict
                 else:
                     landing_price = base_cost
                 
-                # Update only the 3 cost fields + recalculated fields
+                # Update all input fields + recalculated fields
                 await db.cogs_data.update_one(
                     {'id': cogs_row['id']},
                     {'$set': {
                         'primary_packaging_cost': primary,
                         'secondary_packaging_cost': secondary,
                         'manufacturing_variable_cost': manufacturing,
+                        'gross_margin': margin,
+                        'outbound_logistics_cost': logistics,
+                        'distribution_cost': distribution,
                         'total_cogs': total_cogs,
                         'ex_factory_price': ex_factory,
                         'base_cost': base_cost,
@@ -1174,7 +1180,7 @@ async def copy_costs_to_all_cities(request: CopyCostsRequest, current_user: dict
         cities_updated += 1
     
     return {
-        'message': f'Costs copied successfully',
+        'message': f'Values copied successfully',
         'source_city': source_city,
         'cities_updated': cities_updated
     }
