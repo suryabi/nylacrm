@@ -7028,6 +7028,43 @@ async def delete_state(state_id: str, current_user: dict = Depends(get_current_u
     
     return {'message': 'State and its cities deleted'}
 
+# Admin endpoint to cleanup orphaned cities
+@api_router.post("/master-locations/cleanup-orphaned-cities")
+async def cleanup_orphaned_cities(current_user: dict = Depends(get_current_user)):
+    """
+    One-time cleanup to deactivate cities whose parent state has been deleted.
+    This fixes orphaned cities that existed before the cascade delete was implemented.
+    """
+    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Get all active state IDs
+    active_states = await db.master_states.find({'is_active': True}, {'id': 1}).to_list(5000)
+    active_state_ids = [s['id'] for s in active_states]
+    
+    # Find and deactivate orphaned cities (cities with inactive/missing parent states)
+    result = await db.master_cities.update_many(
+        {
+            'is_active': True,
+            'state_id': {'$nin': active_state_ids}
+        },
+        {
+            '$set': {
+                'is_active': False,
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    # Get final counts
+    final_active_cities = await db.master_cities.count_documents({'is_active': True})
+    
+    return {
+        'message': 'Cleanup completed',
+        'orphaned_cities_deactivated': result.modified_count,
+        'active_cities_remaining': final_active_cities
+    }
+
 # CRUD for Cities
 @api_router.post("/master-locations/cities")
 async def create_city(city: City, current_user: dict = Depends(get_current_user)):
