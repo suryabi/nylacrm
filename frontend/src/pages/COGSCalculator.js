@@ -431,16 +431,19 @@ export default function COGSCalculator() {
       <Dialog open={showCopyDialog} onOpenChange={setShowCopyDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Copy Costs to All Cities</DialogTitle>
+            <DialogTitle>Copy Values to All Cities</DialogTitle>
             <DialogDescription>
               This will copy the following values from <strong>{selectedCity}</strong> to all other cities:
               <ul className="mt-3 space-y-1 text-sm">
                 <li>• Primary Packaging Cost (₹)</li>
                 <li>• Secondary Packaging Cost (₹)</li>
                 <li>• Manufacturing Variable Cost (₹)</li>
+                <li>• Gross Margin (%)</li>
+                <li>• Outbound Logistics Cost (₹)</li>
+                <li>• Distribution Cost (%)</li>
               </ul>
               <p className="mt-3 text-amber-600 dark:text-amber-400 font-medium">
-                Note: This will overwrite existing values in other cities. Other fields (Gross Margin, Logistics, Distribution Cost) will not be changed.
+                Note: This will overwrite existing values in other cities for all SKUs.
               </p>
             </DialogDescription>
           </DialogHeader>
