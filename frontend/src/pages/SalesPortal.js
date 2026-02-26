@@ -95,7 +95,7 @@ export default function SalesPortal() {
 
   const formatCurrency = (val) => `₹${val.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 
-  const CompactInput = ({ label, field, data, onChange, disabled = false }) => (
+  const CompactInput = ({ label, field, data, onChange, disabled = false, testId }) => (
     <div className="flex items-center gap-2">
       <Label className="text-xs text-muted-foreground w-20 shrink-0">{label}</Label>
       <Input
@@ -105,6 +105,7 @@ export default function SalesPortal() {
         disabled={disabled}
         className="h-8 text-sm"
         placeholder="0"
+        data-testid={testId}
       />
     </div>
   );
