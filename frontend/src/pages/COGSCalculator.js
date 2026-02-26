@@ -148,6 +148,41 @@ export default function COGSCalculator() {
     }
   };
 
+  // Copy Primary Pkg, Secondary Pkg, and Mfg Cost to all other cities
+  const copyToAllCities = async () => {
+    setCopying(true);
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Prepare the cost data from current city's COGS data
+      const costData = cogsData.map(row => ({
+        sku_name: row.sku_name,
+        primary_packaging_cost: parseFloat(row.primary_packaging_cost) || 0,
+        secondary_packaging_cost: parseFloat(row.secondary_packaging_cost) || 0,
+        manufacturing_variable_cost: parseFloat(row.manufacturing_variable_cost) || 0
+      }));
+      
+      const response = await axios.post(
+        `${API}/cogs/copy-costs-to-all-cities`,
+        {
+          source_city: selectedCity,
+          cost_data: costData
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
+        }
+      );
+      
+      toast.success(`Costs copied to ${response.data.cities_updated} cities!`);
+      setShowCopyDialog(false);
+    } catch (error) {
+      toast.error('Failed to copy costs: ' + (error.response?.data?.detail || error.message));
+    } finally {
+      setCopying(false);
+    }
+  };
+
   const exportToExcel = () => {
     // Headers depend on user role
     const headers = canSeeCostDetails
