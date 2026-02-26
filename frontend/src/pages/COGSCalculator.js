@@ -5,9 +5,17 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
-import { Download, Save } from 'lucide-react';
+import { Download, Save, Copy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useMasterLocations } from '../hooks/useMasterLocations';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
 
 const API = process.env.REACT_APP_BACKEND_URL + '/api';
 
