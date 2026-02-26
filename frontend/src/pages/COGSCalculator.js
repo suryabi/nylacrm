@@ -236,6 +236,16 @@ export default function COGSCalculator() {
             <Save className="h-4 w-4 mr-2" />
             {saving ? 'Saving...' : hasChanges ? 'Save All Changes' : 'All Saved'}
           </Button>
+          {canSeeCostDetails && (
+            <Button 
+              onClick={() => setShowCopyDialog(true)} 
+              variant="outline" 
+              className="rounded-full"
+              disabled={!selectedCity || cogsData.length === 0}
+            >
+              <Copy className="h-4 w-4 mr-2" />Copy Costs to All Cities
+            </Button>
+          )}
           <Button onClick={exportToExcel} variant="outline" className="rounded-full">
             <Download className="h-4 w-4 mr-2" />Download Excel
           </Button>
