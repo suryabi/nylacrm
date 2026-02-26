@@ -514,13 +514,15 @@ export default function FilesDocuments() {
                           <FileImage className="h-8 w-8 text-green-500" />
                         )}
                       </div>
-                    ) : (
+                    ) : doc.document_type === 'pdf' ? (
                       <div 
                         className="cursor-pointer hover:ring-2 hover:ring-primary/50 rounded transition-all"
                         onClick={() => setPreviewDocument(doc)}
                       >
                         {getDocumentIcon(doc.document_type, doc.content_type)}
                       </div>
+                    ) : (
+                      getDocumentIcon(doc.document_type, doc.content_type)
                     )}
                   </div>
                   
