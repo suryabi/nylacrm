@@ -504,17 +504,15 @@ export default function FilesDocuments() {
                         className="h-16 w-16 rounded bg-muted flex items-center justify-center overflow-hidden cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
                         onClick={() => setPreviewImage(doc)}
                       >
-                        <img 
-                          src={`${API_URL}/documents/${doc.id}/download`}
-                          alt={doc.name}
-                          className="h-full w-full object-cover"
-                          onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.style.display = 'none';
-                            e.target.nextSibling && (e.target.nextSibling.style.display = 'block');
-                          }}
-                        />
-                        <FileImage className="h-8 w-8 text-green-500 hidden" />
+                        {doc.file_data ? (
+                          <img 
+                            src={`data:${doc.content_type};base64,${doc.file_data}`}
+                            alt={doc.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <FileImage className="h-8 w-8 text-green-500" />
+                        )}
                       </div>
                     ) : (
                       getDocumentIcon(doc.document_type, doc.content_type)
