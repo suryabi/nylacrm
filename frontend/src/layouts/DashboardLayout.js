@@ -51,7 +51,7 @@ const salesNavigationGroups = [
   {
     title: 'Pricing & Logistics',
     items: [
-      { name: 'COGS Calculator', href: '/cogs-calculator', icon: Calculator, roles: ['CEO', 'Director', 'National Sales Head'] },
+      { name: 'COGS Calculator', href: '/cogs-calculator', icon: Calculator },
       { name: 'Transport Calculator', href: '/transportation-calculator', icon: Truck, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
     ]
   },
