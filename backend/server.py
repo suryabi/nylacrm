@@ -1188,9 +1188,9 @@ async def cleanup_invalid_skus(current_user: dict = Depends(get_current_user)):
     if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
         raise HTTPException(status_code=403, detail="Not authorized")
     
-    # Get all master SKU names
-    master_skus = await db.master_skus.find({'is_active': True}, {'name': 1}).to_list(5000)
-    master_sku_names = set(sku['name'] for sku in master_skus)
+    # Get all master SKU names (field is 'sku_name' in master_skus collection)
+    master_skus = await db.master_skus.find({'is_active': True}, {'sku_name': 1}).to_list(5000)
+    master_sku_names = set(sku['sku_name'] for sku in master_skus if sku.get('sku_name'))
     
     # Find all unique SKU names in COGS data
     cogs_skus = await db.cogs_data.distinct('sku_name')
