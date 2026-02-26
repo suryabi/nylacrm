@@ -446,57 +446,38 @@ export default function AccountsList() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+              {/* Logo Grid - 25mm x 25mm logos (approx 94px), smaller gaps */}
+              <div ref={logoGridRef} className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-2 p-2 bg-white">
                 {accounts.map((account, idx) => (
                   <div
                     key={account.id || idx}
                     onClick={() => navigate(`/accounts/${account.account_id}`)}
                     className="group cursor-pointer"
                   >
-                    <div className="relative aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-200 hover:border-primary/50 transition-all duration-300 hover:shadow-xl hover:scale-105">
+                    {/* 25mm = ~94px at 96dpi */}
+                    <div 
+                      className="relative rounded-lg overflow-hidden bg-white border border-gray-200 hover:border-primary/50 transition-all duration-200 hover:shadow-lg"
+                      style={{ width: '94px', height: '94px' }}
+                    >
                       {account.logo_url ? (
                         <img
                           src={`${process.env.REACT_APP_BACKEND_URL}${account.logo_url}`}
                           alt={account.account_name}
-                          className="w-full h-full object-contain p-4"
+                          className="w-full h-full object-contain p-1"
                         />
                       ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-br from-primary/5 via-primary/10 to-primary/5">
-                          <div className="text-center">
-                            <p className="text-lg font-bold text-primary/80 leading-tight line-clamp-3">
-                              {account.account_name?.split(' ').slice(0, 3).join(' ')}
-                            </p>
-                            {account.account_name?.split(' ').length > 3 && (
-                              <p className="text-sm text-primary/60 mt-1">
-                                {account.account_name?.split(' ').slice(3).join(' ')}
-                              </p>
-                            )}
-                          </div>
+                        <div className="w-full h-full flex items-center justify-center p-1 bg-gradient-to-br from-gray-50 to-gray-100">
+                          <p className="text-[8px] font-medium text-gray-500 text-center leading-tight line-clamp-3 px-1">
+                            {account.account_name}
+                          </p>
                         </div>
                       )}
                       {/* Hover overlay */}
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end">
-                        <div className="w-full p-3 text-white">
-                          <p className="text-xs font-medium truncate">{account.account_name}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            {account.category && (
-                              <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full">
-                                {account.category}
-                              </span>
-                            )}
-                            {account.account_type && (
-                              <span className="text-[10px] bg-primary/60 px-2 py-0.5 rounded-full">
-                                {account.account_type}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                      <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                        <p className="text-[8px] font-medium text-white text-center px-1 leading-tight">
+                          {account.account_name}
+                        </p>
                       </div>
-                    </div>
-                    <div className="mt-2 text-center">
-                      <p className="text-xs font-medium text-muted-foreground truncate">
-                        {account.city}
-                      </p>
                     </div>
                   </div>
                 ))}
