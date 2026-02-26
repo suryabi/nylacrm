@@ -500,8 +500,21 @@ export default function FilesDocuments() {
                   {/* Icon/Thumbnail */}
                   <div className="flex-shrink-0">
                     {doc.document_type === 'image' ? (
-                      <div className="h-12 w-12 rounded bg-muted flex items-center justify-center overflow-hidden">
-                        <FileImage className="h-8 w-8 text-green-500" />
+                      <div 
+                        className="h-16 w-16 rounded bg-muted flex items-center justify-center overflow-hidden cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
+                        onClick={() => setPreviewImage(doc)}
+                      >
+                        <img 
+                          src={`${API_URL}/documents/${doc.id}/download`}
+                          alt={doc.name}
+                          className="h-full w-full object-cover"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.style.display = 'none';
+                            e.target.nextSibling && (e.target.nextSibling.style.display = 'block');
+                          }}
+                        />
+                        <FileImage className="h-8 w-8 text-green-500 hidden" />
                       </div>
                     ) : (
                       getDocumentIcon(doc.document_type, doc.content_type)
