@@ -10,7 +10,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
-import { ArrowLeft, Mail, Phone, Building2, User, MessageSquare, Send, Loader2, ArrowRightCircle, Plus, Trash2, Save, Package, Upload, Download, FileText, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Building2, User, MessageSquare, Send, Loader2, ArrowRightCircle, Plus, Trash2, Save, Package, Upload, Download, FileText, CheckCircle, XCircle, Clock, AlertCircle, ImageIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Select,
@@ -22,6 +22,7 @@ import {
 import ActivityTimeline from '../components/ActivityTimeline';
 import TimelineSummaryCompact from '../components/TimelineSummaryCompact';
 import InvoiceSummaryCard from '../components/InvoiceSummaryCard';
+import LogoUploader from '../components/LogoUploader';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
