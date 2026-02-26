@@ -6271,10 +6271,22 @@ async def get_documents(
     if subcategory_id:
         query['subcategory_id'] = subcategory_id
     
-    # Don't include file_data in list response for performance
-    documents = await db.documents.find(query, {'_id': 0, 'file_data': 0}).sort('created_at', -1).to_list(1000)
+    # Get documents without file_data first
+    documents = await db.documents.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
     
-    return {'documents': documents}
+    # For images, include file_data for thumbnail display
+    # For other documents, remove file_data for performance
+    result = []
+    for doc in documents:
+        if doc.get('document_type') == 'image':
+            # Keep file_data for images
+            result.append(doc)
+        else:
+            # Remove file_data for non-images
+            doc_copy = {k: v for k, v in doc.items() if k != 'file_data'}
+            result.append(doc_copy)
+    
+    return {'documents': result}
 
 @api_router.post("/documents/upload")
 async def upload_document(
