@@ -6356,6 +6356,31 @@ async def get_document(document_id: str, current_user: dict = Depends(get_curren
     
     return {'document': document}
 
+@api_router.get("/documents/{document_id}/download")
+async def download_document(document_id: str, current_user: dict = Depends(get_current_user)):
+    """Download a document file"""
+    document = await db.documents.find_one({'id': document_id})
+    if not document:
+        raise HTTPException(status_code=404, detail='Document not found')
+    
+    file_data = document.get('file_data')
+    if not file_data:
+        raise HTTPException(status_code=404, detail='File data not found')
+    
+    # Decode base64
+    import base64
+    file_bytes = base64.b64decode(file_data)
+    
+    # Return file as response
+    from fastapi.responses import Response
+    return Response(
+        content=file_bytes,
+        media_type=document.get('content_type', 'application/octet-stream'),
+        headers={
+            'Content-Disposition': f'inline; filename="{document.get("file_name", "file")}"'
+        }
+    )
+
 @api_router.delete("/documents/{document_id}")
 async def delete_document(document_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a document (uploader or key users only)"""
