@@ -176,7 +176,7 @@ export default function LogoUploader({ entityType = 'accounts', entityId, curren
 
   return (
     <div className="space-y-3">
-      <Label className="text-sm font-medium">Account Logo</Label>
+      <Label className="text-sm font-medium">{label}</Label>
       
       {/* Current logo display */}
       <div className="flex items-center gap-4">
