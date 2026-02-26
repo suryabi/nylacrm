@@ -2727,6 +2727,81 @@ async def delete_account_logo(account_id: str, current_user: dict = Depends(get_
     
     return {'message': 'Logo deleted successfully'}
 
+# ============= LEAD LOGO ROUTES =============
+
+@api_router.post("/leads/{lead_id}/logo")
+async def upload_lead_logo(lead_id: str, request: LogoUploadRequest, current_user: dict = Depends(get_current_user)):
+    """Upload and save lead logo"""
+    import base64
+    import os
+    
+    lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+    
+    try:
+        # Extract base64 data
+        logo_data = request.logo
+        if ',' in logo_data:
+            logo_data = logo_data.split(',')[1]
+        
+        # Decode base64
+        image_bytes = base64.b64decode(logo_data)
+        
+        # Create logos directory if not exists
+        logos_dir = '/app/backend/static/logos/leads'
+        os.makedirs(logos_dir, exist_ok=True)
+        
+        # Save file with lead ID
+        file_name = f"{lead_id}.png"
+        file_path = os.path.join(logos_dir, file_name)
+        
+        with open(file_path, 'wb') as f:
+            f.write(image_bytes)
+        
+        # Update lead with logo info
+        logo_url = f"/api/static/logos/leads/{file_name}"
+        await db.leads.update_one(
+            {'id': lead_id},
+            {'$set': {
+                'logo_url': logo_url,
+                'logo_width_mm': request.width_mm,
+                'logo_height_mm': request.height_mm,
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        
+        return {'logo_url': logo_url, 'message': 'Logo uploaded successfully'}
+        
+    except Exception as e:
+        logger.error(f"Error uploading lead logo: {str(e)}")
+        raise HTTPException(status_code=500, detail=f'Failed to upload logo: {str(e)}')
+
+@api_router.delete("/leads/{lead_id}/logo")
+async def delete_lead_logo(lead_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete lead logo"""
+    import os
+    
+    lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+    
+    # Remove file if exists
+    logo_url = lead.get('logo_url', '')
+    if logo_url:
+        file_name = logo_url.split('/')[-1]
+        file_path = f'/app/backend/static/logos/leads/{file_name}'
+        if os.path.exists(file_path):
+            os.remove(file_path)
+    
+    # Update lead to remove logo
+    await db.leads.update_one(
+        {'id': lead_id},
+        {'$unset': {'logo_url': '', 'logo_width_mm': '', 'logo_height_mm': ''}}
+    )
+    
+    return {'message': 'Logo deleted successfully'}
+
 # ============= ACTIVITIES ROUTES =============
 
 @api_router.post("/activities", response_model=Activity)
