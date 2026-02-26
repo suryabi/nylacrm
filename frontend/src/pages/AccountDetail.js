@@ -645,11 +645,13 @@ ${googleMapsLink}`;
                 </div>
                 <div className="md:col-span-2 pt-4 border-t">
                   <LogoUploader
-                    accountId={account.id || account.account_id}
+                    entityType="accounts"
+                    entityId={account.id || account.account_id}
                     currentLogo={account.logo_url ? `${process.env.REACT_APP_BACKEND_URL}${account.logo_url}` : null}
                     onLogoUpdate={(newLogoUrl) => {
                       fetchAccount();
                     }}
+                    label="Account Logo"
                   />
                 </div>
               </div>
