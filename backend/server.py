@@ -1179,6 +1179,39 @@ async def copy_costs_to_all_cities(request: CopyCostsRequest, current_user: dict
         'cities_updated': cities_updated
     }
 
+@api_router.post("/cogs/cleanup-invalid-skus")
+async def cleanup_invalid_skus(current_user: dict = Depends(get_current_user)):
+    """
+    Remove all SKUs from COGS table that are not in the master SKU list.
+    Only CEO, Director, and System Admin can perform this action.
+    """
+    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Get all master SKU names
+    master_skus = await db.master_skus.find({'is_active': True}, {'name': 1}).to_list(5000)
+    master_sku_names = set(sku['name'] for sku in master_skus)
+    
+    # Find all unique SKU names in COGS data
+    cogs_skus = await db.cogs_data.distinct('sku_name')
+    
+    # Find invalid SKUs (in COGS but not in master)
+    invalid_skus = [sku for sku in cogs_skus if sku not in master_sku_names]
+    
+    # Delete invalid SKU entries
+    if invalid_skus:
+        result = await db.cogs_data.delete_many({'sku_name': {'$in': invalid_skus}})
+        deleted_count = result.deleted_count
+    else:
+        deleted_count = 0
+    
+    return {
+        'message': 'Cleanup completed',
+        'invalid_skus_found': invalid_skus,
+        'records_deleted': deleted_count,
+        'master_sku_count': len(master_sku_names)
+    }
+
 # ============= GOOGLE OAUTH AUTH ROUTES =============
 
 @api_router.post("/auth/google-callback")
