@@ -446,8 +446,8 @@ export default function AccountsList() {
             </div>
           ) : (
             <>
-              {/* Logo Grid - 35mm x 35mm logos (approx 132px), smaller gaps */}
-              <div ref={logoGridRef} className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2 p-2 bg-white">
+              {/* Logo Grid - 35mm x 35mm logos (approx 132px) */}
+              <div ref={logoGridRef} className="flex flex-wrap gap-3 p-3 bg-white">
                 {accounts.map((account, idx) => (
                   <div
                     key={account.id || idx}
