@@ -920,23 +920,11 @@ export default function FilesDocuments() {
               />
             )}
             {previewDocument && previewDocument.document_type === 'pdf' && previewDocument.file_data && (
-              <object
-                data={`data:application/pdf;base64,${previewDocument.file_data}`}
+              <embed
+                src={`data:application/pdf;base64,${previewDocument.file_data}#toolbar=1&navpanes=1&scrollbar=1`}
                 type="application/pdf"
                 className="w-full h-[65vh]"
-              >
-                <div className="flex flex-col items-center justify-center p-8 text-center">
-                  <FileText className="h-16 w-16 text-red-500 mb-4" />
-                  <p className="text-lg font-medium mb-2">{previewDocument.name}</p>
-                  <p className="text-muted-foreground mb-4">
-                    Your browser cannot display this PDF. Please download to view.
-                  </p>
-                  <Button onClick={() => handleDownloadDocument(previewDocument)}>
-                    <Download className="h-4 w-4 mr-2" />
-                    Download PDF
-                  </Button>
-                </div>
-              </object>
+              />
             )}
             {previewDocument && previewDocument.document_type === 'word' && (
               <div className="flex flex-col items-center justify-center p-8 text-center">
