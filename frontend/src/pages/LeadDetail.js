@@ -442,6 +442,24 @@ export default function LeadDetail() {
         <Button variant="ghost" size="icon" onClick={() => navigate('/leads')} data-testid="back-button">
           <ArrowLeft className="h-5 w-5" />
         </Button>
+        
+        {/* Logo Display */}
+        <div className="shrink-0">
+          {lead.logo_url ? (
+            <div className="w-14 h-14 rounded-lg border-2 border-primary/20 overflow-hidden bg-white shadow-sm">
+              <img 
+                src={`${process.env.REACT_APP_BACKEND_URL}${lead.logo_url}`}
+                alt={`${lead.company} logo`}
+                className="w-full h-full object-contain"
+              />
+            </div>
+          ) : (
+            <div className="w-14 h-14 rounded-lg border-2 border-dashed border-muted-foreground/30 flex items-center justify-center bg-muted/20">
+              <Building2 className="h-5 w-5 text-muted-foreground/50" />
+            </div>
+          )}
+        </div>
+        
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-semibold">{lead.company}</h1>
