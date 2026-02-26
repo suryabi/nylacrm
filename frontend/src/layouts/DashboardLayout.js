@@ -154,16 +154,17 @@ export default function DashboardLayout({ children }) {
   // Select navigation groups based on current context
   const navigationGroups = currentContext === 'production' ? productionNavigationGroups : salesNavigationGroups;
 
-  const filteredDashboardSubmenu = dashboardSubmenu.filter(item => item.roles.includes(user?.role));
+  const filteredDashboardSubmenu = dashboardSubmenu.filter(item => !item.roles || item.roles.includes(user?.role));
   const isDashboardActive = location.pathname === '/dashboard' || location.pathname === '/sales-revenue' || 
     location.pathname === '/target-sku' || location.pathname === '/target-resource' ||
     location.pathname === '/sku-performance' || location.pathname === '/resource-performance' ||
     location.pathname === '/account-performance';
 
   // Filter navigation groups based on user role
+  // If item has no roles array, it's available to all users
   const filteredGroups = navigationGroups.map(group => ({
     ...group,
-    items: group.items.filter(item => item.roles.includes(user?.role))
+    items: group.items.filter(item => !item.roles || item.roles.includes(user?.role))
   })).filter(group => group.items.length > 0);
 
   return (
