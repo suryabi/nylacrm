@@ -900,29 +900,65 @@ export default function FilesDocuments() {
         </DialogContent>
       </Dialog>
 
-      {/* Image Preview Modal */}
-      <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
+      {/* Document Preview Modal */}
+      <Dialog open={!!previewDocument} onOpenChange={() => setPreviewDocument(null)}>
+        <DialogContent className="max-w-5xl max-h-[90vh] p-0 overflow-hidden">
           <DialogHeader className="p-4 pb-2 border-b">
-            <DialogTitle className="flex items-center justify-between pr-8">
-              <span className="truncate">{previewImage?.name}</span>
+            <DialogTitle className="flex items-center gap-2 pr-8">
+              {previewDocument?.document_type === 'image' && <FileImage className="h-5 w-5 text-green-500" />}
+              {previewDocument?.document_type === 'pdf' && <FileText className="h-5 w-5 text-red-500" />}
+              {previewDocument?.document_type === 'word' && <FileText className="h-5 w-5 text-blue-500" />}
+              <span className="truncate">{previewDocument?.name}</span>
             </DialogTitle>
           </DialogHeader>
-          <div className="relative flex items-center justify-center bg-black/5 dark:bg-black/20 p-4 min-h-[300px] max-h-[70vh] overflow-auto">
-            {previewImage && previewImage.file_data && (
+          <div className="relative flex items-center justify-center bg-black/5 dark:bg-black/20 min-h-[400px] max-h-[70vh] overflow-auto">
+            {previewDocument && previewDocument.document_type === 'image' && previewDocument.file_data && (
               <img 
-                src={`data:${previewImage.content_type};base64,${previewImage.file_data}`}
-                alt={previewImage.name}
-                className="max-w-full max-h-[65vh] object-contain rounded shadow-lg"
+                src={`data:${previewDocument.content_type};base64,${previewDocument.file_data}`}
+                alt={previewDocument.name}
+                className="max-w-full max-h-[65vh] object-contain rounded shadow-lg m-4"
               />
+            )}
+            {previewDocument && previewDocument.document_type === 'pdf' && previewDocument.file_data && (
+              <iframe
+                src={`data:application/pdf;base64,${previewDocument.file_data}`}
+                title={previewDocument.name}
+                className="w-full h-[65vh] border-0"
+              />
+            )}
+            {previewDocument && previewDocument.document_type === 'word' && (
+              <div className="flex flex-col items-center justify-center p-8 text-center">
+                <FileText className="h-16 w-16 text-blue-500 mb-4" />
+                <p className="text-lg font-medium mb-2">{previewDocument.name}</p>
+                <p className="text-muted-foreground mb-4">
+                  Word documents cannot be previewed directly in the browser.
+                </p>
+                <Button onClick={() => handleDownloadDocument(previewDocument)}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Download to View
+                </Button>
+              </div>
+            )}
+            {previewDocument && !['image', 'pdf', 'word'].includes(previewDocument.document_type) && (
+              <div className="flex flex-col items-center justify-center p-8 text-center">
+                <FileText className="h-16 w-16 text-muted-foreground mb-4" />
+                <p className="text-lg font-medium mb-2">{previewDocument.name}</p>
+                <p className="text-muted-foreground mb-4">
+                  This file type cannot be previewed. Please download to view.
+                </p>
+                <Button onClick={() => handleDownloadDocument(previewDocument)}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Download
+                </Button>
+              </div>
             )}
           </div>
           <DialogFooter className="p-4 pt-2 border-t">
-            <Button variant="outline" onClick={() => setPreviewImage(null)}>
+            <Button variant="outline" onClick={() => setPreviewDocument(null)}>
               <X className="h-4 w-4 mr-2" />
               Close
             </Button>
-            <Button onClick={() => previewImage && handleDownloadDocument(previewImage)}>
+            <Button onClick={() => previewDocument && handleDownloadDocument(previewDocument)}>
               <Download className="h-4 w-4 mr-2" />
               Download
             </Button>
