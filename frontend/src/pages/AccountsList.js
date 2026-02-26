@@ -446,18 +446,18 @@ export default function AccountsList() {
             </div>
           ) : (
             <>
-              {/* Logo Grid - 25mm x 25mm logos (approx 94px), smaller gaps */}
-              <div ref={logoGridRef} className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-2 p-2 bg-white">
+              {/* Logo Grid - 35mm x 35mm logos (approx 132px), smaller gaps */}
+              <div ref={logoGridRef} className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2 p-2 bg-white">
                 {accounts.map((account, idx) => (
                   <div
                     key={account.id || idx}
                     onClick={() => navigate(`/accounts/${account.account_id}`)}
                     className="group cursor-pointer"
                   >
-                    {/* 25mm = ~94px at 96dpi */}
+                    {/* 35mm = ~132px at 96dpi */}
                     <div 
                       className="relative rounded-lg overflow-hidden bg-white border border-gray-200 hover:border-primary/50 transition-all duration-200 hover:shadow-lg"
-                      style={{ width: '94px', height: '94px' }}
+                      style={{ width: '132px', height: '132px' }}
                     >
                       {account.logo_url ? (
                         <img
