@@ -415,13 +415,25 @@ export default function AccountsList() {
             <LayoutGrid className="h-4 w-4 mr-1" />
             Logo Gallery
           </Button>
+          {viewMode === 'gallery' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={downloadLogoPdf}
+              disabled={downloadingPdf || loading || accounts.length === 0}
+              className="h-8 ml-2"
+            >
+              <Download className="h-4 w-4 mr-1" />
+              {downloadingPdf ? 'Generating...' : 'Download PDF'}
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Accounts Display */}
       {viewMode === 'gallery' ? (
         /* Logo Gallery View */
-        <Card className="p-6">
+        <Card className="p-4">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
