@@ -904,9 +904,9 @@ export default function FilesDocuments() {
             </DialogTitle>
           </DialogHeader>
           <div className="relative flex items-center justify-center bg-black/5 dark:bg-black/20 p-4 min-h-[300px] max-h-[70vh] overflow-auto">
-            {previewImage && (
+            {previewImage && previewImage.file_data && (
               <img 
-                src={`${API_URL}/documents/${previewImage.id}/download`}
+                src={`data:${previewImage.content_type};base64,${previewImage.file_data}`}
                 alt={previewImage.name}
                 className="max-w-full max-h-[65vh] object-contain rounded shadow-lg"
               />
