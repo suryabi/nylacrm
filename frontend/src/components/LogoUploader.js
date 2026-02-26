@@ -55,7 +55,7 @@ const getCroppedImg = async (imageSrc, pixelCrop, targetWidth, targetHeight) => 
 const mmToPixels = (mm) => Math.round(mm * 3.7795275591);
 const pixelsToMm = (px) => Math.round(px / 3.7795275591);
 
-export default function LogoUploader({ accountId, currentLogo, onLogoUpdate }) {
+export default function LogoUploader({ entityType = 'accounts', entityId, currentLogo, onLogoUpdate, label = 'Logo' }) {
   const [isOpen, setIsOpen] = useState(false);
   const [imageSrc, setImageSrc] = useState(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
