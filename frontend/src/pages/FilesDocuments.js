@@ -928,32 +928,6 @@ export default function FilesDocuments() {
                 className="w-full h-[65vh]"
               />
             )}
-            {previewDocument && previewDocument.document_type === 'word' && (
-              <div className="flex flex-col items-center justify-center p-8 text-center">
-                <FileText className="h-16 w-16 text-blue-500 mb-4" />
-                <p className="text-lg font-medium mb-2">{previewDocument.name}</p>
-                <p className="text-muted-foreground mb-4">
-                  Word documents cannot be previewed directly in the browser.
-                </p>
-                <Button onClick={() => handleDownloadDocument(previewDocument)}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Download to View
-                </Button>
-              </div>
-            )}
-            {previewDocument && !['image', 'pdf', 'word'].includes(previewDocument.document_type) && (
-              <div className="flex flex-col items-center justify-center p-8 text-center">
-                <FileText className="h-16 w-16 text-muted-foreground mb-4" />
-                <p className="text-lg font-medium mb-2">{previewDocument.name}</p>
-                <p className="text-muted-foreground mb-4">
-                  This file type cannot be previewed. Please download to view.
-                </p>
-                <Button onClick={() => handleDownloadDocument(previewDocument)}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Download
-                </Button>
-              </div>
-            )}
           </div>
           <DialogFooter className="p-4 pt-2 border-t">
             <Button variant="outline" onClick={() => setPreviewDocument(null)}>
