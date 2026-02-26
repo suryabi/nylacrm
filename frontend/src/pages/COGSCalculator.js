@@ -36,6 +36,8 @@ export default function COGSCalculator() {
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [hasChanges, setHasChanges] = React.useState(false);
+  const [showCopyDialog, setShowCopyDialog] = React.useState(false);
+  const [copying, setCopying] = React.useState(false);
   
   // Set default city when cities load
   React.useEffect(() => {
