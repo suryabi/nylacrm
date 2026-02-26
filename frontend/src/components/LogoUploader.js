@@ -120,7 +120,7 @@ export default function LogoUploader({ entityType = 'accounts', entityId, curren
       const croppedImage = await getCroppedImg(imageSrc, croppedAreaPixels, targetWidth, targetHeight);
       
       // Upload to server
-      const response = await fetch(`${API_URL}/accounts/${accountId}/logo`, {
+      const response = await fetch(`${API_URL}/${entityType}/${entityId}/logo`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
