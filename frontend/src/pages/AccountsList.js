@@ -99,6 +99,48 @@ export default function AccountsList() {
   
   // View mode state
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'gallery'
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const logoGridRef = useRef(null);
+
+  // Download logo gallery as PDF
+  const downloadLogoPdf = async () => {
+    if (!logoGridRef.current) return;
+    
+    setDownloadingPdf(true);
+    try {
+      const element = logoGridRef.current;
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff'
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      const imgX = (pdfWidth - imgWidth * ratio) / 2;
+      const imgY = 10;
+      
+      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+      pdf.save('account-logos.pdf');
+      toast.success('PDF downloaded successfully!');
+    } catch (error) {
+      console.error('PDF download error:', error);
+      toast.error('Failed to download PDF');
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   const fetchAccounts = useCallback(async () => {
     setLoading(true);
