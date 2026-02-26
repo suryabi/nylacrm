@@ -155,7 +155,7 @@ export default function LogoUploader({ entityType = 'accounts', entityId, curren
     
     setSaving(true);
     try {
-      const response = await fetch(`${API_URL}/accounts/${accountId}/logo`, {
+      const response = await fetch(`${API_URL}/${entityType}/${entityId}/logo`, {
         method: 'DELETE',
         credentials: 'include'
       });
