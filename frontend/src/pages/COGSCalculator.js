@@ -148,18 +148,21 @@ export default function COGSCalculator() {
     }
   };
 
-  // Copy Primary Pkg, Secondary Pkg, and Mfg Cost to all other cities
+  // Copy all input field values to all other cities
   const copyToAllCities = async () => {
     setCopying(true);
     try {
       const token = localStorage.getItem('token');
       
-      // Prepare the cost data from current city's COGS data
+      // Prepare all input field data from current city's COGS data
       const costData = cogsData.map(row => ({
         sku_name: row.sku_name,
         primary_packaging_cost: parseFloat(row.primary_packaging_cost) || 0,
         secondary_packaging_cost: parseFloat(row.secondary_packaging_cost) || 0,
-        manufacturing_variable_cost: parseFloat(row.manufacturing_variable_cost) || 0
+        manufacturing_variable_cost: parseFloat(row.manufacturing_variable_cost) || 0,
+        gross_margin: parseFloat(row.gross_margin) || 0,
+        outbound_logistics_cost: parseFloat(row.outbound_logistics_cost) || 0,
+        distribution_cost: parseFloat(row.distribution_cost) || 0
       }));
       
       const response = await axios.post(
@@ -174,10 +177,10 @@ export default function COGSCalculator() {
         }
       );
       
-      toast.success(`Costs copied to ${response.data.cities_updated} cities!`);
+      toast.success(`Values copied to ${response.data.cities_updated} cities!`);
       setShowCopyDialog(false);
     } catch (error) {
-      toast.error('Failed to copy costs: ' + (error.response?.data?.detail || error.message));
+      toast.error('Failed to copy values: ' + (error.response?.data?.detail || error.message));
     } finally {
       setCopying(false);
     }
