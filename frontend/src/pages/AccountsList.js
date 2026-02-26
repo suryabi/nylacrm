@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
@@ -9,9 +9,11 @@ import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { 
   Search, Building2, ChevronLeft, ChevronRight, Loader2, 
-  Filter, Users, Calendar, Phone, User, MapPin, LayoutGrid, List, Image as ImageIcon
+  Filter, Users, Calendar, Phone, User, MapPin, LayoutGrid, List, Image as ImageIcon, Download
 } from 'lucide-react';
 import { useMasterLocations } from '../hooks/useMasterLocations';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
