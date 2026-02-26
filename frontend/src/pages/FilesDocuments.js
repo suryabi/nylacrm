@@ -502,7 +502,7 @@ export default function FilesDocuments() {
                     {doc.document_type === 'image' ? (
                       <div 
                         className="h-16 w-16 rounded bg-muted flex items-center justify-center overflow-hidden cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
-                        onClick={() => setPreviewImage(doc)}
+                        onClick={() => setPreviewDocument(doc)}
                       >
                         {doc.file_data ? (
                           <img 
@@ -515,7 +515,12 @@ export default function FilesDocuments() {
                         )}
                       </div>
                     ) : (
-                      getDocumentIcon(doc.document_type, doc.content_type)
+                      <div 
+                        className="cursor-pointer hover:ring-2 hover:ring-primary/50 rounded transition-all"
+                        onClick={() => setPreviewDocument(doc)}
+                      >
+                        {getDocumentIcon(doc.document_type, doc.content_type)}
+                      </div>
                     )}
                   </div>
                   
