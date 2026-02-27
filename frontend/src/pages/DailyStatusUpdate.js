@@ -235,18 +235,66 @@ export default function DailyStatusUpdate() {
       
       if (response.data.activity_count === 0) {
         toast.info('No activities found for this date');
+        setHasFetchedActivities(false);
         return;
       }
       
       if (response.data.formatted_text) {
         // Convert to bullet format before setting
         setYesterdayUpdates(convertToBulletFormat(response.data.formatted_text));
+        setHasFetchedActivities(true);
+        setCopied(false);
         toast.success(`Loaded ${response.data.activity_count} activities from ${response.data.leads_contacted} leads`);
       }
     } catch (error) {
       toast.error('Failed to fetch activities');
+      setHasFetchedActivities(false);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Copy fetched activities to clipboard (clean format without special markers)
+  const handleCopyActivities = async () => {
+    if (!yesterdayUpdates) {
+      toast.error('No activities to copy');
+      return;
+    }
+    
+    // Convert the formatted text to a clean, readable format for clipboard
+    const lines = yesterdayUpdates.split('\n').filter(line => line.trim());
+    const cleanedLines = lines.map(line => {
+      const trimmedLine = line.trim();
+      // Convert [SUMMARY] to plain text
+      if (trimmedLine.startsWith('[SUMMARY]')) {
+        return trimmedLine.replace('[SUMMARY]', 'SUMMARY:');
+      }
+      // Convert [HEADER] to plain text with separator
+      if (trimmedLine.startsWith('[HEADER]')) {
+        return '\n' + trimmedLine.replace('[HEADER]', '').trim() + ':';
+      }
+      return trimmedLine;
+    });
+    
+    const textToCopy = cleanedLines.join('\n').trim();
+    
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      setCopied(true);
+      toast.success('Activities copied to clipboard!');
+      // Reset copied state after 2 seconds
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = textToCopy;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopied(true);
+      toast.success('Activities copied to clipboard!');
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
