@@ -366,23 +366,36 @@ ${userEmail}`;
 
   // Send proposal via email
   const handleSendProposalEmail = async () => {
-    if (!shareEmailTo.trim()) {
+    // Add any pending input to the chips before sending
+    if (shareEmailToInput.trim()) {
+      addEmailChip('to', shareEmailToInput);
+    }
+    if (shareEmailCcInput.trim()) {
+      addEmailChip('cc', shareEmailCcInput);
+    }
+    if (shareEmailBccInput.trim()) {
+      addEmailChip('bcc', shareEmailBccInput);
+    }
+    
+    // Use the arrays directly
+    const toEmails = [...shareEmailTo];
+    if (shareEmailToInput.trim() && emailRegex.test(shareEmailToInput.trim())) {
+      toEmails.push(shareEmailToInput.trim());
+    }
+    
+    if (toEmails.length === 0) {
       toast.error('Please enter at least one recipient email address');
       return;
     }
     
-    // Parse email addresses (comma-separated)
-    const toEmails = shareEmailTo.split(',').map(e => e.trim()).filter(e => e);
-    const ccEmails = shareEmailCc ? shareEmailCc.split(',').map(e => e.trim()).filter(e => e) : [];
-    const bccEmails = shareEmailBcc ? shareEmailBcc.split(',').map(e => e.trim()).filter(e => e) : [];
+    const ccEmails = [...shareEmailCc];
+    if (shareEmailCcInput.trim() && emailRegex.test(shareEmailCcInput.trim())) {
+      ccEmails.push(shareEmailCcInput.trim());
+    }
     
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const allEmails = [...toEmails, ...ccEmails, ...bccEmails];
-    const invalidEmail = allEmails.find(e => !emailRegex.test(e));
-    if (invalidEmail) {
-      toast.error(`Invalid email address: ${invalidEmail}`);
-      return;
+    const bccEmails = [...shareEmailBcc];
+    if (shareEmailBccInput.trim() && emailRegex.test(shareEmailBccInput.trim())) {
+      bccEmails.push(shareEmailBccInput.trim());
     }
     
     setSendingEmail(true);
