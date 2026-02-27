@@ -1846,6 +1846,402 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         current_user['created_at'] = datetime.fromisoformat(current_user['created_at'])
     return current_user
 
+# ============= DASHBOARD ROUTES =============
+
+def calculate_lead_score(lead: dict) -> int:
+    """Calculate win probability score for a lead (0-100)"""
+    score = 0
+    
+    # Status progression scoring (max 40 points)
+    status_scores = {
+        'new': 10,
+        'contacted': 20,
+        'qualified': 35,
+        'proposal_sent': 50,
+        'proposal_shared': 55,
+        'proposal_submitted': 60,
+        'negotiation': 75,
+        'won': 100,
+        'lost': 0,
+        'closed_lost': 0
+    }
+    status = lead.get('status', 'new')
+    score += status_scores.get(status, 10) * 0.4  # 40% weight
+    
+    # Activity count in last 7 days (max 30 points)
+    # This will be calculated separately with actual activity data
+    
+    # Days since last contact (max 30 points)
+    # More recent = higher score
+    
+    return int(score)
+
+@api_router.get("/dashboard")
+async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
+    """Get comprehensive dashboard data for the logged-in user"""
+    user_id = current_user['id']
+    today = datetime.now(timezone.utc).date()
+    today_str = today.isoformat()
+    
+    # Calculate date ranges
+    week_from_now = (today + timedelta(days=7)).isoformat()
+    week_ago = (today - timedelta(days=7)).isoformat()
+    month_start = today.replace(day=1).isoformat()
+    
+    # 1. ACTION ITEMS - Tasks assigned to user
+    tasks_cursor = db.tasks.find({
+        'assigned_to': user_id,
+        'status': {'$in': ['pending', 'in_progress']}
+    }, {'_id': 0}).sort('due_date', 1).limit(10)
+    tasks = await tasks_cursor.to_list(length=10)
+    
+    # 2. OVERDUE FOLLOW-UPS - Leads with past follow-up dates assigned to user
+    overdue_leads_cursor = db.leads.find({
+        'assigned_to': user_id,
+        'next_follow_up': {'$lt': today_str, '$ne': None},
+        'status': {'$nin': ['won', 'lost', 'closed_won', 'closed_lost']}
+    }, {'_id': 0, 'id': 1, 'lead_id': 1, 'company': 1, 'next_follow_up': 1, 'status': 1, 'contact_person': 1, 'phone': 1}).limit(10)
+    overdue_leads = await overdue_leads_cursor.to_list(length=10)
+    
+    # 3. UPCOMING LEADS - Leads with future follow-up dates
+    upcoming_leads_cursor = db.leads.find({
+        'assigned_to': user_id,
+        'next_follow_up': {'$gte': today_str, '$lte': week_from_now},
+        'status': {'$nin': ['won', 'lost', 'closed_won', 'closed_lost']}
+    }, {'_id': 0, 'id': 1, 'lead_id': 1, 'company': 1, 'next_follow_up': 1, 'status': 1, 'contact_person': 1, 'phone': 1}).sort('next_follow_up', 1).limit(10)
+    upcoming_leads = await upcoming_leads_cursor.to_list(length=10)
+    
+    # 4. SMART LEAD RECOMMENDATIONS - Leads likely to close
+    # Get all active leads for the user
+    all_leads_cursor = db.leads.find({
+        'assigned_to': user_id,
+        'status': {'$nin': ['won', 'lost', 'closed_won', 'closed_lost']}
+    }, {'_id': 0})
+    all_leads = await all_leads_cursor.to_list(length=100)
+    
+    # Calculate scores for each lead
+    for lead in all_leads:
+        lead_id = lead.get('id')
+        
+        # Base score from status
+        score = calculate_lead_score(lead)
+        
+        # Get activity count in last 7 days
+        activity_count = await db.lead_activities.count_documents({
+            'lead_id': lead_id,
+            'created_at': {'$gte': week_ago}
+        })
+        # Activity score (max 30 points) - more activities = higher score
+        activity_score = min(activity_count * 5, 30)
+        score += activity_score
+        
+        # Days since last contact score (max 30 points)
+        last_activity = await db.lead_activities.find_one(
+            {'lead_id': lead_id},
+            sort=[('created_at', -1)]
+        )
+        if last_activity:
+            last_contact_str = last_activity.get('created_at', '')
+            if last_contact_str:
+                try:
+                    last_contact = datetime.fromisoformat(last_contact_str.replace('Z', '+00:00'))
+                    days_since = (datetime.now(timezone.utc) - last_contact).days
+                    # Recent contact gets higher score
+                    if days_since <= 1:
+                        score += 30
+                    elif days_since <= 3:
+                        score += 25
+                    elif days_since <= 7:
+                        score += 15
+                    elif days_since <= 14:
+                        score += 5
+                    # Older than 14 days = 0 additional points
+                except:
+                    pass
+        
+        lead['win_score'] = min(int(score), 100)
+    
+    # Sort by win score and get top recommendations
+    recommended_leads = sorted(all_leads, key=lambda x: x.get('win_score', 0), reverse=True)[:5]
+    # Simplify the data
+    recommended_leads = [{
+        'id': l['id'],
+        'lead_id': l.get('lead_id'),
+        'company': l.get('company'),
+        'status': l.get('status'),
+        'contact_person': l.get('contact_person'),
+        'phone': l.get('phone'),
+        'win_score': l.get('win_score', 0),
+        'next_follow_up': l.get('next_follow_up')
+    } for l in recommended_leads]
+    
+    # 5. UPCOMING MEETINGS - Next 7 days
+    meetings_cursor = db.meetings.find({
+        '$or': [
+            {'organizer_id': user_id},
+            {'attendees': current_user.get('email')}
+        ],
+        'meeting_date': {'$gte': today_str, '$lte': week_from_now},
+        'status': {'$ne': 'cancelled'}
+    }, {'_id': 0}).sort([('meeting_date', 1), ('start_time', 1)]).limit(10)
+    upcoming_meetings = await meetings_cursor.to_list(length=10)
+    
+    # 6. TODAY'S ACTIVITY SUMMARY
+    today_activities = await db.lead_activities.count_documents({
+        'created_by': user_id,
+        'created_at': {'$gte': today_str}
+    })
+    
+    today_calls = await db.lead_activities.count_documents({
+        'created_by': user_id,
+        'created_at': {'$gte': today_str},
+        'activity_type': {'$in': ['call', 'phone']}
+    })
+    
+    today_emails = await db.lead_activities.count_documents({
+        'created_by': user_id,
+        'created_at': {'$gte': today_str},
+        'activity_type': 'email'
+    })
+    
+    today_meetings_count = await db.lead_activities.count_documents({
+        'created_by': user_id,
+        'created_at': {'$gte': today_str},
+        'activity_type': {'$in': ['meeting', 'visit']}
+    })
+    
+    # 7. SALES PIPELINE - Leads by status
+    pipeline_stats = []
+    status_list = ['new', 'contacted', 'qualified', 'proposal_sent', 'negotiation', 'won', 'lost']
+    for status in status_list:
+        count = await db.leads.count_documents({
+            'assigned_to': user_id,
+            'status': status
+        })
+        pipeline_stats.append({'status': status, 'count': count})
+    
+    # 8. MONTHLY TARGETS VS ACTUALS
+    # Get user's sales target for current month
+    current_month = today.strftime('%Y-%m')
+    target_doc = await db.sales_targets.find_one({
+        'user_id': user_id,
+        'month': current_month
+    }, {'_id': 0})
+    
+    monthly_target = target_doc.get('target_amount', 0) if target_doc else 0
+    
+    # Calculate actual revenue from won leads this month
+    won_leads_cursor = db.leads.find({
+        'assigned_to': user_id,
+        'status': 'won',
+        'updated_at': {'$gte': month_start}
+    }, {'_id': 0, 'expected_value': 1})
+    won_leads = await won_leads_cursor.to_list(length=100)
+    actual_revenue = sum(lead.get('expected_value', 0) or 0 for lead in won_leads)
+    
+    # 9. RECENT ACTIVITIES FEED - Last 10 activities
+    recent_activities_cursor = db.lead_activities.find({
+        'created_by': user_id
+    }, {'_id': 0}).sort('created_at', -1).limit(10)
+    recent_activities = await recent_activities_cursor.to_list(length=10)
+    
+    # Enrich with lead company names
+    for activity in recent_activities:
+        lead_id = activity.get('lead_id')
+        if lead_id:
+            lead = await db.leads.find_one({'id': lead_id}, {'_id': 0, 'company': 1})
+            activity['company'] = lead.get('company') if lead else 'Unknown'
+    
+    return {
+        'action_items': {
+            'tasks': tasks,
+            'overdue_follow_ups': overdue_leads
+        },
+        'upcoming_leads': upcoming_leads,
+        'recommended_leads': recommended_leads,
+        'upcoming_meetings': upcoming_meetings,
+        'today_summary': {
+            'total_activities': today_activities,
+            'calls': today_calls,
+            'emails': today_emails,
+            'meetings': today_meetings_count
+        },
+        'pipeline': pipeline_stats,
+        'monthly_performance': {
+            'target': monthly_target,
+            'actual': actual_revenue,
+            'percentage': round((actual_revenue / monthly_target * 100) if monthly_target > 0 else 0, 1)
+        },
+        'recent_activities': recent_activities
+    }
+
+# ============= TASK ROUTES =============
+
+@api_router.post("/tasks")
+async def create_task(task_input: TaskCreate, current_user: dict = Depends(get_current_user)):
+    """Create a new task"""
+    # Get assignee name
+    assignee = await db.users.find_one({'id': task_input.assigned_to}, {'_id': 0, 'name': 1})
+    
+    task = Task(
+        **task_input.model_dump(),
+        assigned_to_name=assignee.get('name') if assignee else None,
+        assigned_by=current_user['id'],
+        assigned_by_name=current_user.get('name')
+    )
+    
+    doc = task.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    
+    await db.tasks.insert_one(doc)
+    return task
+
+@api_router.get("/tasks")
+async def get_tasks(
+    assigned_to: Optional[str] = None,
+    status: Optional[str] = None,
+    priority: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get tasks with optional filters"""
+    query = {}
+    
+    if assigned_to:
+        query['assigned_to'] = assigned_to
+    else:
+        # Default to current user's tasks
+        query['assigned_to'] = current_user['id']
+    
+    if status:
+        query['status'] = status
+    
+    if priority:
+        query['priority'] = priority
+    
+    cursor = db.tasks.find(query, {'_id': 0}).sort('due_date', 1)
+    tasks = await cursor.to_list(length=100)
+    return {'tasks': tasks}
+
+@api_router.get("/tasks/{task_id}")
+async def get_task(task_id: str, current_user: dict = Depends(get_current_user)):
+    """Get a specific task"""
+    task = await db.tasks.find_one({'id': task_id}, {'_id': 0})
+    if not task:
+        raise HTTPException(status_code=404, detail='Task not found')
+    return task
+
+@api_router.put("/tasks/{task_id}")
+async def update_task(task_id: str, task_update: TaskUpdate, current_user: dict = Depends(get_current_user)):
+    """Update a task"""
+    task = await db.tasks.find_one({'id': task_id}, {'_id': 0})
+    if not task:
+        raise HTTPException(status_code=404, detail='Task not found')
+    
+    update_data = {k: v for k, v in task_update.model_dump().items() if v is not None}
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    # If marking as completed, set completed_at
+    if update_data.get('status') == 'completed':
+        update_data['completed_at'] = datetime.now(timezone.utc).isoformat()
+    
+    # If assignee changed, update name
+    if 'assigned_to' in update_data:
+        assignee = await db.users.find_one({'id': update_data['assigned_to']}, {'_id': 0, 'name': 1})
+        update_data['assigned_to_name'] = assignee.get('name') if assignee else None
+    
+    await db.tasks.update_one({'id': task_id}, {'$set': update_data})
+    
+    updated = await db.tasks.find_one({'id': task_id}, {'_id': 0})
+    return updated
+
+@api_router.delete("/tasks/{task_id}")
+async def delete_task(task_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a task"""
+    result = await db.tasks.delete_one({'id': task_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail='Task not found')
+    return {'message': 'Task deleted successfully'}
+
+# ============= MEETING ROUTES =============
+
+@api_router.post("/meetings")
+async def create_meeting(meeting_input: MeetingCreate, current_user: dict = Depends(get_current_user)):
+    """Create a new meeting"""
+    meeting = Meeting(
+        **meeting_input.model_dump(),
+        organizer_id=current_user['id'],
+        organizer_name=current_user.get('name')
+    )
+    
+    doc = meeting.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    
+    await db.meetings.insert_one(doc)
+    return meeting
+
+@api_router.get("/meetings")
+async def get_meetings(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get meetings for the current user"""
+    query = {
+        '$or': [
+            {'organizer_id': current_user['id']},
+            {'attendees': current_user.get('email')}
+        ]
+    }
+    
+    if start_date:
+        query['meeting_date'] = {'$gte': start_date}
+    if end_date:
+        if 'meeting_date' in query:
+            query['meeting_date']['$lte'] = end_date
+        else:
+            query['meeting_date'] = {'$lte': end_date}
+    
+    if status:
+        query['status'] = status
+    
+    cursor = db.meetings.find(query, {'_id': 0}).sort([('meeting_date', 1), ('start_time', 1)])
+    meetings = await cursor.to_list(length=100)
+    return {'meetings': meetings}
+
+@api_router.get("/meetings/{meeting_id}")
+async def get_meeting(meeting_id: str, current_user: dict = Depends(get_current_user)):
+    """Get a specific meeting"""
+    meeting = await db.meetings.find_one({'id': meeting_id}, {'_id': 0})
+    if not meeting:
+        raise HTTPException(status_code=404, detail='Meeting not found')
+    return meeting
+
+@api_router.put("/meetings/{meeting_id}")
+async def update_meeting(meeting_id: str, meeting_update: MeetingUpdate, current_user: dict = Depends(get_current_user)):
+    """Update a meeting"""
+    meeting = await db.meetings.find_one({'id': meeting_id}, {'_id': 0})
+    if not meeting:
+        raise HTTPException(status_code=404, detail='Meeting not found')
+    
+    update_data = {k: v for k, v in meeting_update.model_dump().items() if v is not None}
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.meetings.update_one({'id': meeting_id}, {'$set': update_data})
+    
+    updated = await db.meetings.find_one({'id': meeting_id}, {'_id': 0})
+    return updated
+
+@api_router.delete("/meetings/{meeting_id}")
+async def delete_meeting(meeting_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a meeting"""
+    result = await db.meetings.delete_one({'id': meeting_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail='Meeting not found')
+    return {'message': 'Meeting deleted successfully'}
+
 # ============= LEADS ROUTES =============
 
 @api_router.post("/leads", response_model=Lead)
