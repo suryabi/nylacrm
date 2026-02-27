@@ -84,7 +84,7 @@ const StyledActivityDisplay = ({ text, onChange }) => {
 };
 
 // Simple status section with styled display option
-const StatusSection = ({ title, value, onChange, placeholder, disabled, showStyledView, showCopyButton, onCopy, copied }) => {
+const StatusSection = ({ title, value, onChange, placeholder, disabled, showStyledView, showCopyButton, onCopy, copied, onShare, canShare }) => {
   const hasSpecialFormatting = value && (value.includes('[SUMMARY]') || value.includes('[HEADER]'));
   
   return (
@@ -92,20 +92,34 @@ const StatusSection = ({ title, value, onChange, placeholder, disabled, showStyl
       <div className="flex items-center justify-between mb-3">
         <label className="block text-sm font-semibold">{title}</label>
         {showCopyButton && value && (
-          <Button
-            type="button"
-            variant={copied ? "default" : "ghost"}
-            size="sm"
-            className={`h-8 px-3 text-xs ${copied ? 'bg-green-600 hover:bg-green-600 text-white' : ''}`}
-            onClick={onCopy}
-            data-testid="copy-activities-button"
-          >
-            {copied ? (
-              <><Check className="h-3.5 w-3.5 mr-1.5" /> Copied!</>
-            ) : (
-              <><Copy className="h-3.5 w-3.5 mr-1.5" /> Copy</>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant={copied ? "default" : "ghost"}
+              size="sm"
+              className={`h-8 px-3 text-xs ${copied ? 'bg-green-600 hover:bg-green-600 text-white' : ''}`}
+              onClick={onCopy}
+              data-testid="copy-activities-button"
+            >
+              {copied ? (
+                <><Check className="h-3.5 w-3.5 mr-1.5" /> Copied!</>
+              ) : (
+                <><Copy className="h-3.5 w-3.5 mr-1.5" /> Copy</>
+              )}
+            </Button>
+            {canShare && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 px-3 text-xs"
+                onClick={onShare}
+                data-testid="share-activities-button"
+              >
+                <Share2 className="h-3.5 w-3.5 mr-1.5" /> Share
+              </Button>
             )}
-          </Button>
+          </div>
         )}
       </div>
       {disabled ? (
