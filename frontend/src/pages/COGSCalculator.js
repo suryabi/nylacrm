@@ -510,6 +510,12 @@ export default function COGSCalculator() {
           <li className="text-xs text-muted-foreground/80 mt-2 pl-4">
             → After paying Distribution Cost %, the remaining amount equals Base Cost
           </li>
+          <li className="mt-3 pt-3 border-t border-primary/20">
+            • <strong>Actual Landing Price</strong> (What-If): Enter a price to reverse-calculate the required Gross Margin %
+          </li>
+          <li className="text-xs text-muted-foreground/80 pl-4">
+            → This is a transient field for analysis only and is not saved to the database
+          </li>
         </ul>
       </Card>
 
