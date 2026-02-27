@@ -249,6 +249,70 @@ export default function LeadDetail() {
     }
   };
 
+  // Open share dialog and pre-populate fields
+  const openShareDialog = async () => {
+    // Pre-populate with user's email as sender context
+    setShareEmailTo('');
+    setShareEmailSubject('Nyla Air Water - Proposal for review');
+    setShareEmailMessage('');
+    setShareEmailBcc('');
+    
+    // Fetch reporting manager's email for CC
+    try {
+      const res = await axios.get(`${API_URL}/users/${user.id}/reporting-manager`, { withCredentials: true });
+      if (res.data.manager?.email) {
+        setShareEmailCc(res.data.manager.email);
+      } else {
+        setShareEmailCc('');
+      }
+    } catch (error) {
+      console.log('Could not fetch reporting manager');
+      setShareEmailCc('');
+    }
+    
+    setShowShareDialog(true);
+  };
+
+  // Send proposal via email
+  const handleSendProposalEmail = async () => {
+    if (!shareEmailTo.trim()) {
+      toast.error('Please enter at least one recipient email address');
+      return;
+    }
+    
+    // Parse email addresses (comma-separated)
+    const toEmails = shareEmailTo.split(',').map(e => e.trim()).filter(e => e);
+    const ccEmails = shareEmailCc ? shareEmailCc.split(',').map(e => e.trim()).filter(e => e) : [];
+    const bccEmails = shareEmailBcc ? shareEmailBcc.split(',').map(e => e.trim()).filter(e => e) : [];
+    
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const allEmails = [...toEmails, ...ccEmails, ...bccEmails];
+    const invalidEmail = allEmails.find(e => !emailRegex.test(e));
+    if (invalidEmail) {
+      toast.error(`Invalid email address: ${invalidEmail}`);
+      return;
+    }
+    
+    setSendingEmail(true);
+    try {
+      const res = await axios.post(`${API_URL}/leads/${id}/proposal/share-email`, {
+        to_emails: toEmails,
+        cc_emails: ccEmails,
+        bcc_emails: bccEmails,
+        subject: shareEmailSubject,
+        message: shareEmailMessage
+      }, { withCredentials: true });
+      
+      toast.success(res.data.message || 'Proposal sent successfully!');
+      setShowShareDialog(false);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to send email');
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   const canApproveProposal = PROPOSAL_APPROVER_ROLES.includes(user?.role);
   const canDeleteProposal = proposal && proposal.uploaded_by === user?.id && proposal.status === 'pending_review';
   // Allow replacing proposal: when no proposal, when changes requested/rejected, when user is uploader, OR when approved (to allow re-submission)
