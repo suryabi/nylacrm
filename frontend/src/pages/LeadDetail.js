@@ -1374,90 +1374,112 @@ ${userEmail}`;
         </div>
       </div>
 
-      {/* Share Proposal via Email Dialog */}
-      <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Share Proposal via Email</DialogTitle>
-            <DialogDescription>
-              Send the approved proposal to the recipient via email.
-            </DialogDescription>
+      {/* Share Proposal via Email Dialog - Email Client Style */}
+      <Dialog open={showShareDialog} onOpenChange={(open) => { setShowShareDialog(open); if (!open) setIsEmailComposerExpanded(false); }}>
+        <DialogContent className={`${isEmailComposerExpanded ? 'sm:max-w-[90vw] sm:max-h-[90vh] h-[90vh]' : 'sm:max-w-[700px]'} flex flex-col transition-all duration-200`}>
+          <DialogHeader className="flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2">
+                <Mail className="h-5 w-5" />
+                New Message
+              </DialogTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsEmailComposerExpanded(!isEmailComposerExpanded)}
+                className="h-8 w-8 p-0"
+                title={isEmailComposerExpanded ? "Minimize" : "Expand"}
+              >
+                {isEmailComposerExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </Button>
+            </div>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="from-email">From</Label>
-              <Input
-                id="from-email"
-                value={user?.email || ''}
-                disabled
-                className="bg-muted"
-              />
+          
+          <div className={`flex-1 overflow-y-auto space-y-3 ${isEmailComposerExpanded ? 'py-4' : 'py-2'}`}>
+            {/* From Row */}
+            <div className="flex items-center border-b pb-2">
+              <span className="w-16 text-sm text-muted-foreground flex-shrink-0">From:</span>
+              <span className="text-sm font-medium">{user?.email || ''}</span>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="to-email">To <span className="text-destructive">*</span></Label>
-              <Input
-                id="to-email"
-                type="email"
-                placeholder="recipient@example.com"
-                value={shareEmailTo}
-                onChange={(e) => setShareEmailTo(e.target.value)}
-                data-testid="share-email-to"
-              />
-              <p className="text-xs text-muted-foreground">Separate multiple emails with commas</p>
+            
+            {/* To, CC, BCC Row - Email Client Style */}
+            <div className="flex items-center border-b pb-2 gap-4">
+              <div className="flex items-center flex-1 min-w-0">
+                <span className="w-16 text-sm text-muted-foreground flex-shrink-0">To:</span>
+                <Input
+                  type="email"
+                  placeholder="Recipients"
+                  value={shareEmailTo}
+                  onChange={(e) => setShareEmailTo(e.target.value)}
+                  className="border-0 shadow-none focus-visible:ring-0 h-8 px-1"
+                  data-testid="share-email-to"
+                />
+              </div>
+              <div className="flex items-center flex-1 min-w-0">
+                <span className="text-sm text-muted-foreground flex-shrink-0 px-2">Cc:</span>
+                <Input
+                  type="email"
+                  placeholder=""
+                  value={shareEmailCc}
+                  onChange={(e) => setShareEmailCc(e.target.value)}
+                  className="border-0 shadow-none focus-visible:ring-0 h-8 px-1"
+                  data-testid="share-email-cc"
+                />
+              </div>
+              <div className="flex items-center flex-1 min-w-0">
+                <span className="text-sm text-muted-foreground flex-shrink-0 px-2">Bcc:</span>
+                <Input
+                  type="email"
+                  placeholder=""
+                  value={shareEmailBcc}
+                  onChange={(e) => setShareEmailBcc(e.target.value)}
+                  className="border-0 shadow-none focus-visible:ring-0 h-8 px-1"
+                  data-testid="share-email-bcc"
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="cc-email">CC</Label>
+            
+            {/* Subject Row */}
+            <div className="flex items-center border-b pb-2">
+              <span className="w-16 text-sm text-muted-foreground flex-shrink-0">Subject:</span>
               <Input
-                id="cc-email"
-                type="email"
-                placeholder="cc@example.com"
-                value={shareEmailCc}
-                onChange={(e) => setShareEmailCc(e.target.value)}
-                data-testid="share-email-cc"
-              />
-              <p className="text-xs text-muted-foreground">Your reporting manager's email is pre-filled</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="bcc-email">BCC</Label>
-              <Input
-                id="bcc-email"
-                type="email"
-                placeholder="bcc@example.com"
-                value={shareEmailBcc}
-                onChange={(e) => setShareEmailBcc(e.target.value)}
-                data-testid="share-email-bcc"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="subject">Subject</Label>
-              <Input
-                id="subject"
                 value={shareEmailSubject}
                 onChange={(e) => setShareEmailSubject(e.target.value)}
+                className="border-0 shadow-none focus-visible:ring-0 h-8 px-1 font-medium"
                 data-testid="share-email-subject"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="message">Message (Optional)</Label>
+            
+            {/* Email Body - Larger Area */}
+            <div className="flex-1">
               <Textarea
-                id="message"
-                placeholder="Add a personal message..."
+                placeholder="Compose your message..."
                 value={shareEmailMessage}
                 onChange={(e) => setShareEmailMessage(e.target.value)}
-                rows={3}
+                className={`w-full resize-none font-sans text-sm leading-relaxed ${isEmailComposerExpanded ? 'min-h-[50vh]' : 'min-h-[280px]'}`}
                 data-testid="share-email-message"
               />
             </div>
+            
+            {/* Attachment Preview */}
+            {proposal && (
+              <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg text-sm">
+                <FileText className="h-4 w-4 text-primary" />
+                <span className="font-medium">{proposal.file_name}</span>
+                <span className="text-muted-foreground">({(proposal.file_size / 1024).toFixed(1)} KB)</span>
+              </div>
+            )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowShareDialog(false)}>
-              Cancel
+          
+          <DialogFooter className="flex-shrink-0 border-t pt-4">
+            <Button variant="outline" onClick={() => { setShowShareDialog(false); setIsEmailComposerExpanded(false); }}>
+              Discard
             </Button>
-            <Button onClick={handleSendProposalEmail} disabled={sendingEmail}>
+            <Button onClick={handleSendProposalEmail} disabled={sendingEmail} className="min-w-[120px]">
               {sendingEmail ? (
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending...</>
               ) : (
-                <><Mail className="mr-2 h-4 w-4" /> Send Email</>
+                <><Send className="mr-2 h-4 w-4" /> Send</>
               )}
             </Button>
           </DialogFooter>
