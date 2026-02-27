@@ -6778,33 +6778,84 @@ async def review_lead_proposal(
         'reviewed_at': datetime.now(timezone.utc).isoformat()
     }
     
-    # If approved and it's a PDF, stamp the document with digital signature
-    if action == 'approved' and proposal.get('content_type') == 'application/pdf':
-        try:
-            # Decode the original PDF
-            original_pdf_data = base64.b64decode(proposal['file_data'])
-            
-            # Format the approval date and time in IST (UTC+5:30)
-            utc_now = datetime.now(timezone.utc)
-            ist_offset = timedelta(hours=5, minutes=30)
-            ist_now = utc_now + ist_offset
-            approval_datetime = ist_now.strftime('%B %d, %Y at %I:%M %p IST')
-            
-            # Stamp the PDF with approver's signature
-            stamped_pdf_data = stamp_pdf_with_signature(
-                original_pdf_data,
-                current_user['name'],
-                approval_datetime
-            )
-            
-            # Update the file_data with the stamped PDF
-            update_data['file_data'] = base64.b64encode(stamped_pdf_data).decode('utf-8')
-            update_data['file_size'] = len(stamped_pdf_data)
-            
-            logging.info(f"Digital signature added to proposal for lead {lead_id}")
-        except Exception as e:
-            logging.error(f"Failed to stamp PDF with signature: {str(e)}")
-            # Continue with approval even if stamping fails
+    # If approved, handle document conversion and stamping
+    if action == 'approved':
+        content_type = proposal.get('content_type', '')
+        file_name = proposal.get('file_name', '')
+        
+        # Check if it's a Word document - convert to PDF first
+        is_word_doc = content_type in [
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/msword'
+        ] or file_name.lower().endswith(('.docx', '.doc'))
+        
+        if is_word_doc:
+            try:
+                logging.info(f"Converting Word document to PDF for lead {lead_id}")
+                
+                # Decode the original Word document
+                original_doc_data = base64.b64decode(proposal['file_data'])
+                
+                # Convert Word to PDF
+                pdf_data = convert_word_to_pdf(original_doc_data)
+                
+                # Format the approval date and time in IST (UTC+5:30)
+                utc_now = datetime.now(timezone.utc)
+                ist_offset = timedelta(hours=5, minutes=30)
+                ist_now = utc_now + ist_offset
+                approval_datetime = ist_now.strftime('%B %d, %Y at %I:%M %p IST')
+                
+                # Stamp the converted PDF with approver's signature
+                stamped_pdf_data = stamp_pdf_with_signature(
+                    pdf_data,
+                    current_user['name'],
+                    approval_datetime
+                )
+                
+                # Update file info to reflect the PDF conversion
+                new_file_name = file_name.rsplit('.', 1)[0] + '.pdf'
+                update_data['file_data'] = base64.b64encode(stamped_pdf_data).decode('utf-8')
+                update_data['file_size'] = len(stamped_pdf_data)
+                update_data['file_name'] = new_file_name
+                update_data['content_type'] = 'application/pdf'
+                update_data['converted_from_word'] = True
+                update_data['original_file_name'] = file_name
+                
+                logging.info(f"Word document converted to PDF and signed for lead {lead_id}")
+            except Exception as e:
+                logging.error(f"Failed to convert Word to PDF: {str(e)}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f'Failed to convert Word document to PDF: {str(e)}'
+                )
+        
+        # If it's already a PDF, just stamp it
+        elif content_type == 'application/pdf':
+            try:
+                # Decode the original PDF
+                original_pdf_data = base64.b64decode(proposal['file_data'])
+                
+                # Format the approval date and time in IST (UTC+5:30)
+                utc_now = datetime.now(timezone.utc)
+                ist_offset = timedelta(hours=5, minutes=30)
+                ist_now = utc_now + ist_offset
+                approval_datetime = ist_now.strftime('%B %d, %Y at %I:%M %p IST')
+                
+                # Stamp the PDF with approver's signature
+                stamped_pdf_data = stamp_pdf_with_signature(
+                    original_pdf_data,
+                    current_user['name'],
+                    approval_datetime
+                )
+                
+                # Update the file_data with the stamped PDF
+                update_data['file_data'] = base64.b64encode(stamped_pdf_data).decode('utf-8')
+                update_data['file_size'] = len(stamped_pdf_data)
+                
+                logging.info(f"Digital signature added to proposal for lead {lead_id}")
+            except Exception as e:
+                logging.error(f"Failed to stamp PDF with signature: {str(e)}")
+                # Continue with approval even if stamping fails
     
     await db.lead_proposals.update_one(
         {'lead_id': lead_id},
