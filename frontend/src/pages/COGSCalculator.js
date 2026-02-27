@@ -124,6 +124,67 @@ export default function COGSCalculator() {
     setHasChanges(true);
   };
 
+  // Handle Actual Landing Price change - recalculates Gross Margin % based on it
+  // This is a transient value, not saved to database
+  const updateActualLandingPrice = (index, value) => {
+    const rowId = cogsData[index]?.id;
+    if (!rowId) return;
+    
+    // Update transient state
+    setActualLandingPrices(prev => ({
+      ...prev,
+      [rowId]: value
+    }));
+    
+    // If value is empty or invalid, don't recalculate
+    if (!value || value === '' || isNaN(parseFloat(value))) {
+      return;
+    }
+    
+    const actualLanding = parseFloat(value);
+    const row = cogsData[index];
+    
+    // Get cost components
+    const primary = parseFloat(row.primary_packaging_cost) || 0;
+    const secondary = parseFloat(row.secondary_packaging_cost) || 0;
+    const manufacturing = parseFloat(row.manufacturing_variable_cost) || 0;
+    const logistics = parseFloat(row.outbound_logistics_cost) || 0;
+    const distributionPercent = parseFloat(row.distribution_cost) || 0;
+    
+    // Total COGS (unchanged)
+    const totalCOGS = primary + secondary + manufacturing;
+    
+    // Reverse calculate: Given Actual Landing Price, find required Gross Margin %
+    // Base Cost = Actual Landing × (1 - Distribution %)
+    // Base Cost = Primary + Secondary + Mfg + Gross Margin (₹) + Logistics
+    // Therefore: Gross Margin (₹) = Base Cost - Primary - Secondary - Mfg - Logistics
+    // Gross Margin % = (Gross Margin ₹ / Total COGS) × 100
+    
+    let baseCost;
+    if (distributionPercent >= 100) {
+      baseCost = 0;
+    } else if (distributionPercent > 0) {
+      baseCost = actualLanding * (1 - distributionPercent / 100);
+    } else {
+      baseCost = actualLanding;
+    }
+    
+    const grossMarginRupees = baseCost - primary - secondary - manufacturing - logistics;
+    
+    // Calculate new gross margin percentage
+    let newGrossMarginPercent = 0;
+    if (totalCOGS > 0) {
+      newGrossMarginPercent = (grossMarginRupees / totalCOGS) * 100;
+    }
+    
+    // Round to 2 decimal places
+    newGrossMarginPercent = Math.round(newGrossMarginPercent * 100) / 100;
+    
+    // Update the gross margin field using the existing updateField function
+    // This will trigger all other recalculations
+    updateField(index, 'gross_margin', newGrossMarginPercent.toString());
+  };
+
   const saveAll = async () => {
     setSaving(true);
     try {
