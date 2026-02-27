@@ -330,6 +330,63 @@ export default function DailyStatusUpdate() {
     }
   };
 
+  // Check if Web Share API is supported (mainly for mobile)
+  const canShare = typeof navigator !== 'undefined' && navigator.share;
+
+  // Share activities via native share (WhatsApp, etc.)
+  const handleShareActivities = async () => {
+    if (!yesterdayUpdates) {
+      toast.error('No activities to share');
+      return;
+    }
+    
+    // Convert the formatted text to a clean, readable format for sharing
+    const lines = yesterdayUpdates.split('\n').filter(line => line.trim());
+    const cleanedLines = lines.map(line => {
+      const trimmedLine = line.trim();
+      // Convert [SUMMARY] to plain text
+      if (trimmedLine.startsWith('[SUMMARY]')) {
+        return trimmedLine.replace('[SUMMARY]', '📊 SUMMARY:');
+      }
+      // Convert [HEADER] to plain text with emoji
+      if (trimmedLine.startsWith('[HEADER]')) {
+        const headerText = trimmedLine.replace('[HEADER]', '').trim();
+        if (headerText.toUpperCase().includes('PHONE') || headerText.toUpperCase().includes('CALL')) {
+          return '\n📞 ' + headerText + ':';
+        } else if (headerText.toUpperCase().includes('EMAIL')) {
+          return '\n📧 ' + headerText + ':';
+        } else if (headerText.toUpperCase().includes('MEETING') || headerText.toUpperCase().includes('VISIT')) {
+          return '\n🤝 ' + headerText + ':';
+        } else {
+          return '\n📋 ' + headerText + ':';
+        }
+      }
+      return trimmedLine;
+    });
+    
+    const dateLabel = format(new Date(selectedDate), 'EEEE, MMM d, yyyy');
+    const textToShare = `*Daily Status Update - ${dateLabel}*\n\n${cleanedLines.join('\n').trim()}`;
+    
+    try {
+      await navigator.share({
+        title: `Daily Status - ${dateLabel}`,
+        text: textToShare
+      });
+      toast.success('Shared successfully!');
+    } catch (error) {
+      // User cancelled or share failed
+      if (error.name !== 'AbortError') {
+        // Fallback: copy to clipboard if share fails
+        try {
+          await navigator.clipboard.writeText(textToShare);
+          toast.info('Share not available. Text copied to clipboard instead.');
+        } catch (copyError) {
+          toast.error('Unable to share. Please copy manually.');
+        }
+      }
+    }
+  };
+
   const handleSubmit = async () => {
     if (!yesterdayUpdates.trim() && !todayActions.trim() && !helpNeeded.trim()) {
       toast.error('Please fill at least one section');
