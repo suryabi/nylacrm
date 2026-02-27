@@ -6712,25 +6712,19 @@ async def share_proposal_via_email(
     sender_name = current_user.get('name', 'Nyla Air Water Team')
     sender_email = current_user.get('email', 'noreply@nylaairwater.earth')
     
-    # Create HTML email body
+    # Convert the plain text message to HTML (preserve line breaks)
+    message_html = email_data.message.replace('\n', '<br>') if email_data.message else ''
+    
+    # Create HTML email body using user's message
     html_content = f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background-color: #0d5c63; padding: 20px; text-align: center;">
             <h1 style="color: white; margin: 0;">Nyla Air Water</h1>
         </div>
         <div style="padding: 30px; background-color: #f8f9fa;">
-            <p style="font-size: 16px; color: #333;">Dear Sir/Madam,</p>
-            <p style="font-size: 14px; color: #555; line-height: 1.6;">
-                Please find attached the proposal for <strong>{company_name}</strong>.
+            <p style="font-size: 14px; color: #333; line-height: 1.8; white-space: pre-wrap;">
+                {message_html}
             </p>
-            {f'<p style="font-size: 14px; color: #555; line-height: 1.6;">{email_data.message}</p>' if email_data.message else ''}
-            <p style="font-size: 14px; color: #555; line-height: 1.6;">
-                If you have any questions or need further information, please feel free to reach out.
-            </p>
-            <br>
-            <p style="font-size: 14px; color: #333;">Best regards,</p>
-            <p style="font-size: 14px; color: #333; font-weight: bold;">{sender_name}</p>
-            <p style="font-size: 12px; color: #666;">{sender_email}</p>
         </div>
         <div style="background-color: #e9ecef; padding: 15px; text-align: center;">
             <p style="font-size: 12px; color: #666; margin: 0;">
