@@ -84,12 +84,30 @@ const StyledActivityDisplay = ({ text, onChange }) => {
 };
 
 // Simple status section with styled display option
-const StatusSection = ({ title, value, onChange, placeholder, disabled, showStyledView }) => {
+const StatusSection = ({ title, value, onChange, placeholder, disabled, showStyledView, showCopyButton, onCopy, copied }) => {
   const hasSpecialFormatting = value && (value.includes('[SUMMARY]') || value.includes('[HEADER]'));
   
   return (
     <Card className={`p-5 ${disabled ? 'bg-muted/30' : ''}`}>
-      <label className="block text-sm font-semibold mb-3">{title}</label>
+      <div className="flex items-center justify-between mb-3">
+        <label className="block text-sm font-semibold">{title}</label>
+        {showCopyButton && value && (
+          <Button
+            type="button"
+            variant={copied ? "default" : "ghost"}
+            size="sm"
+            className={`h-8 px-3 text-xs ${copied ? 'bg-green-600 hover:bg-green-600 text-white' : ''}`}
+            onClick={onCopy}
+            data-testid="copy-activities-button"
+          >
+            {copied ? (
+              <><Check className="h-3.5 w-3.5 mr-1.5" /> Copied!</>
+            ) : (
+              <><Copy className="h-3.5 w-3.5 mr-1.5" /> Copy</>
+            )}
+          </Button>
+        )}
+      </div>
       {disabled ? (
         <p className="text-sm text-muted-foreground italic">Action items not available for past dates</p>
       ) : hasSpecialFormatting ? (
