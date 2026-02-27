@@ -2453,6 +2453,18 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
     city = lead.get('city', 'Unknown')
     account_id = await generate_account_id(account_name, city)
     
+    # Convert proposed_sku_pricing from lead to account's sku_pricing format
+    sku_pricing_list = []
+    proposed_pricing = lead.get('proposed_sku_pricing', [])
+    if proposed_pricing:
+        for sku_item in proposed_pricing:
+            # Map lead's proposed pricing fields to account's SKU pricing format
+            sku_pricing_list.append(AccountSKUPricing(
+                sku=sku_item.get('sku', ''),
+                price_per_unit=float(sku_item.get('proposed_price', 0) or sku_item.get('price_per_unit', 0) or 0),
+                return_bottle_credit=float(sku_item.get('bottle_return_credit', 0) or sku_item.get('return_bottle_credit', 0) or 0)
+            ))
+    
     # Create account with category and contact info from lead
     account = Account(
         account_id=account_id,
@@ -2464,7 +2476,7 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
         assigned_to=lead.get('assigned_to'),
         contact_name=lead.get('contact_person') or lead.get('name'),
         contact_number=lead.get('phone'),
-        sku_pricing=[]
+        sku_pricing=sku_pricing_list
     )
     
     doc = account.model_dump()
