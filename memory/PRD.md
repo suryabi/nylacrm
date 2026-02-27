@@ -29,6 +29,24 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 ## What's Been Implemented
 
 ### Feb 27, 2026 (Session 11 - Current)
+- **FEATURE**: Word to PDF Conversion on Proposal Approval
+  - **Purpose**: Automatically convert Word documents (.docx, .doc) to PDF when a proposal is approved
+  - **Implementation**:
+    - Added `python-docx` library for reading Word documents
+    - Created `convert_word_to_pdf()` function using reportlab
+    - Converts document text, headings, bold/italic formatting, and tables
+    - After conversion, the digital signature stamp is added
+    - Original file name is preserved in `original_file_name` field
+    - `converted_from_word: true` flag added to track converted documents
+  - **Workflow**:
+    1. User uploads Word proposal (.docx/.doc)
+    2. Approver clicks "Approve"
+    3. System converts Word → PDF automatically
+    4. Digital signature stamp added to PDF
+    5. Approved PDF is saved (replaces Word file)
+  - **Files Modified**: `/app/backend/server.py`
+  - Status: VERIFIED via curl and screenshot testing
+
 - **FEATURE**: Proposal Email Sharing
   - **Purpose**: Allow users to share approved proposals via email directly from the CRM
   - **Implementation**:
