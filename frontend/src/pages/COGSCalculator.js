@@ -466,6 +466,21 @@ export default function COGSCalculator() {
                     <td className="p-3 text-right font-bold text-primary bg-green-50">{row.ex_factory_price?.toFixed(2)}</td>
                     <td className="p-3 text-right font-semibold text-blue-600 bg-blue-50">{row.base_cost?.toFixed(2) || '0.00'}</td>
                     <td className="p-3 text-right font-bold text-emerald-700 bg-emerald-100">{row.minimum_landing_price?.toFixed(2)}</td>
+                    <td className="p-2 bg-purple-50/50">
+                      <input
+                        type="text"
+                        value={actualLandingPrices[row.id] || ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                            updateActualLandingPrice(index, val);
+                          }
+                        }}
+                        className="w-24 h-9 text-right px-2 border rounded bg-background"
+                        placeholder="Enter price"
+                        data-testid={`actual-landing-price-${index}`}
+                      />
+                    </td>
                     <td className="p-3 text-xs text-muted-foreground">
                       {row.editor_name || '-'}
                       {row.last_edited_at && (
