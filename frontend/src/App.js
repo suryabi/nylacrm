@@ -11,6 +11,7 @@ import Login from './pages/Login';
 import AuthCallback from './components/AuthCallback';
 import GoogleAuthCallback from './pages/GoogleAuthCallback';
 import Dashboard from './pages/Dashboard';
+import HomeDashboard from './pages/HomeDashboard';
 
 // CRITICAL: Configure axios to always send credentials (cookies) with all requests
 axios.defaults.withCredentials = true;
@@ -109,6 +110,7 @@ function AppRouter() {
           <Route path="/login" element={<Login />} />
           <Route path="/auth/callback" element={<GoogleAuthCallback />} />
           
+          <Route path="/home" element={<ProtectedRoute><HomeDashboard /></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/dashboard-preview" element={<ProtectedRoute><DashboardPreview /></ProtectedRoute>} />
           <Route path="/leads" element={<ProtectedRoute><LeadsList /></ProtectedRoute>} />
