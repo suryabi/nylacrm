@@ -29,6 +29,16 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 ## What's Been Implemented
 
 ### Feb 27, 2026 (Session 11 - Current)
+- **FEATURE**: Lead-to-Account Conversion - Copy Proposed SKU Pricing
+  - **Purpose**: Automatically copy the lead's proposed SKU pricing to the account's SKU pricing during conversion
+  - **Implementation**:
+    - Updated `/api/accounts/convert-lead` endpoint in `server.py`
+    - Maps lead's `proposed_sku_pricing` fields to account's `sku_pricing` format
+    - Handles both field naming conventions: `proposed_price` → `price_per_unit`, `bottle_return_credit` → `return_bottle_credit`
+    - Gracefully handles missing or null values
+  - **File Modified**: `/app/backend/server.py`
+  - Status: VERIFIED via curl and screenshot testing
+
 - **FEATURE**: Daily Status - Copy Fetched Activities
   - **Purpose**: Allow users to easily copy the fetched activity list to clipboard for sharing
   - **Implementation**:
