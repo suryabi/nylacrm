@@ -50,6 +50,11 @@ export default function COGSCalculator() {
     }
   }, [cities]);
 
+  // Clear transient actual landing prices when city changes
+  React.useEffect(() => {
+    setActualLandingPrices({});
+  }, [selectedCity]);
+
   React.useEffect(() => {
     if (selectedCity) {
       loadCOGSData();
