@@ -256,9 +256,12 @@ export default function LeadDetail() {
   // Open share dialog and pre-populate fields
   const openShareDialog = async () => {
     // Pre-populate with user's email as sender context
-    setShareEmailTo('');
+    setShareEmailTo([]);
+    setShareEmailToInput('');
+    setShareEmailCcInput('');
+    setShareEmailBccInput('');
+    setShareEmailBcc([]);
     setShareEmailSubject('Nyla Air Water - Proposal for review');
-    setShareEmailBcc('');
     setIsEmailComposerExpanded(false);
     
     // Generate default email body with signature
@@ -285,16 +288,80 @@ ${userEmail}`;
     try {
       const res = await axios.get(`${API_URL}/users/${user.id}/reporting-manager`, { withCredentials: true });
       if (res.data.manager?.email) {
-        setShareEmailCc(res.data.manager.email);
+        setShareEmailCc([res.data.manager.email]);
       } else {
-        setShareEmailCc('');
+        setShareEmailCc([]);
       }
     } catch (error) {
       console.log('Could not fetch reporting manager');
-      setShareEmailCc('');
+      setShareEmailCc([]);
     }
     
     setShowShareDialog(true);
+  };
+
+  // Email chip handling functions
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  
+  const addEmailChip = (type, value) => {
+    const email = value.trim().replace(/,$/g, '');
+    if (!email || !emailRegex.test(email)) return false;
+    
+    if (type === 'to' && !shareEmailTo.includes(email)) {
+      setShareEmailTo([...shareEmailTo, email]);
+      setShareEmailToInput('');
+      return true;
+    } else if (type === 'cc' && !shareEmailCc.includes(email)) {
+      setShareEmailCc([...shareEmailCc, email]);
+      setShareEmailCcInput('');
+      return true;
+    } else if (type === 'bcc' && !shareEmailBcc.includes(email)) {
+      setShareEmailBcc([...shareEmailBcc, email]);
+      setShareEmailBccInput('');
+      return true;
+    }
+    return false;
+  };
+  
+  const removeEmailChip = (type, email) => {
+    if (type === 'to') {
+      setShareEmailTo(shareEmailTo.filter(e => e !== email));
+    } else if (type === 'cc') {
+      setShareEmailCc(shareEmailCc.filter(e => e !== email));
+    } else if (type === 'bcc') {
+      setShareEmailBcc(shareEmailBcc.filter(e => e !== email));
+    }
+  };
+  
+  const handleEmailInputKeyDown = (type, e, value) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addEmailChip(type, value);
+    } else if (e.key === 'Backspace' && !value) {
+      // Remove last chip if input is empty and backspace is pressed
+      if (type === 'to' && shareEmailTo.length > 0) {
+        setShareEmailTo(shareEmailTo.slice(0, -1));
+      } else if (type === 'cc' && shareEmailCc.length > 0) {
+        setShareEmailCc(shareEmailCc.slice(0, -1));
+      } else if (type === 'bcc' && shareEmailBcc.length > 0) {
+        setShareEmailBcc(shareEmailBcc.slice(0, -1));
+      }
+    }
+  };
+  
+  const handleEmailInputChange = (type, value) => {
+    // Check if user pasted or typed a comma
+    if (value.includes(',')) {
+      const email = value.replace(/,/g, '').trim();
+      if (email) {
+        addEmailChip(type, email);
+      }
+      return;
+    }
+    
+    if (type === 'to') setShareEmailToInput(value);
+    else if (type === 'cc') setShareEmailCcInput(value);
+    else if (type === 'bcc') setShareEmailBccInput(value);
   };
 
   // Send proposal via email
