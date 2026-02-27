@@ -6792,6 +6792,20 @@ async def share_proposal_via_email(
             detail=f'Failed to send email: {str(e)}'
         )
 
+@api_router.get("/users/{user_id}/reporting-manager")
+async def get_reporting_manager(user_id: str, current_user: dict = Depends(get_current_user)):
+    """Get the reporting manager details for a user"""
+    user = await db.users.find_one({'id': user_id}, {'_id': 0})
+    if not user:
+        raise HTTPException(status_code=404, detail='User not found')
+    
+    reports_to = user.get('reports_to')
+    if not reports_to:
+        return {'manager': None}
+    
+    manager = await db.users.find_one({'id': reports_to}, {'_id': 0, 'id': 1, 'name': 1, 'email': 1})
+    return {'manager': manager}
+
 # ============= ACCOUNT CONTRACT ENDPOINTS =============
 
 class AccountContract(BaseModel):
