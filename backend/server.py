@@ -2455,6 +2455,31 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
     if lead.get('converted_to_account'):
         raise HTTPException(status_code=400, detail='Lead already converted to account')
     
+    # Validate proposed SKU pricing exists
+    proposed_pricing = lead.get('proposed_sku_pricing', [])
+    if not proposed_pricing or len(proposed_pricing) == 0:
+        raise HTTPException(
+            status_code=400, 
+            detail='Please add at least one SKU with pricing before converting to account'
+        )
+    
+    # Validate SKU pricing data
+    for idx, sku_item in enumerate(proposed_pricing):
+        sku_name = sku_item.get('sku', '')
+        price = sku_item.get('proposed_price') or sku_item.get('price_per_unit') or 0
+        
+        if not sku_name or not sku_name.strip():
+            raise HTTPException(
+                status_code=400,
+                detail=f'SKU #{idx + 1} is missing a name. Please select a valid SKU.'
+            )
+        
+        if float(price) <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f'SKU "{sku_name}" has an invalid price. Price must be greater than 0.'
+            )
+    
     # Generate account ID
     account_name = lead.get('company') or lead.get('name', 'Unknown')
     city = lead.get('city', 'Unknown')
