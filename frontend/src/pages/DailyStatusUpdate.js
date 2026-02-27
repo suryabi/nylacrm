@@ -465,9 +465,6 @@ export default function DailyStatusUpdate() {
         onCopy={handleCopyActivities}
         copied={copied}
       />
-        onChange={setYesterdayUpdates}
-        placeholder={isToday ? "What did you accomplish today? Enter each item on a new line..." : "What did you accomplish on this day? Enter each item on a new line..."}
-      />
 
       {/* Section 2: Today's / Tomorrow's Action Items (Disabled for past dates) */}
       <StatusSection
