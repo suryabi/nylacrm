@@ -219,6 +219,9 @@ export default function DailyStatusUpdate() {
       setTodayActions('');
       setHelpNeeded('');
     }
+    // Reset fetched activities state when date changes
+    setHasFetchedActivities(false);
+    setCopied(false);
   }, [selectedDate, pastStatuses]);
 
   const handleFetchFromActivities = async () => {
