@@ -1185,18 +1185,24 @@ ${userEmail}`;
             ) : (
               <div className="space-y-4">
                 {/* Proposal File Info */}
-                <div className="flex items-start gap-4 p-4 bg-muted/50 rounded-lg">
-                  <FileText className="h-10 w-10 text-primary flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{proposal.file_name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Version {proposal.version} • {(proposal.file_size / 1024).toFixed(1)} KB
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Uploaded by {proposal.uploaded_by_name} on {format(new Date(proposal.uploaded_at), 'MMM d, yyyy h:mm a')}
-                    </p>
+                <div className="p-4 bg-muted/50 rounded-lg">
+                  <div className="flex items-start gap-4">
+                    <FileText className="h-10 w-10 text-primary flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{proposal.file_name}</p>
+                      <p className="text-sm text-muted-foreground whitespace-nowrap">
+                        Version {proposal.version} • {(proposal.file_size / 1024).toFixed(1)} KB
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Uploaded by {proposal.uploaded_by_name}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        on {format(new Date(proposal.uploaded_at), 'MMM d, yyyy h:mm a')}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  {/* Action Buttons - Separate Row */}
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t">
                     <Button
                       variant="outline"
                       size="sm"
