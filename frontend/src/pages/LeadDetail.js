@@ -255,8 +255,28 @@ export default function LeadDetail() {
     // Pre-populate with user's email as sender context
     setShareEmailTo('');
     setShareEmailSubject('Nyla Air Water - Proposal for review');
-    setShareEmailMessage('');
     setShareEmailBcc('');
+    setIsEmailComposerExpanded(false);
+    
+    // Generate default email body with signature
+    const companyName = lead?.company || 'your company';
+    const firstName = user?.name?.split(' ')[0] || '';
+    const lastName = user?.name?.split(' ').slice(1).join(' ') || '';
+    const userPhone = user?.phone || '';
+    const userEmail = user?.email || '';
+    
+    const defaultBody = `Dear Sir/Madam,
+
+Please find attached the proposal for ${companyName}. We look forward to your feedback and the opportunity to serve you.
+
+If you have any questions or need further information, please feel free to reach out.
+
+Best Regards,
+${firstName} ${lastName}
+${userPhone}
+${userEmail}`;
+    
+    setShareEmailMessage(defaultBody);
     
     // Fetch reporting manager's email for CC
     try {
