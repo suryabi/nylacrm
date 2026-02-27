@@ -120,6 +120,7 @@ export default function LeadDetail() {
   const [shareEmailSubject, setShareEmailSubject] = useState('Nyla Air Water - Proposal for review');
   const [shareEmailMessage, setShareEmailMessage] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [isEmailComposerExpanded, setIsEmailComposerExpanded] = useState(false);
 
   useEffect(() => {
     fetchData();
