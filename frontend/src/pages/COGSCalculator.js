@@ -259,8 +259,8 @@ export default function COGSCalculator() {
   const exportToExcel = () => {
     // Headers depend on user role
     const headers = canSeeCostDetails
-      ? ['SKU', 'Primary Packaging', 'Secondary Packaging', 'Manufacturing Cost', 'Gross Margin %', 'Outbound Logistics', 'Distribution Cost %', 'Total COGS', 'Gross Margin ₹', 'Ex-Factory Price', 'Base Cost', 'Min Landing Price', 'Last Edited By']
-      : ['SKU', 'Gross Margin %', 'Outbound Logistics', 'Distribution Cost %', 'Total COGS', 'Gross Margin ₹', 'Ex-Factory Price', 'Base Cost', 'Min Landing Price', 'Last Edited By'];
+      ? ['SKU', 'Primary Packaging', 'Secondary Packaging', 'Manufacturing Cost', 'Gross Margin %', 'Outbound Logistics', 'Distribution Cost %', 'Total COGS', 'Gross Margin ₹', 'Ex-Factory Price', 'Base Cost', 'Min Landing Price', 'Actual Landing Price', 'Last Edited By']
+      : ['SKU', 'Gross Margin %', 'Outbound Logistics', 'Distribution Cost %', 'Total COGS', 'Gross Margin ₹', 'Ex-Factory Price', 'Base Cost', 'Min Landing Price', 'Actual Landing Price', 'Last Edited By'];
     
     const rows = cogsData.map(row => {
       const baseRow = [
@@ -278,6 +278,7 @@ export default function COGSCalculator() {
         row.ex_factory_price,
         row.base_cost,
         row.minimum_landing_price,
+        actualLandingPrices[row.id] || '',
         row.editor_name || '-'
       ];
       return baseRow;
