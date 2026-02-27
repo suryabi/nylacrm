@@ -181,6 +181,129 @@ def stamp_pdf_with_signature(pdf_data: bytes, approver_name: str, approval_date:
     return output_buffer.read()
 
 
+def convert_word_to_pdf(docx_data: bytes) -> bytes:
+    """
+    Convert a Word document (.docx) to PDF format.
+    
+    Args:
+        docx_data: The Word document as bytes
+    
+    Returns:
+        The converted PDF as bytes
+    """
+    try:
+        # Load the Word document
+        doc = DocxDocument(io.BytesIO(docx_data))
+        
+        # Create PDF buffer
+        pdf_buffer = io.BytesIO()
+        
+        # Create PDF document with reportlab
+        pdf_doc = SimpleDocTemplate(
+            pdf_buffer,
+            pagesize=A4,
+            rightMargin=72,
+            leftMargin=72,
+            topMargin=72,
+            bottomMargin=72
+        )
+        
+        # Create styles
+        styles = getSampleStyleSheet()
+        
+        # Custom styles for different heading levels
+        heading1_style = ParagraphStyle(
+            'CustomHeading1',
+            parent=styles['Heading1'],
+            fontSize=16,
+            spaceAfter=12,
+            spaceBefore=12,
+            textColor=Color(0.1, 0.1, 0.1)
+        )
+        
+        heading2_style = ParagraphStyle(
+            'CustomHeading2',
+            parent=styles['Heading2'],
+            fontSize=14,
+            spaceAfter=10,
+            spaceBefore=10,
+            textColor=Color(0.2, 0.2, 0.2)
+        )
+        
+        normal_style = ParagraphStyle(
+            'CustomNormal',
+            parent=styles['Normal'],
+            fontSize=11,
+            spaceAfter=6,
+            leading=14,
+            alignment=TA_JUSTIFY
+        )
+        
+        # Build story (content elements)
+        story = []
+        
+        for para in doc.paragraphs:
+            text = para.text.strip()
+            if not text:
+                story.append(Spacer(1, 6))
+                continue
+            
+            # Escape special characters for reportlab
+            text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            
+            # Determine style based on paragraph style name
+            style_name = para.style.name.lower() if para.style else ''
+            
+            if 'heading 1' in style_name or 'title' in style_name:
+                story.append(Paragraph(f"<b>{text}</b>", heading1_style))
+            elif 'heading 2' in style_name:
+                story.append(Paragraph(f"<b>{text}</b>", heading2_style))
+            elif 'heading' in style_name:
+                story.append(Paragraph(f"<b>{text}</b>", styles['Heading3']))
+            else:
+                # Check for bold/italic runs within paragraph
+                formatted_text = ""
+                for run in para.runs:
+                    run_text = run.text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                    if run.bold and run.italic:
+                        formatted_text += f"<b><i>{run_text}</i></b>"
+                    elif run.bold:
+                        formatted_text += f"<b>{run_text}</b>"
+                    elif run.italic:
+                        formatted_text += f"<i>{run_text}</i>"
+                    else:
+                        formatted_text += run_text
+                
+                if formatted_text:
+                    story.append(Paragraph(formatted_text, normal_style))
+                else:
+                    story.append(Paragraph(text, normal_style))
+        
+        # Handle tables (basic support)
+        for table in doc.tables:
+            story.append(Spacer(1, 12))
+            for row in table.rows:
+                row_text = " | ".join(cell.text.strip() for cell in row.cells)
+                if row_text.strip():
+                    row_text = row_text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                    story.append(Paragraph(row_text, normal_style))
+            story.append(Spacer(1, 12))
+        
+        # Build the PDF
+        if story:
+            pdf_doc.build(story)
+        else:
+            # Create empty page if no content
+            pdf_doc.build([Paragraph("No content", normal_style)])
+        
+        pdf_buffer.seek(0)
+        return pdf_buffer.read()
+        
+    except Exception as e:
+        logging.error(f"Error converting Word to PDF: {str(e)}")
+        raise ValueError(f"Failed to convert Word document to PDF: {str(e)}")
+
+
 # ============= MODELS =============
 
 class UserRole(BaseModel):
