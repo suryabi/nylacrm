@@ -559,6 +559,26 @@ ${userEmail}`;
       return;
     }
     
+    // Validate proposed SKU pricing is filled
+    const skuPricing = lead.proposed_sku_pricing || proposedSkuPricing || [];
+    if (!skuPricing || skuPricing.length === 0) {
+      toast.error('Please add at least one SKU with pricing before converting to account');
+      return;
+    }
+    
+    // Check if any SKU has empty or invalid data
+    const hasInvalidSKU = skuPricing.some(sku => 
+      !sku.sku || 
+      sku.sku.trim() === '' ||
+      (sku.proposed_price === undefined && sku.price_per_unit === undefined) ||
+      ((sku.proposed_price || sku.price_per_unit || 0) <= 0)
+    );
+    
+    if (hasInvalidSKU) {
+      toast.error('Please ensure all SKUs have a valid name and price greater than 0');
+      return;
+    }
+    
     setConvertingToAccount(true);
     try {
       const response = await accountsAPI.convertFromLead(lead.id);
