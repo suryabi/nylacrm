@@ -6678,21 +6678,6 @@ async def review_lead_proposal(
             logging.error(f"Failed to stamp PDF with signature: {str(e)}")
             # Continue with approval even if stamping fails
     
-    # If it's a Word document being approved, show error - must be PDF
-    elif action == 'approved':
-        content_type = proposal.get('content_type', '')
-        file_name = proposal.get('file_name', '')
-        is_word_doc = content_type in [
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/msword'
-        ] or file_name.lower().endswith(('.docx', '.doc'))
-        
-        if is_word_doc:
-            raise HTTPException(
-                status_code=400,
-                detail='Word documents cannot be approved directly. Please save the document as PDF and upload again.'
-            )
-    
     await db.lead_proposals.update_one(
         {'lead_id': lead_id},
         {
