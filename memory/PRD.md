@@ -29,6 +29,43 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 ## What's Been Implemented
 
 ### Feb 27, 2026 (Session 11 - Current)
+- **FEATURE**: Home Dashboard (New Landing Page)
+  - **Purpose**: Centralized, action-oriented dashboard as the new default landing page after login
+  - **Implementation**:
+    - Created `/home` route with `HomeDashboard.js` component
+    - Updated login redirect from `/dashboard` to `/home`
+    - Added "Home" navigation item as first item under "Core" in sidebar
+    - Context switcher now navigates to `/home` instead of `/dashboard`
+  - **Widgets**:
+    - **Today's Summary Cards**: Activities, Calls, Emails, Meetings counters
+    - **Action Items**: User's pending tasks + overdue follow-ups with completion toggle
+    - **Upcoming Follow-ups**: Leads with follow-up dates in next 7 days
+    - **Leads to Focus On**: Top 5 leads by win probability score
+    - **Monthly Performance**: Target vs Achieved progress bar
+    - **Pipeline Summary**: Lead status distribution counts
+    - **Upcoming Meetings**: Scheduled meetings for next week
+    - **Recent Activity**: Latest activity timeline
+  - **Form-based Task Scheduler**:
+    - New Task dialog: Title, Description, Type, Priority, Due Date, Time, Assign To
+    - Task types: General, Follow Up, Call, Email, Meeting, Visit
+    - Priority levels: Low, Medium, High, Urgent
+    - Can assign to self or team members
+  - **Form-based Meeting Scheduler**:
+    - Schedule Meeting dialog: Title, Description, Type, Duration, Date, Time, Location, Attendees
+    - Meeting types: Client Meeting, Internal, Vendor, Other
+    - Duration options: 15min, 30min, 45min, 1hr, 1.5hr, 2hr
+    - Attendee emails and names fields
+  - **Backend Endpoints** (built in previous session):
+    - `GET /api/dashboard` - Aggregates action_items, upcoming_leads, recommended_leads, meetings, today_summary, pipeline, monthly_performance, recent_activities
+    - `POST/GET/PUT/DELETE /api/tasks` - Full CRUD for tasks
+    - `POST/GET/PUT/DELETE /api/meetings` - Full CRUD for meetings
+  - **Files Modified**:
+    - `/app/frontend/src/pages/HomeDashboard.js` - Main component
+    - `/app/frontend/src/App.js` - Added /home route and import
+    - `/app/frontend/src/pages/Login.js` - Changed redirect to /home
+    - `/app/frontend/src/layouts/DashboardLayout.js` - Added Home nav item, updated context switch
+  - Status: VERIFIED - 100% test success rate (14/14 tests passed)
+
 - **CHANGE**: Proposal Approval - PDF Only Requirement
   - Word documents (.docx, .doc) can still be uploaded for review
   - When approving, if the proposal is a Word document, an error is shown:
@@ -600,6 +637,7 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 13. ~~Leads Kanban Board~~ ✅ IMPLEMENTED (drag-drop pipeline with activity logging)
 14. ~~Sales/Production Context Switching~~ ✅ IMPLEMENTED (context switcher, department field, production modules)
 15. ~~Server-Side Filtering for Leads List~~ ✅ FIXED (time_filter, territory, assigned_to filters now server-side)
+16. ~~Home Dashboard~~ ✅ IMPLEMENTED (action-oriented landing page with tasks, meetings, leads, performance)
 
 ### P1 - High Priority
 - Build out Production modules (Maintenance, Inventory, Quality Control, Assets, Vendors) - currently placeholders
