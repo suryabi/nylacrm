@@ -114,9 +114,12 @@ export default function LeadDetail() {
   
   // Email share dialog state
   const [showShareDialog, setShowShareDialog] = useState(false);
-  const [shareEmailTo, setShareEmailTo] = useState('');
-  const [shareEmailCc, setShareEmailCc] = useState('');
-  const [shareEmailBcc, setShareEmailBcc] = useState('');
+  const [shareEmailTo, setShareEmailTo] = useState([]);
+  const [shareEmailCc, setShareEmailCc] = useState([]);
+  const [shareEmailBcc, setShareEmailBcc] = useState([]);
+  const [shareEmailToInput, setShareEmailToInput] = useState('');
+  const [shareEmailCcInput, setShareEmailCcInput] = useState('');
+  const [shareEmailBccInput, setShareEmailBccInput] = useState('');
   const [shareEmailSubject, setShareEmailSubject] = useState('Nyla Air Water - Proposal for review');
   const [shareEmailMessage, setShareEmailMessage] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
