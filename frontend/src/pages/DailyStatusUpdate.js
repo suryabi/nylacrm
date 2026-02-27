@@ -436,48 +436,35 @@ export default function DailyStatusUpdate() {
       </Card>
 
       {/* Fetch from Lead Activities Button - Dynamic text */}
-      <div className="flex gap-3">
-        <Button
-          type="button"
-          variant="outline"
-          className="flex-1 h-14 text-base font-medium border-dashed"
-          onClick={handleFetchFromActivities}
-          disabled={loading}
-          data-testid="fetch-activities-button"
-        >
-          {loading ? (
-            <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Loading activities...</>
-          ) : (
-            <><Download className="h-5 w-5 mr-2" /> 
-              {isToday ? "Fetch Today's Lead Activities" : 
-               isYesterday ? "Fetch Yesterday's Lead Activities" :
-               `Fetch Lead Activities from ${format(new Date(selectedDate), 'MMM d')}`}
-            </>
-          )}
-        </Button>
-        
-        {/* Copy button - appears after activities are fetched */}
-        {hasFetchedActivities && yesterdayUpdates && (
-          <Button
-            type="button"
-            variant={copied ? "default" : "outline"}
-            className={`h-14 px-6 text-base font-medium ${copied ? 'bg-green-600 hover:bg-green-600' : ''}`}
-            onClick={handleCopyActivities}
-            data-testid="copy-activities-button"
-          >
-            {copied ? (
-              <><Check className="h-5 w-5 mr-2" /> Copied!</>
-            ) : (
-              <><Copy className="h-5 w-5 mr-2" /> Copy</>
-            )}
-          </Button>
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full h-14 text-base font-medium border-dashed"
+        onClick={handleFetchFromActivities}
+        disabled={loading}
+        data-testid="fetch-activities-button"
+      >
+        {loading ? (
+          <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Loading activities...</>
+        ) : (
+          <><Download className="h-5 w-5 mr-2" /> 
+            {isToday ? "Fetch Today's Lead Activities" : 
+             isYesterday ? "Fetch Yesterday's Lead Activities" :
+             `Fetch Lead Activities from ${format(new Date(selectedDate), 'MMM d')}`}
+          </>
         )}
-      </div>
+      </Button>
 
       {/* Section 1: Yesterday's Updates / Today's Updates / Date-specific */}
       <StatusSection
         title={firstSectionTitle}
         value={yesterdayUpdates}
+        onChange={setYesterdayUpdates}
+        placeholder={isToday ? "What did you accomplish today? Enter each item on a new line..." : "What did you accomplish on this day? Enter each item on a new line..."}
+        showCopyButton={hasFetchedActivities}
+        onCopy={handleCopyActivities}
+        copied={copied}
+      />
         onChange={setYesterdayUpdates}
         placeholder={isToday ? "What did you accomplish today? Enter each item on a new line..." : "What did you accomplish on this day? Enter each item on a new line..."}
       />
