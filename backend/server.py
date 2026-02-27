@@ -6748,8 +6748,10 @@ async def share_proposal_via_email(
     }
     
     # Build email params
+    # Use configured sender email or fall back to Resend's test domain
+    sender_from_email = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
     email_params = {
-        "from": f"{sender_name} <onboarding@resend.dev>",  # Using Resend's test domain
+        "from": f"{sender_name} <{sender_from_email}>",
         "to": email_data.to_emails,
         "subject": email_data.subject,
         "html": html_content,
