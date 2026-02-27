@@ -6666,6 +6666,132 @@ async def review_lead_proposal(
     
     return {'proposal': updated, 'message': f'Proposal {action.replace("_", " ")}'}
 
+# ============= PROPOSAL EMAIL SHARING =============
+
+class ProposalShareEmailRequest(BaseModel):
+    """Request model for sharing proposal via email"""
+    to_emails: List[EmailStr]
+    cc_emails: Optional[List[EmailStr]] = []
+    bcc_emails: Optional[List[EmailStr]] = []
+    subject: str = "Nyla Air Water - Proposal for review"
+    message: Optional[str] = ""
+
+@api_router.post("/leads/{lead_id}/proposal/share-email")
+async def share_proposal_via_email(
+    lead_id: str,
+    email_data: ProposalShareEmailRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Share an approved proposal via email with attachment"""
+    
+    # Check if Resend is configured
+    if not RESEND_API_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail='Email service not configured. Please contact administrator.'
+        )
+    
+    # Get the proposal
+    proposal = await db.lead_proposals.find_one({'lead_id': lead_id})
+    
+    if not proposal:
+        raise HTTPException(status_code=404, detail='No proposal found for this lead')
+    
+    # Only allow sharing approved proposals
+    if proposal.get('status') != 'approved':
+        raise HTTPException(
+            status_code=400,
+            detail='Only approved proposals can be shared via email'
+        )
+    
+    # Get lead details for context
+    lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    company_name = lead.get('company', 'Unknown Company') if lead else 'Unknown Company'
+    
+    # Prepare the email content
+    sender_name = current_user.get('name', 'Nyla Air Water Team')
+    sender_email = current_user.get('email', 'noreply@nylaairwater.earth')
+    
+    # Create HTML email body
+    html_content = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background-color: #0d5c63; padding: 20px; text-align: center;">
+            <h1 style="color: white; margin: 0;">Nyla Air Water</h1>
+        </div>
+        <div style="padding: 30px; background-color: #f8f9fa;">
+            <p style="font-size: 16px; color: #333;">Dear Sir/Madam,</p>
+            <p style="font-size: 14px; color: #555; line-height: 1.6;">
+                Please find attached the proposal for <strong>{company_name}</strong>.
+            </p>
+            {f'<p style="font-size: 14px; color: #555; line-height: 1.6;">{email_data.message}</p>' if email_data.message else ''}
+            <p style="font-size: 14px; color: #555; line-height: 1.6;">
+                If you have any questions or need further information, please feel free to reach out.
+            </p>
+            <br>
+            <p style="font-size: 14px; color: #333;">Best regards,</p>
+            <p style="font-size: 14px; color: #333; font-weight: bold;">{sender_name}</p>
+            <p style="font-size: 12px; color: #666;">{sender_email}</p>
+        </div>
+        <div style="background-color: #e9ecef; padding: 15px; text-align: center;">
+            <p style="font-size: 12px; color: #666; margin: 0;">
+                Nyla Air Water | Premium Atmospheric Water
+            </p>
+        </div>
+    </div>
+    """
+    
+    # Prepare attachment
+    attachment = {
+        "filename": proposal['file_name'],
+        "content": proposal['file_data'],  # Already base64 encoded
+        "content_type": proposal['content_type']
+    }
+    
+    # Build email params
+    email_params = {
+        "from": f"{sender_name} <onboarding@resend.dev>",  # Using Resend's test domain
+        "to": email_data.to_emails,
+        "subject": email_data.subject,
+        "html": html_content,
+        "attachments": [attachment]
+    }
+    
+    # Add CC if provided
+    if email_data.cc_emails:
+        email_params["cc"] = email_data.cc_emails
+    
+    # Add BCC if provided
+    if email_data.bcc_emails:
+        email_params["bcc"] = email_data.bcc_emails
+    
+    try:
+        # Send email using Resend (non-blocking)
+        email_result = await asyncio.to_thread(resend.Emails.send, email_params)
+        
+        # Log the email share action
+        await db.lead_activities.insert_one({
+            'id': str(uuid.uuid4()),
+            'lead_id': lead_id,
+            'activity_type': 'email',
+            'interaction_method': 'email',
+            'description': f'Proposal shared via email to: {", ".join(email_data.to_emails)}',
+            'created_by': current_user['id'],
+            'created_by_name': current_user.get('name'),
+            'created_at': datetime.now(timezone.utc).isoformat()
+        })
+        
+        return {
+            'status': 'success',
+            'message': f'Proposal sent successfully to {", ".join(email_data.to_emails)}',
+            'email_id': email_result.get('id')
+        }
+    except Exception as e:
+        logging.error(f"Failed to send proposal email: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f'Failed to send email: {str(e)}'
+        )
+
 # ============= ACCOUNT CONTRACT ENDPOINTS =============
 
 class AccountContract(BaseModel):
