@@ -32,14 +32,15 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 - **FEATURE**: Daily Status - Copy Fetched Activities
   - **Purpose**: Allow users to easily copy the fetched activity list to clipboard for sharing
   - **Implementation**:
-    - Added "Copy" button that appears after activities are successfully fetched
+    - Added "Copy" button inside the Updates section card, positioned on the right side of the header
+    - Button appears only after activities are successfully fetched
     - Button shows "Copy" icon initially, changes to green "Copied!" with checkmark on success
     - Text is cleaned for clipboard: removes [SUMMARY] and [HEADER] markers, formats nicely
     - Uses `navigator.clipboard.writeText()` with fallback for older browsers
     - State resets automatically after 2 seconds or when date changes
   - **UI Changes**:
-    - Fetch and Copy buttons now side-by-side in a flex container
-    - Copy button only visible when `hasFetchedActivities` is true and activities exist
+    - StatusSection component updated to accept `showCopyButton`, `onCopy`, and `copied` props
+    - Copy button styled with ghost variant, small size, positioned in header flex container
   - **File Modified**: `/app/frontend/src/pages/DailyStatusUpdate.js`
   - Status: VERIFIED via screenshot testing
 
