@@ -502,6 +502,110 @@ class DailyStatusUpdate(BaseModel):
     help_original: Optional[str] = None
     help_ai_revised: Optional[bool] = None
 
+# ============= TASK MODELS =============
+
+class Task(BaseModel):
+    """Task/Action item model"""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    description: Optional[str] = None
+    task_type: str = 'general'  # 'general', 'follow_up', 'call', 'meeting', 'email', 'visit'
+    priority: str = 'medium'  # 'low', 'medium', 'high', 'urgent'
+    status: str = 'pending'  # 'pending', 'in_progress', 'completed', 'cancelled'
+    due_date: str  # YYYY-MM-DD
+    due_time: Optional[str] = None  # HH:MM
+    assigned_to: str  # User ID
+    assigned_to_name: Optional[str] = None
+    assigned_by: str  # User ID
+    assigned_by_name: Optional[str] = None
+    lead_id: Optional[str] = None  # Optional link to lead
+    account_id: Optional[str] = None  # Optional link to account
+    completed_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class TaskCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    task_type: str = 'general'
+    priority: str = 'medium'
+    due_date: str
+    due_time: Optional[str] = None
+    assigned_to: str
+    lead_id: Optional[str] = None
+    account_id: Optional[str] = None
+
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    task_type: Optional[str] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+    due_date: Optional[str] = None
+    due_time: Optional[str] = None
+    assigned_to: Optional[str] = None
+    lead_id: Optional[str] = None
+    account_id: Optional[str] = None
+
+# ============= MEETING MODELS =============
+
+class Meeting(BaseModel):
+    """Meeting model"""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    description: Optional[str] = None
+    meeting_type: str = 'internal'  # 'internal', 'client', 'vendor', 'other'
+    meeting_date: str  # YYYY-MM-DD
+    start_time: str  # HH:MM
+    end_time: Optional[str] = None  # HH:MM
+    duration_minutes: int = 30
+    location: Optional[str] = None  # Physical location or 'Online'
+    meeting_link: Optional[str] = None  # Zoom/Teams/Meet link
+    attendees: List[str] = []  # List of email addresses
+    attendee_names: List[str] = []  # List of names
+    lead_id: Optional[str] = None
+    account_id: Optional[str] = None
+    organizer_id: str
+    organizer_name: Optional[str] = None
+    status: str = 'scheduled'  # 'scheduled', 'completed', 'cancelled'
+    notes: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class MeetingCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    meeting_type: str = 'internal'
+    meeting_date: str
+    start_time: str
+    end_time: Optional[str] = None
+    duration_minutes: int = 30
+    location: Optional[str] = None
+    meeting_link: Optional[str] = None
+    attendees: List[str] = []
+    attendee_names: List[str] = []
+    lead_id: Optional[str] = None
+    account_id: Optional[str] = None
+
+class MeetingUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    meeting_type: Optional[str] = None
+    meeting_date: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    location: Optional[str] = None
+    meeting_link: Optional[str] = None
+    attendees: Optional[List[str]] = None
+    attendee_names: Optional[List[str]] = None
+    lead_id: Optional[str] = None
+    account_id: Optional[str] = None
+    status: Optional[str] = None
+    notes: Optional[str] = None
+
 class LeaveRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
