@@ -29,6 +29,24 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 ## What's Been Implemented
 
 ### Feb 27, 2026 (Session 11 - Current)
+- **FEATURE**: Proposal Email Sharing
+  - **Purpose**: Allow users to share approved proposals via email directly from the CRM
+  - **Implementation**:
+    - Added "Share via Email" button that appears only for approved proposals
+    - Email dialog with TO (required), CC (pre-filled with reporting manager), BCC, Subject, Message fields
+    - Subject line pre-populated: "Nyla Air Water - Proposal for review" (editable)
+    - From field shows logged-in user's email (read-only display)
+    - Proposal PDF attached automatically
+    - Activity logged when proposal is shared
+    - New endpoint `GET /api/users/{user_id}/reporting-manager` to fetch manager's email
+    - New endpoint `POST /api/leads/{lead_id}/proposal/share-email` to send the email
+  - **Integration**: Resend email service (API key required in RESEND_API_KEY env var)
+  - **Note**: For production use, verify domain in Resend dashboard and set SENDER_EMAIL env var
+  - **Files Modified**: 
+    - `/app/backend/server.py` - Added Resend integration and email endpoints
+    - `/app/frontend/src/pages/LeadDetail.js` - Added share dialog and button
+  - Status: VERIFIED via screenshot testing (email service working)
+
 - **FEATURE**: Lead-to-Account Conversion - Copy Proposed SKU Pricing
   - **Purpose**: Automatically copy the lead's proposed SKU pricing to the account's SKU pricing during conversion
   - **Implementation**:
