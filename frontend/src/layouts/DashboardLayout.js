@@ -11,7 +11,7 @@ import {
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
   Kanban, Wrench, Box, ShieldCheck, Boxes,
-  Factory, ArrowLeftRight, MapPin, Sun, Moon
+  Factory, ArrowLeftRight, MapPin, Sun, Moon, Home
 } from 'lucide-react';
 
 const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
@@ -32,6 +32,7 @@ const salesNavigationGroups = [
   {
     title: 'Core',
     items: [
+      { name: 'Home', href: '/home', icon: Home, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
       { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'], hasSubmenu: true },
       { name: 'Leads', href: '/leads', icon: Users, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
       { name: 'Pipeline', href: '/leads/kanban', icon: Kanban, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
