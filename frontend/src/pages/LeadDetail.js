@@ -1487,42 +1487,80 @@ ${userEmail}`;
           <div className={`flex-1 overflow-y-auto space-y-3 ${isEmailComposerExpanded ? 'py-4' : 'py-2'}`}>
             {/* From Row */}
             <div className="flex items-center border-b pb-2">
-              <span className="w-16 text-sm text-muted-foreground flex-shrink-0">From:</span>
+              <span className="w-12 text-sm text-muted-foreground flex-shrink-0">From:</span>
               <span className="text-sm font-medium">{user?.email || ''}</span>
             </div>
             
-            {/* To, CC, BCC Row - Email Client Style */}
-            <div className="flex items-center border-b pb-2 gap-4">
-              <div className="flex items-center flex-1 min-w-0">
-                <span className="w-16 text-sm text-muted-foreground flex-shrink-0">To:</span>
+            {/* To Row with Chips */}
+            <div className="flex items-start border-b pb-2">
+              <span className="w-12 text-sm text-muted-foreground flex-shrink-0 pt-1.5">To:</span>
+              <div className="flex-1 flex flex-wrap items-center gap-1">
+                {shareEmailTo.map((email, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs px-2 py-1 rounded-full">
+                    {email}
+                    <button onClick={() => removeEmailChip('to', email)} className="hover:bg-primary/20 rounded-full p-0.5">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
                 <Input
                   type="email"
-                  placeholder="Recipients"
-                  value={shareEmailTo}
-                  onChange={(e) => setShareEmailTo(e.target.value)}
-                  className="border-0 shadow-none focus-visible:ring-0 h-8 px-1"
+                  placeholder={shareEmailTo.length === 0 ? "Add recipients..." : ""}
+                  value={shareEmailToInput}
+                  onChange={(e) => handleEmailInputChange('to', e.target.value)}
+                  onKeyDown={(e) => handleEmailInputKeyDown('to', e, shareEmailToInput)}
+                  onBlur={() => { if (shareEmailToInput.trim()) addEmailChip('to', shareEmailToInput); }}
+                  className="border-0 shadow-none focus-visible:ring-0 h-7 px-1 min-w-[120px] flex-1"
                   data-testid="share-email-to"
                 />
               </div>
-              <div className="flex items-center flex-1 min-w-0">
-                <span className="text-sm text-muted-foreground flex-shrink-0 px-2">Cc:</span>
+            </div>
+            
+            {/* CC Row with Chips */}
+            <div className="flex items-start border-b pb-2">
+              <span className="w-12 text-sm text-muted-foreground flex-shrink-0 pt-1.5">Cc:</span>
+              <div className="flex-1 flex flex-wrap items-center gap-1">
+                {shareEmailCc.map((email, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full">
+                    {email}
+                    <button onClick={() => removeEmailChip('cc', email)} className="hover:bg-blue-200 rounded-full p-0.5">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
                 <Input
                   type="email"
                   placeholder=""
-                  value={shareEmailCc}
-                  onChange={(e) => setShareEmailCc(e.target.value)}
-                  className="border-0 shadow-none focus-visible:ring-0 h-8 px-1"
+                  value={shareEmailCcInput}
+                  onChange={(e) => handleEmailInputChange('cc', e.target.value)}
+                  onKeyDown={(e) => handleEmailInputKeyDown('cc', e, shareEmailCcInput)}
+                  onBlur={() => { if (shareEmailCcInput.trim()) addEmailChip('cc', shareEmailCcInput); }}
+                  className="border-0 shadow-none focus-visible:ring-0 h-7 px-1 min-w-[120px] flex-1"
                   data-testid="share-email-cc"
                 />
               </div>
-              <div className="flex items-center flex-1 min-w-0">
-                <span className="text-sm text-muted-foreground flex-shrink-0 px-2">Bcc:</span>
+            </div>
+            
+            {/* BCC Row with Chips */}
+            <div className="flex items-start border-b pb-2">
+              <span className="w-12 text-sm text-muted-foreground flex-shrink-0 pt-1.5">Bcc:</span>
+              <div className="flex-1 flex flex-wrap items-center gap-1">
+                {shareEmailBcc.map((email, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded-full">
+                    {email}
+                    <button onClick={() => removeEmailChip('bcc', email)} className="hover:bg-gray-200 rounded-full p-0.5">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
                 <Input
                   type="email"
                   placeholder=""
-                  value={shareEmailBcc}
-                  onChange={(e) => setShareEmailBcc(e.target.value)}
-                  className="border-0 shadow-none focus-visible:ring-0 h-8 px-1"
+                  value={shareEmailBccInput}
+                  onChange={(e) => handleEmailInputChange('bcc', e.target.value)}
+                  onKeyDown={(e) => handleEmailInputKeyDown('bcc', e, shareEmailBccInput)}
+                  onBlur={() => { if (shareEmailBccInput.trim()) addEmailChip('bcc', shareEmailBccInput); }}
+                  className="border-0 shadow-none focus-visible:ring-0 h-7 px-1 min-w-[120px] flex-1"
                   data-testid="share-email-bcc"
                 />
               </div>
@@ -1530,7 +1568,7 @@ ${userEmail}`;
             
             {/* Subject Row */}
             <div className="flex items-center border-b pb-2">
-              <span className="w-16 text-sm text-muted-foreground flex-shrink-0">Subject:</span>
+              <span className="w-12 text-sm text-muted-foreground flex-shrink-0">Subject:</span>
               <Input
                 value={shareEmailSubject}
                 onChange={(e) => setShareEmailSubject(e.target.value)}
