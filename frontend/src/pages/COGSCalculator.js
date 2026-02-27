@@ -39,6 +39,10 @@ export default function COGSCalculator() {
   const [showCopyDialog, setShowCopyDialog] = React.useState(false);
   const [copying, setCopying] = React.useState(false);
   
+  // Transient state for "Actual Landing Price" - NOT saved to database
+  // Used for on-the-fly gross margin calculation
+  const [actualLandingPrices, setActualLandingPrices] = React.useState({});
+  
   // Set default city when cities load
   React.useEffect(() => {
     if (cities.length > 0 && !selectedCity) {
