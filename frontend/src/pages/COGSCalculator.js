@@ -363,6 +363,7 @@ export default function COGSCalculator() {
                   <th className="text-right p-3 font-semibold bg-green-50">Ex-Factory (₹)</th>
                   <th className="text-right p-3 font-semibold bg-blue-50">Base Cost (₹)</th>
                   <th className="text-right p-3 font-semibold bg-emerald-100">Min Landing (₹)</th>
+                  <th className="text-right p-3 font-semibold bg-purple-100">Actual Landing (₹)</th>
                   <th className="text-left p-3 font-semibold">Last Edited</th>
                 </tr>
               </thead>
