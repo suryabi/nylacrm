@@ -148,7 +148,7 @@ export default function DashboardLayout({ children }) {
     if (newContext === 'production') {
       navigate('/maintenance');
     } else {
-      navigate('/dashboard');
+      navigate('/home');
     }
   };
 
