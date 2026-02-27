@@ -1184,6 +1184,17 @@ export default function LeadDetail() {
                     >
                       <Download className="h-4 w-4 mr-1" /> Download
                     </Button>
+                    {proposal.status === 'approved' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={openShareDialog}
+                        className="text-primary"
+                        data-testid="proposal-share-email-btn"
+                      >
+                        <Share2 className="h-4 w-4 mr-1" /> Share via Email
+                      </Button>
+                    )}
                     {canDeleteProposal && (
                       <Button
                         variant="outline"
