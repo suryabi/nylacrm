@@ -535,6 +535,8 @@ export default function DailyStatusUpdate() {
         showCopyButton={hasFetchedActivities}
         onCopy={handleCopyActivities}
         copied={copied}
+        onShare={handleShareActivities}
+        canShare={canShare}
       />
 
       {/* Section 2: Today's / Tomorrow's Action Items (Disabled for past dates) */}
