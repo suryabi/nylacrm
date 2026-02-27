@@ -34,6 +34,11 @@ mq_subscriber = None
 start_mq_subscriber = None
 stop_mq_subscriber = None
 
+# Resend email configuration
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
+if RESEND_API_KEY:
+    resend.api_key = RESEND_API_KEY
+
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
