@@ -28,7 +28,27 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 
 ## What's Been Implemented
 
-### Feb 25, 2026 (Session 10 - Current)
+### Feb 27, 2026 (Session 11 - Current)
+- **FEATURE**: COGS Calculator - Actual Landing Price (What-If Analysis)
+  - **Purpose**: Allow users to perform on-the-fly "what-if" analysis on gross margins
+  - **Implementation**:
+    - Added new "Actual Landing Price" input column to COGS Calculator table
+    - When user enters a value, the system reverse-calculates the required Gross Margin %
+    - Formula: `Base Cost = Actual Landing × (1 - Distribution %)` then `Gross Margin % = (Base Cost - Costs - Logistics) / Total COGS × 100`
+    - This field is **transient** - NOT saved to database, cleared on city change or page refresh
+    - The recalculated Gross Margin % CAN be saved if user clicks "Save All Changes"
+  - **UI Changes**:
+    - New purple-highlighted column "Actual Landing (₹)" with input fields
+    - Updated formula section with explanation of the What-If feature
+    - Excel export includes Actual Landing Price column
+  - **Technical Details**:
+    - `actualLandingPrices` state object (keyed by row ID) holds transient values
+    - `updateActualLandingPrice()` function handles input changes and triggers recalculation
+    - State is cleared when `selectedCity` changes via useEffect
+  - **File Modified**: `/app/frontend/src/pages/COGSCalculator.js`
+  - Status: VERIFIED via screenshot testing
+
+### Feb 25, 2026 (Session 10)
 - **FEATURE**: Dark/Light Mode Theme Toggle
   - **Purpose**: User-requested theme switching with dark aqua blue color scheme
   - **Implementation**:
