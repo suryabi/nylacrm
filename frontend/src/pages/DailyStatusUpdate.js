@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
 import { Card } from '../components/ui/card';
 import { toast } from 'sonner';
-import { Calendar, Send, Loader2, Download, Phone, MapPin, Mail, MessageSquare, Activity, Copy, Check } from 'lucide-react';
+import { Calendar, Send, Loader2, Download, Phone, MapPin, Mail, MessageSquare, Activity, Copy, Check, Share2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
