@@ -185,6 +185,8 @@ export default function DailyStatusUpdate() {
   const [yesterdayUpdates, setYesterdayUpdates] = useState('');
   const [todayActions, setTodayActions] = useState('');
   const [helpNeeded, setHelpNeeded] = useState('');
+  const [hasFetchedActivities, setHasFetchedActivities] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     fetchPastStatuses();
