@@ -1352,6 +1352,96 @@ export default function LeadDetail() {
           </Card>
         </div>
       </div>
+
+      {/* Share Proposal via Email Dialog */}
+      <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Share Proposal via Email</DialogTitle>
+            <DialogDescription>
+              Send the approved proposal to the recipient via email.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="from-email">From</Label>
+              <Input
+                id="from-email"
+                value={user?.email || ''}
+                disabled
+                className="bg-muted"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="to-email">To <span className="text-destructive">*</span></Label>
+              <Input
+                id="to-email"
+                type="email"
+                placeholder="recipient@example.com"
+                value={shareEmailTo}
+                onChange={(e) => setShareEmailTo(e.target.value)}
+                data-testid="share-email-to"
+              />
+              <p className="text-xs text-muted-foreground">Separate multiple emails with commas</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cc-email">CC</Label>
+              <Input
+                id="cc-email"
+                type="email"
+                placeholder="cc@example.com"
+                value={shareEmailCc}
+                onChange={(e) => setShareEmailCc(e.target.value)}
+                data-testid="share-email-cc"
+              />
+              <p className="text-xs text-muted-foreground">Your reporting manager's email is pre-filled</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bcc-email">BCC</Label>
+              <Input
+                id="bcc-email"
+                type="email"
+                placeholder="bcc@example.com"
+                value={shareEmailBcc}
+                onChange={(e) => setShareEmailBcc(e.target.value)}
+                data-testid="share-email-bcc"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="subject">Subject</Label>
+              <Input
+                id="subject"
+                value={shareEmailSubject}
+                onChange={(e) => setShareEmailSubject(e.target.value)}
+                data-testid="share-email-subject"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="message">Message (Optional)</Label>
+              <Textarea
+                id="message"
+                placeholder="Add a personal message..."
+                value={shareEmailMessage}
+                onChange={(e) => setShareEmailMessage(e.target.value)}
+                rows={3}
+                data-testid="share-email-message"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowShareDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSendProposalEmail} disabled={sendingEmail}>
+              {sendingEmail ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending...</>
+              ) : (
+                <><Mail className="mr-2 h-4 w-4" /> Send Email</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
