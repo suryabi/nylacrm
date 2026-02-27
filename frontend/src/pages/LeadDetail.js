@@ -111,6 +111,15 @@ export default function LeadDetail() {
   const [uploadingProposal, setUploadingProposal] = useState(false);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewingProposal, setReviewingProposal] = useState(false);
+  
+  // Email share dialog state
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [shareEmailTo, setShareEmailTo] = useState('');
+  const [shareEmailCc, setShareEmailCc] = useState('');
+  const [shareEmailBcc, setShareEmailBcc] = useState('');
+  const [shareEmailSubject, setShareEmailSubject] = useState('Nyla Air Water - Proposal for review');
+  const [shareEmailMessage, setShareEmailMessage] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   useEffect(() => {
     fetchData();
