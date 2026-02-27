@@ -331,7 +331,8 @@ export default function DailyStatusUpdate() {
   };
 
   // Check if Web Share API is supported (mainly for mobile)
-  const canShare = typeof navigator !== 'undefined' && navigator.share;
+  // We show the button on all devices - it will fallback to copy if share isn't available
+  const canShare = true; // Always show share button
 
   // Share activities via native share (WhatsApp, etc.)
   const handleShareActivities = async () => {
@@ -367,23 +368,36 @@ export default function DailyStatusUpdate() {
     const dateLabel = format(new Date(selectedDate), 'EEEE, MMM d, yyyy');
     const textToShare = `*Daily Status Update - ${dateLabel}*\n\n${cleanedLines.join('\n').trim()}`;
     
-    try {
-      await navigator.share({
-        title: `Daily Status - ${dateLabel}`,
-        text: textToShare
-      });
-      toast.success('Shared successfully!');
-    } catch (error) {
-      // User cancelled or share failed
-      if (error.name !== 'AbortError') {
-        // Fallback: copy to clipboard if share fails
-        try {
-          await navigator.clipboard.writeText(textToShare);
-          toast.info('Share not available. Text copied to clipboard instead.');
-        } catch (copyError) {
-          toast.error('Unable to share. Please copy manually.');
+    // Check if native share is available (mobile)
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: `Daily Status - ${dateLabel}`,
+          text: textToShare
+        });
+        toast.success('Shared successfully!');
+        return;
+      } catch (error) {
+        // User cancelled or share failed - fall through to clipboard
+        if (error.name === 'AbortError') {
+          return; // User cancelled, don't show any message
         }
       }
+    }
+    
+    // Fallback: copy to clipboard (for desktop or if share fails)
+    try {
+      await navigator.clipboard.writeText(textToShare);
+      toast.success('Text copied! Paste it in WhatsApp or any app to share.');
+    } catch (copyError) {
+      // Final fallback
+      const textArea = document.createElement('textarea');
+      textArea.value = textToShare;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      toast.success('Text copied! Paste it in WhatsApp or any app to share.');
     }
   };
 
