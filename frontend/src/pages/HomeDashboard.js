@@ -4,6 +4,16 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Loader2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 
 // Import all widgets
 import {
@@ -16,10 +26,24 @@ import {
   PipelineSummaryWidget,
   RecentActivityWidget,
   NewTaskDialog,
-  NewMeetingDialog
+  NewMeetingDialog,
+  MeetingDetailDialog
 } from '../components/widgets';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
+
+const getDefaultMeetingState = () => ({
+  title: '',
+  description: '',
+  meeting_type: 'client',
+  meeting_date: format(new Date(), 'yyyy-MM-dd'),
+  start_time: '10:00',
+  duration_minutes: 30,
+  location: '',
+  internal_attendees: [],
+  external_attendees: [],
+  create_zoom_meeting: true
+});
 
 export default function HomeDashboard() {
   const { user, activeTime } = useAuth();
@@ -27,10 +51,14 @@ export default function HomeDashboard() {
   const [loading, setLoading] = useState(true);
   const [showNewTaskDialog, setShowNewTaskDialog] = useState(false);
   const [showNewMeetingDialog, setShowNewMeetingDialog] = useState(false);
+  const [showMeetingDetailDialog, setShowMeetingDetailDialog] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [savingTask, setSavingTask] = useState(false);
   const [savingMeeting, setSavingMeeting] = useState(false);
   const [users, setUsers] = useState([]);
   const [taskFilter, setTaskFilter] = useState('assigned');
+  const [selectedMeeting, setSelectedMeeting] = useState(null);
+  const [editMode, setEditMode] = useState(false);
   
   // New task form
   const [newTask, setNewTask] = useState({
@@ -44,18 +72,7 @@ export default function HomeDashboard() {
   });
   
   // New meeting form
-  const [newMeeting, setNewMeeting] = useState({
-    title: '',
-    description: '',
-    meeting_type: 'client',
-    meeting_date: format(new Date(), 'yyyy-MM-dd'),
-    start_time: '10:00',
-    duration_minutes: 30,
-    location: '',
-    attendees: '',
-    attendee_names: '',
-    create_zoom_meeting: true  // Default to creating Zoom meeting
-  });
+  const [newMeeting, setNewMeeting] = useState(getDefaultMeetingState());
   
   // Weather and time state
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -191,7 +208,7 @@ export default function HomeDashboard() {
     }
   };
 
-  const handleCreateMeeting = async () => {
+  const handleCreateOrUpdateMeeting = async () => {
     if (!newMeeting.title.trim()) {
       toast.error('Please enter a meeting title');
       return;
@@ -199,38 +216,112 @@ export default function HomeDashboard() {
     
     setSavingMeeting(true);
     try {
-      const meetingData = {
-        ...newMeeting,
-        attendees: newMeeting.attendees.split(',').map(e => e.trim()).filter(e => e),
-        attendee_names: newMeeting.attendee_names.split(',').map(n => n.trim()).filter(n => n)
-      };
-      const response = await axios.post(`${API_URL}/meetings`, meetingData, { withCredentials: true });
+      // Combine internal and external attendees
+      const internalEmails = newMeeting.internal_attendees.map(id => {
+        const u = users.find(user => user.id === id);
+        return u?.email || '';
+      }).filter(e => e);
+      const internalNames = newMeeting.internal_attendees.map(id => {
+        const u = users.find(user => user.id === id);
+        return u?.name || '';
+      }).filter(n => n);
       
-      if (newMeeting.create_zoom_meeting && response.data.meeting_link) {
-        toast.success('Meeting scheduled with Zoom link!');
+      const meetingData = {
+        title: newMeeting.title,
+        description: newMeeting.description,
+        meeting_type: newMeeting.meeting_type,
+        meeting_date: newMeeting.meeting_date,
+        start_time: newMeeting.start_time,
+        duration_minutes: newMeeting.duration_minutes,
+        location: newMeeting.location,
+        attendees: [...internalEmails, ...newMeeting.external_attendees],
+        attendee_names: [...internalNames, ...newMeeting.external_attendees.map(e => e.split('@')[0])],
+        create_zoom_meeting: newMeeting.create_zoom_meeting && !editMode // Only create new Zoom for new meetings
+      };
+      
+      let response;
+      if (editMode && selectedMeeting?.id) {
+        response = await axios.put(`${API_URL}/meetings/${selectedMeeting.id}`, meetingData, { withCredentials: true });
+        toast.success('Meeting rescheduled successfully');
       } else {
-        toast.success('Meeting scheduled successfully');
+        response = await axios.post(`${API_URL}/meetings`, meetingData, { withCredentials: true });
+        if (newMeeting.create_zoom_meeting && response.data.meeting_link) {
+          toast.success('Meeting scheduled with Zoom link!');
+        } else {
+          toast.success('Meeting scheduled successfully');
+        }
       }
       
       setShowNewMeetingDialog(false);
-      setNewMeeting({
-        title: '',
-        description: '',
-        meeting_type: 'client',
-        meeting_date: format(new Date(), 'yyyy-MM-dd'),
-        start_time: '10:00',
-        duration_minutes: 30,
-        location: '',
-        attendees: '',
-        attendee_names: '',
-        create_zoom_meeting: true
-      });
+      setNewMeeting(getDefaultMeetingState());
+      setEditMode(false);
+      setSelectedMeeting(null);
       fetchDashboardData();
     } catch (error) {
       const errorMsg = error.response?.data?.detail || 'Failed to schedule meeting';
       toast.error(errorMsg);
     } finally {
       setSavingMeeting(false);
+    }
+  };
+
+  const handleViewMeeting = (meeting) => {
+    setSelectedMeeting(meeting);
+    setShowMeetingDetailDialog(true);
+  };
+
+  const handleEditMeeting = (meeting) => {
+    // Parse attendees back to internal/external
+    const internalIds = [];
+    const externalEmails = [];
+    
+    meeting.attendees?.forEach((email, idx) => {
+      const user = users.find(u => u.email === email);
+      if (user) {
+        internalIds.push(user.id);
+      } else {
+        externalEmails.push(email);
+      }
+    });
+    
+    setNewMeeting({
+      title: meeting.title,
+      description: meeting.description || '',
+      meeting_type: meeting.meeting_type,
+      meeting_date: meeting.meeting_date,
+      start_time: meeting.start_time,
+      duration_minutes: meeting.duration_minutes,
+      location: meeting.location || '',
+      internal_attendees: internalIds,
+      external_attendees: externalEmails,
+      create_zoom_meeting: !!meeting.meeting_link
+    });
+    setSelectedMeeting(meeting);
+    setEditMode(true);
+    setShowMeetingDetailDialog(false);
+    setShowNewMeetingDialog(true);
+  };
+
+  const handleCancelMeeting = (meeting) => {
+    setSelectedMeeting(meeting);
+    setShowCancelDialog(true);
+  };
+
+  const confirmCancelMeeting = async () => {
+    if (!selectedMeeting) return;
+    
+    try {
+      await axios.put(`${API_URL}/meetings/${selectedMeeting.id}`, 
+        { status: 'cancelled' }, 
+        { withCredentials: true }
+      );
+      toast.success('Meeting cancelled');
+      setShowCancelDialog(false);
+      setShowMeetingDetailDialog(false);
+      setSelectedMeeting(null);
+      fetchDashboardData();
+    } catch (error) {
+      toast.error('Failed to cancel meeting');
     }
   };
 
@@ -312,7 +403,14 @@ export default function HomeDashboard() {
         <div className="space-y-6">
           <UpcomingMeetingsWidget
             upcomingMeetings={upcoming_meetings}
-            onNewMeeting={() => setShowNewMeetingDialog(true)}
+            onNewMeeting={() => {
+              setNewMeeting(getDefaultMeetingState());
+              setEditMode(false);
+              setShowNewMeetingDialog(true);
+            }}
+            onViewMeeting={handleViewMeeting}
+            onEditMeeting={handleEditMeeting}
+            onCancelMeeting={handleCancelMeeting}
           />
           <MonthlyPerformanceWidget monthlyPerformance={monthly_performance} />
           <PipelineSummaryWidget pipeline={pipeline} />
@@ -334,12 +432,51 @@ export default function HomeDashboard() {
 
       <NewMeetingDialog
         open={showNewMeetingDialog}
-        onOpenChange={setShowNewMeetingDialog}
+        onOpenChange={(open) => {
+          setShowNewMeetingDialog(open);
+          if (!open) {
+            setEditMode(false);
+            setNewMeeting(getDefaultMeetingState());
+          }
+        }}
         newMeeting={newMeeting}
         setNewMeeting={setNewMeeting}
-        onSave={handleCreateMeeting}
+        onSave={handleCreateOrUpdateMeeting}
         saving={savingMeeting}
+        users={users}
+        editMode={editMode}
       />
+
+      <MeetingDetailDialog
+        open={showMeetingDetailDialog}
+        onOpenChange={setShowMeetingDetailDialog}
+        meeting={selectedMeeting}
+        onEdit={handleEditMeeting}
+        onCancel={handleCancelMeeting}
+      />
+
+      {/* Cancel Confirmation Dialog */}
+      <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Meeting?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel "{selectedMeeting?.title}"? 
+              {selectedMeeting?.attendees?.length > 0 && (
+                <span className="block mt-2">
+                  All attendees will be notified via email.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Meeting</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmCancelMeeting} className="bg-red-600 hover:bg-red-700">
+              Cancel Meeting
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
