@@ -302,8 +302,8 @@ export default function TeamManagement() {
               <TableHead>Name & Designation</TableHead>
               <TableHead>Contact</TableHead>
               <TableHead>Territory</TableHead>
-              <TableHead>Last Active</TableHead>
-              <TableHead>Session Time</TableHead>
+              <TableHead>Last Login</TableHead>
+              <TableHead>Time Spent</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -311,9 +311,19 @@ export default function TeamManagement() {
           <TableBody>
             {sortedUsers.map((user) => {
               const activity = teamActivity[user.id];
-              const lastActive = activity?.last_active;
-              const sessionTime = activity?.session?.total_time_seconds || 0;
+              const lastActive = activity?.last_active || user.last_login_at;
+              const sessionTime = activity?.session?.total_time_seconds || user.last_session_duration || 0;
+              const totalTimeSpent = user.total_time_spent || 0;
               const isOnlineNow = lastActive && (new Date() - new Date(lastActive)) < 120000; // Within 2 mins
+              
+              // Format time spent
+              const formatTotalTime = (seconds) => {
+                if (!seconds || seconds === 0) return '-';
+                const hours = Math.floor(seconds / 3600);
+                const mins = Math.floor((seconds % 3600) / 60);
+                if (hours > 0) return `${hours}h ${mins}m total`;
+                return `${mins}m total`;
+              };
               
               return (
               <TableRow key={user.id} data-testid={`team-member-${user.id}`}>
@@ -348,28 +358,42 @@ export default function TeamManagement() {
                   )}
                 </TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className={`text-sm ${isOnlineNow ? 'text-green-600 font-medium' : ''}`}>
-                      {isOnlineNow ? 'Online' : formatRelativeTime(lastActive)}
-                    </span>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className={`text-sm ${isOnlineNow ? 'text-green-600 font-medium' : ''}`}>
+                        {isOnlineNow ? 'Online' : formatRelativeTime(user.last_login_at)}
+                      </span>
+                    </div>
+                    {user.last_login_ip && (
+                      <p className="text-xs text-muted-foreground">
+                        From: {user.last_login_ip}
+                      </p>
+                    )}
                   </div>
                 </TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-1.5">
-                    <Activity className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-sm">{formatDuration(sessionTime)}</span>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <Activity className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-sm">
+                        {sessionTime > 0 ? formatDuration(sessionTime) : '-'}
+                      </span>
+                    </div>
+                    {totalTimeSpent > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {formatTotalTime(totalTimeSpent)}
+                      </p>
+                    )}
                   </div>
-                  {activity?.session?.pages_visited?.length > 0 && (
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {activity.session.pages_visited.length} pages
-                    </p>
-                  )}
                 </TableCell>
                 <TableCell>
                   <Badge className={user.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
                     {user.is_active ? 'Active' : 'Inactive'}
                   </Badge>
+                  {user.last_logout_reason === 'inactivity' && (
+                    <p className="text-xs text-orange-500 mt-0.5">Auto logged out</p>
+                  )}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
