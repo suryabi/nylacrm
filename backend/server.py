@@ -547,6 +547,7 @@ class TaskUpdate(BaseModel):
     assigned_to: Optional[str] = None
     lead_id: Optional[str] = None
     account_id: Optional[str] = None
+    comment: Optional[str] = None  # For adding comments
 
 # ============= MEETING MODELS =============
 
