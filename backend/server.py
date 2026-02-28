@@ -176,6 +176,183 @@ def stamp_pdf_with_signature(pdf_data: bytes, approver_name: str, approval_date:
     return output_buffer.read()
 
 
+# ============= APPROVAL TASK FRAMEWORK =============
+
+class ApprovalType:
+    """Enum-like class for approval types"""
+    LEAVE_REQUEST = 'leave_request'
+    PROPOSAL = 'proposal'
+    CONTRACT = 'contract'
+    EXPENSE = 'expense'
+    PURCHASE_ORDER = 'purchase_order'
+
+APPROVAL_CONFIG = {
+    ApprovalType.LEAVE_REQUEST: {
+        'title_template': 'Leave Request: {requester_name} - {details}',
+        'task_type': 'general',
+        'priority': 'high',
+        'due_days': 1,  # Days from now for due date
+    },
+    ApprovalType.PROPOSAL: {
+        'title_template': 'Proposal Approval: {details}',
+        'task_type': 'general',
+        'priority': 'high',
+        'due_days': 2,
+    },
+    ApprovalType.CONTRACT: {
+        'title_template': 'Contract Approval: {details}',
+        'task_type': 'general',
+        'priority': 'high',
+        'due_days': 2,
+    },
+    ApprovalType.EXPENSE: {
+        'title_template': 'Expense Approval: {requester_name} - {details}',
+        'task_type': 'general',
+        'priority': 'medium',
+        'due_days': 3,
+    },
+    ApprovalType.PURCHASE_ORDER: {
+        'title_template': 'PO Approval: {details}',
+        'task_type': 'general',
+        'priority': 'high',
+        'due_days': 2,
+    },
+}
+
+async def create_approval_task(
+    approval_type: str,
+    requester_id: str,
+    requester_name: str,
+    approver_id: str,
+    details: str,
+    description: str = None,
+    reference_id: str = None,
+    reference_type: str = None,
+    lead_id: str = None,
+    account_id: str = None,
+    custom_due_date: str = None,
+    custom_priority: str = None
+) -> dict:
+    """
+    Create an approval task automatically when an approval is requested.
+    
+    Args:
+        approval_type: Type of approval (from ApprovalType class)
+        requester_id: ID of the user requesting approval
+        requester_name: Name of the user requesting approval
+        approver_id: ID of the user who needs to approve
+        details: Short details for the task title (e.g., leave dates, proposal name)
+        description: Optional longer description
+        reference_id: Optional ID of the related document (leave request ID, proposal ID, etc.)
+        reference_type: Optional type of the related document
+        lead_id: Optional link to a lead
+        account_id: Optional link to an account
+        custom_due_date: Optional custom due date (YYYY-MM-DD)
+        custom_priority: Optional custom priority override
+    
+    Returns:
+        Created task document
+    """
+    config = APPROVAL_CONFIG.get(approval_type, {
+        'title_template': 'Approval Required: {details}',
+        'task_type': 'general',
+        'priority': 'medium',
+        'due_days': 2,
+    })
+    
+    # Generate title from template
+    title = config['title_template'].format(
+        requester_name=requester_name,
+        details=details
+    )
+    
+    # Calculate due date
+    if custom_due_date:
+        due_date = custom_due_date
+    else:
+        due_date = (datetime.now(timezone.utc) + timedelta(days=config['due_days'])).strftime('%Y-%m-%d')
+    
+    # Get approver name
+    approver = await db.users.find_one({'id': approver_id}, {'_id': 0, 'name': 1})
+    approver_name = approver.get('name') if approver else None
+    
+    # Build description with reference info
+    full_description = description or ''
+    if reference_id and reference_type:
+        if full_description:
+            full_description += '\n\n'
+        full_description += f'Reference: {reference_type} #{reference_id}'
+    
+    # Create the task
+    task_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    
+    task_doc = {
+        'id': task_id,
+        'title': title,
+        'description': full_description if full_description else None,
+        'task_type': config['task_type'],
+        'priority': custom_priority or config['priority'],
+        'status': 'pending',
+        'due_date': due_date,
+        'due_time': None,
+        'assigned_to': approver_id,
+        'assigned_to_name': approver_name,
+        'assigned_by': requester_id,
+        'assigned_by_name': requester_name,
+        'lead_id': lead_id,
+        'account_id': account_id,
+        'completed_at': None,
+        'created_at': now.isoformat(),
+        'updated_at': now.isoformat(),
+        # Approval-specific metadata
+        'is_approval_task': True,
+        'approval_type': approval_type,
+        'approval_reference_id': reference_id,
+        'approval_reference_type': reference_type,
+        'approval_requester_id': requester_id,
+    }
+    
+    await db.tasks.insert_one(task_doc)
+    
+    # Return without _id
+    return {k: v for k, v in task_doc.items() if k != '_id'}
+
+
+async def complete_approval_task(
+    approval_type: str,
+    reference_id: str,
+    status: str = 'completed'
+) -> bool:
+    """
+    Mark an approval task as completed when the approval is processed.
+    
+    Args:
+        approval_type: Type of approval
+        reference_id: ID of the related document
+        status: 'completed' or 'cancelled'
+    
+    Returns:
+        True if task was found and updated, False otherwise
+    """
+    result = await db.tasks.update_one(
+        {
+            'is_approval_task': True,
+            'approval_type': approval_type,
+            'approval_reference_id': reference_id,
+            'status': {'$in': ['pending', 'in_progress']}
+        },
+        {
+            '$set': {
+                'status': status,
+                'completed_at': datetime.now(timezone.utc).isoformat() if status == 'completed' else None,
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    return result.modified_count > 0
+
+
 # ============= MODELS =============
 
 class UserRole(BaseModel):
