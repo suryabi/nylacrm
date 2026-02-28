@@ -72,6 +72,7 @@ export default function AccountDetail() {
   const [contactName, setContactName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [gstNumber, setGstNumber] = useState('');
+  const [nextFollowUp, setNextFollowUp] = useState('');
   const [skuPricing, setSkuPricing] = useState([]);
   
   // Delivery Address state
