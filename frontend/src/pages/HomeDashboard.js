@@ -61,6 +61,7 @@ export default function HomeDashboard() {
   const [savingTask, setSavingTask] = useState(false);
   const [savingMeeting, setSavingMeeting] = useState(false);
   const [users, setUsers] = useState([]);
+  const [taskFilter, setTaskFilter] = useState('assigned'); // 'assigned' or 'created'
   
   // New task form
   const [newTask, setNewTask] = useState({
