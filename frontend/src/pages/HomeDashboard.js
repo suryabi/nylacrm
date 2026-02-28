@@ -800,20 +800,25 @@ export default function HomeDashboard() {
             
             {upcoming_leads?.length > 0 ? (
               <div className="space-y-2">
-                {upcoming_leads.map(lead => (
+                {upcoming_leads.map(item => (
                   <div
-                    key={lead.id}
-                    onClick={() => navigate(`/leads/${lead.id}`)}
+                    key={item.id}
+                    onClick={() => navigate(item.type === 'account' ? `/accounts/${item.id}` : `/leads/${item.id}`)}
                     className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
                   >
-                    <Building2 className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                    <Building2 className={`h-5 w-5 flex-shrink-0 ${item.type === 'account' ? 'text-green-600' : 'text-muted-foreground'}`} />
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{lead.company}</p>
-                      <p className="text-xs text-muted-foreground">{lead.contact_person}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium truncate">{item.type === 'account' ? item.account_name : item.company}</p>
+                        <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 ${item.type === 'account' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {item.type === 'account' ? 'Account' : 'Lead'}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{item.type === 'account' ? item.contact_name : item.contact_person}</p>
                     </div>
                     <div className="text-right">
                       <Badge variant="outline" className="text-xs">
-                        {formatMeetingDate(lead.next_follow_up)}
+                        {formatMeetingDate(item.next_follow_up)}
                       </Badge>
                     </div>
                   </div>
