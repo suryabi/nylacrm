@@ -85,7 +85,7 @@ const STATUS_COLORS = {
 };
 
 export default function HomeDashboard() {
-  const { user } = useAuth();
+  const { user, activeTime } = useAuth();
   const navigate = useNavigate();
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
