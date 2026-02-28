@@ -7240,22 +7240,10 @@ async def share_proposal_via_email(
     # Convert the plain text message to HTML (preserve line breaks)
     message_html = email_data.message.replace('\n', '<br>') if email_data.message else ''
     
-    # Create HTML email body using user's message
+    # Create simple HTML email body with Helvetica font - no template/branding
     html_content = f"""
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background-color: #0d5c63; padding: 20px; text-align: center;">
-            <h1 style="color: white; margin: 0;">Nyla Air Water</h1>
-        </div>
-        <div style="padding: 30px; background-color: #f8f9fa;">
-            <p style="font-size: 14px; color: #333; line-height: 1.8; white-space: pre-wrap;">
-                {message_html}
-            </p>
-        </div>
-        <div style="background-color: #e9ecef; padding: 15px; text-align: center;">
-            <p style="font-size: 12px; color: #666; margin: 0;">
-                Nyla Air Water | Premium Atmospheric Water
-            </p>
-        </div>
+    <div style="font-family: Helvetica, Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.6;">
+        {message_html}
     </div>
     """
     
