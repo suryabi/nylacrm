@@ -5,7 +5,7 @@ import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Calendar } from '../components/ui/calendar';
 import { toast } from 'sonner';
-import { Calendar as CalendarIcon, CheckCircle2, Clock, Plus } from 'lucide-react';
+import { Calendar as CalendarIcon, CheckCircle2, Clock, Plus, Loader2 } from 'lucide-react';
 import { format, isToday, isFuture, isPast } from 'date-fns';
 import {
   Dialog,
