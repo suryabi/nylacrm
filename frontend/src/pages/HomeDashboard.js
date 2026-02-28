@@ -333,18 +333,72 @@ export default function HomeDashboard() {
                 <h3 className="text-sm font-medium text-muted-foreground mb-2">Tasks</h3>
                 <div className="space-y-2">
                   {action_items.tasks.map(task => (
-                    <div key={task.id} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
-                      <button
-                        onClick={() => handleCompleteTask(task.id)}
-                        className="text-muted-foreground hover:text-primary"
-                      >
-                        <Square className="h-5 w-5" />
-                      </button>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{task.title}</p>
-                        <p className="text-xs text-muted-foreground">Due: {format(parseISO(task.due_date), 'MMM d')}</p>
+                    <div key={task.id} className="bg-muted/50 rounded-lg hover:bg-muted transition-colors">
+                      <div className="flex items-center gap-3 p-3">
+                        <button
+                          onClick={() => handleCompleteTask(task.id)}
+                          className="text-muted-foreground hover:text-green-600"
+                          title="Mark complete"
+                        >
+                          <Square className="h-5 w-5" />
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{task.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Due: {format(parseISO(task.due_date), 'MMM d')}
+                            {task.assigned_to !== user?.id && task.assigned_to_name && (
+                              <span className="ml-2">• Assigned to: {task.assigned_to_name}</span>
+                            )}
+                          </p>
+                        </div>
+                        <Badge className={PRIORITY_COLORS[task.priority]}>{task.priority}</Badge>
+                        <button
+                          onClick={() => toggleTaskExpand(task.id)}
+                          className="text-muted-foreground hover:text-primary p-1"
+                          title={expandedTaskId === task.id ? "Collapse" : "Expand"}
+                        >
+                          {expandedTaskId === task.id ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </button>
                       </div>
-                      <Badge className={PRIORITY_COLORS[task.priority]}>{task.priority}</Badge>
+                      
+                      {/* Expanded section */}
+                      {expandedTaskId === task.id && (
+                        <div className="px-3 pb-3 pt-1 border-t border-border/50 space-y-3">
+                          {task.description && (
+                            <p className="text-sm text-muted-foreground">{task.description}</p>
+                          )}
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="Add a comment..."
+                              value={taskComment}
+                              onChange={(e) => setTaskComment(e.target.value)}
+                              className="flex-1 h-8 text-sm"
+                            />
+                            <Select value={taskReassignTo} onValueChange={setTaskReassignTo}>
+                              <SelectTrigger className="w-[140px] h-8 text-sm">
+                                <SelectValue placeholder="Reassign to" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {users.filter(u => u.id !== task.assigned_to).map(u => (
+                                  <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              size="sm"
+                              className="h-8"
+                              onClick={() => handleUpdateTask(task.id)}
+                              disabled={updatingTask || (!taskComment.trim() && !taskReassignTo)}
+                            >
+                              {updatingTask ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
