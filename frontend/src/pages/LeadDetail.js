@@ -1691,6 +1691,39 @@ ${userEmail}`;
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* PDF Viewer Dialog */}
+      <Dialog open={showPdfViewer} onOpenChange={setShowPdfViewer}>
+        <DialogContent className="max-w-5xl max-h-[90vh] p-0 overflow-hidden">
+          <DialogHeader className="p-4 pb-2 border-b">
+            <DialogTitle className="flex items-center gap-2 pr-8">
+              <div className="h-8 w-8 rounded bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                <FileText className="h-4 w-4 text-red-600 dark:text-red-400" />
+              </div>
+              <span className="truncate">{pdfViewerData?.file_name || 'Proposal'}</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="relative flex items-center justify-center bg-black/5 dark:bg-black/20 min-h-[400px] max-h-[70vh] overflow-auto">
+            {pdfViewerData && pdfViewerData.file_data && (
+              <embed
+                src={`data:application/pdf;base64,${pdfViewerData.file_data}#toolbar=1&navpanes=1&scrollbar=1`}
+                type="application/pdf"
+                className="w-full h-[65vh]"
+              />
+            )}
+          </div>
+          <DialogFooter className="p-4 pt-2 border-t">
+            <Button variant="outline" onClick={() => setShowPdfViewer(false)}>
+              <X className="h-4 w-4 mr-2" />
+              Close
+            </Button>
+            <Button onClick={handleProposalDownload}>
+              <Download className="h-4 w-4 mr-2" />
+              Download
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
