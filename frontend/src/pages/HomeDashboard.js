@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -216,7 +216,6 @@ export default function HomeDashboard() {
     
     setSavingMeeting(true);
     try {
-      // Combine internal and external attendees
       const internalEmails = newMeeting.internal_attendees.map(id => {
         const u = users.find(user => user.id === id);
         return u?.email || '';
@@ -236,7 +235,7 @@ export default function HomeDashboard() {
         location: newMeeting.location,
         attendees: [...internalEmails, ...newMeeting.external_attendees],
         attendee_names: [...internalNames, ...newMeeting.external_attendees.map(e => e.split('@')[0])],
-        create_zoom_meeting: newMeeting.create_zoom_meeting && !editMode // Only create new Zoom for new meetings
+        create_zoom_meeting: newMeeting.create_zoom_meeting && !editMode
       };
       
       let response;
@@ -271,7 +270,6 @@ export default function HomeDashboard() {
   };
 
   const handleEditMeeting = (meeting) => {
-    // Parse attendees back to internal/external
     const internalIds = [];
     const externalEmails = [];
     
@@ -348,8 +346,14 @@ export default function HomeDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative">
+            <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
+            <Loader2 className="h-10 w-10 animate-spin text-primary relative z-10" />
+          </div>
+          <p className="text-muted-foreground text-sm animate-pulse">Loading your dashboard...</p>
+        </div>
       </div>
     );
   }
@@ -357,64 +361,90 @@ export default function HomeDashboard() {
   const { action_items, upcoming_leads, upcoming_meetings, today_summary, pipeline, monthly_performance, recent_activities } = dashboardData || {};
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6" data-testid="home-dashboard">
-      {/* Header with Weather and Time */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold">
-            Welcome back, {user?.name?.split(' ')[0]}!
-          </h1>
-          <p className="text-muted-foreground">{format(new Date(), 'EEEE, MMMM d, yyyy')}</p>
-        </div>
-        
-        <WeatherTimeWidget
-          weather={weather}
-          weatherLoading={weatherLoading}
-          locationName={locationName}
-          currentTime={currentTime}
-          activeTime={activeTime}
-        />
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="home-dashboard">
+      {/* Subtle background pattern */}
+      <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-30 dark:opacity-10 pointer-events-none" />
+      
+      <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto">
+        {/* Header Section */}
+        <header className="mb-8">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+            {/* Welcome Section */}
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <h1 className="text-3xl lg:text-4xl font-bold tracking-tight bg-gradient-to-r from-slate-900 via-slate-700 to-slate-900 dark:from-white dark:via-slate-200 dark:to-white bg-clip-text text-transparent">
+                  Good {getGreeting()}, {user?.name?.split(' ')[0]}
+                </h1>
+                <Sparkles className="h-6 w-6 text-amber-500 animate-pulse" />
+              </div>
+              <p className="text-muted-foreground text-lg">
+                {format(new Date(), 'EEEE, MMMM d, yyyy')}
+              </p>
+            </div>
+            
+            {/* Weather & Time Widget */}
+            <WeatherTimeWidget
+              weather={weather}
+              weatherLoading={weatherLoading}
+              locationName={locationName}
+              currentTime={currentTime}
+              activeTime={activeTime}
+            />
+          </div>
+        </header>
 
-      {/* Today's Summary Cards */}
-      <TodaySummaryWidget todaySummary={today_summary} />
+        {/* Stats Summary - Bento Grid Row 1 */}
+        <section className="mb-8">
+          <TodaySummaryWidget todaySummary={today_summary} />
+        </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column */}
-        <div className="lg:col-span-2 space-y-6">
-          <ActionItemsWidget
-            actionItems={action_items}
-            user={user}
-            users={users}
-            taskFilter={taskFilter}
-            setTaskFilter={setTaskFilter}
-            onCompleteTask={handleCompleteTask}
-            onUpdateTask={handleUpdateTask}
-            onNewTask={() => {
-              setNewTask(prev => ({ ...prev, assigned_to: user?.id || '' }));
-              setShowNewTaskDialog(true);
-            }}
-          />
-          
-          <UpcomingFollowupsWidget upcomingLeads={upcoming_leads} />
-        </div>
+        {/* Main Content - Bento Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left Column - Primary Content (8 cols) */}
+          <div className="lg:col-span-8 space-y-6">
+            {/* Action Items - Large Card */}
+            <ActionItemsWidget
+              actionItems={action_items}
+              user={user}
+              users={users}
+              taskFilter={taskFilter}
+              setTaskFilter={setTaskFilter}
+              onCompleteTask={handleCompleteTask}
+              onUpdateTask={handleUpdateTask}
+              onNewTask={() => {
+                setNewTask(prev => ({ ...prev, assigned_to: user?.id || '' }));
+                setShowNewTaskDialog(true);
+              }}
+            />
+            
+            {/* Bottom Row - Two cards side by side */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <UpcomingFollowupsWidget upcomingLeads={upcoming_leads} />
+              <RecentActivityWidget recentActivities={recent_activities} />
+            </div>
+          </div>
 
-        {/* Right Column */}
-        <div className="space-y-6">
-          <UpcomingMeetingsWidget
-            upcomingMeetings={upcoming_meetings}
-            onNewMeeting={() => {
-              setNewMeeting(getDefaultMeetingState());
-              setEditMode(false);
-              setShowNewMeetingDialog(true);
-            }}
-            onViewMeeting={handleViewMeeting}
-            onEditMeeting={handleEditMeeting}
-            onCancelMeeting={handleCancelMeeting}
-          />
-          <MonthlyPerformanceWidget monthlyPerformance={monthly_performance} />
-          <PipelineSummaryWidget pipeline={pipeline} />
-          <RecentActivityWidget recentActivities={recent_activities} />
+          {/* Right Column - Secondary Content (4 cols) */}
+          <div className="lg:col-span-4 space-y-6">
+            {/* Meetings - Featured Card */}
+            <UpcomingMeetingsWidget
+              upcomingMeetings={upcoming_meetings}
+              onNewMeeting={() => {
+                setNewMeeting(getDefaultMeetingState());
+                setEditMode(false);
+                setShowNewMeetingDialog(true);
+              }}
+              onViewMeeting={handleViewMeeting}
+              onEditMeeting={handleEditMeeting}
+              onCancelMeeting={handleCancelMeeting}
+            />
+            
+            {/* Performance - Compact Card */}
+            <MonthlyPerformanceWidget monthlyPerformance={monthly_performance} />
+            
+            {/* Pipeline - Compact Card */}
+            <PipelineSummaryWidget pipeline={pipeline} />
+          </div>
         </div>
       </div>
 
@@ -479,4 +509,12 @@ export default function HomeDashboard() {
       </AlertDialog>
     </div>
   );
+}
+
+// Helper function for greeting
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'morning';
+  if (hour < 17) return 'afternoon';
+  return 'evening';
 }
