@@ -408,6 +408,14 @@ export default function HomeDashboard() {
     return format(date, 'EEE, MMM d');
   };
 
+  // Format session time (seconds to HH:MM:SS)
+  const formatSessionTime = (seconds) => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
