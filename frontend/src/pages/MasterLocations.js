@@ -520,6 +520,7 @@ export default function MasterLocations() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }
