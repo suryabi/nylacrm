@@ -489,6 +489,7 @@ ${googleMapsLink}`;
         contact_name: contactName || null,
         contact_number: contactNumber || null,
         gst_number: gstNumber || null,
+        next_follow_up: nextFollowUp || null,
         sku_pricing: skuPricing,
       });
       toast.success('Account updated successfully');
