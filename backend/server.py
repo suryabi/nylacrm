@@ -1748,13 +1748,45 @@ async def get_current_user_info(request: Request):
     user = await get_current_user_from_cookie_or_header(request)
     return user
 
+class LogoutData(BaseModel):
+    time_spent: Optional[int] = 0
+    due_to_inactivity: Optional[bool] = False
+
 @api_router.post("/auth/logout")
-async def logout_user(request: Request, response: Response):
+async def logout_user(request: Request, response: Response, data: LogoutData = None):
     """Logout user by deleting session"""
     
     session_token = request.cookies.get('session_token')
     
     if session_token:
+        # Get session info before deleting
+        session = await db.user_sessions.find_one({'session_token': session_token}, {'_id': 0})
+        
+        if session:
+            user_id = session.get('user_id')
+            now = datetime.now(timezone.utc)
+            
+            # Calculate time spent (from request body or calculate from session)
+            time_spent = data.time_spent if data else 0
+            
+            # Update user's last login info
+            update_data = {
+                'last_logout_at': now.isoformat(),
+                'last_session_duration': time_spent,
+            }
+            
+            # If logout due to inactivity, mark it
+            if data and data.due_to_inactivity:
+                update_data['last_logout_reason'] = 'inactivity'
+            else:
+                update_data['last_logout_reason'] = 'manual'
+            
+            # Update user record
+            await db.users.update_one(
+                {'id': user_id},
+                {'$set': update_data, '$inc': {'total_time_spent': time_spent}}
+            )
+        
         await db.user_sessions.delete_one({'session_token': session_token})
         response.delete_cookie('session_token', path='/')
     
