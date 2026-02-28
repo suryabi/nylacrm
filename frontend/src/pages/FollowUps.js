@@ -68,20 +68,35 @@ export default function FollowUps() {
   const completedFollowUps = followUps.filter(f => f.is_completed);
 
   if (loading) {
-    return <div className="flex justify-center py-12">Loading...</div>;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-cyan-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex items-center justify-center">
+        <div className="flex flex-col items-center">
+          <div className="relative"><div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" /><Loader2 className="h-10 w-10 animate-spin text-primary relative z-10" /></div>
+          <p className="text-muted-foreground text-sm mt-4 animate-pulse">Loading follow-ups...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6" data-testid="follow-ups-page">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-cyan-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="follow-ups-page">
+      <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-30 dark:opacity-10 pointer-events-none" />
+      
+      <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold">Follow-ups</h1>
-          <p className="text-muted-foreground mt-1">Manage scheduled follow-ups with leads</p>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-cyan-100 to-teal-100 dark:from-cyan-900/50 dark:to-teal-900/30">
+            <CalendarIcon className="h-6 w-6 text-cyan-600 dark:text-cyan-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800 dark:text-white">Follow-ups</h1>
+            <p className="text-muted-foreground">Manage scheduled follow-ups with leads</p>
+          </div>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button data-testid="add-followup-button">
+            <Button data-testid="add-followup-button" className="bg-gradient-to-r from-cyan-500 to-teal-600 hover:from-cyan-600 hover:to-teal-700 text-white shadow-lg shadow-cyan-200/50 dark:shadow-cyan-900/30">
               <Plus className="h-4 w-4 mr-2" />
               Schedule Follow-up
             </Button>
@@ -103,9 +118,9 @@ export default function FollowUps() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Calendar */}
-        <Card className="p-6">
+        <Card className="p-6 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <CalendarIcon className="h-5 w-5" />
+            <CalendarIcon className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
             Calendar
           </h2>
           <Calendar
@@ -118,9 +133,9 @@ export default function FollowUps() {
 
         {/* Upcoming Follow-ups */}
         <div className="lg:col-span-2 space-y-4">
-          <Card className="p-6">
+          <Card className="p-6 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Clock className="h-5 w-5" />
+              <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               Upcoming Follow-ups
             </h2>
             <div className="space-y-3">
@@ -137,24 +152,24 @@ export default function FollowUps() {
                   return (
                     <div
                       key={followUp.id}
-                      className="flex items-start justify-between p-4 bg-muted/50 rounded-lg"
+                      className="flex items-start justify-between p-4 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/50 dark:to-slate-700/30 rounded-xl border border-slate-100 dark:border-slate-700/50"
                       data-testid={`followup-${followUp.id}`}
                     >
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <p className="font-medium">{followUp.title}</p>
+                          <p className="font-medium text-slate-800 dark:text-white">{followUp.title}</p>
                           {isOverdue && (
                             <Badge variant="destructive" className="text-xs">Overdue</Badge>
                           )}
                           {isToday(scheduleDate) && (
-                            <Badge className="text-xs bg-amber-100 text-amber-800">Today</Badge>
+                            <Badge className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">Today</Badge>
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground mb-2">
                           {lead?.name} - {format(scheduleDate, 'MMM d, yyyy h:mm a')}
                         </p>
                         {followUp.description && (
-                          <p className="text-sm">{followUp.description}</p>
+                          <p className="text-sm text-slate-600 dark:text-slate-400">{followUp.description}</p>
                         )}
                       </div>
                       <Button
@@ -162,6 +177,7 @@ export default function FollowUps() {
                         variant="outline"
                         onClick={() => handleComplete(followUp.id)}
                         data-testid={`complete-followup-${followUp.id}`}
+                        className="border-emerald-200 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400"
                       >
                         <CheckCircle2 className="h-4 w-4" />
                       </Button>
@@ -174,19 +190,19 @@ export default function FollowUps() {
 
           {/* Completed Follow-ups */}
           {completedFollowUps.length > 0 && (
-            <Card className="p-6">
+            <Card className="p-6 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5" />
+                <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                 Recently Completed
               </h2>
               <div className="space-y-3">
                 {completedFollowUps.slice(0, 5).map((followUp) => {
                   const lead = leads.find(l => l.id === followUp.lead_id);
                   return (
-                    <div key={followUp.id} className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    <div key={followUp.id} className="flex items-center gap-3 p-3 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/10 rounded-lg border border-emerald-100 dark:border-emerald-800/30">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                       <div className="flex-1">
-                        <p className="font-medium text-sm">{followUp.title}</p>
+                        <p className="font-medium text-sm text-slate-800 dark:text-white">{followUp.title}</p>
                         <p className="text-xs text-muted-foreground">{lead?.name}</p>
                       </div>
                     </div>
@@ -196,6 +212,7 @@ export default function FollowUps() {
             </Card>
           )}
         </div>
+      </div>
       </div>
     </div>
   );
