@@ -14,7 +14,7 @@ import {
   LayoutDashboard, Loader2, Phone, Mail, Calendar, Clock, Target,
   CheckCircle, AlertTriangle, TrendingUp, Users, ChevronRight,
   Plus, X, CalendarDays, Activity, Zap, ArrowRight, Building2,
-  User, AlertCircle, CheckSquare, Square, Circle
+  User, AlertCircle, CheckSquare, Square, Circle, ChevronDown, ChevronUp, Send
 } from 'lucide-react';
 import {
   Dialog,
