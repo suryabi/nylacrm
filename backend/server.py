@@ -7688,6 +7688,22 @@ async def upload_account_contract(
     
     await db.account_contracts.insert_one(doc)
     
+    # Create approval task for reporting manager
+    reports_to = current_user.get('reports_to')
+    if reports_to:
+        account_name = account.get('company_name', account.get('name', 'Unknown Account'))
+        await create_approval_task(
+            approval_type=ApprovalType.CONTRACT,
+            requester_id=current_user['id'],
+            requester_name=current_user.get('name', 'Unknown'),
+            approver_id=reports_to,
+            details=f"{account_name} - {file.filename}",
+            description=f"Contract uploaded by {current_user.get('name')} for review.\n\nAccount: {account_name}\nFile: {file.filename}\nVersion: {version}",
+            reference_id=actual_account_id,
+            reference_type='contract',
+            account_id=actual_account_id
+        )
+    
     # Return without file_data
     response = {k: v for k, v in doc.items() if k not in ['_id', 'file_data']}
     
