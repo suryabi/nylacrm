@@ -2583,7 +2583,7 @@ async def get_meeting(meeting_id: str, current_user: dict = Depends(get_current_
 
 @api_router.put("/meetings/{meeting_id}")
 async def update_meeting(meeting_id: str, meeting_update: MeetingUpdate, current_user: dict = Depends(get_current_user)):
-    """Update a meeting"""
+    """Update a meeting and send email notifications"""
     meeting = await db.meetings.find_one({'id': meeting_id}, {'_id': 0})
     if not meeting:
         raise HTTPException(status_code=404, detail='Meeting not found')
@@ -2591,9 +2591,29 @@ async def update_meeting(meeting_id: str, meeting_update: MeetingUpdate, current
     update_data = {k: v for k, v in meeting_update.model_dump().items() if v is not None}
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
+    # Check if this is a reschedule (date/time changed) or cancellation
+    is_reschedule = any([
+        meeting_update.meeting_date and meeting_update.meeting_date != meeting.get('meeting_date'),
+        meeting_update.start_time and meeting_update.start_time != meeting.get('start_time')
+    ])
+    is_cancellation = meeting_update.status == 'cancelled'
+    
     await db.meetings.update_one({'id': meeting_id}, {'$set': update_data})
     
     updated = await db.meetings.find_one({'id': meeting_id}, {'_id': 0})
+    
+    # Send email notification for reschedule or cancellation
+    attendees = updated.get('attendees', [])
+    if attendees and (is_reschedule or is_cancellation):
+        try:
+            await send_meeting_notification(
+                meeting=updated,
+                notification_type='cancelled' if is_cancellation else 'rescheduled',
+                organizer=current_user
+            )
+        except Exception as e:
+            print(f"Failed to send meeting notification: {e}")
+    
     return updated
 
 @api_router.delete("/meetings/{meeting_id}")
