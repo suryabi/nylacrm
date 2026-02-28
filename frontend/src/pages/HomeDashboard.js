@@ -425,7 +425,7 @@ export default function HomeDashboard() {
                         </div>
                         <Badge className={`${PRIORITY_COLORS[task.priority]} shrink-0`}>{task.priority}</Badge>
                         <button
-                          onClick={() => toggleTaskExpand(task.id)}
+                          onClick={() => toggleTaskExpand(task.id, task)}
                           className="text-muted-foreground hover:text-primary p-1.5 hover:bg-muted rounded-lg transition-colors"
                           title={expandedTaskId === task.id ? "Collapse" : "Expand"}
                         >
