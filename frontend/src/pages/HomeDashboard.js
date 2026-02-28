@@ -335,12 +335,45 @@ export default function HomeDashboard() {
             </div>
             
             <div className="p-5">
+            {/* Task Filter Tabs */}
+            <div className="flex gap-1 p-1 bg-muted rounded-lg mb-4 w-fit">
+              <button
+                onClick={() => setTaskFilter('assigned')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                  taskFilter === 'assigned' 
+                    ? 'bg-background text-foreground shadow-sm' 
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Assigned to Me
+              </button>
+              <button
+                onClick={() => setTaskFilter('created')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                  taskFilter === 'created' 
+                    ? 'bg-background text-foreground shadow-sm' 
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Created by Me
+              </button>
+            </div>
+            
             {/* Tasks */}
-            {action_items?.tasks?.length > 0 && (
+            {(() => {
+              const filteredTasks = action_items?.tasks?.filter(task => 
+                taskFilter === 'assigned' 
+                  ? task.assigned_to === user?.id 
+                  : (task.assigned_by === user?.id || task.created_by === user?.id)
+              ) || [];
+              
+              return filteredTasks.length > 0 ? (
               <div className="mb-4">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Tasks</h3>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                  Tasks ({filteredTasks.length})
+                </h3>
                 <div className="space-y-3">
-                  {action_items.tasks.map(task => (
+                  {filteredTasks.map(task => (
                     <div key={task.id} className="bg-card border rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
                       <div className="flex items-start gap-3 p-4">
                         {/* Complete button - only show for creator (or assignee for approval tasks) */}
