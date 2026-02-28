@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
-import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { LayoutDashboard, Loader2, Plus, Calendar } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 // Import all widgets
 import {
