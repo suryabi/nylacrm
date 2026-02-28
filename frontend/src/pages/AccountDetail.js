@@ -635,7 +635,7 @@ ${googleMapsLink}`;
                     data-testid="edit-contact-number"
                   />
                 </div>
-                <div className="space-y-2 md:col-span-2">
+                <div className="space-y-2">
                   <Label>GST Number</Label>
                   <Input
                     value={gstNumber}
@@ -645,6 +645,15 @@ ${googleMapsLink}`;
                     data-testid="edit-gst-number"
                   />
                   <p className="text-xs text-muted-foreground">15-character GST Identification Number</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Next Follow-up Date</Label>
+                  <Input
+                    type="date"
+                    value={nextFollowUp}
+                    onChange={(e) => setNextFollowUp(e.target.value)}
+                    data-testid="edit-follow-up-date"
+                  />
                 </div>
                 <div className="md:col-span-2 pt-4 border-t">
                   <LogoUploader
