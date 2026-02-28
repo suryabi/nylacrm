@@ -438,20 +438,20 @@ export default function HomeDashboard() {
             {/* Overdue Follow-ups */}
             {action_items?.overdue_follow_ups?.length > 0 && (
               <div>
-                <h3 className="text-sm font-medium text-red-600 mb-2 flex items-center gap-1">
+                <h3 className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-3 flex items-center gap-1">
                   <AlertTriangle className="h-4 w-4" /> Overdue Follow-ups
                 </h3>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {action_items.overdue_follow_ups.map(lead => (
                     <div
                       key={lead.id}
                       onClick={() => navigate(`/leads/${lead.id}`)}
-                      className="flex items-center gap-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                      className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/30 transition-all duration-200 shadow-sm hover:shadow-md"
                     >
                       <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{lead.company}</p>
-                        <p className="text-xs text-red-600">Was due: {format(parseISO(lead.next_follow_up), 'MMM d')}</p>
+                        <p className="font-semibold text-foreground truncate">{lead.company}</p>
+                        <p className="text-xs text-red-600 mt-0.5">Was due: {format(parseISO(lead.next_follow_up), 'MMM d')}</p>
                       </div>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </div>
@@ -461,8 +461,13 @@ export default function HomeDashboard() {
             )}
             
             {(!action_items?.tasks?.length && !action_items?.overdue_follow_ups?.length) && (
-              <p className="text-center text-muted-foreground py-4">No pending action items</p>
+              <div className="text-center py-8">
+                <CheckCircle className="h-12 w-12 text-green-500/50 mx-auto mb-3" />
+                <p className="text-muted-foreground font-medium">All caught up!</p>
+                <p className="text-sm text-muted-foreground/70">No pending action items</p>
+              </div>
             )}
+            </div>
           </Card>
 
           {/* Upcoming Leads */}
