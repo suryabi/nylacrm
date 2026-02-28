@@ -341,13 +341,19 @@ export default function HomeDashboard() {
                   {action_items.tasks.map(task => (
                     <div key={task.id} className="bg-card border rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
                       <div className="flex items-start gap-3 p-4">
-                        <button
-                          onClick={() => handleCompleteTask(task.id)}
-                          className="mt-1 text-muted-foreground hover:text-green-600 transition-colors"
-                          title="Mark complete"
-                        >
-                          <Square className="h-5 w-5" />
-                        </button>
+                        {/* Complete button - only show for creator (or assignee for approval tasks) */}
+                        {(task.assigned_by === user?.id || task.created_by === user?.id || 
+                          (task.is_approval_task && task.assigned_to === user?.id)) ? (
+                          <button
+                            onClick={() => handleCompleteTask(task.id)}
+                            className="mt-1 text-muted-foreground hover:text-green-600 transition-colors"
+                            title="Mark complete"
+                          >
+                            <Square className="h-5 w-5" />
+                          </button>
+                        ) : (
+                          <div className="mt-1 w-5" /> 
+                        )}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="font-semibold text-foreground">{task.title}</p>
