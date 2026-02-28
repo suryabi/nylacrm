@@ -454,6 +454,19 @@ export default function HomeDashboard() {
                               </p>
                             </div>
                           )}
+                          {/* Navigation link for approval tasks */}
+                          {task.is_approval_task && getApprovalTaskUrl(task) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(getApprovalTaskUrl(task));
+                              }}
+                              className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 font-medium"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              {getApprovalTaskLabel(task)}
+                            </button>
+                          )}
                         </div>
                         <Badge className={`${PRIORITY_COLORS[task.priority]} shrink-0`}>{task.priority}</Badge>
                         <button
