@@ -275,19 +275,6 @@ export default function HomeDashboard() {
           currentTime={currentTime}
           activeTime={activeTime}
         />
-        
-        {/* Action Buttons */}
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => {
-            setNewTask(prev => ({ ...prev, assigned_to: user?.id || '' }));
-            setShowNewTaskDialog(true);
-          }} data-testid="new-task-btn">
-            <Plus className="h-4 w-4 mr-2" /> New Task
-          </Button>
-          <Button onClick={() => setShowNewMeetingDialog(true)} data-testid="new-meeting-btn">
-            <Calendar className="h-4 w-4 mr-2" /> Schedule Meeting
-          </Button>
-        </div>
       </div>
 
       {/* Today's Summary Cards */}
@@ -304,6 +291,10 @@ export default function HomeDashboard() {
             setTaskFilter={setTaskFilter}
             onCompleteTask={handleCompleteTask}
             onUpdateTask={handleUpdateTask}
+            onNewTask={() => {
+              setNewTask(prev => ({ ...prev, assigned_to: user?.id || '' }));
+              setShowNewTaskDialog(true);
+            }}
           />
           
           <UpcomingFollowupsWidget upcomingLeads={upcoming_leads} />
