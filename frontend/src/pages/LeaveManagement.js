@@ -22,7 +22,7 @@ import {
   DialogTrigger,
 } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { Calendar, CheckCircle, XCircle, Clock, Plus, Loader2 } from 'lucide-react';
+import { Calendar, CheckCircle, XCircle, Clock, Plus, Loader2, CalendarDays } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
