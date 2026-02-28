@@ -2502,7 +2502,6 @@ async def create_meeting(meeting_input: MeetingCreate, current_user: dict = Depe
     
     zoom_meeting_id = None
     zoom_password = None
-    meeting_link = meeting_data.get('meeting_link')
     
     # Create Zoom meeting if requested
     if create_zoom:
@@ -2522,7 +2521,8 @@ async def create_meeting(meeting_input: MeetingCreate, current_user: dict = Depe
                 
                 zoom_meeting_id = zoom_result.get('meeting_id')
                 zoom_password = zoom_result.get('password')
-                meeting_link = zoom_result.get('join_url')
+                # Override meeting_link with Zoom join URL
+                meeting_data['meeting_link'] = zoom_result.get('join_url')
             else:
                 raise HTTPException(status_code=500, detail="Zoom API not configured")
         except Exception as e:
@@ -2532,7 +2532,6 @@ async def create_meeting(meeting_input: MeetingCreate, current_user: dict = Depe
         **meeting_data,
         organizer_id=current_user['id'],
         organizer_name=current_user.get('name'),
-        meeting_link=meeting_link,
         zoom_meeting_id=zoom_meeting_id,
         zoom_password=zoom_password
     )
