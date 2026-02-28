@@ -489,6 +489,10 @@ export default function HomeDashboard() {
                 <Wind className="h-3 w-3" />
                 <span>{Math.round(weather.wind_speed_10m)} km/h</span>
               </div>
+              <div className="flex items-center gap-1 ml-auto">
+                <Clock className="h-3 w-3" />
+                <span>Session: {formatSessionTime(activeTime)}</span>
+              </div>
             </div>
           )}
         </Card>
