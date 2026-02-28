@@ -753,14 +753,47 @@ export default function HomeDashboard() {
             </div>
           </Card>
 
-          {/* Upcoming Leads */}
+          {/* Upcoming Meetings - Moved to top */}
+          <Card className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-primary" />
+                Upcoming Meetings
+              </h2>
+            </div>
+            
+            {upcoming_meetings?.length > 0 ? (
+              <div className="space-y-3">
+                {upcoming_meetings.slice(0, 5).map(meeting => (
+                  <div key={meeting.id} className="p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-start justify-between mb-1">
+                      <p className="font-medium text-sm truncate">{meeting.title}</p>
+                      <Badge variant="outline" className="text-xs ml-2 flex-shrink-0">
+                        {formatMeetingDate(meeting.meeting_date)}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {meeting.start_time} • {meeting.duration || '1 hr'}
+                    </p>
+                    {meeting.location && (
+                      <p className="text-xs text-muted-foreground mt-1">{meeting.location}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-center text-muted-foreground py-4">No upcoming meetings</p>
+            )}
+          </Card>
+
+          {/* Upcoming Follow-ups */}
           <Card className="p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <CalendarDays className="h-5 w-5 text-primary" />
                 Upcoming Follow-ups
               </h2>
-              <Button variant="ghost" size="sm" onClick={() => navigate('/follow-ups')}>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/leads')}>
                 View all <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
@@ -788,49 +821,6 @@ export default function HomeDashboard() {
               </div>
             ) : (
               <p className="text-center text-muted-foreground py-4">No upcoming follow-ups this week</p>
-            )}
-          </Card>
-
-          {/* Smart Lead Recommendations */}
-          <Card className="p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Zap className="h-5 w-5 text-yellow-500" />
-                Leads to Focus On
-              </h2>
-              <span className="text-xs text-muted-foreground">Based on win probability</span>
-            </div>
-            
-            {recommended_leads?.length > 0 ? (
-              <div className="space-y-3">
-                {recommended_leads.map(lead => (
-                  <div
-                    key={lead.id}
-                    onClick={() => navigate(`/leads/${lead.id}`)}
-                    className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
-                  >
-                    <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold ${getWinScoreColor(lead.win_score)}`}>
-                      {lead.win_score}%
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{lead.company}</p>
-                      <div className="flex items-center gap-2">
-                        <Badge className={STATUS_COLORS[lead.status] || 'bg-gray-100 text-gray-700'} variant="secondary">
-                          {lead.status?.replace(/_/g, ' ')}
-                        </Badge>
-                        {lead.next_follow_up && (
-                          <span className="text-xs text-muted-foreground">
-                            Follow-up: {format(parseISO(lead.next_follow_up), 'MMM d')}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-center text-muted-foreground py-4">No lead recommendations</p>
             )}
           </Card>
         </div>
