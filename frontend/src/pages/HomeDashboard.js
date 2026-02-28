@@ -254,7 +254,7 @@ export default function HomeDashboard() {
     
     switch (task.approval_type) {
       case 'leave_request':
-        return '/leave-management';
+        return '/leaves';
       case 'proposal':
         return task.lead_id ? `/leads/${task.lead_id}` : null;
       case 'contract':
