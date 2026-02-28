@@ -61,20 +61,28 @@ export default function SalesTargets() {
   if (page === 'skus' && currentPlan) return <SKUsPage plan={currentPlan} onBack={() => setPage('list')} />;
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-green-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="sales-targets-page">
+      <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-30 dark:opacity-10 pointer-events-none" />
+      
+      <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto space-y-6">
       <div className="flex justify-between">
-        <div>
-          <h1 className="text-4xl font-light mb-2">Sales Targets</h1>
-          <p className="text-muted-foreground">Revenue planning</p>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 dark:from-green-900/50 dark:to-emerald-900/30">
+            <Target className="h-6 w-6 text-green-600 dark:text-green-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800 dark:text-white">Sales Targets</h1>
+            <p className="text-muted-foreground">Revenue planning</p>
+          </div>
         </div>
-        <Button onClick={() => setPage('create')} className="h-12 rounded-full">
+        <Button onClick={() => setPage('create')} className="h-12 rounded-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg shadow-green-200/50 dark:shadow-green-900/30">
           <Plus className="h-5 w-5 mr-2" />New Plan
         </Button>
       </div>
 
       <div className="grid md:grid-cols-3 gap-6">
         {plans.map(p => (
-          <Card key={p.id} className="p-6 border rounded-2xl">
+          <Card key={p.id} className="p-6 border-0 rounded-2xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5">
             <div className="flex justify-between items-start mb-3">
               <div>
                 <h3 className="font-semibold mb-1">{p.plan_name}</h3>
