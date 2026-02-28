@@ -299,6 +299,7 @@ ${googleMapsLink}`;
       setContactName(data.contact_name || '');
       setContactNumber(data.contact_number || '');
       setGstNumber(data.gst_number || '');
+      setNextFollowUp(data.next_follow_up || '');
       setSkuPricing(data.sku_pricing || []);
       
       // Load delivery address if exists
