@@ -1,38 +1,77 @@
 import React from 'react';
 import { Card } from '../ui/card';
-import { Activity, Phone, Mail, Users } from 'lucide-react';
+import { Activity, Phone, Mail, Users, TrendingUp } from 'lucide-react';
 
 export function TodaySummaryWidget({ todaySummary }) {
+  const stats = [
+    {
+      label: "Today's Activities",
+      value: todaySummary?.total_activities || 0,
+      icon: Activity,
+      gradient: 'from-violet-500 to-purple-600',
+      bgGradient: 'from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/20',
+      iconBg: 'bg-violet-100 dark:bg-violet-900/50',
+      textColor: 'text-violet-700 dark:text-violet-300'
+    },
+    {
+      label: 'Calls Made',
+      value: todaySummary?.calls || 0,
+      icon: Phone,
+      gradient: 'from-emerald-500 to-teal-600',
+      bgGradient: 'from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20',
+      iconBg: 'bg-emerald-100 dark:bg-emerald-900/50',
+      textColor: 'text-emerald-700 dark:text-emerald-300'
+    },
+    {
+      label: 'Emails Sent',
+      value: todaySummary?.emails || 0,
+      icon: Mail,
+      gradient: 'from-blue-500 to-indigo-600',
+      bgGradient: 'from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20',
+      iconBg: 'bg-blue-100 dark:bg-blue-900/50',
+      textColor: 'text-blue-700 dark:text-blue-300'
+    },
+    {
+      label: 'Meetings',
+      value: todaySummary?.meetings || 0,
+      icon: Users,
+      gradient: 'from-amber-500 to-orange-600',
+      bgGradient: 'from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20',
+      iconBg: 'bg-amber-100 dark:bg-amber-900/50',
+      textColor: 'text-amber-700 dark:text-amber-300'
+    }
+  ];
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 border-blue-200 dark:border-blue-700/50">
-        <div className="flex items-center gap-2 mb-2">
-          <Activity className="h-4 w-4 text-blue-600" />
-          <span className="text-xs font-medium text-blue-600">TODAY'S ACTIVITIES</span>
-        </div>
-        <p className="text-2xl font-bold text-blue-700">{todaySummary?.total_activities || 0}</p>
-      </Card>
-      <Card className="p-4 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/20 border-green-200 dark:border-green-700/50">
-        <div className="flex items-center gap-2 mb-2">
-          <Phone className="h-4 w-4 text-green-600" />
-          <span className="text-xs font-medium text-green-600">CALLS</span>
-        </div>
-        <p className="text-2xl font-bold text-green-700">{todaySummary?.calls || 0}</p>
-      </Card>
-      <Card className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 border-purple-200 dark:border-purple-700/50">
-        <div className="flex items-center gap-2 mb-2">
-          <Mail className="h-4 w-4 text-purple-600" />
-          <span className="text-xs font-medium text-purple-600">EMAILS</span>
-        </div>
-        <p className="text-2xl font-bold text-purple-700">{todaySummary?.emails || 0}</p>
-      </Card>
-      <Card className="p-4 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/30 dark:to-orange-800/20 border-orange-200 dark:border-orange-700/50">
-        <div className="flex items-center gap-2 mb-2">
-          <Users className="h-4 w-4 text-orange-600" />
-          <span className="text-xs font-medium text-orange-600">MEETINGS</span>
-        </div>
-        <p className="text-2xl font-bold text-orange-700">{todaySummary?.meetings || 0}</p>
-      </Card>
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {stats.map((stat, index) => {
+        const Icon = stat.icon;
+        return (
+          <Card 
+            key={stat.label}
+            className={`relative overflow-hidden border-0 bg-gradient-to-br ${stat.bgGradient} backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5 group`}
+          >
+            {/* Decorative gradient line */}
+            <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.gradient}`} />
+            
+            <div className="p-5">
+              <div className="flex items-start justify-between">
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    {stat.label}
+                  </p>
+                  <p className={`text-3xl font-bold ${stat.textColor} tabular-nums`}>
+                    {stat.value}
+                  </p>
+                </div>
+                <div className={`p-2.5 rounded-xl ${stat.iconBg} group-hover:scale-110 transition-transform duration-300`}>
+                  <Icon className={`h-5 w-5 ${stat.textColor}`} />
+                </div>
+              </div>
+            </div>
+          </Card>
+        );
+      })}
     </div>
   );
 }
