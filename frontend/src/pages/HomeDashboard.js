@@ -29,6 +29,8 @@ import {
   NewMeetingDialog,
   MeetingDetailDialog
 } from '../components/widgets';
+import WaterQuoteWidget from '../components/widgets/WaterQuoteWidget';
+import SalesQuoteWidget from '../components/widgets/SalesQuoteWidget';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
