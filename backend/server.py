@@ -300,6 +300,8 @@ async def create_approval_task(
         'assigned_to_name': approver_name,
         'assigned_by': requester_id,
         'assigned_by_name': requester_name,
+        'created_by': requester_id,
+        'created_by_name': requester_name,
         'lead_id': lead_id,
         'account_id': account_id,
         'completed_at': None,
