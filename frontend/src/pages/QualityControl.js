@@ -68,54 +68,58 @@ export default function QualityControl() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-slate-50 to-gray-50 dark:from-slate-900/30 dark:to-gray-900/20 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-slate-500 to-gray-600" />
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Tests Today</p>
-                <p className="text-2xl font-bold text-gray-900">12</p>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tests Today</p>
+                <p className="text-2xl font-bold text-slate-700 dark:text-slate-300 tabular-nums">12</p>
               </div>
-              <Beaker className="w-8 h-8 text-gray-200" />
+              <Beaker className="w-8 h-8 text-slate-400" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/20 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-green-600" />
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Passed</p>
-                <p className="text-2xl font-bold text-green-600">10</p>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Passed</p>
+                <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">10</p>
               </div>
-              <CheckCircle className="w-8 h-8 text-green-200" />
+              <CheckCircle className="w-8 h-8 text-emerald-400" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/30 dark:to-yellow-950/20 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-yellow-600" />
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Pending</p>
-                <p className="text-2xl font-bold text-yellow-600">1</p>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Pending</p>
+                <p className="text-2xl font-bold text-amber-700 dark:text-amber-300 tabular-nums">1</p>
               </div>
-              <Clock className="w-8 h-8 text-yellow-200" />
+              <Clock className="w-8 h-8 text-amber-400" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/20 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-rose-600" />
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Failed</p>
-                <p className="text-2xl font-bold text-red-600">1</p>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Failed</p>
+                <p className="text-2xl font-bold text-red-700 dark:text-red-300 tabular-nums">1</p>
               </div>
-              <XCircle className="w-8 h-8 text-red-200" />
+              <XCircle className="w-8 h-8 text-red-400" />
             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Quality Thresholds */}
-      <Card className="p-4 bg-blue-50 border-blue-200">
+      <Card className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20 border-0 shadow-sm">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-blue-800">Quality Thresholds:</span>
