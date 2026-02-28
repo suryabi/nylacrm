@@ -221,6 +221,32 @@ export default function LeadDetail() {
     }
   };
 
+  // Get proposal file type from filename
+  const getProposalFileType = (fileName) => {
+    if (!fileName) return 'unknown';
+    const ext = fileName.split('.').pop().toLowerCase();
+    if (ext === 'pdf') return 'pdf';
+    if (['doc', 'docx'].includes(ext)) return 'word';
+    return 'unknown';
+  };
+
+  // Open PDF viewer
+  const handleOpenPdfViewer = async () => {
+    if (!proposal) return;
+    
+    setLoadingPdfViewer(true);
+    try {
+      const res = await axios.get(`${API_URL}/leads/${id}/proposal/download`, { withCredentials: true });
+      const proposalData = res.data.proposal;
+      setPdfViewerData(proposalData);
+      setShowPdfViewer(true);
+    } catch (error) {
+      toast.error('Failed to load PDF for viewing');
+    } finally {
+      setLoadingPdfViewer(false);
+    }
+  };
+
   const handleProposalDelete = async () => {
     if (!window.confirm('Are you sure you want to delete this proposal?')) return;
 
