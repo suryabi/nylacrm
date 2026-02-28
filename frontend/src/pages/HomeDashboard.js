@@ -128,10 +128,24 @@ export default function HomeDashboard() {
   const [taskComment, setTaskComment] = useState('');
   const [taskReassignTo, setTaskReassignTo] = useState('');
   const [updatingTask, setUpdatingTask] = useState(false);
+  
+  // Weather and time state
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [weather, setWeather] = useState(null);
+  const [weatherLoading, setWeatherLoading] = useState(true);
+  const [locationName, setLocationName] = useState('');
 
   useEffect(() => {
     fetchDashboardData();
     fetchUsers();
+    fetchWeather();
+    
+    // Update time every second
+    const timeInterval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    
+    return () => clearInterval(timeInterval);
   }, []);
 
   const fetchDashboardData = async () => {
