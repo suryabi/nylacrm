@@ -218,25 +218,33 @@ export default function MasterLocations() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-violet-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex items-center justify-center">
+        <div className="flex flex-col items-center">
+          <div className="relative"><div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" /><Loader2 className="h-10 w-10 animate-spin text-primary relative z-10" /></div>
+          <p className="text-muted-foreground text-sm mt-4 animate-pulse">Loading locations...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6" data-testid="master-locations-page">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-violet-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="master-locations-page">
+      <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-30 dark:opacity-10 pointer-events-none" />
+      
+      <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold flex items-center gap-3">
-            <MapPin className="h-8 w-8 text-primary" />
-            Master Locations
-          </h1>
-          <p className="text-muted-foreground mt-1">Manage territories, states, and cities</p>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-900/50 dark:to-purple-900/30">
+            <MapPin className="h-6 w-6 text-violet-600 dark:text-violet-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800 dark:text-white">Master Locations</h1>
+            <p className="text-muted-foreground">Manage territories, states, and cities</p>
+          </div>
         </div>
         <div className="flex gap-2">
-          <Button onClick={() => openAddDialog('territory')} data-testid="add-territory-btn">
+          <Button onClick={() => openAddDialog('territory')} data-testid="add-territory-btn" className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white shadow-lg shadow-violet-200/50 dark:shadow-violet-900/30">
             <Plus className="h-4 w-4 mr-2" />
             Add Territory
           </Button>
@@ -245,35 +253,35 @@ export default function MasterLocations() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-4">
+        <Card className="p-4 border-0 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-100">
-              <Globe className="h-5 w-5 text-blue-600" />
+            <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50">
+              <Globe className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{stats.territories}</p>
+              <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{stats.territories}</p>
               <p className="text-sm text-muted-foreground">Territories</p>
             </div>
           </div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 border-0 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/20 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-green-100">
-              <Building className="h-5 w-5 text-green-600" />
+            <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/50">
+              <Building className="h-5 w-5 text-green-600 dark:text-green-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{stats.states}</p>
+              <p className="text-2xl font-bold text-green-700 dark:text-green-300">{stats.states}</p>
               <p className="text-sm text-muted-foreground">States</p>
             </div>
           </div>
         </Card>
-        <Card className="p-4">
+        <Card className="p-4 border-0 bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-950/30 dark:to-violet-950/20 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-purple-100">
-              <Home className="h-5 w-5 text-purple-600" />
+            <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/50">
+              <Home className="h-5 w-5 text-purple-600 dark:text-purple-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{stats.cities}</p>
+              <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">{stats.cities}</p>
               <p className="text-sm text-muted-foreground">Cities</p>
             </div>
           </div>
