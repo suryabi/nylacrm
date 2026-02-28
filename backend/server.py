@@ -2270,7 +2270,9 @@ async def create_task(task_input: TaskCreate, current_user: dict = Depends(get_c
         **task_input.model_dump(),
         assigned_to_name=assignee.get('name') if assignee else None,
         assigned_by=current_user['id'],
-        assigned_by_name=current_user.get('name')
+        assigned_by_name=current_user.get('name'),
+        created_by=current_user['id'],
+        created_by_name=current_user.get('name')
     )
     
     doc = task.model_dump()
