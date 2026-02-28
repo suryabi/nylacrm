@@ -127,14 +127,14 @@ export function UpcomingMeetingsWidget({ upcomingMeetings, onNewMeeting, onViewM
       </div>
       
       {/* Footer */}
-      <div className="px-3 py-2 border-t bg-muted/30">
+      <div className="px-3 py-3 border-t bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/10">
         <Button
-          variant="ghost"
-          size="sm"
-          className="w-full text-xs text-muted-foreground hover:text-foreground"
+          variant="outline"
+          size="default"
+          className="w-full h-10 text-sm font-medium border-blue-300 text-blue-700 hover:bg-blue-100 hover:text-blue-800 dark:border-blue-600 dark:text-blue-400 dark:hover:bg-blue-900/30"
           onClick={onNewMeeting}
         >
-          <Plus className="h-3 w-3 mr-1" /> Schedule New Meeting
+          <Plus className="h-4 w-4 mr-2" /> Schedule New Meeting
         </Button>
       </div>
     </Card>
