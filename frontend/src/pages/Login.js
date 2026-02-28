@@ -15,7 +15,14 @@ const MOUNTAIN_BG = 'https://images.unsplash.com/photo-1761589951732-2795cd6ecdb
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, user } = useAuth();
+  
+  // If user is already logged in, redirect to home
+  useEffect(() => {
+    if (user) {
+      navigate('/home', { replace: true });
+    }
+  }, [user, navigate]);
   
   // Check for remembered email
   const rememberedEmail = localStorage.getItem('rememberedEmail') || '';
