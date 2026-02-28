@@ -2494,11 +2494,47 @@ async def delete_task(task_id: str, current_user: dict = Depends(get_current_use
 
 @api_router.post("/meetings")
 async def create_meeting(meeting_input: MeetingCreate, current_user: dict = Depends(get_current_user)):
-    """Create a new meeting"""
+    """Create a new meeting, optionally with Zoom integration"""
+    from zoom_service import get_zoom_client
+    
+    meeting_data = meeting_input.model_dump()
+    create_zoom = meeting_data.pop('create_zoom_meeting', False)
+    
+    zoom_meeting_id = None
+    zoom_password = None
+    meeting_link = meeting_data.get('meeting_link')
+    
+    # Create Zoom meeting if requested
+    if create_zoom:
+        try:
+            zoom_client = get_zoom_client()
+            if zoom_client.is_configured():
+                # Format start time for Zoom API (YYYY-MM-DDTHH:MM:SS)
+                zoom_start_time = f"{meeting_data['meeting_date']}T{meeting_data['start_time']}:00"
+                
+                zoom_result = zoom_client.create_meeting(
+                    topic=meeting_data['title'],
+                    start_time=zoom_start_time,
+                    duration=meeting_data.get('duration_minutes', 30),
+                    timezone="Asia/Kolkata",
+                    agenda=meeting_data.get('description')
+                )
+                
+                zoom_meeting_id = zoom_result.get('meeting_id')
+                zoom_password = zoom_result.get('password')
+                meeting_link = zoom_result.get('join_url')
+            else:
+                raise HTTPException(status_code=500, detail="Zoom API not configured")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to create Zoom meeting: {str(e)}")
+    
     meeting = Meeting(
-        **meeting_input.model_dump(),
+        **meeting_data,
         organizer_id=current_user['id'],
-        organizer_name=current_user.get('name')
+        organizer_name=current_user.get('name'),
+        meeting_link=meeting_link,
+        zoom_meeting_id=zoom_meeting_id,
+        zoom_password=zoom_password
     )
     
     doc = meeting.model_dump()
