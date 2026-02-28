@@ -689,11 +689,15 @@ ${googleMapsLink}`;
                   </div>
                 </div>
                 {account.gst_number && (
-                  <div className="md:col-span-2">
+                  <div>
                     <p className="text-sm text-muted-foreground">GST Number</p>
                     <p className="font-medium font-mono tracking-wider">{account.gst_number}</p>
                   </div>
                 )}
+                <div>
+                  <p className="text-sm text-muted-foreground">Next Follow-up</p>
+                  <p className="font-medium">{account.next_follow_up || '-'}</p>
+                </div>
                 {account.logo_url && (
                   <div className="md:col-span-2 pt-4 border-t">
                     <p className="text-sm text-muted-foreground mb-2">Account Logo</p>
