@@ -2541,6 +2541,18 @@ async def create_meeting(meeting_input: MeetingCreate, current_user: dict = Depe
     doc['updated_at'] = doc['updated_at'].isoformat()
     
     await db.meetings.insert_one(doc)
+    
+    # Send email notifications to attendees
+    if meeting.attendees:
+        try:
+            await send_meeting_notification(
+                meeting=doc,
+                notification_type='scheduled',
+                organizer=current_user
+            )
+        except Exception as e:
+            print(f"Failed to send meeting notification: {e}")
+    
     return meeting
 
 @api_router.get("/meetings")
