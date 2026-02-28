@@ -7265,9 +7265,26 @@ async def share_proposal_via_email(
         "attachments": [attachment]
     }
     
-    # Add CC if provided
-    if email_data.cc_emails:
-        email_params["cc"] = email_data.cc_emails
+    # Build CC list: user-provided CCs + logged-in user's email + reporting manager's email
+    cc_list = list(email_data.cc_emails) if email_data.cc_emails else []
+    
+    # Add logged-in user's email to CC
+    user_email = current_user.get('email')
+    if user_email and user_email not in cc_list and user_email not in email_data.to_emails:
+        cc_list.append(user_email)
+    
+    # Add reporting manager's email to CC
+    reports_to_id = current_user.get('reports_to')
+    if reports_to_id:
+        manager = await db.users.find_one({'id': reports_to_id}, {'_id': 0, 'email': 1})
+        if manager and manager.get('email'):
+            manager_email = manager['email']
+            if manager_email not in cc_list and manager_email not in email_data.to_emails:
+                cc_list.append(manager_email)
+    
+    # Add CC if we have any
+    if cc_list:
+        email_params["cc"] = cc_list
     
     # Add BCC if provided
     if email_data.bcc_emails:
