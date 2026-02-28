@@ -182,6 +182,67 @@ export default function HomeDashboard() {
     }
   };
 
+  const fetchWeather = async () => {
+    setWeatherLoading(true);
+    try {
+      // Get user's location
+      if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            
+            // Fetch weather from Open-Meteo API (free, no API key required)
+            const weatherRes = await fetch(
+              `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`
+            );
+            const weatherData = await weatherRes.json();
+            setWeather(weatherData.current);
+            
+            // Get location name using reverse geocoding
+            try {
+              const geoRes = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+              );
+              const geoData = await geoRes.json();
+              const city = geoData.address?.city || geoData.address?.town || geoData.address?.village || geoData.address?.county || '';
+              setLocationName(city);
+            } catch {
+              setLocationName('Your Location');
+            }
+            
+            setWeatherLoading(false);
+          },
+          (error) => {
+            console.error('Geolocation error:', error);
+            // Fallback to a default location (e.g., Hyderabad)
+            fetchDefaultWeather();
+          },
+          { timeout: 10000 }
+        );
+      } else {
+        fetchDefaultWeather();
+      }
+    } catch (error) {
+      console.error('Weather fetch error:', error);
+      setWeatherLoading(false);
+    }
+  };
+
+  const fetchDefaultWeather = async () => {
+    try {
+      // Default to Hyderabad, India
+      const weatherRes = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=17.385&longitude=78.4867&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`
+      );
+      const weatherData = await weatherRes.json();
+      setWeather(weatherData.current);
+      setLocationName('Hyderabad');
+    } catch {
+      setWeather(null);
+    }
+    setWeatherLoading(false);
+  };
+
   const handleCreateTask = async () => {
     if (!newTask.title.trim()) {
       toast.error('Please enter a task title');
