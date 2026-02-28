@@ -7814,6 +7814,20 @@ async def review_account_contract(
         }
     )
     
+    # Complete the approval task when reviewed
+    if action in ['approved', 'rejected']:
+        await complete_approval_task(
+            approval_type=ApprovalType.CONTRACT,
+            reference_id=actual_account_id,
+            status='completed'
+        )
+    elif action == 'changes_requested':
+        await complete_approval_task(
+            approval_type=ApprovalType.CONTRACT,
+            reference_id=actual_account_id,
+            status='cancelled'
+        )
+    
     # Get updated contract
     updated = await db.account_contracts.find_one({'account_id': actual_account_id}, {'_id': 0, 'file_data': 0})
     
