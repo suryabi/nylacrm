@@ -27,9 +27,9 @@ export default function QualityControl() {
   ];
 
   const statusColors = {
-    passed: 'bg-green-100 text-green-800',
-    pending: 'bg-yellow-100 text-yellow-800',
-    failed: 'bg-red-100 text-red-800'
+    passed: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
+    pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
+    failed: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
   };
 
   const statusIcons = {
@@ -39,24 +39,27 @@ export default function QualityControl() {
   };
 
   return (
-    <div className="space-y-6" data-testid="quality-control-page">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="quality-control-page">
+      <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-30 dark:opacity-10 pointer-events-none" />
+      
+      <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <ShieldCheck className="w-7 h-7 text-primary" />
-            Quality Control
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Monitor and manage product quality testing
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/50 dark:to-teal-900/30">
+            <ShieldCheck className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800 dark:text-white">Quality Control</h1>
+            <p className="text-muted-foreground">Monitor and manage product quality testing</p>
+          </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2 border-slate-200 dark:border-slate-700">
             <FileText className="w-4 h-4" />
             Export Reports
           </Button>
-          <Button className="gap-2" data-testid="add-qc-btn">
+          <Button className="gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-lg" data-testid="add-qc-btn">
             <Plus className="w-4 h-4" />
             New Test
           </Button>
