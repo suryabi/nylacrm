@@ -15,7 +15,7 @@ import {
   CheckCircle, AlertTriangle, TrendingUp, Users, ChevronRight,
   Plus, X, CalendarDays, Activity, Zap, ArrowRight, Building2,
   User, AlertCircle, CheckSquare, Square, Circle, ChevronDown, ChevronUp, Send, ExternalLink,
-  Sun, Cloud, CloudRain, CloudSnow, CloudLightning, Wind, Droplets, MapPin, Thermometer
+  Sun, Cloud, CloudRain, CloudSnow, CloudLightning, Wind, Droplets, MapPin, Thermometer, Video
 } from 'lucide-react';
 import {
   Dialog,
