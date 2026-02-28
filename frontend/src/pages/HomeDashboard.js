@@ -53,7 +53,8 @@ export default function HomeDashboard() {
     duration_minutes: 30,
     location: '',
     attendees: '',
-    attendee_names: ''
+    attendee_names: '',
+    create_zoom_meeting: true  // Default to creating Zoom meeting
   });
   
   // Weather and time state
