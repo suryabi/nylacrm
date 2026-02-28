@@ -227,6 +227,18 @@ export default function COGSCalculator() {
         );
       }
       
+      // Update original gross margins to current values after save
+      const newOriginalMargins = {};
+      cogsData.forEach(row => {
+        if (row.id) {
+          newOriginalMargins[row.id] = parseFloat(row.gross_margin) || 0;
+        }
+      });
+      setOriginalGrossMargins(newOriginalMargins);
+      
+      // Clear actual landing prices since values are now saved
+      setActualLandingPrices({});
+      
       toast.success('All changes saved!');
       setHasChanges(false);
       loadCOGSData(); // Reload to get updated calculations
