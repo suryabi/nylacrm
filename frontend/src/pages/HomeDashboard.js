@@ -106,23 +106,25 @@ export default function HomeDashboard() {
     try {
       const response = await axios.get(`${API_URL}/dashboard`, { withCredentials: true });
       setDashboardData(response.data);
-      
-      // Auto-select the appropriate tab based on which list has items
-      const tasks = response.data?.action_items?.tasks || [];
-      const assignedToMe = tasks.filter(t => t.assigned_to === user?.id);
-      const createdByMe = tasks.filter(t => t.assigned_by === user?.id || t.created_by === user?.id);
-      
-      if (assignedToMe.length === 0 && createdByMe.length > 0) {
-        setTaskFilter('created');
-      } else {
-        setTaskFilter('assigned');
-      }
     } catch (error) {
       toast.error('Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
   };
+
+  // Auto-select the appropriate tab based on which list has items
+  useEffect(() => {
+    if (!dashboardData || !user?.id) return;
+    
+    const tasks = dashboardData?.action_items?.tasks || [];
+    const assignedToMe = tasks.filter(t => t.assigned_to === user.id);
+    const createdByMe = tasks.filter(t => t.assigned_by === user.id || t.created_by === user.id);
+    
+    if (assignedToMe.length === 0 && createdByMe.length > 0) {
+      setTaskFilter('created');
+    }
+  }, [dashboardData, user?.id]);
 
   const fetchUsers = async () => {
     try {
