@@ -649,6 +649,7 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 14. ~~Sales/Production Context Switching~~ ✅ IMPLEMENTED (context switcher, department field, production modules)
 15. ~~Server-Side Filtering for Leads List~~ ✅ FIXED (time_filter, territory, assigned_to filters now server-side)
 16. ~~Home Dashboard~~ ✅ IMPLEMENTED (action-oriented landing page with tasks, meetings, leads, performance)
+17. ~~HomeDashboard.js Refactoring~~ ✅ COMPLETED (Feb 28, 2026) - Extracted 10 reusable widget components
 
 ### P1 - High Priority
 - Build out Production modules (Maintenance, Inventory, Quality Control, Assets, Vendors) - currently placeholders
