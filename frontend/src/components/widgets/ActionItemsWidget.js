@@ -106,8 +106,14 @@ export function ActionItemsWidget({
           <Badge className="bg-primary/20 text-primary border-0 font-semibold">
             {(actionItems?.tasks?.length || 0) + (actionItems?.overdue_follow_ups?.length || 0)} pending
           </Badge>
-          <Button size="sm" variant="outline" onClick={onNewTask} data-testid="new-task-btn">
-            <Plus className="h-4 w-4 mr-1" /> New Task
+          <Button 
+            size="default" 
+            variant="outline" 
+            onClick={onNewTask} 
+            data-testid="new-task-btn"
+            className="h-10 px-4 border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-600 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
+          >
+            <Plus className="h-4 w-4 mr-2" /> New Task
           </Button>
         </div>
       </div>
