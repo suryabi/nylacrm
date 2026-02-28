@@ -1888,9 +1888,12 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
     week_ago = (today - timedelta(days=7)).isoformat()
     month_start = today.replace(day=1).isoformat()
     
-    # 1. ACTION ITEMS - Tasks assigned to user
+    # 1. ACTION ITEMS - Tasks assigned to OR created by user
     tasks_cursor = db.tasks.find({
-        'assigned_to': user_id,
+        '$or': [
+            {'assigned_to': user_id},
+            {'created_by': user_id}
+        ],
         'status': {'$in': ['pending', 'in_progress']}
     }, {'_id': 0}).sort('due_date', 1).limit(10)
     tasks = await tasks_cursor.to_list(length=10)
