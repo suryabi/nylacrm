@@ -186,26 +186,29 @@ export default function SKUManagement() {
   }, {});
 
   return (
-    <div className="space-y-6" data-testid="sku-management-page">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-orange-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="sku-management-page">
+      <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-30 dark:opacity-10 pointer-events-none" />
+      
+      <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold flex items-center gap-3">
-            <Package className="h-8 w-8 text-primary" />
-            SKU Management
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Manage your product catalog and SKU master list
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-orange-100 to-amber-100 dark:from-orange-900/50 dark:to-amber-900/30">
+            <Package className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800 dark:text-white">SKU Management</h1>
+            <p className="text-muted-foreground">Manage your product catalog and SKU master list</p>
+          </div>
         </div>
-        <Button onClick={handleOpenCreate} data-testid="create-sku-btn">
+        <Button onClick={handleOpenCreate} data-testid="create-sku-btn" className="bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white shadow-lg shadow-orange-200/50 dark:shadow-orange-900/30">
           <Plus className="h-4 w-4 mr-2" />
           Add New SKU
         </Button>
       </div>
 
       {/* Filters */}
-      <Card className="p-4">
+      <Card className="p-4 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex-1 min-w-[200px]">
             <div className="relative">
@@ -214,7 +217,7 @@ export default function SKUManagement() {
                 placeholder="Search SKUs..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="pl-10 border-slate-200 dark:border-slate-700"
                 data-testid="search-sku-input"
               />
             </div>
