@@ -229,7 +229,7 @@ export default function HomeDashboard() {
     }
   };
 
-  const toggleTaskExpand = (taskId) => {
+  const toggleTaskExpand = (taskId, task = null) => {
     if (expandedTaskId === taskId) {
       setExpandedTaskId(null);
       setTaskComment('');
@@ -237,7 +237,8 @@ export default function HomeDashboard() {
     } else {
       setExpandedTaskId(taskId);
       setTaskComment('');
-      setTaskReassignTo('');
+      // Default reassign to the person who assigned the task
+      setTaskReassignTo(task?.assigned_by || '');
     }
   };
 
