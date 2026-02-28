@@ -197,8 +197,9 @@ export default function QualityControl() {
       </Card>
 
       {/* Placeholder Notice */}
-      <div className="text-center py-8 text-gray-400 text-sm">
+      <div className="text-center py-8 text-muted-foreground text-sm">
         <p>This is a placeholder page. Full quality control functionality coming soon.</p>
+      </div>
       </div>
     </div>
   );
