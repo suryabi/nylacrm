@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '../ui/select';
 import {
-  Loader2, Clock, CheckCircle, AlertTriangle, ChevronRight,
+  Loader2, Clock, CheckCircle, AlertTriangle, ChevronRight, Plus,
   User, AlertCircle, CheckSquare, Square, ChevronDown, ChevronUp, Send, ExternalLink
 } from 'lucide-react';
 
@@ -32,7 +32,8 @@ export function ActionItemsWidget({
   taskFilter,
   setTaskFilter,
   onCompleteTask,
-  onUpdateTask
+  onUpdateTask,
+  onNewTask
 }) {
   const navigate = useNavigate();
   const [expandedTaskId, setExpandedTaskId] = useState(null);
