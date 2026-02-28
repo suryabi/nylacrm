@@ -228,7 +228,7 @@ export default function TeamManagement() {
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button data-testid="add-team-member-button">
+              <Button data-testid="add-team-member-button" className="bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-white shadow-lg shadow-purple-200/50 dark:shadow-purple-900/30">
                 <Plus className="h-4 w-4 mr-2" />
                 Add Team Member
               </Button>
