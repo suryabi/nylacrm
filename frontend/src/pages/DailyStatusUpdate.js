@@ -469,21 +469,29 @@ export default function DailyStatusUpdate() {
     : "Today's Action Items & Follow-ups";
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 pb-8 px-4" data-testid="daily-status-page">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-rose-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="daily-status-page">
+      <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-30 dark:opacity-10 pointer-events-none" />
+      
+      <div className="relative max-w-3xl mx-auto space-y-6 pb-8 px-4 py-6 lg:py-8">
       {/* Header */}
-      <div className="text-center pt-4">
-        <h1 className="text-3xl font-bold mb-2">Daily Status Update</h1>
+      <div className="text-center">
+        <div className="inline-flex items-center gap-3 mb-4">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-rose-100 to-pink-100 dark:from-rose-900/50 dark:to-pink-900/30">
+            <Activity className="h-6 w-6 text-rose-600 dark:text-rose-400" />
+          </div>
+          <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800 dark:text-white">Daily Status Update</h1>
+        </div>
         <p className="text-muted-foreground">Share your daily sales activities and progress</p>
       </div>
 
       {/* Date Selection - Mobile Optimized */}
-      <Card className="p-5">
+      <Card className="p-5 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
         <label className="block text-sm font-semibold mb-3">Select Date</label>
         <div className="grid grid-cols-2 gap-3 mb-4">
           <Button
             type="button"
             variant={selectedDate === yesterday ? 'default' : 'outline'}
-            className="h-16 text-base font-medium"
+            className="h-16 text-base font-medium border-slate-200 dark:border-slate-700"
             onClick={() => setSelectedDate(yesterday)}
             data-testid="date-yesterday"
           >
@@ -493,7 +501,7 @@ export default function DailyStatusUpdate() {
           <Button
             type="button"
             variant={selectedDate === today ? 'default' : 'outline'}
-            className="h-16 text-base font-medium"
+            className="h-16 text-base font-medium border-slate-200 dark:border-slate-700"
             onClick={() => setSelectedDate(today)}
             data-testid="date-today"
           >
@@ -510,7 +518,7 @@ export default function DailyStatusUpdate() {
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
             max={today}
-            className="w-full h-12 px-4 rounded-md border border-input bg-background text-base"
+            className="w-full h-12 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-background text-base"
             data-testid="date-picker"
           />
         </div>
@@ -524,7 +532,7 @@ export default function DailyStatusUpdate() {
       <Button
         type="button"
         variant="outline"
-        className="w-full h-14 text-base font-medium border-dashed"
+        className="w-full h-14 text-base font-medium border-dashed border-slate-300 dark:border-slate-600"
         onClick={handleFetchFromActivities}
         disabled={loading}
         data-testid="fetch-activities-button"
