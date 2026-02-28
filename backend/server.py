@@ -8588,7 +8588,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Weather API Proxy - to avoid CORS issues in production
-@app.get("/weather")
+@api_router.get("/weather")
 async def get_weather(latitude: float, longitude: float):
     """Proxy endpoint for Open-Meteo weather API to avoid CORS issues"""
     try:
