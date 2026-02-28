@@ -248,6 +248,38 @@ export default function HomeDashboard() {
     return 'text-red-600 bg-red-100';
   };
 
+  // Get navigation URL for approval tasks
+  const getApprovalTaskUrl = (task) => {
+    if (!task.is_approval_task) return null;
+    
+    switch (task.approval_type) {
+      case 'leave_request':
+        return '/leave-management';
+      case 'proposal':
+        return task.lead_id ? `/leads/${task.lead_id}` : null;
+      case 'contract':
+        return task.account_id ? `/accounts/${task.account_id}` : null;
+      default:
+        return null;
+    }
+  };
+
+  // Get label for approval task link
+  const getApprovalTaskLabel = (task) => {
+    if (!task.is_approval_task) return null;
+    
+    switch (task.approval_type) {
+      case 'leave_request':
+        return 'View Leave Request';
+      case 'proposal':
+        return 'View Proposal';
+      case 'contract':
+        return 'View Contract';
+      default:
+        return 'View Details';
+    }
+  };
+
   const formatMeetingDate = (dateStr) => {
     const date = parseISO(dateStr);
     if (isToday(date)) return 'Today';
