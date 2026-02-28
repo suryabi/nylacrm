@@ -39,6 +39,126 @@ RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
 if RESEND_API_KEY:
     resend.api_key = RESEND_API_KEY
 
+# Meeting email notification helper
+async def send_meeting_notification(meeting: dict, notification_type: str, organizer: dict):
+    """
+    Send email notifications for meeting events.
+    notification_type: 'scheduled', 'rescheduled', 'cancelled'
+    """
+    if not RESEND_API_KEY:
+        print("Resend API key not configured, skipping email notification")
+        return
+    
+    attendees = meeting.get('attendees', [])
+    if not attendees:
+        return
+    
+    sender_email = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
+    organizer_name = organizer.get('name', 'Someone')
+    meeting_title = meeting.get('title', 'Meeting')
+    meeting_date = meeting.get('meeting_date', '')
+    meeting_time = meeting.get('start_time', '')
+    duration = meeting.get('duration_minutes', 30)
+    meeting_link = meeting.get('meeting_link', '')
+    zoom_password = meeting.get('zoom_password', '')
+    location = meeting.get('location', '')
+    description = meeting.get('description', '')
+    
+    # Subject line based on notification type
+    subjects = {
+        'scheduled': f"Meeting Invitation: {meeting_title}",
+        'rescheduled': f"Meeting Rescheduled: {meeting_title}",
+        'cancelled': f"Meeting Cancelled: {meeting_title}"
+    }
+    subject = subjects.get(notification_type, f"Meeting Update: {meeting_title}")
+    
+    # Build email content
+    if notification_type == 'cancelled':
+        html_content = f"""
+        <div style="font-family: Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: #dc2626; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+                <h2 style="margin: 0;">Meeting Cancelled</h2>
+            </div>
+            <div style="padding: 20px; background: #f9fafb; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+                <p style="color: #374151; font-size: 16px;">
+                    <strong>{organizer_name}</strong> has cancelled the following meeting:
+                </p>
+                <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #dc2626;">
+                    <h3 style="margin: 0 0 10px 0; color: #111827;">{meeting_title}</h3>
+                    <p style="margin: 5px 0; color: #6b7280;">
+                        <strong>Originally scheduled:</strong> {meeting_date} at {meeting_time}
+                    </p>
+                </div>
+                <p style="color: #6b7280; font-size: 14px;">
+                    If you have any questions, please contact {organizer_name}.
+                </p>
+            </div>
+        </div>
+        """
+    else:
+        status_color = '#2563eb' if notification_type == 'scheduled' else '#f59e0b'
+        status_text = 'New Meeting' if notification_type == 'scheduled' else 'Meeting Rescheduled'
+        
+        zoom_section = ""
+        if meeting_link:
+            zoom_section = f"""
+            <div style="background: #eff6ff; padding: 15px; border-radius: 8px; margin: 15px 0; border: 1px solid #bfdbfe;">
+                <p style="margin: 0 0 10px 0; color: #1e40af; font-weight: bold;">
+                    📹 Zoom Meeting
+                </p>
+                <p style="margin: 5px 0;">
+                    <a href="{meeting_link}" style="color: #2563eb; text-decoration: none; font-weight: bold;">
+                        Join Meeting
+                    </a>
+                </p>
+                {f'<p style="margin: 5px 0; color: #6b7280; font-size: 14px;">Password: <strong>{zoom_password}</strong></p>' if zoom_password else ''}
+            </div>
+            """
+        
+        location_text = f"<p style='margin: 5px 0; color: #6b7280;'><strong>Location:</strong> {location}</p>" if location and not meeting_link else ""
+        description_text = f"<p style='margin: 10px 0; color: #374151;'>{description}</p>" if description else ""
+        
+        html_content = f"""
+        <div style="font-family: Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: {status_color}; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+                <h2 style="margin: 0;">{status_text}</h2>
+            </div>
+            <div style="padding: 20px; background: #f9fafb; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
+                <p style="color: #374151; font-size: 16px;">
+                    <strong>{organizer_name}</strong> has {'invited you to' if notification_type == 'scheduled' else 'rescheduled'} a meeting:
+                </p>
+                <div style="background: white; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid {status_color};">
+                    <h3 style="margin: 0 0 10px 0; color: #111827;">{meeting_title}</h3>
+                    <p style="margin: 5px 0; color: #6b7280;">
+                        <strong>📅 Date:</strong> {meeting_date}
+                    </p>
+                    <p style="margin: 5px 0; color: #6b7280;">
+                        <strong>🕐 Time:</strong> {meeting_time} ({duration} minutes)
+                    </p>
+                    {location_text}
+                    {description_text}
+                </div>
+                {zoom_section}
+                <p style="color: #6b7280; font-size: 14px;">
+                    If you have any questions, please contact {organizer_name}.
+                </p>
+            </div>
+        </div>
+        """
+    
+    try:
+        email_params = {
+            "from": f"Nyla CRM <{sender_email}>",
+            "to": attendees,
+            "subject": subject,
+            "html": html_content
+        }
+        
+        await asyncio.to_thread(resend.Emails.send, email_params)
+        print(f"Meeting notification sent to {len(attendees)} attendees")
+    except Exception as e:
+        print(f"Failed to send meeting notification: {e}")
+
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
