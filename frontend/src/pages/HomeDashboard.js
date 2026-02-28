@@ -135,19 +135,6 @@ export default function HomeDashboard() {
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [locationName, setLocationName] = useState('');
 
-  useEffect(() => {
-    fetchDashboardData();
-    fetchUsers();
-    fetchWeather();
-    
-    // Update time every second
-    const timeInterval = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    
-    return () => clearInterval(timeInterval);
-  }, []);
-
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
@@ -160,19 +147,6 @@ export default function HomeDashboard() {
     }
   };
 
-  // Auto-select the appropriate tab based on which list has items
-  useEffect(() => {
-    if (!dashboardData || !user?.id) return;
-    
-    const tasks = dashboardData?.action_items?.tasks || [];
-    const assignedToMe = tasks.filter(t => t.assigned_to === user.id);
-    const createdByMe = tasks.filter(t => t.assigned_by === user.id || t.created_by === user.id);
-    
-    if (assignedToMe.length === 0 && createdByMe.length > 0) {
-      setTaskFilter('created');
-    }
-  }, [dashboardData, user?.id]);
-
   const fetchUsers = async () => {
     try {
       const response = await axios.get(`${API_URL}/users`, { withCredentials: true });
@@ -180,6 +154,21 @@ export default function HomeDashboard() {
     } catch (error) {
       console.error('Failed to load users');
     }
+  };
+
+  const fetchDefaultWeather = async () => {
+    try {
+      // Default to Hyderabad, India
+      const weatherRes = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=17.385&longitude=78.4867&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`
+      );
+      const weatherData = await weatherRes.json();
+      setWeather(weatherData.current);
+      setLocationName('Hyderabad');
+    } catch {
+      setWeather(null);
+    }
+    setWeatherLoading(false);
   };
 
   const fetchWeather = async () => {
@@ -228,20 +217,31 @@ export default function HomeDashboard() {
     }
   };
 
-  const fetchDefaultWeather = async () => {
-    try {
-      // Default to Hyderabad, India
-      const weatherRes = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=17.385&longitude=78.4867&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`
-      );
-      const weatherData = await weatherRes.json();
-      setWeather(weatherData.current);
-      setLocationName('Hyderabad');
-    } catch {
-      setWeather(null);
+  useEffect(() => {
+    fetchDashboardData();
+    fetchUsers();
+    fetchWeather();
+    
+    // Update time every second
+    const timeInterval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    
+    return () => clearInterval(timeInterval);
+  }, []);
+
+  // Auto-select the appropriate tab based on which list has items
+  useEffect(() => {
+    if (!dashboardData || !user?.id) return;
+    
+    const tasks = dashboardData?.action_items?.tasks || [];
+    const assignedToMe = tasks.filter(t => t.assigned_to === user.id);
+    const createdByMe = tasks.filter(t => t.assigned_by === user.id || t.created_by === user.id);
+    
+    if (assignedToMe.length === 0 && createdByMe.length > 0) {
+      setTaskFilter('created');
     }
-    setWeatherLoading(false);
-  };
+  }, [dashboardData, user?.id]);
 
   const handleCreateTask = async () => {
     if (!newTask.title.trim()) {
