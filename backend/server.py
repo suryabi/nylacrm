@@ -5499,6 +5499,21 @@ async def create_leave_request(request: LeaveRequestCreate, current_user: dict =
     
     await db.leave_requests.insert_one(doc)
     
+    # Create approval task for reporting manager
+    reports_to = current_user.get('reports_to')
+    if reports_to:
+        leave_details = f"{request.leave_type.capitalize()} Leave ({request.start_date} to {request.end_date})"
+        await create_approval_task(
+            approval_type=ApprovalType.LEAVE_REQUEST,
+            requester_id=current_user['id'],
+            requester_name=current_user.get('name', 'Unknown'),
+            approver_id=reports_to,
+            details=leave_details,
+            description=f"Leave request from {current_user.get('name')}:\n\nType: {request.leave_type.capitalize()}\nDates: {request.start_date} to {request.end_date}\nDays: {total_days}\nReason: {request.reason or 'Not specified'}",
+            reference_id=leave_obj.id,
+            reference_type='leave_request'
+        )
+    
     return leave_obj
 
 @api_router.get("/leave-requests")
