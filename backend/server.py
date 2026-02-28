@@ -2014,7 +2014,7 @@ async def register(user_input: UserCreate):
     return user_obj
 
 @api_router.post("/auth/login")
-async def login(credentials: UserLogin, response: Response):
+async def login(credentials: UserLogin, request: Request, response: Response):
     user_doc = await db.users.find_one({'email': credentials.email}, {'_id': 0})
     if not user_doc or not verify_password(credentials.password, user_doc['password']):
         raise HTTPException(status_code=401, detail='Invalid credentials')
@@ -2025,14 +2025,33 @@ async def login(credentials: UserLogin, response: Response):
     # Create session token (same as Google OAuth flow)
     session_token = str(uuid.uuid4())
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    now = datetime.now(timezone.utc)
+    
+    # Get client IP and user agent
+    client_ip = request.headers.get('X-Forwarded-For', request.client.host if request.client else 'unknown')
+    if client_ip and ',' in client_ip:
+        client_ip = client_ip.split(',')[0].strip()
+    user_agent = request.headers.get('User-Agent', 'unknown')
     
     # Store session in database
     await db.user_sessions.insert_one({
         'user_id': user_doc['id'],
         'session_token': session_token,
         'expires_at': expires_at.isoformat(),
-        'created_at': datetime.now(timezone.utc).isoformat()
+        'created_at': now.isoformat(),
+        'client_ip': client_ip,
+        'user_agent': user_agent
     })
+    
+    # Update user's last login info
+    await db.users.update_one(
+        {'id': user_doc['id']},
+        {'$set': {
+            'last_login_at': now.isoformat(),
+            'last_login_ip': client_ip,
+            'last_login_user_agent': user_agent
+        }}
+    )
     
     # Set httpOnly cookie
     response.set_cookie(
