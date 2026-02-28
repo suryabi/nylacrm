@@ -749,6 +749,8 @@ class Meeting(BaseModel):
     duration_minutes: int = 30
     location: Optional[str] = None  # Physical location or 'Online'
     meeting_link: Optional[str] = None  # Zoom/Teams/Meet link
+    zoom_meeting_id: Optional[str] = None  # Zoom meeting ID
+    zoom_password: Optional[str] = None  # Zoom meeting password
     attendees: List[str] = []  # List of email addresses
     attendee_names: List[str] = []  # List of names
     lead_id: Optional[str] = None
@@ -774,6 +776,7 @@ class MeetingCreate(BaseModel):
     attendee_names: List[str] = []
     lead_id: Optional[str] = None
     account_id: Optional[str] = None
+    create_zoom_meeting: bool = False  # Flag to create Zoom meeting
 
 class MeetingUpdate(BaseModel):
     title: Optional[str] = None
