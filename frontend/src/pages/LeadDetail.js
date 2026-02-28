@@ -1319,22 +1319,52 @@ ${userEmail}`;
                 {/* Proposal File Info */}
                 <div className="p-4 bg-muted/50 rounded-lg">
                   <div className="flex items-start gap-4">
-                    <FileText className="h-10 w-10 text-primary flex-shrink-0" />
+                    {/* File Type Thumbnail */}
+                    {getProposalFileType(proposal.file_name) === 'pdf' ? (
+                      <div className="h-12 w-12 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
+                        <FileText className="h-6 w-6 text-red-600 dark:text-red-400" />
+                      </div>
+                    ) : (
+                      <div className="h-12 w-12 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                        <FileIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{proposal.file_name}</p>
-                      <p className="text-sm text-muted-foreground whitespace-nowrap">
-                        Version {proposal.version} • {(proposal.file_size / 1024).toFixed(1)} KB
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="outline" className={`text-xs ${getProposalFileType(proposal.file_name) === 'pdf' ? 'border-red-300 text-red-600' : 'border-blue-300 text-blue-600'}`}>
+                          {getProposalFileType(proposal.file_name) === 'pdf' ? 'PDF' : 'Word Document'}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {(proposal.file_size / 1024).toFixed(1)} KB
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Version {proposal.version} • Uploaded by {proposal.uploaded_by_name}
                       </p>
-                      <p className="text-sm text-muted-foreground">
-                        Uploaded by {proposal.uploaded_by_name}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        on {format(new Date(proposal.uploaded_at), 'MMM d, yyyy h:mm a')}
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(proposal.uploaded_at), 'MMM d, yyyy h:mm a')}
                       </p>
                     </div>
                   </div>
                   {/* Action Buttons - Separate Row */}
-                  <div className="flex items-center gap-2 mt-3 pt-3 border-t">
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t flex-wrap">
+                    {/* View PDF Button - Only for PDFs */}
+                    {getProposalFileType(proposal.file_name) === 'pdf' && (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={handleOpenPdfViewer}
+                        disabled={loadingPdfViewer}
+                        data-testid="proposal-view-btn"
+                      >
+                        {loadingPdfViewer ? (
+                          <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Loading...</>
+                        ) : (
+                          <><Eye className="h-4 w-4 mr-1" /> View PDF</>
+                        )}
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
