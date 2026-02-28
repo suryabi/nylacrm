@@ -1,0 +1,76 @@
+{
+  "summary": "Proposal File Type Display & PDF Viewer Feature - All 8 test cases PASSED. PDF proposals show red icon with PDF badge and View PDF button. Word documents show blue icon with Word Document badge and NO View PDF button. PDF viewer dialog opens correctly with filename title, embedded PDF, Close and Download buttons.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "PDF Viewer Dialog",
+        "issues": [
+          "Minor: Console warning 'Missing Description or aria-describedby for DialogContent' - accessibility improvement recommended"
+        ]
+      }
+    ]
+  },
+  "passed_tests": [
+    "PDF proposals show red PDF icon (.bg-red-100 class)",
+    "PDF proposals show 'PDF' badge with red border (border-red-300 text-red-600)",
+    "PDF proposals have 'View PDF' button visible (data-testid='proposal-view-btn')",
+    "Clicking 'View PDF' opens dialog with embedded PDF viewer",
+    "PDF viewer dialog title shows filename ('test_proposal.pdf')",
+    "PDF viewer dialog has Close button",
+    "PDF viewer dialog has Download button",
+    "Word document proposals (.docx) show blue icon (.bg-blue-100 class)",
+    "Word document proposals show 'Word Document' badge with blue border",
+    "Word documents do NOT have View PDF button - correctly hidden",
+    "Download button works for both PDF and Word documents",
+    "getProposalFileType() function correctly identifies file types by extension"
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "getProposalFileType() function correctly handles PDF, DOC, DOCX extensions",
+    "Conditional rendering using {getProposalFileType(proposal.file_name) === 'pdf' && ...} works correctly to show/hide View PDF button",
+    "File type icons use appropriate colors: red (bg-red-100) for PDF, blue (bg-blue-100) for Word",
+    "PDF viewer dialog uses embed tag for PDF display - matches Files & Documents page implementation",
+    "All interactive elements have proper data-testid attributes"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A - Frontend only testing",
+    "frontend": "100% (All 12 test cases passed)"
+  },
+  "test_credentials": {
+    "email": "admin@nylaairwater.earth",
+    "password": "admin123"
+  },
+  "seed_data_creation": "Uploaded test_proposal.docx to Patni Plaza lead (ID: 2e60a270-1222-4431-8959-e27edbf988ff) for Word document testing. Citadel Hotels lead (ID: 2ac8be7f-7115-4f40-b5ef-b03113146606) has approved PDF proposal for PDF testing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Proposal file type display feature working correctly. PDF files show red icon + PDF badge + View PDF button. Word files show blue icon + Word Document badge + NO View PDF button. PDF viewer dialog opens correctly with filename title and embedded PDF. Tested on: 1) Citadel Hotels lead (PDF proposal - approved), 2) Patni Plaza lead (Word document - pending review after upload).",
+  "features_verified": {
+    "getProposalFileType_function": {
+      "location": "/app/frontend/src/pages/LeadDetail.js lines 225-231",
+      "behavior": "Returns 'pdf' for .pdf files, 'word' for .doc/.docx files, 'unknown' for others"
+    },
+    "pdf_file_display": {
+      "icon": "Red background (bg-red-100) with FileText icon in red-600",
+      "badge": "'PDF' badge with red border (border-red-300 text-red-600)",
+      "view_button": "View PDF button visible with data-testid='proposal-view-btn'"
+    },
+    "word_file_display": {
+      "icon": "Blue background (bg-blue-100) with FileIcon in blue-600",
+      "badge": "'Word Document' badge with blue border (border-blue-300 text-blue-600)",
+      "view_button": "View PDF button NOT rendered for Word documents"
+    },
+    "pdf_viewer_dialog": {
+      "title": "Shows filename in dialog title",
+      "content": "Embedded PDF using <embed> tag",
+      "buttons": "Close and Download buttons in dialog footer"
+    }
+  }
+}
