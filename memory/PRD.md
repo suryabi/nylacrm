@@ -28,7 +28,30 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 
 ## What's Been Implemented
 
-### Feb 27, 2026 (Session 11 - Current)
+### Feb 28, 2026 (Session 12 - Current)
+- **REFACTORING**: HomeDashboard.js Component Extraction
+  - **Purpose**: Improve code maintainability by breaking down monolithic dashboard component
+  - **Result**: Reduced HomeDashboard.js from 1126 lines to ~260 lines (77% reduction)
+  - **New Widget Components Created** in `/app/frontend/src/components/widgets/`:
+    1. `WeatherTimeWidget.js` - Weather display, digital clock, session timer
+    2. `TodaySummaryWidget.js` - Today's activity summary cards (Activities, Calls, Emails, Meetings)
+    3. `ActionItemsWidget.js` - Tasks with filtering, comments, expand/collapse, approval links
+    4. `UpcomingFollowupsWidget.js` - Follow-ups for both Leads and Accounts
+    5. `UpcomingMeetingsWidget.js` - Zoom-styled meetings widget
+    6. `MonthlyPerformanceWidget.js` - Target vs Achieved progress display
+    7. `PipelineSummaryWidget.js` - Pipeline status distribution
+    8. `RecentActivityWidget.js` - Recent activity feed
+    9. `NewTaskDialog.js` - Task creation modal
+    10. `NewMeetingDialog.js` - Meeting scheduling modal
+    11. `index.js` - Barrel export for all widgets
+  - **Benefits**:
+    - Each widget is now independently maintainable and testable
+    - Improved code reusability - widgets can be used in other pages if needed
+    - Better separation of concerns
+    - Easier debugging and feature additions
+  - Status: VERIFIED via screenshot - all widgets rendering correctly
+
+### Feb 27, 2026 (Session 11)
 - **FEATURE**: Proposal File Type Thumbnails & PDF Viewer
   - **Purpose**: Better visual identification of proposal file types and inline PDF viewing without download
   - **Implementation**:
