@@ -111,6 +111,9 @@ export default function LeadDetail() {
   const [uploadingProposal, setUploadingProposal] = useState(false);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewingProposal, setReviewingProposal] = useState(false);
+  const [showPdfViewer, setShowPdfViewer] = useState(false);
+  const [pdfViewerData, setPdfViewerData] = useState(null);
+  const [loadingPdfViewer, setLoadingPdfViewer] = useState(false);
   
   // Email share dialog state
   const [showShareDialog, setShowShareDialog] = useState(false);
