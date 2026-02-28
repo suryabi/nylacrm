@@ -104,7 +104,7 @@ export default function HomeDashboard() {
   const fetchDefaultWeather = async () => {
     try {
       const weatherRes = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=17.385&longitude=78.4867&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`
+        `${API_URL}/weather?latitude=17.385&longitude=78.4867`
       );
       const weatherData = await weatherRes.json();
       setWeather(weatherData.current);
@@ -123,7 +123,7 @@ export default function HomeDashboard() {
           async (position) => {
             const { latitude, longitude } = position.coords;
             const weatherRes = await fetch(
-              `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`
+              `${API_URL}/weather?latitude=${latitude}&longitude=${longitude}`
             );
             const weatherData = await weatherRes.json();
             setWeather(weatherData.current);
