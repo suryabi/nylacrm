@@ -150,8 +150,13 @@ export default function COGSCalculator() {
       [rowId]: value
     }));
     
-    // If value is empty or invalid, don't recalculate
+    // If value is empty or invalid, reset gross margin to original saved value
     if (!value || value === '' || isNaN(parseFloat(value))) {
+      const originalMargin = originalGrossMargins[rowId];
+      if (originalMargin !== undefined) {
+        // Reset to original value using updateField to recalculate all dependent values
+        updateField(index, 'gross_margin', originalMargin.toString());
+      }
       return;
     }
     
