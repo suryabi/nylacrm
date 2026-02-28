@@ -172,13 +172,13 @@ function LeaveRequestCard({ request, onApprove, showActions }) {
   const [rejectionReason, setRejectionReason] = useState('');
 
   const statusColors = {
-    pending: 'bg-amber-100 text-amber-800',
-    approved: 'bg-green-100 text-green-800',
-    rejected: 'bg-red-100 text-red-800'
+    pending: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300',
+    approved: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
+    rejected: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
   };
 
   return (
-    <Card className="p-6 bg-card border rounded-2xl">
+    <Card className="p-6 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 rounded-2xl">
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
