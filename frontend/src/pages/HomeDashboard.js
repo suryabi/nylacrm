@@ -397,9 +397,10 @@ export default function HomeDashboard() {
         </header>
 
         {/* Quote Widgets - Visible Above the Fold */}
-        <section className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <section className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
           <WaterQuoteWidget />
           <SalesQuoteWidget />
+          <DidYouKnowWidget />
         </section>
 
         {/* Stats Summary - Bento Grid Row 1 */}
