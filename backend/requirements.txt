@@ -130,3 +130,4 @@ websockets==15.0.1
 yarl==1.22.0
 zipp==3.23.0
 resend>=2.0.0
+httpx==0.28.1
