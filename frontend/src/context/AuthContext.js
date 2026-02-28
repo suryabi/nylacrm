@@ -1,14 +1,78 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 
 const AuthContext = createContext();
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
+const INACTIVITY_TIMEOUT = 20 * 60 * 1000; // 20 minutes in milliseconds
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(localStorage.getItem('token'));
+  const [sessionStartTime, setSessionStartTime] = useState(null);
+  const [activeTime, setActiveTime] = useState(0);
+  const lastActivityRef = useRef(Date.now());
+  const inactivityTimerRef = useRef(null);
+  const activeTimeIntervalRef = useRef(null);
+
+  // Reset inactivity timer on user activity
+  const resetInactivityTimer = useCallback(() => {
+    lastActivityRef.current = Date.now();
+    
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
+    
+    if (user) {
+      inactivityTimerRef.current = setTimeout(() => {
+        // Auto logout due to inactivity
+        logoutDueToInactivity();
+      }, INACTIVITY_TIMEOUT);
+    }
+  }, [user]);
+
+  // Track user activity
+  useEffect(() => {
+    if (!user) return;
+
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+    
+    const handleActivity = () => {
+      resetInactivityTimer();
+    };
+
+    events.forEach(event => {
+      document.addEventListener(event, handleActivity);
+    });
+
+    // Start inactivity timer
+    resetInactivityTimer();
+
+    return () => {
+      events.forEach(event => {
+        document.removeEventListener(event, handleActivity);
+      });
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+    };
+  }, [user, resetInactivityTimer]);
+
+  // Update active time every second
+  useEffect(() => {
+    if (sessionStartTime && user) {
+      activeTimeIntervalRef.current = setInterval(() => {
+        setActiveTime(Math.floor((Date.now() - sessionStartTime) / 1000));
+      }, 1000);
+    }
+
+    return () => {
+      if (activeTimeIntervalRef.current) {
+        clearInterval(activeTimeIntervalRef.current);
+      }
+    };
+  }, [sessionStartTime, user]);
 
   useEffect(() => {
     checkAuth();
@@ -21,6 +85,15 @@ export const AuthProvider = ({ children }) => {
         withCredentials: true  // Send cookies
       });
       setUser(response.data);
+      // Restore session start time if available
+      const storedSessionStart = localStorage.getItem('sessionStartTime');
+      if (storedSessionStart) {
+        setSessionStartTime(parseInt(storedSessionStart));
+      } else {
+        const now = Date.now();
+        setSessionStartTime(now);
+        localStorage.setItem('sessionStartTime', now.toString());
+      }
       setLoading(false);
     } catch (error) {
       // If cookie auth fails, try JWT token
@@ -39,6 +112,15 @@ export const AuthProvider = ({ children }) => {
         withCredentials: true
       });
       setUser(response.data);
+      // Restore session start time if available
+      const storedSessionStart = localStorage.getItem('sessionStartTime');
+      if (storedSessionStart) {
+        setSessionStartTime(parseInt(storedSessionStart));
+      } else {
+        const now = Date.now();
+        setSessionStartTime(now);
+        localStorage.setItem('sessionStartTime', now.toString());
+      }
     } catch (error) {
       console.error('Failed to fetch user:', error);
       logout();
@@ -58,6 +140,11 @@ export const AuthProvider = ({ children }) => {
       setToken(session_token);
     }
     setUser(userData);
+    // Set session start time
+    const now = Date.now();
+    setSessionStartTime(now);
+    localStorage.setItem('sessionStartTime', now.toString());
+    setActiveTime(0);
     return userData;
   };
 
@@ -65,19 +152,51 @@ export const AuthProvider = ({ children }) => {
     await axios.post(`${API_URL}/auth/register`, userData);
   };
 
-  const logout = async () => {
+  const logout = async (dueToInactivity = false) => {
+    // Calculate time spent (exclude idle time if due to inactivity)
+    let timeSpent = activeTime;
+    if (dueToInactivity) {
+      // Don't count the last 20 minutes of inactivity
+      timeSpent = Math.max(0, activeTime - (INACTIVITY_TIMEOUT / 1000));
+    }
+    
     try {
-      await axios.post(`${API_URL}/auth/logout`, {}, { withCredentials: true });
+      await axios.post(`${API_URL}/auth/logout`, { 
+        time_spent: timeSpent,
+        due_to_inactivity: dueToInactivity
+      }, { withCredentials: true });
     } catch (error) {
       console.error('Logout error:', error);
     }
     localStorage.removeItem('token');
+    localStorage.removeItem('sessionStartTime');
     setToken(null);
     setUser(null);
+    setSessionStartTime(null);
+    setActiveTime(0);
+    
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
+  };
+
+  const logoutDueToInactivity = async () => {
+    await logout(true);
+    // Redirect to login with message
+    window.location.href = '/login?reason=inactivity';
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, token }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      login, 
+      register, 
+      logout, 
+      token,
+      sessionStartTime,
+      activeTime
+    }}>
       {children}
     </AuthContext.Provider>
   );
