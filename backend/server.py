@@ -8542,6 +8542,32 @@ async def delete_city(city_id: str, current_user: dict = Depends(get_current_use
     )
     return {'message': 'City deleted'}
 
+# ============= WEATHER API PROXY =============
+# Proxy endpoint for Open-Meteo weather API to avoid CORS issues in production
+@api_router.get("/weather")
+async def get_weather(latitude: float, longitude: float):
+    """Proxy endpoint for Open-Meteo weather API to avoid CORS issues"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m",
+                    "timezone": "auto"
+                },
+                timeout=10.0
+            )
+            response.raise_for_status()
+            return response.json()
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Weather service timeout")
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Weather service error: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch weather: {str(e)}")
+
 # ============= INCLUDE ROUTER =============
 
 app.include_router(api_router)
