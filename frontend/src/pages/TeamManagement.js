@@ -642,6 +642,7 @@ export default function TeamManagement() {
           )}
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }
