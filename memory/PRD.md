@@ -51,6 +51,33 @@ Build a comprehensive, mobile-ready Sales CRM application with:
     - Easier debugging and feature additions
   - Status: VERIFIED via screenshot - all widgets rendering correctly
 
+- **FEATURE**: Zoom Integration for Meetings
+  - **Purpose**: Automatically create Zoom meetings when scheduling meetings in the CRM
+  - **Implementation**:
+    - Created `/app/backend/zoom_service.py` - Zoom API client using Server-to-Server OAuth
+    - Updated Meeting model with `zoom_meeting_id` and `zoom_password` fields
+    - Added `create_zoom_meeting` flag to MeetingCreate model
+    - Modified POST `/api/meetings` endpoint to create Zoom meeting when flag is true
+    - Added "Create Zoom Meeting" toggle in NewMeetingDialog component
+    - Updated UpcomingMeetingsWidget to show "Join" button and password for Zoom meetings
+  - **UI Features**:
+    - Toggle switch to enable/disable Zoom meeting creation (ON by default)
+    - "Join" button appears on meetings with Zoom links
+    - Password displayed for easy access
+    - Button text changes to "Create with Zoom" when toggle is on
+  - **Backend**: Uses Zoom Server-to-Server OAuth with `meeting:write:meeting:admin` scope
+  - **Files Modified**:
+    - `/app/backend/.env` - Added ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET
+    - `/app/backend/zoom_service.py` - NEW: Zoom API client
+    - `/app/backend/server.py` - Updated Meeting models and create_meeting endpoint
+    - `/app/frontend/src/components/widgets/NewMeetingDialog.js` - Added Zoom toggle
+    - `/app/frontend/src/components/widgets/UpcomingMeetingsWidget.js` - Added Join button
+    - `/app/frontend/src/pages/HomeDashboard.js` - Added create_zoom_meeting to state
+  - Status: VERIFIED via curl and screenshot - Zoom meetings created successfully
+
+- **UI**: Moved "New Task" button into Action Items widget header
+  - Cleaner dashboard layout with contextual action buttons
+
 ### Feb 27, 2026 (Session 11)
 - **FEATURE**: Proposal File Type Thumbnails & PDF Viewer
   - **Purpose**: Better visual identification of proposal file types and inline PDF viewing without download
