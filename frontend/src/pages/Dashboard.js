@@ -67,28 +67,16 @@ export default function Dashboard() {
   const [cityFilter, setCityFilter] = useState('all');
   const [salesResource, setSalesResource] = useState('all');
 
-  // Master locations from API
-  const { 
-    territories: masterTerritories, 
-    getStateNamesByTerritoryName, 
-    getCityNamesByStateName 
-  } = useMasterLocations();
+  const { territories: masterTerritories, getStateNamesByTerritoryName, getCityNamesByStateName } = useMasterLocations();
 
-  useEffect(() => {
-    fetchSalesTeam();
-  }, []);
-
-  useEffect(() => {
-    fetchAnalytics();
-  }, [timeFilter, territoryFilter, stateFilter, cityFilter, salesResource]);
+  useEffect(() => { fetchSalesTeam(); }, []);
+  useEffect(() => { fetchAnalytics(); }, [timeFilter, territoryFilter, stateFilter, cityFilter, salesResource]);
 
   const fetchSalesTeam = async () => {
     try {
       const response = await axios.get(`${API_URL}/users`, { withCredentials: true });
       setSalesTeam(response.data.filter(u => ['Head of Business', 'Regional Sales Manager', 'National Sales Head', 'Partner - Sales'].includes(u.role) && u.is_active));
-    } catch (error) {
-      console.error('Failed to load team');
-    }
+    } catch (error) { console.error('Failed to load team'); }
   };
 
   const fetchAnalytics = async () => {
@@ -101,14 +89,10 @@ export default function Dashboard() {
         ...(cityFilter !== 'all' && { city: cityFilter }),
         ...(salesResource !== 'all' && { sales_resource: salesResource })
       });
-      
       const response = await axios.get(`${API_URL}/analytics/dashboard?${params}`, { withCredentials: true });
       setAnalytics(response.data);
-    } catch (error) {
-      toast.error('Failed to load analytics');
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { toast.error('Failed to load analytics'); }
+    finally { setLoading(false); }
   };
 
   const handleResetFilters = () => {
@@ -120,245 +104,204 @@ export default function Dashboard() {
   };
 
   const availableTerritories = user?.territory === 'All India' || ['CEO', 'Director', 'Vice President', 'System Admin'].includes(user?.role)
-    ? ['All Territories', ...masterTerritories.map(t => t.name)]
-    : user?.territory ? ['All Territories', user.territory] : ['All Territories'];
+    ? ['All Territories', ...masterTerritories.map(t => t.name)] : user?.territory ? ['All Territories', user.territory] : ['All Territories'];
+  const availableStates = territoryFilter !== 'all' && territoryFilter !== 'All Territories' ? ['All States', ...getStateNamesByTerritoryName(territoryFilter)] : ['All States'];
+  const availableCities = stateFilter !== 'all' && stateFilter !== 'All States' ? ['All Cities', ...getCityNamesByStateName(stateFilter)] : ['All Cities'];
 
-  const availableStates = territoryFilter !== 'all' && territoryFilter !== 'All Territories'
-    ? ['All States', ...getStateNamesByTerritoryName(territoryFilter)]
-    : ['All States'];
+  const totalLeads = analytics?.status_distribution ? Object.values(analytics.status_distribution).reduce((sum, val) => sum + val, 0) : 0;
 
-  const availableCities = stateFilter !== 'all' && stateFilter !== 'All States'
-    ? ['All Cities', ...getCityNamesByStateName(stateFilter)]
-    : ['All Cities'];
-
-  // Calculate total leads from status distribution
-  const totalLeads = analytics?.status_distribution 
-    ? Object.values(analytics.status_distribution).reduce((sum, val) => sum + val, 0)
-    : 0;
+  const activityStats = [
+    { label: 'Visits', value: analytics?.total_visits || 0, sub: `${analytics?.unique_visits || 0} unique`, icon: MapPin, gradient: 'from-teal-500 to-cyan-600', bgGradient: 'from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/20', iconBg: 'bg-teal-100 dark:bg-teal-900/50', textColor: 'text-teal-700 dark:text-teal-300' },
+    { label: 'Calls', value: analytics?.total_calls || 0, sub: `${analytics?.unique_calls || 0} unique`, icon: Phone, gradient: 'from-cyan-500 to-blue-600', bgGradient: 'from-cyan-50 to-blue-50 dark:from-cyan-950/30 dark:to-blue-950/20', iconBg: 'bg-cyan-100 dark:bg-cyan-900/50', textColor: 'text-cyan-700 dark:text-cyan-300' },
+    { label: 'New Leads', value: analytics?.new_leads_added || 0, sub: 'this period', icon: UserPlus, gradient: 'from-violet-500 to-purple-600', bgGradient: 'from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/20', iconBg: 'bg-violet-100 dark:bg-violet-900/50', textColor: 'text-violet-700 dark:text-violet-300' },
+    { label: 'Pipeline Value', value: `₹${((analytics?.pipeline_value || 0) / 100000).toFixed(1)}L`, sub: 'total value', icon: TrendingUp, gradient: 'from-amber-500 to-orange-600', bgGradient: 'from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20', iconBg: 'bg-amber-100 dark:bg-amber-900/50', textColor: 'text-amber-700 dark:text-amber-300' }
+  ];
 
   return (
-    <div className="p-6 max-w-7xl mx-auto" data-testid="sales-overview-dashboard">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <LayoutDashboard className="h-6 w-6 text-primary" />
-          Sales Overview
-        </h1>
-        <p className="text-muted-foreground mt-1">Overview of your sales pipeline</p>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-teal-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="sales-overview-dashboard">
+      <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-30 dark:opacity-10 pointer-events-none" />
+      
+      <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto">
+        {/* Header */}
+        <header className="mb-8">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-teal-100 to-cyan-100 dark:from-teal-900/50 dark:to-cyan-900/30">
+              <LayoutDashboard className="h-6 w-6 text-teal-600 dark:text-teal-400" />
+            </div>
+            <div>
+              <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800 dark:text-white">Sales Overview</h1>
+              <p className="text-muted-foreground">Overview of your sales pipeline</p>
+            </div>
+          </div>
+        </header>
 
-      {/* Filters */}
-      <Card className="p-4 mb-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <span className="font-medium">Filters</span>
-        </div>
-        
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">Time Period</label>
-            <select
-              value={timeFilter}
-              onChange={(e) => setTimeFilter(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg bg-background text-sm"
-            >
-              {TIME_FILTERS.map(tf => (
-                <option key={tf.value} value={tf.value}>{tf.label}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">Territory</label>
-            <select
-              value={territoryFilter}
-              onChange={(e) => { setTerritoryFilter(e.target.value); setStateFilter('all'); setCityFilter('all'); }}
-              className="w-full px-3 py-2 border rounded-lg bg-background text-sm"
-            >
-              {availableTerritories.map(t => (
-                <option key={t} value={t === 'All Territories' ? 'all' : t}>{t}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">State</label>
-            <select
-              value={stateFilter}
-              onChange={(e) => { setStateFilter(e.target.value); setCityFilter('all'); }}
-              disabled={territoryFilter === 'all'}
-              className="w-full px-3 py-2 border rounded-lg bg-background text-sm disabled:opacity-50"
-            >
-              {availableStates.map(s => (
-                <option key={s} value={s === 'All States' ? 'all' : s}>{s}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">City</label>
-            <select
-              value={cityFilter}
-              onChange={(e) => setCityFilter(e.target.value)}
-              disabled={stateFilter === 'all'}
-              className="w-full px-3 py-2 border rounded-lg bg-background text-sm disabled:opacity-50"
-            >
-              {availableCities.map(c => (
-                <option key={c} value={c === 'All Cities' ? 'all' : c}>{c}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">Sales Resource</label>
-            <select
-              value={salesResource}
-              onChange={(e) => setSalesResource(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg bg-background text-sm"
-            >
-              <option value="all">All Resources</option>
-              {salesTeam.map(m => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div className="flex items-end">
-            <Button variant="outline" onClick={handleResetFilters} className="w-full">
-              Reset
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : (
-        <>
-          {/* Activity Metrics */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <Card className="p-4 bg-gradient-to-br from-teal-50 to-teal-100 dark:from-teal-900/30 dark:to-teal-800/20 border-teal-200 dark:border-teal-700/50">
-              <div className="flex items-center gap-2 mb-2">
-                <MapPin className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-                <p className="text-xs font-medium text-teal-600 dark:text-teal-400">VISITS</p>
-              </div>
-              <p className="text-2xl font-bold text-teal-700 dark:text-teal-300">{analytics?.total_visits || 0}</p>
-              <p className="text-xs text-teal-600 dark:text-teal-400 mt-1">{analytics?.unique_visits || 0} unique</p>
-            </Card>
-            <Card className="p-4 bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-900/30 dark:to-cyan-800/20 border-cyan-200 dark:border-cyan-700/50">
-              <div className="flex items-center gap-2 mb-2">
-                <Phone className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
-                <p className="text-xs font-medium text-cyan-600 dark:text-cyan-400">CALLS</p>
-              </div>
-              <p className="text-2xl font-bold text-cyan-700 dark:text-cyan-300">{analytics?.total_calls || 0}</p>
-              <p className="text-xs text-cyan-600 dark:text-cyan-400 mt-1">{analytics?.unique_calls || 0} unique</p>
-            </Card>
-            <Card className="p-4 bg-gradient-to-br from-violet-50 to-violet-100 dark:from-violet-900/30 dark:to-violet-800/20 border-violet-200 dark:border-violet-700/50">
-              <div className="flex items-center gap-2 mb-2">
-                <UserPlus className="h-4 w-4 text-violet-600 dark:text-violet-400" />
-                <p className="text-xs font-medium text-violet-600 dark:text-violet-400">NEW LEADS</p>
-              </div>
-              <p className="text-2xl font-bold text-violet-700 dark:text-violet-300">{analytics?.new_leads_added || 0}</p>
-              <p className="text-xs text-violet-600 dark:text-violet-400 mt-1">this period</p>
-            </Card>
-            <Card className="p-4 bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/30 dark:to-amber-800/20 border-amber-200 dark:border-amber-700/50">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                <p className="text-xs font-medium text-amber-600 dark:text-amber-400">PIPELINE VALUE</p>
-              </div>
-              <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
-                ₹{((analytics?.pipeline_value || 0) / 100000).toFixed(1)}L
-              </p>
-              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">total value</p>
-            </Card>
-          </div>
-
-          {/* Lead Status Distribution */}
-          <Card className="p-4 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="font-semibold">Lead Status Distribution</h3>
-                <p className="text-sm text-muted-foreground">{totalLeads} total leads</p>
-              </div>
+        {/* Filters */}
+        <Card className="mb-6 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
+          <div className="p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <span className="font-semibold text-slate-700 dark:text-slate-300">Filters</span>
             </div>
             
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-              {Object.entries(STATUS_CONFIG).map(([key, config]) => {
-                const count = analytics?.status_distribution?.[key] || 0;
-                const percentage = totalLeads > 0 ? ((count / totalLeads) * 100).toFixed(0) : 0;
-                const Icon = config.icon;
-                const colorClass = COLOR_CLASSES[config.color];
-                
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Time Period</label>
+                <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
+                  {TIME_FILTERS.map(tf => <option key={tf.value} value={tf.value}>{tf.label}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Territory</label>
+                <select value={territoryFilter} onChange={(e) => { setTerritoryFilter(e.target.value); setStateFilter('all'); setCityFilter('all'); }} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
+                  {availableTerritories.map(t => <option key={t} value={t === 'All Territories' ? 'all' : t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">State</label>
+                <select value={stateFilter} onChange={(e) => { setStateFilter(e.target.value); setCityFilter('all'); }} disabled={territoryFilter === 'all'} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm disabled:opacity-50 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
+                  {availableStates.map(s => <option key={s} value={s === 'All States' ? 'all' : s}>{s}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">City</label>
+                <select value={cityFilter} onChange={(e) => setCityFilter(e.target.value)} disabled={stateFilter === 'all'} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm disabled:opacity-50 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
+                  {availableCities.map(c => <option key={c} value={c === 'All Cities' ? 'all' : c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Sales Resource</label>
+                <select value={salesResource} onChange={(e) => setSalesResource(e.target.value)} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all">
+                  <option value="all">All Resources</option>
+                  {salesTeam.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </div>
+              <div className="flex items-end">
+                <Button variant="outline" onClick={handleResetFilters} className="w-full h-[38px] border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">Reset</Button>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-16">
+            <div className="relative"><div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" /><Loader2 className="h-10 w-10 animate-spin text-primary relative z-10" /></div>
+            <p className="text-muted-foreground text-sm mt-4 animate-pulse">Loading data...</p>
+          </div>
+        ) : (
+          <>
+            {/* Activity Metrics */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              {activityStats.map((stat) => {
+                const Icon = stat.icon;
                 return (
-                  <div
-                    key={key}
-                    onClick={() => navigate(`/leads?status=${key}`)}
-                    className={`p-3 rounded-xl bg-gradient-to-br border cursor-pointer hover:shadow-md transition-all ${colorClass}`}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <Icon className="h-4 w-4 opacity-70" />
-                      <span className="text-xs font-medium truncate">{config.label}</span>
-                    </div>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-xl font-bold">{count}</span>
-                      <span className="text-xs opacity-70">/ {totalLeads}</span>
-                    </div>
-                    <div className="mt-1">
-                      <div className="h-1.5 bg-white/50 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-current opacity-50 rounded-full transition-all"
-                          style={{ width: `${percentage}%` }}
-                        />
+                  <Card key={stat.label} className={`relative overflow-hidden border-0 bg-gradient-to-br ${stat.bgGradient} backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5`}>
+                    <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.gradient}`} />
+                    <div className="p-5">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{stat.label}</p>
+                          <p className={`text-2xl lg:text-3xl font-bold ${stat.textColor} tabular-nums`}>{stat.value}</p>
+                          <p className="text-xs text-muted-foreground">{stat.sub}</p>
+                        </div>
+                        <div className={`p-2.5 rounded-xl ${stat.iconBg}`}><Icon className={`h-5 w-5 ${stat.textColor}`} /></div>
                       </div>
-                      <p className="text-xs font-medium mt-1">{percentage}%</p>
                     </div>
-                  </div>
+                  </Card>
                 );
               })}
             </div>
-          </Card>
 
-          {/* Quick Summary */}
-          <div className="grid grid-cols-2 gap-4">
-            <Card className="p-4 bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-full bg-emerald-200 flex items-center justify-center">
-                  <CheckCircle className="h-6 w-6 text-emerald-700" />
+            {/* Lead Status Distribution */}
+            <Card className="mb-6 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
+              <div className="p-5">
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-800 dark:text-white">Lead Status Distribution</h3>
+                    <p className="text-sm text-muted-foreground">{totalLeads} total leads</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-emerald-600">WON</p>
-                  <p className="text-3xl font-bold text-emerald-700">{analytics?.status_distribution?.won || 0}</p>
-                </div>
-                <div className="ml-auto text-right">
-                  <p className="text-2xl font-bold text-emerald-700">
-                    {totalLeads > 0 ? ((analytics?.status_distribution?.won || 0) / totalLeads * 100).toFixed(0) : 0}%
-                  </p>
-                  <p className="text-xs text-emerald-600">win rate</p>
+                
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                  {Object.entries(STATUS_CONFIG).map(([key, config]) => {
+                    const count = analytics?.status_distribution?.[key] || 0;
+                    const percentage = totalLeads > 0 ? ((count / totalLeads) * 100).toFixed(0) : 0;
+                    const Icon = config.icon;
+                    const colorClass = COLOR_CLASSES[config.color];
+                    
+                    return (
+                      <div
+                        key={key}
+                        onClick={() => navigate(`/leads?status=${key}`)}
+                        className={`p-3 rounded-xl bg-gradient-to-br border cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 ${colorClass}`}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <Icon className="h-4 w-4 opacity-70" />
+                          <span className="text-xs font-medium truncate">{config.label}</span>
+                        </div>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-xl font-bold">{count}</span>
+                          <span className="text-xs opacity-70">/ {totalLeads}</span>
+                        </div>
+                        <div className="mt-2">
+                          <div className="h-1.5 bg-white/50 rounded-full overflow-hidden">
+                            <div className="h-full bg-current opacity-50 rounded-full transition-all" style={{ width: `${percentage}%` }} />
+                          </div>
+                          <p className="text-xs font-medium mt-1">{percentage}%</p>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </Card>
-            <Card className="p-4 bg-gradient-to-br from-red-50 to-red-100 border-red-200">
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-full bg-red-200 flex items-center justify-center">
-                  <XCircle className="h-6 w-6 text-red-700" />
+
+            {/* Quick Summary - Won/Lost */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/20 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300">
+                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-green-600" />
+                <div className="p-5">
+                  <div className="flex items-center gap-4">
+                    <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-emerald-100 to-green-200 dark:from-emerald-900/50 dark:to-green-900/30 flex items-center justify-center shadow-sm">
+                      <CheckCircle className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Won Deals</p>
+                      <p className="text-3xl font-bold text-emerald-700 dark:text-emerald-300">{analytics?.status_distribution?.won || 0}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
+                        {totalLeads > 0 ? ((analytics?.status_distribution?.won || 0) / totalLeads * 100).toFixed(0) : 0}%
+                      </p>
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400">win rate</p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-red-600">LOST</p>
-                  <p className="text-3xl font-bold text-red-700">{analytics?.status_distribution?.lost || 0}</p>
+              </Card>
+
+              <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/20 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300">
+                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-rose-600" />
+                <div className="p-5">
+                  <div className="flex items-center gap-4">
+                    <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-red-100 to-rose-200 dark:from-red-900/50 dark:to-rose-900/30 flex items-center justify-center shadow-sm">
+                      <XCircle className="h-7 w-7 text-red-600 dark:text-red-400" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs font-medium text-red-600 dark:text-red-400 uppercase tracking-wider">Lost Deals</p>
+                      <p className="text-3xl font-bold text-red-700 dark:text-red-300">{analytics?.status_distribution?.lost || 0}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-red-700 dark:text-red-300">
+                        {totalLeads > 0 ? ((analytics?.status_distribution?.lost || 0) / totalLeads * 100).toFixed(0) : 0}%
+                      </p>
+                      <p className="text-xs text-red-600 dark:text-red-400">loss rate</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="ml-auto text-right">
-                  <p className="text-2xl font-bold text-red-700">
-                    {totalLeads > 0 ? ((analytics?.status_distribution?.lost || 0) / totalLeads * 100).toFixed(0) : 0}%
-                  </p>
-                  <p className="text-xs text-red-600">loss rate</p>
-                </div>
-              </div>
-            </Card>
-          </div>
-        </>
-      )}
+              </Card>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
