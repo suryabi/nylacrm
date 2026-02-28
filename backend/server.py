@@ -2175,6 +2175,28 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             assignee = await db.users.find_one({'id': lead['assigned_to']}, {'_id': 0, 'name': 1})
             lead['assigned_to_name'] = assignee.get('name') if assignee else None
     
+    # 3b. UPCOMING ACCOUNTS - Accounts with future follow-up dates within a week
+    upcoming_accounts_cursor = db.accounts.find({
+        'assigned_to': {'$in': team_user_ids},
+        'next_follow_up': {'$gte': today_str, '$lte': week_from_now}
+    }, {'_id': 0, 'id': 1, 'account_id': 1, 'account_name': 1, 'next_follow_up': 1, 'contact_name': 1, 'contact_number': 1, 'assigned_to': 1}).sort('next_follow_up', 1).limit(10)
+    upcoming_accounts = await upcoming_accounts_cursor.to_list(length=10)
+    
+    # Add assigned_to_name and mark as account type
+    for account in upcoming_accounts:
+        account['type'] = 'account'
+        if account.get('assigned_to') and account['assigned_to'] != user_id:
+            assignee = await db.users.find_one({'id': account['assigned_to']}, {'_id': 0, 'name': 1})
+            account['assigned_to_name'] = assignee.get('name') if assignee else None
+    
+    # Mark leads with their type
+    for lead in upcoming_leads:
+        lead['type'] = 'lead'
+    
+    # Combine and sort upcoming follow-ups (leads + accounts)
+    combined_upcoming = upcoming_leads + upcoming_accounts
+    combined_upcoming.sort(key=lambda x: x.get('next_follow_up', ''))
+    
     # 4. SMART LEAD RECOMMENDATIONS - Leads likely to close
     # Get all active leads for the user
     all_leads_cursor = db.leads.find({
