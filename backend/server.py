@@ -7283,6 +7283,22 @@ async def upload_lead_proposal(
     
     await db.lead_proposals.insert_one(doc)
     
+    # Create approval task for reporting manager
+    reports_to = current_user.get('reports_to')
+    if reports_to:
+        company_name = lead.get('company', 'Unknown Company')
+        await create_approval_task(
+            approval_type=ApprovalType.PROPOSAL,
+            requester_id=current_user['id'],
+            requester_name=current_user.get('name', 'Unknown'),
+            approver_id=reports_to,
+            details=f"{company_name} - {file.filename}",
+            description=f"Proposal uploaded by {current_user.get('name')} for review.\n\nLead: {company_name}\nFile: {file.filename}\nVersion: {version}",
+            reference_id=lead_id,
+            reference_type='proposal',
+            lead_id=lead_id
+        )
+    
     # Return without file_data
     response = {k: v for k, v in doc.items() if k not in ['_id', 'file_data']}
     
