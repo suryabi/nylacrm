@@ -7419,6 +7419,21 @@ async def review_lead_proposal(
         }
     )
     
+    # Complete the approval task when reviewed (approved, rejected, or changes requested)
+    if action in ['approved', 'rejected']:
+        await complete_approval_task(
+            approval_type=ApprovalType.PROPOSAL,
+            reference_id=lead_id,
+            status='completed'
+        )
+    elif action == 'changes_requested':
+        # Mark as cancelled since the submitter needs to resubmit
+        await complete_approval_task(
+            approval_type=ApprovalType.PROPOSAL,
+            reference_id=lead_id,
+            status='cancelled'
+        )
+    
     # Get updated proposal
     updated = await db.lead_proposals.find_one({'lead_id': lead_id}, {'_id': 0, 'file_data': 0})
     
