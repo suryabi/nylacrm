@@ -29,7 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
-import { Plus, Loader2, Edit, Trash2, Clock, Activity, Eye, MousePointer } from 'lucide-react';
+import { Plus, Loader2, Edit, Trash2, Clock, Activity, Eye, MousePointer, Users } from 'lucide-react';
 import { formatDuration, formatRelativeTime, getPageName } from '../hooks/useActivityTracker';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 
