@@ -474,7 +474,12 @@ export default function HomeDashboard() {
                   ))}
                 </div>
               </div>
-            )}
+            ) : (
+              <div className="text-center py-6 text-muted-foreground">
+                <p className="text-sm">No tasks {taskFilter === 'assigned' ? 'assigned to you' : 'created by you'}</p>
+              </div>
+            );
+            })()}
             
             {/* Overdue Follow-ups */}
             {action_items?.overdue_follow_ups?.length > 0 && (
