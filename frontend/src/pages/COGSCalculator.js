@@ -43,6 +43,9 @@ export default function COGSCalculator() {
   // Used for on-the-fly gross margin calculation
   const [actualLandingPrices, setActualLandingPrices] = React.useState({});
   
+  // Store original gross margin values from database to reset when actual landing price is cleared
+  const [originalGrossMargins, setOriginalGrossMargins] = React.useState({});
+  
   // Set default city when cities load
   React.useEffect(() => {
     if (cities.length > 0 && !selectedCity) {
@@ -50,9 +53,10 @@ export default function COGSCalculator() {
     }
   }, [cities]);
 
-  // Clear transient actual landing prices when city changes
+  // Clear transient actual landing prices and original values when city changes
   React.useEffect(() => {
     setActualLandingPrices({});
+    setOriginalGrossMargins({});
   }, [selectedCity]);
 
   React.useEffect(() => {
