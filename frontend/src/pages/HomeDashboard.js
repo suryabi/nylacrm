@@ -14,7 +14,8 @@ import {
   LayoutDashboard, Loader2, Phone, Mail, Calendar, Clock, Target,
   CheckCircle, AlertTriangle, TrendingUp, Users, ChevronRight,
   Plus, X, CalendarDays, Activity, Zap, ArrowRight, Building2,
-  User, AlertCircle, CheckSquare, Square, Circle, ChevronDown, ChevronUp, Send, ExternalLink
+  User, AlertCircle, CheckSquare, Square, Circle, ChevronDown, ChevronUp, Send, ExternalLink,
+  Sun, Cloud, CloudRain, CloudSnow, CloudLightning, Wind, Droplets, MapPin, Thermometer
 } from 'lucide-react';
 import {
   Dialog,
@@ -33,6 +34,38 @@ import {
 } from '../components/ui/select';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
+
+// Weather code to icon mapping
+const getWeatherIcon = (code) => {
+  if (code === 0) return <Sun className="h-8 w-8 text-yellow-500" />;
+  if (code >= 1 && code <= 3) return <Cloud className="h-8 w-8 text-gray-400" />;
+  if (code >= 45 && code <= 48) return <Cloud className="h-8 w-8 text-gray-500" />;
+  if (code >= 51 && code <= 67) return <CloudRain className="h-8 w-8 text-blue-400" />;
+  if (code >= 71 && code <= 77) return <CloudSnow className="h-8 w-8 text-blue-200" />;
+  if (code >= 80 && code <= 82) return <CloudRain className="h-8 w-8 text-blue-500" />;
+  if (code >= 85 && code <= 86) return <CloudSnow className="h-8 w-8 text-blue-300" />;
+  if (code >= 95 && code <= 99) return <CloudLightning className="h-8 w-8 text-purple-500" />;
+  return <Sun className="h-8 w-8 text-yellow-500" />;
+};
+
+const getWeatherDescription = (code) => {
+  if (code === 0) return 'Clear sky';
+  if (code === 1) return 'Mainly clear';
+  if (code === 2) return 'Partly cloudy';
+  if (code === 3) return 'Overcast';
+  if (code >= 45 && code <= 48) return 'Foggy';
+  if (code >= 51 && code <= 55) return 'Drizzle';
+  if (code >= 56 && code <= 57) return 'Freezing drizzle';
+  if (code >= 61 && code <= 65) return 'Rain';
+  if (code >= 66 && code <= 67) return 'Freezing rain';
+  if (code >= 71 && code <= 75) return 'Snowfall';
+  if (code === 77) return 'Snow grains';
+  if (code >= 80 && code <= 82) return 'Rain showers';
+  if (code >= 85 && code <= 86) return 'Snow showers';
+  if (code === 95) return 'Thunderstorm';
+  if (code >= 96 && code <= 99) return 'Thunderstorm with hail';
+  return 'Unknown';
+};
 
 // Priority colors
 const PRIORITY_COLORS = {
