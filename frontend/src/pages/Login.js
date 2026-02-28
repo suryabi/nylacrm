@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { Checkbox } from '../components/ui/checkbox';
 import { toast } from 'sonner';
 import { Mail, Lock, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -15,16 +16,35 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
-  const [email, setEmail] = useState('admin@nylaairwater.earth');
-  const [password, setPassword] = useState('admin123');
+  
+  // Check for remembered email
+  const rememberedEmail = localStorage.getItem('rememberedEmail') || '';
+  const [email, setEmail] = useState(rememberedEmail || '');
+  const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(!!rememberedEmail);
   const [loading, setLoading] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const errorMessage = location.state?.error;
+  
+  // Check for inactivity logout message
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('reason') === 'inactivity') {
+      toast.info('You were logged out due to inactivity');
+    }
+  }, [location.search]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
+      // Save or remove remembered email
+      if (rememberMe) {
+        localStorage.setItem('rememberedEmail', email);
+      } else {
+        localStorage.removeItem('rememberedEmail');
+      }
+      
       await login(email, password);
       toast.success('Welcome back!');
       navigate('/home');
