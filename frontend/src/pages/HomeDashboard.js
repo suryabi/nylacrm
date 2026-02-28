@@ -346,13 +346,20 @@ export default function HomeDashboard() {
                           <Square className="h-5 w-5" />
                         </button>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{task.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Due: {format(parseISO(task.due_date), 'MMM d')}
-                            {task.assigned_to !== user?.id && task.assigned_to_name && (
-                              <span className="ml-2">• Assigned to: {task.assigned_to_name}</span>
-                            )}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium truncate">{task.title}</p>
+                            <Badge variant="outline" className="text-xs capitalize">
+                              {task.status?.replace('_', ' ') || 'pending'}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                            <span>Due: {format(parseISO(task.due_date), 'MMM d')}</span>
+                            <span>•</span>
+                            <span className="flex items-center gap-1">
+                              <User className="h-3 w-3" />
+                              {task.assigned_to === user?.id ? 'You' : task.assigned_to_name || 'Unassigned'}
+                            </span>
+                          </div>
                         </div>
                         <Badge className={PRIORITY_COLORS[task.priority]}>{task.priority}</Badge>
                         <button
