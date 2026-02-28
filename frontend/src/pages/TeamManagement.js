@@ -175,7 +175,14 @@ export default function TeamManagement() {
   };
 
   if (loading) {
-    return <div className="flex justify-center py-12">Loading team...</div>;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex items-center justify-center">
+        <div className="flex flex-col items-center">
+          <div className="relative"><div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" /><Loader2 className="h-10 w-10 animate-spin text-primary relative z-10" /></div>
+          <p className="text-muted-foreground text-sm mt-4 animate-pulse">Loading team...</p>
+        </div>
+      </div>
+    );
   }
 
   // Sort users by hierarchy
@@ -185,12 +192,20 @@ export default function TeamManagement() {
   });
 
   return (
-    <div className="space-y-6" data-testid="team-management-page">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="team-management-page">
+      <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-30 dark:opacity-10 pointer-events-none" />
+      
+      <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold">Team Management</h1>
-          <p className="text-muted-foreground mt-1">Manage your sales team members</p>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-purple-100 to-violet-100 dark:from-purple-900/50 dark:to-violet-900/30">
+            <Users className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800 dark:text-white">Team Management</h1>
+            <p className="text-muted-foreground">Manage your sales team members</p>
+          </div>
         </div>
         <div className="flex gap-3">
           <div className="flex gap-2 bg-secondary p-1 rounded-full">
