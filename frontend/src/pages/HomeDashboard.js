@@ -321,50 +321,70 @@ export default function HomeDashboard() {
         {/* Left Column - Action Items */}
         <div className="lg:col-span-2 space-y-6">
           {/* Action Items */}
-          <Card className="p-5">
-            <div className="flex items-center justify-between mb-4">
+          <Card className="p-0 overflow-hidden border-0 shadow-lg">
+            <div className="flex items-center justify-between p-5 bg-gradient-to-r from-primary/10 to-primary/5 border-b">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <CheckSquare className="h-5 w-5 text-primary" />
                 Action Items
               </h2>
-              <Badge variant="outline">{(action_items?.tasks?.length || 0) + (action_items?.overdue_follow_ups?.length || 0)} pending</Badge>
+              <Badge className="bg-primary/20 text-primary border-0 font-semibold">
+                {(action_items?.tasks?.length || 0) + (action_items?.overdue_follow_ups?.length || 0)} pending
+              </Badge>
             </div>
             
+            <div className="p-5">
             {/* Tasks */}
             {action_items?.tasks?.length > 0 && (
               <div className="mb-4">
-                <h3 className="text-sm font-medium text-muted-foreground mb-2">Tasks</h3>
-                <div className="space-y-2">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Tasks</h3>
+                <div className="space-y-3">
                   {action_items.tasks.map(task => (
-                    <div key={task.id} className="bg-muted/50 rounded-lg hover:bg-muted transition-colors">
-                      <div className="flex items-center gap-3 p-3">
+                    <div key={task.id} className="bg-card border rounded-xl shadow-sm hover:shadow-md transition-all duration-200">
+                      <div className="flex items-start gap-3 p-4">
                         <button
                           onClick={() => handleCompleteTask(task.id)}
-                          className="text-muted-foreground hover:text-green-600"
+                          className="mt-1 text-muted-foreground hover:text-green-600 transition-colors"
                           title="Mark complete"
                         >
                           <Square className="h-5 w-5" />
                         </button>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium truncate">{task.title}</p>
-                            <Badge variant="outline" className="text-xs capitalize">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold text-foreground">{task.title}</p>
+                            <Badge variant="outline" className="text-xs capitalize border-primary/30 text-primary">
                               {task.status?.replace('_', ' ') || 'pending'}
                             </Badge>
                           </div>
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                            <span>Due: {format(parseISO(task.due_date), 'MMM d')}</span>
-                            <span>•</span>
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1.5">
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              Due: {format(parseISO(task.due_date), 'MMM d')}
+                            </span>
                             <span className="flex items-center gap-1">
                               <User className="h-3 w-3" />
                               {task.assigned_to === user?.id ? 'You' : task.assigned_to_name || 'Unassigned'}
                             </span>
+                            {task.created_by === user?.id && task.assigned_to !== user?.id && (
+                              <Badge variant="secondary" className="text-xs py-0">Created by you</Badge>
+                            )}
                           </div>
+                          {/* Latest Comment Preview */}
+                          {task.comments?.length > 0 && (
+                            <div className="mt-2 p-2 bg-muted/50 rounded-lg border-l-2 border-primary/50">
+                              <p className="text-xs text-muted-foreground">
+                                <span className="font-medium text-foreground">{task.comments[task.comments.length - 1].created_by_name}:</span>{' '}
+                                {task.comments[task.comments.length - 1].text}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                                {format(parseISO(task.comments[task.comments.length - 1].created_at), 'MMM d, h:mm a')}
+                              </p>
+                            </div>
+                          )}
                         </div>
-                        <Badge className={PRIORITY_COLORS[task.priority]}>{task.priority}</Badge>
+                        <Badge className={`${PRIORITY_COLORS[task.priority]} shrink-0`}>{task.priority}</Badge>
                         <button
                           onClick={() => toggleTaskExpand(task.id)}
-                          className="text-muted-foreground hover:text-primary p-1"
+                          className="text-muted-foreground hover:text-primary p-1.5 hover:bg-muted rounded-lg transition-colors"
                           title={expandedTaskId === task.id ? "Collapse" : "Expand"}
                         >
                           {expandedTaskId === task.id ? (
@@ -377,19 +397,19 @@ export default function HomeDashboard() {
                       
                       {/* Expanded section */}
                       {expandedTaskId === task.id && (
-                        <div className="px-3 pb-3 pt-1 border-t border-border/50 space-y-3">
+                        <div className="px-4 pb-4 pt-2 border-t space-y-3">
                           {task.description && (
-                            <p className="text-sm text-muted-foreground">{task.description}</p>
+                            <p className="text-sm text-muted-foreground bg-muted/30 p-2 rounded-lg">{task.description}</p>
                           )}
                           <div className="flex gap-2">
                             <Input
-                              placeholder="Add a comment..."
+                              placeholder="Add an update..."
                               value={taskComment}
                               onChange={(e) => setTaskComment(e.target.value)}
-                              className="flex-1 h-8 text-sm"
+                              className="flex-1 h-10 bg-background border-2 border-muted focus:border-primary shadow-sm"
                             />
                             <Select value={taskReassignTo} onValueChange={setTaskReassignTo}>
-                              <SelectTrigger className="w-[140px] h-8 text-sm">
+                              <SelectTrigger className="w-[150px] h-10 bg-background border-2 border-muted">
                                 <SelectValue placeholder="Reassign to" />
                               </SelectTrigger>
                               <SelectContent>
@@ -400,11 +420,11 @@ export default function HomeDashboard() {
                             </Select>
                             <Button
                               size="sm"
-                              className="h-8"
+                              className="h-10 px-4"
                               onClick={() => handleUpdateTask(task.id)}
                               disabled={updatingTask || (!taskComment.trim() && !taskReassignTo)}
                             >
-                              {updatingTask ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                              {updatingTask ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                             </Button>
                           </div>
                         </div>
