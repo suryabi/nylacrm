@@ -204,8 +204,14 @@ export default function HomeDashboard() {
         attendees: newMeeting.attendees.split(',').map(e => e.trim()).filter(e => e),
         attendee_names: newMeeting.attendee_names.split(',').map(n => n.trim()).filter(n => n)
       };
-      await axios.post(`${API_URL}/meetings`, meetingData, { withCredentials: true });
-      toast.success('Meeting scheduled successfully');
+      const response = await axios.post(`${API_URL}/meetings`, meetingData, { withCredentials: true });
+      
+      if (newMeeting.create_zoom_meeting && response.data.meeting_link) {
+        toast.success('Meeting scheduled with Zoom link!');
+      } else {
+        toast.success('Meeting scheduled successfully');
+      }
+      
       setShowNewMeetingDialog(false);
       setNewMeeting({
         title: '',
@@ -216,11 +222,13 @@ export default function HomeDashboard() {
         duration_minutes: 30,
         location: '',
         attendees: '',
-        attendee_names: ''
+        attendee_names: '',
+        create_zoom_meeting: true
       });
       fetchDashboardData();
     } catch (error) {
-      toast.error('Failed to schedule meeting');
+      const errorMsg = error.response?.data?.detail || 'Failed to schedule meeting';
+      toast.error(errorMsg);
     } finally {
       setSavingMeeting(false);
     }
