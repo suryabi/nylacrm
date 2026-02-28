@@ -552,6 +552,9 @@ class Account(BaseModel):
     # Assignment
     assigned_to: Optional[str] = None
     
+    # Follow-up
+    next_follow_up: Optional[str] = None  # YYYY-MM-DD
+    
     # SKU Pricing
     sku_pricing: List[AccountSKUPricing] = []
     
