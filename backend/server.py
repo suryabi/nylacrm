@@ -2113,6 +2113,7 @@ def calculate_lead_score(lead: dict) -> int:
 async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
     """Get comprehensive dashboard data for the logged-in user"""
     user_id = current_user['id']
+    user_role = current_user.get('role', '')
     today = datetime.now(timezone.utc).date()
     today_str = today.isoformat()
     
@@ -2120,6 +2121,17 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
     week_from_now = (today + timedelta(days=7)).isoformat()
     week_ago = (today - timedelta(days=7)).isoformat()
     month_start = today.replace(day=1).isoformat()
+    
+    # For managers (CEO, Director, VP, NSH), also show leads from their team
+    team_user_ids = [user_id]
+    manager_roles = ['CEO', 'Director', 'Vice President', 'National Sales Head']
+    if user_role in manager_roles:
+        # Get all users who report to this user (direct reports)
+        subordinates = await db.users.find(
+            {'reports_to': user_id, 'is_active': True},
+            {'_id': 0, 'id': 1}
+        ).to_list(length=100)
+        team_user_ids.extend([s['id'] for s in subordinates])
     
     # 1. ACTION ITEMS - Tasks assigned to OR created by user
     tasks_cursor = db.tasks.find({
