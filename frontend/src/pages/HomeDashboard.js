@@ -420,14 +420,72 @@ export default function HomeDashboard() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6" data-testid="home-dashboard">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      {/* Header with Weather and Time */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex-1">
           <h1 className="text-2xl font-bold">
             Welcome back, {user?.name?.split(' ')[0]}!
           </h1>
           <p className="text-muted-foreground">{format(new Date(), 'EEEE, MMMM d, yyyy')}</p>
         </div>
+        
+        {/* Weather & Time Widget */}
+        <Card className="p-4 bg-gradient-to-br from-sky-50 to-indigo-50 dark:from-sky-900/30 dark:to-indigo-900/20 border-sky-200 dark:border-sky-700/50 min-w-[280px]">
+          <div className="flex items-center gap-4">
+            {/* Weather */}
+            <div className="flex items-center gap-3">
+              {weatherLoading ? (
+                <Loader2 className="h-8 w-8 animate-spin text-sky-500" />
+              ) : weather ? (
+                <>
+                  {getWeatherIcon(weather.weather_code)}
+                  <div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-2xl font-bold text-sky-700 dark:text-sky-300">
+                        {Math.round(weather.temperature_2m)}°C
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{getWeatherDescription(weather.weather_code)}</p>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                      <MapPin className="h-3 w-3" />
+                      <span>{locationName}</span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-muted-foreground">Weather unavailable</div>
+              )}
+            </div>
+            
+            {/* Divider */}
+            <div className="w-px h-12 bg-border" />
+            
+            {/* Digital Clock */}
+            <div className="text-right">
+              <div className="text-2xl font-mono font-bold text-indigo-700 dark:text-indigo-300 tracking-wider">
+                {format(currentTime, 'HH:mm')}
+                <span className="text-lg text-indigo-400 dark:text-indigo-500">{format(currentTime, ':ss')}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">{format(currentTime, 'a')}</p>
+            </div>
+          </div>
+          
+          {/* Weather details */}
+          {weather && !weatherLoading && (
+            <div className="flex items-center gap-4 mt-3 pt-3 border-t border-sky-200/50 dark:border-sky-700/30 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1">
+                <Droplets className="h-3 w-3" />
+                <span>{weather.relative_humidity_2m}% humidity</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Wind className="h-3 w-3" />
+                <span>{Math.round(weather.wind_speed_10m)} km/h</span>
+              </div>
+            </div>
+          )}
+        </Card>
+        
+        {/* Action Buttons */}
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => {
             setNewTask(prev => ({ ...prev, assigned_to: user?.id || '' }));
