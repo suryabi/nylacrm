@@ -72,7 +72,17 @@ export default function COGSCalculator() {
         headers: { Authorization: `Bearer ${token}` },
         withCredentials: true
       });
-      setCogsData(res.data.cogs_data || []);
+      const data = res.data.cogs_data || [];
+      setCogsData(data);
+      
+      // Store original gross margin values for each row
+      const originalMargins = {};
+      data.forEach(row => {
+        if (row.id) {
+          originalMargins[row.id] = row.gross_margin;
+        }
+      });
+      setOriginalGrossMargins(originalMargins);
     } catch (error) {
       toast.error('Failed to load COGS data');
     } finally {
