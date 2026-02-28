@@ -29,23 +29,30 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 ## What's Been Implemented
 
 ### Feb 28, 2026 (Session 13 - Current)
-- **FEATURE**: Daily Quote Widgets on Home Dashboard
-  - **Purpose**: Display inspirational daily quotes to users on login
-  - **Implementation**:
-    - Created `/app/frontend/src/components/widgets/WaterQuoteWidget.js` - Water wisdom quotes with cyan/sky/blue gradient theme and animated wave SVG background
-    - Created `/app/frontend/src/components/widgets/SalesQuoteWidget.js` - Sales inspiration quotes with amber/orange/rose gradient theme and sparkle animation effects
+- **FEATURE**: Daily Quote Widgets on Home Dashboard (API-Powered)
+  - **Purpose**: Display inspirational daily quotes to users, with new quote on each login
+  - **Backend Implementation**:
+    - Created `GET /api/quotes/water` - Returns random water quote from curated list of 31 quotes
+    - Created `GET /api/quotes/sales` - Proxies to ZenQuotes API for inspirational quotes (free, no auth required)
+    - Both endpoints avoid CORS issues by being served from same domain
+  - **Frontend Implementation**:
+    - Updated `/app/frontend/src/components/widgets/WaterQuoteWidget.js` - Fetches from API on mount
+    - Updated `/app/frontend/src/components/widgets/SalesQuoteWidget.js` - Fetches from API on mount
   - **Features**:
-    - Both widgets positioned immediately after header (visible without scrolling)
-    - Quotes change daily based on day-of-year calculation (31 water quotes, 31 sales quotes)
-    - Sales widget uses +15 day offset to show different quote than water widget
+    - New quote fetched on each login/page load
+    - Refresh button on each widget to get new quote manually
+    - Loading spinner while fetching
+    - Graceful fallback quotes on API failure
     - Contemporary styling with gradient backgrounds, glass-morphism effects, hover animations
-    - Proper data-testid attributes for testing
-  - **Files Created**:
-    - `/app/frontend/src/components/widgets/WaterQuoteWidget.js`
-    - `/app/frontend/src/components/widgets/SalesQuoteWidget.js`
+    - Positioned immediately after header (visible without scrolling)
+  - **APIs Used**:
+    - Water quotes: Curated server-side list (free, unlimited)
+    - Sales quotes: ZenQuotes API (https://zenquotes.io/api/random) - free, no auth required
   - **Files Modified**:
-    - `/app/frontend/src/pages/HomeDashboard.js` - Added imports and positioned widgets at top of dashboard
-  - Status: VERIFIED - 100% test success rate (11/11 frontend tests)
+    - `/app/backend/server.py` - Added quotes proxy endpoints
+    - `/app/frontend/src/components/widgets/WaterQuoteWidget.js` - API integration
+    - `/app/frontend/src/components/widgets/SalesQuoteWidget.js` - API integration
+  - Status: VERIFIED - All API endpoints working, new quotes on each login/refresh
 
 ### Feb 28, 2026 (Session 12)
 - **UI**: Applied Contemporary Theme Across ALL Application Pages
