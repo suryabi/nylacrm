@@ -194,7 +194,8 @@ export default function HomeDashboard() {
       toast.success('Task completed');
       fetchDashboardData();
     } catch (error) {
-      toast.error('Failed to update task');
+      const message = error.response?.data?.detail || 'Failed to update task';
+      toast.error(message);
     }
   };
 
