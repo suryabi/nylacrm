@@ -310,7 +310,7 @@ export default function TeamManagement() {
 
       {viewMode === 'table' ? (
         // Table View
-        <Card className="p-6">
+        <Card className="p-6 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
         <Table>
           <TableHeader>
             <TableRow>
