@@ -2343,7 +2343,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             'tasks': tasks,
             'overdue_follow_ups': overdue_leads
         },
-        'upcoming_leads': upcoming_leads,
+        'upcoming_leads': combined_upcoming,  # Now includes both leads and accounts
         'recommended_leads': recommended_leads,
         'upcoming_meetings': upcoming_meetings,
         'today_summary': {
