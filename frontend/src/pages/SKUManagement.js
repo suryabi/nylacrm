@@ -492,6 +492,7 @@ export default function SKUManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }
