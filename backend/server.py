@@ -5595,6 +5595,13 @@ async def approve_leave_request(
     
     await db.leave_requests.update_one({'id': request_id}, {'$set': update_data})
     
+    # Complete the approval task
+    await complete_approval_task(
+        approval_type=ApprovalType.LEAVE_REQUEST,
+        reference_id=request_id,
+        status='completed'
+    )
+    
     return {'message': f'Leave request {approval.status}'}
 
 @api_router.get("/leave-requests/pending-approvals")
