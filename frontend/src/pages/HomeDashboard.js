@@ -870,39 +870,6 @@ export default function HomeDashboard() {
             </div>
           </Card>
 
-          {/* Upcoming Meetings */}
-          <Card className="p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-primary" />
-                Upcoming Meetings
-              </h2>
-            </div>
-            
-            {upcoming_meetings?.length > 0 ? (
-              <div className="space-y-3">
-                {upcoming_meetings.slice(0, 5).map(meeting => (
-                  <div key={meeting.id} className="p-3 bg-muted/50 rounded-lg">
-                    <div className="flex items-start justify-between mb-1">
-                      <p className="font-medium text-sm truncate">{meeting.title}</p>
-                      <Badge variant="outline" className="text-xs ml-2 flex-shrink-0">
-                        {formatMeetingDate(meeting.meeting_date)}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {meeting.start_time} • {meeting.duration_minutes} min
-                    </p>
-                    {meeting.location && (
-                      <p className="text-xs text-muted-foreground truncate mt-1">{meeting.location}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-center text-muted-foreground py-4 text-sm">No meetings scheduled</p>
-            )}
-          </Card>
-
           {/* Recent Activity */}
           <Card className="p-5">
             <h2 className="text-lg font-semibold flex items-center gap-2 mb-4">
