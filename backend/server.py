@@ -2322,9 +2322,31 @@ async def update_task(task_id: str, task_update: TaskUpdate, current_user: dict 
     update_data = {k: v for k, v in task_update.model_dump().items() if v is not None and k != 'comment'}
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    # If marking as completed, set completed_at
+    # If marking as completed, only the creator can do this
     if update_data.get('status') == 'completed':
+        # For approval tasks, the approver (assigned_to) can also complete
+        is_approval_task = task.get('is_approval_task', False)
+        is_creator = task.get('assigned_by') == current_user['id'] or task.get('created_by') == current_user['id']
+        is_assignee = task.get('assigned_to') == current_user['id']
+        
+        if is_approval_task:
+            # Approval tasks can be completed by the assignee (approver)
+            if not is_assignee and not is_creator:
+                raise HTTPException(
+                    status_code=403,
+                    detail='Only the task creator or approver can mark this task as complete'
+                )
+        else:
+            # Regular tasks can only be completed by the creator
+            if not is_creator:
+                raise HTTPException(
+                    status_code=403,
+                    detail='Only the task creator can mark this task as complete'
+                )
+        
         update_data['completed_at'] = datetime.now(timezone.utc).isoformat()
+        update_data['completed_by'] = current_user['id']
+        update_data['completed_by_name'] = current_user.get('name')
     
     # If assignee changed, update name
     if 'assigned_to' in update_data:
