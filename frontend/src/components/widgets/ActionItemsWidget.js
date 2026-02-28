@@ -102,9 +102,14 @@ export function ActionItemsWidget({
           <CheckSquare className="h-5 w-5 text-primary" />
           Action Items
         </h2>
-        <Badge className="bg-primary/20 text-primary border-0 font-semibold">
-          {(actionItems?.tasks?.length || 0) + (actionItems?.overdue_follow_ups?.length || 0)} pending
-        </Badge>
+        <div className="flex items-center gap-3">
+          <Badge className="bg-primary/20 text-primary border-0 font-semibold">
+            {(actionItems?.tasks?.length || 0) + (actionItems?.overdue_follow_ups?.length || 0)} pending
+          </Badge>
+          <Button size="sm" variant="outline" onClick={onNewTask} data-testid="new-task-btn">
+            <Plus className="h-4 w-4 mr-1" /> New Task
+          </Button>
+        </div>
       </div>
       
       <div className="p-5">
