@@ -83,21 +83,36 @@ export default function LeaveManagement() {
   };
 
   if (loading) {
-    return <div className="flex justify-center py-12">Loading...</div>;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex items-center justify-center">
+        <div className="flex flex-col items-center">
+          <div className="relative"><div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" /><Loader2 className="h-10 w-10 animate-spin text-primary relative z-10" /></div>
+          <p className="text-muted-foreground text-sm mt-4 animate-pulse">Loading leave data...</p>
+        </div>
+      </div>
+    );
   }
 
   const isManager = ['ceo', 'director', 'vp', 'admin', 'sales_manager'].includes(user?.role);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="leave-management-page">
+      <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-30 dark:opacity-10 pointer-events-none" />
+      
+      <div className="relative max-w-6xl mx-auto space-y-6 p-6 lg:p-8">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-4xl font-light text-foreground mb-2">Leave Management</h1>
-          <p className="text-foreground-muted">Apply for leaves and manage approvals</p>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-sky-100 to-blue-100 dark:from-sky-900/50 dark:to-blue-900/30">
+            <CalendarDays className="h-6 w-6 text-sky-600 dark:text-sky-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800 dark:text-white">Leave Management</h1>
+            <p className="text-muted-foreground">Apply for leaves and manage approvals</p>
+          </div>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="h-12 rounded-full">
+            <Button className="h-12 rounded-full bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white shadow-lg shadow-sky-200/50 dark:shadow-sky-900/30">
               <Plus className="h-5 w-5 mr-2" />
               Apply for Leave
             </Button>
@@ -115,8 +130,8 @@ export default function LeaveManagement() {
       {isManager && pendingApprovals.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-amber-600" />
-            <h2 className="text-xl font-semibold">Pending Approvals ({pendingApprovals.length})</h2>
+            <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            <h2 className="text-xl font-semibold text-slate-800 dark:text-white">Pending Approvals ({pendingApprovals.length})</h2>
           </div>
           {pendingApprovals.map(req => (
             <LeaveRequestCard key={req.id} request={req} onApprove={handleApproval} showActions />
@@ -126,9 +141,9 @@ export default function LeaveManagement() {
 
       {/* My Leave Requests */}
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold">My Leave Requests</h2>
+        <h2 className="text-xl font-semibold text-slate-800 dark:text-white">My Leave Requests</h2>
         {myRequests.length === 0 ? (
-          <Card className="p-12 text-center bg-card border rounded-2xl">
+          <Card className="p-12 text-center border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 rounded-2xl">
             <p className="text-muted-foreground">No leave requests yet</p>
           </Card>
         ) : (
@@ -141,12 +156,13 @@ export default function LeaveManagement() {
       {/* Team Requests (for managers) */}
       {isManager && myRequests.filter(r => r.user_id !== user.id).length > 0 && (
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Team Leave Requests</h2>
+          <h2 className="text-xl font-semibold text-slate-800 dark:text-white">Team Leave Requests</h2>
           {myRequests.filter(r => r.user_id !== user.id).map(req => (
             <LeaveRequestCard key={req.id} request={req} onApprove={handleApproval} showActions={req.status === 'pending'} />
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }
