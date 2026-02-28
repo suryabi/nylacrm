@@ -3,7 +3,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Video } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -53,6 +53,32 @@ export function NewMeetingDialog({
               rows={2}
             />
           </div>
+          
+          {/* Zoom Integration Toggle */}
+          <div 
+            className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+              newMeeting.create_zoom_meeting 
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+                : 'border-muted hover:border-blue-300'
+            }`}
+            onClick={() => setNewMeeting({ ...newMeeting, create_zoom_meeting: !newMeeting.create_zoom_meeting })}
+          >
+            <div className={`p-2 rounded-lg ${newMeeting.create_zoom_meeting ? 'bg-blue-500' : 'bg-muted'}`}>
+              <Video className={`h-5 w-5 ${newMeeting.create_zoom_meeting ? 'text-white' : 'text-muted-foreground'}`} />
+            </div>
+            <div className="flex-1">
+              <p className="font-medium text-sm">Create Zoom Meeting</p>
+              <p className="text-xs text-muted-foreground">Automatically generate a Zoom link for this meeting</p>
+            </div>
+            <div className={`w-10 h-6 rounded-full p-1 transition-colors ${
+              newMeeting.create_zoom_meeting ? 'bg-blue-500' : 'bg-muted'
+            }`}>
+              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                newMeeting.create_zoom_meeting ? 'translate-x-4' : 'translate-x-0'
+              }`} />
+            </div>
+          </div>
+          
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Type</Label>
@@ -99,14 +125,19 @@ export function NewMeetingDialog({
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label>Location / Link</Label>
-            <Input
-              value={newMeeting.location}
-              onChange={(e) => setNewMeeting({ ...newMeeting, location: e.target.value })}
-              placeholder="Office, Zoom link, or address"
-            />
-          </div>
+          
+          {/* Location field - hidden when Zoom is enabled */}
+          {!newMeeting.create_zoom_meeting && (
+            <div className="space-y-2">
+              <Label>Location / Link</Label>
+              <Input
+                value={newMeeting.location}
+                onChange={(e) => setNewMeeting({ ...newMeeting, location: e.target.value })}
+                placeholder="Office, Zoom link, or address"
+              />
+            </div>
+          )}
+          
           <div className="space-y-2">
             <Label>Attendee Emails</Label>
             <Input
@@ -129,7 +160,7 @@ export function NewMeetingDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={onSave} disabled={saving}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            Schedule Meeting
+            {newMeeting.create_zoom_meeting ? 'Create with Zoom' : 'Schedule Meeting'}
           </Button>
         </DialogFooter>
       </DialogContent>
