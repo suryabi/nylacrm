@@ -29,6 +29,17 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 ## What's Been Implemented
 
 ### Feb 27, 2026 (Session 11 - Current)
+- **FEATURE**: Proposal File Type Thumbnails & PDF Viewer
+  - **Purpose**: Better visual identification of proposal file types and inline PDF viewing without download
+  - **Implementation**:
+    - Added `getProposalFileType()` function to detect PDF vs Word documents by extension
+    - PDF files display: Red icon (bg-red-100), "PDF" badge, "View PDF" button
+    - Word files display: Blue icon (bg-blue-100), "Word Document" badge, NO View PDF button
+    - PDF viewer dialog with embedded PDF using `<embed>` tag (same as Files & Documents)
+    - Dialog includes filename in title, Close and Download buttons
+  - **File Modified**: `/app/frontend/src/pages/LeadDetail.js`
+  - Status: VERIFIED - 100% test success rate (12/12 tests passed)
+
 - **FEATURE**: Home Dashboard (New Landing Page)
   - **Purpose**: Centralized, action-oriented dashboard as the new default landing page after login
   - **Implementation**:
