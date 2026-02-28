@@ -694,8 +694,10 @@ class Task(BaseModel):
     due_time: Optional[str] = None  # HH:MM
     assigned_to: str  # User ID
     assigned_to_name: Optional[str] = None
-    assigned_by: str  # User ID
+    assigned_by: str  # User ID (who assigned the task)
     assigned_by_name: Optional[str] = None
+    created_by: Optional[str] = None  # User ID (who created the task)
+    created_by_name: Optional[str] = None
     lead_id: Optional[str] = None  # Optional link to lead
     account_id: Optional[str] = None  # Optional link to account
     completed_at: Optional[datetime] = None
