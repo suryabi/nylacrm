@@ -1,19 +1,26 @@
 import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
 const MOUNTAIN_BG = 'https://images.unsplash.com/photo-1761589951732-2795cd6ecdbf?crop=entropy&cs=srgb&fm=jpg&q=85';
 
 export default function SplashScreen() {
   const navigate = useNavigate();
+  const { user, loading } = useAuth();
 
   useEffect(() => {
+    // Wait for auth check to complete
+    if (loading) return;
+    
     const timer = setTimeout(() => {
-      navigate('/login');
+      // If user is already logged in, go to home
+      // Otherwise, go to login
+      navigate(user ? '/home' : '/login');
     }, 2500);
     return () => clearTimeout(timer);
-  }, [navigate]);
+  }, [navigate, user, loading]);
 
   return (
     <div 
