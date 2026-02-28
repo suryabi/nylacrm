@@ -88,6 +88,12 @@ export default function HomeDashboard() {
   
   // Week navigation for meetings
   const [meetingWeekStart, setMeetingWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
+  
+  // Task expansion state
+  const [expandedTaskId, setExpandedTaskId] = useState(null);
+  const [taskComment, setTaskComment] = useState('');
+  const [taskReassignTo, setTaskReassignTo] = useState('');
+  const [updatingTask, setUpdatingTask] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
