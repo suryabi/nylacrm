@@ -9,3 +9,4 @@ export { PipelineSummaryWidget } from './PipelineSummaryWidget';
 export { RecentActivityWidget } from './RecentActivityWidget';
 export { NewTaskDialog } from './NewTaskDialog';
 export { NewMeetingDialog } from './NewMeetingDialog';
+export { MeetingDetailDialog } from './MeetingDetailDialog';
