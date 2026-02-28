@@ -198,6 +198,47 @@ export default function HomeDashboard() {
     }
   };
 
+  const handleUpdateTask = async (taskId) => {
+    if (!taskComment.trim() && !taskReassignTo) {
+      toast.error('Please add a comment or select someone to reassign');
+      return;
+    }
+    
+    setUpdatingTask(true);
+    try {
+      const updates = {};
+      if (taskComment.trim()) {
+        updates.comment = taskComment.trim();
+      }
+      if (taskReassignTo) {
+        updates.assigned_to = taskReassignTo;
+      }
+      
+      await axios.put(`${API_URL}/tasks/${taskId}`, updates, { withCredentials: true });
+      toast.success(taskReassignTo ? 'Task reassigned' : 'Comment added');
+      setExpandedTaskId(null);
+      setTaskComment('');
+      setTaskReassignTo('');
+      fetchDashboardData();
+    } catch (error) {
+      toast.error('Failed to update task');
+    } finally {
+      setUpdatingTask(false);
+    }
+  };
+
+  const toggleTaskExpand = (taskId) => {
+    if (expandedTaskId === taskId) {
+      setExpandedTaskId(null);
+      setTaskComment('');
+      setTaskReassignTo('');
+    } else {
+      setExpandedTaskId(taskId);
+      setTaskComment('');
+      setTaskReassignTo('');
+    }
+  };
+
   const getWinScoreColor = (score) => {
     if (score >= 70) return 'text-green-600 bg-green-100';
     if (score >= 40) return 'text-yellow-600 bg-yellow-100';
