@@ -2142,7 +2142,7 @@ async def update_task(task_id: str, task_update: TaskUpdate, current_user: dict 
     if not task:
         raise HTTPException(status_code=404, detail='Task not found')
     
-    update_data = {k: v for k, v in task_update.model_dump().items() if v is not None}
+    update_data = {k: v for k, v in task_update.model_dump().items() if v is not None and k != 'comment'}
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
     # If marking as completed, set completed_at
@@ -2153,6 +2153,20 @@ async def update_task(task_id: str, task_update: TaskUpdate, current_user: dict 
     if 'assigned_to' in update_data:
         assignee = await db.users.find_one({'id': update_data['assigned_to']}, {'_id': 0, 'name': 1})
         update_data['assigned_to_name'] = assignee.get('name') if assignee else None
+    
+    # Handle comment - append to comments array
+    if task_update.comment:
+        comment_entry = {
+            'id': str(uuid.uuid4()),
+            'text': task_update.comment,
+            'created_by': current_user['id'],
+            'created_by_name': current_user.get('name'),
+            'created_at': datetime.now(timezone.utc).isoformat()
+        }
+        await db.tasks.update_one(
+            {'id': task_id},
+            {'$push': {'comments': comment_entry}}
+        )
     
     await db.tasks.update_one({'id': task_id}, {'$set': update_data})
     
