@@ -164,28 +164,31 @@ function CreatePage({ onBack }) {
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <Button variant="outline" onClick={onBack} className="rounded-full"><ArrowLeft className="h-4 w-4 mr-2" />Back</Button>
-      <Card className="p-8 border rounded-2xl">
-        <h1 className="text-2xl font-semibold mb-6">Create Plan</h1>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-green-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+      <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-30 dark:opacity-10 pointer-events-none" />
+      <div className="relative max-w-3xl mx-auto p-6 lg:p-8 space-y-6">
+      <Button variant="outline" onClick={onBack} className="rounded-full border-slate-200 dark:border-slate-700"><ArrowLeft className="h-4 w-4 mr-2" />Back</Button>
+      <Card className="p-8 border-0 rounded-2xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
+        <h1 className="text-2xl font-semibold mb-6 text-slate-800 dark:text-white">Create Plan</h1>
         <form onSubmit={submit} className="space-y-4">
-          <div><Label>Plan Name</Label><Input value={name} onChange={e => setName(e.target.value)} required className="h-12" /></div>
+          <div><Label>Plan Name</Label><Input value={name} onChange={e => setName(e.target.value)} required className="h-12 border-slate-200 dark:border-slate-700" /></div>
           <div className="grid grid-cols-2 gap-4">
             <div><Label>Period</Label>
-              <select value={period} onChange={e => setPeriod(e.target.value)} className="w-full h-12 px-4 rounded-xl border">
+              <select value={period} onChange={e => setPeriod(e.target.value)} className="w-full h-12 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
                 <option value="quarterly">Quarterly</option>
                 <option value="monthly">Monthly</option>
               </select>
             </div>
-            <div><Label>Target (Lakhs)</Label><Input type="number" value={target} onChange={e => setTarget(e.target.value)} required className="h-12" /></div>
+            <div><Label>Target (Lakhs)</Label><Input type="number" value={target} onChange={e => setTarget(e.target.value)} required className="h-12 border-slate-200 dark:border-slate-700" /></div>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div><Label>Start</Label><Input type="date" value={start} onChange={e => setStart(e.target.value)} required className="h-12" /></div>
-            <div><Label>End</Label><Input type="date" value={end} onChange={e => setEnd(e.target.value)} required className="h-12" /></div>
+            <div><Label>Start</Label><Input type="date" value={start} onChange={e => setStart(e.target.value)} required className="h-12 border-slate-200 dark:border-slate-700" /></div>
+            <div><Label>End</Label><Input type="date" value={end} onChange={e => setEnd(e.target.value)} required className="h-12 border-slate-200 dark:border-slate-700" /></div>
           </div>
-          <Button type="submit" className="w-full h-14 rounded-full">Create</Button>
+          <Button type="submit" className="w-full h-14 rounded-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white">Create</Button>
         </form>
       </Card>
+      </div>
     </div>
   );
 }
