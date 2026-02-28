@@ -630,6 +630,7 @@ export default function DailyStatusUpdate() {
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }
