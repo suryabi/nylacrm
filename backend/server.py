@@ -2143,21 +2143,33 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
     }, {'_id': 0}).sort('due_date', 1).limit(10)
     tasks = await tasks_cursor.to_list(length=10)
     
-    # 2. OVERDUE FOLLOW-UPS - Leads with past follow-up dates assigned to user
+    # 2. OVERDUE FOLLOW-UPS - Leads with past follow-up dates assigned to user or team
     overdue_leads_cursor = db.leads.find({
-        'assigned_to': user_id,
+        'assigned_to': {'$in': team_user_ids},
         'next_follow_up': {'$lt': today_str, '$ne': None},
         'status': {'$nin': ['won', 'lost', 'closed_won', 'closed_lost']}
-    }, {'_id': 0, 'id': 1, 'lead_id': 1, 'company': 1, 'next_follow_up': 1, 'status': 1, 'contact_person': 1, 'phone': 1}).limit(10)
+    }, {'_id': 0, 'id': 1, 'lead_id': 1, 'company': 1, 'next_follow_up': 1, 'status': 1, 'contact_person': 1, 'phone': 1, 'assigned_to': 1}).limit(10)
     overdue_leads = await overdue_leads_cursor.to_list(length=10)
     
-    # 3. UPCOMING LEADS - Leads with future follow-up dates
+    # Add assigned_to_name for team leads
+    for lead in overdue_leads:
+        if lead.get('assigned_to') and lead['assigned_to'] != user_id:
+            assignee = await db.users.find_one({'id': lead['assigned_to']}, {'_id': 0, 'name': 1})
+            lead['assigned_to_name'] = assignee.get('name') if assignee else None
+    
+    # 3. UPCOMING LEADS - Leads with future follow-up dates within a week
     upcoming_leads_cursor = db.leads.find({
-        'assigned_to': user_id,
+        'assigned_to': {'$in': team_user_ids},
         'next_follow_up': {'$gte': today_str, '$lte': week_from_now},
         'status': {'$nin': ['won', 'lost', 'closed_won', 'closed_lost']}
-    }, {'_id': 0, 'id': 1, 'lead_id': 1, 'company': 1, 'next_follow_up': 1, 'status': 1, 'contact_person': 1, 'phone': 1}).sort('next_follow_up', 1).limit(10)
+    }, {'_id': 0, 'id': 1, 'lead_id': 1, 'company': 1, 'next_follow_up': 1, 'status': 1, 'contact_person': 1, 'phone': 1, 'assigned_to': 1}).sort('next_follow_up', 1).limit(10)
     upcoming_leads = await upcoming_leads_cursor.to_list(length=10)
+    
+    # Add assigned_to_name for team leads
+    for lead in upcoming_leads:
+        if lead.get('assigned_to') and lead['assigned_to'] != user_id:
+            assignee = await db.users.find_one({'id': lead['assigned_to']}, {'_id': 0, 'name': 1})
+            lead['assigned_to_name'] = assignee.get('name') if assignee else None
     
     # 4. SMART LEAD RECOMMENDATIONS - Leads likely to close
     # Get all active leads for the user
