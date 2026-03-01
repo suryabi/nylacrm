@@ -404,7 +404,19 @@ export default function LeadsList() {
                             const today = new Date();
                             const diffDays = Math.ceil((followupDate - today) / (1000 * 60 * 60 * 24));
                             const isUrgent = diffDays >= 0 && diffDays <= 3;
-                            return <span className={`${isUrgent ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 px-2 py-1 rounded font-semibold' : ''}`}>{format(followupDate, 'MMM d, yyyy')}</span>;
+                            return (
+                              <div className="flex items-center gap-2">
+                                <Checkbox 
+                                  className="h-4 w-4 border-slate-300 data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500"
+                                  onClick={(e) => handleCompleteFollowup(e, lead)}
+                                  title="Mark follow-up as complete"
+                                  data-testid={`complete-followup-${lead.id}`}
+                                />
+                                <span className={`${isUrgent ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 px-2 py-1 rounded font-semibold' : ''}`}>
+                                  {format(followupDate, 'MMM d, yyyy')}
+                                </span>
+                              </div>
+                            );
                           })() : '-'}
                         </TableCell>
                         <TableCell>{lead.last_contact_method ? <span className="text-xs text-muted-foreground">{lead.last_contact_method.replace('_', ' ')}</span> : '-'}</TableCell>
