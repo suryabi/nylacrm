@@ -103,7 +103,7 @@ class InvoiceListener(stomp.ConnectionListener):
             logger.error(f"Error processing message: {e}")
     
     async def _process_invoice(self, invoice_data):
-        """Update lead with invoice data"""
+        """Update account with invoice data"""
         try:
             lead_id = invoice_data.get('ca_lead_id')
             
@@ -111,41 +111,44 @@ class InvoiceListener(stomp.ConnectionListener):
                 logger.warning("No CA_LEAD_ID in invoice message")
                 return
             
-            # Find lead by lead_id (our unique formatted ID)
-            lead = await self.db.leads.find_one({'lead_id': lead_id})
+            # Find account by lead_id (accounts store the original lead_id)
+            account = await self.db.accounts.find_one({'lead_id': lead_id})
             
-            if not lead:
-                logger.warning(f"Lead not found for lead_id: {lead_id}")
+            if not account:
+                logger.warning(f"Account not found for lead_id: {lead_id}")
                 # Store as unmatched invoice for later reconciliation
                 invoice_data['status'] = 'unmatched'
                 await self.db.invoices.insert_one(invoice_data)
                 return
             
             # Store invoice in invoices collection
-            invoice_data['lead_uuid'] = lead['id']
-            invoice_data['assigned_to'] = lead.get('assigned_to')
+            invoice_data['account_uuid'] = account['id']
+            invoice_data['account_id'] = account.get('account_id')
+            invoice_data['assigned_to'] = account.get('assigned_to')
             invoice_data['status'] = 'matched'
             await self.db.invoices.insert_one(invoice_data)
             
-            # Calculate totals for the lead
+            # Calculate totals for the account
             all_invoices = await self.db.invoices.find({
-                'lead_uuid': lead['id'],
+                'account_uuid': account['id'],
                 'status': 'matched'
             }).to_list(1000)
             
             total_gross = sum(inv.get('gross_invoice_value', 0) for inv in all_invoices)
             total_net = sum(inv.get('net_invoice_value', 0) for inv in all_invoices)
             total_credit = sum(inv.get('credit_note_value', 0) for inv in all_invoices)
+            total_outstanding = sum(inv.get('outstanding', 0) for inv in all_invoices)
             invoice_count = len(all_invoices)
             
-            # Update lead with invoice summary
-            await self.db.leads.update_one(
-                {'id': lead['id']},
+            # Update account with invoice summary
+            await self.db.accounts.update_one(
+                {'id': account['id']},
                 {
                     '$set': {
                         'total_gross_invoice_value': total_gross,
                         'total_net_invoice_value': total_net,
                         'total_credit_note_value': total_credit,
+                        'total_outstanding': total_outstanding,
                         'invoice_count': invoice_count,
                         'last_invoice_date': invoice_data.get('invoice_date'),
                         'last_invoice_no': invoice_data.get('invoice_no'),
@@ -154,15 +157,15 @@ class InvoiceListener(stomp.ConnectionListener):
                 }
             )
             
-            logger.info(f"Updated lead {lead_id} with invoice {invoice_data.get('invoice_no')}")
+            logger.info(f"Updated account {account.get('account_id')} with invoice {invoice_data.get('invoice_no')}")
             
             # Update resource (assigned_to) invoice totals for reporting
-            assigned_to = lead.get('assigned_to')
+            assigned_to = account.get('assigned_to')
             if assigned_to:
                 await self._update_resource_invoice_totals(assigned_to, invoice_data.get('gross_invoice_value', 0))
             
         except Exception as e:
-            logger.error(f"Error updating lead with invoice: {e}")
+            logger.error(f"Error updating account with invoice: {e}")
     
     async def _update_resource_invoice_totals(self, resource_id: str, gross_value: float):
         """Update resource invoice totals for allocation reporting"""
