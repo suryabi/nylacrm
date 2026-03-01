@@ -301,6 +301,7 @@ def stamp_pdf_with_signature(pdf_data: bytes, approver_name: str, approval_date:
 class ApprovalType:
     """Enum-like class for approval types"""
     LEAVE_REQUEST = 'leave_request'
+    TRAVEL_REQUEST = 'travel_request'
     PROPOSAL = 'proposal'
     CONTRACT = 'contract'
     EXPENSE = 'expense'
