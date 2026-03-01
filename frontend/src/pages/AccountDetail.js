@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import LogoUploader from '../components/LogoUploader';
+import ExpenseRequestSection from '../components/ExpenseRequestSection';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
