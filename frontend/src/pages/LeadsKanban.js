@@ -35,16 +35,15 @@ const API_URL = process.env.REACT_APP_BACKEND_URL;
 // Lead status configuration with colors and order
 const LEAD_STATUSES = [
   { id: 'new', label: 'New', color: 'bg-blue-500', bgLight: 'bg-blue-50', textColor: 'text-blue-700', borderColor: 'border-blue-200' },
-  { id: 'contacted', label: 'Contacted', color: 'bg-yellow-500', bgLight: 'bg-yellow-50', textColor: 'text-yellow-700', borderColor: 'border-yellow-200' },
   { id: 'qualified', label: 'Qualified', color: 'bg-green-500', bgLight: 'bg-green-50', textColor: 'text-green-700', borderColor: 'border-green-200' },
-  { id: 'in_progress', label: 'In Progress', color: 'bg-purple-500', bgLight: 'bg-purple-50', textColor: 'text-purple-700', borderColor: 'border-purple-200' },
+  { id: 'contacted', label: 'Contacted', color: 'bg-yellow-500', bgLight: 'bg-yellow-50', textColor: 'text-yellow-700', borderColor: 'border-yellow-200' },
+  { id: 'proposal_internal_review', label: 'Internal Review', color: 'bg-purple-500', bgLight: 'bg-purple-50', textColor: 'text-purple-700', borderColor: 'border-purple-200' },
+  { id: 'ready_to_share_proposal', label: 'Ready to Share', color: 'bg-cyan-500', bgLight: 'bg-cyan-50', textColor: 'text-cyan-700', borderColor: 'border-cyan-200' },
+  { id: 'proposal_shared_with_customer', label: 'Proposal Shared', color: 'bg-orange-500', bgLight: 'bg-orange-50', textColor: 'text-orange-700', borderColor: 'border-orange-200' },
   { id: 'trial_in_progress', label: 'Trial', color: 'bg-indigo-500', bgLight: 'bg-indigo-50', textColor: 'text-indigo-700', borderColor: 'border-indigo-200' },
-  { id: 'proposal_shared', label: 'Proposal Shared', color: 'bg-orange-500', bgLight: 'bg-orange-50', textColor: 'text-orange-700', borderColor: 'border-orange-200' },
-  { id: 'proposal_approved_by_customer', label: 'Approved', color: 'bg-teal-500', bgLight: 'bg-teal-50', textColor: 'text-teal-700', borderColor: 'border-teal-200' },
   { id: 'won', label: 'Won', color: 'bg-emerald-500', bgLight: 'bg-emerald-50', textColor: 'text-emerald-700', borderColor: 'border-emerald-200' },
   { id: 'lost', label: 'Lost', color: 'bg-red-500', bgLight: 'bg-red-50', textColor: 'text-red-700', borderColor: 'border-red-200' },
   { id: 'not_qualified', label: 'Not Qualified', color: 'bg-gray-500', bgLight: 'bg-gray-50', textColor: 'text-gray-700', borderColor: 'border-gray-200' },
-  { id: 'future_followup', label: 'Future Follow-up', color: 'bg-slate-500', bgLight: 'bg-slate-50', textColor: 'text-slate-700', borderColor: 'border-slate-200' },
 ];
 
 const INTERACTION_METHODS = [
