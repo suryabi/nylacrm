@@ -31,6 +31,7 @@ import ActivityTimeline from '../components/ActivityTimeline';
 import TimelineSummaryCompact from '../components/TimelineSummaryCompact';
 import InvoiceSummaryCard from '../components/InvoiceSummaryCard';
 import LogoUploader from '../components/LogoUploader';
+import { useLeadStatuses } from '../hooks/useLeadStatuses';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -45,39 +46,11 @@ const proposalStatusConfig = {
   rejected: { label: 'Rejected', color: 'bg-red-100 text-red-800', icon: XCircle }
 };
 
-const statusColors = {
-  new: 'bg-blue-100 text-blue-800',
-  contacted: 'bg-yellow-100 text-yellow-800',
-  qualified: 'bg-green-100 text-green-800',
-  not_qualified: 'bg-gray-100 text-gray-800',
-  proposal_internal_review: 'bg-purple-100 text-purple-800',
-  ready_to_share_proposal: 'bg-cyan-100 text-cyan-800',
-  proposal_shared_with_customer: 'bg-orange-100 text-orange-800',
-  trial_in_progress: 'bg-indigo-100 text-indigo-800',
-  won: 'bg-emerald-100 text-emerald-800',
-  lost: 'bg-red-100 text-red-800',
-};
-
-const getStatusLabel = (status) => {
-  const labels = {
-    'new': 'New',
-    'qualified': 'Qualified',
-    'contacted': 'Contacted',
-    'not_qualified': 'Not Qualified',
-    'proposal_internal_review': 'Proposal - Internal Review',
-    'ready_to_share_proposal': 'Ready to Share Proposal',
-    'proposal_shared_with_customer': 'Proposal - Shared with Customer',
-    'trial_in_progress': 'Trial in Progress',
-    'won': 'Won',
-    'lost': 'Lost',
-  };
-  return labels[status] || status;
-};
-
 export default function LeadDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { statuses, getStatusLabel, getStatusColor } = useLeadStatuses();
   const [lead, setLead] = useState(null);
   const [activities, setActivities] = useState([]);
   const [comments, setComments] = useState([]);
