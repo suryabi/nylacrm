@@ -75,6 +75,7 @@ const salesNavigationGroups = [
       { name: 'Company Profile', href: '/company-profile', icon: Building, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
       { name: 'Team', href: '/team', icon: UserCog, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
       { name: 'Master Locations', href: '/master-locations', icon: MapPin, roles: ['CEO', 'Director', 'System Admin'] },
+      { name: 'Lead Statuses', href: '/master-lead-status', icon: Settings, roles: ['CEO', 'Director', 'System Admin'] },
       { name: 'Leaves', href: '/leaves', icon: CalendarOff, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
     ]
   },
