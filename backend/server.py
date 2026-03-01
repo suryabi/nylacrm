@@ -1408,6 +1408,39 @@ async def setup_production_database_endpoint(request: Request):
     try:
         # Run the setup inline
         surya_id = str(uuid.uuid4())
+
+@api_router.post("/admin/populate-lead-statuses")
+async def populate_lead_statuses_endpoint(request: Request):
+    """Populate lead statuses in production - requires secret"""
+    
+    body = await request.json()
+    secret = body.get('secret', '')
+    
+    if secret != 'nyla-production-setup-2026':
+        raise HTTPException(status_code=403, detail='Invalid secret')
+    
+    lead_statuses = [
+        {"id": "new", "label": "New", "color": "blue", "order": 1, "is_active": True},
+        {"id": "qualified", "label": "Qualified", "color": "green", "order": 2, "is_active": True},
+        {"id": "contacted", "label": "Contacted", "color": "yellow", "order": 3, "is_active": True},
+        {"id": "proposal_internal_review", "label": "Proposal - Internal Review", "color": "purple", "order": 4, "is_active": True},
+        {"id": "ready_to_share_proposal", "label": "Ready to Share Proposal", "color": "cyan", "order": 5, "is_active": True},
+        {"id": "proposal_shared_with_customer", "label": "Proposal - Shared with Customer", "color": "orange", "order": 6, "is_active": True},
+        {"id": "trial_in_progress", "label": "Trial in Progress", "color": "indigo", "order": 7, "is_active": True},
+        {"id": "won", "label": "Won", "color": "emerald", "order": 8, "is_active": True},
+        {"id": "lost", "label": "Lost", "color": "red", "order": 9, "is_active": True},
+        {"id": "not_qualified", "label": "Not Qualified", "color": "gray", "order": 10, "is_active": True}
+    ]
+    
+    # Clear existing and insert new
+    await db.lead_statuses.delete_many({})
+    await db.lead_statuses.insert_many(lead_statuses)
+    
+    return {
+        "message": "Lead statuses populated successfully",
+        "count": len(lead_statuses),
+        "statuses": [s["label"] for s in lead_statuses]
+    }
         vamsi_id = str(uuid.uuid4())
         karanabir_id = str(uuid.uuid4())
         admin_id = str(uuid.uuid4())
