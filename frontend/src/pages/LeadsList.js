@@ -232,7 +232,7 @@ export default function LeadsList() {
   });
 
   const displayLeads = sortedLeads;
-  const hasActiveFilters = searchQuery || statusFilter !== 'all' || territoryFilter !== 'all' || stateFilter !== 'all' || cityFilter !== 'all' || assignedToFilter !== 'all' || timeFilter !== 'lifetime';
+  const hasActiveFilters = searchQuery || statusFilter.length > 0 || territoryFilter !== 'all' || stateFilter !== 'all' || cityFilter !== 'all' || assignedToFilter.length > 0 || timeFilter !== 'lifetime';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="leads-list-page">
