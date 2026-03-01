@@ -62,7 +62,7 @@ const INTERACTION_METHODS = [
 
 // Lead Card Component
 // Lead Card Component with Move To action
-const LeadCard = ({ lead, onDragStart, onDragEnd, onClick, users, onMoveToStatus, currentStatus }) => {
+const LeadCard = ({ lead, onDragStart, onDragEnd, onClick, users, onMoveToStatus, currentStatus, statuses = [] }) => {
   const assignedUser = users.find(u => u.id === lead.assigned_to);
   const [showMoveMenu, setShowMoveMenu] = useState(false);
   
