@@ -104,6 +104,7 @@ export default function LeadDetail() {
   const [activityStatus, setActivityStatus] = useState('');
   const [activityFollowUpDate, setActivityFollowUpDate] = useState('');
   const [convertingToAccount, setConvertingToAccount] = useState(false);
+  const [generatingLeadId, setGeneratingLeadId] = useState(false);
   
   // Proposal state
   const [proposal, setProposal] = useState(null);
