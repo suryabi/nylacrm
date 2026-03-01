@@ -1255,13 +1255,12 @@ ${userEmail}`;
                             <SelectItem value="contacted">Contacted</SelectItem>
                             <SelectItem value="qualified">Qualified</SelectItem>
                             <SelectItem value="not_qualified">Not Qualified</SelectItem>
-                            <SelectItem value="in_progress">In Progress</SelectItem>
+                            <SelectItem value="proposal_internal_review">Proposal - Internal Review</SelectItem>
+                            <SelectItem value="ready_to_share_proposal">Ready to Share Proposal</SelectItem>
+                            <SelectItem value="proposal_shared_with_customer">Proposal - Shared with Customer</SelectItem>
                             <SelectItem value="trial_in_progress">Trial in Progress</SelectItem>
-                            <SelectItem value="proposal_shared">Proposal Shared</SelectItem>
-                            <SelectItem value="proposal_approved_by_customer">Proposal Approved</SelectItem>
                             <SelectItem value="won">Won</SelectItem>
                             <SelectItem value="lost">Lost</SelectItem>
-                            <SelectItem value="future_followup">Future Follow up</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
