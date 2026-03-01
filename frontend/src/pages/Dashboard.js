@@ -230,21 +230,22 @@ export default function Dashboard() {
                 </div>
                 
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-3">
-                  {Object.entries(STATUS_CONFIG).map(([key, config]) => {
-                    const count = analytics?.status_distribution?.[key] || 0;
+                  {statuses.map((status) => {
+                    const count = analytics?.status_distribution?.[status.id] || 0;
                     const percentage = totalLeads > 0 ? ((count / totalLeads) * 100).toFixed(0) : 0;
-                    const Icon = config.icon;
-                    const colorClass = COLOR_CLASSES[config.color];
+                    const Icon = getIconForColor(status.color);
+                    const colorClass = COLOR_CLASSES[status.color] || COLOR_CLASSES.gray;
                     
                     return (
                       <div
-                        key={key}
-                        onClick={() => navigate(`/leads?status=${key}`)}
+                        key={status.id}
+                        onClick={() => navigate(`/leads?status=${status.id}`)}
                         className={`p-3 rounded-xl bg-gradient-to-br border cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 ${colorClass}`}
+                        data-testid={`status-card-${status.id}`}
                       >
                         <div className="flex items-center gap-2 mb-2">
                           <Icon className="h-4 w-4 opacity-70" />
-                          <span className="text-xs font-medium truncate">{config.label}</span>
+                          <span className="text-xs font-medium truncate">{status.label}</span>
                         </div>
                         <div className="flex items-baseline gap-1">
                           <span className="text-xl font-bold">{count}</span>
