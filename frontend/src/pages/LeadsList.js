@@ -54,9 +54,16 @@ const statusColors = {
 
 const getStatusLabel = (status) => {
   const labels = {
-    'new': 'New', 'contacted': 'Contacted', 'qualified': 'Qualified', 'not_qualified': 'Not Qualified',
-    'in_progress': 'In Progress', 'trial_in_progress': 'Trial in Progress', 'proposal_shared': 'Proposal Shared',
-    'proposal_approved_by_customer': 'Proposal Approved', 'won': 'Won', 'lost': 'Lost', 'future_followup': 'Future Follow up'
+    'new': 'New', 
+    'contacted': 'Contacted', 
+    'qualified': 'Qualified', 
+    'not_qualified': 'Not Qualified',
+    'proposal_internal_review': 'Proposal - Internal Review',
+    'ready_to_share_proposal': 'Ready to Share Proposal',
+    'proposal_shared_with_customer': 'Proposal - Shared with Customer',
+    'trial_in_progress': 'Trial in Progress', 
+    'won': 'Won', 
+    'lost': 'Lost',
   };
   return labels[status] || status;
 };
@@ -71,16 +78,15 @@ const TIME_FILTERS = [
 
 const STATUS_OPTIONS = [
   { value: 'new', label: 'New' },
-  { value: 'contacted', label: 'Contacted' },
   { value: 'qualified', label: 'Qualified' },
-  { value: 'not_qualified', label: 'Not Qualified' },
-  { value: 'in_progress', label: 'In Progress' },
+  { value: 'contacted', label: 'Contacted' },
+  { value: 'proposal_internal_review', label: 'Proposal - Internal Review' },
+  { value: 'ready_to_share_proposal', label: 'Ready to Share Proposal' },
+  { value: 'proposal_shared_with_customer', label: 'Proposal - Shared with Customer' },
   { value: 'trial_in_progress', label: 'Trial in Progress' },
-  { value: 'proposal_shared', label: 'Proposal Shared' },
-  { value: 'proposal_approved_by_customer', label: 'Proposal Approved' },
   { value: 'won', label: 'Won' },
   { value: 'lost', label: 'Lost' },
-  { value: 'future_followup', label: 'Future Follow up' },
+  { value: 'not_qualified', label: 'Not Qualified' },
 ];
 
 export default function LeadsList() {
