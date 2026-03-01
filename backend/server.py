@@ -2820,6 +2820,176 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
         'recent_activities': recent_activities
     }
 
+@api_router.get("/employee-insights")
+async def get_employee_insights(current_user: dict = Depends(get_current_user)):
+    """Get comprehensive employee insights including CTC, revenue, and expenses"""
+    
+    user_id = current_user['id']
+    user_role = current_user.get('role', '').lower()
+    
+    # Get full user data including HR fields
+    user_data = await db.users.find_one({'id': user_id}, {'_id': 0})
+    if not user_data:
+        raise HTTPException(status_code=404, detail='User not found')
+    
+    # Check if user can view sensitive HR data (CEO, Director, Admin, VP)
+    can_view_hr_data = user_role in ['ceo', 'director', 'admin', 'vp', 'vice president']
+    
+    ctc_monthly = user_data.get('ctc_monthly', 0) or 0
+    joining_date_str = user_data.get('joining_date')
+    
+    # Calculate days/months since joining
+    today = datetime.now(timezone.utc).date()
+    days_since_joining = 0
+    months_since_joining = 0
+    ctc_till_date = 0
+    
+    if joining_date_str:
+        try:
+            joining_date = datetime.strptime(joining_date_str, '%Y-%m-%d').date()
+            days_since_joining = (today - joining_date).days
+            months_since_joining = max(1, days_since_joining // 30)  # Approximate months
+            ctc_till_date = ctc_monthly * months_since_joining
+        except:
+            pass
+    
+    # Calculate total revenue from WON leads (since joining or all time)
+    revenue_query = {
+        'assigned_to': user_id,
+        'status': 'won'
+    }
+    if joining_date_str:
+        revenue_query['updated_at'] = {'$gte': joining_date_str}
+    
+    won_leads = await db.leads.find(revenue_query, {'_id': 0, 'expected_value': 1, 'actual_value': 1}).to_list(1000)
+    total_revenue = sum(lead.get('actual_value') or lead.get('expected_value', 0) or 0 for lead in won_leads)
+    
+    # Calculate total accounts revenue (from invoices)
+    accounts_revenue = 0
+    try:
+        # Get accounts assigned to this user
+        user_accounts = await db.accounts.find({'sales_owner_id': user_id}, {'_id': 0, 'id': 1, 'account_id': 1}).to_list(500)
+        account_ids = [acc.get('id') or acc.get('account_id') for acc in user_accounts]
+        
+        if account_ids:
+            # Sum invoice values for these accounts
+            invoice_pipeline = [
+                {'$match': {'account_id': {'$in': account_ids}}},
+                {'$group': {'_id': None, 'total': {'$sum': '$grand_total'}}}
+            ]
+            invoice_result = await db.invoices.aggregate(invoice_pipeline).to_list(1)
+            accounts_revenue = invoice_result[0]['total'] if invoice_result else 0
+    except:
+        pass
+    
+    total_revenue += accounts_revenue
+    
+    # Calculate Gross Margin (simplified - based on won leads with margin info)
+    # For more accuracy, this would need actual cost data
+    gross_margin = 0
+    try:
+        margin_leads = await db.leads.find({
+            'assigned_to': user_id,
+            'status': 'won'
+        }, {'_id': 0, 'expected_value': 1, 'actual_value': 1, 'gross_margin': 1, 'gross_margin_percent': 1}).to_list(1000)
+        
+        for lead in margin_leads:
+            lead_value = lead.get('actual_value') or lead.get('expected_value', 0) or 0
+            if lead.get('gross_margin'):
+                gross_margin += lead.get('gross_margin', 0)
+            elif lead.get('gross_margin_percent'):
+                gross_margin += lead_value * (lead.get('gross_margin_percent', 0) / 100)
+            else:
+                # Default estimate: 25% gross margin
+                gross_margin += lead_value * 0.25
+    except:
+        pass
+    
+    # Calculate total expenses (budget requests + expense requests for this user)
+    total_expenses = 0
+    
+    # Budget requests created by this user (approved only)
+    try:
+        budget_expenses = await db.budget_requests.find({
+            'created_by': user_id,
+            'status': 'approved'
+        }, {'_id': 0, 'total_budget': 1}).to_list(500)
+        total_expenses += sum(b.get('total_budget', 0) or 0 for b in budget_expenses)
+    except:
+        pass
+    
+    # Expense requests created by this user (approved only)
+    try:
+        expense_requests = await db.expense_requests.find({
+            'user_id': user_id,
+            'status': 'approved'
+        }, {'_id': 0, 'amount': 1}).to_list(500)
+        total_expenses += sum(e.get('amount', 0) or 0 for e in expense_requests)
+    except:
+        pass
+    
+    # Calculate ROI (Revenue - CTC - Expenses) / CTC * 100
+    roi = 0
+    if ctc_till_date > 0:
+        net_contribution = total_revenue - ctc_till_date - total_expenses
+        roi = round((net_contribution / ctc_till_date) * 100, 1)
+    
+    return {
+        'user_id': user_id,
+        'user_name': user_data.get('name'),
+        'designation': user_data.get('designation'),
+        'can_view_hr_data': can_view_hr_data,
+        'joining_date': joining_date_str,
+        'days_since_joining': days_since_joining,
+        'months_since_joining': months_since_joining,
+        'ctc': {
+            'monthly': ctc_monthly if can_view_hr_data else None,
+            'yearly': ctc_monthly * 12 if can_view_hr_data else None,
+            'till_date': ctc_till_date if can_view_hr_data else None,
+        },
+        'revenue': {
+            'total': total_revenue,
+            'from_leads': total_revenue - accounts_revenue,
+            'from_accounts': accounts_revenue,
+        },
+        'gross_margin': gross_margin,
+        'expenses': {
+            'total': total_expenses,
+        },
+        'roi_percentage': roi if can_view_hr_data else None,
+        'net_contribution': (total_revenue - ctc_till_date - total_expenses) if can_view_hr_data else None,
+    }
+
+@api_router.put("/users/{user_id}/hr-data")
+async def update_user_hr_data(
+    user_id: str,
+    ctc_monthly: Optional[float] = None,
+    joining_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update user HR data (CTC and joining date) - Admin only"""
+    
+    # Only CEO, Director, Admin can update HR data
+    user_role = current_user.get('role', '').lower()
+    if user_role not in ['ceo', 'director', 'admin', 'vp', 'vice president']:
+        raise HTTPException(status_code=403, detail='Only CEO, Director, or Admin can update HR data')
+    
+    update_data = {}
+    if ctc_monthly is not None:
+        update_data['ctc_monthly'] = ctc_monthly
+    if joining_date is not None:
+        update_data['joining_date'] = joining_date
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail='No data to update')
+    
+    result = await db.users.update_one({'id': user_id}, {'$set': update_data})
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail='User not found')
+    
+    return {'message': 'HR data updated successfully'}
+
 # ============= TASK ROUTES =============
 
 @api_router.post("/tasks")
