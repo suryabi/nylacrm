@@ -209,11 +209,39 @@ export default function AccountsList() {
 
         {/* View Toggle */}
         <div className="flex items-center justify-between mb-4">
-          <p className="text-sm text-muted-foreground">Showing {accounts.length} of {totalCount} accounts</p>
-          <div className="flex items-center gap-2 bg-muted rounded-lg p-1">
-            <Button variant={viewMode === 'list' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('list')} className="h-8"><List className="h-4 w-4 mr-1" />List</Button>
-            <Button variant={viewMode === 'gallery' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('gallery')} className="h-8"><LayoutGrid className="h-4 w-4 mr-1" />Logo Gallery</Button>
-            {viewMode === 'gallery' && <Button variant="outline" size="sm" onClick={downloadLogoPdf} disabled={downloadingPdf || loading || accounts.length === 0} className="h-8 ml-2"><Download className="h-4 w-4 mr-1" />{downloadingPdf ? 'Generating...' : 'Download PDF'}</Button>}
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            Showing <span className="font-semibold text-slate-800 dark:text-white">{accounts.length}</span> of <span className="font-semibold text-slate-800 dark:text-white">{totalCount}</span> accounts
+          </p>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center bg-white dark:bg-slate-800 rounded-xl p-1 shadow-sm border border-slate-200 dark:border-slate-700">
+              <Button 
+                variant={viewMode === 'list' ? 'default' : 'ghost'} 
+                size="sm" 
+                onClick={() => setViewMode('list')} 
+                className={`h-9 px-4 rounded-lg ${viewMode === 'list' ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md' : 'hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+              >
+                <List className="h-4 w-4 mr-2" />List
+              </Button>
+              <Button 
+                variant={viewMode === 'gallery' ? 'default' : 'ghost'} 
+                size="sm" 
+                onClick={() => setViewMode('gallery')} 
+                className={`h-9 px-4 rounded-lg ${viewMode === 'gallery' ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md' : 'hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+              >
+                <LayoutGrid className="h-4 w-4 mr-2" />Logo Gallery
+              </Button>
+            </div>
+            {viewMode === 'gallery' && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={downloadLogoPdf} 
+                disabled={downloadingPdf || loading || accounts.length === 0} 
+                className="h-9 px-4 border-amber-200 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-700 dark:text-amber-400"
+              >
+                <Download className="h-4 w-4 mr-2" />{downloadingPdf ? 'Generating...' : 'Download PDF'}
+              </Button>
+            )}
           </div>
         </div>
 
