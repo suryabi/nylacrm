@@ -145,6 +145,7 @@ function AppRouter() {
           <Route path="/company-profile" element={<ProtectedRoute><CompanyProfile /></ProtectedRoute>} />
           <Route path="/files-documents" element={<ProtectedRoute><FilesDocuments /></ProtectedRoute>} />
           <Route path="/master-locations" element={<ProtectedRoute><MasterLocations /></ProtectedRoute>} />
+          <Route path="/master-lead-status" element={<ProtectedRoute><MasterLeadStatus /></ProtectedRoute>} />
           
           {/* Production Context Routes */}
           <Route path="/maintenance" element={<ProtectedRoute><Maintenance /></ProtectedRoute>} />
