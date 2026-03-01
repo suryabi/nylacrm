@@ -100,7 +100,7 @@ export default function LeadsList() {
   const [totalPages, setTotalPages] = useState(0);
   const [sortField, setSortField] = useState('created_at');
   const [sortDirection, setSortDirection] = useState('desc');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState(() => getInitialFilter('search', ''));
   
   // Save filters to sessionStorage whenever they change
   useEffect(() => {
