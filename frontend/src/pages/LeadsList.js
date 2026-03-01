@@ -312,28 +312,23 @@ export default function LeadsList() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">Status</label>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-9 border-slate-200 dark:border-slate-700" data-testid="leads-status-filter"><SelectValue placeholder="All Statuses" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="new">New</SelectItem><SelectItem value="contacted">Contacted</SelectItem>
-                    <SelectItem value="qualified">Qualified</SelectItem><SelectItem value="not_qualified">Not Qualified</SelectItem>
-                    <SelectItem value="in_progress">In Progress</SelectItem><SelectItem value="trial_in_progress">Trial in Progress</SelectItem>
-                    <SelectItem value="proposal_shared">Proposal Shared</SelectItem><SelectItem value="proposal_approved_by_customer">Proposal Approved</SelectItem>
-                    <SelectItem value="won">Won</SelectItem><SelectItem value="lost">Lost</SelectItem>
-                    <SelectItem value="future_followup">Future Follow up</SelectItem>
-                  </SelectContent>
-                </Select>
+                <MultiSelect
+                  options={STATUS_OPTIONS}
+                  selected={statusFilter}
+                  onChange={setStatusFilter}
+                  placeholder="All Statuses"
+                  data-testid="leads-status-filter"
+                />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">Sales Resource</label>
-                <Select value={assignedToFilter} onValueChange={setAssignedToFilter}>
-                  <SelectTrigger className="h-9 border-slate-200 dark:border-slate-700" data-testid="leads-assigned-filter"><SelectValue placeholder="All Resources" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Resources</SelectItem>
-                    {users.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <MultiSelect
+                  options={users.map(u => ({ value: u.id, label: u.name }))}
+                  selected={assignedToFilter}
+                  onChange={setAssignedToFilter}
+                  placeholder="All Resources"
+                  data-testid="leads-assigned-filter"
+                />
               </div>
               <div className="flex items-end">
                 <Button variant="outline" onClick={handleResetFilters} className="w-full h-9 border-slate-200 dark:border-slate-700" disabled={!hasActiveFilters} data-testid="leads-reset-filters">Reset</Button>
