@@ -293,7 +293,7 @@ export default function LeadsList() {
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">Status</label>
                 <MultiSelect
-                  options={STATUS_OPTIONS}
+                  options={statuses.map(s => ({ value: s.id, label: s.label }))}
                   selected={statusFilter}
                   onChange={setStatusFilter}
                   placeholder="All Statuses"
