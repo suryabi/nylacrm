@@ -3120,6 +3120,101 @@ async def generate_lead_id_for_lead(lead_id: str, current_user: dict = Depends(g
     
     return {'lead_id': new_lead_id, 'message': f'Lead ID generated successfully: {new_lead_id}'}
 
+# ============= MASTER LEAD STATUSES =============
+
+class LeadStatusCreate(BaseModel):
+    label: str
+    color: str = 'gray'
+
+class LeadStatusUpdate(BaseModel):
+    label: Optional[str] = None
+    color: Optional[str] = None
+    order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+@api_router.get("/master/lead-statuses")
+async def get_lead_statuses(current_user: dict = Depends(get_current_user)):
+    """Get all lead statuses ordered by 'order' field"""
+    statuses = await db.lead_statuses.find({}, {'_id': 0}).sort('order', 1).to_list(100)
+    return {'statuses': statuses}
+
+@api_router.post("/master/lead-statuses")
+async def create_lead_status(status: LeadStatusCreate, current_user: dict = Depends(get_current_user)):
+    """Create a new lead status (Admin/Director only)"""
+    if current_user['role'] not in ['ceo', 'director', 'admin']:
+        raise HTTPException(status_code=403, detail='Only admins can manage lead statuses')
+    
+    # Generate ID from label
+    status_id = status.label.lower().replace(' ', '_').replace('-', '_')
+    status_id = ''.join(c for c in status_id if c.isalnum() or c == '_')
+    
+    # Check if already exists
+    existing = await db.lead_statuses.find_one({'id': status_id})
+    if existing:
+        raise HTTPException(status_code=400, detail='Status with this name already exists')
+    
+    # Get max order
+    max_order_doc = await db.lead_statuses.find_one(sort=[('order', -1)])
+    max_order = max_order_doc.get('order', 0) if max_order_doc else 0
+    
+    new_status = {
+        'id': status_id,
+        'label': status.label,
+        'color': status.color,
+        'order': max_order + 1,
+        'is_active': True
+    }
+    
+    await db.lead_statuses.insert_one(new_status)
+    return {'status': {k: v for k, v in new_status.items() if k != '_id'}, 'message': 'Status created successfully'}
+
+@api_router.put("/master/lead-statuses/{status_id}")
+async def update_lead_status(status_id: str, status: LeadStatusUpdate, current_user: dict = Depends(get_current_user)):
+    """Update a lead status (Admin/Director only)"""
+    if current_user['role'] not in ['ceo', 'director', 'admin']:
+        raise HTTPException(status_code=403, detail='Only admins can manage lead statuses')
+    
+    existing = await db.lead_statuses.find_one({'id': status_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail='Status not found')
+    
+    update_data = {k: v for k, v in status.dict().items() if v is not None}
+    if not update_data:
+        raise HTTPException(status_code=400, detail='No data to update')
+    
+    await db.lead_statuses.update_one({'id': status_id}, {'$set': update_data})
+    
+    updated = await db.lead_statuses.find_one({'id': status_id}, {'_id': 0})
+    return {'status': updated, 'message': 'Status updated successfully'}
+
+@api_router.delete("/master/lead-statuses/{status_id}")
+async def delete_lead_status(status_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a lead status (Admin/Director only) - only if no leads use it"""
+    if current_user['role'] not in ['ceo', 'director', 'admin']:
+        raise HTTPException(status_code=403, detail='Only admins can manage lead statuses')
+    
+    # Check if any leads use this status
+    leads_count = await db.leads.count_documents({'status': status_id})
+    if leads_count > 0:
+        raise HTTPException(status_code=400, detail=f'Cannot delete: {leads_count} leads have this status')
+    
+    result = await db.lead_statuses.delete_one({'id': status_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail='Status not found')
+    
+    return {'message': 'Status deleted successfully'}
+
+@api_router.put("/master/lead-statuses/reorder")
+async def reorder_lead_statuses(status_ids: List[str], current_user: dict = Depends(get_current_user)):
+    """Reorder lead statuses (Admin/Director only)"""
+    if current_user['role'] not in ['ceo', 'director', 'admin']:
+        raise HTTPException(status_code=403, detail='Only admins can manage lead statuses')
+    
+    for i, status_id in enumerate(status_ids):
+        await db.lead_statuses.update_one({'id': status_id}, {'$set': {'order': i + 1}})
+    
+    return {'message': 'Statuses reordered successfully'}
+
 # ============= SALES REVENUE DASHBOARD =============
 
 @api_router.get("/sales-revenue/won-leads")
