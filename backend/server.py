@@ -3076,6 +3076,41 @@ async def delete_lead(lead_id: str, current_user: dict = Depends(get_current_use
     
     return {'message': 'Lead deleted successfully'}
 
+@api_router.post("/leads/{lead_id}/generate-lead-id")
+async def generate_lead_id_for_lead(lead_id: str, current_user: dict = Depends(get_current_user)):
+    """Generate a lead_id for a lead that doesn't have one"""
+    lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+    
+    # Check if lead already has a lead_id
+    if lead.get('lead_id'):
+        raise HTTPException(status_code=400, detail='Lead already has a Lead ID')
+    
+    # Check permission
+    if current_user['role'] == 'sales_rep' and lead.get('assigned_to') != current_user['id']:
+        raise HTTPException(status_code=403, detail='Access denied')
+    
+    # Get company and city for generating lead_id
+    company = lead.get('company', 'UNKNOWN')
+    city = lead.get('city', 'XXX')
+    
+    # Generate the lead_id
+    new_lead_id = await generate_lead_id(company, city)
+    
+    # Update the lead
+    await db.leads.update_one(
+        {'id': lead_id},
+        {
+            '$set': {
+                'lead_id': new_lead_id,
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    return {'lead_id': new_lead_id, 'message': f'Lead ID generated successfully: {new_lead_id}'}
+
 # ============= SALES REVENUE DASHBOARD =============
 
 @api_router.get("/sales-revenue/won-leads")
