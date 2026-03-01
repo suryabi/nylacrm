@@ -337,6 +337,7 @@ export default function LeadsKanban() {
   const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
+  const [statuses, setStatuses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   
@@ -368,9 +369,10 @@ export default function LeadsKanban() {
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
       
-      const [leadsRes, usersRes] = await Promise.all([
+      const [leadsRes, usersRes, statusesRes] = await Promise.all([
         axios.get(`${API_URL}/api/leads?page_size=500`, { headers, withCredentials: true }),
-        axios.get(`${API_URL}/api/users`, { headers, withCredentials: true })
+        axios.get(`${API_URL}/api/users`, { headers, withCredentials: true }),
+        axios.get(`${API_URL}/api/master/lead-statuses`, { headers, withCredentials: true })
       ]);
       
       // Map API response fields to component expected fields
@@ -381,6 +383,14 @@ export default function LeadsKanban() {
       }));
       setLeads(mappedLeads);
       setUsers(usersRes.data || []);
+      
+      // Map statuses with color classes
+      const mappedStatuses = (statusesRes.data.statuses || []).map(s => ({
+        id: s.id,
+        label: s.label,
+        ...getStatusColors(s.color)
+      }));
+      setStatuses(mappedStatuses);
     } catch (error) {
       console.error('Failed to fetch data:', error);
       toast.error('Failed to load leads');
