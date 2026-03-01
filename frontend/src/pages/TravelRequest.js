@@ -566,7 +566,7 @@ function TravelRequestForm({ onSuccess, initialData = null }) {
                 />
               </div>
               {showToDropdown && toSearchTerm && (
-                <Card className="absolute z-20 w-full mt-1 p-1 max-h-48 overflow-y-auto shadow-lg">
+                <Card className="absolute z-50 w-full mt-1 p-1 max-h-48 overflow-y-auto shadow-lg border bg-white dark:bg-slate-900">
                   {cities
                     .filter(c => c.name.toLowerCase().includes(toSearchTerm.toLowerCase()))
                     .slice(0, 10)
