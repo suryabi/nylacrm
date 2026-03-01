@@ -720,10 +720,28 @@ ${userEmail}`;
               </Badge>
             )}
           </div>
-          {lead.lead_id && (
+          {lead.lead_id ? (
             <p className="text-sm font-mono text-muted-foreground mt-1" data-testid="lead-unique-id">
               ID: {lead.lead_id}
             </p>
+          ) : (
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-sm text-amber-600">No Lead ID</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleGenerateLeadId}
+                disabled={generatingLeadId}
+                className="h-7 text-xs border-amber-500 text-amber-700 hover:bg-amber-50"
+                data-testid="generate-lead-id-btn"
+              >
+                {generatingLeadId ? (
+                  <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Generating...</>
+                ) : (
+                  <><Plus className="h-3 w-3 mr-1" /> Generate ID</>
+                )}
+              </Button>
+            </div>
           )}
           {lead.contact_person && (
             <p className="text-muted-foreground mt-1">Contact: {lead.contact_person}</p>
