@@ -1140,6 +1140,84 @@ class BudgetApproval(BaseModel):
     status: str  # 'approved' or 'rejected'
     rejection_reason: Optional[str] = None
 
+# ============= EXPENSE REQUEST MODELS (Lead/Account Level) =============
+
+EXPENSE_TYPES = [
+    {'id': 'gifting', 'label': 'Gifting Expense', 'requires_sku': False},
+    {'id': 'onboarding', 'label': 'On-boarding Expense', 'requires_sku': False},
+    {'id': 'staff_gifting', 'label': 'Staff Gifting Expense', 'requires_sku': False},
+    {'id': 'sponsorship', 'label': 'Sponsorship Expense', 'requires_sku': False},
+    {'id': 'free_trial', 'label': 'Free Trial Expense', 'requires_sku': True},
+]
+
+class ExpenseSKUItem(BaseModel):
+    """SKU item for Free Trial expense"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    sku_id: str
+    sku_name: str
+    quantity: int = 0
+    minimum_landing_price: float = 0
+    total_cost: float = 0  # quantity * minimum_landing_price
+
+class ExpenseRequest(BaseModel):
+    """Expense request at Lead or Account level"""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    
+    # Entity Reference (either lead or account)
+    entity_type: str  # 'lead' or 'account'
+    entity_id: str  # lead_id or account_id
+    entity_name: Optional[str] = None  # Company/Account name for display
+    entity_city: Optional[str] = None  # City for COGS lookup
+    
+    # Request Info
+    expense_type: str  # 'gifting', 'onboarding', 'staff_gifting', 'sponsorship', 'free_trial'
+    expense_type_label: Optional[str] = None
+    description: Optional[str] = None
+    
+    # For all expense types except free_trial
+    amount: float = 0
+    
+    # For Free Trial expense specifically
+    free_trial_days: Optional[int] = None
+    sku_items: List[ExpenseSKUItem] = []
+    total_sku_cost: float = 0  # Sum of all SKU item costs
+    
+    # Requester Info
+    user_id: str
+    user_name: Optional[str] = None
+    
+    # Status & Approval Workflow
+    status: str = 'draft'  # 'draft', 'pending_approval', 'approved', 'rejected', 'cancelled'
+    approved_by: Optional[str] = None
+    approved_by_name: Optional[str] = None
+    approval_date: Optional[datetime] = None
+    rejection_reason: Optional[str] = None
+    
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class ExpenseRequestCreate(BaseModel):
+    entity_type: str  # 'lead' or 'account'
+    entity_id: str
+    expense_type: str
+    description: Optional[str] = None
+    amount: float = 0
+    free_trial_days: Optional[int] = None
+    sku_items: List[dict] = []
+    submit_for_approval: bool = False
+
+class ExpenseRequestUpdate(BaseModel):
+    description: Optional[str] = None
+    amount: Optional[float] = None
+    free_trial_days: Optional[int] = None
+    sku_items: Optional[List[dict]] = None
+    submit_for_approval: bool = False
+
+class ExpenseApproval(BaseModel):
+    status: str  # 'approved' or 'rejected'
+    rejection_reason: Optional[str] = None
+
 class TargetPlan(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
