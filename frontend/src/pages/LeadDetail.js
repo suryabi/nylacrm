@@ -50,28 +50,26 @@ const statusColors = {
   contacted: 'bg-yellow-100 text-yellow-800',
   qualified: 'bg-green-100 text-green-800',
   not_qualified: 'bg-gray-100 text-gray-800',
-  in_progress: 'bg-purple-100 text-purple-800',
+  proposal_internal_review: 'bg-purple-100 text-purple-800',
+  ready_to_share_proposal: 'bg-cyan-100 text-cyan-800',
+  proposal_shared_with_customer: 'bg-orange-100 text-orange-800',
   trial_in_progress: 'bg-indigo-100 text-indigo-800',
-  proposal_shared: 'bg-orange-100 text-orange-800',
-  proposal_approved_by_customer: 'bg-teal-100 text-teal-800',
   won: 'bg-emerald-100 text-emerald-800',
   lost: 'bg-red-100 text-red-800',
-  future_followup: 'bg-slate-100 text-slate-800',
 };
 
 const getStatusLabel = (status) => {
   const labels = {
     'new': 'New',
-    'contacted': 'Contacted',
     'qualified': 'Qualified',
+    'contacted': 'Contacted',
     'not_qualified': 'Not Qualified',
-    'in_progress': 'In Progress',
+    'proposal_internal_review': 'Proposal - Internal Review',
+    'ready_to_share_proposal': 'Ready to Share Proposal',
+    'proposal_shared_with_customer': 'Proposal - Shared with Customer',
     'trial_in_progress': 'Trial in Progress',
-    'proposal_shared': 'Proposal Shared',
-    'proposal_approved_by_customer': 'Proposal Approved by Customer',
     'won': 'Won',
     'lost': 'Lost',
-    'future_followup': 'Future Follow up'
   };
   return labels[status] || status;
 };
