@@ -320,7 +320,7 @@ function BudgetRequestForm({ onSuccess, initialData = null }) {
           axios.get(`${API_URL}/master-skus`, { headers: { Authorization: `Bearer ${token}` } }),
           axios.get(`${API_URL}/master-locations/flat`, { headers: { Authorization: `Bearer ${token}` } })
         ]);
-        setSkus(skuRes.data || []);
+        setSkus(skuRes.data?.skus || skuRes.data || []);
         setCities(locationRes.data.cities || []);
       } catch (error) {
         console.error('Failed to fetch data:', error);
