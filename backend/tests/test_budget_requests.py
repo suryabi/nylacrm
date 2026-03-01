@@ -12,6 +12,18 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 CEO_CREDS = {"email": "surya.yadavalli@nylaairwater.earth", "password": "surya123"}
 DIRECTOR_CREDS = {"email": "admin@nylaairwater.earth", "password": "admin123"}
 
+
+def get_auth_headers(creds):
+    """Login and return auth headers"""
+    response = requests.post(f"{BASE_URL}/api/auth/login", json=creds)
+    if response.status_code != 200:
+        raise Exception(f"Login failed: {response.text}")
+    data = response.json()
+    # API returns session_token, not token
+    session_token = data.get('session_token')
+    return {"Authorization": f"Bearer {session_token}"}
+
+
 class TestBudgetCategories:
     """Test Budget Categories endpoint - verify no customer-related categories"""
     
@@ -99,13 +111,7 @@ class TestBudgetRequestCRUD:
     @pytest.fixture(autouse=True)
     def setup(self):
         """Login and get token for CEO user"""
-        response = requests.post(f"{BASE_URL}/api/auth/login", json=CEO_CREDS)
-        assert response.status_code == 200, f"Login failed: {response.text}"
-        data = response.json()
-        self.token = data.get('token')
-        self.user_id = data.get('user', {}).get('id')
-        self.user_name = data.get('user', {}).get('name')
-        self.headers = {"Authorization": f"Bearer {self.token}"}
+        self.headers = get_auth_headers(CEO_CREDS)
     
     def test_create_budget_request_draft(self):
         """POST /api/budget-requests - Create as draft"""
@@ -134,10 +140,7 @@ class TestBudgetRequestCRUD:
         assert data.get('title') == payload['title']
         assert len(data.get('line_items', [])) == 1
         
-        # Store for cleanup
-        self.draft_request_id = data.get('id')
-        print(f"PASS: Created draft budget request: {self.draft_request_id}")
-        
+        print(f"PASS: Created draft budget request: {data.get('id')}")
         return data.get('id')
     
     def test_create_budget_request_submit(self):
@@ -244,17 +247,8 @@ class TestBudgetRequestApproval:
     @pytest.fixture(autouse=True)
     def setup(self):
         """Login as CEO (requestor) and Director (approver)"""
-        # CEO login
-        ceo_resp = requests.post(f"{BASE_URL}/api/auth/login", json=CEO_CREDS)
-        assert ceo_resp.status_code == 200, f"CEO login failed: {ceo_resp.text}"
-        self.ceo_token = ceo_resp.json().get('token')
-        self.ceo_headers = {"Authorization": f"Bearer {self.ceo_token}"}
-        
-        # Director login
-        dir_resp = requests.post(f"{BASE_URL}/api/auth/login", json=DIRECTOR_CREDS)
-        assert dir_resp.status_code == 200, f"Director login failed: {dir_resp.text}"
-        self.dir_token = dir_resp.json().get('token')
-        self.dir_headers = {"Authorization": f"Bearer {self.dir_token}"}
+        self.ceo_headers = get_auth_headers(CEO_CREDS)
+        self.dir_headers = get_auth_headers(DIRECTOR_CREDS)
     
     def test_director_approve_request(self):
         """PUT /api/budget-requests/{id}/approve - Director approves request"""
@@ -330,10 +324,7 @@ class TestCOGSPriceEndpoint:
     
     @pytest.fixture(autouse=True)
     def setup(self):
-        response = requests.post(f"{BASE_URL}/api/auth/login", json=CEO_CREDS)
-        assert response.status_code == 200
-        self.token = response.json().get('token')
-        self.headers = {"Authorization": f"Bearer {self.token}"}
+        self.headers = get_auth_headers(CEO_CREDS)
     
     def test_get_sku_price_for_city(self):
         """GET /api/cogs/sku-price/{city}/{sku_name} - Get SKU price from COGS"""
@@ -349,7 +340,7 @@ class TestCOGSPriceEndpoint:
         elif response.status_code == 404:
             print(f"INFO: No COGS data for {sku_name} in {city}")
         else:
-            assert False, f"Unexpected status {response.status_code}: {response.text}"
+            assert response.status_code in [200, 404], f"Unexpected status {response.status_code}: {response.text}"
 
 
 class TestMasterSKUs:
@@ -357,10 +348,7 @@ class TestMasterSKUs:
     
     @pytest.fixture(autouse=True)
     def setup(self):
-        response = requests.post(f"{BASE_URL}/api/auth/login", json=CEO_CREDS)
-        assert response.status_code == 200
-        self.token = response.json().get('token')
-        self.headers = {"Authorization": f"Bearer {self.token}"}
+        self.headers = get_auth_headers(CEO_CREDS)
     
     def test_get_master_skus(self):
         """GET /api/master-skus - Get available SKUs for selection"""
@@ -384,10 +372,7 @@ class TestMasterLocations:
     
     @pytest.fixture(autouse=True)
     def setup(self):
-        response = requests.post(f"{BASE_URL}/api/auth/login", json=CEO_CREDS)
-        assert response.status_code == 200
-        self.token = response.json().get('token')
-        self.headers = {"Authorization": f"Bearer {self.token}"}
+        self.headers = get_auth_headers(CEO_CREDS)
     
     def test_get_locations_flat(self):
         """GET /api/master-locations/flat - Get cities for event city dropdown"""
