@@ -251,83 +251,112 @@ export default function LeadsList() {
           </div>
         </header>
 
-        {/* Filters */}
-        <Card className="mb-6 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
-          <div className="p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              <span className="font-semibold text-slate-700 dark:text-slate-300">Filters</span>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Time Period</label>
-                <Select value={timeFilter} onValueChange={setTimeFilter}>
-                  <SelectTrigger className="h-9 border-slate-200 dark:border-slate-700" data-testid="leads-time-filter"><SelectValue placeholder="All Time" /></SelectTrigger>
-                  <SelectContent>{TIME_FILTERS.map(filter => <SelectItem key={filter.value} value={filter.value}>{filter.label}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Territory</label>
-                <Select value={territoryFilter} onValueChange={(v) => { setTerritoryFilter(v); setStateFilter('all'); setCityFilter('all'); }}>
-                  <SelectTrigger className="h-9 border-slate-200 dark:border-slate-700" data-testid="leads-territory-filter"><SelectValue placeholder="All Territories" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Territories</SelectItem>
-                    {territories.map(t => <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">State</label>
-                <Select value={stateFilter} onValueChange={(v) => { setStateFilter(v); setCityFilter('all'); }}>
-                  <SelectTrigger className="h-9 border-slate-200 dark:border-slate-700" data-testid="leads-state-filter"><SelectValue placeholder="All States" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All States</SelectItem>
-                    {territoryFilter !== 'all' && getStateNamesByTerritoryName(territoryFilter).map(state => <SelectItem key={state} value={state}>{state}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">City</label>
-                <Select value={cityFilter} onValueChange={setCityFilter}>
-                  <SelectTrigger className="h-9 border-slate-200 dark:border-slate-700" data-testid="leads-city-filter"><SelectValue placeholder="All Cities" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Cities</SelectItem>
-                    {stateFilter !== 'all' && getCityNamesByStateName(stateFilter).map(city => <SelectItem key={city} value={city}>{city}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Status</label>
-                <MultiSelect
-                  options={statuses.map(s => ({ value: s.id, label: s.label }))}
-                  selected={statusFilter}
-                  onChange={setStatusFilter}
-                  placeholder="All Statuses"
-                  data-testid="leads-status-filter"
+        {/* Contemporary Filters */}
+        <FilterContainer 
+          title="Filters" 
+          activeFiltersCount={[
+            searchQuery, 
+            statusFilter.length > 0, 
+            territoryFilter !== 'all', 
+            stateFilter !== 'all', 
+            cityFilter !== 'all', 
+            assignedToFilter.length > 0, 
+            timeFilter !== 'lifetime'
+          ].filter(Boolean).length}
+          onReset={handleResetFilters}
+          className="mb-6"
+        >
+          <FilterGrid columns={7}>
+            <FilterItem label="Time Period" icon={Calendar}>
+              <Select value={timeFilter} onValueChange={setTimeFilter}>
+                <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" data-testid="leads-time-filter">
+                  <SelectValue placeholder="All Time" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  {TIME_FILTERS.map(filter => (
+                    <SelectItem key={filter.value} value={filter.value} className="rounded-lg">{filter.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterItem>
+            
+            <FilterItem label="Territory" icon={MapPin}>
+              <Select value={territoryFilter} onValueChange={(v) => { setTerritoryFilter(v); setStateFilter('all'); setCityFilter('all'); }}>
+                <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" data-testid="leads-territory-filter">
+                  <SelectValue placeholder="All Territories" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="all" className="rounded-lg">All Territories</SelectItem>
+                  {territories.map(t => <SelectItem key={t.id} value={t.name} className="rounded-lg">{t.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FilterItem>
+            
+            <FilterItem label="State" icon={MapPin}>
+              <Select value={stateFilter} onValueChange={(v) => { setStateFilter(v); setCityFilter('all'); }}>
+                <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" data-testid="leads-state-filter">
+                  <SelectValue placeholder="All States" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="all" className="rounded-lg">All States</SelectItem>
+                  {territoryFilter !== 'all' && getStateNamesByTerritoryName(territoryFilter).map(state => (
+                    <SelectItem key={state} value={state} className="rounded-lg">{state}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterItem>
+            
+            <FilterItem label="City" icon={MapPin}>
+              <Select value={cityFilter} onValueChange={setCityFilter}>
+                <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" data-testid="leads-city-filter">
+                  <SelectValue placeholder="All Cities" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="all" className="rounded-lg">All Cities</SelectItem>
+                  {stateFilter !== 'all' && getCityNamesByStateName(stateFilter).map(city => (
+                    <SelectItem key={city} value={city} className="rounded-lg">{city}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterItem>
+            
+            <FilterItem label="Status" icon={Target}>
+              <MultiSelect
+                options={statuses.map(s => ({ value: s.id, label: s.label }))}
+                selected={statusFilter}
+                onChange={setStatusFilter}
+                placeholder="All Statuses"
+                className="h-10 rounded-xl"
+                data-testid="leads-status-filter"
+              />
+            </FilterItem>
+            
+            <FilterItem label="Sales Resource" icon={UserCircle}>
+              <MultiSelect
+                options={users.map(u => ({ value: u.id, label: u.name }))}
+                selected={assignedToFilter}
+                onChange={setAssignedToFilter}
+                placeholder="All Resources"
+                className="h-10 rounded-xl"
+                data-testid="leads-assigned-filter"
+              />
+            </FilterItem>
+            
+            <FilterItem label="Search" icon={Search}>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input 
+                  type="text" 
+                  value={searchQuery} 
+                  onChange={e => setSearchQuery(e.target.value)} 
+                  placeholder="Company, contact..." 
+                  className="pl-10 h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" 
+                  data-testid="leads-search-input" 
                 />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Sales Resource</label>
-                <MultiSelect
-                  options={users.map(u => ({ value: u.id, label: u.name }))}
-                  selected={assignedToFilter}
-                  onChange={setAssignedToFilter}
-                  placeholder="All Resources"
-                  data-testid="leads-assigned-filter"
-                />
-              </div>
-              <div className="flex items-end">
-                <Button variant="outline" onClick={handleResetFilters} className="w-full h-9 border-slate-200 dark:border-slate-700" disabled={!hasActiveFilters} data-testid="leads-reset-filters">Reset</Button>
-              </div>
-            </div>
-            <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-              <div className="relative max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search by company name, contact, or lead ID..." className="pl-9 h-9 border-slate-200 dark:border-slate-700" data-testid="leads-search-input" />
-              </div>
-            </div>
-          </div>
-        </Card>
+            </FilterItem>
+          </FilterGrid>
+        </FilterContainer>
 
         {/* Leads Table */}
         <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
