@@ -1055,17 +1055,17 @@ class TravelApproval(BaseModel):
 
 # ============= BUDGET REQUEST MODELS =============
 
-# Budget Request Categories
+# Budget Request Categories (Non-lead/account specific - General company expenses)
 BUDGET_CATEGORIES = [
-    {'id': 'customer_onboarding', 'label': 'Customer On-boarding', 'requires_lead': True, 'requires_sku': False},
     {'id': 'event_sponsorship_amount', 'label': 'Event Sponsorship - Amount', 'requires_lead': False, 'requires_sku': False},
     {'id': 'event_sponsorship_stock', 'label': 'Event Sponsorship - Stock', 'requires_lead': False, 'requires_sku': True},
     {'id': 'event_participation', 'label': 'Event Participation', 'requires_lead': False, 'requires_sku': False},
     {'id': 'setup_exhibit', 'label': 'Set up Exhibit', 'requires_lead': False, 'requires_sku': False},
-    {'id': 'customer_gifting', 'label': 'Customer Gifting', 'requires_lead': True, 'requires_sku': False},
-    {'id': 'customer_entertainment', 'label': 'Customer Entertainment', 'requires_lead': True, 'requires_sku': False},
-    {'id': 'customer_free_trials', 'label': 'Customer - Free Trials', 'requires_lead': True, 'requires_sku': True},
     {'id': 'digital_promotion', 'label': 'Digital Promotion', 'requires_lead': False, 'requires_sku': False},
+    {'id': 'marketing_collateral', 'label': 'Marketing Collateral', 'requires_lead': False, 'requires_sku': False},
+    {'id': 'office_supplies', 'label': 'Office Supplies', 'requires_lead': False, 'requires_sku': False},
+    {'id': 'travel_general', 'label': 'General Travel', 'requires_lead': False, 'requires_sku': False},
+    {'id': 'other', 'label': 'Other', 'requires_lead': False, 'requires_sku': False},
 ]
 
 class BudgetLineItem(BaseModel):
