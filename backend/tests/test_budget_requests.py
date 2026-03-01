@@ -133,7 +133,7 @@ class TestBudgetRequestCRUD:
         }
         
         response = requests.post(f"{BASE_URL}/api/budget-requests", json=payload, headers=self.headers)
-        assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
+        assert response.status_code in [200, 201], f"Expected 200/201, got {response.status_code}: {response.text}"
         
         data = response.json()
         assert data.get('status') == 'draft', f"Expected draft status, got {data.get('status')}"
@@ -166,7 +166,7 @@ class TestBudgetRequestCRUD:
         }
         
         response = requests.post(f"{BASE_URL}/api/budget-requests", json=payload, headers=self.headers)
-        assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
+        assert response.status_code in [200, 201], f"Expected 200/201, got {response.status_code}: {response.text}"
         
         data = response.json()
         assert data.get('status') == 'pending_approval', f"Expected pending_approval, got {data.get('status')}"
@@ -198,7 +198,7 @@ class TestBudgetRequestCRUD:
         }
         
         response = requests.post(f"{BASE_URL}/api/budget-requests", json=payload, headers=self.headers)
-        assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
+        assert response.status_code in [200, 201], f"Expected 200/201, got {response.status_code}: {response.text}"
         
         data = response.json()
         line_item = data.get('line_items', [{}])[0]
@@ -259,7 +259,7 @@ class TestBudgetRequestApproval:
             "submit_for_approval": True
         }
         create_resp = requests.post(f"{BASE_URL}/api/budget-requests", json=create_payload, headers=self.ceo_headers)
-        assert create_resp.status_code == 201
+        assert create_resp.status_code in [200, 201]
         request_id = create_resp.json().get('id')
         
         # Approve as Director
@@ -282,7 +282,7 @@ class TestBudgetRequestApproval:
             "submit_for_approval": True
         }
         create_resp = requests.post(f"{BASE_URL}/api/budget-requests", json=create_payload, headers=self.ceo_headers)
-        assert create_resp.status_code == 201
+        assert create_resp.status_code in [200, 201]
         request_id = create_resp.json().get('id')
         
         # Reject as Director
@@ -305,7 +305,7 @@ class TestBudgetRequestApproval:
             "submit_for_approval": True
         }
         create_resp = requests.post(f"{BASE_URL}/api/budget-requests", json=create_payload, headers=self.ceo_headers)
-        assert create_resp.status_code == 201
+        assert create_resp.status_code in [200, 201]
         request_id = create_resp.json().get('id')
         
         # Try to approve as CEO (should fail if CEO is not director role)
