@@ -68,6 +68,20 @@ const TIME_FILTERS = [
   { value: 'lifetime', label: 'Lifetime' },
 ];
 
+const STATUS_OPTIONS = [
+  { value: 'new', label: 'New' },
+  { value: 'contacted', label: 'Contacted' },
+  { value: 'qualified', label: 'Qualified' },
+  { value: 'not_qualified', label: 'Not Qualified' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'trial_in_progress', label: 'Trial in Progress' },
+  { value: 'proposal_shared', label: 'Proposal Shared' },
+  { value: 'proposal_approved_by_customer', label: 'Proposal Approved' },
+  { value: 'won', label: 'Won' },
+  { value: 'lost', label: 'Lost' },
+  { value: 'future_followup', label: 'Future Follow up' },
+];
+
 export default function LeadsList() {
   const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
