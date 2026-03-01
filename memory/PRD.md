@@ -29,6 +29,31 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 ## What's Been Implemented
 
 ### Mar 1, 2026 (Session 14 - Current)
+- **NEW MODULE**: Travel Request Module
+  - **Purpose**: Enable employees to request travel approvals with trip details, purpose, lead linkage, budget, and 15-day advance policy compliance
+  - **Features Implemented**:
+    - Trip Details: From/To locations, Departure/Return dates, Flexible dates toggle
+    - 15-Day Advance Rule: Short notice warning with mandatory explanation (min 20 chars) when departure < 15 days
+    - Purpose Dropdown: Lead/Customer visits, Distribution, Manufacturing, Team visit, Vendor visits
+    - Lead/Customer Visits Section: Typeahead search, chip multi-select, Opportunity Size calculation
+    - Budget Section: Total + breakdown (Travel, Accommodation, Local Transport, Meals, Others)
+    - Workflow: Save as Draft, Submit for Approval
+    - Approval: CEO/Director can approve/reject with reason
+    - Action Items Integration: Auto-creates tasks for approvers on submission
+  - **New Files**:
+    - `/app/frontend/src/pages/TravelRequest.js` - Full page with form and list
+    - `/app/backend/tests/test_travel_requests.py` - 11 test cases
+  - **API Endpoints**:
+    - `GET /api/travel-requests/purposes` - List of travel purposes
+    - `GET /api/travel-requests` - List user's requests (CEO/Director see pending)
+    - `POST /api/travel-requests` - Create new request
+    - `PUT /api/travel-requests/{id}` - Update draft request
+    - `PUT /api/travel-requests/{id}/approve` - Approve/reject request
+    - `PUT /api/travel-requests/{id}/cancel` - Cancel request
+    - `GET /api/travel-requests/pending-approvals/count` - Count for approvers
+  - **Sidebar**: Added "REQUESTS" section with Leaves and Travel Request
+  - Status: VERIFIED - 100% test success rate (11/11 backend, 10/10 frontend)
+
 - **UI**: Enhanced Accounts List Page with Contemporary Styling
   - **Purpose**: Apply consistent modern theme to the accounts listing table
   - **Changes**:
