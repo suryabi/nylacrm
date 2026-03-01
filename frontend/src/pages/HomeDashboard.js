@@ -22,9 +22,9 @@ import {
   ActionItemsWidget,
   UpcomingFollowupsWidget,
   UpcomingMeetingsWidget,
-  MonthlyPerformanceWidget,
   PipelineSummaryWidget,
   RecentActivityWidget,
+  EmployeeInsightsWidget,
   NewTaskDialog,
   NewMeetingDialog,
   MeetingDetailDialog
