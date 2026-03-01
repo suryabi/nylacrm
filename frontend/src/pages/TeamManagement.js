@@ -899,6 +899,7 @@ function AddTeamMemberForm({ onSuccess }) {
 function EditTeamMemberForm({ user, onSuccess, onCancel }) {
   const [loading, setLoading] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
   const [formData, setFormData] = useState({
     name: user?.name || '',
     designation: user?.designation || '',
@@ -910,7 +911,10 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
     role: user?.role || 'sales_rep',
     department: user?.department || 'sales',
     reports_to: user?.reports_to || '',
-    is_active: user?.is_active ?? true
+    is_active: user?.is_active ?? true,
+    // HR Fields
+    ctc_monthly: user?.ctc_monthly || '',
+    joining_date: user?.joining_date || ''
   });
 
   // Master locations from API
@@ -932,8 +936,20 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
         console.error('Failed to load users');
       }
     };
+    const fetchCurrentUser = async () => {
+      try {
+        const response = await axios.get(`${API_URL}/auth/me`, { withCredentials: true });
+        setCurrentUser(response.data);
+      } catch (error) {
+        console.error('Failed to load current user');
+      }
+    };
     fetchManagers();
+    fetchCurrentUser();
   }, []);
+
+  // Check if current user can edit HR data
+  const canEditHRData = currentUser && ['ceo', 'director', 'admin', 'vp', 'vice president'].includes(currentUser.role?.toLowerCase());
 
   React.useEffect(() => {
     if (user) {
@@ -948,7 +964,9 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
         role: user.role || 'sales_rep',
         department: user.department || 'sales',
         reports_to: user.reports_to || '',
-        is_active: user.is_active ?? true
+        is_active: user.is_active ?? true,
+        ctc_monthly: user.ctc_monthly || '',
+        joining_date: user.joining_date || ''
       });
     }
   }, [user]);
