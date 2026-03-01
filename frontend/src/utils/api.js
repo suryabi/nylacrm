@@ -29,6 +29,7 @@ export const leadsAPI = {
   create: (data) => axios.post(`${API_URL}/leads`, data, { headers: getAuthHeaders() }),
   update: (id, data) => axios.put(`${API_URL}/leads/${id}`, data, { headers: getAuthHeaders() }),
   delete: (id) => axios.delete(`${API_URL}/leads/${id}`, { headers: getAuthHeaders() }),
+  generateLeadId: (id) => axios.post(`${API_URL}/leads/${id}/generate-lead-id`, {}, { headers: getAuthHeaders() }),
 };
 
 // Activities API
