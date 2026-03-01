@@ -19,38 +19,41 @@ class TestTravelRequestAPI:
     """Test travel request API endpoints"""
     
     @pytest.fixture(scope='class')
-    def ceo_token(self):
-        """Login as CEO for approval tests"""
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
+    def ceo_session(self):
+        """Login as CEO and get session with cookies"""
+        session = requests.Session()
+        response = session.post(f"{BASE_URL}/api/auth/login", json={
             "email": "surya.yadavalli@nylaairwater.earth",
             "password": "surya123"
         })
         if response.status_code == 200:
-            return response.json().get('token')
+            data = response.json()
+            session_token = data.get('session_token')
+            if session_token:
+                # Set session cookie
+                session.cookies.set('session_id', session_token)
+            return session
         pytest.skip("CEO login failed - skipping CEO tests")
     
     @pytest.fixture(scope='class')
-    def director_token(self):
-        """Login as Director for approval tests"""
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
+    def director_session(self):
+        """Login as Director and get session with cookies"""
+        session = requests.Session()
+        response = session.post(f"{BASE_URL}/api/auth/login", json={
             "email": "admin@nylaairwater.earth",
             "password": "admin123"
         })
         if response.status_code == 200:
-            return response.json().get('token')
+            data = response.json()
+            session_token = data.get('session_token')
+            if session_token:
+                session.cookies.set('session_id', session_token)
+            return session
         pytest.skip("Director login failed - skipping Director tests")
     
-    @pytest.fixture(scope='class')
-    def ceo_headers(self, ceo_token):
-        return {"Authorization": f"Bearer {ceo_token}", "Content-Type": "application/json"}
-    
-    @pytest.fixture(scope='class')
-    def director_headers(self, director_token):
-        return {"Authorization": f"Bearer {director_token}", "Content-Type": "application/json"}
-    
-    def test_get_travel_purposes(self, ceo_headers):
+    def test_get_travel_purposes(self, ceo_session):
         """Test GET /api/travel-requests/purposes returns all 5 purposes"""
-        response = requests.get(f"{BASE_URL}/api/travel-requests/purposes", headers=ceo_headers)
+        response = ceo_session.get(f"{BASE_URL}/api/travel-requests/purposes")
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         purposes = response.json()
         assert isinstance(purposes, list)
@@ -63,7 +66,7 @@ class TestTravelRequestAPI:
             assert val in purpose_values, f"Missing purpose: {val}"
         print(f"✓ Travel purposes API returns {len(purposes)} purposes")
     
-    def test_create_travel_request_draft(self, ceo_headers):
+    def test_create_travel_request_draft(self, ceo_session):
         """Test creating travel request as draft"""
         # Use dates more than 15 days in future
         departure = (datetime.now() + timedelta(days=20)).strftime('%Y-%m-%d')
@@ -88,7 +91,7 @@ class TestTravelRequestAPI:
             "submit_for_approval": False
         }
         
-        response = requests.post(f"{BASE_URL}/api/travel-requests", json=payload, headers=ceo_headers)
+        response = ceo_session.post(f"{BASE_URL}/api/travel-requests", json=payload)
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         
         data = response.json()
@@ -101,7 +104,7 @@ class TestTravelRequestAPI:
         print(f"✓ Created draft travel request: {data['id']}")
         return data['id']
     
-    def test_create_travel_request_submit_for_approval(self, director_headers):
+    def test_create_travel_request_submit_for_approval(self, director_session):
         """Test creating travel request and submitting for approval"""
         departure = (datetime.now() + timedelta(days=25)).strftime('%Y-%m-%d')
         return_date = (datetime.now() + timedelta(days=28)).strftime('%Y-%m-%d')
@@ -127,7 +130,7 @@ class TestTravelRequestAPI:
             "submit_for_approval": True
         }
         
-        response = requests.post(f"{BASE_URL}/api/travel-requests", json=payload, headers=director_headers)
+        response = director_session.post(f"{BASE_URL}/api/travel-requests", json=payload)
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         
         data = response.json()
@@ -137,7 +140,7 @@ class TestTravelRequestAPI:
         print(f"✓ Created travel request for approval: {data['id']}")
         return data['id']
     
-    def test_15_day_policy_short_notice_without_explanation(self, ceo_headers):
+    def test_15_day_policy_short_notice_without_explanation(self, ceo_session):
         """Test 15-day policy: short notice without explanation should fail"""
         # Departure in 5 days (short notice)
         departure = (datetime.now() + timedelta(days=5)).strftime('%Y-%m-%d')
@@ -154,7 +157,7 @@ class TestTravelRequestAPI:
             # No short_notice_explanation
         }
         
-        response = requests.post(f"{BASE_URL}/api/travel-requests", json=payload, headers=ceo_headers)
+        response = ceo_session.post(f"{BASE_URL}/api/travel-requests", json=payload)
         # Should fail with 400 due to missing explanation
         assert response.status_code == 400, f"Expected 400 for short notice without explanation, got {response.status_code}"
         error_detail = response.json().get('detail', '')
@@ -162,7 +165,7 @@ class TestTravelRequestAPI:
             f"Expected error about short notice explanation, got: {error_detail}"
         print("✓ Short notice travel without explanation correctly rejected")
     
-    def test_15_day_policy_short_notice_with_explanation(self, ceo_headers):
+    def test_15_day_policy_short_notice_with_explanation(self, ceo_session):
         """Test 15-day policy: short notice with valid explanation should succeed"""
         departure = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')
         return_date = (datetime.now() + timedelta(days=9)).strftime('%Y-%m-%d')
@@ -178,7 +181,7 @@ class TestTravelRequestAPI:
             "submit_for_approval": True
         }
         
-        response = requests.post(f"{BASE_URL}/api/travel-requests", json=payload, headers=ceo_headers)
+        response = ceo_session.post(f"{BASE_URL}/api/travel-requests", json=payload)
         assert response.status_code == 200, f"Expected 200 for short notice with explanation, got {response.status_code}: {response.text}"
         
         data = response.json()
@@ -187,7 +190,7 @@ class TestTravelRequestAPI:
         print(f"✓ Short notice travel with explanation accepted: {data['id']}")
         return data['id']
     
-    def test_create_travel_with_leads(self, director_headers):
+    def test_create_travel_with_leads(self, director_session):
         """Test creating travel request with lead/customer visits purpose and selected leads"""
         departure = (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
         return_date = (datetime.now() + timedelta(days=32)).strftime('%Y-%m-%d')
@@ -223,7 +226,7 @@ class TestTravelRequestAPI:
             "submit_for_approval": True
         }
         
-        response = requests.post(f"{BASE_URL}/api/travel-requests", json=payload, headers=director_headers)
+        response = director_session.post(f"{BASE_URL}/api/travel-requests", json=payload)
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         
         data = response.json()
@@ -233,9 +236,9 @@ class TestTravelRequestAPI:
         print(f"✓ Created travel request with leads, opportunity size: ₹{data['opportunity_size']}")
         return data['id']
     
-    def test_get_travel_requests_list(self, ceo_headers):
+    def test_get_travel_requests_list(self, ceo_session):
         """Test GET /api/travel-requests returns list"""
-        response = requests.get(f"{BASE_URL}/api/travel-requests", headers=ceo_headers)
+        response = ceo_session.get(f"{BASE_URL}/api/travel-requests")
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
         
         data = response.json()
@@ -252,7 +255,7 @@ class TestTravelRequestAPI:
             assert 'user_name' in req
             print(f"✓ Travel request structure validated")
     
-    def test_approval_workflow(self, ceo_headers, director_headers):
+    def test_approval_workflow(self, ceo_session, director_session):
         """Test full approval workflow: create -> approve"""
         # First create a request as Director
         departure = (datetime.now() + timedelta(days=40)).strftime('%Y-%m-%d')
@@ -268,28 +271,27 @@ class TestTravelRequestAPI:
             "submit_for_approval": True
         }
         
-        response = requests.post(f"{BASE_URL}/api/travel-requests", json=payload, headers=director_headers)
+        response = director_session.post(f"{BASE_URL}/api/travel-requests", json=payload)
         assert response.status_code == 200
         request_id = response.json()['id']
         print(f"✓ Created travel request for approval workflow test: {request_id}")
         
         # Now approve as CEO
-        approve_response = requests.put(
+        approve_response = ceo_session.put(
             f"{BASE_URL}/api/travel-requests/{request_id}/approve",
-            json={"status": "approved"},
-            headers=ceo_headers
+            json={"status": "approved"}
         )
         assert approve_response.status_code == 200, f"Approval failed: {approve_response.text}"
         
         # Verify status changed
-        get_response = requests.get(f"{BASE_URL}/api/travel-requests/{request_id}", headers=ceo_headers)
+        get_response = ceo_session.get(f"{BASE_URL}/api/travel-requests/{request_id}")
         assert get_response.status_code == 200
         updated_req = get_response.json()
         assert updated_req['status'] == 'approved', f"Expected approved status, got {updated_req['status']}"
         assert updated_req['approved_by_name'] is not None
         print(f"✓ Travel request approved by {updated_req['approved_by_name']}")
     
-    def test_rejection_workflow(self, ceo_headers, director_headers):
+    def test_rejection_workflow(self, ceo_session, director_session):
         """Test rejection workflow with reason"""
         departure = (datetime.now() + timedelta(days=45)).strftime('%Y-%m-%d')
         return_date = (datetime.now() + timedelta(days=47)).strftime('%Y-%m-%d')
@@ -304,31 +306,30 @@ class TestTravelRequestAPI:
             "submit_for_approval": True
         }
         
-        response = requests.post(f"{BASE_URL}/api/travel-requests", json=payload, headers=director_headers)
+        response = director_session.post(f"{BASE_URL}/api/travel-requests", json=payload)
         assert response.status_code == 200
         request_id = response.json()['id']
         
         # Reject as CEO
-        reject_response = requests.put(
+        reject_response = ceo_session.put(
             f"{BASE_URL}/api/travel-requests/{request_id}/approve",
             json={
                 "status": "rejected",
                 "rejection_reason": "Budget exceeds allocated limits for this quarter"
-            },
-            headers=ceo_headers
+            }
         )
         assert reject_response.status_code == 200, f"Rejection failed: {reject_response.text}"
         
         # Verify rejection
-        get_response = requests.get(f"{BASE_URL}/api/travel-requests/{request_id}", headers=ceo_headers)
+        get_response = ceo_session.get(f"{BASE_URL}/api/travel-requests/{request_id}")
         updated_req = get_response.json()
         assert updated_req['status'] == 'rejected'
         assert 'Budget exceeds' in updated_req['rejection_reason']
         print(f"✓ Travel request rejected with reason")
     
-    def test_get_pending_approvals_count(self, ceo_headers, director_headers):
+    def test_get_pending_approvals_count(self, ceo_session):
         """Test pending approvals count for CEO/Director"""
-        response = requests.get(f"{BASE_URL}/api/travel-requests/pending-approvals/count", headers=ceo_headers)
+        response = ceo_session.get(f"{BASE_URL}/api/travel-requests/pending-approvals/count")
         assert response.status_code == 200
         data = response.json()
         assert 'count' in data
@@ -340,22 +341,26 @@ class TestTravelRequestCleanup:
     """Cleanup test data"""
     
     @pytest.fixture(scope='class')
-    def ceo_token(self):
-        response = requests.post(f"{BASE_URL}/api/auth/login", json={
+    def ceo_session(self):
+        session = requests.Session()
+        response = session.post(f"{BASE_URL}/api/auth/login", json={
             "email": "surya.yadavalli@nylaairwater.earth",
             "password": "surya123"
         })
         if response.status_code == 200:
-            return response.json().get('token')
+            data = response.json()
+            session_token = data.get('session_token')
+            if session_token:
+                session.cookies.set('session_id', session_token)
+            return session
         return None
     
-    def test_cleanup_test_requests(self, ceo_token):
+    def test_cleanup_test_requests(self, ceo_session):
         """Note: Test data with TEST_ prefix should be cleaned up manually or via admin"""
-        if not ceo_token:
-            pytest.skip("No token for cleanup")
+        if not ceo_session:
+            pytest.skip("No session for cleanup")
         
-        headers = {"Authorization": f"Bearer {ceo_token}"}
-        response = requests.get(f"{BASE_URL}/api/travel-requests", headers=headers)
+        response = ceo_session.get(f"{BASE_URL}/api/travel-requests")
         
         if response.status_code == 200:
             requests_list = response.json()
