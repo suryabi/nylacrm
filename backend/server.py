@@ -2829,7 +2829,12 @@ async def get_leads(
     
     # Add location filters
     if status and status != 'all':
-        query['status'] = status
+        # Support comma-separated multiple statuses
+        status_list = [s.strip() for s in status.split(',') if s.strip()]
+        if len(status_list) == 1:
+            query['status'] = status_list[0]
+        elif len(status_list) > 1:
+            query['status'] = {'$in': status_list}
     if city and city != 'all':
         query['city'] = city
     if state and state != 'all':
@@ -2841,9 +2846,13 @@ async def get_leads(
     if region and region != 'all':
         query['region'] = region
     
-    # Add assigned_to filter
+    # Add assigned_to filter - support comma-separated multiple values
     if assigned_to and assigned_to != 'all':
-        query['assigned_to'] = assigned_to
+        assigned_list = [a.strip() for a in assigned_to.split(',') if a.strip()]
+        if len(assigned_list) == 1:
+            query['assigned_to'] = assigned_list[0]
+        elif len(assigned_list) > 1:
+            query['assigned_to'] = {'$in': assigned_list}
     
     # Add time filter
     if time_filter and time_filter != 'all' and time_filter != 'lifetime':
