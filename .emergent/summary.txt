@@ -1,283 +1,94 @@
 <analysis>**original_problem_statement:**
-The user wants to build a comprehensive, mobile-ready Sales CRM application. The main goal is to continue adding features as requested by the user.
+The user wants to build a comprehensive, mobile-ready Sales CRM application.
 
 PRODUCT REQUIREMENTS added in this session:
-1.  **Apply Contemporary Theme:** Apply the contemporary and elegant design theme consistently across all pages of the application.
-2.  **COGS Calculator Fix:** In the COGS calculator, if the actual landing price is removed, the gross profit should reset to its original saved value.
-3.  **Upcoming Follow-ups Fix:** The Upcoming Follow-ups widget on the home page should correctly display all leads/accounts that have a follow-up scheduled within one week of the current date.
-4.  **Login Redirect:** After a user logs in, they should be redirected to the home page ().
-5.  **Animated Splash Screen:** Replace the static splash screen image with an animated misty foggy greenery theme.
-6.  **Weather Widget CORS Fix:** Resolve a Cross-Origin Request Blocked (CORS) error that was preventing the weather widget from loading in production.
-7.  **Quote Widgets:** Add two new widgets to the home page that display daily random quotes, one about water and one about sales, styled to match the contemporary theme.
+1.  **Fix Home Page Blank Screen:** Debug and resolve the rendering issue that caused the home page to be blank.
+2.  **Home Page Widgets:**
+    *   Implement and position Water and Sales quote widgets.
+    *   Change the quote source from hardcoded to a free API, then revert back to hardcoded per user request.
+    *   Add a Did You Know? widget with facts about nature.
+    *   Disable (comment out) all three widgets to reduce clutter on the home page, while preserving the code.
+3.  **Lead List Enhancements:**
+    *   Change the default time filter to Lifetime.
+    *   Make all filters persistent using  so they are retained after navigating away and back.
+    *   Implement multi-select functionality for Resources and Status filters, including a Select All option.
+    *   Add a checkbox next to the follow-up date, allowing users to complete the follow-up with a single click without editing the lead.
+4.  **Amazon MQ Integration:**
+    *   Fix the connection issue caused by a duplicate client ID and an unreachable broker URL.
+    *   Correct the message processing logic to update **Accounts** instead of Leads.
+    *   Fix field name mismatches () and add support for new fields (, ).
+5.  **Invoice Display:**
+    *   Fix the bug where invoices sent via MQ were not showing up on the Account Detail page by creating the necessary backend endpoint and fixing the query logic.
+    *   Update the invoice table on the Account Detail page to match the column format of the Lead Detail page (Invoice #, Date, Gross, Net, Credit).
+6.  **Lead ID Generation:** Provide an option on the Lead Detail page to generate a  for leads that do not have one.
+7.  **Master Lead Status Management:**
+    *   Create a master list of lead statuses and perform a one-time database migration to map all existing leads to the new statuses.
+    *   Build a new settings page for full CRUD management (Create, Read, Update, Delete, Reorder) of lead statuses.
+    *   Ensure the Pipeline (Kanban) view dynamically fetches statuses and respects their defined order.
+    *   Update all status dropdowns and displays throughout the application to fetch statuses dynamically from the master list.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack Sales CRM application (React/FastAPI/MongoDB). The application has undergone a significant visual overhaul, with a contemporary and elegant theme applied to the majority of its pages. Several key bug fixes have been implemented, including resolving a data display issue in the Upcoming Follow-ups widget, fixing a logic bug in the COGS Calculator, and solving a production CORS error for the weather widget by implementing a backend proxy. The login flow has been corrected, and the splash screen is now a custom animation. The agent was in the process of adding two new quote widgets to the home page.
+A full-stack Sales CRM application. In this session, the Amazon MQ integration was fully repaired, including connection stability and business logic fixes to correctly process invoices against Accounts. The Lead List page has been significantly enhanced with persistent multi-select filters and a one-click complete follow-up feature. A comprehensive Master Lead Status management system has been implemented, including a new settings page for CRUD operations and a database migration. Most of the application, including the Pipeline (Kanban) view, now dynamically fetches statuses from this master list. The agent was in the final stages of this migration, updating the last few components to use the new dynamic status hook.
 
 **Last working item**:
--   **Last item agent was working:** Adding two new quote widgets ( and ) to the home page to display daily random quotes. The agent created the components, added them to , and attempted to verify the result.
--   **Status:** BLOCKED
+-   **Last item agent was working:** Updating all status-related UI elements across the application to be dynamic. The final component being worked on was , which needed to be updated to use the new  hook instead of hardcoded constants.
+-   **Status:** IN PROGRESS
 -   **Agent Testing Done:** N
--   **Which testing method agent to use?** Manual testing using ==> /var/log/supervisor/frontend.err.log <==
-(node:295) [DEP_WEBPACK_DEV_SERVER_ON_AFTER_SETUP_MIDDLEWARE] DeprecationWarning: 'onAfterSetupMiddleware' option is deprecated. Please use the 'setupMiddlewares' option.
-(Use `node --trace-deprecation ...` to show where the warning was created)
-(node:295) [DEP_WEBPACK_DEV_SERVER_ON_BEFORE_SETUP_MIDDLEWARE] DeprecationWarning: 'onBeforeSetupMiddleware' option is deprecated. Please use the 'setupMiddlewares' option.
-(node:78) [DEP_WEBPACK_DEV_SERVER_ON_AFTER_SETUP_MIDDLEWARE] DeprecationWarning: 'onAfterSetupMiddleware' option is deprecated. Please use the 'setupMiddlewares' option.
-(Use `node --trace-deprecation ...` to show where the warning was created)
-(node:78) [DEP_WEBPACK_DEV_SERVER_ON_BEFORE_SETUP_MIDDLEWARE] DeprecationWarning: 'onBeforeSetupMiddleware' option is deprecated. Please use the 'setupMiddlewares' option.
-
-==> /var/log/supervisor/frontend.out.log <==
-src/pages/SKUPerformance.js
-  Line 60:37:  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/SalesRevenueDashboard.js
-  Line 66:6:  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/SalesTargets.js
-  Line 254:6:  React Hook React.useEffect has a missing dependency: 'loadExisting'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-  Line 328:6:  React Hook React.useEffect has a missing dependency: 'loadTerr'. Either include it or remove the dependency array      react-hooks/exhaustive-deps
-  Line 394:6:  React Hook React.useEffect has a missing dependency: 'loadExisting'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-  Line 495:6:  React Hook React.useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array      react-hooks/exhaustive-deps
-  Line 562:6:  React Hook React.useEffect has a missing dependency: 'loadExisting'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-  Line 681:6:  React Hook React.useEffect has a missing dependency: 'loadCities'. Either include it or remove the dependency array    react-hooks/exhaustive-deps
-  Line 753:6:  React Hook React.useEffect has a missing dependency: 'loadExisting'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/StatusSummary.js
-  Line 112:6:  React Hook useEffect has a missing dependency: 'fetchStatuses'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/TransportationCostCalculator.js
-  Line 125:6:  React Hook useEffect has a missing dependency: 'calculateRoute'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-Search for the keywords to learn more about each warning.
-To ignore, add // eslint-disable-next-line to the line before.
-
-WARNING in [eslint] 
-src/context/AppContextContext.js
-  Line 57:6:  React Hook useEffect has missing dependencies: 'canAccessProduction', 'canAccessSales', and 'setDefaultContext'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
-
-src/context/AuthContext.js
-  Line 33:6:  React Hook useCallback has a missing dependency: 'logoutDueToInactivity'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-  Line 79:6:  React Hook useEffect has a missing dependency: 'checkAuth'. Either include it or remove the dependency array                react-hooks/exhaustive-deps
-
-src/pages/AccountDetail.js
-  Line 97:6:  React Hook useEffect has a missing dependency: 'fetchAccount'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/AccountPerformance.js
-  Line 84:6:  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/AddEditLead.js
-  Line 117:6:  React Hook useEffect has missing dependencies: 'formData.region', 'getInitialRegion', and 'isEdit'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
-  Line 124:6:  React Hook useEffect has missing dependencies: 'fetchLead' and 'isEdit'. Either include them or remove the dependency array                             react-hooks/exhaustive-deps
-
-src/pages/COGSCalculator.js
-  Line 54:6:  React Hook React.useEffect has a missing dependency: 'selectedCity'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-  Line 66:6:  React Hook React.useEffect has a missing dependency: 'loadCOGSData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/DailyStatusUpdate.js
-  Line 229:6:  React Hook useEffect has a missing dependency: 'loadExistingStatus'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/Dashboard.js
-  Line 73:42:  React Hook useEffect has a missing dependency: 'fetchAnalytics'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/HomeDashboard.js
-  Line 166:6:  React Hook useEffect has a missing dependency: 'fetchWeather'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/LeadDetail.js
-  Line 135:6:  React Hook useEffect has missing dependencies: 'fetchData' and 'fetchProposal'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/LeadDiscovery.js
-  Line 101:6:  React Hook React.useEffect has a missing dependency: 'fetchLocationSuggestions'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/LeadsList.js
-  Line 113:38:  React Hook useEffect has a missing dependency: 'fetchLeads'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/ResourcePerformance.js
-  Line 49:37:  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/SKUManagement.js
-  Line 65:6:  React Hook useEffect has a missing dependency: 'fetchSkus'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/SKUPerformance.js
-  Line 60:37:  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/SalesRevenueDashboard.js
-  Line 66:6:  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/SalesTargets.js
-  Line 254:6:  React Hook React.useEffect has a missing dependency: 'loadExisting'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-  Line 328:6:  React Hook React.useEffect has a missing dependency: 'loadTerr'. Either include it or remove the dependency array      react-hooks/exhaustive-deps
-  Line 394:6:  React Hook React.useEffect has a missing dependency: 'loadExisting'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-  Line 495:6:  React Hook React.useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array      react-hooks/exhaustive-deps
-  Line 562:6:  React Hook React.useEffect has a missing dependency: 'loadExisting'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-  Line 681:6:  React Hook React.useEffect has a missing dependency: 'loadCities'. Either include it or remove the dependency array    react-hooks/exhaustive-deps
-  Line 753:6:  React Hook React.useEffect has a missing dependency: 'loadExisting'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/StatusSummary.js
-  Line 112:6:  React Hook useEffect has a missing dependency: 'fetchStatuses'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/TransportationCostCalculator.js
-  Line 125:6:  React Hook useEffect has a missing dependency: 'calculateRoute'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-webpack compiled with 1 warning
-yarn run v1.22.22
-$ craco start
-Attempting to bind to HOST environment variable: 0.0.0.0
-If this was unintentional, check that you haven't mistakenly set it in your shell.
-Learn more here: https://cra.link/advanced-config
-
-Starting the development server... to check for console errors, followed by the screenshot tool.
+-   **Which testing method agent to use?** Frontend testing agent. After the final component is updated, a full regression test should be run to ensure all status dropdowns, badges, filters, and the Kanban board function correctly with the dynamic data.
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   **Issue 1: Home Page Rendering Blank After Adding Widgets**
-    -   **Description:** After adding the new  and  to , the home page started rendering as a blank screen. This is a critical blocking issue.
+-   **Issue 1: Dynamic Status Integration in Dashboard.js**
+    -   **Description:** The agent was in the process of refactoring  to remove its dependency on hardcoded status constants and instead use the  custom hook. This is the last step to complete the full migration to a dynamic lead status system.
     -   **Priority:** P0
-    -   **Attempted fixes:** None yet. The issue was discovered at the end of the last step.
+    -   **Attempted fixes:** The agent has already created the  hook and updated most other components. The last action was viewing  in preparation for editing it.
     -   **Next debug checklist:**
-        1.  Check the frontend supervisor logs for JavaScript errors: ==> /var/log/supervisor/frontend.err.log <==
-(node:295) [DEP_WEBPACK_DEV_SERVER_ON_AFTER_SETUP_MIDDLEWARE] DeprecationWarning: 'onAfterSetupMiddleware' option is deprecated. Please use the 'setupMiddlewares' option.
-(Use `node --trace-deprecation ...` to show where the warning was created)
-(node:295) [DEP_WEBPACK_DEV_SERVER_ON_BEFORE_SETUP_MIDDLEWARE] DeprecationWarning: 'onBeforeSetupMiddleware' option is deprecated. Please use the 'setupMiddlewares' option.
-(node:78) [DEP_WEBPACK_DEV_SERVER_ON_AFTER_SETUP_MIDDLEWARE] DeprecationWarning: 'onAfterSetupMiddleware' option is deprecated. Please use the 'setupMiddlewares' option.
-(Use `node --trace-deprecation ...` to show where the warning was created)
-(node:78) [DEP_WEBPACK_DEV_SERVER_ON_BEFORE_SETUP_MIDDLEWARE] DeprecationWarning: 'onBeforeSetupMiddleware' option is deprecated. Please use the 'setupMiddlewares' option.
-
-==> /var/log/supervisor/frontend.out.log <==
-src/pages/SKUPerformance.js
-  Line 60:37:  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/SalesRevenueDashboard.js
-  Line 66:6:  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/SalesTargets.js
-  Line 254:6:  React Hook React.useEffect has a missing dependency: 'loadExisting'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-  Line 328:6:  React Hook React.useEffect has a missing dependency: 'loadTerr'. Either include it or remove the dependency array      react-hooks/exhaustive-deps
-  Line 394:6:  React Hook React.useEffect has a missing dependency: 'loadExisting'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-  Line 495:6:  React Hook React.useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array      react-hooks/exhaustive-deps
-  Line 562:6:  React Hook React.useEffect has a missing dependency: 'loadExisting'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-  Line 681:6:  React Hook React.useEffect has a missing dependency: 'loadCities'. Either include it or remove the dependency array    react-hooks/exhaustive-deps
-  Line 753:6:  React Hook React.useEffect has a missing dependency: 'loadExisting'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/StatusSummary.js
-  Line 112:6:  React Hook useEffect has a missing dependency: 'fetchStatuses'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/TransportationCostCalculator.js
-  Line 125:6:  React Hook useEffect has a missing dependency: 'calculateRoute'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-Search for the keywords to learn more about each warning.
-To ignore, add // eslint-disable-next-line to the line before.
-
-WARNING in [eslint] 
-src/context/AppContextContext.js
-  Line 57:6:  React Hook useEffect has missing dependencies: 'canAccessProduction', 'canAccessSales', and 'setDefaultContext'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
-
-src/context/AuthContext.js
-  Line 33:6:  React Hook useCallback has a missing dependency: 'logoutDueToInactivity'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-  Line 79:6:  React Hook useEffect has a missing dependency: 'checkAuth'. Either include it or remove the dependency array                react-hooks/exhaustive-deps
-
-src/pages/AccountDetail.js
-  Line 97:6:  React Hook useEffect has a missing dependency: 'fetchAccount'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/AccountPerformance.js
-  Line 84:6:  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/AddEditLead.js
-  Line 117:6:  React Hook useEffect has missing dependencies: 'formData.region', 'getInitialRegion', and 'isEdit'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
-  Line 124:6:  React Hook useEffect has missing dependencies: 'fetchLead' and 'isEdit'. Either include them or remove the dependency array                             react-hooks/exhaustive-deps
-
-src/pages/COGSCalculator.js
-  Line 54:6:  React Hook React.useEffect has a missing dependency: 'selectedCity'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-  Line 66:6:  React Hook React.useEffect has a missing dependency: 'loadCOGSData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/DailyStatusUpdate.js
-  Line 229:6:  React Hook useEffect has a missing dependency: 'loadExistingStatus'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/Dashboard.js
-  Line 73:42:  React Hook useEffect has a missing dependency: 'fetchAnalytics'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/HomeDashboard.js
-  Line 166:6:  React Hook useEffect has a missing dependency: 'fetchWeather'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/LeadDetail.js
-  Line 135:6:  React Hook useEffect has missing dependencies: 'fetchData' and 'fetchProposal'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/LeadDiscovery.js
-  Line 101:6:  React Hook React.useEffect has a missing dependency: 'fetchLocationSuggestions'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/LeadsList.js
-  Line 113:38:  React Hook useEffect has a missing dependency: 'fetchLeads'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/ResourcePerformance.js
-  Line 49:37:  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/SKUManagement.js
-  Line 65:6:  React Hook useEffect has a missing dependency: 'fetchSkus'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/SKUPerformance.js
-  Line 60:37:  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/SalesRevenueDashboard.js
-  Line 66:6:  React Hook useEffect has a missing dependency: 'fetchData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/SalesTargets.js
-  Line 254:6:  React Hook React.useEffect has a missing dependency: 'loadExisting'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-  Line 328:6:  React Hook React.useEffect has a missing dependency: 'loadTerr'. Either include it or remove the dependency array      react-hooks/exhaustive-deps
-  Line 394:6:  React Hook React.useEffect has a missing dependency: 'loadExisting'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-  Line 495:6:  React Hook React.useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array      react-hooks/exhaustive-deps
-  Line 562:6:  React Hook React.useEffect has a missing dependency: 'loadExisting'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-  Line 681:6:  React Hook React.useEffect has a missing dependency: 'loadCities'. Either include it or remove the dependency array    react-hooks/exhaustive-deps
-  Line 753:6:  React Hook React.useEffect has a missing dependency: 'loadExisting'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/StatusSummary.js
-  Line 112:6:  React Hook useEffect has a missing dependency: 'fetchStatuses'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-src/pages/TransportationCostCalculator.js
-  Line 125:6:  React Hook useEffect has a missing dependency: 'calculateRoute'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
-
-webpack compiled with 1 warning
-yarn run v1.22.22
-$ craco start
-Attempting to bind to HOST environment variable: 0.0.0.0
-If this was unintentional, check that you haven't mistakenly set it in your shell.
-Learn more here: https://cra.link/advanced-config
-
-Starting the development server....
-        2.  Carefully review the code in the newly created files (, ) for any syntax errors, infinite loops, or invalid React hooks usage.
-        3.  Verify the imports and the placement of the new components within .
-    -   **Why fix this issue and what will be achieved with the fix?** Fixing this will unblock the development of the quote widgets and restore the functionality of the home page.
-    -   **Status:** NOT STARTED
+        1.  Modify .
+        2.  Import the  hook.
+        3.  Instantiate the hook to get the dynamic  and .
+        4.  Replace all remaining hardcoded references (e.g., to ) with the dynamic values from the hook.
+    -   **Why fix this issue and what will be achieved with the fix?** Completing this will make the entire application's status system configurable from the Master Lead Status page, ensuring consistency and removing all hardcoded status logic.
+    -   **Status:** IN PROGRESS
     -   **Is recurring issue?** N
     -   **Should Test frontend/backend/both after fix?** Frontend
 
 **In progress Task List**:
--   **Task 1: Implement Water and Sales Quote Widgets**
-    -   **Where to resume:** Resume by debugging the blank screen issue. Once the root cause is identified and fixed, proceed to verify that the two quote widgets appear correctly on the home page and match the application's contemporary theme.
-    -   **What will be achieved with this?** The home page will be enhanced with two new, visually appealing widgets providing daily inspiration to the user.
+-   **Task 1: Complete Dynamic Status Integration**
+    -   **Where to resume:** Resume by applying search and replace edits to  to integrate the  hook.
+    -   **What will be achieved with this?** The application will be fully decoupled from hardcoded lead statuses, making the system modular and manageable from the new UI.
     -   **Status:** IN PROGRESS
     -   **Should Test frontend/backend/both after fix?** Frontend
-    -   **Blocked on something:** Issue 1: Home Page Rendering Blank.
+    -   **Blocked on something:** None.
 
 **Upcoming and Future Tasks**
 -   **Upcoming Tasks:**
-    -   **P1: Complete Application-Wide Theme Update:** While a majority of pages have been updated, a full audit is required to find and style any remaining pages, modals, or components. The  page, for example, needs its table styling updated.
-    -   **P1: Build Out Production Modules:** Flesh out the placeholder modules (Maintenance, Inventory, Quality Control, Assets, Vendors) with actual functionality.
-    -   **P1: Implement Invoices Functionality:** Add the ability to create and manage invoices within the Accounts section.
+    -   **P1: Complete Application-Wide Theme Update:** Audit and style any remaining pages or components (e.g., the table on the  page) to match the contemporary theme.
+    -   **P1: Build Out Production Modules:** Implement functionality for the placeholder modules (Maintenance, Inventory, Quality Control, Assets, Vendors).
+    -   **P1: Implement Invoices Functionality:** Add the ability to create and manage invoices directly within the application, separate from the MQ integration.
     -   **P1: Re-implement Grid View:** Re-introduce the spreadsheet-style Grid View for the Sales Target module.
 -   **Future Tasks:**
     -   **P2: Refactor :** Break down the monolithic  into smaller, more manageable  modules based on functionality.
     -   **P2: Google Workspace Authentication:** Implement Google Workspace login as a full, alternative authentication method.
 
 **Completed work in this session**
--   **Application-Wide Theme Update (In Progress):** Applied the contemporary and elegant design theme to over a dozen pages, including all main dashboard reports, target reports, , , , and more.
--   **Weather Widget CORS Fix (DONE):** Resolved a production CORS error by creating a backend proxy endpoint () to securely handle API calls to the Open-Meteo service.
--   **Upcoming Follow-ups Bug Fix (DONE):** Corrected a backend query in  to use the  field, ensuring leads with upcoming follow-ups are correctly displayed on the home page widget.
--   **Login Redirect Fix (DONE):** Updated  and  to correctly redirect already-authenticated users to , ensuring a smooth login experience.
--   **Animated Splash Screen (DONE):** Replaced the static splash screen with a custom, animated misty foggy greenery theme using CSS animations.
--   **COGS Calculator Bug Fix (DONE):** Fixed a state management bug in  to ensure the gross profit value correctly resets when the actual landing price input is cleared.
+-   **Amazon MQ Integration Fix:** Resolved connection failures by implementing a unique client ID and fixed the business logic to process invoices against **Accounts** instead of Leads.
+-   **Account Invoice Display:** Added the backend endpoint and updated the frontend to correctly display a list of invoices on the Account Detail page.
+-   **Lead List Major Enhancements:**
+    -   Implemented filter persistence using .
+    -   Set the default time filter to Lifetime.
+    -   Converted Status and Resources filters to multi-select dropdowns.
+    -   Added a one-click checkbox to complete follow-ups from the list view.
+-   **Master Lead Status System:**
+    -   Created a full CRUD management page () for creating, editing, reordering, and deleting lead statuses.
+    -   Performed a one-time database migration to align all existing leads with the new master statuses.
+    -   Made the Pipeline (Kanban) view and most other pages dynamically render statuses based on the master list.
+-   **Lead ID Generation:** Added a feature to generate a  on the Lead Detail page if one is missing.
+-   **Home Page Cleanup:** Disabled the quote and Did You Know? widgets by commenting out their code in  at the user's request.
 
 **Earlier issues found/mentioned but not fixed**
--   **Incomplete Theming:** During the mass update, it was noted that some components on updated pages might still need styling refinements to fully match the new theme (e.g., the table card on the  page). This is captured in the Complete Application-Wide Theme Update upcoming task.
+-   None. The incomplete theming is captured as an upcoming task.
 
 **Known issue recurrence from previous fork**
 -   None.
@@ -286,80 +97,95 @@ Starting the development server....
 
 
 **Key Technical Concepts**
--   **Backend Proxy for CORS:** Implemented a FastAPI endpoint to act as a proxy for a third-party API (Open-Meteo), resolving browser-based CORS errors.
--   **CSS Animation:** Used  to create a complex, multi-layered animated splash screen with moving fog and glowing effects.
--   **Database Query Debugging:** Traced a data discrepancy from the UI back to a specific MongoDB query in the backend and corrected the field name ( -> ).
--   **React State Management:** Used  and  to manage and reset component state based on user interactions, fixing a UI logic bug in the COGS calculator.
--   **Large-Scale Theming:** Applied a consistent visual theme across a large number of disparate React components using shared CSS classes and structure.
+-   **Centralized State Management (Hooks):** Created a  custom hook to provide a single source of truth for lead status data across the entire application.
+-   **Dynamic UI Rendering:** The Kanban board columns and various dropdowns are now generated dynamically based on data fetched from the backend, making the UI adaptable to data changes without code modifications.
+-   **Backend Data Migration:** Executed a one-time script via a temporary API endpoint to perform a bulk update on the  collection, migrating them to the new status system.
+-   **State Persistence ():** Used  to maintain the user's filter state on the  page across page loads and navigation.
+-   **Message Queue Debugging (Stomp/ActiveMQ):** Diagnosed and fixed a connection conflict by ensuring a unique  for the preview environment's subscriber.
 
 **key DB schema**
--   No schema changes were made. The work involved correctly querying existing fields like  in the  and  collections.
+-   ** (New Collection):**
+    -   uid=0(root) gid=0(root) groups=0(root): String (e.g., 'new', 'qualified')
+    -   : String (e.g., 'New', 'Qualified')
+    -   : String (tailwind color, e.g., 'blue', 'green')
+    -   : Integer
+-   **:** The  field now maps to the uid=0(root) gid=0(root) groups=0(root) in the  collection.
+-   **:** Updated with invoice summary fields (e.g., ).
+-   **:** Now linked via  and .
 
 **changes in tech stack**
 -   None.
 
 **All files of reference**
+-    (The last file being worked on)
 -   
 -   
 -   
 -   
 -   
 -   
--   
--   The numerous page files updated with the new theme (e.g., , , ).
 
 **Areas that need refactoring**:
--    remains a large, monolithic file that is a prime candidate for being broken down into smaller  modules.
+-    remains a monolithic file and is a candidate for being split into multiple  modules.
 
 **key api endpoints**
--   ****: (New) Backend proxy endpoint to fetch weather data from the Open-Meteo API, bypassing browser CORS restrictions.
--   ****: (Modified) The underlying MongoDB aggregation pipeline was fixed to query using the correct field name () for upcoming follow-ups.
+-   **Lead Status Management (CRUD):**
+    -   
+    -   
+    -   
+    -   
+    -   
+-   **Lead Actions:**
+    -   
+    -   
+-   **Account Invoices:**
+    -   
+-   **Modified:**
+    -   : Now accepts comma-separated values for  and .
 
 **Critical Info for New Agent**
--   **Immediate Blocker:** The home page is currently rendering as a blank screen. Your first priority must be to investigate and fix this. The issue started immediately after the new quote widgets were added to . Start by checking the frontend console logs for errors.
--   **Weather API Rate Limiting:** The backend proxy for the weather API is functional. However, the Open-Meteo service has a strict rate limit. If the weather widget shows Weather unavailable during testing, it is likely due to this rate limit and is the expected fallback behavior. It is not a bug in the proxy implementation.
--   **Incomplete Theming Task:** The task to apply the theme across the entire application was very large. While most major pages are done, assume there are still minor components, modals, or less-frequented pages that need styling.
+-   **The Master Status system is the new source of truth.** All UI related to lead statuses (dropdowns, badges, filters, Kanban columns) should now be powered by the  hook. Avoid adding any new hardcoded status logic. The final step of this migration is to update .
+-   **Home Page widgets are intentionally disabled.** The quote widgets and Did You Know? widget were commented out in  per the user's request to declutter the page. Do not re-enable them unless asked. The code is preserved for potential future use.
+-   **The Amazon MQ integration is stable.** The core connection and data processing issues have been resolved. The subscriber now uses a unique client ID to prevent conflicts and correctly updates Accounts with invoice data.
 
 **documents and test reports created in this job**
--   
--   
--   
--   
+-   None.
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User**: Add two styled quote widgets (water & sales) to the home page. **Status: In Progress & Blocked.**
-2.  **User**: Fix CORS issue with the weather widget. **Status: Done.**
-3.  **User**: Animate the splash screen with a misty foggy greenery theme. **Status: Done.**
-4.  **User**: The user should land on the home page after login. **Status: Done.**
-5.  **User**: Upcoming follow-ups are not showing on the home page. **Status: Done.**
-6.  **User**: In the COGS calculator, gross profit should reset when the landing price is removed. **Status: Done.**
-7.  **User**: Apply the same contemporary theme across the entire application. **Status: In Progress.**
-8.  **User**: The sales overview, target x sku, and target x resource pages also need the new theme. **Status: Done.**
-9.  **User**: upon loggin in the user should be landed to Home page. **Status: Done.**
-10. **User**: in production , i see the following issue with weather widget **Status: Done.**
+1.  **User**:  - Status: **In Progress**. The agent is finishing this task.
+2.  **User**:  - Status: **Done**.
+3.  **User**:  - Status: **Done**.
+4.  **User**:  - Status: **Done**.
+5.  **User**:  - Status: **Done**.
+6.  **User**:  - Status: **Done**.
+7.  **User**:  - Status: **Done**.
+8.  **User**:  - Status: **Done**.
+9.  **User**:  - Status: **Done**.
+10. **User**:  - Status: **Done**.
 
 **Project Health Check:**
--   **Broken**: The home page () is currently non-functional (renders a blank screen).
--   **Mocked**: Production modules (Maintenance, Inventory, etc.) have a themed UI but remain non-functional placeholders.
--   **Refactoring Needed**:  is a large monolithic file that needs to be broken into smaller routers.
+-   **Broken**: None. The application is stable.
+-   **Mocked**: Production modules (e.g., Maintenance, Inventory) have UI but no backend functionality.
+-   **Refactoring Needed**:  is a large monolithic file that should be broken into smaller routers.
 
 **3rd Party Integrations**
--   **Zoom API (Server-to-Server OAuth):** For creating meetings. Requires User API Key.
--   **Resend:** For sending email notifications. Requires User API Key.
--   **Open-Meteo:** For the weather widget. Now proxied through the backend. No key required.
--   **Google Places API:** Requires User API Key.
--   **Google Workspace OAuth:** Requires User-provided OAuth Client ID/Secret.
+-   **Zoom API (Server-to-Server OAuth):** For creating meetings.
+-   **Resend:** For sending email notifications.
+-   **Open-Meteo:** For the weather widget (proxied through the backend).
+-   **Google Places API:** For location data.
+-   **Google Workspace OAuth:** For authentication.
 -   **Claude Sonnet 4.5:** Uses Emergent LLM Key.
+-   **Amazon MQ (via Stomp.py):** For receiving invoice data. This was heavily debugged and fixed in this session.
 
 **Testing status**
--   **Testing agent used after significant changes**: YES (for theme updates)
--   **Troubleshoot agent used after agent stuck in loop**: NO
--   **Test files created**: None
--   **Known regressions**: The home page is currently broken.
+-   **Testing agent used after significant changes**: No, but recommended after the current task is complete.
+-   **Troubleshoot agent used after agent stuck in loop**: No.
+-   **Test files created**: None.
+-   **Known regressions**: None.
 
 **Credentials to test flow:**
 -   **CEO:**  / 
 -   **Director:**  / 
 
 **What agent forgot to execute**
--   Nothing was forgotten. The agent was actively implementing the user's latest request when a blocking bug was introduced.</analysis>
+-   The agent is in the middle of completing the last user request and has not forgotten any tasks.</analysis>
