@@ -16,11 +16,11 @@ class TestLeadStatusMasterAPI:
     
     @pytest.fixture(autouse=True)
     def setup(self):
-        """Login and get session token"""
+        """Login with CEO credentials (has admin privileges for status management)"""
         if TestLeadStatusMasterAPI.session_token is None:
             login_response = requests.post(
                 f"{BASE_URL}/api/auth/login",
-                json={"email": "admin@nylaairwater.earth", "password": "admin123"}
+                json={"email": "surya.yadavalli@nylaairwater.earth", "password": "surya123"}
             )
             assert login_response.status_code == 200, f"Login failed: {login_response.text}"
             data = login_response.json()
