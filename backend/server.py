@@ -1053,6 +1053,93 @@ class TravelApproval(BaseModel):
     status: str  # 'approved' or 'rejected'
     rejection_reason: Optional[str] = None
 
+# ============= BUDGET REQUEST MODELS =============
+
+# Budget Request Categories
+BUDGET_CATEGORIES = [
+    {'id': 'customer_onboarding', 'label': 'Customer On-boarding', 'requires_lead': True, 'requires_sku': False},
+    {'id': 'event_sponsorship_amount', 'label': 'Event Sponsorship - Amount', 'requires_lead': False, 'requires_sku': False},
+    {'id': 'event_sponsorship_stock', 'label': 'Event Sponsorship - Stock', 'requires_lead': False, 'requires_sku': True},
+    {'id': 'event_participation', 'label': 'Event Participation', 'requires_lead': False, 'requires_sku': False},
+    {'id': 'setup_exhibit', 'label': 'Set up Exhibit', 'requires_lead': False, 'requires_sku': False},
+    {'id': 'customer_gifting', 'label': 'Customer Gifting', 'requires_lead': True, 'requires_sku': False},
+    {'id': 'customer_entertainment', 'label': 'Customer Entertainment', 'requires_lead': True, 'requires_sku': False},
+    {'id': 'customer_free_trials', 'label': 'Customer - Free Trials', 'requires_lead': True, 'requires_sku': True},
+    {'id': 'digital_promotion', 'label': 'Digital Promotion', 'requires_lead': False, 'requires_sku': False},
+]
+
+class BudgetLineItem(BaseModel):
+    """Single budget line item in a request"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    category_id: str
+    category_label: str
+    
+    # Lead info (for customer-related categories)
+    lead_id: Optional[str] = None
+    lead_name: Optional[str] = None
+    lead_city: Optional[str] = None
+    
+    # SKU info (for stock-based categories)
+    sku_id: Optional[str] = None
+    sku_name: Optional[str] = None
+    bottle_count: Optional[int] = None
+    price_per_unit: Optional[float] = None  # From COGS minimum landing price
+    
+    # Amount
+    amount: float = 0
+    notes: Optional[str] = None
+
+class BudgetRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    user_name: Optional[str] = None
+    
+    # Request Details
+    title: str
+    description: Optional[str] = None
+    
+    # Line Items
+    line_items: List[BudgetLineItem] = []
+    total_amount: float = 0
+    
+    # Event Details (for event-related categories)
+    event_name: Optional[str] = None
+    event_date: Optional[str] = None
+    event_city: Optional[str] = None
+    
+    # Status & Workflow
+    status: str = 'draft'  # 'draft', 'pending_approval', 'approved', 'rejected', 'cancelled'
+    approved_by: Optional[str] = None
+    approved_by_name: Optional[str] = None
+    approval_date: Optional[datetime] = None
+    rejection_reason: Optional[str] = None
+    
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class BudgetRequestCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    line_items: List[dict] = []
+    event_name: Optional[str] = None
+    event_date: Optional[str] = None
+    event_city: Optional[str] = None
+    submit_for_approval: bool = False
+
+class BudgetRequestUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    line_items: Optional[List[dict]] = None
+    event_name: Optional[str] = None
+    event_date: Optional[str] = None
+    event_city: Optional[str] = None
+    submit_for_approval: bool = False
+
+class BudgetApproval(BaseModel):
+    status: str  # 'approved' or 'rejected'
+    rejection_reason: Optional[str] = None
+
 class TargetPlan(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
