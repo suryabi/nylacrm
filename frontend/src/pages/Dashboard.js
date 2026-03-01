@@ -11,6 +11,7 @@ import {
   Clock, MessageSquare, Target, ThumbsUp, ThumbsDown, Calendar
 } from 'lucide-react';
 import { useMasterLocations } from '../hooks/useMasterLocations';
+import { useLeadStatuses } from '../hooks/useLeadStatuses';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -26,17 +27,20 @@ const TIME_FILTERS = [
   { value: 'lifetime', label: 'Lifetime' },
 ];
 
-const STATUS_CONFIG = {
-  new: { label: 'New', color: 'blue', icon: UserPlus },
-  qualified: { label: 'Qualified', color: 'green', icon: ThumbsUp },
-  contacted: { label: 'Contacted', color: 'yellow', icon: MessageSquare },
-  proposal_internal_review: { label: 'Internal Review', color: 'purple', icon: Clock },
-  ready_to_share_proposal: { label: 'Ready to Share', color: 'cyan', icon: TrendingUp },
-  proposal_shared_with_customer: { label: 'Proposal Shared', color: 'orange', icon: TrendingUp },
-  trial_in_progress: { label: 'Trial', color: 'indigo', icon: Target },
-  won: { label: 'Won', color: 'emerald', icon: CheckCircle },
-  lost: { label: 'Lost', color: 'red', icon: XCircle },
-  not_qualified: { label: 'Not Qualified', color: 'gray', icon: ThumbsDown },
+// Icon mapping for status colors
+const STATUS_ICONS = {
+  blue: UserPlus,
+  green: ThumbsUp,
+  yellow: MessageSquare,
+  purple: Clock,
+  cyan: TrendingUp,
+  orange: TrendingUp,
+  indigo: Target,
+  emerald: CheckCircle,
+  red: XCircle,
+  gray: ThumbsDown,
+  pink: Target,
+  teal: Target,
 };
 
 const COLOR_CLASSES = {
@@ -50,6 +54,8 @@ const COLOR_CLASSES = {
   orange: 'from-orange-50 to-orange-100 dark:from-orange-900/30 dark:to-orange-800/20 border-orange-200 dark:border-orange-700/50 text-orange-700 dark:text-orange-400',
   emerald: 'from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/20 border-emerald-200 dark:border-emerald-700/50 text-emerald-700 dark:text-emerald-400',
   red: 'from-red-50 to-red-100 dark:from-red-900/30 dark:to-red-800/20 border-red-200 dark:border-red-700/50 text-red-700 dark:text-red-400',
+  pink: 'from-pink-50 to-pink-100 dark:from-pink-900/30 dark:to-pink-800/20 border-pink-200 dark:border-pink-700/50 text-pink-700 dark:text-pink-400',
+  teal: 'from-teal-50 to-teal-100 dark:from-teal-900/30 dark:to-teal-800/20 border-teal-200 dark:border-teal-700/50 text-teal-700 dark:text-teal-400',
 };
 
 export default function Dashboard() {
@@ -58,6 +64,7 @@ export default function Dashboard() {
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [salesTeam, setSalesTeam] = useState([]);
+  const { statuses } = useLeadStatuses();
   
   const [timeFilter, setTimeFilter] = useState('this_week');
   const [territoryFilter, setTerritoryFilter] = useState('all');
