@@ -130,11 +130,11 @@ export default function LeadsList() {
   // Save filters to sessionStorage whenever they change
   useEffect(() => {
     sessionStorage.setItem('leads_filter_search', searchQuery);
-    sessionStorage.setItem('leads_filter_status', statusFilter);
+    sessionStorage.setItem('leads_filter_status', JSON.stringify(statusFilter));
     sessionStorage.setItem('leads_filter_territory', territoryFilter);
     sessionStorage.setItem('leads_filter_state', stateFilter);
     sessionStorage.setItem('leads_filter_city', cityFilter);
-    sessionStorage.setItem('leads_filter_assigned_to', assignedToFilter);
+    sessionStorage.setItem('leads_filter_assigned_to', JSON.stringify(assignedToFilter));
     sessionStorage.setItem('leads_filter_time', timeFilter);
     sessionStorage.setItem('leads_filter_page', currentPage.toString());
   }, [searchQuery, statusFilter, territoryFilter, stateFilter, cityFilter, assignedToFilter, timeFilter, currentPage]);
