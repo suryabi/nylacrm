@@ -1073,6 +1073,16 @@ ${userEmail}`;
           {/* Invoice Summary */}
           <InvoiceSummaryCard invoiceData={invoiceData} />
 
+          {/* Expense Requests Section */}
+          {lead && (
+            <ExpenseRequestSection
+              entityType="lead"
+              entityId={lead.id}
+              entityName={lead.company}
+              entityCity={lead.city}
+            />
+          )}
+
           {/* Comments */}
           <Card className="p-6">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
