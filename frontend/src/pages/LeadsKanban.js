@@ -430,7 +430,7 @@ export default function LeadsKanban() {
   });
   
   // Group leads by status
-  const leadsByStatus = LEAD_STATUSES.reduce((acc, status) => {
+  const leadsByStatus = statuses.reduce((acc, status) => {
     acc[status.id] = filteredLeads.filter(lead => lead.status === status.id);
     return acc;
   }, {});
