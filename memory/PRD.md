@@ -60,10 +60,15 @@ Build a comprehensive, mobile-ready Sales CRM application with:
     - `PUT /api/expense-requests/{id}` - Update draft request
     - `PUT /api/expense-requests/{id}/approve` - Approve/reject (Director only)
     - `DELETE /api/expense-requests/{id}` - Cancel request
-  - **Budget Module Updated**: Removed customer-related categories (now handled by Expense Requests):
+  - Status: VERIFIED - 100% test success rate (18/18 backend, 100% frontend)
+
+- **BUG FIX**: Budget Request Module Categories Update
+  - **Issue**: Budget module had customer-related categories that overlapped with new Expense Request feature
+  - **Fix**: Removed customer-specific categories from Budget module:
     - Removed: Customer On-boarding, Customer Gifting, Customer Entertainment, Customer Free Trials
     - Kept: Event Sponsorship (Amount/Stock), Event Participation, Set up Exhibit, Digital Promotion, Marketing Collateral, Office Supplies, General Travel, Other
-  - Status: VERIFIED - 100% test success rate (18/18 backend, 100% frontend)
+  - Updated both backend `BUDGET_CATEGORIES` constant and frontend `BUDGET_CATEGORIES` array
+  - Status: VERIFIED - 100% test success rate (15/15 backend, 100% frontend)
 
 ### Mar 1, 2026 (Session 14)
 - **NEW MODULE**: Budget Request Module
