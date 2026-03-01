@@ -3141,7 +3141,7 @@ async def get_lead_statuses(current_user: dict = Depends(get_current_user)):
 @api_router.post("/master/lead-statuses")
 async def create_lead_status(status: LeadStatusCreate, current_user: dict = Depends(get_current_user)):
     """Create a new lead status (Admin/Director only)"""
-    if current_user['role'] not in ['ceo', 'director', 'admin']:
+    if current_user['role'].lower() not in ['ceo', 'director', 'admin', 'system admin']:
         raise HTTPException(status_code=403, detail='Only admins can manage lead statuses')
     
     # Generate ID from label
@@ -3171,7 +3171,7 @@ async def create_lead_status(status: LeadStatusCreate, current_user: dict = Depe
 @api_router.put("/master/lead-statuses/{status_id}")
 async def update_lead_status(status_id: str, status: LeadStatusUpdate, current_user: dict = Depends(get_current_user)):
     """Update a lead status (Admin/Director only)"""
-    if current_user['role'] not in ['ceo', 'director', 'admin']:
+    if current_user['role'].lower() not in ['ceo', 'director', 'admin', 'system admin']:
         raise HTTPException(status_code=403, detail='Only admins can manage lead statuses')
     
     existing = await db.lead_statuses.find_one({'id': status_id})
@@ -3190,7 +3190,7 @@ async def update_lead_status(status_id: str, status: LeadStatusUpdate, current_u
 @api_router.delete("/master/lead-statuses/{status_id}")
 async def delete_lead_status(status_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a lead status (Admin/Director only) - only if no leads use it"""
-    if current_user['role'] not in ['ceo', 'director', 'admin']:
+    if current_user['role'].lower() not in ['ceo', 'director', 'admin', 'system admin']:
         raise HTTPException(status_code=403, detail='Only admins can manage lead statuses')
     
     # Check if any leads use this status
@@ -3207,7 +3207,7 @@ async def delete_lead_status(status_id: str, current_user: dict = Depends(get_cu
 @api_router.put("/master/lead-statuses/reorder")
 async def reorder_lead_statuses(status_ids: List[str], current_user: dict = Depends(get_current_user)):
     """Reorder lead statuses (Admin/Director only)"""
-    if current_user['role'] not in ['ceo', 'director', 'admin']:
+    if current_user['role'].lower() not in ['ceo', 'director', 'admin', 'system admin']:
         raise HTTPException(status_code=403, detail='Only admins can manage lead statuses')
     
     for i, status_id in enumerate(status_ids):
