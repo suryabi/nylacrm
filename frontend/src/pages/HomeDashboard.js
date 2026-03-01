@@ -451,8 +451,8 @@ export default function HomeDashboard() {
               onCancelMeeting={handleCancelMeeting}
             />
             
-            {/* Performance - Compact Card */}
-            <MonthlyPerformanceWidget monthlyPerformance={monthly_performance} />
+            {/* Employee Insights - Contemporary Widget */}
+            <EmployeeInsightsWidget />
             
             {/* Pipeline - Compact Card */}
             <PipelineSummaryWidget pipeline={pipeline} />
