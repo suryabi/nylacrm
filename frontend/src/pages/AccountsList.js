@@ -257,30 +257,102 @@ export default function AccountsList() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm" data-testid="accounts-table">
                   <thead>
-                    <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
-                      <th className="text-left py-4 px-4 font-semibold text-slate-600 dark:text-slate-400">Account</th>
-                      <th className="text-left py-4 px-4 font-semibold text-slate-600 dark:text-slate-400">Type</th>
-                      <th className="text-left py-4 px-4 font-semibold text-slate-600 dark:text-slate-400">Contact</th>
-                      <th className="text-left py-4 px-4 font-semibold text-slate-600 dark:text-slate-400">Location</th>
-                      <th className="text-left py-4 px-4 font-semibold text-slate-600 dark:text-slate-400">Account Age</th>
-                      <th className="text-left py-4 px-4 font-semibold text-slate-600 dark:text-slate-400">Onboarded</th>
-                      <th className="text-left py-4 px-4 font-semibold text-slate-600 dark:text-slate-400">Sales Contact</th>
+                    <tr className="border-b-2 border-amber-100 dark:border-amber-900/30 bg-gradient-to-r from-amber-50/80 to-orange-50/50 dark:from-amber-900/20 dark:to-orange-900/10">
+                      <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Account</th>
+                      <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Type</th>
+                      <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Contact</th>
+                      <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Location</th>
+                      <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Account Age</th>
+                      <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Onboarded</th>
+                      <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Sales Contact</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
                     {accounts.map((account, idx) => (
-                      <tr key={account.id || idx} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer" onClick={() => navigate(`/accounts/${account.account_id}`)} data-testid={`account-row-${account.account_id}`}>
-                        <td className="py-4 px-4">
-                          <div><p className="font-medium text-primary">{account.account_name}</p><p className="text-xs text-muted-foreground font-mono">{account.account_id}</p>{account.category && <Badge variant="outline" className="mt-1 text-xs">{account.category}</Badge>}</div>
+                      <tr 
+                        key={account.id || idx} 
+                        className="group hover:bg-gradient-to-r hover:from-amber-50/50 hover:to-orange-50/30 dark:hover:from-amber-900/10 dark:hover:to-orange-900/5 transition-all duration-200 cursor-pointer" 
+                        onClick={() => navigate(`/accounts/${account.account_id}`)} 
+                        data-testid={`account-row-${account.account_id}`}
+                      >
+                        <td className="py-5 px-5">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/50 dark:to-orange-900/30 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform duration-200">
+                              <Building2 className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-slate-800 dark:text-white group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors">{account.account_name}</p>
+                              <p className="text-xs text-slate-400 dark:text-slate-500 font-mono">{account.account_id}</p>
+                              {account.category && <Badge variant="outline" className="mt-1.5 text-xs border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">{account.category}</Badge>}
+                            </div>
+                          </div>
                         </td>
-                        <td className="py-4 px-4">{account.account_type ? <Badge className={accountTypeColors[account.account_type]}>{account.account_type}</Badge> : <span className="text-muted-foreground">-</span>}</td>
-                        <td className="py-4 px-4">
-                          <div>{account.contact_name && <p className="font-medium flex items-center gap-1"><User className="h-3 w-3 text-muted-foreground" />{account.contact_name}</p>}{account.contact_number && <p className="text-sm text-muted-foreground flex items-center gap-1"><Phone className="h-3 w-3" />{account.contact_number}</p>}{!account.contact_name && !account.contact_number && <span className="text-muted-foreground">-</span>}</div>
+                        <td className="py-5 px-5">
+                          {account.account_type ? (
+                            <Badge className={`${accountTypeColors[account.account_type]} font-medium px-3 py-1`}>
+                              {account.account_type}
+                            </Badge>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
                         </td>
-                        <td className="py-4 px-4"><div className="flex items-start gap-1"><MapPin className="h-3 w-3 text-muted-foreground mt-0.5" /><div><p className="text-sm">{account.city}</p><p className="text-xs text-muted-foreground">{account.state}</p></div></div></td>
-                        <td className="py-4 px-4"><div className="flex items-center gap-1"><Calendar className="h-3 w-3 text-muted-foreground" /><span className={`font-medium ${calculateAccountAge(account.created_at) === 'New' ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>{calculateAccountAge(account.created_at)}</span></div></td>
-                        <td className="py-4 px-4"><p className="text-sm">{formatDate(account.created_at)}</p></td>
-                        <td className="py-4 px-4">{account.sales_person_name ? <div className="flex items-center gap-1"><Users className="h-3 w-3 text-muted-foreground" /><span className="text-sm">{account.sales_person_name}</span></div> : <span className="text-muted-foreground">-</span>}</td>
+                        <td className="py-5 px-5">
+                          <div className="space-y-1">
+                            {account.contact_name && (
+                              <p className="font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                <User className="h-3.5 w-3.5 text-slate-400" />
+                                {account.contact_name}
+                              </p>
+                            )}
+                            {account.contact_number && (
+                              <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                                <Phone className="h-3.5 w-3.5 text-slate-400" />
+                                {account.contact_number}
+                              </p>
+                            )}
+                            {!account.contact_name && !account.contact_number && (
+                              <span className="text-slate-400">-</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-5 px-5">
+                          <div className="flex items-start gap-2">
+                            <div className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800">
+                              <MapPin className="h-3.5 w-3.5 text-slate-500" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-slate-700 dark:text-slate-300">{account.city}</p>
+                              <p className="text-xs text-slate-500">{account.state}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-5 px-5">
+                          <div className="flex items-center gap-2">
+                            <div className={`px-3 py-1.5 rounded-lg ${calculateAccountAge(account.created_at) === 'New' ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                              <span className={`text-sm font-semibold ${calculateAccountAge(account.created_at) === 'New' ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                                {calculateAccountAge(account.created_at)}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-5 px-5">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                            <span className="text-sm text-slate-600 dark:text-slate-400">{formatDate(account.created_at)}</span>
+                          </div>
+                        </td>
+                        <td className="py-5 px-5">
+                          {account.sales_person_name ? (
+                            <div className="flex items-center gap-2">
+                              <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/30 flex items-center justify-center">
+                                <Users className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                              </div>
+                              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{account.sales_person_name}</span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
