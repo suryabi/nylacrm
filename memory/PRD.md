@@ -28,7 +28,30 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 
 ## What's Been Implemented
 
-### Feb 28, 2026 (Session 13 - Current)
+### Mar 1, 2026 (Session 14 - Current)
+- **FEATURE**: Complete Dynamic Lead Status Integration
+  - **Purpose**: Make the entire application's lead status system configurable from the Master Lead Status settings page, removing all hardcoded status logic
+  - **Implementation**:
+    - Updated `Dashboard.js` to use `useLeadStatuses` hook instead of hardcoded `STATUS_CONFIG`
+    - Added `getIconForColor()` helper function to map status colors to icons
+    - Status distribution cards now iterate over dynamic `statuses` array from the hook
+    - Each status card is clickable and navigates to filtered leads list
+  - **Bug Fixed**: Case sensitivity in role permissions for lead status CRUD operations
+    - Role checks in server.py now use `.lower()` for comparison
+    - Affected endpoints: POST/PUT/DELETE `/api/master/lead-statuses`
+  - **Pages Using Dynamic Statuses**:
+    - `Dashboard.js` - Lead Status Distribution (10 status cards)
+    - `LeadsList.js` - Status filter dropdown (multi-select)
+    - `AddEditLead.js` - Status dropdown in lead form
+    - `LeadDetail.js` - Status display badge and update dropdown
+    - `LeadsKanban.js` - Kanban columns generated dynamically
+    - `MasterLeadStatus.js` - CRUD management UI
+  - **Files Modified**:
+    - `/app/frontend/src/pages/Dashboard.js` - Dynamic status rendering
+    - `/app/backend/server.py` - Case-insensitive role checks
+  - Status: VERIFIED - 100% test success rate (9/9 backend, 6/6 frontend)
+
+### Feb 28, 2026 (Session 13)
 - **FEATURE**: Daily Quote Widgets on Home Dashboard (API-Powered)
   - **Purpose**: Display inspirational daily quotes to users, with new quote on each login
   - **Backend Implementation**:
