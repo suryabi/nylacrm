@@ -561,6 +561,7 @@ function BudgetRequestForm({ onSuccess, initialData = null }) {
                     cities={cities}
                     eventCity={formData.event_city}
                     onUpdate={updateLineItem}
+                    onUpdateBatch={updateLineItemBatch}
                     onRemove={removeLineItem}
                   />
                 ))}
