@@ -302,6 +302,7 @@ class ApprovalType:
     """Enum-like class for approval types"""
     LEAVE_REQUEST = 'leave_request'
     TRAVEL_REQUEST = 'travel_request'
+    BUDGET_REQUEST = 'budget_request'
     PROPOSAL = 'proposal'
     CONTRACT = 'contract'
     EXPENSE = 'expense'
