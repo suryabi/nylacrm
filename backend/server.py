@@ -3776,17 +3776,24 @@ async def get_account_invoices(account_id: str, current_user: dict = Depends(get
     """Get invoices for an account"""
     account = await db.accounts.find_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
-        {'_id': 0, 'lead_id': 1, 'account_name': 1}
+        {'_id': 0, 'id': 1, 'lead_id': 1, 'account_name': 1, 'account_id': 1}
     )
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
     
-    # Find invoices by lead_id or account name
+    # Find invoices by account_uuid, account_id, ca_lead_id, or lead_id
+    account_uuid = account.get('id')
+    acc_id = account.get('account_id')
     lead_id = account.get('lead_id')
     account_name = account.get('account_name')
     
     query = {'$or': []}
+    if account_uuid:
+        query['$or'].append({'account_uuid': account_uuid})
+    if acc_id:
+        query['$or'].append({'account_id': acc_id})
     if lead_id:
+        query['$or'].append({'ca_lead_id': lead_id})
         query['$or'].append({'lead_id': lead_id})
     if account_name:
         query['$or'].append({'customer_name': {'$regex': account_name, '$options': 'i'}})
@@ -3794,16 +3801,37 @@ async def get_account_invoices(account_id: str, current_user: dict = Depends(get
     if not query['$or']:
         return {'invoices': [], 'total_amount': 0, 'paid_amount': 0, 'outstanding': 0}
     
-    invoices = await db.invoices.find(query, {'_id': 0}).sort('created_at', -1).to_list(100)
+    invoices = await db.invoices.find(query, {'_id': 0}).sort('invoice_date', -1).to_list(100)
     
-    total_amount = sum(inv.get('total_amount', 0) for inv in invoices)
-    paid_amount = sum(inv.get('paid_amount', 0) for inv in invoices)
+    # Calculate totals - support both old and new field names
+    total_amount = sum(inv.get('gross_invoice_value', inv.get('total_amount', 0)) or 0 for inv in invoices)
+    net_amount = sum(inv.get('net_invoice_value', inv.get('paid_amount', 0)) or 0 for inv in invoices)
+    credit_amount = sum(inv.get('credit_note_value', 0) or 0 for inv in invoices)
+    outstanding = sum(inv.get('outstanding', 0) or 0 for inv in invoices)
+    
+    # Transform invoices to consistent format for frontend
+    formatted_invoices = []
+    for inv in invoices:
+        formatted_invoices.append({
+            'id': inv.get('id'),
+            'invoice_number': inv.get('invoice_no'),
+            'invoice_date': inv.get('invoice_date'),
+            'gross_amount': inv.get('gross_invoice_value', inv.get('total_amount', 0)),
+            'net_amount': inv.get('net_invoice_value', inv.get('paid_amount', 0)),
+            'credit_note': inv.get('credit_note_value', 0),
+            'outstanding': inv.get('outstanding', 0),
+            'status': inv.get('status', 'matched'),
+            'items': inv.get('items', []),
+            'received_at': inv.get('received_at')
+        })
     
     return {
-        'invoices': invoices,
+        'invoices': formatted_invoices,
         'total_amount': total_amount,
-        'paid_amount': paid_amount,
-        'outstanding': total_amount - paid_amount
+        'net_amount': net_amount,
+        'credit_amount': credit_amount,
+        'paid_amount': net_amount,  # For backwards compatibility
+        'outstanding': outstanding if outstanding > 0 else (total_amount - net_amount)
     }
 
 @api_router.delete("/accounts/{account_id}")
