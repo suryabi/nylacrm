@@ -180,7 +180,7 @@ const LeadCard = ({ lead, onDragStart, onDragEnd, onClick, users, onMoveToStatus
 };
 
 // Kanban Column Component
-const KanbanColumn = ({ status, leads, onDragStart, onDragEnd, onDragOver, onDrop, onCardClick, users, isDropTarget, onMoveToStatus }) => {
+const KanbanColumn = ({ status, leads, onDragStart, onDragEnd, onDragOver, onDrop, onCardClick, users, isDropTarget, onMoveToStatus, statuses }) => {
   const count = leads.length;
   
   return (
@@ -216,6 +216,7 @@ const KanbanColumn = ({ status, leads, onDragStart, onDragEnd, onDragOver, onDro
               users={users}
               onMoveToStatus={onMoveToStatus}
               currentStatus={status.id}
+              statuses={statuses}
             />
           ))}
           {leads.length === 0 && (
