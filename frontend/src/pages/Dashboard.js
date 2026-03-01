@@ -28,16 +28,15 @@ const TIME_FILTERS = [
 
 const STATUS_CONFIG = {
   new: { label: 'New', color: 'blue', icon: UserPlus },
-  contacted: { label: 'Contacted', color: 'yellow', icon: MessageSquare },
   qualified: { label: 'Qualified', color: 'green', icon: ThumbsUp },
-  not_qualified: { label: 'Not Qualified', color: 'gray', icon: ThumbsDown },
-  in_progress: { label: 'In Progress', color: 'purple', icon: Clock },
+  contacted: { label: 'Contacted', color: 'yellow', icon: MessageSquare },
+  proposal_internal_review: { label: 'Internal Review', color: 'purple', icon: Clock },
+  ready_to_share_proposal: { label: 'Ready to Share', color: 'cyan', icon: TrendingUp },
+  proposal_shared_with_customer: { label: 'Proposal Shared', color: 'orange', icon: TrendingUp },
   trial_in_progress: { label: 'Trial', color: 'indigo', icon: Target },
-  proposal_shared: { label: 'Proposal Shared', color: 'orange', icon: TrendingUp },
-  proposal_approved_by_customer: { label: 'Proposal Approved', color: 'teal', icon: CheckCircle },
   won: { label: 'Won', color: 'emerald', icon: CheckCircle },
   lost: { label: 'Lost', color: 'red', icon: XCircle },
-  future_followup: { label: 'Follow Up', color: 'slate', icon: Calendar },
+  not_qualified: { label: 'Not Qualified', color: 'gray', icon: ThumbsDown },
 };
 
 const COLOR_CLASSES = {
