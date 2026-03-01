@@ -598,7 +598,7 @@ function BudgetLineItemRow({ item, index, skus, cities, eventCity, onUpdate, onR
   const [searchingLead, setSearchingLead] = useState(false);
   const [leadSearchTerm, setLeadSearchTerm] = useState('');
   const [leadResults, setLeadResults] = useState([]);
-  const [showLeadDropdown, setShowLeadDropdown] = useState(false);
+  const [showLeadDialog, setShowLeadDialog] = useState(false);
 
   const category = BUDGET_CATEGORIES.find(c => c.id === item.category_id);
   const requiresLead = category?.requires_lead;
@@ -613,19 +613,25 @@ function BudgetLineItemRow({ item, index, skus, cities, eventCity, onUpdate, onR
     setSearchingLead(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_URL}/leads?search=${encodeURIComponent(term)}&page_size=5`, {
+      const response = await axios.get(`${API_URL}/leads?search=${encodeURIComponent(term)}&page_size=10`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setLeadResults(response.data.data || response.data || []);
+      const data = response.data;
+      setLeadResults(data.data || data || []);
     } catch (error) {
       console.error('Failed to search leads:', error);
+      setLeadResults([]);
     } finally {
       setSearchingLead(false);
     }
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => searchLeads(leadSearchTerm), 300);
+    const timer = setTimeout(() => {
+      if (leadSearchTerm) {
+        searchLeads(leadSearchTerm);
+      }
+    }, 300);
     return () => clearTimeout(timer);
   }, [leadSearchTerm, searchLeads]);
 
@@ -648,7 +654,6 @@ function BudgetLineItemRow({ item, index, skus, cities, eventCity, onUpdate, onR
 
   const handleSkuChange = (skuName) => {
     onUpdate(index, 'sku_name', skuName);
-    // Determine city for pricing
     const city = item.lead_city || eventCity;
     if (city) {
       fetchSkuPrice(skuName, city);
@@ -660,20 +665,26 @@ function BudgetLineItemRow({ item, index, skus, cities, eventCity, onUpdate, onR
     onUpdate(index, 'lead_name', lead.company_name);
     onUpdate(index, 'lead_city', lead.city);
     setLeadSearchTerm('');
-    setShowLeadDropdown(false);
+    setShowLeadDialog(false);
+    setLeadResults([]);
     
-    // Fetch SKU price if SKU is already selected
     if (item.sku_name) {
       fetchSkuPrice(item.sku_name, lead.city);
     }
   };
 
+  const clearLead = () => {
+    onUpdate(index, 'lead_id', null);
+    onUpdate(index, 'lead_name', '');
+    onUpdate(index, 'lead_city', '');
+  };
+
   return (
-    <TableRow>
+    <TableRow className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
       <TableCell>
         <Select value={item.category_id} onValueChange={(v) => onUpdate(index, 'category_id', v)}>
-          <SelectTrigger className="h-9 text-sm">
-            <SelectValue placeholder="Select..." />
+          <SelectTrigger className="h-10 text-sm rounded-lg">
+            <SelectValue placeholder="Select category..." />
           </SelectTrigger>
           <SelectContent>
             {BUDGET_CATEGORIES.map(cat => (
@@ -685,56 +696,127 @@ function BudgetLineItemRow({ item, index, skus, cities, eventCity, onUpdate, onR
       
       <TableCell>
         {requiresLead ? (
-          <div className="relative">
+          <div>
             {item.lead_name ? (
-              <div className="flex items-center gap-1 p-1.5 bg-slate-100 dark:bg-slate-800 rounded text-sm">
-                <Building2 className="h-3 w-3 text-slate-500" />
-                <span className="truncate flex-1">{item.lead_name}</span>
-                <button onClick={() => { onUpdate(index, 'lead_id', null); onUpdate(index, 'lead_name', ''); onUpdate(index, 'lead_city', ''); }} className="text-slate-400 hover:text-red-500">
-                  <X className="h-3 w-3" />
+              <div className="flex items-center gap-2 p-2.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg">
+                <Building2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm text-emerald-800 dark:text-emerald-300 truncate">{item.lead_name}</p>
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400">{item.lead_city}</p>
+                </div>
+                <button 
+                  onClick={clearLead} 
+                  className="p-1 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 transition-colors"
+                >
+                  <X className="h-4 w-4" />
                 </button>
               </div>
             ) : (
-              <>
-                <Input
-                  placeholder="Search lead..."
-                  value={leadSearchTerm}
-                  onChange={(e) => { setLeadSearchTerm(e.target.value); setShowLeadDropdown(true); }}
-                  onFocus={() => setShowLeadDropdown(true)}
-                  className="h-9 text-sm"
-                />
-                {showLeadDropdown && leadSearchTerm && (
-                  <Card className="absolute z-50 w-full mt-1 p-1 max-h-40 overflow-y-auto shadow-lg">
-                    {searchingLead ? (
-                      <div className="p-2 text-center text-sm text-muted-foreground">Searching...</div>
-                    ) : leadResults.length === 0 ? (
-                      <div className="p-2 text-center text-sm text-muted-foreground">No leads found</div>
-                    ) : (
-                      leadResults.map(lead => (
+              <Dialog open={showLeadDialog} onOpenChange={setShowLeadDialog}>
+                <DialogTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    className="w-full h-10 justify-start text-sm font-normal rounded-lg border-dashed border-2 hover:border-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10"
+                  >
+                    <Search className="h-4 w-4 mr-2 text-slate-400" />
+                    <span className="text-slate-500">Select Lead...</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Building2 className="h-5 w-5 text-emerald-600" />
+                      Select Lead / Customer
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    {/* Search Input */}
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                      <Input
+                        placeholder="Search by company name, contact, or city..."
+                        value={leadSearchTerm}
+                        onChange={(e) => setLeadSearchTerm(e.target.value)}
+                        className="pl-11 h-12 text-base rounded-xl border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                        autoFocus
+                      />
+                      {searchingLead && (
+                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 animate-spin text-slate-400" />
+                      )}
+                    </div>
+                    
+                    {/* Search Results */}
+                    <div className="max-h-[300px] overflow-y-auto space-y-2">
+                      {!leadSearchTerm && (
+                        <div className="text-center py-8 text-slate-400">
+                          <Search className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">Start typing to search leads</p>
+                          <p className="text-xs mt-1">Minimum 2 characters</p>
+                        </div>
+                      )}
+                      
+                      {leadSearchTerm && leadSearchTerm.length < 2 && (
+                        <div className="text-center py-6 text-slate-400">
+                          <p className="text-sm">Type at least 2 characters to search</p>
+                        </div>
+                      )}
+                      
+                      {leadSearchTerm && leadSearchTerm.length >= 2 && !searchingLead && leadResults.length === 0 && (
+                        <div className="text-center py-8 text-slate-400">
+                          <Building2 className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">No leads found for "{leadSearchTerm}"</p>
+                          <p className="text-xs mt-1">Try a different search term</p>
+                        </div>
+                      )}
+                      
+                      {leadResults.map(lead => (
                         <div
                           key={lead.id}
-                          className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded cursor-pointer"
                           onClick={() => selectLead(lead)}
+                          className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 cursor-pointer transition-all group"
                         >
-                          <p className="font-medium text-sm">{lead.company_name}</p>
-                          <p className="text-xs text-muted-foreground">{lead.city}</p>
+                          <div className="flex items-start gap-3">
+                            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/50 dark:to-teal-900/30 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                              <Building2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-slate-800 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
+                                {lead.company_name}
+                              </p>
+                              <div className="flex items-center gap-3 mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="h-3.5 w-3.5" />
+                                  {lead.city}
+                                </span>
+                                {lead.contact_name && (
+                                  <span className="truncate">{lead.contact_name}</span>
+                                )}
+                              </div>
+                              {lead.lead_id && (
+                                <p className="text-xs text-slate-400 mt-1 font-mono">{lead.lead_id}</p>
+                              )}
+                            </div>
+                            <div className="text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <CheckCircle className="h-5 w-5" />
+                            </div>
+                          </div>
                         </div>
-                      ))
-                    )}
-                  </Card>
-                )}
-              </>
+                      ))}
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             )}
           </div>
         ) : (
-          <span className="text-sm text-muted-foreground">-</span>
+          <span className="text-sm text-slate-400 italic">Not required</span>
         )}
       </TableCell>
 
       <TableCell>
         {requiresSku ? (
           <Select value={item.sku_name} onValueChange={handleSkuChange}>
-            <SelectTrigger className="h-9 text-sm">
+            <SelectTrigger className="h-10 text-sm rounded-lg">
               <SelectValue placeholder="Select SKU" />
             </SelectTrigger>
             <SelectContent>
@@ -744,7 +826,7 @@ function BudgetLineItemRow({ item, index, skus, cities, eventCity, onUpdate, onR
             </SelectContent>
           </Select>
         ) : (
-          <span className="text-sm text-muted-foreground">-</span>
+          <span className="text-sm text-slate-400 italic">Not required</span>
         )}
       </TableCell>
 
@@ -756,10 +838,10 @@ function BudgetLineItemRow({ item, index, skus, cities, eventCity, onUpdate, onR
             placeholder="0"
             value={item.bottle_count || ''}
             onChange={(e) => onUpdate(index, 'bottle_count', parseInt(e.target.value) || 0)}
-            className="h-9 text-sm w-20"
+            className="h-10 text-sm w-24 rounded-lg"
           />
         ) : (
-          <span className="text-sm text-muted-foreground">-</span>
+          <span className="text-sm text-slate-400 italic">-</span>
         )}
       </TableCell>
 
@@ -771,10 +853,10 @@ function BudgetLineItemRow({ item, index, skus, cities, eventCity, onUpdate, onR
             placeholder="0"
             value={item.price_per_unit || ''}
             onChange={(e) => onUpdate(index, 'price_per_unit', parseFloat(e.target.value) || 0)}
-            className="h-9 text-sm w-20"
+            className="h-10 text-sm w-24 rounded-lg"
           />
         ) : (
-          <span className="text-sm text-muted-foreground">-</span>
+          <span className="text-sm text-slate-400 italic">-</span>
         )}
       </TableCell>
 
@@ -785,7 +867,7 @@ function BudgetLineItemRow({ item, index, skus, cities, eventCity, onUpdate, onR
           placeholder="0"
           value={item.amount || ''}
           onChange={(e) => onUpdate(index, 'amount', parseFloat(e.target.value) || 0)}
-          className="h-9 text-sm font-medium"
+          className="h-10 text-sm font-medium rounded-lg"
           disabled={requiresSku && item.bottle_count > 0 && item.price_per_unit > 0}
         />
       </TableCell>
@@ -795,7 +877,7 @@ function BudgetLineItemRow({ item, index, skus, cities, eventCity, onUpdate, onR
           placeholder="Notes..."
           value={item.notes || ''}
           onChange={(e) => onUpdate(index, 'notes', e.target.value)}
-          className="h-9 text-sm"
+          className="h-10 text-sm rounded-lg"
         />
       </TableCell>
 
@@ -804,7 +886,7 @@ function BudgetLineItemRow({ item, index, skus, cities, eventCity, onUpdate, onR
           variant="ghost"
           size="sm"
           onClick={() => onRemove(index)}
-          className="h-8 w-8 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+          className="h-9 w-9 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
         >
           <Trash2 className="h-4 w-4" />
         </Button>
