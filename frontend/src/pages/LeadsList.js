@@ -72,15 +72,22 @@ export default function LeadsList() {
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [territoryFilter, setTerritoryFilter] = useState('all');
-  const [stateFilter, setStateFilter] = useState('all');
-  const [cityFilter, setCityFilter] = useState('all');
-  const [assignedToFilter, setAssignedToFilter] = useState('all');
+  
+  // Initialize filters from sessionStorage or defaults
+  const getInitialFilter = (key, defaultValue) => {
+    const saved = sessionStorage.getItem(`leads_filter_${key}`);
+    return saved !== null ? saved : defaultValue;
+  };
+  
+  const [searchQuery, setSearchQuery] = useState(() => getInitialFilter('search', ''));
+  const [statusFilter, setStatusFilter] = useState(() => getInitialFilter('status', 'all'));
+  const [territoryFilter, setTerritoryFilter] = useState(() => getInitialFilter('territory', 'all'));
+  const [stateFilter, setStateFilter] = useState(() => getInitialFilter('state', 'all'));
+  const [cityFilter, setCityFilter] = useState(() => getInitialFilter('city', 'all'));
+  const [assignedToFilter, setAssignedToFilter] = useState(() => getInitialFilter('assigned_to', 'all'));
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
-  const [timeFilter, setTimeFilter] = useState('this_week');
+  const [timeFilter, setTimeFilter] = useState(() => getInitialFilter('time', 'lifetime'));
   
   const { territories, getStateNamesByTerritoryName, getCityNamesByStateName } = useMasterLocations();
   
