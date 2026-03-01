@@ -182,7 +182,16 @@ export default function LeadsList() {
 
   const handleResetFilters = () => {
     setSearchQuery(''); setStatusFilter('all'); setTerritoryFilter('all'); setStateFilter('all');
-    setCityFilter('all'); setAssignedToFilter('all'); setTimeFilter('this_week'); setCurrentPage(1);
+    setCityFilter('all'); setAssignedToFilter('all'); setTimeFilter('lifetime'); setCurrentPage(1);
+    // Clear sessionStorage
+    sessionStorage.removeItem('leads_filter_search');
+    sessionStorage.removeItem('leads_filter_status');
+    sessionStorage.removeItem('leads_filter_territory');
+    sessionStorage.removeItem('leads_filter_state');
+    sessionStorage.removeItem('leads_filter_city');
+    sessionStorage.removeItem('leads_filter_assigned_to');
+    sessionStorage.removeItem('leads_filter_time');
+    sessionStorage.removeItem('leads_filter_page');
     window.history.replaceState({}, '', '/leads');
   };
 
@@ -195,7 +204,7 @@ export default function LeadsList() {
   });
 
   const displayLeads = sortedLeads;
-  const hasActiveFilters = searchQuery || statusFilter !== 'all' || territoryFilter !== 'all' || stateFilter !== 'all' || cityFilter !== 'all' || assignedToFilter !== 'all' || timeFilter !== 'this_week';
+  const hasActiveFilters = searchQuery || statusFilter !== 'all' || territoryFilter !== 'all' || stateFilter !== 'all' || cityFilter !== 'all' || assignedToFilter !== 'all' || timeFilter !== 'lifetime';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="leads-list-page">
