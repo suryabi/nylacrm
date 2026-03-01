@@ -94,12 +94,22 @@ export default function LeadsList() {
     return saved !== null ? saved : defaultValue;
   };
   
+  const getInitialArrayFilter = (key) => {
+    const saved = sessionStorage.getItem(`leads_filter_${key}`);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch { return []; }
+    }
+    return [];
+  };
+  
   const [searchQuery, setSearchQuery] = useState(() => getInitialFilter('search', ''));
-  const [statusFilter, setStatusFilter] = useState(() => getInitialFilter('status', 'all'));
+  const [statusFilter, setStatusFilter] = useState(() => getInitialArrayFilter('status'));
   const [territoryFilter, setTerritoryFilter] = useState(() => getInitialFilter('territory', 'all'));
   const [stateFilter, setStateFilter] = useState(() => getInitialFilter('state', 'all'));
   const [cityFilter, setCityFilter] = useState(() => getInitialFilter('city', 'all'));
-  const [assignedToFilter, setAssignedToFilter] = useState(() => getInitialFilter('assigned_to', 'all'));
+  const [assignedToFilter, setAssignedToFilter] = useState(() => getInitialArrayFilter('assigned_to'));
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
   const [timeFilter, setTimeFilter] = useState(() => getInitialFilter('time', 'lifetime'));
