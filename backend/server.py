@@ -2731,15 +2731,34 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
         'activity_type': {'$in': ['meeting', 'visit']}
     })
     
-    # 7. SALES PIPELINE - Leads by status
+    # 7. SALES PIPELINE - Leads by status (using dynamic statuses)
     pipeline_stats = []
-    status_list = ['new', 'contacted', 'qualified', 'proposal_sent', 'negotiation', 'won', 'lost']
-    for status in status_list:
-        count = await db.leads.count_documents({
-            'assigned_to': user_id,
-            'status': status
-        })
-        pipeline_stats.append({'status': status, 'count': count})
+    
+    # Get dynamic statuses from lead_statuses collection
+    dynamic_statuses = await db.lead_statuses.find({'is_active': True}, {'_id': 0, 'id': 1, 'label': 1, 'order': 1}).sort('order', 1).to_list(20)
+    
+    if dynamic_statuses:
+        # Use dynamic statuses
+        for status_doc in dynamic_statuses:
+            status_id = status_doc['id']
+            count = await db.leads.count_documents({
+                'assigned_to': user_id,
+                'status': status_id
+            })
+            pipeline_stats.append({
+                'status': status_id,
+                'label': status_doc.get('label', status_id),
+                'count': count
+            })
+    else:
+        # Fallback to hardcoded statuses if no dynamic statuses exist
+        status_list = ['new', 'contacted', 'qualified', 'proposal_sent', 'negotiation', 'won', 'lost']
+        for status in status_list:
+            count = await db.leads.count_documents({
+                'assigned_to': user_id,
+                'status': status
+            })
+            pipeline_stats.append({'status': status, 'label': status.replace('_', ' ').title(), 'count': count})
     
     # 8. MONTHLY TARGETS VS ACTUALS
     # Get user's sales target for current month
