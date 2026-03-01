@@ -622,6 +622,22 @@ ${userEmail}`;
     }
   };
 
+  const handleGenerateLeadId = async () => {
+    setGeneratingLeadId(true);
+    try {
+      const response = await leadsAPI.generateLeadId(id);
+      toast.success(response.data.message);
+      // Refresh lead data
+      const leadRes = await leadsAPI.getById(id);
+      setLead(leadRes.data);
+    } catch (error) {
+      const message = error.response?.data?.detail || 'Failed to generate Lead ID';
+      toast.error(message);
+    } finally {
+      setGeneratingLeadId(false);
+    }
+  };
+
   // SKU Pricing handlers
   const handleAddProposedSKU = () => {
     setProposedSkuPricing([...proposedSkuPricing, { sku: '', price_per_unit: 0, return_bottle_credit: 0 }]);
