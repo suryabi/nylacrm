@@ -566,7 +566,7 @@ export default function LeadsKanban() {
         l.id === lead.id ? { ...l, status: toStatus } : l
       ));
       
-      toast.success(`Lead moved to "${LEAD_STATUSES.find(s => s.id === toStatus)?.label}"`);
+      toast.success(`Lead moved to "${statuses.find(s => s.id === toStatus)?.label}"`);
       setActivityDialogOpen(false);
       setPendingStatusChange(null);
     } catch (error) {
