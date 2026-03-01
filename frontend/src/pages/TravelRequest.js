@@ -484,23 +484,130 @@ function TravelRequestForm({ onSuccess, initialData = null }) {
         </h3>
         
         <div className="grid grid-cols-2 gap-4">
+          {/* From Location - Searchable Dropdown */}
           <div className="space-y-2">
             <Label>From Location *</Label>
-            <Input
-              placeholder="e.g., Hyderabad"
-              value={formData.from_location}
-              onChange={(e) => setFormData({ ...formData, from_location: e.target.value })}
-              data-testid="from-location-input"
-            />
+            <div className="relative">
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder={loadingCities ? "Loading cities..." : "Search city..."}
+                  value={fromSearchTerm || formData.from_location}
+                  onChange={(e) => {
+                    setFromSearchTerm(e.target.value);
+                    setShowFromDropdown(true);
+                  }}
+                  onFocus={() => setShowFromDropdown(true)}
+                  className="pl-10"
+                  data-testid="from-location-input"
+                />
+              </div>
+              {showFromDropdown && fromSearchTerm && (
+                <Card className="absolute z-20 w-full mt-1 p-1 max-h-48 overflow-y-auto shadow-lg">
+                  {cities
+                    .filter(c => c.name.toLowerCase().includes(fromSearchTerm.toLowerCase()))
+                    .slice(0, 10)
+                    .map(city => (
+                      <div
+                        key={city.id}
+                        className="p-2.5 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg cursor-pointer flex items-center justify-between"
+                        onClick={() => {
+                          setFormData({ ...formData, from_location: city.name });
+                          setFromSearchTerm('');
+                          setShowFromDropdown(false);
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-3.5 w-3.5 text-indigo-500" />
+                          <span className="font-medium text-sm">{city.name}</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">{city.state_name}</span>
+                      </div>
+                    ))}
+                  {cities.filter(c => c.name.toLowerCase().includes(fromSearchTerm.toLowerCase())).length === 0 && (
+                    <p className="p-2 text-sm text-muted-foreground text-center">No cities found</p>
+                  )}
+                </Card>
+              )}
+              {formData.from_location && !fromSearchTerm && (
+                <div className="mt-1.5 flex items-center gap-2">
+                  <Badge variant="secondary" className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                    <MapPin className="h-3 w-3 mr-1" />
+                    {formData.from_location}
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, from_location: '' })}
+                      className="ml-1.5 hover:text-red-500"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                </div>
+              )}
+            </div>
           </div>
+          
+          {/* To Location - Searchable Dropdown */}
           <div className="space-y-2">
             <Label>To Location *</Label>
-            <Input
-              placeholder="e.g., Mumbai"
-              value={formData.to_location}
-              onChange={(e) => setFormData({ ...formData, to_location: e.target.value })}
-              data-testid="to-location-input"
-            />
+            <div className="relative">
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder={loadingCities ? "Loading cities..." : "Search city..."}
+                  value={toSearchTerm || formData.to_location}
+                  onChange={(e) => {
+                    setToSearchTerm(e.target.value);
+                    setShowToDropdown(true);
+                  }}
+                  onFocus={() => setShowToDropdown(true)}
+                  className="pl-10"
+                  data-testid="to-location-input"
+                />
+              </div>
+              {showToDropdown && toSearchTerm && (
+                <Card className="absolute z-20 w-full mt-1 p-1 max-h-48 overflow-y-auto shadow-lg">
+                  {cities
+                    .filter(c => c.name.toLowerCase().includes(toSearchTerm.toLowerCase()))
+                    .slice(0, 10)
+                    .map(city => (
+                      <div
+                        key={city.id}
+                        className="p-2.5 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg cursor-pointer flex items-center justify-between"
+                        onClick={() => {
+                          setFormData({ ...formData, to_location: city.name });
+                          setToSearchTerm('');
+                          setShowToDropdown(false);
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-3.5 w-3.5 text-indigo-500" />
+                          <span className="font-medium text-sm">{city.name}</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">{city.state_name}</span>
+                      </div>
+                    ))}
+                  {cities.filter(c => c.name.toLowerCase().includes(toSearchTerm.toLowerCase())).length === 0 && (
+                    <p className="p-2 text-sm text-muted-foreground text-center">No cities found</p>
+                  )}
+                </Card>
+              )}
+              {formData.to_location && !toSearchTerm && (
+                <div className="mt-1.5 flex items-center gap-2">
+                  <Badge variant="secondary" className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                    <MapPin className="h-3 w-3 mr-1" />
+                    {formData.to_location}
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, to_location: '' })}
+                      className="ml-1.5 hover:text-red-500"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
