@@ -224,6 +224,20 @@ export default function LeadsList() {
     window.history.replaceState({}, '', '/leads');
   };
 
+  const handleCompleteFollowup = async (e, lead) => {
+    e.stopPropagation(); // Prevent row click navigation
+    try {
+      await leadsAPI.update(lead.id, { next_followup_date: null });
+      toast.success(`Follow-up completed for ${lead.company || lead.name}`);
+      // Update local state to reflect the change
+      setLeads(prevLeads => prevLeads.map(l => 
+        l.id === lead.id ? { ...l, next_followup_date: null } : l
+      ));
+    } catch (error) {
+      toast.error('Failed to complete follow-up');
+    }
+  };
+
   let sortedLeads = [...leads].sort((a, b) => {
     let aVal = a[sortField], bVal = b[sortField];
     if (['created_at', 'updated_at', 'next_followup_date', 'last_contacted_date'].includes(sortField)) {
