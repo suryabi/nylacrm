@@ -15,7 +15,13 @@ import { MultiSelect } from '../components/ui/multi-select';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
 import { Checkbox } from '../components/ui/checkbox';
-import { Plus, Search, Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid, List, Filter, Users, Loader2, Check } from 'lucide-react';
+import { 
+  FilterContainer, 
+  FilterItem, 
+  FilterGrid, 
+  FilterSearch 
+} from '../components/ui/filter-bar';
+import { Plus, Search, Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid, List, Filter, Users, Loader2, Check, MapPin, Calendar, Target, UserCircle, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Table,
