@@ -901,6 +901,16 @@ ${googleMapsLink}`;
               <p className="text-center py-8 text-muted-foreground">No invoices found for this account</p>
             )}
           </Card>
+
+          {/* Expense Requests Section */}
+          {account && (
+            <ExpenseRequestSection
+              entityType="account"
+              entityId={account.id || account.account_id}
+              entityName={account.account_name}
+              entityCity={account.city}
+            />
+          )}
         </div>
 
         {/* Right Column - Financial Summary & Delivery */}
