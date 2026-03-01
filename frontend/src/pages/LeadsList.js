@@ -209,8 +209,8 @@ export default function LeadsList() {
   };
 
   const handleResetFilters = () => {
-    setSearchQuery(''); setStatusFilter('all'); setTerritoryFilter('all'); setStateFilter('all');
-    setCityFilter('all'); setAssignedToFilter('all'); setTimeFilter('lifetime'); setCurrentPage(1);
+    setSearchQuery(''); setStatusFilter([]); setTerritoryFilter('all'); setStateFilter('all');
+    setCityFilter('all'); setAssignedToFilter([]); setTimeFilter('lifetime'); setCurrentPage(1);
     // Clear sessionStorage
     sessionStorage.removeItem('leads_filter_search');
     sessionStorage.removeItem('leads_filter_status');
