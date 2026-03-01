@@ -397,12 +397,13 @@ export default function HomeDashboard() {
           </div>
         </header>
 
-        {/* Quote Widgets - Visible Above the Fold */}
+        {/* Quote Widgets - Temporarily Disabled
         <section className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
           <WaterQuoteWidget />
           <SalesQuoteWidget />
           <DidYouKnowWidget />
         </section>
+        */}
 
         {/* Stats Summary - Bento Grid Row 1 */}
         <section className="mb-8">
