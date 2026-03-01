@@ -252,13 +252,15 @@ class ActiveMQSubscriber:
         # Set listener
         self.connection.set_listener('invoice_listener', self.listener)
         
-        # Connect with credentials
+        # Connect with credentials - use unique client-id for this instance
+        import uuid
+        client_id = f"nyla-crm-preview-{uuid.uuid4().hex[:8]}"
         logger.info(f"Connecting to ActiveMQ at {ACTIVEMQ_HOST}:{ACTIVEMQ_PORT}")
         self.connection.connect(
             ACTIVEMQ_USER,
             ACTIVEMQ_PASSWORD,
             wait=True,
-            headers={'client-id': 'nyla-crm-subscriber'}
+            headers={'client-id': client_id}
         )
         
         # Subscribe to queue
