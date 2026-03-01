@@ -65,6 +65,7 @@ export default function AddEditLead() {
   const isEdit = !!id;
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState([]);
+  const { statuses } = useLeadStatuses();
   
   // Master locations from API
   const { 
