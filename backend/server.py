@@ -7039,6 +7039,328 @@ async def cancel_budget_request(request_id: str, current_user: dict = Depends(ge
     
     return {'message': 'Budget request cancelled'}
 
+# ============= EXPENSE REQUEST ROUTES (Lead/Account Level) =============
+
+@api_router.get("/expense-types")
+async def get_expense_types(current_user: dict = Depends(get_current_user)):
+    """Get list of expense types"""
+    return EXPENSE_TYPES
+
+@api_router.post("/expense-requests")
+async def create_expense_request(request: ExpenseRequestCreate, current_user: dict = Depends(get_current_user)):
+    """Create a new expense request for a lead or account"""
+    
+    # Validate expense type
+    expense_type_info = next((t for t in EXPENSE_TYPES if t['id'] == request.expense_type), None)
+    if not expense_type_info:
+        raise HTTPException(status_code=400, detail='Invalid expense type')
+    
+    # Get entity info (lead or account)
+    entity_name = None
+    entity_city = None
+    
+    if request.entity_type == 'lead':
+        lead = await db.leads.find_one({'id': request.entity_id}, {'_id': 0, 'company': 1, 'city': 1})
+        if not lead:
+            raise HTTPException(status_code=404, detail='Lead not found')
+        entity_name = lead.get('company')
+        entity_city = lead.get('city')
+    elif request.entity_type == 'account':
+        account = await db.accounts.find_one({'id': request.entity_id}, {'_id': 0, 'account_name': 1, 'city': 1})
+        if not account:
+            # Try with account_id
+            account = await db.accounts.find_one({'account_id': request.entity_id}, {'_id': 0, 'account_name': 1, 'city': 1})
+        if not account:
+            raise HTTPException(status_code=404, detail='Account not found')
+        entity_name = account.get('account_name')
+        entity_city = account.get('city')
+    else:
+        raise HTTPException(status_code=400, detail='entity_type must be "lead" or "account"')
+    
+    # Process SKU items for free_trial expense
+    sku_items = []
+    total_sku_cost = 0
+    
+    if request.expense_type == 'free_trial' and request.sku_items:
+        for item in request.sku_items:
+            # Get minimum landing price from COGS
+            cogs_data = await db.cogs_data.find_one(
+                {'city': entity_city, 'sku_name': item.get('sku_name')},
+                {'_id': 0, 'minimum_landing_price': 1}
+            )
+            mlp = cogs_data.get('minimum_landing_price', 0) if cogs_data else 0
+            quantity = item.get('quantity', 0)
+            item_cost = mlp * quantity
+            
+            sku_items.append(ExpenseSKUItem(
+                sku_id=item.get('sku_id', ''),
+                sku_name=item.get('sku_name', ''),
+                quantity=quantity,
+                minimum_landing_price=mlp,
+                total_cost=item_cost
+            ))
+            total_sku_cost += item_cost
+    
+    # Calculate total amount
+    final_amount = total_sku_cost if request.expense_type == 'free_trial' else request.amount
+    
+    # Create expense request
+    expense_obj = ExpenseRequest(
+        entity_type=request.entity_type,
+        entity_id=request.entity_id,
+        entity_name=entity_name,
+        entity_city=entity_city,
+        expense_type=request.expense_type,
+        expense_type_label=expense_type_info['label'],
+        description=request.description,
+        amount=final_amount,
+        free_trial_days=request.free_trial_days if request.expense_type == 'free_trial' else None,
+        sku_items=sku_items,
+        total_sku_cost=total_sku_cost,
+        user_id=current_user['id'],
+        user_name=current_user.get('name'),
+        status='pending_approval' if request.submit_for_approval else 'draft'
+    )
+    
+    # Store document
+    doc = expense_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    if doc.get('approval_date'):
+        doc['approval_date'] = doc['approval_date'].isoformat()
+    
+    # Convert SKU items to dicts
+    doc['sku_items'] = [item.model_dump() for item in sku_items]
+    
+    await db.expense_requests.insert_one(doc)
+    
+    # Create approval task if submitted for approval
+    if request.submit_for_approval:
+        # Find Director for approval
+        director = await db.users.find_one(
+            {'role': {'$in': ['Director', 'director']}},
+            {'_id': 0, 'id': 1, 'name': 1}
+        )
+        
+        if director:
+            expense_label = expense_type_info['label']
+            await create_approval_task(
+                approval_type=ApprovalType.EXPENSE,
+                requester_id=current_user['id'],
+                requester_name=current_user.get('name', 'Unknown'),
+                approver_id=director['id'],
+                details=f"{expense_label} - {entity_name} (₹{final_amount:,.0f})",
+                description=f"Expense request for {entity_name}:\n\nType: {expense_label}\nAmount: ₹{final_amount:,.0f}\n{('Free Trial Days: ' + str(request.free_trial_days)) if request.free_trial_days else ''}\n{request.description or ''}",
+                reference_id=expense_obj.id,
+                reference_type='expense_request'
+            )
+    
+    return {
+        'id': expense_obj.id,
+        'message': 'Expense request created' + (' and submitted for approval' if request.submit_for_approval else ''),
+        'status': expense_obj.status
+    }
+
+@api_router.get("/expense-requests")
+async def get_expense_requests(
+    entity_type: Optional[str] = None,
+    entity_id: Optional[str] = None,
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get expense requests, optionally filtered by entity"""
+    
+    query = {}
+    
+    # Filter by entity if provided
+    if entity_type and entity_id:
+        query['entity_type'] = entity_type
+        query['entity_id'] = entity_id
+    
+    # Filter by status if provided
+    if status:
+        query['status'] = status
+    
+    # Non-directors can only see their own requests
+    if current_user['role'] not in ['CEO', 'Director', 'Vice President', 'ceo', 'director', 'vp']:
+        query['user_id'] = current_user['id']
+    
+    expenses = await db.expense_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(500)
+    
+    return expenses
+
+@api_router.get("/expense-requests/{request_id}")
+async def get_expense_request(request_id: str, current_user: dict = Depends(get_current_user)):
+    """Get a single expense request"""
+    
+    expense = await db.expense_requests.find_one({'id': request_id}, {'_id': 0})
+    if not expense:
+        raise HTTPException(status_code=404, detail='Expense request not found')
+    
+    return expense
+
+@api_router.put("/expense-requests/{request_id}")
+async def update_expense_request(
+    request_id: str,
+    request: ExpenseRequestUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update an expense request"""
+    
+    expense_req = await db.expense_requests.find_one({'id': request_id}, {'_id': 0})
+    if not expense_req:
+        raise HTTPException(status_code=404, detail='Expense request not found')
+    
+    if expense_req['user_id'] != current_user['id']:
+        raise HTTPException(status_code=403, detail='You can only update your own expense requests')
+    
+    if expense_req['status'] not in ['draft', 'rejected']:
+        raise HTTPException(status_code=400, detail='Cannot update this expense request')
+    
+    update_data = {}
+    
+    if request.description is not None:
+        update_data['description'] = request.description
+    
+    if request.amount is not None and expense_req['expense_type'] != 'free_trial':
+        update_data['amount'] = request.amount
+    
+    if request.free_trial_days is not None and expense_req['expense_type'] == 'free_trial':
+        update_data['free_trial_days'] = request.free_trial_days
+    
+    # Update SKU items for free trial
+    if request.sku_items is not None and expense_req['expense_type'] == 'free_trial':
+        entity_city = expense_req.get('entity_city')
+        sku_items = []
+        total_sku_cost = 0
+        
+        for item in request.sku_items:
+            cogs_data = await db.cogs_data.find_one(
+                {'city': entity_city, 'sku_name': item.get('sku_name')},
+                {'_id': 0, 'minimum_landing_price': 1}
+            )
+            mlp = cogs_data.get('minimum_landing_price', 0) if cogs_data else 0
+            quantity = item.get('quantity', 0)
+            item_cost = mlp * quantity
+            
+            sku_items.append({
+                'id': item.get('id', str(uuid.uuid4())),
+                'sku_id': item.get('sku_id', ''),
+                'sku_name': item.get('sku_name', ''),
+                'quantity': quantity,
+                'minimum_landing_price': mlp,
+                'total_cost': item_cost
+            })
+            total_sku_cost += item_cost
+        
+        update_data['sku_items'] = sku_items
+        update_data['total_sku_cost'] = total_sku_cost
+        update_data['amount'] = total_sku_cost
+    
+    # Submit for approval
+    if request.submit_for_approval:
+        update_data['status'] = 'pending_approval'
+        
+        # Create approval task
+        director = await db.users.find_one(
+            {'role': {'$in': ['Director', 'director']}},
+            {'_id': 0, 'id': 1, 'name': 1}
+        )
+        
+        if director:
+            expense_type_label = expense_req.get('expense_type_label', expense_req['expense_type'])
+            entity_name = expense_req.get('entity_name', 'Unknown')
+            final_amount = update_data.get('amount', expense_req.get('amount', 0))
+            
+            await create_approval_task(
+                approval_type=ApprovalType.EXPENSE,
+                requester_id=current_user['id'],
+                requester_name=current_user.get('name', 'Unknown'),
+                approver_id=director['id'],
+                details=f"{expense_type_label} - {entity_name} (₹{final_amount:,.0f})",
+                description=f"Expense request for {entity_name}:\n\nType: {expense_type_label}\nAmount: ₹{final_amount:,.0f}",
+                reference_id=request_id,
+                reference_type='expense_request'
+            )
+    
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.expense_requests.update_one({'id': request_id}, {'$set': update_data})
+    
+    return {'message': 'Expense request updated'}
+
+@api_router.put("/expense-requests/{request_id}/approve")
+async def approve_expense_request(
+    request_id: str,
+    approval: ExpenseApproval,
+    current_user: dict = Depends(get_current_user)
+):
+    """Approve or reject an expense request"""
+    
+    # Only Directors and CEO can approve
+    if current_user['role'] not in ['CEO', 'Director', 'Vice President', 'ceo', 'director', 'vp']:
+        raise HTTPException(status_code=403, detail='Only Directors can approve expense requests')
+    
+    expense_req = await db.expense_requests.find_one({'id': request_id}, {'_id': 0})
+    if not expense_req:
+        raise HTTPException(status_code=404, detail='Expense request not found')
+    
+    if expense_req['status'] != 'pending_approval':
+        raise HTTPException(status_code=400, detail='Expense request is not pending approval')
+    
+    update_data = {
+        'status': approval.status,
+        'approved_by': current_user['id'],
+        'approved_by_name': current_user.get('name'),
+        'approval_date': datetime.now(timezone.utc).isoformat(),
+        'updated_at': datetime.now(timezone.utc).isoformat()
+    }
+    
+    if approval.status == 'rejected' and approval.rejection_reason:
+        update_data['rejection_reason'] = approval.rejection_reason
+    
+    await db.expense_requests.update_one({'id': request_id}, {'$set': update_data})
+    
+    # Complete approval task
+    await complete_approval_task(
+        approval_type=ApprovalType.EXPENSE,
+        reference_id=request_id,
+        status='completed' if approval.status == 'approved' else 'cancelled'
+    )
+    
+    return {'message': f'Expense request {approval.status}'}
+
+@api_router.delete("/expense-requests/{request_id}")
+async def delete_expense_request(request_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete/cancel an expense request"""
+    
+    expense_req = await db.expense_requests.find_one({'id': request_id}, {'_id': 0})
+    if not expense_req:
+        raise HTTPException(status_code=404, detail='Expense request not found')
+    
+    if expense_req['user_id'] != current_user['id']:
+        raise HTTPException(status_code=403, detail='You can only delete your own expense requests')
+    
+    if expense_req['status'] in ['approved']:
+        raise HTTPException(status_code=400, detail='Cannot delete approved expense requests')
+    
+    await db.expense_requests.update_one(
+        {'id': request_id},
+        {'$set': {
+            'status': 'cancelled',
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Complete any pending approval tasks
+    await complete_approval_task(
+        approval_type=ApprovalType.EXPENSE,
+        reference_id=request_id,
+        status='cancelled'
+    )
+    
+    return {'message': 'Expense request cancelled'}
+
 @api_router.get("/cogs/sku-price/{city}/{sku_name}")
 async def get_sku_price_for_city(city: str, sku_name: str, current_user: dict = Depends(get_current_user)):
     """Get minimum landing price for a SKU in a specific city"""
