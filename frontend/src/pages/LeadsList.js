@@ -385,7 +385,7 @@ export default function LeadsList() {
                           })() : '-'}
                         </TableCell>
                         <TableCell>{lead.last_contact_method ? <span className="text-xs text-muted-foreground">{lead.last_contact_method.replace('_', ' ')}</span> : '-'}</TableCell>
-                        <TableCell><Badge className={statusColors[lead.status]}>{getStatusLabel(lead.status)}</Badge></TableCell>
+                        <TableCell><Badge className={getStatusColor(lead.status)}>{getStatusLabel(lead.status)}</Badge></TableCell>
                         <TableCell className="text-right">
                           <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setLeadToDelete(lead); setDeleteDialogOpen(true); }} data-testid={`delete-lead-${lead.id}`}>
                             <Trash2 className="h-4 w-4 text-red-500" />
