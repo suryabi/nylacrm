@@ -50,7 +50,7 @@ export default function Login() {
     if (loading) return; // Prevent double submission
     
     setLoading(true);
-    hasNavigated.current = false; // Reset navigation flag
+    setLoginSuccess(false);
     
     try {
       // Save or remove remembered email
@@ -63,25 +63,16 @@ export default function Login() {
       const userData = await login(email, password);
       
       if (userData) {
-        setLoginSuccess(true);
         toast.success('Welcome back!');
-        
-        // Force navigation after successful login
-        // Small delay to ensure state is updated
-        setTimeout(() => {
-          if (!hasNavigated.current) {
-            hasNavigated.current = true;
-            navigate('/home', { replace: true });
-          }
-        }, 100);
+        // Navigate immediately - the AuthContext will handle user state
+        navigate('/home', { replace: true });
       } else {
         toast.error('Login failed - no user data received');
+        setLoading(false);
       }
     } catch (error) {
-      setLoginSuccess(false);
       const errorMsg = error.response?.data?.detail || 'Login failed. Please check your credentials.';
       toast.error(errorMsg);
-    } finally {
       setLoading(false);
     }
   };
