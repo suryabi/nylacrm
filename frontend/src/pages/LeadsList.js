@@ -174,9 +174,12 @@ export default function LeadsList() {
       setLoading(true);
       const params = {
         page: currentPage, pageSize: itemsPerPage, search: debouncedSearch || undefined,
-        status: statusFilter !== 'all' ? statusFilter : undefined, city: cityFilter !== 'all' ? cityFilter : undefined,
-        state: stateFilter !== 'all' ? stateFilter : undefined, territory: territoryFilter !== 'all' ? territoryFilter : undefined,
-        assigned_to: assignedToFilter !== 'all' ? assignedToFilter : undefined, time_filter: timeFilter !== 'lifetime' ? timeFilter : undefined,
+        status: statusFilter.length > 0 ? statusFilter.join(',') : undefined, 
+        city: cityFilter !== 'all' ? cityFilter : undefined,
+        state: stateFilter !== 'all' ? stateFilter : undefined, 
+        territory: territoryFilter !== 'all' ? territoryFilter : undefined,
+        assigned_to: assignedToFilter.length > 0 ? assignedToFilter.join(',') : undefined, 
+        time_filter: timeFilter !== 'lifetime' ? timeFilter : undefined,
       };
       const response = await leadsAPI.getAll(params);
       const { data, total, total_pages } = response.data;
