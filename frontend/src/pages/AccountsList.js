@@ -359,12 +359,36 @@ export default function AccountsList() {
                 </table>
               </div>
               {totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-800">
-                  <p className="text-sm text-muted-foreground">Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, totalCount)} of {totalCount} accounts</p>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} data-testid="prev-page-btn"><ChevronLeft className="h-4 w-4" />Previous</Button>
-                    <span className="text-sm text-muted-foreground px-2">Page {currentPage} of {totalPages}</span>
-                    <Button variant="outline" size="sm" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} data-testid="next-page-btn">Next<ChevronRight className="h-4 w-4" /></Button>
+                <div className="flex items-center justify-between px-5 py-4 border-t border-slate-100 dark:border-slate-800 bg-gradient-to-r from-slate-50/50 to-amber-50/30 dark:from-slate-900/50 dark:to-amber-900/10">
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Showing <span className="font-semibold text-slate-800 dark:text-white">{((currentPage - 1) * pageSize) + 1}</span> - <span className="font-semibold text-slate-800 dark:text-white">{Math.min(currentPage * pageSize, totalCount)}</span> of <span className="font-semibold text-slate-800 dark:text-white">{totalCount}</span> accounts
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} 
+                      disabled={currentPage === 1} 
+                      className="h-9 px-4 border-slate-200 dark:border-slate-700 hover:bg-amber-50 hover:border-amber-200 dark:hover:bg-amber-900/20 disabled:opacity-50"
+                      data-testid="prev-page-btn"
+                    >
+                      <ChevronLeft className="h-4 w-4 mr-1" />Previous
+                    </Button>
+                    <div className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                      <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Page</span>
+                      <span className="text-sm font-bold text-amber-600 dark:text-amber-400">{currentPage}</span>
+                      <span className="text-sm font-medium text-slate-600 dark:text-slate-400">of {totalPages}</span>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} 
+                      disabled={currentPage === totalPages}
+                      className="h-9 px-4 border-slate-200 dark:border-slate-700 hover:bg-amber-50 hover:border-amber-200 dark:hover:bg-amber-900/20 disabled:opacity-50"
+                      data-testid="next-page-btn"
+                    >
+                      Next<ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
                   </div>
                 </div>
               )}
