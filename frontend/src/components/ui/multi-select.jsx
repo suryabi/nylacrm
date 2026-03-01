@@ -49,8 +49,11 @@ export function MultiSelect({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            "w-full h-9 justify-between font-normal border-slate-200 dark:border-slate-700",
-            selected.length > 0 && "text-foreground",
+            "w-full h-10 justify-between font-normal rounded-xl",
+            "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700",
+            "hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600",
+            "transition-all duration-200",
+            selected.length > 0 && "text-foreground border-primary/50",
             className
           )}
           data-testid={testId}
@@ -59,18 +62,18 @@ export function MultiSelect({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[220px] p-0" align="start">
+      <PopoverContent className="w-[240px] p-0 rounded-xl border-slate-200 dark:border-slate-700 shadow-xl" align="start">
         <div className="max-h-[300px] overflow-auto">
           {/* Select/Deselect All */}
           <div 
-            className="flex items-center gap-2 px-3 py-2 border-b border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50"
+            className="flex items-center gap-2.5 px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
             onClick={handleSelectAll}
           >
             <Checkbox 
               checked={selected.length === options.length && options.length > 0}
-              className="h-4 w-4"
+              className="h-4 w-4 rounded"
             />
-            <span className="text-sm font-medium">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
               {selected.length === options.length ? 'Deselect All' : 'Select All'}
             </span>
           </div>
@@ -79,12 +82,16 @@ export function MultiSelect({
           {options.map((option) => (
             <div
               key={option.value}
-              className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50"
+              className={cn(
+                "flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors",
+                "hover:bg-slate-50 dark:hover:bg-slate-800/50",
+                selected.includes(option.value) && "bg-primary/5"
+              )}
               onClick={() => handleToggle(option.value)}
             >
               <Checkbox 
                 checked={selected.includes(option.value)}
-                className="h-4 w-4"
+                className="h-4 w-4 rounded"
               />
               <span className="text-sm truncate">{option.label}</span>
             </div>
@@ -103,10 +110,10 @@ export function MultiSelect({
             <Button 
               variant="ghost" 
               size="sm" 
-              className="w-full h-8 text-xs"
+              className="w-full h-8 text-xs rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
               onClick={() => { onChange([]); }}
             >
-              <X className="h-3 w-3 mr-1" /> Clear Selection
+              <X className="h-3 w-3 mr-1.5" /> Clear Selection
             </Button>
           </div>
         )}
