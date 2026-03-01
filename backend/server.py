@@ -6686,6 +6686,296 @@ async def get_pending_travel_approvals_count(current_user: dict = Depends(get_cu
     count = await db.travel_requests.count_documents({'status': 'pending_approval'})
     return {'count': count}
 
+# ============= BUDGET REQUEST ROUTES =============
+
+@api_router.get("/budget-categories")
+async def get_budget_categories():
+    """Get list of budget categories"""
+    return BUDGET_CATEGORIES
+
+@api_router.post("/budget-requests")
+async def create_budget_request(request: BudgetRequestCreate, current_user: dict = Depends(get_current_user)):
+    """Create budget request"""
+    
+    # Process line items
+    line_items = []
+    total_amount = 0
+    
+    for item_data in request.line_items:
+        item = BudgetLineItem(
+            category_id=item_data.get('category_id', ''),
+            category_label=item_data.get('category_label', ''),
+            lead_id=item_data.get('lead_id'),
+            lead_name=item_data.get('lead_name'),
+            lead_city=item_data.get('lead_city'),
+            sku_id=item_data.get('sku_id'),
+            sku_name=item_data.get('sku_name'),
+            bottle_count=item_data.get('bottle_count'),
+            price_per_unit=item_data.get('price_per_unit'),
+            amount=float(item_data.get('amount', 0)),
+            notes=item_data.get('notes')
+        )
+        line_items.append(item)
+        total_amount += item.amount
+    
+    status = 'pending_approval' if request.submit_for_approval else 'draft'
+    
+    budget_obj = BudgetRequest(
+        user_id=current_user['id'],
+        user_name=current_user.get('name'),
+        title=request.title,
+        description=request.description,
+        line_items=line_items,
+        total_amount=total_amount,
+        event_name=request.event_name,
+        event_date=request.event_date,
+        event_city=request.event_city,
+        status=status
+    )
+    
+    doc = budget_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    if doc.get('approval_date'):
+        doc['approval_date'] = doc['approval_date'].isoformat()
+    # Convert line items to dicts
+    doc['line_items'] = [li.model_dump() if hasattr(li, 'model_dump') else li for li in budget_obj.line_items]
+    
+    await db.budget_requests.insert_one(doc)
+    
+    # Create approval task for Director if submitting for approval
+    if request.submit_for_approval:
+        # Find Directors only
+        approvers = await db.users.find(
+            {'role': 'Director', 'is_active': True},
+            {'_id': 0, 'id': 1, 'name': 1}
+        ).to_list(10)
+        
+        budget_details = f"{request.title} - ₹{total_amount:,.0f}"
+        
+        for approver in approvers:
+            await create_approval_task(
+                approval_type=ApprovalType.BUDGET_REQUEST,
+                requester_id=current_user['id'],
+                requester_name=current_user.get('name', 'Unknown'),
+                approver_id=approver['id'],
+                details=budget_details,
+                description=f"Budget request from {current_user.get('name')}:\n\nTitle: {request.title}\nTotal Amount: ₹{total_amount:,.0f}\nCategories: {len(line_items)} items\n\n{request.description or ''}",
+                reference_id=budget_obj.id,
+                reference_type='budget_request'
+            )
+    
+    return {k: v for k, v in doc.items() if k != '_id'}
+
+@api_router.get("/budget-requests")
+async def get_budget_requests(
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get budget requests - users see their own, Director sees all pending"""
+    
+    query = {}
+    
+    if current_user['role'].lower() == 'director':
+        # Director sees their own + all pending for approval
+        if status:
+            if status == 'pending_approval':
+                query = {'status': 'pending_approval'}
+            else:
+                query = {'user_id': current_user['id'], 'status': status}
+        else:
+            query = {'$or': [
+                {'user_id': current_user['id']},
+                {'status': 'pending_approval'}
+            ]}
+    else:
+        # Regular users see only their own
+        query = {'user_id': current_user['id']}
+        if status:
+            query['status'] = status
+    
+    requests = await db.budget_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(100)
+    
+    # Get user names
+    user_ids = list(set([r['user_id'] for r in requests]))
+    users = await db.users.find(
+        {'id': {'$in': user_ids}},
+        {'_id': 0, 'id': 1, 'name': 1}
+    ).to_list(100)
+    user_map = {u['id']: u['name'] for u in users}
+    
+    for req in requests:
+        req['user_name'] = user_map.get(req['user_id'], req.get('user_name', 'Unknown'))
+    
+    return requests
+
+@api_router.get("/budget-requests/{request_id}")
+async def get_budget_request(request_id: str, current_user: dict = Depends(get_current_user)):
+    """Get single budget request"""
+    
+    budget_req = await db.budget_requests.find_one({'id': request_id}, {'_id': 0})
+    if not budget_req:
+        raise HTTPException(status_code=404, detail='Budget request not found')
+    
+    # Check access
+    if budget_req['user_id'] != current_user['id'] and current_user['role'].lower() != 'director':
+        raise HTTPException(status_code=403, detail='Access denied')
+    
+    return budget_req
+
+@api_router.put("/budget-requests/{request_id}")
+async def update_budget_request(
+    request_id: str,
+    request: BudgetRequestUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update budget request (only if in draft status)"""
+    
+    budget_req = await db.budget_requests.find_one({'id': request_id}, {'_id': 0})
+    if not budget_req:
+        raise HTTPException(status_code=404, detail='Budget request not found')
+    
+    if budget_req['user_id'] != current_user['id']:
+        raise HTTPException(status_code=403, detail='You can only edit your own budget requests')
+    
+    if budget_req['status'] != 'draft':
+        raise HTTPException(status_code=400, detail='Only draft requests can be edited')
+    
+    update_data = {}
+    
+    if request.title is not None:
+        update_data['title'] = request.title
+    if request.description is not None:
+        update_data['description'] = request.description
+    if request.event_name is not None:
+        update_data['event_name'] = request.event_name
+    if request.event_date is not None:
+        update_data['event_date'] = request.event_date
+    if request.event_city is not None:
+        update_data['event_city'] = request.event_city
+    
+    if request.line_items is not None:
+        total_amount = sum(float(item.get('amount', 0)) for item in request.line_items)
+        update_data['line_items'] = request.line_items
+        update_data['total_amount'] = total_amount
+    
+    if request.submit_for_approval:
+        update_data['status'] = 'pending_approval'
+        
+        # Create approval tasks for Directors
+        approvers = await db.users.find(
+            {'role': 'Director', 'is_active': True},
+            {'_id': 0, 'id': 1, 'name': 1}
+        ).to_list(10)
+        
+        title = update_data.get('title', budget_req['title'])
+        total = update_data.get('total_amount', budget_req['total_amount'])
+        budget_details = f"{title} - ₹{total:,.0f}"
+        
+        for approver in approvers:
+            await create_approval_task(
+                approval_type=ApprovalType.BUDGET_REQUEST,
+                requester_id=current_user['id'],
+                requester_name=current_user.get('name', 'Unknown'),
+                approver_id=approver['id'],
+                details=budget_details,
+                description=f"Budget request from {current_user.get('name')}:\n\nTitle: {title}\nTotal Amount: ₹{total:,.0f}",
+                reference_id=request_id,
+                reference_type='budget_request'
+            )
+    
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.budget_requests.update_one({'id': request_id}, {'$set': update_data})
+    
+    return {'message': 'Budget request updated successfully'}
+
+@api_router.put("/budget-requests/{request_id}/approve")
+async def approve_budget_request(
+    request_id: str,
+    approval: BudgetApproval,
+    current_user: dict = Depends(get_current_user)
+):
+    """Approve or reject budget request (Director only)"""
+    
+    if current_user['role'].lower() != 'director':
+        raise HTTPException(status_code=403, detail='Only Director can approve budget requests')
+    
+    budget_req = await db.budget_requests.find_one({'id': request_id}, {'_id': 0})
+    if not budget_req:
+        raise HTTPException(status_code=404, detail='Budget request not found')
+    
+    if budget_req['status'] != 'pending_approval':
+        raise HTTPException(status_code=400, detail='Only pending requests can be approved/rejected')
+    
+    update_data = {
+        'status': approval.status,
+        'approved_by': current_user['id'],
+        'approved_by_name': current_user.get('name'),
+        'approval_date': datetime.now(timezone.utc).isoformat(),
+        'updated_at': datetime.now(timezone.utc).isoformat()
+    }
+    
+    if approval.rejection_reason:
+        update_data['rejection_reason'] = approval.rejection_reason
+    
+    await db.budget_requests.update_one({'id': request_id}, {'$set': update_data})
+    
+    # Complete approval tasks
+    await complete_approval_task(
+        approval_type=ApprovalType.BUDGET_REQUEST,
+        reference_id=request_id,
+        status='completed'
+    )
+    
+    return {'message': f'Budget request {approval.status}'}
+
+@api_router.put("/budget-requests/{request_id}/cancel")
+async def cancel_budget_request(request_id: str, current_user: dict = Depends(get_current_user)):
+    """Cancel budget request"""
+    
+    budget_req = await db.budget_requests.find_one({'id': request_id}, {'_id': 0})
+    if not budget_req:
+        raise HTTPException(status_code=404, detail='Budget request not found')
+    
+    if budget_req['user_id'] != current_user['id']:
+        raise HTTPException(status_code=403, detail='You can only cancel your own budget requests')
+    
+    if budget_req['status'] in ['approved', 'rejected', 'cancelled']:
+        raise HTTPException(status_code=400, detail='Cannot cancel this request')
+    
+    await db.budget_requests.update_one(
+        {'id': request_id},
+        {'$set': {
+            'status': 'cancelled',
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Complete any pending approval tasks
+    await complete_approval_task(
+        approval_type=ApprovalType.BUDGET_REQUEST,
+        reference_id=request_id,
+        status='cancelled'
+    )
+    
+    return {'message': 'Budget request cancelled'}
+
+@api_router.get("/cogs/sku-price/{city}/{sku_name}")
+async def get_sku_price_for_city(city: str, sku_name: str, current_user: dict = Depends(get_current_user)):
+    """Get minimum landing price for a SKU in a specific city"""
+    
+    cogs_data = await db.cogs_data.find_one(
+        {'city': city, 'sku_name': sku_name},
+        {'_id': 0, 'minimum_landing_price': 1, 'sku_name': 1, 'city': 1}
+    )
+    
+    if not cogs_data:
+        # Try to find default city pricing or return 0
+        return {'minimum_landing_price': 0, 'sku_name': sku_name, 'city': city, 'found': False}
+    
+    return {**cogs_data, 'found': True}
+
 # ============= SALES TARGET ROUTES =============
 
 @api_router.post("/target-plans", response_model=TargetPlan)
