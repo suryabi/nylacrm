@@ -53,6 +53,7 @@ import Assets from './pages/Assets';
 import Vendors from './pages/Vendors';
 import MasterLocations from './pages/MasterLocations';
 import MasterLeadStatus from './pages/MasterLeadStatus';
+import TravelRequest from './pages/TravelRequest';
 import '@/App.css';
 import { useActivityTracker } from './hooks/useActivityTracker';
 
