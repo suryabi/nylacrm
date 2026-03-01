@@ -88,7 +88,8 @@ class TestLeadStatusMasterAPI:
         )
         assert response.status_code in [200, 201], f"Failed to create status: {response.text}"
         
-        created_status = response.json()
+        data = response.json()
+        created_status = data.get('status', data)  # Handle nested or flat response
         assert created_status['label'] == test_label
         assert created_status['color'] == 'pink'
         assert 'id' in created_status
@@ -120,7 +121,8 @@ class TestLeadStatusMasterAPI:
             cookies=self.cookies
         )
         assert create_response.status_code in [200, 201]
-        status_id = create_response.json()['id']
+        create_data = create_response.json()
+        status_id = create_data.get('status', create_data)['id']
         
         # Update the status
         updated_label = f"TEST_Updated_{uuid.uuid4().hex[:6]}"
@@ -131,7 +133,8 @@ class TestLeadStatusMasterAPI:
         )
         assert update_response.status_code == 200, f"Failed to update status: {update_response.text}"
         
-        updated_status = update_response.json()
+        update_data = update_response.json()
+        updated_status = update_data.get('status', update_data)
         assert updated_status['label'] == updated_label
         assert updated_status['color'] == 'orange'
         
@@ -153,7 +156,8 @@ class TestLeadStatusMasterAPI:
             cookies=self.cookies
         )
         assert create_response.status_code in [200, 201]
-        status_id = create_response.json()['id']
+        create_data = create_response.json()
+        status_id = create_data.get('status', create_data)['id']
         
         # Delete the status
         delete_response = requests.delete(
