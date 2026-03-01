@@ -6,7 +6,19 @@ import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
-import { Building2, Filter, Loader2, TrendingUp, AlertTriangle, Calendar, ShoppingCart, DollarSign, CreditCard, Receipt, Wallet, AlertCircle } from 'lucide-react';
+import { 
+  FilterContainer, 
+  FilterItem, 
+  FilterGrid 
+} from '../components/ui/filter-bar';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
+import { Building2, Filter, Loader2, TrendingUp, AlertTriangle, Calendar, ShoppingCart, DollarSign, CreditCard, Receipt, Wallet, AlertCircle, MapPin, Layers } from 'lucide-react';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
