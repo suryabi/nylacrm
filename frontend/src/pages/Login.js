@@ -107,6 +107,20 @@ export default function Login() {
     window.location.href = authUrl;
   };
 
+  // Show loading while checking auth or after successful login
+  if (authLoading || loginSuccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <p className="mt-2 text-muted-foreground">
+            {loginSuccess ? 'Redirecting...' : 'Loading...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex" data-testid="login-page">
       {/* Left side - Misty Mountains Background */}
