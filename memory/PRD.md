@@ -32,7 +32,7 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 - **NEW MODULE**: Travel Request Module
   - **Purpose**: Enable employees to request travel approvals with trip details, purpose, lead linkage, budget, and 15-day advance policy compliance
   - **Features Implemented**:
-    - Trip Details: From/To locations, Departure/Return dates, Flexible dates toggle
+    - Trip Details: From/To locations (searchable dropdown from Master Locations), Departure/Return dates, Flexible dates toggle
     - 15-Day Advance Rule: Short notice warning with mandatory explanation (min 20 chars) when departure < 15 days
     - Purpose Dropdown: Lead/Customer visits, Distribution, Manufacturing, Team visit, Vendor visits
     - Lead/Customer Visits Section: Typeahead search, chip multi-select, Opportunity Size calculation
