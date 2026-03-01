@@ -1224,16 +1224,9 @@ ${userEmail}`;
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="keep_current">Keep current status</SelectItem>
-                            <SelectItem value="new">New</SelectItem>
-                            <SelectItem value="contacted">Contacted</SelectItem>
-                            <SelectItem value="qualified">Qualified</SelectItem>
-                            <SelectItem value="not_qualified">Not Qualified</SelectItem>
-                            <SelectItem value="proposal_internal_review">Proposal - Internal Review</SelectItem>
-                            <SelectItem value="ready_to_share_proposal">Ready to Share Proposal</SelectItem>
-                            <SelectItem value="proposal_shared_with_customer">Proposal - Shared with Customer</SelectItem>
-                            <SelectItem value="trial_in_progress">Trial in Progress</SelectItem>
-                            <SelectItem value="won">Won</SelectItem>
-                            <SelectItem value="lost">Lost</SelectItem>
+                            {statuses.map(status => (
+                              <SelectItem key={status.id} value={status.id}>{status.label}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
