@@ -230,12 +230,12 @@ const KanbanColumn = ({ status, leads, onDragStart, onDragEnd, onDragOver, onDro
 };
 
 // Activity Log Dialog Component
-const ActivityLogDialog = ({ open, onClose, lead, fromStatus, toStatus, onSubmit, loading }) => {
+const ActivityLogDialog = ({ open, onClose, lead, fromStatus, toStatus, onSubmit, loading, statuses }) => {
   const [interactionMethod, setInteractionMethod] = useState('phone_call');
   const [description, setDescription] = useState('');
   
-  const fromStatusObj = LEAD_STATUSES.find(s => s.id === fromStatus);
-  const toStatusObj = LEAD_STATUSES.find(s => s.id === toStatus);
+  const fromStatusObj = statuses.find(s => s.id === fromStatus);
+  const toStatusObj = statuses.find(s => s.id === toStatus);
   
   const handleSubmit = (e) => {
     e.preventDefault();
