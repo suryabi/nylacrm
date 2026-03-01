@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
@@ -15,14 +15,8 @@ const MOUNTAIN_BG = 'https://images.unsplash.com/photo-1761589951732-2795cd6ecdb
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, user } = useAuth();
-  
-  // If user is already logged in, redirect to home
-  useEffect(() => {
-    if (user) {
-      navigate('/home', { replace: true });
-    }
-  }, [user, navigate]);
+  const { login, user, loading: authLoading } = useAuth();
+  const hasNavigated = useRef(false);
   
   // Check for remembered email
   const rememberedEmail = localStorage.getItem('rememberedEmail') || '';
@@ -31,7 +25,16 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(!!rememberedEmail);
   const [loading, setLoading] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
+  const [loginSuccess, setLoginSuccess] = useState(false);
   const errorMessage = location.state?.error;
+  
+  // Redirect to home if user is authenticated (handles both initial load and post-login)
+  useEffect(() => {
+    if (user && !authLoading && !hasNavigated.current) {
+      hasNavigated.current = true;
+      navigate('/home', { replace: true });
+    }
+  }, [user, authLoading, navigate]);
   
   // Check for inactivity logout message
   useEffect(() => {
@@ -43,7 +46,12 @@ export default function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    
+    if (loading) return; // Prevent double submission
+    
     setLoading(true);
+    hasNavigated.current = false; // Reset navigation flag
+    
     try {
       // Save or remove remembered email
       if (rememberMe) {
@@ -54,14 +62,25 @@ export default function Login() {
       
       const userData = await login(email, password);
       
-      // Only show success and navigate if we got a valid user
       if (userData) {
+        setLoginSuccess(true);
         toast.success('Welcome back!');
-        // Use replace to prevent back navigation to login
-        navigate('/home', { replace: true });
+        
+        // Force navigation after successful login
+        // Small delay to ensure state is updated
+        setTimeout(() => {
+          if (!hasNavigated.current) {
+            hasNavigated.current = true;
+            navigate('/home', { replace: true });
+          }
+        }, 100);
+      } else {
+        toast.error('Login failed - no user data received');
       }
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Login failed');
+      setLoginSuccess(false);
+      const errorMsg = error.response?.data?.detail || 'Login failed. Please check your credentials.';
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
