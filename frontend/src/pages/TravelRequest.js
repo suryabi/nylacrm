@@ -310,6 +310,30 @@ function TravelRequestForm({ onSuccess, initialData = null }) {
   const [searchingLeads, setSearchingLeads] = useState(false);
   const [leadSearchTerm, setLeadSearchTerm] = useState('');
   const [leadSearchResults, setLeadSearchResults] = useState([]);
+  const [cities, setCities] = useState([]);
+  const [loadingCities, setLoadingCities] = useState(true);
+  const [fromSearchTerm, setFromSearchTerm] = useState('');
+  const [toSearchTerm, setToSearchTerm] = useState('');
+  const [showFromDropdown, setShowFromDropdown] = useState(false);
+  const [showToDropdown, setShowToDropdown] = useState(false);
+  
+  // Fetch cities from master locations
+  useEffect(() => {
+    const fetchCities = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`${API_URL}/master-locations/flat`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setCities(response.data.cities || []);
+      } catch (error) {
+        console.error('Failed to fetch cities:', error);
+      } finally {
+        setLoadingCities(false);
+      }
+    };
+    fetchCities();
+  }, []);
   
   const [formData, setFormData] = useState({
     from_location: initialData?.from_location || '',
