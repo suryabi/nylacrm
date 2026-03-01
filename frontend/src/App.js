@@ -52,6 +52,7 @@ import QualityControl from './pages/QualityControl';
 import Assets from './pages/Assets';
 import Vendors from './pages/Vendors';
 import MasterLocations from './pages/MasterLocations';
+import MasterLeadStatus from './pages/MasterLeadStatus';
 import '@/App.css';
 import { useActivityTracker } from './hooks/useActivityTracker';
 
