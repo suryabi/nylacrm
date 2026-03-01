@@ -353,16 +353,18 @@ async def process_invoice_manually(invoice_data: dict, db) -> dict:
     Returns result of the processing
     """
     try:
-        # Extract fields from invoice data
+        # Extract fields from invoice data - handle both field naming conventions
         processed = {
             'id': str(__import__('uuid').uuid4()),
             'invoice_no': invoice_data.get('invoiceNo'),
-            'invoice_date': invoice_data.get('invoiceData'),  # Note: typo in source
-            'gross_invoice_value': float(invoice_data.get('grossInvoiceValue', 0)),
-            'net_invoice_value': float(invoice_data.get('netInvoiceValue', 0)),
-            'credit_note_value': float(invoice_data.get('creditNoteValue', 0)),
+            'invoice_date': invoice_data.get('invoiceDate') or invoice_data.get('invoiceData'),  # Support both field names
+            'gross_invoice_value': float(invoice_data.get('grossInvoiceValue', 0) or 0),
+            'net_invoice_value': float(invoice_data.get('netInvoiceValue', 0) or 0),
+            'credit_note_value': float(invoice_data.get('creditNoteValue', 0) or 0),
+            'outstanding': float(invoice_data.get('outstanding', 0) or 0),
             'c_lead_id': invoice_data.get('C_LEAD_ID'),
             'ca_lead_id': invoice_data.get('CA_LEAD_ID'),
+            'items': invoice_data.get('items', []),
             'received_at': datetime.now(timezone.utc).isoformat()
         }
         
