@@ -118,7 +118,7 @@ const LeadCard = ({ lead, onDragStart, onDragEnd, onClick, users, onMoveToStatus
                 <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 border-b border-gray-100">
                   Move to...
                 </div>
-                {LEAD_STATUSES.map((status) => (
+                {statuses.map((status) => (
                   <button
                     key={status.id}
                     onClick={(e) => handleMoveClick(e, status.id)}
