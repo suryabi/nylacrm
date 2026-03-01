@@ -8,8 +8,20 @@ import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { 
+  FilterContainer, 
+  FilterItem, 
+  FilterGrid 
+} from '../components/ui/filter-bar';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
+import { 
   Search, Building2, ChevronLeft, ChevronRight, Loader2, 
-  Filter, Users, Calendar, Phone, User, MapPin, LayoutGrid, List, Image as ImageIcon, Download
+  Filter, Users, Calendar, Phone, User, MapPin, LayoutGrid, List, Image as ImageIcon, Download, Layers
 } from 'lucide-react';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 import html2canvas from 'html2canvas';
