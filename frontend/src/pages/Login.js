@@ -107,15 +107,14 @@ export default function Login() {
     window.location.href = authUrl;
   };
 
-  // Show loading while checking auth or after successful login
-  if (authLoading || loginSuccess) {
+  // Show loading only during initial auth check, not after failed login attempts
+  // authLoading is true only during the initial checkAuth call
+  if (authLoading && !loginSuccess) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-          <p className="mt-2 text-muted-foreground">
-            {loginSuccess ? 'Redirecting...' : 'Loading...'}
-          </p>
+          <p className="mt-2 text-muted-foreground">Loading...</p>
         </div>
       </div>
     );
