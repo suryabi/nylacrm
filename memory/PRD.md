@@ -28,7 +28,44 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 
 ## What's Been Implemented
 
-### Mar 1, 2026 (Session 14 - Current)
+### Mar 1, 2026 (Session 15 - Current)
+- **NEW MODULE**: Expense Request at Lead/Account Level
+  - **Purpose**: Enable employees to submit expense requests for leads or accounts before/after onboarding
+  - **Expense Types** (5 total):
+    - Gifting Expense (amount + description only)
+    - On-boarding Expense (amount + description only)
+    - Staff Gifting Expense (amount + description only)
+    - Sponsorship Expense (amount + description only)
+    - Free Trial Expense (special: days + SKU grid with auto-calculated MLP)
+  - **Features Implemented**:
+    - Expense Request section on both **Lead Detail** and **Account Detail** pages
+    - History table showing all previous expense requests with Type, Amount, Status, Date
+    - Status badges: Draft, Pending Approval, Approved, Rejected, Cancelled
+    - **Free Trial Expense** captures:
+      - Number of free trial days
+      - SKU grid with columns: SKU (dropdown), Tentative Quantity
+      - Auto-calculated Minimum Landing Price based on entity city from COGS
+      - Auto-calculated Total Budget (Qty × MLP)
+    - Save as Draft / Submit for Approval workflow
+    - Approval goes to **Director**
+    - Users can submit multiple expense requests per lead/account
+    - Delete/Cancel functionality for draft and pending requests
+  - **New Files**:
+    - `/app/frontend/src/components/ExpenseRequestSection.js` - Reusable component
+    - `/app/backend/tests/test_expense_requests.py` - Test cases
+  - **API Endpoints**:
+    - `GET /api/expense-types` - List of 5 expense types
+    - `GET /api/expense-requests` - List requests (filterable by entity_type, entity_id)
+    - `POST /api/expense-requests` - Create new request
+    - `PUT /api/expense-requests/{id}` - Update draft request
+    - `PUT /api/expense-requests/{id}/approve` - Approve/reject (Director only)
+    - `DELETE /api/expense-requests/{id}` - Cancel request
+  - **Budget Module Updated**: Removed customer-related categories (now handled by Expense Requests):
+    - Removed: Customer On-boarding, Customer Gifting, Customer Entertainment, Customer Free Trials
+    - Kept: Event Sponsorship (Amount/Stock), Event Participation, Set up Exhibit, Digital Promotion, Marketing Collateral, Office Supplies, General Travel, Other
+  - Status: VERIFIED - 100% test success rate (18/18 backend, 100% frontend)
+
+### Mar 1, 2026 (Session 14)
 - **NEW MODULE**: Budget Request Module
   - **Purpose**: Enable employees to request budget approvals for various activities with editable grid format
   - **Budget Categories** (9 total, stored as master data):
