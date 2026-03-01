@@ -40,16 +40,18 @@ import { format, parseISO } from 'date-fns';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
+// Budget categories (non-lead/account specific - general company expenses)
+// Customer-related expenses are now handled via Expense Requests at Lead/Account level
 const BUDGET_CATEGORIES = [
-  { id: 'customer_onboarding', label: 'Customer On-boarding', requires_lead: true, requires_sku: false },
   { id: 'event_sponsorship_amount', label: 'Event Sponsorship - Amount', requires_lead: false, requires_sku: false },
   { id: 'event_sponsorship_stock', label: 'Event Sponsorship - Stock', requires_lead: false, requires_sku: true },
   { id: 'event_participation', label: 'Event Participation', requires_lead: false, requires_sku: false },
   { id: 'setup_exhibit', label: 'Set up Exhibit', requires_lead: false, requires_sku: false },
-  { id: 'customer_gifting', label: 'Customer Gifting', requires_lead: true, requires_sku: false },
-  { id: 'customer_entertainment', label: 'Customer Entertainment', requires_lead: true, requires_sku: false },
-  { id: 'customer_free_trials', label: 'Customer - Free Trials', requires_lead: true, requires_sku: true },
   { id: 'digital_promotion', label: 'Digital Promotion', requires_lead: false, requires_sku: false },
+  { id: 'marketing_collateral', label: 'Marketing Collateral', requires_lead: false, requires_sku: false },
+  { id: 'office_supplies', label: 'Office Supplies', requires_lead: false, requires_sku: false },
+  { id: 'travel_general', label: 'General Travel', requires_lead: false, requires_sku: false },
+  { id: 'other', label: 'Other', requires_lead: false, requires_sku: false },
 ];
 
 const statusColors = {
