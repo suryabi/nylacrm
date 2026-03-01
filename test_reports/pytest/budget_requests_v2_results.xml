@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="11" skipped="0" tests="15" time="6.714" timestamp="2026-03-01T13:27:16.366852+00:00" hostname="agent-env-6f7273ed-867d-4cdc-b86e-5c3833de72df"><testcase classname="backend.tests.test_budget_requests.TestBudgetCategories" name="test_get_budget_categories" time="0.241" /><testcase classname="backend.tests.test_budget_requests.TestBudgetCategories" name="test_no_customer_categories" time="0.116" /><testcase classname="backend.tests.test_budget_requests.TestBudgetCategories" name="test_all_categories_no_lead_required" time="0.121" /><testcase classname="backend.tests.test_budget_requests.TestBudgetCategories" name="test_event_sponsorship_stock_requires_sku" time="0.106" /><testcase classname="backend.tests.test_budget_requests.TestBudgetRequestCRUD" name="test_create_budget_request_draft" time="0.453"><failure message="AssertionError: Expected 201, got 401: {&quot;detail&quot;:&quot;Invalid session&quot;}&#10;assert 401 == 201&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_budget_requests.py:130: in test_create_budget_request_draft
+    assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
+E   AssertionError: Expected 201, got 401: {"detail":"Invalid session"}
+E   assert 401 == 201
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_budget_requests.TestBudgetRequestCRUD" name="test_create_budget_request_submit" time="0.434"><failure message="AssertionError: Expected 201, got 401: {&quot;detail&quot;:&quot;Invalid session&quot;}&#10;assert 401 == 201&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_budget_requests.py:166: in test_create_budget_request_submit
+    assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
+E   AssertionError: Expected 201, got 401: {"detail":"Invalid session"}
+E   assert 401 == 201
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_budget_requests.TestBudgetRequestCRUD" name="test_create_budget_request_with_sku" time="0.435"><failure message="AssertionError: Expected 201, got 401: {&quot;detail&quot;:&quot;Invalid session&quot;}&#10;assert 401 == 201&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_budget_requests.py:198: in test_create_budget_request_with_sku
+    assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
+E   AssertionError: Expected 201, got 401: {"detail":"Invalid session"}
+E   assert 401 == 201
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_budget_requests.TestBudgetRequestCRUD" name="test_get_budget_requests_list" time="0.442"><failure message="AssertionError: Expected 200, got 401: {&quot;detail&quot;:&quot;Invalid session&quot;}&#10;assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_budget_requests.py:212: in test_get_budget_requests_list
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+E   AssertionError: Expected 200, got 401: {"detail":"Invalid session"}
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_budget_requests.TestBudgetRequestCRUD" name="test_get_single_budget_request" time="0.532"><failure message="AssertionError: Expected 200, got 401: {&quot;detail&quot;:&quot;Invalid session&quot;}&#10;assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_budget_requests.py:232: in test_get_single_budget_request
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+E   AssertionError: Expected 200, got 401: {"detail":"Invalid session"}
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_budget_requests.TestBudgetRequestApproval" name="test_director_approve_request" time="0.755"><failure message="assert 401 == 201&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_budget_requests.py:268: in test_director_approve_request
+    assert create_resp.status_code == 201
+E   assert 401 == 201
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_budget_requests.TestBudgetRequestApproval" name="test_director_reject_request" time="0.766"><failure message="assert 401 == 201&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_budget_requests.py:291: in test_director_reject_request
+    assert create_resp.status_code == 201
+E   assert 401 == 201
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_budget_requests.TestBudgetRequestApproval" name="test_non_director_cannot_approve" time="0.790"><failure message="assert 401 == 201&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_budget_requests.py:314: in test_non_director_cannot_approve
+    assert create_resp.status_code == 201
+E   assert 401 == 201
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_budget_requests.TestCOGSPriceEndpoint" name="test_get_sku_price_for_city" time="0.429"><failure message="AssertionError: Unexpected status 401: {&quot;detail&quot;:&quot;Invalid session&quot;}&#10;assert False">backend/tests/test_budget_requests.py:352: in test_get_sku_price_for_city
+    assert False, f"Unexpected status {response.status_code}: {response.text}"
+E   AssertionError: Unexpected status 401: {"detail":"Invalid session"}
+E   assert False</failure></testcase><testcase classname="backend.tests.test_budget_requests.TestMasterSKUs" name="test_get_master_skus" time="0.515"><failure message="AssertionError: Expected 200, got 401: {&quot;detail&quot;:&quot;Invalid session&quot;}&#10;assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_budget_requests.py:368: in test_get_master_skus
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+E   AssertionError: Expected 200, got 401: {"detail":"Invalid session"}
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_budget_requests.TestMasterLocations" name="test_get_locations_flat" time="0.426"><failure message="AssertionError: Expected 200, got 401: {&quot;detail&quot;:&quot;Invalid session&quot;}&#10;assert 401 == 200&#10; +  where 401 = &lt;Response [401]&gt;.status_code">backend/tests/test_budget_requests.py:395: in test_get_locations_flat
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+E   AssertionError: Expected 200, got 401: {"detail":"Invalid session"}
+E   assert 401 == 200
+E    +  where 401 = &lt;Response [401]&gt;.status_code</failure></testcase></testsuite></testsuites>
