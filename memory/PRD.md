@@ -29,6 +29,43 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 ## What's Been Implemented
 
 ### Mar 1, 2026 (Session 14 - Current)
+- **NEW MODULE**: Budget Request Module
+  - **Purpose**: Enable employees to request budget approvals for various activities with editable grid format
+  - **Budget Categories** (9 total, stored as master data):
+    - Customer On-boarding (requires lead)
+    - Event Sponsorship - Amount
+    - Event Sponsorship - Stock (requires SKU)
+    - Event Participation
+    - Set up Exhibit
+    - Customer Gifting (requires lead)
+    - Customer Entertainment (requires lead)
+    - Customer - Free Trials (requires lead + SKU)
+    - Digital Promotion
+  - **Features Implemented**:
+    - Title and Description fields
+    - Optional Event Details (Name, Date, City)
+    - **Editable Grid** for budget line items with columns: Category, Lead/Customer, SKU, Bottles, Price/Unit, Amount, Notes
+    - Conditional fields based on category (Lead for customer-related, SKU for stock-based)
+    - Auto-calculation: Amount = Bottles × Price/Unit for SKU categories
+    - Price per unit fetched from COGS minimum landing price based on lead/event city
+    - Total Budget auto-calculation
+    - Save as Draft / Submit for Approval workflow
+    - Approval goes to **Director only** (not CEO)
+  - **New Files**:
+    - `/app/frontend/src/pages/BudgetRequest.js` - Full page with editable grid
+    - `/app/backend/tests/test_budget_requests.py` - 15 test cases
+  - **API Endpoints**:
+    - `GET /api/budget-categories` - List of 9 budget categories
+    - `GET /api/budget-requests` - List user's requests
+    - `POST /api/budget-requests` - Create new request
+    - `PUT /api/budget-requests/{id}` - Update draft request
+    - `PUT /api/budget-requests/{id}/approve` - Approve/reject (Director only)
+    - `PUT /api/budget-requests/{id}/cancel` - Cancel request
+    - `GET /api/cogs/sku-price/{city}/{sku}` - Get SKU landing price for city
+  - **Bug Fixed**: SKU dropdown crash - `skus.map is not a function` error due to incorrect API response handling
+  - **Sidebar**: Added "Budget Request" under REQUESTS section
+  - Status: VERIFIED - 100% test success rate (15/15 backend, 100% frontend)
+
 - **UI**: Application-Wide Contemporary Theme Update for Filters & Date Controls
   - **Purpose**: Modernize all filter components across the application with consistent contemporary styling
   - **New Components Created**:
