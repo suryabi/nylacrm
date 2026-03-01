@@ -736,7 +736,7 @@ export default function LeadsKanban() {
           onDragLeave={stopAutoScroll}
         >
           <div className="flex gap-4 min-w-max">
-            {LEAD_STATUSES.map((status) => (
+            {statuses.map((status) => (
               <KanbanColumn
                 key={status.id}
                 status={status}
@@ -749,6 +749,7 @@ export default function LeadsKanban() {
                 users={users}
                 isDropTarget={dropTargetStatus === status.id}
                 onMoveToStatus={handleMoveToStatus}
+                statuses={statuses}
               />
             ))}
           </div>
@@ -770,6 +771,7 @@ export default function LeadsKanban() {
         toStatus={pendingStatusChange?.toStatus}
         onSubmit={handleActivitySubmit}
         loading={updating}
+        statuses={statuses}
       />
     </div>
   );
