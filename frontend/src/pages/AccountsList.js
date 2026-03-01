@@ -158,52 +158,87 @@ export default function AccountsList() {
           </div>
         </header>
 
-        {/* Filters */}
-        <Card className="mb-6 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
-          <div className="p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              <span className="font-semibold text-slate-700 dark:text-slate-300">Filters</span>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
-              <div className="lg:col-span-2 space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Search</label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Search accounts..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="pl-10 h-10 border-slate-200 dark:border-slate-700" data-testid="search-accounts-input" />
-                </div>
+        {/* Contemporary Filters */}
+        <FilterContainer 
+          title="Filters" 
+          activeFiltersCount={[
+            searchTerm, 
+            territoryFilter !== 'all', 
+            stateFilter !== 'all', 
+            cityFilter !== 'all', 
+            accountTypeFilter !== 'all'
+          ].filter(Boolean).length}
+          onReset={handleResetFilters}
+          className="mb-6"
+        >
+          <FilterGrid columns={6}>
+            <FilterItem label="Search" icon={Search} className="lg:col-span-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input 
+                  placeholder="Search accounts..." 
+                  value={searchTerm} 
+                  onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} 
+                  className="pl-10 h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" 
+                  data-testid="search-accounts-input" 
+                />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Territory</label>
-                <select value={territoryFilter} onChange={(e) => { setTerritoryFilter(e.target.value); setStateFilter('all'); setCityFilter('all'); setCurrentPage(1); }} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm h-10" data-testid="territory-filter">
-                  {availableTerritories.map(t => <option key={t} value={t === 'All Territories' ? 'all' : t}>{t}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">State</label>
-                <select value={stateFilter} onChange={(e) => { setStateFilter(e.target.value); setCityFilter('all'); setCurrentPage(1); }} disabled={territoryFilter === 'all'} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm h-10 disabled:opacity-50" data-testid="state-filter">
-                  {availableStates.map(s => <option key={s} value={s === 'All States' ? 'all' : s}>{s}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">City</label>
-                <select value={cityFilter} onChange={(e) => { setCityFilter(e.target.value); setCurrentPage(1); }} disabled={stateFilter === 'all'} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm h-10 disabled:opacity-50" data-testid="city-filter">
-                  {availableCities.map(c => <option key={c} value={c === 'All Cities' ? 'all' : c}>{c}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Account Type</label>
-                <select value={accountTypeFilter} onChange={(e) => { setAccountTypeFilter(e.target.value); setCurrentPage(1); }} className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm h-10" data-testid="account-type-filter">
-                  <option value="all">All Types</option>
-                  {ACCOUNT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div className="flex items-end">
-                <Button variant="outline" onClick={handleResetFilters} className="w-full h-10 border-slate-200 dark:border-slate-700" data-testid="reset-filters-btn">Reset</Button>
-              </div>
-            </div>
-          </div>
-        </Card>
+            </FilterItem>
+            
+            <FilterItem label="Territory" icon={MapPin}>
+              <Select value={territoryFilter} onValueChange={(v) => { setTerritoryFilter(v); setStateFilter('all'); setCityFilter('all'); setCurrentPage(1); }}>
+                <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" data-testid="territory-filter">
+                  <SelectValue placeholder="All Territories" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  {availableTerritories.map(t => (
+                    <SelectItem key={t} value={t === 'All Territories' ? 'all' : t} className="rounded-lg">{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterItem>
+            
+            <FilterItem label="State" icon={MapPin}>
+              <Select value={stateFilter} onValueChange={(v) => { setStateFilter(v); setCityFilter('all'); setCurrentPage(1); }} disabled={territoryFilter === 'all'}>
+                <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all disabled:opacity-50" data-testid="state-filter">
+                  <SelectValue placeholder="All States" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  {availableStates.map(s => (
+                    <SelectItem key={s} value={s === 'All States' ? 'all' : s} className="rounded-lg">{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterItem>
+            
+            <FilterItem label="City" icon={MapPin}>
+              <Select value={cityFilter} onValueChange={(v) => { setCityFilter(v); setCurrentPage(1); }} disabled={stateFilter === 'all'}>
+                <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all disabled:opacity-50" data-testid="city-filter">
+                  <SelectValue placeholder="All Cities" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  {availableCities.map(c => (
+                    <SelectItem key={c} value={c === 'All Cities' ? 'all' : c} className="rounded-lg">{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterItem>
+            
+            <FilterItem label="Account Type" icon={Layers}>
+              <Select value={accountTypeFilter} onValueChange={(v) => { setAccountTypeFilter(v); setCurrentPage(1); }}>
+                <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" data-testid="account-type-filter">
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="all" className="rounded-lg">All Types</SelectItem>
+                  {ACCOUNT_TYPES.map(t => (
+                    <SelectItem key={t} value={t} className="rounded-lg">{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterItem>
+          </FilterGrid>
+        </FilterContainer>
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
