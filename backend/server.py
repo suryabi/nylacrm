@@ -321,6 +321,12 @@ APPROVAL_CONFIG = {
         'priority': 'high',
         'due_days': 2,
     },
+    ApprovalType.BUDGET_REQUEST: {
+        'title_template': 'Budget Approval: {requester_name} - {details}',
+        'task_type': 'general',
+        'priority': 'high',
+        'due_days': 2,
+    },
     ApprovalType.PROPOSAL: {
         'title_template': 'Proposal Approval: {details}',
         'task_type': 'general',
