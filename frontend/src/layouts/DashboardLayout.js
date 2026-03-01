@@ -74,6 +74,7 @@ const salesNavigationGroups = [
     items: [
       { name: 'Leaves', href: '/leaves', icon: CalendarOff, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
       { name: 'Travel Request', href: '/travel-requests', icon: Plane, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
+      { name: 'Budget Request', href: '/budget-requests', icon: Wallet, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
     ]
   },
   {
