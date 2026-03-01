@@ -1167,6 +1167,44 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
         </div>
       </div>
       
+      {/* HR Data Section - Only visible to CEO, Director, Admin */}
+      {canEditHRData && (
+        <div className="border-t pt-4 mt-4">
+          <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+            </svg>
+            HR Information (Confidential)
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-joining_date">Joining Date</Label>
+              <Input
+                id="edit-joining_date"
+                type="date"
+                value={formData.joining_date}
+                onChange={(e) => setFormData(prev => ({ ...prev, joining_date: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-ctc_monthly">Monthly CTC (₹)</Label>
+              <Input
+                id="edit-ctc_monthly"
+                type="number"
+                value={formData.ctc_monthly}
+                onChange={(e) => setFormData(prev => ({ ...prev, ctc_monthly: e.target.value ? parseFloat(e.target.value) : '' }))}
+                placeholder="e.g., 50000"
+              />
+              {formData.ctc_monthly && (
+                <p className="text-xs text-muted-foreground">
+                  Annual: ₹{(formData.ctc_monthly * 12).toLocaleString('en-IN')}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="flex gap-3 pt-4">
         <Button type="submit" disabled={loading}>
           {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Updating...</> : 'Update Team Member'}
