@@ -6228,6 +6228,370 @@ async def get_pending_approvals(current_user: dict = Depends(get_current_user)):
     
     return {'pending_requests': pending, 'count': len(pending)}
 
+# ============= TRAVEL REQUEST ROUTES =============
+
+TRAVEL_PURPOSES = [
+    {'value': 'lead_customer_visits', 'label': 'Lead / Customer visits'},
+    {'value': 'distribution', 'label': 'Distribution'},
+    {'value': 'manufacturing', 'label': 'Manufacturing'},
+    {'value': 'team_visit', 'label': 'Team visit'},
+    {'value': 'vendor_visits', 'label': 'Vendor visits'},
+]
+
+@api_router.get("/travel-requests/purposes")
+async def get_travel_purposes():
+    """Get list of travel purposes"""
+    return TRAVEL_PURPOSES
+
+@api_router.post("/travel-requests")
+async def create_travel_request(request: TravelRequestCreate, current_user: dict = Depends(get_current_user)):
+    """Create travel request"""
+    
+    # Calculate days before travel
+    from datetime import datetime as dt
+    today = dt.now().date()
+    departure = dt.fromisoformat(request.departure_date).date()
+    days_before_travel = (departure - today).days
+    is_short_notice = days_before_travel < 15
+    
+    # Validate short notice explanation
+    if is_short_notice and request.submit_for_approval:
+        if not request.short_notice_explanation or len(request.short_notice_explanation.strip()) < 20:
+            raise HTTPException(
+                status_code=400, 
+                detail='Short notice travel (less than 15 days) requires an explanation of at least 20 characters'
+            )
+    
+    # Process selected leads
+    selected_leads = []
+    opportunity_size = 0
+    for lead_data in request.selected_leads:
+        lead = TravelRequestLead(
+            lead_id=lead_data.get('lead_id', ''),
+            lead_name=lead_data.get('lead_name', ''),
+            city=lead_data.get('city'),
+            estimated_deal_value=float(lead_data.get('estimated_deal_value', 0))
+        )
+        selected_leads.append(lead)
+        opportunity_size += lead.estimated_deal_value
+    
+    # Process budget breakdown
+    budget_breakdown = None
+    if request.budget_breakdown:
+        budget_breakdown = TravelRequestBudget(
+            travel=request.budget_breakdown.get('travel', 0),
+            accommodation=request.budget_breakdown.get('accommodation', 0),
+            local_transport=request.budget_breakdown.get('local_transport', 0),
+            meals=request.budget_breakdown.get('meals', 0),
+            others=request.budget_breakdown.get('others', 0),
+            total=request.budget_breakdown.get('travel', 0) + 
+                  request.budget_breakdown.get('accommodation', 0) + 
+                  request.budget_breakdown.get('local_transport', 0) + 
+                  request.budget_breakdown.get('meals', 0) + 
+                  request.budget_breakdown.get('others', 0)
+        )
+    
+    # Determine status
+    status = 'pending_approval' if request.submit_for_approval else 'draft'
+    
+    travel_obj = TravelRequest(
+        user_id=current_user['id'],
+        user_name=current_user.get('name'),
+        from_location=request.from_location,
+        to_location=request.to_location,
+        departure_date=request.departure_date,
+        return_date=request.return_date,
+        is_flexible=request.is_flexible,
+        flexible_window=request.flexible_window,
+        flexibility_notes=request.flexibility_notes,
+        days_before_travel=days_before_travel,
+        is_short_notice=is_short_notice,
+        short_notice_explanation=request.short_notice_explanation,
+        purpose=request.purpose,
+        selected_leads=selected_leads,
+        opportunity_size=opportunity_size,
+        tentative_budget=request.tentative_budget,
+        budget_breakdown=budget_breakdown,
+        additional_notes=request.additional_notes,
+        status=status
+    )
+    
+    doc = travel_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    if doc.get('approval_date'):
+        doc['approval_date'] = doc['approval_date'].isoformat()
+    # Convert nested models to dicts
+    doc['selected_leads'] = [l.model_dump() if hasattr(l, 'model_dump') else l for l in travel_obj.selected_leads]
+    if travel_obj.budget_breakdown:
+        doc['budget_breakdown'] = travel_obj.budget_breakdown.model_dump()
+    
+    await db.travel_requests.insert_one(doc)
+    
+    # Create approval tasks for CEO and Director if submitting for approval
+    if request.submit_for_approval:
+        # Find CEO and Director users
+        approvers = await db.users.find(
+            {'role': {'$in': ['CEO', 'Director']}, 'is_active': True},
+            {'_id': 0, 'id': 1, 'name': 1}
+        ).to_list(10)
+        
+        travel_details = f"{request.from_location} to {request.to_location} ({request.departure_date})"
+        
+        for approver in approvers:
+            await create_approval_task(
+                approval_type=ApprovalType.TRAVEL_REQUEST,
+                requester_id=current_user['id'],
+                requester_name=current_user.get('name', 'Unknown'),
+                approver_id=approver['id'],
+                details=travel_details,
+                description=f"Travel request from {current_user.get('name')}:\n\nFrom: {request.from_location}\nTo: {request.to_location}\nDeparture: {request.departure_date}\nReturn: {request.return_date}\nPurpose: {request.purpose}\nBudget: ₹{request.tentative_budget:,.0f}\n\n{'Short Notice: ' + request.short_notice_explanation if is_short_notice else ''}",
+                reference_id=travel_obj.id,
+                reference_type='travel_request'
+            )
+    
+    return {k: v for k, v in doc.items() if k != '_id'}
+
+@api_router.get("/travel-requests")
+async def get_travel_requests(
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get travel requests - users see their own, CEO/Director see all pending"""
+    
+    query = {}
+    
+    if current_user['role'].lower() in ['ceo', 'director']:
+        # CEO/Director see their own + all pending for approval
+        if status:
+            if status == 'pending_approval':
+                # Show all pending
+                query = {'status': 'pending_approval'}
+            else:
+                # Show own with specific status
+                query = {'user_id': current_user['id'], 'status': status}
+        else:
+            # Show own + all pending
+            query = {'$or': [
+                {'user_id': current_user['id']},
+                {'status': 'pending_approval'}
+            ]}
+    else:
+        # Regular users see only their own
+        query = {'user_id': current_user['id']}
+        if status:
+            query['status'] = status
+    
+    requests = await db.travel_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(100)
+    
+    # Get user names for all requests
+    user_ids = list(set([r['user_id'] for r in requests]))
+    users = await db.users.find(
+        {'id': {'$in': user_ids}},
+        {'_id': 0, 'id': 1, 'name': 1}
+    ).to_list(100)
+    user_map = {u['id']: u['name'] for u in users}
+    
+    for req in requests:
+        req['user_name'] = user_map.get(req['user_id'], req.get('user_name', 'Unknown'))
+    
+    return requests
+
+@api_router.get("/travel-requests/{request_id}")
+async def get_travel_request(request_id: str, current_user: dict = Depends(get_current_user)):
+    """Get single travel request"""
+    
+    travel_req = await db.travel_requests.find_one({'id': request_id}, {'_id': 0})
+    if not travel_req:
+        raise HTTPException(status_code=404, detail='Travel request not found')
+    
+    # Check access
+    if travel_req['user_id'] != current_user['id'] and current_user['role'].lower() not in ['ceo', 'director']:
+        raise HTTPException(status_code=403, detail='Access denied')
+    
+    return travel_req
+
+@api_router.put("/travel-requests/{request_id}")
+async def update_travel_request(
+    request_id: str,
+    request: TravelRequestUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update travel request (only if in draft status)"""
+    
+    travel_req = await db.travel_requests.find_one({'id': request_id}, {'_id': 0})
+    if not travel_req:
+        raise HTTPException(status_code=404, detail='Travel request not found')
+    
+    if travel_req['user_id'] != current_user['id']:
+        raise HTTPException(status_code=403, detail='You can only edit your own travel requests')
+    
+    if travel_req['status'] != 'draft':
+        raise HTTPException(status_code=400, detail='Only draft requests can be edited')
+    
+    update_data = {}
+    
+    # Update fields if provided
+    if request.from_location is not None:
+        update_data['from_location'] = request.from_location
+    if request.to_location is not None:
+        update_data['to_location'] = request.to_location
+    if request.departure_date is not None:
+        update_data['departure_date'] = request.departure_date
+        # Recalculate days before travel
+        from datetime import datetime as dt
+        today = dt.now().date()
+        departure = dt.fromisoformat(request.departure_date).date()
+        update_data['days_before_travel'] = (departure - today).days
+        update_data['is_short_notice'] = update_data['days_before_travel'] < 15
+    if request.return_date is not None:
+        update_data['return_date'] = request.return_date
+    if request.is_flexible is not None:
+        update_data['is_flexible'] = request.is_flexible
+    if request.flexible_window is not None:
+        update_data['flexible_window'] = request.flexible_window
+    if request.flexibility_notes is not None:
+        update_data['flexibility_notes'] = request.flexibility_notes
+    if request.short_notice_explanation is not None:
+        update_data['short_notice_explanation'] = request.short_notice_explanation
+    if request.purpose is not None:
+        update_data['purpose'] = request.purpose
+    if request.selected_leads is not None:
+        update_data['selected_leads'] = request.selected_leads
+        update_data['opportunity_size'] = sum(l.get('estimated_deal_value', 0) for l in request.selected_leads)
+    if request.tentative_budget is not None:
+        update_data['tentative_budget'] = request.tentative_budget
+    if request.budget_breakdown is not None:
+        update_data['budget_breakdown'] = request.budget_breakdown
+    if request.additional_notes is not None:
+        update_data['additional_notes'] = request.additional_notes
+    
+    # Check if submitting for approval
+    if request.submit_for_approval:
+        is_short_notice = update_data.get('is_short_notice', travel_req.get('is_short_notice', False))
+        explanation = update_data.get('short_notice_explanation', travel_req.get('short_notice_explanation'))
+        
+        if is_short_notice and (not explanation or len(explanation.strip()) < 20):
+            raise HTTPException(
+                status_code=400,
+                detail='Short notice travel requires an explanation of at least 20 characters'
+            )
+        
+        update_data['status'] = 'pending_approval'
+        
+        # Create approval tasks
+        approvers = await db.users.find(
+            {'role': {'$in': ['CEO', 'Director']}, 'is_active': True},
+            {'_id': 0, 'id': 1, 'name': 1}
+        ).to_list(10)
+        
+        from_loc = update_data.get('from_location', travel_req['from_location'])
+        to_loc = update_data.get('to_location', travel_req['to_location'])
+        dep_date = update_data.get('departure_date', travel_req['departure_date'])
+        purpose = update_data.get('purpose', travel_req['purpose'])
+        budget = update_data.get('tentative_budget', travel_req['tentative_budget'])
+        
+        travel_details = f"{from_loc} to {to_loc} ({dep_date})"
+        
+        for approver in approvers:
+            await create_approval_task(
+                approval_type=ApprovalType.TRAVEL_REQUEST,
+                requester_id=current_user['id'],
+                requester_name=current_user.get('name', 'Unknown'),
+                approver_id=approver['id'],
+                details=travel_details,
+                description=f"Travel request from {current_user.get('name')}:\n\nFrom: {from_loc}\nTo: {to_loc}\nDeparture: {dep_date}\nPurpose: {purpose}\nBudget: ₹{budget:,.0f}",
+                reference_id=request_id,
+                reference_type='travel_request'
+            )
+    
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.travel_requests.update_one({'id': request_id}, {'$set': update_data})
+    
+    return {'message': 'Travel request updated successfully'}
+
+@api_router.put("/travel-requests/{request_id}/approve")
+async def approve_travel_request(
+    request_id: str,
+    approval: TravelApproval,
+    current_user: dict = Depends(get_current_user)
+):
+    """Approve or reject travel request (CEO/Director only)"""
+    
+    if current_user['role'].lower() not in ['ceo', 'director']:
+        raise HTTPException(status_code=403, detail='Only CEO or Director can approve travel requests')
+    
+    travel_req = await db.travel_requests.find_one({'id': request_id}, {'_id': 0})
+    if not travel_req:
+        raise HTTPException(status_code=404, detail='Travel request not found')
+    
+    if travel_req['status'] != 'pending_approval':
+        raise HTTPException(status_code=400, detail='Only pending requests can be approved/rejected')
+    
+    update_data = {
+        'status': approval.status,
+        'approved_by': current_user['id'],
+        'approved_by_name': current_user.get('name'),
+        'approval_date': datetime.now(timezone.utc).isoformat(),
+        'updated_at': datetime.now(timezone.utc).isoformat()
+    }
+    
+    if approval.rejection_reason:
+        update_data['rejection_reason'] = approval.rejection_reason
+    
+    await db.travel_requests.update_one({'id': request_id}, {'$set': update_data})
+    
+    # Complete approval tasks
+    await complete_approval_task(
+        approval_type=ApprovalType.TRAVEL_REQUEST,
+        reference_id=request_id,
+        status='completed'
+    )
+    
+    return {'message': f'Travel request {approval.status}'}
+
+@api_router.put("/travel-requests/{request_id}/cancel")
+async def cancel_travel_request(request_id: str, current_user: dict = Depends(get_current_user)):
+    """Cancel travel request"""
+    
+    travel_req = await db.travel_requests.find_one({'id': request_id}, {'_id': 0})
+    if not travel_req:
+        raise HTTPException(status_code=404, detail='Travel request not found')
+    
+    if travel_req['user_id'] != current_user['id']:
+        raise HTTPException(status_code=403, detail='You can only cancel your own travel requests')
+    
+    if travel_req['status'] in ['approved', 'rejected', 'cancelled']:
+        raise HTTPException(status_code=400, detail='Cannot cancel this request')
+    
+    await db.travel_requests.update_one(
+        {'id': request_id},
+        {'$set': {
+            'status': 'cancelled',
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    # Complete any pending approval tasks
+    await complete_approval_task(
+        approval_type=ApprovalType.TRAVEL_REQUEST,
+        reference_id=request_id,
+        status='cancelled'
+    )
+    
+    return {'message': 'Travel request cancelled'}
+
+@api_router.get("/travel-requests/pending-approvals/count")
+async def get_pending_travel_approvals_count(current_user: dict = Depends(get_current_user)):
+    """Get count of pending travel approvals (for CEO/Director)"""
+    
+    if current_user['role'].lower() not in ['ceo', 'director']:
+        return {'count': 0}
+    
+    count = await db.travel_requests.count_documents({'status': 'pending_approval'})
+    return {'count': count}
+
 # ============= SALES TARGET ROUTES =============
 
 @api_router.post("/target-plans", response_model=TargetPlan)
