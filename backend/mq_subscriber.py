@@ -376,45 +376,48 @@ async def process_invoice_manually(invoice_data: dict, db) -> dict:
         if not lead_id:
             return {'success': False, 'error': 'No CA_LEAD_ID in invoice message'}
         
-        # Find lead by lead_id (our unique formatted ID)
-        lead = await db.leads.find_one({'lead_id': lead_id})
+        # Find account by lead_id (accounts store the original lead_id)
+        account = await db.accounts.find_one({'lead_id': lead_id})
         
-        if not lead:
+        if not account:
             # Store as unmatched invoice
             processed['status'] = 'unmatched'
             await db.invoices.insert_one(processed)
             return {
                 'success': False, 
-                'error': f'Lead not found for lead_id: {lead_id}',
+                'error': f'Account not found for lead_id: {lead_id}',
                 'invoice_stored': True,
                 'status': 'unmatched'
             }
         
-        # Store invoice linked to lead
-        processed['lead_uuid'] = lead['id']
-        processed['assigned_to'] = lead.get('assigned_to')
+        # Store invoice linked to account
+        processed['account_uuid'] = account['id']
+        processed['account_id'] = account.get('account_id')
+        processed['assigned_to'] = account.get('assigned_to')
         processed['status'] = 'matched'
         await db.invoices.insert_one(processed)
         
-        # Calculate totals for the lead
+        # Calculate totals for the account
         all_invoices = await db.invoices.find({
-            'lead_uuid': lead['id'],
+            'account_uuid': account['id'],
             'status': 'matched'
         }).to_list(1000)
         
         total_gross = sum(inv.get('gross_invoice_value', 0) for inv in all_invoices)
         total_net = sum(inv.get('net_invoice_value', 0) for inv in all_invoices)
         total_credit = sum(inv.get('credit_note_value', 0) for inv in all_invoices)
+        total_outstanding = sum(inv.get('outstanding', 0) for inv in all_invoices)
         invoice_count = len(all_invoices)
         
-        # Update lead with invoice summary
-        await db.leads.update_one(
-            {'id': lead['id']},
+        # Update account with invoice summary
+        await db.accounts.update_one(
+            {'id': account['id']},
             {
                 '$set': {
                     'total_gross_invoice_value': total_gross,
                     'total_net_invoice_value': total_net,
                     'total_credit_note_value': total_credit,
+                    'total_outstanding': total_outstanding,
                     'invoice_count': invoice_count,
                     'last_invoice_date': processed.get('invoice_date'),
                     'last_invoice_no': processed.get('invoice_no'),
@@ -424,7 +427,7 @@ async def process_invoice_manually(invoice_data: dict, db) -> dict:
         )
         
         # Update resource (assigned_to) invoice totals for reporting
-        assigned_to = lead.get('assigned_to')
+        assigned_to = account.get('assigned_to')
         if assigned_to:
             resource_summary = await db.resource_invoice_summary.find_one({'resource_id': assigned_to})
             gross_value = processed.get('gross_invoice_value', 0)
@@ -455,13 +458,15 @@ async def process_invoice_manually(invoice_data: dict, db) -> dict:
         return {
             'success': True,
             'lead_id': lead_id,
-            'lead_company': lead.get('company'),
+            'account_id': account.get('account_id'),
+            'account_name': account.get('account_name'),
             'assigned_to': assigned_to,
             'invoice_no': processed.get('invoice_no'),
             'totals': {
                 'gross': total_gross,
                 'net': total_net,
                 'credit': total_credit,
+                'outstanding': total_outstanding,
                 'count': invoice_count
             }
         }
