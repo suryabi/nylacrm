@@ -31,6 +31,7 @@ import ActivityTimeline from '../components/ActivityTimeline';
 import TimelineSummaryCompact from '../components/TimelineSummaryCompact';
 import InvoiceSummaryCard from '../components/InvoiceSummaryCard';
 import LogoUploader from '../components/LogoUploader';
+import ExpenseRequestSection from '../components/ExpenseRequestSection';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
