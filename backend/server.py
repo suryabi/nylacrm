@@ -511,6 +511,9 @@ class User(BaseModel):
     reports_to: Optional[str] = None  # user_id of direct manager
     dotted_line_to: Optional[str] = None  # user_id for dotted line reporting
     is_active: bool = True
+    # Employee HR fields (visible to CEO, Director, Admin only)
+    ctc_monthly: Optional[float] = None  # Cost to Company per month in INR
+    joining_date: Optional[str] = None  # Format: YYYY-MM-DD
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class UserCreate(BaseModel):
@@ -527,6 +530,8 @@ class UserCreate(BaseModel):
     territory: Optional[str] = None
     reports_to: Optional[str] = None
     dotted_line_to: Optional[str] = None
+    ctc_monthly: Optional[float] = None
+    joining_date: Optional[str] = None
 
 class UserLogin(BaseModel):
     email: EmailStr
