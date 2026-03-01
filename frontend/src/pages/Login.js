@@ -16,7 +16,6 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, user, loading: authLoading } = useAuth();
-  const hasNavigated = useRef(false);
   
   // Check for remembered email
   const rememberedEmail = localStorage.getItem('rememberedEmail') || '';
@@ -28,10 +27,9 @@ export default function Login() {
   const [loginSuccess, setLoginSuccess] = useState(false);
   const errorMessage = location.state?.error;
   
-  // Redirect to home if user is authenticated (handles both initial load and post-login)
+  // Redirect to home if user is already authenticated
   useEffect(() => {
-    if (user && !authLoading && !hasNavigated.current) {
-      hasNavigated.current = true;
+    if (user && !authLoading) {
       navigate('/home', { replace: true });
     }
   }, [user, authLoading, navigate]);
