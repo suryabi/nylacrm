@@ -948,6 +948,104 @@ class LeaveApproval(BaseModel):
     status: str  # 'approved' or 'rejected'
     rejection_reason: Optional[str] = None
 
+# ============= TRAVEL REQUEST MODELS =============
+
+class TravelRequestLead(BaseModel):
+    """Lead attached to a travel request"""
+    lead_id: str
+    lead_name: str
+    city: Optional[str] = None
+    estimated_deal_value: float = 0
+
+class TravelRequestBudget(BaseModel):
+    """Budget breakdown for travel request"""
+    travel: float = 0
+    accommodation: float = 0
+    local_transport: float = 0
+    meals: float = 0
+    others: float = 0
+    total: float = 0
+
+class TravelRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    user_name: Optional[str] = None
+    
+    # Trip Details
+    from_location: str
+    to_location: str
+    departure_date: str  # YYYY-MM-DD
+    return_date: str  # YYYY-MM-DD
+    is_flexible: bool = False
+    flexible_window: Optional[int] = None  # ±days
+    flexibility_notes: Optional[str] = None
+    
+    # Policy Check
+    days_before_travel: int = 0
+    is_short_notice: bool = False
+    short_notice_explanation: Optional[str] = None
+    
+    # Purpose
+    purpose: str  # 'lead_customer_visits', 'distribution', 'manufacturing', 'team_visit', 'vendor_visits'
+    
+    # Lead/Customer Visits (conditional)
+    selected_leads: List[TravelRequestLead] = []
+    opportunity_size: float = 0  # Sum of estimated deal values
+    
+    # Budget
+    tentative_budget: float = 0
+    budget_breakdown: Optional[TravelRequestBudget] = None
+    
+    # Notes
+    additional_notes: Optional[str] = None
+    
+    # Status & Workflow
+    status: str = 'draft'  # 'draft', 'pending_approval', 'approved', 'rejected', 'cancelled'
+    approved_by: Optional[str] = None
+    approved_by_name: Optional[str] = None
+    approval_date: Optional[datetime] = None
+    rejection_reason: Optional[str] = None
+    
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class TravelRequestCreate(BaseModel):
+    from_location: str
+    to_location: str
+    departure_date: str
+    return_date: str
+    is_flexible: bool = False
+    flexible_window: Optional[int] = None
+    flexibility_notes: Optional[str] = None
+    short_notice_explanation: Optional[str] = None
+    purpose: str
+    selected_leads: List[dict] = []
+    tentative_budget: float = 0
+    budget_breakdown: Optional[dict] = None
+    additional_notes: Optional[str] = None
+    submit_for_approval: bool = False  # If True, submit immediately; else save as draft
+
+class TravelRequestUpdate(BaseModel):
+    from_location: Optional[str] = None
+    to_location: Optional[str] = None
+    departure_date: Optional[str] = None
+    return_date: Optional[str] = None
+    is_flexible: Optional[bool] = None
+    flexible_window: Optional[int] = None
+    flexibility_notes: Optional[str] = None
+    short_notice_explanation: Optional[str] = None
+    purpose: Optional[str] = None
+    selected_leads: Optional[List[dict]] = None
+    tentative_budget: Optional[float] = None
+    budget_breakdown: Optional[dict] = None
+    additional_notes: Optional[str] = None
+    submit_for_approval: bool = False
+
+class TravelApproval(BaseModel):
+    status: str  # 'approved' or 'rejected'
+    rejection_reason: Optional[str] = None
+
 class TargetPlan(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
