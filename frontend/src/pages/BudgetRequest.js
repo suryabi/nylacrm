@@ -614,7 +614,7 @@ function BudgetRequestForm({ onSuccess, initialData = null }) {
 }
 
 // Budget Line Item Row
-function BudgetLineItemRow({ item, index, skus, cities, eventCity, onUpdate, onRemove }) {
+function BudgetLineItemRow({ item, index, skus, cities, eventCity, onUpdate, onUpdateBatch, onRemove }) {
   const [searchingLead, setSearchingLead] = useState(false);
   const [leadSearchTerm, setLeadSearchTerm] = useState('');
   const [leadResults, setLeadResults] = useState([]);
@@ -664,7 +664,7 @@ function BudgetLineItemRow({ item, index, skus, cities, eventCity, onUpdate, onR
         `${API_URL}/cogs/sku-price/${encodeURIComponent(city)}/${encodeURIComponent(skuName)}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      if (response.data.found) {
+      if (response.data.found && response.data.minimum_landing_price) {
         onUpdate(index, 'price_per_unit', response.data.minimum_landing_price);
       }
     } catch (error) {
@@ -673,7 +673,13 @@ function BudgetLineItemRow({ item, index, skus, cities, eventCity, onUpdate, onR
   };
 
   const handleSkuChange = (skuName) => {
-    onUpdate(index, 'sku_name', skuName);
+    // Update SKU name using batch update
+    const skuData = skus.find(s => s.sku_name === skuName);
+    onUpdateBatch(index, {
+      sku_id: skuData?.id || null,
+      sku_name: skuName
+    });
+    
     const city = item.lead_city || eventCity;
     if (city) {
       fetchSkuPrice(skuName, city);
@@ -681,237 +687,318 @@ function BudgetLineItemRow({ item, index, skus, cities, eventCity, onUpdate, onR
   };
 
   const selectLead = (lead) => {
-    onUpdate(index, 'lead_id', lead.id);
-    onUpdate(index, 'lead_name', lead.company_name);
-    onUpdate(index, 'lead_city', lead.city);
+    // Batch update all lead fields at once
+    onUpdateBatch(index, {
+      lead_id: lead.id,
+      lead_name: lead.company_name,
+      lead_city: lead.city
+    });
+    
     setLeadSearchTerm('');
     setShowLeadDialog(false);
     setLeadResults([]);
     
+    // Fetch SKU price if SKU is already selected
     if (item.sku_name) {
-      fetchSkuPrice(item.sku_name, lead.city);
+      setTimeout(() => {
+        fetchSkuPrice(item.sku_name, lead.city);
+      }, 100);
     }
   };
 
   const clearLead = () => {
-    onUpdate(index, 'lead_id', null);
-    onUpdate(index, 'lead_name', '');
-    onUpdate(index, 'lead_city', '');
+    onUpdateBatch(index, {
+      lead_id: null,
+      lead_name: '',
+      lead_city: ''
+    });
   };
 
+  const clearSku = () => {
+    onUpdateBatch(index, {
+      sku_id: null,
+      sku_name: '',
+      bottle_count: 0,
+      price_per_unit: 0
+    });
+  };
+
+  // Check if we have a lead or SKU selected to show summary
+  const hasSelectedLead = item.lead_name && item.lead_city;
+  const hasSelectedSku = item.sku_name;
+  const showSummary = hasSelectedLead || hasSelectedSku;
+
   return (
-    <TableRow className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-      <TableCell>
-        <Select value={item.category_id} onValueChange={(v) => onUpdate(index, 'category_id', v)}>
-          <SelectTrigger className="h-10 text-sm rounded-lg">
-            <SelectValue placeholder="Select category..." />
-          </SelectTrigger>
-          <SelectContent>
-            {BUDGET_CATEGORIES.map(cat => (
-              <SelectItem key={cat.id} value={cat.id}>{cat.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </TableCell>
-      
-      <TableCell>
-        {requiresLead ? (
-          <div>
-            {item.lead_name ? (
-              <div className="flex items-center gap-2 p-2.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg">
-                <Building2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm text-emerald-800 dark:text-emerald-300 truncate">{item.lead_name}</p>
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400">{item.lead_city}</p>
+    <>
+      <TableRow className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 border-b-0">
+        <TableCell className="align-top pt-4">
+          <Select value={item.category_id} onValueChange={(v) => onUpdate(index, 'category_id', v)}>
+            <SelectTrigger className="h-10 text-sm rounded-lg">
+              <SelectValue placeholder="Select category..." />
+            </SelectTrigger>
+            <SelectContent>
+              {BUDGET_CATEGORIES.map(cat => (
+                <SelectItem key={cat.id} value={cat.id}>{cat.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </TableCell>
+        
+        <TableCell className="align-top pt-4">
+          {requiresLead ? (
+            <div>
+              {item.lead_name ? (
+                <div className="flex items-center gap-2 p-2.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg">
+                  <Building2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm text-emerald-800 dark:text-emerald-300 truncate">{item.lead_name}</p>
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400">{item.lead_city}</p>
+                  </div>
+                  <button 
+                    onClick={clearLead} 
+                    className="p-1 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 transition-colors"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
+              ) : (
+                <Dialog open={showLeadDialog} onOpenChange={setShowLeadDialog}>
+                  <DialogTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      className="w-full h-10 justify-start text-sm font-normal rounded-lg border-dashed border-2 hover:border-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10"
+                    >
+                      <Search className="h-4 w-4 mr-2 text-slate-400" />
+                      <span className="text-slate-500">Select Lead...</span>
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <Building2 className="h-5 w-5 text-emerald-600" />
+                        Select Lead / Customer
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      {/* Search Input */}
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                        <Input
+                          placeholder="Search by company name, contact, or city..."
+                          value={leadSearchTerm}
+                          onChange={(e) => setLeadSearchTerm(e.target.value)}
+                          className="pl-11 h-12 text-base rounded-xl border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                          autoFocus
+                        />
+                        {searchingLead && (
+                          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 animate-spin text-slate-400" />
+                        )}
+                      </div>
+                      
+                      {/* Search Results */}
+                      <div className="max-h-[300px] overflow-y-auto space-y-2">
+                        {!leadSearchTerm && (
+                          <div className="text-center py-8 text-slate-400">
+                            <Search className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                            <p className="text-sm">Start typing to search leads</p>
+                            <p className="text-xs mt-1">Minimum 2 characters</p>
+                          </div>
+                        )}
+                        
+                        {leadSearchTerm && leadSearchTerm.length < 2 && (
+                          <div className="text-center py-6 text-slate-400">
+                            <p className="text-sm">Type at least 2 characters to search</p>
+                          </div>
+                        )}
+                        
+                        {leadSearchTerm && leadSearchTerm.length >= 2 && !searchingLead && leadResults.length === 0 && (
+                          <div className="text-center py-8 text-slate-400">
+                            <Building2 className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                            <p className="text-sm">No leads found for "{leadSearchTerm}"</p>
+                            <p className="text-xs mt-1">Try a different search term</p>
+                          </div>
+                        )}
+                        
+                        {leadResults.map(lead => (
+                          <div
+                            key={lead.id}
+                            onClick={() => selectLead(lead)}
+                            className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 cursor-pointer transition-all group"
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/50 dark:to-teal-900/30 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                                <Building2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-slate-800 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
+                                  {lead.company_name}
+                                </p>
+                                <div className="flex items-center gap-3 mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                  <span className="flex items-center gap-1">
+                                    <MapPin className="h-3.5 w-3.5" />
+                                    {lead.city}
+                                  </span>
+                                  {lead.contact_name && (
+                                    <span className="truncate">{lead.contact_name}</span>
+                                  )}
+                                </div>
+                                {lead.lead_id && (
+                                  <p className="text-xs text-slate-400 mt-1 font-mono">{lead.lead_id}</p>
+                                )}
+                              </div>
+                              <div className="text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <CheckCircle className="h-5 w-5" />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </div>
+          ) : (
+            <span className="text-sm text-slate-400 italic">Not required</span>
+          )}
+        </TableCell>
+
+        <TableCell className="align-top pt-4">
+          {requiresSku ? (
+            item.sku_name ? (
+              <div className="flex items-center gap-2 p-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <Package className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                <span className="font-medium text-sm text-blue-800 dark:text-blue-300 truncate flex-1">{item.sku_name}</span>
                 <button 
-                  onClick={clearLead} 
+                  onClick={clearSku} 
                   className="p-1 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 transition-colors"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
             ) : (
-              <Dialog open={showLeadDialog} onOpenChange={setShowLeadDialog}>
-                <DialogTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    className="w-full h-10 justify-start text-sm font-normal rounded-lg border-dashed border-2 hover:border-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10"
-                  >
-                    <Search className="h-4 w-4 mr-2 text-slate-400" />
-                    <span className="text-slate-500">Select Lead...</span>
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-lg">
-                  <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                      <Building2 className="h-5 w-5 text-emerald-600" />
-                      Select Lead / Customer
-                    </DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    {/* Search Input */}
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                      <Input
-                        placeholder="Search by company name, contact, or city..."
-                        value={leadSearchTerm}
-                        onChange={(e) => setLeadSearchTerm(e.target.value)}
-                        className="pl-11 h-12 text-base rounded-xl border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                        autoFocus
-                      />
-                      {searchingLead && (
-                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 animate-spin text-slate-400" />
-                      )}
-                    </div>
-                    
-                    {/* Search Results */}
-                    <div className="max-h-[300px] overflow-y-auto space-y-2">
-                      {!leadSearchTerm && (
-                        <div className="text-center py-8 text-slate-400">
-                          <Search className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                          <p className="text-sm">Start typing to search leads</p>
-                          <p className="text-xs mt-1">Minimum 2 characters</p>
-                        </div>
-                      )}
-                      
-                      {leadSearchTerm && leadSearchTerm.length < 2 && (
-                        <div className="text-center py-6 text-slate-400">
-                          <p className="text-sm">Type at least 2 characters to search</p>
-                        </div>
-                      )}
-                      
-                      {leadSearchTerm && leadSearchTerm.length >= 2 && !searchingLead && leadResults.length === 0 && (
-                        <div className="text-center py-8 text-slate-400">
-                          <Building2 className="h-10 w-10 mx-auto mb-2 opacity-50" />
-                          <p className="text-sm">No leads found for "{leadSearchTerm}"</p>
-                          <p className="text-xs mt-1">Try a different search term</p>
-                        </div>
-                      )}
-                      
-                      {leadResults.map(lead => (
-                        <div
-                          key={lead.id}
-                          onClick={() => selectLead(lead)}
-                          className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 cursor-pointer transition-all group"
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/50 dark:to-teal-900/30 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
-                              <Building2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-slate-800 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
-                                {lead.company_name}
-                              </p>
-                              <div className="flex items-center gap-3 mt-1 text-sm text-slate-500 dark:text-slate-400">
-                                <span className="flex items-center gap-1">
-                                  <MapPin className="h-3.5 w-3.5" />
-                                  {lead.city}
-                                </span>
-                                {lead.contact_name && (
-                                  <span className="truncate">{lead.contact_name}</span>
-                                )}
-                              </div>
-                              {lead.lead_id && (
-                                <p className="text-xs text-slate-400 mt-1 font-mono">{lead.lead_id}</p>
-                              )}
-                            </div>
-                            <div className="text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <CheckCircle className="h-5 w-5" />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            )}
-          </div>
-        ) : (
-          <span className="text-sm text-slate-400 italic">Not required</span>
-        )}
-      </TableCell>
+              <Select value={item.sku_name || ''} onValueChange={handleSkuChange}>
+                <SelectTrigger className="h-10 text-sm rounded-lg">
+                  <SelectValue placeholder="Select SKU" />
+                </SelectTrigger>
+                <SelectContent>
+                  {skus.map(sku => (
+                    <SelectItem key={sku.id} value={sku.sku_name}>{sku.sku_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )
+          ) : (
+            <span className="text-sm text-slate-400 italic">Not required</span>
+          )}
+        </TableCell>
 
-      <TableCell>
-        {requiresSku ? (
-          <Select value={item.sku_name} onValueChange={handleSkuChange}>
-            <SelectTrigger className="h-10 text-sm rounded-lg">
-              <SelectValue placeholder="Select SKU" />
-            </SelectTrigger>
-            <SelectContent>
-              {skus.map(sku => (
-                <SelectItem key={sku.id} value={sku.sku_name}>{sku.sku_name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : (
-          <span className="text-sm text-slate-400 italic">Not required</span>
-        )}
-      </TableCell>
+        <TableCell className="align-top pt-4">
+          {requiresSku ? (
+            <Input
+              type="number"
+              min="0"
+              placeholder="0"
+              value={item.bottle_count || ''}
+              onChange={(e) => onUpdate(index, 'bottle_count', parseInt(e.target.value) || 0)}
+              className="h-10 text-sm w-24 rounded-lg"
+            />
+          ) : (
+            <span className="text-sm text-slate-400 italic">-</span>
+          )}
+        </TableCell>
 
-      <TableCell>
-        {requiresSku ? (
+        <TableCell className="align-top pt-4">
+          {requiresSku ? (
+            <Input
+              type="number"
+              min="0"
+              placeholder="0"
+              value={item.price_per_unit || ''}
+              onChange={(e) => onUpdate(index, 'price_per_unit', parseFloat(e.target.value) || 0)}
+              className="h-10 text-sm w-24 rounded-lg"
+            />
+          ) : (
+            <span className="text-sm text-slate-400 italic">-</span>
+          )}
+        </TableCell>
+
+        <TableCell className="align-top pt-4">
           <Input
             type="number"
             min="0"
             placeholder="0"
-            value={item.bottle_count || ''}
-            onChange={(e) => onUpdate(index, 'bottle_count', parseInt(e.target.value) || 0)}
-            className="h-10 text-sm w-24 rounded-lg"
+            value={item.amount || ''}
+            onChange={(e) => onUpdate(index, 'amount', parseFloat(e.target.value) || 0)}
+            className="h-10 text-sm font-medium rounded-lg"
+            disabled={requiresSku && item.bottle_count > 0 && item.price_per_unit > 0}
           />
-        ) : (
-          <span className="text-sm text-slate-400 italic">-</span>
-        )}
-      </TableCell>
+        </TableCell>
 
-      <TableCell>
-        {requiresSku ? (
+        <TableCell className="align-top pt-4">
           <Input
-            type="number"
-            min="0"
-            placeholder="0"
-            value={item.price_per_unit || ''}
-            onChange={(e) => onUpdate(index, 'price_per_unit', parseFloat(e.target.value) || 0)}
-            className="h-10 text-sm w-24 rounded-lg"
+            placeholder="Notes..."
+            value={item.notes || ''}
+            onChange={(e) => onUpdate(index, 'notes', e.target.value)}
+            className="h-10 text-sm rounded-lg"
           />
-        ) : (
-          <span className="text-sm text-slate-400 italic">-</span>
-        )}
-      </TableCell>
+        </TableCell>
 
-      <TableCell>
-        <Input
-          type="number"
-          min="0"
-          placeholder="0"
-          value={item.amount || ''}
-          onChange={(e) => onUpdate(index, 'amount', parseFloat(e.target.value) || 0)}
-          className="h-10 text-sm font-medium rounded-lg"
-          disabled={requiresSku && item.bottle_count > 0 && item.price_per_unit > 0}
-        />
-      </TableCell>
-
-      <TableCell>
-        <Input
-          placeholder="Notes..."
-          value={item.notes || ''}
-          onChange={(e) => onUpdate(index, 'notes', e.target.value)}
-          className="h-10 text-sm rounded-lg"
-        />
-      </TableCell>
-
-      <TableCell>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onRemove(index)}
-          className="h-9 w-9 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </TableCell>
-    </TableRow>
+        <TableCell className="align-top pt-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onRemove(index)}
+            className="h-9 w-9 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </TableCell>
+      </TableRow>
+      
+      {/* Summary Row - Shows selected lead and SKU details */}
+      {showSummary && (
+        <TableRow className="bg-slate-50/50 dark:bg-slate-800/20 border-b">
+          <TableCell colSpan={8} className="py-2 px-4">
+            <div className="flex items-center gap-4 text-sm">
+              {hasSelectedLead && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/30 rounded-full">
+                  <Building2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span className="font-medium text-emerald-800 dark:text-emerald-300">{item.lead_name}</span>
+                  <span className="text-emerald-600 dark:text-emerald-400">•</span>
+                  <MapPin className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-emerald-700 dark:text-emerald-400">{item.lead_city}</span>
+                </div>
+              )}
+              {hasSelectedSku && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+                  <Package className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                  <span className="font-medium text-blue-800 dark:text-blue-300">{item.sku_name}</span>
+                  {item.bottle_count > 0 && (
+                    <>
+                      <span className="text-blue-600 dark:text-blue-400">×</span>
+                      <span className="text-blue-700 dark:text-blue-400">{item.bottle_count} bottles</span>
+                    </>
+                  )}
+                  {item.price_per_unit > 0 && (
+                    <>
+                      <span className="text-blue-600 dark:text-blue-400">@</span>
+                      <span className="text-blue-700 dark:text-blue-400">₹{item.price_per_unit}/unit</span>
+                    </>
+                  )}
+                </div>
+              )}
+              {item.amount > 0 && (
+                <div className="ml-auto flex items-center gap-1 px-3 py-1.5 bg-amber-100 dark:bg-amber-900/30 rounded-full">
+                  <DollarSign className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                  <span className="font-bold text-amber-800 dark:text-amber-300">₹{item.amount.toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+          </TableCell>
+        </TableRow>
+      )}
+    </>
   );
 }
 
