@@ -842,47 +842,58 @@ ${googleMapsLink}`;
 
           {/* Invoices */}
           <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Invoices
-            </h2>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                Invoice Summary
+              </h2>
+              {invoiceData && invoiceData.invoices?.length > 0 && (
+                <Badge variant="outline">{invoiceData.invoices.length} Invoices</Badge>
+              )}
+            </div>
             {loadingInvoices ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin" />
               </div>
             ) : invoiceData && invoiceData.invoices?.length > 0 ? (
               <>
-                <div className="grid grid-cols-3 gap-4 mb-4">
-                  <div className="bg-muted/50 p-3 rounded-lg">
-                    <p className="text-sm text-muted-foreground">Total Amount</p>
-                    <p className="text-lg font-semibold">₹{invoiceData.total_amount?.toLocaleString()}</p>
+                <div className="grid grid-cols-3 gap-3 mb-5">
+                  <div className="bg-green-50 rounded-lg p-4 border border-green-100">
+                    <p className="text-xs text-green-600 font-medium mb-1">GROSS VALUE</p>
+                    <p className="text-lg font-bold text-green-700">₹{(invoiceData.total_amount / 100000).toFixed(2)}L</p>
                   </div>
-                  <div className="bg-green-50 p-3 rounded-lg">
-                    <p className="text-sm text-green-600">Paid Amount</p>
-                    <p className="text-lg font-semibold text-green-700">₹{invoiceData.paid_amount?.toLocaleString()}</p>
+                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
+                    <p className="text-xs text-blue-600 font-medium mb-1">NET VALUE</p>
+                    <p className="text-lg font-bold text-blue-700">₹{(invoiceData.net_amount / 100000).toFixed(2)}L</p>
                   </div>
-                  <div className="bg-red-50 p-3 rounded-lg">
-                    <p className="text-sm text-red-600">Outstanding</p>
-                    <p className="text-lg font-semibold text-red-700">₹{invoiceData.outstanding?.toLocaleString()}</p>
+                  <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
+                    <p className="text-xs text-amber-600 font-medium mb-1">CREDIT NOTES</p>
+                    <p className="text-lg font-bold text-amber-700">₹{((invoiceData.credit_amount || 0) / 100000).toFixed(2)}L</p>
                   </div>
                 </div>
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {invoiceData.invoices.map((inv, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                      <div>
-                        <p className="font-medium">{inv.invoice_number || `Invoice #${idx + 1}`}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {inv.created_at && format(new Date(inv.created_at), 'MMM d, yyyy')}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">₹{inv.total_amount?.toLocaleString()}</p>
-                        <Badge variant={inv.status === 'paid' ? 'success' : 'warning'} className="text-xs">
-                          {inv.status || 'pending'}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted">
+                      <tr>
+                        <th className="text-left py-2.5 px-3 font-medium">Invoice #</th>
+                        <th className="text-left py-2.5 px-3 font-medium">Date</th>
+                        <th className="text-right py-2.5 px-3 font-medium">Gross</th>
+                        <th className="text-right py-2.5 px-3 font-medium">Net</th>
+                        <th className="text-right py-2.5 px-3 font-medium">Credit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {invoiceData.invoices.map((inv, idx) => (
+                        <tr key={idx} className="border-t hover:bg-muted/30">
+                          <td className="py-2.5 px-3 font-medium text-primary">{inv.invoice_number}</td>
+                          <td className="py-2.5 px-3 text-muted-foreground">{inv.invoice_date}</td>
+                          <td className="py-2.5 px-3 text-right text-green-600">₹{Math.round(inv.gross_amount || 0).toLocaleString()}</td>
+                          <td className="py-2.5 px-3 text-right text-blue-600">₹{Math.round(inv.net_amount || 0).toLocaleString()}</td>
+                          <td className="py-2.5 px-3 text-right text-amber-600">₹{Math.round(inv.credit_note || 0).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </>
             ) : (
