@@ -3390,13 +3390,16 @@ async def get_mq_status(current_user: dict = Depends(get_current_user)):
 
 class InvoiceWebhookPayload(BaseModel):
     """Payload for invoice webhook (matches ActiveMQ message format)"""
-    invoiceData: str  # Note: typo from source system (should be invoiceDate)
+    invoiceDate: Optional[str] = None  # Correct field name
+    invoiceData: Optional[str] = None  # Legacy field name (typo in source system)
     grossInvoiceValue: str
     netInvoiceValue: str
     C_LEAD_ID: Optional[str] = None
     CA_LEAD_ID: str  # Our lead_id to match
     invoiceNo: str
     creditNoteValue: str
+    outstanding: Optional[float] = None
+    items: Optional[List[dict]] = None
 
 @api_router.post("/invoices/webhook")
 async def process_invoice_webhook(payload: InvoiceWebhookPayload):
