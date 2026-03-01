@@ -394,6 +394,25 @@ function BudgetRequestForm({ onSuccess, initialData = null }) {
     });
   };
 
+  // Batch update multiple fields at once (for lead and SKU selection)
+  const updateLineItemBatch = (index, updates) => {
+    setFormData(prev => {
+      const newItems = [...prev.line_items];
+      newItems[index] = { ...newItems[index], ...updates };
+      
+      // Auto-calculate amount if bottle_count and price_per_unit are in updates
+      if (updates.bottle_count !== undefined || updates.price_per_unit !== undefined) {
+        const bottles = updates.bottle_count ?? newItems[index].bottle_count;
+        const price = updates.price_per_unit ?? newItems[index].price_per_unit;
+        if (bottles && price) {
+          newItems[index].amount = bottles * price;
+        }
+      }
+      
+      return { ...prev, line_items: newItems };
+    });
+  };
+
   const totalAmount = formData.line_items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
 
   const handleSubmit = async (submitForApproval = false) => {
