@@ -54,6 +54,7 @@ import Vendors from './pages/Vendors';
 import MasterLocations from './pages/MasterLocations';
 import MasterLeadStatus from './pages/MasterLeadStatus';
 import TravelRequest from './pages/TravelRequest';
+import BudgetRequest from './pages/BudgetRequest';
 import '@/App.css';
 import { useActivityTracker } from './hooks/useActivityTracker';
 
