@@ -52,9 +52,14 @@ export default function Login() {
         localStorage.removeItem('rememberedEmail');
       }
       
-      await login(email, password);
-      toast.success('Welcome back!');
-      navigate('/home');
+      const userData = await login(email, password);
+      
+      // Only show success and navigate if we got a valid user
+      if (userData) {
+        toast.success('Welcome back!');
+        // Use replace to prevent back navigation to login
+        navigate('/home', { replace: true });
+      }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Login failed');
     } finally {
