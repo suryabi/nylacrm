@@ -314,6 +314,12 @@ APPROVAL_CONFIG = {
         'priority': 'high',
         'due_days': 1,  # Days from now for due date
     },
+    ApprovalType.TRAVEL_REQUEST: {
+        'title_template': 'Travel Approval: {requester_name} - {details}',
+        'task_type': 'general',
+        'priority': 'high',
+        'due_days': 2,
+    },
     ApprovalType.PROPOSAL: {
         'title_template': 'Proposal Approval: {details}',
         'task_type': 'general',
