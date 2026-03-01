@@ -37,35 +37,7 @@ import {
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
 import { useMasterLocations } from '../hooks/useMasterLocations';
-
-const statusColors = {
-  new: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
-  qualified: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
-  contacted: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
-  proposal_internal_review: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300',
-  ready_to_share_proposal: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/50 dark:text-cyan-300',
-  proposal_shared_with_customer: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300',
-  trial_in_progress: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300',
-  won: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300',
-  lost: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
-  not_qualified: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
-};
-
-const getStatusLabel = (status) => {
-  const labels = {
-    'new': 'New', 
-    'contacted': 'Contacted', 
-    'qualified': 'Qualified', 
-    'not_qualified': 'Not Qualified',
-    'proposal_internal_review': 'Proposal - Internal Review',
-    'ready_to_share_proposal': 'Ready to Share Proposal',
-    'proposal_shared_with_customer': 'Proposal - Shared with Customer',
-    'trial_in_progress': 'Trial in Progress', 
-    'won': 'Won', 
-    'lost': 'Lost',
-  };
-  return labels[status] || status;
-};
+import { useLeadStatuses } from '../hooks/useLeadStatuses';
 
 const TIME_FILTERS = [
   { value: 'this_week', label: 'This Week' }, { value: 'last_week', label: 'Last Week' },
@@ -75,24 +47,12 @@ const TIME_FILTERS = [
   { value: 'lifetime', label: 'Lifetime' },
 ];
 
-const STATUS_OPTIONS = [
-  { value: 'new', label: 'New' },
-  { value: 'qualified', label: 'Qualified' },
-  { value: 'contacted', label: 'Contacted' },
-  { value: 'proposal_internal_review', label: 'Proposal - Internal Review' },
-  { value: 'ready_to_share_proposal', label: 'Ready to Share Proposal' },
-  { value: 'proposal_shared_with_customer', label: 'Proposal - Shared with Customer' },
-  { value: 'trial_in_progress', label: 'Trial in Progress' },
-  { value: 'won', label: 'Won' },
-  { value: 'lost', label: 'Lost' },
-  { value: 'not_qualified', label: 'Not Qualified' },
-];
-
 export default function LeadsList() {
   const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { statuses, getStatusLabel, getStatusColor } = useLeadStatuses();
   
   // Initialize filters from sessionStorage or defaults
   const getInitialFilter = (key, defaultValue) => {
