@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import { MultiSelect } from '../components/ui/multi-select';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
 import { Plus, Search, Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid, List, Filter, Users, Loader2 } from 'lucide-react';
