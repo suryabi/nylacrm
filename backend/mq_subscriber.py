@@ -75,17 +75,21 @@ class InvoiceListener(stomp.ConnectionListener):
             else:
                 message_data = json.loads(frame.body)
             
-            # Extract invoice data
+            # Extract invoice data - handle both field naming conventions
             invoice_data = {
                 'invoice_no': message_data.get('invoiceNo'),
-                'invoice_date': message_data.get('invoiceData'),  # Note: typo in source as 'invoiceData'
-                'gross_invoice_value': float(message_data.get('grossInvoiceValue', 0)),
-                'net_invoice_value': float(message_data.get('netInvoiceValue', 0)),
-                'credit_note_value': float(message_data.get('creditNoteValue', 0)),
+                'invoice_date': message_data.get('invoiceDate') or message_data.get('invoiceData'),  # Support both field names
+                'gross_invoice_value': float(message_data.get('grossInvoiceValue', 0) or 0),
+                'net_invoice_value': float(message_data.get('netInvoiceValue', 0) or 0),
+                'credit_note_value': float(message_data.get('creditNoteValue', 0) or 0),
+                'outstanding': float(message_data.get('outstanding', 0) or 0),
                 'c_lead_id': message_data.get('C_LEAD_ID'),
                 'ca_lead_id': message_data.get('CA_LEAD_ID'),  # This is our lead_id to match
+                'items': message_data.get('items', []),
                 'received_at': datetime.now(timezone.utc).isoformat()
             }
+            
+            logger.info(f"Parsed invoice data: invoice_no={invoice_data['invoice_no']}, ca_lead_id={invoice_data['ca_lead_id']}")
             
             # Process in async context
             asyncio.run_coroutine_threadsafe(
