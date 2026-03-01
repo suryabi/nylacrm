@@ -58,6 +58,9 @@ const COLOR_CLASSES = {
   teal: 'from-teal-50 to-teal-100 dark:from-teal-900/30 dark:to-teal-800/20 border-teal-200 dark:border-teal-700/50 text-teal-700 dark:text-teal-400',
 };
 
+// Helper to get icon for a color
+const getIconForColor = (color) => STATUS_ICONS[color] || Target;
+
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
