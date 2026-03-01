@@ -91,13 +91,28 @@ export default function LeadsList() {
   
   const { territories, getStateNamesByTerritoryName, getCityNamesByStateName } = useMasterLocations();
   
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(() => {
+    const saved = sessionStorage.getItem('leads_filter_page');
+    return saved ? parseInt(saved, 10) : 1;
+  });
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [totalLeads, setTotalLeads] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [sortField, setSortField] = useState('created_at');
   const [sortDirection, setSortDirection] = useState('desc');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  
+  // Save filters to sessionStorage whenever they change
+  useEffect(() => {
+    sessionStorage.setItem('leads_filter_search', searchQuery);
+    sessionStorage.setItem('leads_filter_status', statusFilter);
+    sessionStorage.setItem('leads_filter_territory', territoryFilter);
+    sessionStorage.setItem('leads_filter_state', stateFilter);
+    sessionStorage.setItem('leads_filter_city', cityFilter);
+    sessionStorage.setItem('leads_filter_assigned_to', assignedToFilter);
+    sessionStorage.setItem('leads_filter_time', timeFilter);
+    sessionStorage.setItem('leads_filter_page', currentPage.toString());
+  }, [searchQuery, statusFilter, territoryFilter, stateFilter, cityFilter, assignedToFilter, timeFilter, currentPage]);
   
   useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(searchQuery); setCurrentPage(1); }, 300);
