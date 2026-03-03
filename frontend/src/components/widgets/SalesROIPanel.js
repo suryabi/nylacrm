@@ -218,18 +218,29 @@ export default function SalesROIPanel() {
               <div className="flex justify-between text-sm">
                 <span className="text-slate-700">Gross Invoice Value</span>
                 <span className="font-medium text-slate-900 tabular-nums">
-                  {formatFullCurrency(revenue.from_invoices)}
+                  {formatFullCurrency(revenue.gross_invoice_value)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-700">Less: COGS</span>
+                <span className="font-medium text-red-600 tabular-nums">
+                  ({formatFullCurrency(revenue.total_cogs)})
                 </span>
               </div>
             </div>
 
-            {/* Total Revenue */}
+            {/* Gross Margin */}
             <div className="mt-3 pt-2 border-t border-slate-300">
               <div className="flex justify-between">
-                <span className="text-sm font-semibold text-slate-800">Total Revenue</span>
-                <span className="text-sm font-bold text-green-700 tabular-nums">
-                  {formatFullCurrency(revenue.total)}
-                </span>
+                <span className="text-sm font-semibold text-slate-800">Gross Margin</span>
+                <div className="text-right">
+                  <span className="text-sm font-bold text-green-700 tabular-nums">
+                    {formatFullCurrency(revenue.gross_margin)}
+                  </span>
+                  <span className="text-xs text-slate-500 ml-1">
+                    ({revenue.gross_margin_percent}%)
+                  </span>
+                </div>
               </div>
             </div>
           </section>
@@ -253,7 +264,7 @@ export default function SalesROIPanel() {
             </div>
             
             <p className="text-[10px] text-slate-400 mb-3">
-              (Total Revenue − Total Cost)
+              (Gross Margin − Total Cost)
             </p>
 
             {/* ROI */}
