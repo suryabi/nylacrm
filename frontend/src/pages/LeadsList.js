@@ -92,7 +92,10 @@ export default function LeadsList() {
     const saved = sessionStorage.getItem('leads_filter_page');
     return saved ? parseInt(saved, 10) : 1;
   });
-  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [itemsPerPage, setItemsPerPage] = useState(() => {
+    const saved = sessionStorage.getItem('leads_filter_pageSize');
+    return saved ? parseInt(saved, 10) : 25;
+  });
   const [totalLeads, setTotalLeads] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [sortField, setSortField] = useState('created_at');
@@ -109,7 +112,8 @@ export default function LeadsList() {
     sessionStorage.setItem('leads_filter_assigned_to', JSON.stringify(assignedToFilter));
     sessionStorage.setItem('leads_filter_time', timeFilter);
     sessionStorage.setItem('leads_filter_page', currentPage.toString());
-  }, [searchQuery, statusFilter, territoryFilter, stateFilter, cityFilter, assignedToFilter, timeFilter, currentPage]);
+    sessionStorage.setItem('leads_filter_pageSize', itemsPerPage.toString());
+  }, [searchQuery, statusFilter, territoryFilter, stateFilter, cityFilter, assignedToFilter, timeFilter, currentPage, itemsPerPage]);
   
   useEffect(() => {
     const timer = setTimeout(() => { setDebouncedSearch(searchQuery); setCurrentPage(1); }, 300);
