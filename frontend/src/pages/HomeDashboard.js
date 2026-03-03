@@ -24,7 +24,7 @@ import {
   UpcomingMeetingsWidget,
   PipelineSummaryWidget,
   RecentActivityWidget,
-  EmployeeInsightsWidget,
+  SalesROIPanel,
   NewTaskDialog,
   NewMeetingDialog,
   MeetingDetailDialog
@@ -363,103 +363,113 @@ export default function HomeDashboard() {
   }
 
   const { action_items, upcoming_leads, upcoming_meetings, today_summary, pipeline, monthly_performance, recent_activities } = dashboardData || {};
+  
+  // Check if user is in Sales department for ROI Panel
+  const showSalesROIPanel = user?.department?.toLowerCase() === 'sales';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="home-dashboard">
-      {/* Subtle background pattern */}
-      <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-30 dark:opacity-10 pointer-events-none" />
-      
-      <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto">
-        {/* Header Section */}
-        <header className="mb-8">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-            {/* Welcome Section */}
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <h1 className="text-3xl lg:text-4xl font-bold tracking-tight bg-gradient-to-r from-slate-900 via-slate-700 to-slate-900 dark:from-white dark:via-slate-200 dark:to-white bg-clip-text text-transparent">
-                  Good {getGreeting()}, {user?.name?.split(' ')[0]}
-                </h1>
-                <Sparkles className="h-6 w-6 text-amber-500 animate-pulse" />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex" data-testid="home-dashboard">
+      {/* Main Content Area - 75% when ROI panel visible, 100% otherwise */}
+      <div className={showSalesROIPanel ? "w-3/4" : "w-full"}>
+        {/* Subtle background pattern */}
+        <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-30 dark:opacity-10 pointer-events-none" />
+        
+        <div className="relative p-6 lg:p-8 max-w-[1400px] mx-auto">
+          {/* Header Section */}
+          <header className="mb-8">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+              {/* Welcome Section */}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-3xl lg:text-4xl font-bold tracking-tight bg-gradient-to-r from-slate-900 via-slate-700 to-slate-900 dark:from-white dark:via-slate-200 dark:to-white bg-clip-text text-transparent">
+                    Good {getGreeting()}, {user?.name?.split(' ')[0]}
+                  </h1>
+                  <Sparkles className="h-6 w-6 text-amber-500 animate-pulse" />
+                </div>
+                <p className="text-muted-foreground text-lg">
+                  {format(new Date(), 'EEEE, MMMM d, yyyy')}
+                </p>
               </div>
-              <p className="text-muted-foreground text-lg">
-                {format(new Date(), 'EEEE, MMMM d, yyyy')}
-              </p>
+              
+              {/* Weather & Time Widget */}
+              <WeatherTimeWidget
+                weather={weather}
+                weatherLoading={weatherLoading}
+                locationName={locationName}
+                currentTime={currentTime}
+                activeTime={activeTime}
+              />
             </div>
-            
-            {/* Weather & Time Widget */}
-            <WeatherTimeWidget
-              weather={weather}
-              weatherLoading={weatherLoading}
-              locationName={locationName}
-              currentTime={currentTime}
-              activeTime={activeTime}
-            />
-          </div>
-        </header>
+          </header>
 
-        {/* Quote Widgets - Temporarily Disabled
-        <section className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <WaterQuoteWidget />
-          <SalesQuoteWidget />
-          <DidYouKnowWidget />
-        </section>
-        */}
+          {/* Quote Widgets - Temporarily Disabled
+          <section className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <WaterQuoteWidget />
+            <SalesQuoteWidget />
+            <DidYouKnowWidget />
+          </section>
+          */}
 
-        {/* Stats Summary - Bento Grid Row 1 */}
-        <section className="mb-8">
-          <TodaySummaryWidget todaySummary={today_summary} />
-        </section>
+          {/* Stats Summary - Bento Grid Row 1 */}
+          <section className="mb-8">
+            <TodaySummaryWidget todaySummary={today_summary} />
+          </section>
 
-        {/* Main Content - Bento Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column - Primary Content (8 cols) */}
-          <div className="lg:col-span-8 space-y-6">
-            {/* Action Items - Large Card */}
-            <ActionItemsWidget
-              actionItems={action_items}
-              user={user}
-              users={users}
-              taskFilter={taskFilter}
-              setTaskFilter={setTaskFilter}
-              onCompleteTask={handleCompleteTask}
-              onUpdateTask={handleUpdateTask}
-              onNewTask={() => {
-                setNewTask(prev => ({ ...prev, assigned_to: user?.id || '' }));
-                setShowNewTaskDialog(true);
-              }}
-            />
-            
-            {/* Bottom Row - Two cards side by side */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <UpcomingFollowupsWidget upcomingLeads={upcoming_leads} />
-              <RecentActivityWidget recentActivities={recent_activities} />
+          {/* Main Content - Bento Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Column - Primary Content (8 cols) */}
+            <div className="lg:col-span-8 space-y-6">
+              {/* Action Items - Large Card */}
+              <ActionItemsWidget
+                actionItems={action_items}
+                user={user}
+                users={users}
+                taskFilter={taskFilter}
+                setTaskFilter={setTaskFilter}
+                onCompleteTask={handleCompleteTask}
+                onUpdateTask={handleUpdateTask}
+                onNewTask={() => {
+                  setNewTask(prev => ({ ...prev, assigned_to: user?.id || '' }));
+                  setShowNewTaskDialog(true);
+                }}
+              />
+              
+              {/* Bottom Row - Two cards side by side */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <UpcomingFollowupsWidget upcomingLeads={upcoming_leads} />
+                <RecentActivityWidget recentActivities={recent_activities} />
+              </div>
+            </div>
+
+            {/* Right Column - Secondary Content (4 cols) */}
+            <div className="lg:col-span-4 space-y-6">
+              {/* Meetings - Featured Card */}
+              <UpcomingMeetingsWidget
+                upcomingMeetings={upcoming_meetings}
+                onNewMeeting={() => {
+                  setNewMeeting(getDefaultMeetingState());
+                  setEditMode(false);
+                  setShowNewMeetingDialog(true);
+                }}
+                onViewMeeting={handleViewMeeting}
+                onEditMeeting={handleEditMeeting}
+                onCancelMeeting={handleCancelMeeting}
+              />
+              
+              {/* Pipeline - Compact Card */}
+              <PipelineSummaryWidget pipeline={pipeline} />
             </div>
           </div>
 
-          {/* Right Column - Secondary Content (4 cols) */}
-          <div className="lg:col-span-4 space-y-6">
-            {/* Meetings - Featured Card */}
-            <UpcomingMeetingsWidget
-              upcomingMeetings={upcoming_meetings}
-              onNewMeeting={() => {
-                setNewMeeting(getDefaultMeetingState());
-                setEditMode(false);
-                setShowNewMeetingDialog(true);
-              }}
-              onViewMeeting={handleViewMeeting}
-              onEditMeeting={handleEditMeeting}
-              onCancelMeeting={handleCancelMeeting}
-            />
-            
-            {/* Employee Insights - Contemporary Widget */}
-            <EmployeeInsightsWidget />
-            
-            {/* Pipeline - Compact Card */}
-            <PipelineSummaryWidget pipeline={pipeline} />
-          </div>
         </div>
-
       </div>
+      
+      {/* Sales ROI Panel - Fixed Right Side (25% width) */}
+      {showSalesROIPanel && (
+        <div className="w-1/4 min-h-screen sticky top-0">
+          <SalesROIPanel />
+        </div>
+      )}
 
       {/* Dialogs */}
       <NewTaskDialog

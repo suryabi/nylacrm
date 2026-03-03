@@ -29,6 +29,29 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 ## What's Been Implemented
 
 ### Mar 3, 2026 (Session 16 - Current)
+
+- **NEW FEATURE**: Sales ROI Accounting Panel
+  - Fixed right-side panel on Home Dashboard (25% width)
+  - Only visible to Sales department users
+  - Displays accounting-style financial summary:
+    - **Cost Section**: Team CTC (prorated for period) + Sales Expenses by category
+    - **Revenue Section**: Revenue from Won Leads + Invoices
+    - **Profitability Section**: Net Contribution and ROI %
+  - Data aggregated for logged-in user + entire reporting hierarchy
+  - Period: March 1st to current date (default)
+  - Expandable drill-down for CTC and Expense details
+  - **Backend**: `/api/sales-roi-summary` endpoint with recursive hierarchy calculation
+  - **Frontend**: `/app/frontend/src/components/widgets/SalesROIPanel.js`
+  - Removed old "Employee Insights" widget from Home Dashboard
+  - Status: VERIFIED
+
+- **NEW FEATURE**: Department Field for Users
+  - Added `department` field to User model with options: Admin, Sales, Production, Marketing, Finance
+  - Updated Team Management forms (Add/Edit) to include department selection
+  - Fixed 500 error on GET /api/users by making department Optional and adding default fallback
+  - Created normalization script: `/app/scripts/normalize_departments.py`
+  - Status: VERIFIED
+
 - **BUG FIX (P0)**: Pipeline View Not Showing All Leads
   - **Issue 1**: Backend had a `page_size` cap of 100, so if production had more than 100 leads, the Pipeline wouldn't show all of them
   - **Issue 2**: Pipeline view showed all team leads by default instead of filtering by logged-in user

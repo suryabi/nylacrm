@@ -2967,6 +2967,233 @@ async def get_employee_insights(current_user: dict = Depends(get_current_user)):
         'net_contribution': (total_revenue - ctc_till_date - total_expenses) if can_view_hr_data else None,
     }
 
+@api_router.get("/sales-roi-summary")
+async def get_sales_roi_summary(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get Sales ROI Accounting Summary for the logged-in user and their reporting hierarchy.
+    Only available for users in the Sales department.
+    
+    Default period: March 1st of current year to current date
+    """
+    
+    user_id = current_user['id']
+    user_department = current_user.get('department', '')
+    
+    # Check if user belongs to Sales department
+    if user_department.lower() != 'sales':
+        raise HTTPException(
+            status_code=403, 
+            detail='Sales ROI Summary is only available for Sales department employees'
+        )
+    
+    # Set default date range (March 1st to current date)
+    now = datetime.now(timezone.utc)
+    if not start_date:
+        start_date = f"{now.year}-03-01"
+    if not end_date:
+        end_date = now.strftime('%Y-%m-%d')
+    
+    # Parse dates
+    try:
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+    except:
+        start_dt = datetime(now.year, 3, 1)
+        end_dt = now
+    
+    # Calculate days in period for CTC proration
+    days_in_period = (end_dt - start_dt).days + 1
+    
+    # Get all users in the reporting hierarchy (self + all direct/indirect reports)
+    async def get_reporting_hierarchy(user_id: str) -> list:
+        """Recursively get all users reporting to this user"""
+        team_ids = [user_id]
+        
+        # Find direct reports
+        direct_reports = await db.users.find(
+            {'reports_to': user_id, 'is_active': True},
+            {'_id': 0, 'id': 1}
+        ).to_list(100)
+        
+        for report in direct_reports:
+            # Recursively get their reports
+            sub_reports = await get_reporting_hierarchy(report['id'])
+            team_ids.extend(sub_reports)
+        
+        return team_ids
+    
+    # Get all team member IDs (self + reporting hierarchy)
+    team_user_ids = await get_reporting_hierarchy(user_id)
+    
+    # Get team member details
+    team_members = await db.users.find(
+        {'id': {'$in': team_user_ids}},
+        {'_id': 0, 'id': 1, 'name': 1, 'ctc_monthly': 1, 'joining_date': 1, 'department': 1}
+    ).to_list(100)
+    
+    # Filter only Sales department members for CTC calculation
+    sales_team = [m for m in team_members if (m.get('department') or '').lower() == 'sales']
+    
+    # ==================== COST SECTION ====================
+    
+    # 1. Calculate Team CTC (prorated for period)
+    total_team_ctc = 0
+    team_ctc_details = []
+    
+    for member in sales_team:
+        ctc_monthly = member.get('ctc_monthly', 0) or 0
+        # Prorate: (monthly CTC / 30) * days_in_period
+        prorated_ctc = round((ctc_monthly / 30) * days_in_period, 2)
+        total_team_ctc += prorated_ctc
+        team_ctc_details.append({
+            'name': member.get('name'),
+            'ctc_monthly': ctc_monthly,
+            'prorated_ctc': prorated_ctc
+        })
+    
+    # 2. Calculate Sales Expenses by Category
+    expense_categories = {
+        'travel': {'label': 'Travel Expenses', 'amount': 0},
+        'onboarding': {'label': 'Customer Onboarding', 'amount': 0},
+        'free_trial': {'label': 'Free Trials', 'amount': 0},
+        'gifting': {'label': 'Customer Gifting', 'amount': 0},
+        'event_participation': {'label': 'Event Participation', 'amount': 0},
+        'event_sponsorship': {'label': 'Event Sponsorship', 'amount': 0},
+        'sponsorship': {'label': 'Customer Sponsorship', 'amount': 0},
+        'staff_gifting': {'label': 'Staff Gifting', 'amount': 0},
+        'other': {'label': 'Other Expenses', 'amount': 0}
+    }
+    
+    # Get approved budget requests for team members
+    budget_requests = await db.budget_requests.find({
+        'created_by': {'$in': team_user_ids},
+        'status': 'approved',
+        'created_at': {'$gte': start_date, '$lte': end_date + 'T23:59:59'}
+    }, {'_id': 0, 'request_type': 1, 'total_budget': 1, 'items': 1}).to_list(1000)
+    
+    for req in budget_requests:
+        req_type = (req.get('request_type') or 'other').lower().replace(' ', '_')
+        amount = req.get('total_budget', 0) or 0
+        
+        if req_type == 'travel' or 'travel' in req_type:
+            expense_categories['travel']['amount'] += amount
+        elif req_type in expense_categories:
+            expense_categories[req_type]['amount'] += amount
+        else:
+            expense_categories['other']['amount'] += amount
+    
+    # Get approved expense requests for team members
+    expense_requests = await db.expense_requests.find({
+        'created_by': {'$in': team_user_ids},
+        'status': 'approved',
+        'created_at': {'$gte': start_date, '$lte': end_date + 'T23:59:59'}
+    }, {'_id': 0, 'expense_type': 1, 'amount': 1, 'items': 1}).to_list(1000)
+    
+    for exp in expense_requests:
+        exp_type = (exp.get('expense_type') or 'other').lower().replace(' ', '_').replace('-', '_')
+        amount = exp.get('amount', 0) or 0
+        
+        # Handle free_trial items (sum of SKU amounts)
+        if exp_type == 'free_trial' and exp.get('items'):
+            amount = sum(item.get('total', 0) or 0 for item in exp.get('items', []))
+        
+        if exp_type in expense_categories:
+            expense_categories[exp_type]['amount'] += amount
+        elif 'gift' in exp_type:
+            expense_categories['gifting']['amount'] += amount
+        elif 'sponsor' in exp_type:
+            expense_categories['sponsorship']['amount'] += amount
+        elif 'onboard' in exp_type:
+            expense_categories['onboarding']['amount'] += amount
+        else:
+            expense_categories['other']['amount'] += amount
+    
+    # Calculate total expenses
+    total_expenses = sum(cat['amount'] for cat in expense_categories.values())
+    
+    # 3. Total Cost
+    total_cost = total_team_ctc + total_expenses
+    
+    # ==================== REVENUE SECTION ====================
+    
+    # Get revenue from WON leads assigned to team members
+    won_leads = await db.leads.find({
+        'assigned_to': {'$in': team_user_ids},
+        'status': 'won',
+        'updated_at': {'$gte': start_date, '$lte': end_date + 'T23:59:59'}
+    }, {'_id': 0, 'actual_value': 1, 'expected_value': 1, 'gross_margin': 1, 'gross_margin_percent': 1}).to_list(1000)
+    
+    total_revenue = sum(
+        (lead.get('actual_value') or lead.get('expected_value', 0) or 0) 
+        for lead in won_leads
+    )
+    
+    # Get revenue from invoices for accounts owned by team members
+    team_accounts = await db.accounts.find(
+        {'sales_owner_id': {'$in': team_user_ids}},
+        {'_id': 0, 'id': 1}
+    ).to_list(500)
+    account_ids = [acc['id'] for acc in team_accounts]
+    
+    invoice_revenue = 0
+    if account_ids:
+        invoices = await db.invoices.find({
+            'account_id': {'$in': account_ids},
+            'invoice_date': {'$gte': start_date, '$lte': end_date}
+        }, {'_id': 0, 'grand_total': 1}).to_list(1000)
+        invoice_revenue = sum(inv.get('grand_total', 0) or 0 for inv in invoices)
+    
+    total_revenue += invoice_revenue
+    
+    # ==================== PROFITABILITY SECTION ====================
+    
+    net_contribution = total_revenue - total_cost
+    roi_percentage = round((net_contribution / total_cost) * 100, 2) if total_cost > 0 else 0
+    
+    # Format expense categories for response (only non-zero)
+    expense_breakdown = [
+        {'category': cat['label'], 'amount': cat['amount']}
+        for key, cat in expense_categories.items()
+        if cat['amount'] > 0
+    ]
+    
+    return {
+        'period': {
+            'start_date': start_date,
+            'end_date': end_date,
+            'days': days_in_period
+        },
+        'team': {
+            'total_members': len(sales_team),
+            'member_ids': team_user_ids
+        },
+        'cost': {
+            'team_ctc': {
+                'total': round(total_team_ctc, 2),
+                'details': team_ctc_details
+            },
+            'expenses': {
+                'total': round(total_expenses, 2),
+                'breakdown': expense_breakdown
+            },
+            'total_cost': round(total_cost, 2)
+        },
+        'revenue': {
+            'total': round(total_revenue, 2),
+            'from_leads': round(total_revenue - invoice_revenue, 2),
+            'from_invoices': round(invoice_revenue, 2)
+        },
+        'profitability': {
+            'net_contribution': round(net_contribution, 2),
+            'roi_percentage': roi_percentage,
+            'is_profitable': net_contribution > 0
+        }
+    }
+
 @api_router.put("/users/{user_id}/hr-data")
 async def update_user_hr_data(
     user_id: str,
