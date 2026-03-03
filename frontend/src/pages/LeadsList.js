@@ -62,12 +62,12 @@ export default function LeadsList() {
   
   // Initialize filters from sessionStorage or defaults
   const getInitialFilter = (key, defaultValue) => {
-    const saved = sessionStorage.getItem(`leads_filter_${key}`);
+    const saved = localStorage.getItem(`leads_filter_${key}`);
     return saved !== null ? saved : defaultValue;
   };
   
   const getInitialArrayFilter = (key) => {
-    const saved = sessionStorage.getItem(`leads_filter_${key}`);
+    const saved = localStorage.getItem(`leads_filter_${key}`);
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -89,11 +89,11 @@ export default function LeadsList() {
   const { territories, getStateNamesByTerritoryName, getCityNamesByStateName } = useMasterLocations();
   
   const [currentPage, setCurrentPage] = useState(() => {
-    const saved = sessionStorage.getItem('leads_filter_page');
+    const saved = localStorage.getItem('leads_filter_page');
     return saved ? parseInt(saved, 10) : 1;
   });
   const [itemsPerPage, setItemsPerPage] = useState(() => {
-    const saved = sessionStorage.getItem('leads_filter_pageSize');
+    const saved = localStorage.getItem('leads_filter_pageSize');
     return saved ? parseInt(saved, 10) : 25;
   });
   const [totalLeads, setTotalLeads] = useState(0);
@@ -102,17 +102,17 @@ export default function LeadsList() {
   const [sortDirection, setSortDirection] = useState('desc');
   const [debouncedSearch, setDebouncedSearch] = useState(() => getInitialFilter('search', ''));
   
-  // Save filters to sessionStorage whenever they change
+  // Save filters to localStorage whenever they change
   useEffect(() => {
-    sessionStorage.setItem('leads_filter_search', searchQuery);
-    sessionStorage.setItem('leads_filter_status', JSON.stringify(statusFilter));
-    sessionStorage.setItem('leads_filter_territory', territoryFilter);
-    sessionStorage.setItem('leads_filter_state', stateFilter);
-    sessionStorage.setItem('leads_filter_city', cityFilter);
-    sessionStorage.setItem('leads_filter_assigned_to', JSON.stringify(assignedToFilter));
-    sessionStorage.setItem('leads_filter_time', timeFilter);
-    sessionStorage.setItem('leads_filter_page', currentPage.toString());
-    sessionStorage.setItem('leads_filter_pageSize', itemsPerPage.toString());
+    localStorage.setItem('leads_filter_search', searchQuery);
+    localStorage.setItem('leads_filter_status', JSON.stringify(statusFilter));
+    localStorage.setItem('leads_filter_territory', territoryFilter);
+    localStorage.setItem('leads_filter_state', stateFilter);
+    localStorage.setItem('leads_filter_city', cityFilter);
+    localStorage.setItem('leads_filter_assigned_to', JSON.stringify(assignedToFilter));
+    localStorage.setItem('leads_filter_time', timeFilter);
+    localStorage.setItem('leads_filter_page', currentPage.toString());
+    localStorage.setItem('leads_filter_pageSize', itemsPerPage.toString());
   }, [searchQuery, statusFilter, territoryFilter, stateFilter, cityFilter, assignedToFilter, timeFilter, currentPage, itemsPerPage]);
   
   useEffect(() => {
