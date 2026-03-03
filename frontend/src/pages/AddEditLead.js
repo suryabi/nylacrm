@@ -20,24 +20,11 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
+import { useBusinessCategories } from '../hooks/useBusinessCategories';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
 const SKUS = ['660 ml / Silver / Nyla', '660 ml / Gold / Nyla', '330 ml / Silver / Nyla', '330 ml / Gold / Nyla', '660 ml / Sparkling', '300 ml / Sparkling', '24 Brand / 660 ml'];
-
-const LEAD_CATEGORIES = [
-  'Restaurant',
-  'Bar & Kitchen',
-  'Star Hotel',
-  'Cafe',
-  'Event Caterer',
-  'HNIs',
-  'Government',
-  'Theatre',
-  'Premium Club',
-  'Wellness Center',
-  'Corporate'
-];
 
 const CUSTOMER_TIERS = [
   'Tier 1',
@@ -66,6 +53,9 @@ export default function AddEditLead() {
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState([]);
   const { statuses } = useLeadStatuses();
+  
+  // Business categories from API
+  const { categories: businessCategories } = useBusinessCategories();
   
   // Master locations from API
   const { 
@@ -303,7 +293,7 @@ export default function AddEditLead() {
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {LEAD_CATEGORIES.map(cat => (
+                  {businessCategories.map(cat => (
                     <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                   ))}
                 </SelectContent>

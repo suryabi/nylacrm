@@ -11,6 +11,7 @@ import { Search, MapPin, Star, DollarSign, Building2, Phone, Mail, Download, Ref
 import { leadsAPI } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useMasterLocations } from '../hooks/useMasterLocations';
+import { useBusinessCategories } from '../hooks/useBusinessCategories';
 
 // Demo data - will be replaced with Google Places API
 const DEMO_OUTLETS = [
@@ -22,17 +23,6 @@ const DEMO_OUTLETS = [
   { id: 6, name: 'The Oberoi', type: 'Star Hotel', address: 'MG Road, Bengaluru 560001', phone: '+91 80 2558 5858', rating: 4.9, price_range: '₹₹₹₹₹', pincode: '560001', distance: 0.7 },
   { id: 7, name: 'Truffles Cafe', type: 'Cafe', address: 'Koramangala, Bengaluru 560034', phone: '+91 80 4112 4561', rating: 4.5, price_range: '₹₹', pincode: '560034', distance: 3.2 },
   { id: 8, name: 'ITC Gardenia', type: 'Star Hotel', address: 'Residency Road, Bengaluru 560025', phone: '+91 80 4952 1234', rating: 4.7, price_range: '₹₹₹₹₹', pincode: '560025', distance: 2.1 },
-];
-
-const OUTLET_TYPES = [
-  'Star Hotel',
-  'Restaurant',
-  'Bar & Kitchen',
-  'Cafe',
-  'Event Caterer',
-  'Premium Club',
-  'Wellness Center',
-  'Jewellery Stores'
 ];
 
 export default function LeadDiscovery() {
@@ -57,6 +47,9 @@ export default function LeadDiscovery() {
   
   // Master locations from API
   const { territories, states, cities } = useMasterLocations();
+  
+  // Business categories from API
+  const { categories: businessCategories } = useBusinessCategories();
   
   // Helper to find state and territory for a city (uses enriched data from API)
   const getLocationInfoForCity = (cityName) => {
@@ -537,7 +530,7 @@ export default function LeadDiscovery() {
             <div>
               <Label className="mb-3 block">Outlet Types</Label>
               <div className="space-y-2">
-                {OUTLET_TYPES.map(type => (
+                {businessCategories.map(type => (
                   <div key={type} className="flex items-center space-x-2">
                     <Checkbox
                       id={type}
