@@ -83,7 +83,12 @@ export default function Dashboard() {
   const fetchSalesTeam = async () => {
     try {
       const response = await axios.get(`${API_URL}/users`, { withCredentials: true });
-      setSalesTeam(response.data.filter(u => ['Head of Business', 'Regional Sales Manager', 'National Sales Head', 'Partner - Sales'].includes(u.role) && u.is_active));
+      // Include all roles that can have leads assigned to them
+      const salesRoles = [
+        'CEO', 'Director', 'Vice President', 'System Admin',
+        'Head of Business', 'Regional Sales Manager', 'National Sales Head', 'Partner - Sales'
+      ];
+      setSalesTeam(response.data.filter(u => salesRoles.includes(u.role) && u.is_active));
     } catch (error) { console.error('Failed to load team'); }
   };
 
