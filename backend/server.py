@@ -3505,7 +3505,17 @@ async def update_lead(lead_id: str, lead_update: LeadUpdate, current_user: dict 
     if current_user['role'] == 'sales_rep' and lead.get('assigned_to') != current_user['id']:
         raise HTTPException(status_code=403, detail='Access denied')
     
-    update_data = {k: v for k, v in lead_update.model_dump().items() if v is not None}
+    # Build update data - handle None values specially for fields that can be cleared
+    clearable_fields = {'next_followup_date', 'last_contacted_date', 'dotted_line_to', 'reports_to'}
+    update_data = {}
+    
+    for k, v in lead_update.model_dump().items():
+        # Include the field if it has a value, OR if it's a clearable field explicitly set to None
+        if v is not None:
+            update_data[k] = v
+        elif k in clearable_fields:
+            # Allow setting these fields to None (to clear them)
+            update_data[k] = None
     
     # Status transition validation
     if 'status' in update_data and update_data['status'] != lead.get('status'):
@@ -3636,6 +3646,32 @@ class LeadStatusUpdate(BaseModel):
     order: Optional[int] = None
     is_active: Optional[bool] = None
 
+# ============= BUSINESS CATEGORY MODELS =============
+
+class BusinessCategory(BaseModel):
+    """Business category for leads/accounts"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str  # e.g., "Restaurant", "Star Hotel", "Hospital"
+    description: Optional[str] = None
+    icon: Optional[str] = None  # Icon name for UI
+    color: str = 'blue'  # Color for badges
+    order: int = 0
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class BusinessCategoryCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    color: str = 'blue'
+
+class BusinessCategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    color: Optional[str] = None
+    is_active: Optional[bool] = None
+
 @api_router.get("/master/lead-statuses")
 async def get_lead_statuses(current_user: dict = Depends(get_current_user)):
     """Get all lead statuses ordered by 'order' field"""
@@ -3718,6 +3754,96 @@ async def reorder_lead_statuses(status_ids: List[str], current_user: dict = Depe
         await db.lead_statuses.update_one({'id': status_id}, {'$set': {'order': i + 1}})
     
     return {'message': 'Statuses reordered successfully'}
+
+# ============= BUSINESS CATEGORY ROUTES =============
+
+@api_router.get("/master/business-categories")
+async def get_business_categories(current_user: dict = Depends(get_current_user)):
+    """Get all business categories ordered by 'order' field"""
+    categories = await db.business_categories.find({}, {'_id': 0}).sort('order', 1).to_list(100)
+    return {'categories': categories}
+
+@api_router.post("/master/business-categories")
+async def create_business_category(category: BusinessCategoryCreate, current_user: dict = Depends(get_current_user)):
+    """Create a new business category (Admin/Director only)"""
+    if current_user['role'].lower() not in ['ceo', 'director', 'admin', 'system admin']:
+        raise HTTPException(status_code=403, detail='Only admins can manage business categories')
+    
+    # Check if category already exists
+    existing = await db.business_categories.find_one({'name': category.name})
+    if existing:
+        raise HTTPException(status_code=400, detail='Category with this name already exists')
+    
+    # Get max order
+    max_order_doc = await db.business_categories.find_one({}, sort=[('order', -1)])
+    new_order = (max_order_doc.get('order', 0) + 1) if max_order_doc else 1
+    
+    new_category = BusinessCategory(
+        name=category.name,
+        description=category.description,
+        icon=category.icon,
+        color=category.color,
+        order=new_order
+    )
+    
+    doc = new_category.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    
+    await db.business_categories.insert_one(doc)
+    
+    return {'message': 'Business category created', 'category': {**doc, '_id': None}}
+
+@api_router.put("/master/business-categories/{category_id}")
+async def update_business_category(
+    category_id: str,
+    update: BusinessCategoryUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a business category (Admin/Director only)"""
+    if current_user['role'].lower() not in ['ceo', 'director', 'admin', 'system admin']:
+        raise HTTPException(status_code=403, detail='Only admins can manage business categories')
+    
+    existing = await db.business_categories.find_one({'id': category_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail='Business category not found')
+    
+    update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+    
+    if update_data:
+        await db.business_categories.update_one({'id': category_id}, {'$set': update_data})
+    
+    return {'message': 'Business category updated'}
+
+@api_router.delete("/master/business-categories/{category_id}")
+async def delete_business_category(category_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a business category (Admin/Director only)"""
+    if current_user['role'].lower() not in ['ceo', 'director', 'admin', 'system admin']:
+        raise HTTPException(status_code=403, detail='Only admins can manage business categories')
+    
+    existing = await db.business_categories.find_one({'id': category_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail='Business category not found')
+    
+    # Check if category is in use
+    leads_using = await db.leads.count_documents({'category': existing.get('name')})
+    if leads_using > 0:
+        # Instead of deleting, deactivate it
+        await db.business_categories.update_one({'id': category_id}, {'$set': {'is_active': False}})
+        return {'message': f'Category deactivated (in use by {leads_using} leads)'}
+    
+    await db.business_categories.delete_one({'id': category_id})
+    return {'message': 'Business category deleted'}
+
+@api_router.put("/master/business-categories/reorder")
+async def reorder_business_categories(category_ids: List[str], current_user: dict = Depends(get_current_user)):
+    """Reorder business categories (Admin/Director only)"""
+    if current_user['role'].lower() not in ['ceo', 'director', 'admin', 'system admin']:
+        raise HTTPException(status_code=403, detail='Only admins can manage business categories')
+    
+    for i, category_id in enumerate(category_ids):
+        await db.business_categories.update_one({'id': category_id}, {'$set': {'order': i + 1}})
+    
+    return {'message': 'Categories reordered successfully'}
 
 # ============= SALES REVENUE DASHBOARD =============
 

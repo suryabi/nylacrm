@@ -53,6 +53,7 @@ import Assets from './pages/Assets';
 import Vendors from './pages/Vendors';
 import MasterLocations from './pages/MasterLocations';
 import MasterLeadStatus from './pages/MasterLeadStatus';
+import MasterBusinessCategories from './pages/MasterBusinessCategories';
 import TravelRequest from './pages/TravelRequest';
 import BudgetRequest from './pages/BudgetRequest';
 import '@/App.css';
@@ -150,6 +151,7 @@ function AppRouter() {
           <Route path="/files-documents" element={<ProtectedRoute><FilesDocuments /></ProtectedRoute>} />
           <Route path="/master-locations" element={<ProtectedRoute><MasterLocations /></ProtectedRoute>} />
           <Route path="/master-lead-status" element={<ProtectedRoute><MasterLeadStatus /></ProtectedRoute>} />
+          <Route path="/master-business-categories" element={<ProtectedRoute><MasterBusinessCategories /></ProtectedRoute>} />
           
           {/* Production Context Routes */}
           <Route path="/maintenance" element={<ProtectedRoute><Maintenance /></ProtectedRoute>} />
