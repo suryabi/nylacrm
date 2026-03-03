@@ -501,7 +501,7 @@ class User(BaseModel):
     name: str
     role: str  # 'ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'
     designation: Optional[str] = None  # Full title like 'CEO & Managing Director'
-    department: str = 'Sales'  # 'Admin', 'Sales', 'Production', 'Marketing', 'Finance'
+    department: Optional[str] = 'Sales'  # 'Admin', 'Sales', 'Production', 'Marketing', 'Finance'
     phone: Optional[str] = None
     avatar: Optional[str] = None
     city: Optional[str] = None
@@ -522,7 +522,7 @@ class UserCreate(BaseModel):
     name: str
     role: str = 'sales_rep'
     designation: Optional[str] = None
-    department: str = 'Sales'  # 'Admin', 'Sales', 'Production', 'Marketing', 'Finance'
+    department: Optional[str] = 'Sales'  # 'Admin', 'Sales', 'Production', 'Marketing', 'Finance'
     phone: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
@@ -4935,7 +4935,7 @@ async def get_comments(
 
 # ============= USERS/TEAM ROUTES =============
 
-@api_router.get("/users", response_model=List[User])
+@api_router.get("/users")
 async def get_users(
     skip: int = 0,
     limit: int = 100,
@@ -4944,8 +4944,11 @@ async def get_users(
     users = await db.users.find({}, {'_id': 0, 'password': 0}).skip(skip).limit(limit).to_list(limit)
     
     for user in users:
-        if isinstance(user['created_at'], str):
+        if isinstance(user.get('created_at'), str):
             user['created_at'] = datetime.fromisoformat(user['created_at'])
+        # Ensure department has a default value for legacy data
+        if not user.get('department'):
+            user['department'] = 'Sales'
     
     return users
 
