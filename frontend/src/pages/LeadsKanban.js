@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
+import { useAuth } from '../context/AuthContext';
 import { 
   Search, 
   Filter, 
@@ -336,17 +337,27 @@ const ActivityLogDialog = ({ open, onClose, lead, fromStatus, toStatus, onSubmit
 
 export default function LeadsKanban() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
   const [statuses, setStatuses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [initialized, setInitialized] = useState(false);
   
-  // Filters
+  // Filters - default to current user's leads
   const [searchQuery, setSearchQuery] = useState('');
   const [cityFilter, setCityFilter] = useState('all');
-  const [assignedToFilter, setAssignedToFilter] = useState('all');
+  const [assignedToFilter, setAssignedToFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  
+  // Set default filter to current user once we have user info
+  useEffect(() => {
+    if (user?.id && !initialized) {
+      setAssignedToFilter(user.id);
+      setInitialized(true);
+    }
+  }, [user, initialized]);
   
   // Drag state
   const [draggedLead, setDraggedLead] = useState(null);
@@ -371,7 +382,8 @@ export default function LeadsKanban() {
       const headers = { Authorization: `Bearer ${token}` };
       
       const [leadsRes, usersRes, statusesRes] = await Promise.all([
-        axios.get(`${API_URL}/api/leads?page_size=500`, { headers, withCredentials: true }),
+        // Use no_limit=true to fetch ALL leads without pagination cap
+        axios.get(`${API_URL}/api/leads?no_limit=true`, { headers, withCredentials: true }),
         axios.get(`${API_URL}/api/users`, { headers, withCredentials: true }),
         axios.get(`${API_URL}/api/master/lead-statuses`, { headers, withCredentials: true })
       ]);
@@ -424,7 +436,8 @@ export default function LeadsKanban() {
       if (!matchesSearch) return false;
     }
     if (cityFilter !== 'all' && lead.city !== cityFilter) return false;
-    if (assignedToFilter !== 'all' && lead.assigned_to !== assignedToFilter) return false;
+    // Filter by assigned_to - empty string or 'all' means show all
+    if (assignedToFilter && assignedToFilter !== 'all' && lead.assigned_to !== assignedToFilter) return false;
     if (categoryFilter !== 'all' && lead.category !== categoryFilter) return false;
     return true;
   });
@@ -586,11 +599,12 @@ export default function LeadsKanban() {
   const resetFilters = () => {
     setSearchQuery('');
     setCityFilter('all');
-    setAssignedToFilter('all');
+    setAssignedToFilter('all'); // Reset to show all team members
     setCategoryFilter('all');
   };
   
-  const hasActiveFilters = searchQuery || cityFilter !== 'all' || assignedToFilter !== 'all' || categoryFilter !== 'all';
+  // Check if any filters differ from "show all" state
+  const hasActiveFilters = searchQuery || cityFilter !== 'all' || (assignedToFilter && assignedToFilter !== 'all') || categoryFilter !== 'all';
   
   if (loading) {
     return (

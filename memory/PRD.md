@@ -29,6 +29,19 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 ## What's Been Implemented
 
 ### Mar 3, 2026 (Session 16 - Current)
+- **BUG FIX (P0)**: Pipeline View Not Showing All Leads
+  - **Issue 1**: Backend had a `page_size` cap of 100, so if production had more than 100 leads, the Pipeline wouldn't show all of them
+  - **Issue 2**: Pipeline view showed all team leads by default instead of filtering by logged-in user
+  - **Fixes Applied**:
+    - **Backend**: Added `no_limit` parameter to `/api/leads` endpoint that bypasses the 100-item page_size cap (sets it to 10000)
+    - **Frontend**: Updated `LeadsKanban.js` to use `no_limit=true` when fetching leads
+    - **Frontend**: Pipeline now defaults to showing logged-in user's leads only (using `useAuth` hook)
+    - **Frontend**: "Reset" button clears the filter to show all team members' leads
+  - **Files Modified**:
+    - `/app/backend/server.py` (lines 3304-3335) - Added `no_limit` parameter
+    - `/app/frontend/src/pages/LeadsKanban.js` - Added `useAuth`, default user filter, `no_limit=true` API call
+  - Status: VERIFIED - Pipeline shows user's leads by default, Reset shows all leads
+
 - **BUG FIX (P0)**: Dashboard Sales Resource Filter Not Showing All Users
   - **Issue**: When CEO/Director filtered the Sales Overview dashboard by a specific sales resource, certain users (CEO, Director, Vice President, System Admin) were missing from the dropdown, making it impossible to view their pipeline.
   - **Root Cause**: The `fetchSalesTeam()` function in Dashboard.js only included certain sales roles: `['Head of Business', 'Regional Sales Manager', 'National Sales Head', 'Partner - Sales']`

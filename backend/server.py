@@ -3314,20 +3314,25 @@ async def get_leads(
     search: Optional[str] = None,
     assigned_to: Optional[str] = None,
     time_filter: Optional[str] = None,
+    no_limit: Optional[bool] = False,
     current_user: dict = Depends(get_current_user)
 ):
     """
     Get paginated leads list with server-side pagination.
     
     - page: Page number (1-indexed)
-    - page_size: Number of items per page (default 25, max 100)
+    - page_size: Number of items per page (default 25, max 100, or unlimited if no_limit=true)
     - status, city, state, territory, country, region: Filter options
     - search: Search in company name, contact person, lead_id
     - assigned_to: Filter by assigned user ID
     - time_filter: Filter by time period (this_week, last_week, this_month, last_month, etc.)
+    - no_limit: If true, returns all matching leads without pagination (for Pipeline/Kanban view)
     """
-    # Validate and cap page_size to prevent abuse
-    page_size = min(max(1, page_size), 100)
+    # Validate and cap page_size to prevent abuse (unless no_limit is set)
+    if no_limit:
+        page_size = 10000  # Effectively unlimited for pipeline view
+    else:
+        page_size = min(max(1, page_size), 100)
     page = max(1, page)
     skip = (page - 1) * page_size
     
