@@ -4801,7 +4801,7 @@ async def get_account_invoices(account_id: str, current_user: dict = Depends(get
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
     
-    # Find invoices by account_uuid, account_id, ca_lead_id, or lead_id
+    # Find invoices by account_id (primary), account_uuid, ca_lead_id, or lead_id
     account_uuid = account.get('id')
     acc_id = account.get('account_id')
     lead_id = account.get('lead_id')
@@ -4809,7 +4809,8 @@ async def get_account_invoices(account_id: str, current_user: dict = Depends(get
     
     query = {'$or': []}
     if account_uuid:
-        query['$or'].append({'account_uuid': account_uuid})
+        query['$or'].append({'account_id': account_uuid})  # Primary match - account_id field in invoice
+        query['$or'].append({'account_uuid': account_uuid})  # Legacy match
     if acc_id:
         query['$or'].append({'account_id': acc_id})
     if lead_id:
@@ -4824,7 +4825,7 @@ async def get_account_invoices(account_id: str, current_user: dict = Depends(get
     invoices = await db.invoices.find(query, {'_id': 0}).sort('invoice_date', -1).to_list(100)
     
     # Calculate totals - support both old and new field names
-    total_amount = sum(inv.get('gross_invoice_value', inv.get('total_amount', 0)) or 0 for inv in invoices)
+    total_amount = sum(inv.get('grand_total', inv.get('gross_invoice_value', inv.get('total_amount', 0))) or 0 for inv in invoices)
     net_amount = sum(inv.get('net_invoice_value', inv.get('paid_amount', 0)) or 0 for inv in invoices)
     credit_amount = sum(inv.get('credit_note_value', 0) or 0 for inv in invoices)
     outstanding = sum(inv.get('outstanding', 0) or 0 for inv in invoices)
@@ -4834,15 +4835,18 @@ async def get_account_invoices(account_id: str, current_user: dict = Depends(get
     for inv in invoices:
         formatted_invoices.append({
             'id': inv.get('id'),
-            'invoice_number': inv.get('invoice_no'),
+            'invoice_number': inv.get('invoice_number', inv.get('invoice_no')),
             'invoice_date': inv.get('invoice_date'),
-            'gross_amount': inv.get('gross_invoice_value', inv.get('total_amount', 0)),
+            'gross_amount': inv.get('grand_total', inv.get('gross_invoice_value', inv.get('total_amount', 0))),
             'net_amount': inv.get('net_invoice_value', inv.get('paid_amount', 0)),
             'credit_note': inv.get('credit_note_value', 0),
             'outstanding': inv.get('outstanding', 0),
             'status': inv.get('status', 'matched'),
-            'items': inv.get('items', []),
-            'received_at': inv.get('received_at')
+            'items': inv.get('line_items', inv.get('items', [])),
+            'received_at': inv.get('received_at'),
+            'total_cogs': inv.get('total_cogs', 0),
+            'gross_margin': inv.get('gross_margin', 0),
+            'gross_margin_percent': inv.get('gross_margin_percent', 0)
         })
     
     return {
