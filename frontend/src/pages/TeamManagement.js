@@ -56,9 +56,11 @@ const ROLE_MAPPING = {
 };
 
 const DEPARTMENTS = [
+  'Admin',
   'Sales',
   'Production',
-  'Both (Admin)'
+  'Marketing',
+  'Finance'
 ];
 
 const toTitleCase = (str) => {
@@ -660,7 +662,7 @@ function AddTeamMemberForm({ onSuccess }) {
     state: '',
     territory: '',
     role: 'sales_rep',
-    department: 'sales',
+    department: 'Sales',
     password: '',
     reports_to: '',
     is_active: true
@@ -764,9 +766,9 @@ function AddTeamMemberForm({ onSuccess }) {
               <SelectValue placeholder="Select department" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="sales">Sales</SelectItem>
-              <SelectItem value="production">Production</SelectItem>
-              <SelectItem value="both">Both (Admin)</SelectItem>
+              {DEPARTMENTS.map(dept => (
+                <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -909,7 +911,7 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
     state: user?.state || '',
     territory: user?.territory || '',
     role: user?.role || 'sales_rep',
-    department: user?.department || 'sales',
+    department: user?.department || 'Sales',
     reports_to: user?.reports_to || '',
     is_active: user?.is_active ?? true,
     // HR Fields
@@ -962,7 +964,7 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
         state: user.state || '',
         territory: user.territory || '',
         role: user.role || 'sales_rep',
-        department: user.department || 'sales',
+        department: user.department || 'Sales',
         reports_to: user.reports_to || '',
         is_active: user.is_active ?? true,
         ctc_monthly: user.ctc_monthly || '',
@@ -1058,9 +1060,9 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
               <SelectValue placeholder="Select department" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="sales">Sales</SelectItem>
-              <SelectItem value="production">Production</SelectItem>
-              <SelectItem value="both">Both (Admin)</SelectItem>
+              {DEPARTMENTS.map(dept => (
+                <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
