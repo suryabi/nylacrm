@@ -28,7 +28,20 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 
 ## What's Been Implemented
 
-### Mar 1, 2026 (Session 15 - Current)
+### Mar 3, 2026 (Session 16 - Current)
+- **BUG FIX (P0)**: Dashboard Sales Resource Filter Not Showing All Users
+  - **Issue**: When CEO/Director filtered the Sales Overview dashboard by a specific sales resource, certain users (CEO, Director, Vice President, System Admin) were missing from the dropdown, making it impossible to view their pipeline.
+  - **Root Cause**: The `fetchSalesTeam()` function in Dashboard.js only included certain sales roles: `['Head of Business', 'Regional Sales Manager', 'National Sales Head', 'Partner - Sales']`
+  - **Impact**: System Admin had 15 leads but couldn't be selected; Surya Yadavalli (CEO) had 21 leads but couldn't be selected
+  - **Fix**: Expanded the `salesRoles` array to include all roles that can have leads assigned:
+    - Added: `'CEO', 'Director', 'Vice President', 'System Admin'`
+    - Kept: `'Head of Business', 'Regional Sales Manager', 'National Sales Head', 'Partner - Sales'`
+  - **File Modified**: `/app/frontend/src/pages/Dashboard.js` (lines 83-92)
+  - **Backend**: No changes needed - filtering was already working correctly
+  - **Testing**: 100% success rate (9/9 backend tests, 100% frontend tests)
+  - Status: VERIFIED - Pipeline now correctly shows leads for all users including CEO, Director, etc.
+
+### Mar 1, 2026 (Session 15)
 - **NEW MODULE**: Expense Request at Lead/Account Level
   - **Purpose**: Enable employees to submit expense requests for leads or accounts before/after onboarding
   - **Expense Types** (5 total):
