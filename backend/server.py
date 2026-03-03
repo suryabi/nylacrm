@@ -2742,14 +2742,20 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
     # Get dynamic statuses from lead_statuses collection
     dynamic_statuses = await db.lead_statuses.find({'is_active': True}, {'_id': 0, 'id': 1, 'label': 1, 'order': 1}).sort('order', 1).to_list(20)
     
+    # Determine if user should see all leads or just their own
+    user_role = current_user.get('role', '').lower()
+    is_leadership = user_role in ['ceo', 'director', 'vp', 'vice president', 'national sales head']
+    
     if dynamic_statuses:
         # Use dynamic statuses
         for status_doc in dynamic_statuses:
             status_id = status_doc['id']
-            count = await db.leads.count_documents({
-                'assigned_to': user_id,
-                'status': status_id
-            })
+            # Leadership sees all leads, others see only assigned leads
+            query = {'status': status_id}
+            if not is_leadership:
+                query['assigned_to'] = user_id
+            
+            count = await db.leads.count_documents(query)
             pipeline_stats.append({
                 'status': status_id,
                 'label': status_doc.get('label', status_id),
@@ -2759,10 +2765,11 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
         # Fallback to hardcoded statuses if no dynamic statuses exist
         status_list = ['new', 'contacted', 'qualified', 'proposal_sent', 'negotiation', 'won', 'lost']
         for status in status_list:
-            count = await db.leads.count_documents({
-                'assigned_to': user_id,
-                'status': status
-            })
+            query = {'status': status}
+            if not is_leadership:
+                query['assigned_to'] = user_id
+            
+            count = await db.leads.count_documents(query)
             pipeline_stats.append({'status': status, 'label': status.replace('_', ' ').title(), 'count': count})
     
     # 8. MONTHLY TARGETS VS ACTUALS
