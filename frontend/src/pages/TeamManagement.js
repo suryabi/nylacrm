@@ -902,6 +902,13 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
   const [loading, setLoading] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  // Normalize department value to match DEPARTMENTS array
+  const getNormalizedDept = (dept) => {
+    if (!dept) return 'Sales';
+    const deptMatch = DEPARTMENTS.find(d => d.toLowerCase() === dept.toLowerCase());
+    return deptMatch || 'Sales';
+  };
+
   const [formData, setFormData] = useState({
     name: user?.name || '',
     designation: user?.designation || '',
@@ -911,7 +918,7 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
     state: user?.state || '',
     territory: user?.territory || '',
     role: user?.role || 'sales_rep',
-    department: user?.department || 'Sales',
+    department: getNormalizedDept(user?.department),
     reports_to: user?.reports_to || '',
     is_active: user?.is_active ?? true,
     // HR Fields
@@ -964,7 +971,7 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
         state: user.state || '',
         territory: user.territory || '',
         role: user.role || 'sales_rep',
-        department: user.department || 'Sales',
+        department: getNormalizedDept(user.department),
         reports_to: user.reports_to || '',
         is_active: user.is_active ?? true,
         ctc_monthly: user.ctc_monthly || '',
