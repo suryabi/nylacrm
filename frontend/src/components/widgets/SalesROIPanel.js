@@ -216,13 +216,7 @@ export default function SalesROIPanel() {
             
             <div className="space-y-1">
               <div className="flex justify-between text-sm">
-                <span className="text-slate-700">Revenue from Leads (Won)</span>
-                <span className="font-medium text-slate-900 tabular-nums">
-                  {formatFullCurrency(revenue.from_leads)}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-700">Revenue from Invoices</span>
+                <span className="text-slate-700">Gross Invoice Value</span>
                 <span className="font-medium text-slate-900 tabular-nums">
                   {formatFullCurrency(revenue.from_invoices)}
                 </span>

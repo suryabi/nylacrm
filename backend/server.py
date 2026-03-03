@@ -3120,19 +3120,7 @@ async def get_sales_roi_summary(
     
     # ==================== REVENUE SECTION ====================
     
-    # Get revenue from WON leads assigned to team members
-    won_leads = await db.leads.find({
-        'assigned_to': {'$in': team_user_ids},
-        'status': 'won',
-        'updated_at': {'$gte': start_date, '$lte': end_date + 'T23:59:59'}
-    }, {'_id': 0, 'actual_value': 1, 'expected_value': 1, 'gross_margin': 1, 'gross_margin_percent': 1}).to_list(1000)
-    
-    total_revenue = sum(
-        (lead.get('actual_value') or lead.get('expected_value', 0) or 0) 
-        for lead in won_leads
-    )
-    
-    # Get revenue from invoices for accounts owned by team members
+    # Get revenue from invoices (gross invoice value) for accounts owned by team members
     team_accounts = await db.accounts.find(
         {'sales_owner_id': {'$in': team_user_ids}},
         {'_id': 0, 'id': 1}
@@ -3147,7 +3135,7 @@ async def get_sales_roi_summary(
         }, {'_id': 0, 'grand_total': 1}).to_list(1000)
         invoice_revenue = sum(inv.get('grand_total', 0) or 0 for inv in invoices)
     
-    total_revenue += invoice_revenue
+    total_revenue = invoice_revenue
     
     # ==================== PROFITABILITY SECTION ====================
     
@@ -3184,7 +3172,6 @@ async def get_sales_roi_summary(
         },
         'revenue': {
             'total': round(total_revenue, 2),
-            'from_leads': round(total_revenue - invoice_revenue, 2),
             'from_invoices': round(invoice_revenue, 2)
         },
         'profitability': {
