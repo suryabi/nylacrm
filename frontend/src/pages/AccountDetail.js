@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import { 
   ArrowLeft, Building2, Phone, MapPin, Save, Loader2, Plus, Trash2, FileText,
   DollarSign, CreditCard, Calendar, AlertTriangle, TrendingUp, Truck, Search, Copy, ExternalLink,
-  Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck
+  Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck, ChevronDown, ChevronRight, Package
 } from 'lucide-react';
 import { format } from 'date-fns';
 import {
@@ -27,6 +27,88 @@ import LogoUploader from '../components/LogoUploader';
 import ExpenseRequestSection from '../components/ExpenseRequestSection';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
+
+// Invoice Card Component with expandable line items
+function InvoiceCard({ invoice }) {
+  const [expanded, setExpanded] = React.useState(false);
+  const hasLineItems = invoice.items && invoice.items.length > 0;
+  const totalBottles = hasLineItems 
+    ? invoice.items.reduce((sum, item) => sum + (item.bottles || item.quantity || 0), 0)
+    : 0;
+
+  return (
+    <div className="border rounded-lg overflow-hidden">
+      {/* Invoice Header - Clickable */}
+      <div 
+        className={`flex items-center justify-between p-3 bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors ${hasLineItems ? '' : 'cursor-default'}`}
+        onClick={() => hasLineItems && setExpanded(!expanded)}
+      >
+        <div className="flex items-center gap-3">
+          {hasLineItems && (
+            <span className="text-muted-foreground">
+              {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </span>
+          )}
+          <div>
+            <p className="font-semibold text-primary">{invoice.invoice_number}</p>
+            <p className="text-xs text-muted-foreground">{invoice.invoice_date}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-6 text-sm">
+          {totalBottles > 0 && (
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Package className="h-4 w-4" />
+              <span>{totalBottles.toLocaleString()} bottles</span>
+            </div>
+          )}
+          <div className="text-right">
+            <p className="font-semibold text-green-600">₹{Math.round(invoice.gross_amount || 0).toLocaleString()}</p>
+            {invoice.gross_margin_percent > 0 && (
+              <p className="text-xs text-muted-foreground">Margin: {invoice.gross_margin_percent}%</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Line Items - Expandable */}
+      {expanded && hasLineItems && (
+        <div className="border-t">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="text-left py-2 px-3 font-medium text-xs text-muted-foreground">SKU</th>
+                <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">Bottles</th>
+                <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">Price/Bottle</th>
+                <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">Line Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoice.items.map((item, idx) => (
+                <tr key={idx} className="border-t border-slate-100 hover:bg-slate-50/50">
+                  <td className="py-2 px-3">
+                    <p className="font-medium">{item.sku_name || item.sku || 'N/A'}</p>
+                    {item.sku_code && <p className="text-xs text-muted-foreground">{item.sku_code}</p>}
+                  </td>
+                  <td className="py-2 px-3 text-right tabular-nums">{(item.bottles || item.quantity || 0).toLocaleString()}</td>
+                  <td className="py-2 px-3 text-right tabular-nums">₹{(item.price_per_bottle || item.unit_price || 0).toFixed(2)}</td>
+                  <td className="py-2 px-3 text-right font-medium tabular-nums">₹{Math.round(item.line_total || item.total || 0).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="bg-slate-50 border-t">
+              <tr>
+                <td className="py-2 px-3 font-semibold">Total</td>
+                <td className="py-2 px-3 text-right font-semibold tabular-nums">{totalBottles.toLocaleString()}</td>
+                <td className="py-2 px-3"></td>
+                <td className="py-2 px-3 text-right font-semibold text-green-600 tabular-nums">₹{Math.round(invoice.gross_amount || 0).toLocaleString()}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Roles that can approve/reject contracts
 const CONTRACT_APPROVER_ROLES = ['ceo', 'CEO', 'director', 'Director', 'vp', 'Vice President', 'national_sales_head', 'National Sales Head', 'admin'];
@@ -872,29 +954,10 @@ ${googleMapsLink}`;
                     <p className="text-lg font-bold text-amber-700">₹{((invoiceData.credit_amount || 0) / 100000).toFixed(2)}L</p>
                   </div>
                 </div>
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted">
-                      <tr>
-                        <th className="text-left py-2.5 px-3 font-medium">Invoice #</th>
-                        <th className="text-left py-2.5 px-3 font-medium">Date</th>
-                        <th className="text-right py-2.5 px-3 font-medium">Gross</th>
-                        <th className="text-right py-2.5 px-3 font-medium">Net</th>
-                        <th className="text-right py-2.5 px-3 font-medium">Credit</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {invoiceData.invoices.map((inv, idx) => (
-                        <tr key={idx} className="border-t hover:bg-muted/30">
-                          <td className="py-2.5 px-3 font-medium text-primary">{inv.invoice_number}</td>
-                          <td className="py-2.5 px-3 text-muted-foreground">{inv.invoice_date}</td>
-                          <td className="py-2.5 px-3 text-right text-green-600">₹{Math.round(inv.gross_amount || 0).toLocaleString()}</td>
-                          <td className="py-2.5 px-3 text-right text-blue-600">₹{Math.round(inv.net_amount || 0).toLocaleString()}</td>
-                          <td className="py-2.5 px-3 text-right text-amber-600">₹{Math.round(inv.credit_note || 0).toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="space-y-3">
+                  {invoiceData.invoices.map((inv, idx) => (
+                    <InvoiceCard key={idx} invoice={inv} />
+                  ))}
                 </div>
               </>
             ) : (
