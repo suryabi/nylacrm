@@ -3129,7 +3129,6 @@ async def get_sales_roi_summary(
     
     invoice_revenue = 0
     invoice_cogs = 0
-    invoice_gross_margin = 0
     
     if account_ids:
         invoices = await db.invoices.find({
@@ -3141,28 +3140,34 @@ async def get_sales_roi_summary(
             grand_total = inv.get('grand_total', 0) or 0
             invoice_revenue += grand_total
             
-            # Use pre-calculated gross_margin if available
-            if inv.get('gross_margin') is not None:
-                invoice_gross_margin += inv.get('gross_margin', 0) or 0
+            # Use pre-calculated COGS if available
+            if inv.get('total_cogs') is not None:
                 invoice_cogs += inv.get('total_cogs', 0) or 0
             elif inv.get('line_items'):
-                # Calculate from line items if gross_margin not pre-calculated
+                # Calculate from line items if not pre-calculated
                 for item in inv.get('line_items', []):
                     invoice_cogs += item.get('cogs_total', 0) or 0
-                invoice_gross_margin = invoice_revenue - invoice_cogs
             else:
-                # No line items or pre-calculated values, estimate 35% margin
-                estimated_margin = grand_total * 0.35
-                invoice_gross_margin += estimated_margin
-                invoice_cogs += grand_total - estimated_margin
+                # No line items, estimate COGS as 65% of revenue
+                invoice_cogs += grand_total * 0.65
+    
+    # Calculate deductions from Gross Invoice Value
+    # Distribution Cost: 10% of Gross Invoice Value (hardcoded)
+    distribution_cost = round(invoice_revenue * 0.10, 2)
+    
+    # Logistics Cost: 8% of Gross Invoice Value (hardcoded)
+    logistics_cost = round(invoice_revenue * 0.08, 2)
+    
+    # Gross Margin = Gross Invoice Value - Distribution - Logistics - COGS
+    gross_margin = invoice_revenue - distribution_cost - logistics_cost - invoice_cogs
+    gross_margin_percent = round((gross_margin / invoice_revenue) * 100, 2) if invoice_revenue > 0 else 0
     
     total_revenue = invoice_revenue
-    gross_margin_percent = round((invoice_gross_margin / invoice_revenue) * 100, 2) if invoice_revenue > 0 else 0
     
     # ==================== PROFITABILITY SECTION ====================
     
     # Net Contribution = Gross Margin - (Team CTC + Sales Expenses)
-    net_contribution = invoice_gross_margin - total_cost
+    net_contribution = gross_margin - total_cost
     roi_percentage = round((net_contribution / total_cost) * 100, 2) if total_cost > 0 else 0
     
     # Format expense categories for response (only non-zero)
@@ -3195,8 +3200,12 @@ async def get_sales_roi_summary(
         },
         'revenue': {
             'gross_invoice_value': round(invoice_revenue, 2),
+            'distribution_cost': round(distribution_cost, 2),
+            'distribution_percent': 10.0,
+            'logistics_cost': round(logistics_cost, 2),
+            'logistics_percent': 8.0,
             'total_cogs': round(invoice_cogs, 2),
-            'gross_margin': round(invoice_gross_margin, 2),
+            'gross_margin': round(gross_margin, 2),
             'gross_margin_percent': gross_margin_percent
         },
         'profitability': {

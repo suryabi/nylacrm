@@ -222,6 +222,18 @@ export default function SalesROIPanel() {
                 </span>
               </div>
               <div className="flex justify-between text-sm">
+                <span className="text-slate-700">Less: Distribution ({revenue.distribution_percent}%)</span>
+                <span className="font-medium text-red-600 tabular-nums">
+                  ({formatFullCurrency(revenue.distribution_cost)})
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-700">Less: Logistics ({revenue.logistics_percent}%)</span>
+                <span className="font-medium text-red-600 tabular-nums">
+                  ({formatFullCurrency(revenue.logistics_cost)})
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
                 <span className="text-slate-700">Less: COGS</span>
                 <span className="font-medium text-red-600 tabular-nums">
                   ({formatFullCurrency(revenue.total_cogs)})
@@ -234,7 +246,10 @@ export default function SalesROIPanel() {
               <div className="flex justify-between">
                 <span className="text-sm font-semibold text-slate-800">Gross Margin</span>
                 <div className="text-right">
-                  <span className="text-sm font-bold text-green-700 tabular-nums">
+                  <span className={cn(
+                    "text-sm font-bold tabular-nums",
+                    revenue.gross_margin >= 0 ? "text-green-700" : "text-red-600"
+                  )}>
                     {formatFullCurrency(revenue.gross_margin)}
                   </span>
                   <span className="text-xs text-slate-500 ml-1">
