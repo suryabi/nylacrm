@@ -61,9 +61,8 @@ export default function Login() {
       const userData = await login(email, password);
       
       if (userData) {
-        toast.success('Welcome back!');
-        // Navigate immediately - the AuthContext will handle user state
-        navigate('/home', { replace: true });
+        // Force navigation to home page
+        window.location.href = '/home';
       } else {
         toast.error('Login failed - no user data received');
         setLoading(false);
