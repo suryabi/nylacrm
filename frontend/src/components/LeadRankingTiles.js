@@ -112,10 +112,9 @@ export default function LeadRankingTiles({ currentRank, onRankChange, disabled =
     <div className="flex items-center gap-4">
       <h3 className="text-sm font-medium text-muted-foreground whitespace-nowrap">Lead Ranking</h3>
       {saving && <span className="text-xs text-muted-foreground animate-pulse">Saving...</span>}
-      <div className="flex gap-2 flex-1" data-testid="lead-ranking-tiles">
+      <div className="flex gap-3 flex-1" data-testid="lead-ranking-tiles">
         {ranks.map((rank) => {
           const config = LEAD_RANKS[rank];
-          const Icon = config.icon;
           const isSelected = currentRank === rank;
           
           return (
@@ -124,11 +123,11 @@ export default function LeadRankingTiles({ currentRank, onRankChange, disabled =
               onClick={() => !disabled && onRankChange(rank)}
               disabled={disabled}
               className={cn(
-                "relative flex items-center gap-2 px-3 py-2 rounded-lg border transition-all duration-200",
+                "relative flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 transition-all duration-200",
                 "hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-1",
                 config.ringColor,
                 isSelected 
-                  ? `${config.border} ${config.bgLight} border-2` 
+                  ? `${config.border} ${config.bgLight}` 
                   : "border-gray-200 bg-gray-50/50 hover:bg-gray-100/50",
                 disabled && "opacity-50 cursor-not-allowed"
               )}
@@ -136,21 +135,19 @@ export default function LeadRankingTiles({ currentRank, onRankChange, disabled =
             >
               {/* Rank Badge */}
               <div className={cn(
-                "w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0",
+                "w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-base flex-shrink-0",
                 config.color
               )}>
                 {rank}
               </div>
               
               {/* Description */}
-              <div className="text-left min-w-0">
-                <span className={cn(
-                  "text-xs font-medium block leading-tight",
-                  isSelected ? config.textDark : "text-gray-600"
-                )}>
-                  {config.description}
-                </span>
-              </div>
+              <span className={cn(
+                "text-xs font-medium leading-tight",
+                isSelected ? config.textDark : "text-gray-600"
+              )}>
+                {config.description}
+              </span>
               
               {/* Selected indicator */}
               {isSelected && (
