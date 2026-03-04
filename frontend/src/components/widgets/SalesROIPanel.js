@@ -6,6 +6,12 @@ import { cn } from '../../lib/utils';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
+// Get auth headers for API calls
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
 // Format currency in Indian style (lakhs, crores)
 const formatCurrency = (amount) => {
   if (amount === null || amount === undefined) return '---';
@@ -56,7 +62,7 @@ export default function SalesROIPanel() {
       try {
         setLoading(true);
         const response = await axios.get(`${API_URL}/sales-roi-summary`, {
-          withCredentials: true
+          headers: getAuthHeaders()
         });
         setData(response.data);
         setError(null);
