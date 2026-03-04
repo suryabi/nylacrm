@@ -44,6 +44,7 @@ import {
 } from '../components/ui/alert-dialog';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
+import { LeadRankBadge } from '../components/LeadRankingTiles';
 
 const TIME_FILTERS = [
   { value: 'this_week', label: 'This Week' }, { value: 'last_week', label: 'Last Week' },
@@ -397,7 +398,10 @@ export default function LeadsList() {
                     {displayLeads.map((lead) => (
                       <TableRow key={lead.id} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/30 border-b border-slate-50 dark:border-slate-800/50 transition-colors" onClick={() => navigate(`/leads/${lead.id}`)} data-testid={`lead-row-${lead.id}`}>
                         <TableCell data-testid={`lead-cell-${lead.id}`}>
-                          <div><p className="font-medium text-primary">{lead.company || lead.name}</p><p className="text-xs text-muted-foreground font-mono">{lead.lead_id || '-'}</p></div>
+                          <div className="flex items-center gap-2">
+                            {lead.rank && <LeadRankBadge rank={lead.rank} size="xs" />}
+                            <div><p className="font-medium text-primary">{lead.company || lead.name}</p><p className="text-xs text-muted-foreground font-mono">{lead.lead_id || '-'}</p></div>
+                          </div>
                         </TableCell>
                         <TableCell>{lead.city}</TableCell>
                         <TableCell>{lead.assigned_to ? users.find(u => u.id === lead.assigned_to)?.name || 'Unknown' : '-'}</TableCell>

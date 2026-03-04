@@ -32,6 +32,7 @@ import TimelineSummaryCompact from '../components/TimelineSummaryCompact';
 import InvoiceSummaryCard from '../components/InvoiceSummaryCard';
 import LogoUploader from '../components/LogoUploader';
 import ExpenseRequestSection from '../components/ExpenseRequestSection';
+import LeadRankingTiles from '../components/LeadRankingTiles';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -77,6 +78,7 @@ export default function LeadDetail() {
   const [activityFollowUpDate, setActivityFollowUpDate] = useState('');
   const [convertingToAccount, setConvertingToAccount] = useState(false);
   const [generatingLeadId, setGeneratingLeadId] = useState(false);
+  const [savingRank, setSavingRank] = useState(false);
   
   // Proposal state
   const [proposal, setProposal] = useState(null);
@@ -645,6 +647,22 @@ ${userEmail}`;
     setIsEditingPricing(false);
   };
 
+  // Handle rank change
+  const handleRankChange = async (newRank) => {
+    if (newRank === lead.rank) return;
+    
+    setSavingRank(true);
+    try {
+      await leadsAPI.update(id, { rank: newRank });
+      setLead(prev => ({ ...prev, rank: newRank }));
+      toast.success(`Lead ranked as ${newRank}`);
+    } catch (error) {
+      toast.error('Failed to update rank');
+    } finally {
+      setSavingRank(false);
+    }
+  };
+
   if (loading) {
     return <div className="flex justify-center py-12">Loading...</div>;
   }
@@ -750,6 +768,15 @@ ${userEmail}`;
           </Button>
         </div>
       </div>
+
+      {/* Lead Ranking Tiles */}
+      <Card className="p-4 mb-6">
+        <LeadRankingTiles
+          currentRank={lead.rank}
+          onRankChange={handleRankChange}
+          saving={savingRank}
+        />
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Lead Info */}

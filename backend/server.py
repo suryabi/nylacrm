@@ -569,6 +569,9 @@ class Lead(BaseModel):
     # Customer Tier
     tier: Optional[str] = None  # Tier 1, Tier 2, Tier 3, Tier 4, Tier 5
     
+    # Lead Rank (A+, A, B, C, D)
+    rank: Optional[str] = None  # A+, A, B, C, D
+    
     # Location
     city: str
     state: str
@@ -620,6 +623,7 @@ class LeadCreate(BaseModel):
     phone: Optional[str] = None
     category: Optional[str] = None
     tier: Optional[str] = None
+    rank: Optional[str] = None  # A+, A, B, C, D
     city: str
     state: str
     country: str = 'India'
@@ -643,6 +647,7 @@ class LeadUpdate(BaseModel):
     phone: Optional[str] = None
     category: Optional[str] = None
     tier: Optional[str] = None
+    rank: Optional[str] = None  # A+, A, B, C, D
     city: Optional[str] = None
     state: Optional[str] = None
     country: Optional[str] = None

@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { useAuth } from '../context/AuthContext';
+import { LeadRankBadge } from '../components/LeadRankingTiles';
 import { 
   Search, 
   Filter, 
@@ -85,9 +86,12 @@ const LeadCard = ({ lead, onDragStart, onDragEnd, onClick, users, onMoveToStatus
     >
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onClick(lead)}>
-          <h4 className="font-semibold text-sm text-gray-900 truncate group-hover:text-primary transition-colors">
-            {lead.company_name || 'Unnamed Lead'}
-          </h4>
+          <div className="flex items-center gap-1.5">
+            {lead.rank && <LeadRankBadge rank={lead.rank} size="xs" />}
+            <h4 className="font-semibold text-sm text-gray-900 truncate group-hover:text-primary transition-colors">
+              {lead.company_name || 'Unnamed Lead'}
+            </h4>
+          </div>
           <p className="text-xs text-gray-500 truncate">{lead.lead_id}</p>
         </div>
         
