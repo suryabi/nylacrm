@@ -23,6 +23,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../components/ui/dialog';
 import LogoUploader from '../components/LogoUploader';
 import ExpenseRequestSection from '../components/ExpenseRequestSection';
 
@@ -34,7 +41,7 @@ function InvoiceCard({ invoice }) {
   const hasLineItems = invoice.items && invoice.items.length > 0;
   const totalBottles = hasLineItems 
     ? invoice.items.reduce((sum, item) => sum + (item.bottles || item.quantity || 0), 0)
-    : 0;
+    : (invoice.total_bottles || 0);
 
   return (
     <div className="border rounded-lg overflow-hidden">
@@ -79,6 +86,8 @@ function InvoiceCard({ invoice }) {
                 <th className="text-left py-2 px-3 font-medium text-xs text-muted-foreground">SKU</th>
                 <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">Bottles</th>
                 <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">Price/Bottle</th>
+                <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">COGS</th>
+                <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">Logistics</th>
                 <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">Line Total</th>
               </tr>
             </thead>
@@ -91,6 +100,8 @@ function InvoiceCard({ invoice }) {
                   </td>
                   <td className="py-2 px-3 text-right tabular-nums">{(item.bottles || item.quantity || 0).toLocaleString()}</td>
                   <td className="py-2 px-3 text-right tabular-nums">₹{(item.price_per_bottle || item.unit_price || 0).toFixed(2)}</td>
+                  <td className="py-2 px-3 text-right tabular-nums text-red-600">₹{(item.cogs_total || 0).toLocaleString()}</td>
+                  <td className="py-2 px-3 text-right tabular-nums text-orange-600">₹{(item.logistics_total || 0).toLocaleString()}</td>
                   <td className="py-2 px-3 text-right font-medium tabular-nums">₹{Math.round(item.line_total || item.total || 0).toLocaleString()}</td>
                 </tr>
               ))}
@@ -100,10 +111,37 @@ function InvoiceCard({ invoice }) {
                 <td className="py-2 px-3 font-semibold">Total</td>
                 <td className="py-2 px-3 text-right font-semibold tabular-nums">{totalBottles.toLocaleString()}</td>
                 <td className="py-2 px-3"></td>
+                <td className="py-2 px-3 text-right font-semibold text-red-600 tabular-nums">₹{Math.round(invoice.total_cogs || 0).toLocaleString()}</td>
+                <td className="py-2 px-3 text-right font-semibold text-orange-600 tabular-nums">₹{Math.round(invoice.total_logistics || 0).toLocaleString()}</td>
                 <td className="py-2 px-3 text-right font-semibold text-green-600 tabular-nums">₹{Math.round(invoice.gross_amount || 0).toLocaleString()}</td>
               </tr>
             </tfoot>
           </table>
+          
+          {/* Margin Summary */}
+          <div className="p-3 bg-slate-100 border-t">
+            <p className="text-xs font-semibold text-slate-600 mb-2">MARGIN SUMMARY</p>
+            <div className="grid grid-cols-4 gap-3 text-sm">
+              <div>
+                <p className="text-xs text-slate-500">Revenue</p>
+                <p className="font-semibold">₹{Math.round(invoice.gross_amount || 0).toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">COGS</p>
+                <p className="font-semibold text-red-600">-₹{Math.round(invoice.total_cogs || 0).toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Logistics</p>
+                <p className="font-semibold text-orange-600">-₹{Math.round(invoice.total_logistics || 0).toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Gross Margin</p>
+                <p className={`font-semibold ${(invoice.gross_margin || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  ₹{Math.round(invoice.gross_margin || 0).toLocaleString()} ({invoice.gross_margin_percent || 0}%)
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -172,6 +210,13 @@ export default function AccountDetail() {
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [savingAddress, setSavingAddress] = useState(false);
   const addressSearchRef = useRef(null);
+  
+  // Invoice creation state
+  const [showCreateInvoice, setShowCreateInvoice] = useState(false);
+  const [creatingInvoice, setCreatingInvoice] = useState(false);
+  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
+  const [invoiceLineItems, setInvoiceLineItems] = useState([{ sku_name: '', bottles: 0, price_per_bottle: 0 }]);
+  const [invoiceNotes, setInvoiceNotes] = useState('');
 
   useEffect(() => {
     fetchAccount();
@@ -411,6 +456,66 @@ ${googleMapsLink}`;
       console.log('No invoice data available');
     } finally {
       setLoadingInvoices(false);
+    }
+  };
+
+  // Invoice creation functions
+  const handleAddInvoiceLineItem = () => {
+    setInvoiceLineItems([...invoiceLineItems, { sku_name: '', bottles: 0, price_per_bottle: 0 }]);
+  };
+
+  const handleRemoveInvoiceLineItem = (index) => {
+    if (invoiceLineItems.length > 1) {
+      setInvoiceLineItems(invoiceLineItems.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleInvoiceLineItemChange = (index, field, value) => {
+    const updated = [...invoiceLineItems];
+    updated[index] = { 
+      ...updated[index], 
+      [field]: field === 'sku_name' ? value : (parseFloat(value) || 0)
+    };
+    setInvoiceLineItems(updated);
+  };
+
+  const calculateInvoiceTotal = () => {
+    return invoiceLineItems.reduce((sum, item) => sum + (item.bottles * item.price_per_bottle), 0);
+  };
+
+  const handleCreateInvoice = async () => {
+    // Validate line items
+    const validItems = invoiceLineItems.filter(item => item.sku_name && item.bottles > 0 && item.price_per_bottle > 0);
+    if (validItems.length === 0) {
+      toast.error('Please add at least one valid line item');
+      return;
+    }
+
+    setCreatingInvoice(true);
+    try {
+      const response = await accountsAPI.createInvoice(account.id || account.account_id, {
+        invoice_date: invoiceDate,
+        line_items: validItems,
+        notes: invoiceNotes || null
+      });
+
+      toast.success(`Invoice ${response.data.invoice.invoice_number} created successfully!`, {
+        description: `Gross Margin: ₹${response.data.margin_summary.gross_margin.toLocaleString()} (${response.data.margin_summary.gross_margin_percent}%)`
+      });
+
+      // Reset form and close modal
+      setShowCreateInvoice(false);
+      setInvoiceDate(new Date().toISOString().split('T')[0]);
+      setInvoiceLineItems([{ sku_name: '', bottles: 0, price_per_bottle: 0 }]);
+      setInvoiceNotes('');
+
+      // Refresh invoice data
+      fetchInvoices(account.id || account.account_id);
+    } catch (error) {
+      const errorMessage = error.response?.data?.detail || 'Failed to create invoice';
+      toast.error(errorMessage);
+    } finally {
+      setCreatingInvoice(false);
     }
   };
 
@@ -930,9 +1035,18 @@ ${googleMapsLink}`;
                 <FileText className="h-5 w-5 text-primary" />
                 Invoice Summary
               </h2>
-              {invoiceData && invoiceData.invoices?.length > 0 && (
-                <Badge variant="outline">{invoiceData.invoices.length} Invoices</Badge>
-              )}
+              <div className="flex items-center gap-2">
+                {invoiceData && invoiceData.invoices?.length > 0 && (
+                  <Badge variant="outline">{invoiceData.invoices.length} Invoices</Badge>
+                )}
+                <Button 
+                  size="sm" 
+                  onClick={() => setShowCreateInvoice(true)}
+                  data-testid="create-invoice-btn"
+                >
+                  <Plus className="h-4 w-4 mr-1" /> Create Invoice
+                </Button>
+              </div>
             </div>
             {loadingInvoices ? (
               <div className="flex items-center justify-center py-8">
@@ -1457,6 +1571,164 @@ ${googleMapsLink}`;
           </Card>
         </div>
       </div>
+
+      {/* Create Invoice Dialog */}
+      <Dialog open={showCreateInvoice} onOpenChange={setShowCreateInvoice}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              Create Invoice for {account?.account_name}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6 py-4">
+            {/* Invoice Info */}
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <Label className="text-sm font-medium">Invoice Date</Label>
+                <Input
+                  type="date"
+                  value={invoiceDate}
+                  onChange={(e) => setInvoiceDate(e.target.value)}
+                  className="mt-1"
+                  data-testid="invoice-date-input"
+                />
+              </div>
+              <div className="flex-1">
+                <Label className="text-sm font-medium">Account City</Label>
+                <Input value={account?.city || ''} disabled className="mt-1 bg-muted" />
+                <p className="text-xs text-muted-foreground mt-1">COGS & logistics calculated for this city</p>
+              </div>
+            </div>
+
+            {/* Line Items Table */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <Label className="text-sm font-medium">Line Items</Label>
+                <Button size="sm" variant="outline" onClick={handleAddInvoiceLineItem} data-testid="add-invoice-line-item-btn">
+                  <Plus className="h-4 w-4 mr-1" /> Add Line
+                </Button>
+              </div>
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left p-3 font-medium">SKU</th>
+                      <th className="text-right p-3 font-medium w-32">Bottles</th>
+                      <th className="text-right p-3 font-medium w-40">Price/Bottle (₹)</th>
+                      <th className="text-right p-3 font-medium w-32">Line Total</th>
+                      <th className="w-12"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {invoiceLineItems.map((item, index) => (
+                      <tr key={index} className="bg-white">
+                        <td className="p-2">
+                          <Select
+                            value={item.sku_name}
+                            onValueChange={(val) => handleInvoiceLineItemChange(index, 'sku_name', val)}
+                          >
+                            <SelectTrigger data-testid={`invoice-sku-select-${index}`}>
+                              <SelectValue placeholder="Select SKU" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {masterSkus.map((sku) => (
+                                <SelectItem key={sku.sku || sku.sku_name} value={sku.sku || sku.sku_name}>
+                                  {sku.sku || sku.sku_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="p-2">
+                          <Input
+                            type="number"
+                            value={item.bottles || ''}
+                            onChange={(e) => handleInvoiceLineItemChange(index, 'bottles', e.target.value)}
+                            min="0"
+                            className="text-right"
+                            placeholder="0"
+                            data-testid={`invoice-bottles-input-${index}`}
+                          />
+                        </td>
+                        <td className="p-2">
+                          <Input
+                            type="number"
+                            value={item.price_per_bottle || ''}
+                            onChange={(e) => handleInvoiceLineItemChange(index, 'price_per_bottle', e.target.value)}
+                            min="0"
+                            step="0.01"
+                            className="text-right"
+                            placeholder="0.00"
+                            data-testid={`invoice-price-input-${index}`}
+                          />
+                        </td>
+                        <td className="p-2 text-right font-medium tabular-nums">
+                          ₹{(item.bottles * item.price_per_bottle).toLocaleString()}
+                        </td>
+                        <td className="p-2">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleRemoveInvoiceLineItem(index)}
+                            className="h-8 w-8 text-red-500 hover:text-red-700"
+                            disabled={invoiceLineItems.length <= 1}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-muted/30">
+                    <tr>
+                      <td colSpan={3} className="p-3 text-right font-semibold">Invoice Total</td>
+                      <td className="p-3 text-right font-bold text-lg tabular-nums text-primary">
+                        ₹{calculateInvoiceTotal().toLocaleString()}
+                      </td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                COGS, logistics, and gross margin will be auto-calculated based on the account's city ({account?.city})
+              </p>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <Label className="text-sm font-medium">Notes (Optional)</Label>
+              <Textarea
+                value={invoiceNotes}
+                onChange={(e) => setInvoiceNotes(e.target.value)}
+                placeholder="Add any notes for this invoice..."
+                className="mt-1"
+                rows={2}
+                data-testid="invoice-notes-input"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowCreateInvoice(false)} disabled={creatingInvoice}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleCreateInvoice} 
+              disabled={creatingInvoice || calculateInvoiceTotal() <= 0}
+              data-testid="submit-invoice-btn"
+            >
+              {creatingInvoice ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creating...</>
+              ) : (
+                <><CheckCircle className="h-4 w-4 mr-2" /> Create Invoice</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

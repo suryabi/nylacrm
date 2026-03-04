@@ -4853,7 +4853,9 @@ async def get_account_invoices(account_id: str, current_user: dict = Depends(get
             'status': inv.get('status', 'matched'),
             'items': inv.get('line_items', inv.get('items', [])),
             'received_at': inv.get('received_at'),
+            'total_bottles': inv.get('total_bottles', 0),
             'total_cogs': inv.get('total_cogs', 0),
+            'total_logistics': inv.get('total_logistics', 0),
             'gross_margin': inv.get('gross_margin', 0),
             'gross_margin_percent': inv.get('gross_margin_percent', 0)
         })
@@ -4865,6 +4867,149 @@ async def get_account_invoices(account_id: str, current_user: dict = Depends(get
         'credit_amount': credit_amount,
         'paid_amount': net_amount,  # For backwards compatibility
         'outstanding': outstanding if outstanding > 0 else (total_amount - net_amount)
+    }
+
+class InvoiceLineItemCreate(BaseModel):
+    """Line item for creating an invoice"""
+    sku_name: str
+    bottles: int
+    price_per_bottle: float
+
+class AccountInvoiceCreate(BaseModel):
+    """Create invoice for an account"""
+    invoice_date: str
+    line_items: List[InvoiceLineItemCreate]
+    notes: Optional[str] = None
+
+@api_router.post("/accounts/{account_id}/invoices")
+async def create_account_invoice(
+    account_id: str, 
+    invoice_data: AccountInvoiceCreate, 
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Create a new invoice for an account with automatic COGS, logistics, and margin calculation.
+    COGS and logistics are fetched from the cogs_data collection based on SKU and account city.
+    """
+    # Get account details
+    account = await db.accounts.find_one(
+        {'$or': [{'id': account_id}, {'account_id': account_id}]},
+        {'_id': 0}
+    )
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+    
+    account_uuid = account.get('id')
+    account_city = account.get('city', 'Hyderabad')
+    account_name = account.get('account_name') or account.get('company_name')
+    
+    # Get COGS data for the account's city
+    cogs_data = await db.cogs_data.find({'city': account_city}, {'_id': 0}).to_list(100)
+    cogs_lookup = {c['sku_name']: c for c in cogs_data}
+    
+    # Process line items and calculate costs
+    processed_items = []
+    total_revenue = 0
+    total_cogs = 0
+    total_logistics = 0
+    total_bottles = 0
+    
+    for item in invoice_data.line_items:
+        sku_name = item.sku_name
+        bottles = item.bottles
+        price_per_bottle = item.price_per_bottle
+        line_total = round(bottles * price_per_bottle, 2)
+        
+        # Look up COGS and logistics for this SKU in the account's city
+        cogs_info = cogs_lookup.get(sku_name, {})
+        cogs_per_bottle = cogs_info.get('total_cogs', 0) or 0
+        logistics_per_bottle = cogs_info.get('outbound_logistics_cost', 0) or 0
+        
+        # If COGS not found for this city, try to get from any city as fallback
+        if cogs_per_bottle == 0:
+            fallback_cogs = await db.cogs_data.find_one({'sku_name': sku_name}, {'_id': 0})
+            if fallback_cogs:
+                cogs_per_bottle = fallback_cogs.get('total_cogs', 0) or 0
+                logistics_per_bottle = fallback_cogs.get('outbound_logistics_cost', 0) or 0
+        
+        # Calculate totals for this line item
+        line_cogs = round(bottles * cogs_per_bottle, 2)
+        line_logistics = round(bottles * logistics_per_bottle, 2)
+        line_margin = round(line_total - line_cogs - line_logistics, 2)
+        line_margin_percent = round((line_margin / line_total) * 100, 2) if line_total > 0 else 0
+        
+        processed_items.append({
+            'id': str(uuid.uuid4()),
+            'sku_name': sku_name,
+            'sku_code': sku_name.replace(' ', '_').replace('–', '').upper()[:15],
+            'bottles': bottles,
+            'price_per_bottle': price_per_bottle,
+            'line_total': line_total,
+            'cogs_per_bottle': cogs_per_bottle,
+            'cogs_total': line_cogs,
+            'logistics_per_bottle': logistics_per_bottle,
+            'logistics_total': line_logistics,
+            'margin': line_margin,
+            'margin_percent': line_margin_percent
+        })
+        
+        total_revenue += line_total
+        total_cogs += line_cogs
+        total_logistics += line_logistics
+        total_bottles += bottles
+    
+    # Calculate invoice-level totals
+    gross_margin = round(total_revenue - total_cogs - total_logistics, 2)
+    gross_margin_percent = round((gross_margin / total_revenue) * 100, 2) if total_revenue > 0 else 0
+    
+    # Generate invoice number
+    today = datetime.now().strftime('%Y%m%d')
+    count = await db.invoices.count_documents({'invoice_number': {'$regex': f'^INV-{today}'}})
+    invoice_number = f"INV-{today}-{str(count + 1).zfill(4)}"
+    
+    # Create invoice document
+    invoice = {
+        'id': str(uuid.uuid4()),
+        'invoice_number': invoice_number,
+        'account_id': account_uuid,
+        'account_name': account_name,
+        'account_city': account_city,
+        'invoice_date': invoice_data.invoice_date,
+        'due_date': (datetime.strptime(invoice_data.invoice_date, '%Y-%m-%d') + timedelta(days=30)).strftime('%Y-%m-%d'),
+        'line_items': processed_items,
+        'total_bottles': total_bottles,
+        'grand_total': round(total_revenue, 2),
+        'total_cogs': round(total_cogs, 2),
+        'total_logistics': round(total_logistics, 2),
+        'gross_margin': gross_margin,
+        'gross_margin_percent': gross_margin_percent,
+        'notes': invoice_data.notes,
+        'status': 'pending',
+        'created_by': current_user['id'],
+        'created_by_name': current_user.get('name'),
+        'created_at': datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.invoices.insert_one(invoice)
+    
+    # Return response with margin summary
+    return {
+        'message': 'Invoice created successfully',
+        'invoice': {
+            'id': invoice['id'],
+            'invoice_number': invoice_number,
+            'account_name': account_name,
+            'invoice_date': invoice_data.invoice_date,
+            'total_bottles': total_bottles,
+            'line_items_count': len(processed_items)
+        },
+        'margin_summary': {
+            'invoice_revenue': round(total_revenue, 2),
+            'total_cogs': round(total_cogs, 2),
+            'total_logistics': round(total_logistics, 2),
+            'gross_margin': gross_margin,
+            'gross_margin_percent': gross_margin_percent
+        }
     }
 
 @api_router.delete("/accounts/{account_id}")

@@ -80,6 +80,7 @@ export const accountsAPI = {
   update: (id, data) => axios.put(`${API_URL}/accounts/${id}`, data, { headers: getAuthHeaders() }),
   delete: (id) => axios.delete(`${API_URL}/accounts/${id}`, { headers: getAuthHeaders() }),
   getInvoices: (id) => axios.get(`${API_URL}/accounts/${id}/invoices`, { headers: getAuthHeaders() }),
+  createInvoice: (id, data) => axios.post(`${API_URL}/accounts/${id}/invoices`, data, { headers: getAuthHeaders() }),
 };
 
 // Master SKUs API with full CRUD
