@@ -655,7 +655,6 @@ ${userEmail}`;
     try {
       await leadsAPI.update(id, { rank: newRank });
       setLead(prev => ({ ...prev, rank: newRank }));
-      toast.success(`Lead ranked as ${newRank}`);
     } catch (error) {
       toast.error('Failed to update rank');
     } finally {
