@@ -10855,6 +10855,315 @@ async def get_weather(latitude: float, longitude: float):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch weather: {str(e)}")
 
+# ==================== TARGET PLANNING MODULE (V2) ====================
+
+class TargetPlanCreateV2(BaseModel):
+    name: str
+    start_date: str  # YYYY-MM-DD
+    end_date: str    # YYYY-MM-DD
+    target_type: str = "revenue"  # revenue, volume, etc.
+    total_amount: float
+    description: Optional[str] = None
+
+class TargetPlanUpdateV2(BaseModel):
+    name: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    target_type: Optional[str] = None
+    total_amount: Optional[float] = None
+    description: Optional[str] = None
+    status: Optional[str] = None  # draft, active, completed, locked
+
+class TargetAllocationCreateV2(BaseModel):
+    territory_id: str
+    territory_name: str
+    city: Optional[str] = None
+    resource_id: Optional[str] = None
+    resource_name: Optional[str] = None
+    amount: float
+
+class TargetAllocationUpdateV2(BaseModel):
+    amount: Optional[float] = None
+
+@api_router.get("/target-planning")
+async def get_target_planning_list(
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all target plans for new Target Planning module"""
+    query = {}
+    if status:
+        query['status'] = status
+    
+    plans = await db.target_plans_v2.find(query, {'_id': 0}).sort('created_at', -1).to_list(100)
+    return plans
+
+@api_router.post("/target-planning")
+async def create_target_planning(
+    plan: TargetPlanCreateV2,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new target plan (v2)"""
+    plan_data = {
+        'id': str(uuid.uuid4()),
+        'name': plan.name,
+        'start_date': plan.start_date,
+        'end_date': plan.end_date,
+        'target_type': plan.target_type,
+        'total_amount': plan.total_amount,
+        'allocated_amount': 0,
+        'description': plan.description,
+        'status': 'draft',
+        'created_by': current_user['id'],
+        'created_by_name': current_user.get('name', current_user.get('email')),
+        'created_at': datetime.now(timezone.utc).isoformat(),
+        'updated_at': datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.target_plans_v2.insert_one(plan_data)
+    plan_data.pop('_id', None)
+    return plan_data
+
+@api_router.get("/target-planning/{plan_id}")
+async def get_target_planning_detail(
+    plan_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a specific target plan with allocations"""
+    plan = await db.target_plans_v2.find_one({'id': plan_id}, {'_id': 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Target plan not found")
+    
+    allocations = await db.target_allocations_v2.find(
+        {'plan_id': plan_id}, {'_id': 0}
+    ).to_list(500)
+    
+    plan['allocations'] = allocations
+    return plan
+
+@api_router.put("/target-planning/{plan_id}")
+async def update_target_planning(
+    plan_id: str,
+    plan_update: TargetPlanUpdateV2,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a target plan"""
+    existing = await db.target_plans_v2.find_one({'id': plan_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Target plan not found")
+    
+    update_data = {k: v for k, v in plan_update.model_dump().items() if v is not None}
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.target_plans_v2.update_one({'id': plan_id}, {'$set': update_data})
+    
+    updated = await db.target_plans_v2.find_one({'id': plan_id}, {'_id': 0})
+    return updated
+
+@api_router.delete("/target-planning/{plan_id}")
+async def delete_target_planning(
+    plan_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a target plan and its allocations"""
+    existing = await db.target_plans_v2.find_one({'id': plan_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Target plan not found")
+    
+    await db.target_allocations_v2.delete_many({'plan_id': plan_id})
+    await db.target_plans_v2.delete_one({'id': plan_id})
+    
+    return {"message": "Target plan deleted successfully"}
+
+@api_router.post("/target-planning/{plan_id}/allocations")
+async def create_target_allocation_v2(
+    plan_id: str,
+    allocation: TargetAllocationCreateV2,
+    current_user: dict = Depends(get_current_user)
+):
+    """Add an allocation to a target plan"""
+    plan = await db.target_plans_v2.find_one({'id': plan_id})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Target plan not found")
+    
+    allocation_data = {
+        'id': str(uuid.uuid4()),
+        'plan_id': plan_id,
+        'territory_id': allocation.territory_id,
+        'territory_name': allocation.territory_name,
+        'city': allocation.city,
+        'resource_id': allocation.resource_id,
+        'resource_name': allocation.resource_name,
+        'amount': allocation.amount,
+        'created_at': datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.target_allocations_v2.insert_one(allocation_data)
+    
+    total_allocated = await db.target_allocations_v2.aggregate([
+        {'$match': {'plan_id': plan_id}},
+        {'$group': {'_id': None, 'total': {'$sum': '$amount'}}}
+    ]).to_list(1)
+    
+    allocated = total_allocated[0]['total'] if total_allocated else 0
+    await db.target_plans_v2.update_one(
+        {'id': plan_id}, 
+        {'$set': {'allocated_amount': allocated, 'updated_at': datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    allocation_data.pop('_id', None)
+    return allocation_data
+
+@api_router.delete("/target-planning/{plan_id}/allocations/{allocation_id}")
+async def delete_target_allocation_v2(
+    plan_id: str,
+    allocation_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete an allocation"""
+    existing = await db.target_allocations_v2.find_one({'id': allocation_id, 'plan_id': plan_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Allocation not found")
+    
+    await db.target_allocations_v2.delete_one({'id': allocation_id})
+    
+    total_allocated = await db.target_allocations_v2.aggregate([
+        {'$match': {'plan_id': plan_id}},
+        {'$group': {'_id': None, 'total': {'$sum': '$amount'}}}
+    ]).to_list(1)
+    
+    allocated = total_allocated[0]['total'] if total_allocated else 0
+    await db.target_plans_v2.update_one(
+        {'id': plan_id}, 
+        {'$set': {'allocated_amount': allocated, 'updated_at': datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"message": "Allocation deleted successfully"}
+
+@api_router.get("/target-planning/{plan_id}/dashboard")
+async def get_target_planning_dashboard(
+    plan_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get dashboard data for a target plan"""
+    plan = await db.target_plans_v2.find_one({'id': plan_id}, {'_id': 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Target plan not found")
+    
+    start_date = datetime.fromisoformat(plan['start_date'])
+    end_date = datetime.fromisoformat(plan['end_date'])
+    today = datetime.now(timezone.utc).replace(tzinfo=None)
+    
+    total_days = (end_date - start_date).days
+    days_elapsed = max(0, (today - start_date).days)
+    days_remaining = max(0, (end_date - today).days)
+    
+    allocations = await db.target_allocations_v2.find(
+        {'plan_id': plan_id}, {'_id': 0}
+    ).to_list(500)
+    
+    cities = list(set(a['city'] for a in allocations if a.get('city')))
+    
+    # Estimated Revenue from Won Leads
+    won_leads_query = {
+        'status': 'won',
+        'updated_at': {'$gte': plan['start_date'], '$lte': plan['end_date']}
+    }
+    if cities:
+        won_leads_query['city'] = {'$in': cities}
+    
+    won_leads = await db.leads.find(won_leads_query, {'_id': 0}).to_list(1000)
+    estimated_revenue = sum(lead.get('estimated_value', 0) or 0 for lead in won_leads)
+    
+    # Actual Revenue from Invoices
+    invoices_query = {
+        'invoice_date': {'$gte': plan['start_date'], '$lte': plan['end_date']}
+    }
+    
+    invoices = await db.invoices.find(invoices_query, {'_id': 0}).to_list(1000)
+    actual_revenue = sum(inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0 for inv in invoices)
+    
+    # Calculate 15-day intervals
+    intervals = []
+    current = start_date
+    interval_num = 1
+    while current < end_date:
+        interval_end = min(current + timedelta(days=15), end_date)
+        intervals.append({
+            'interval': interval_num,
+            'start': current.strftime('%Y-%m-%d'),
+            'end': interval_end.strftime('%Y-%m-%d'),
+            'label': f"{current.strftime('%b %d')} - {interval_end.strftime('%b %d')}"
+        })
+        current = interval_end
+        interval_num += 1
+    
+    # Territory breakdown for won leads
+    territory_breakdown = {}
+    for lead in won_leads:
+        territory = lead.get('territory', 'Unknown')
+        if territory not in territory_breakdown:
+            territory_breakdown[territory] = {'count': 0, 'value': 0}
+        territory_breakdown[territory]['count'] += 1
+        territory_breakdown[territory]['value'] += lead.get('estimated_value', 0) or 0
+    
+    # City breakdown for invoices
+    city_breakdown = {}
+    for inv in invoices:
+        account_id = inv.get('account_id')
+        if account_id:
+            account = await db.accounts.find_one({'account_id': account_id}, {'city': 1})
+            city = account.get('city', 'Unknown') if account else 'Unknown'
+        else:
+            city = 'Unknown'
+        
+        if city not in city_breakdown:
+            city_breakdown[city] = {'count': 0, 'value': 0}
+        city_breakdown[city]['count'] += 1
+        city_breakdown[city]['value'] += inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0
+    
+    return {
+        'plan': plan,
+        'timeline': {
+            'total_days': total_days,
+            'days_elapsed': days_elapsed,
+            'days_remaining': days_remaining,
+            'progress_percent': round((days_elapsed / total_days) * 100, 1) if total_days > 0 else 0,
+            'intervals': intervals
+        },
+        'estimated_revenue': {
+            'achieved': estimated_revenue,
+            'remaining': max(0, plan['total_amount'] - estimated_revenue),
+            'percent': round((estimated_revenue / plan['total_amount']) * 100, 1) if plan['total_amount'] > 0 else 0,
+            'won_leads_count': len(won_leads),
+            'territory_breakdown': territory_breakdown
+        },
+        'actual_revenue': {
+            'achieved': actual_revenue,
+            'remaining': max(0, plan['total_amount'] - actual_revenue),
+            'percent': round((actual_revenue / plan['total_amount']) * 100, 1) if plan['total_amount'] > 0 else 0,
+            'invoices_count': len(invoices),
+            'city_breakdown': city_breakdown
+        },
+        'allocations': allocations
+    }
+
+# Sales roles for resource filtering
+SALES_ROLES_V2 = ['National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Head of Business']
+
+@api_router.get("/target-planning/resources/sales")
+async def get_sales_resources_v2(
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all sales team members for target allocation"""
+    users = await db.users.find(
+        {'role': {'$in': SALES_ROLES_V2}},
+        {'_id': 0, 'id': 1, 'name': 1, 'email': 1, 'role': 1, 'city': 1, 'territory': 1}
+    ).to_list(200)
+    return users
+
+# ==================== END TARGET PLANNING MODULE (V2) ====================
+
 # ============= INCLUDE ROUTER =============
 
 app.include_router(api_router)
@@ -10877,6 +11186,7 @@ else:
     cors_origins = default_origins
 
 # Add the preview URL if set
+
 preview_url = os.environ.get('REACT_APP_BACKEND_URL', '')
 if preview_url and preview_url not in cors_origins:
     # Extract just the origin (protocol + host)

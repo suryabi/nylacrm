@@ -29,6 +29,8 @@ import DashboardPreview from './pages/DashboardPreview';
 import BottlePreview from './pages/BottlePreview';
 import LeaveManagement from './pages/LeaveManagement';
 import SalesTargets from './pages/SalesTargets';
+import TargetPlanningList from './pages/TargetPlanningList';
+import TargetPlanDashboard from './pages/TargetPlanDashboard';
 import ReportsPage from './pages/ReportsPage';
 import SalesPortal from './pages/SalesPortal';
 import LeadDiscovery from './pages/LeadDiscovery';
@@ -133,6 +135,8 @@ function AppRouter() {
           <Route path="/travel-requests" element={<ProtectedRoute><TravelRequest /></ProtectedRoute>} />
           <Route path="/budget-requests" element={<ProtectedRoute><BudgetRequest /></ProtectedRoute>} />
           <Route path="/targets" element={<ProtectedRoute><SalesTargets /></ProtectedRoute>} />
+          <Route path="/target-planning" element={<ProtectedRoute><TargetPlanningList /></ProtectedRoute>} />
+          <Route path="/target-planning/:planId" element={<ProtectedRoute><TargetPlanDashboard /></ProtectedRoute>} />
           <Route path="/reports-new" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
           <Route path="/sales-portal" element={<ProtectedRoute><SalesPortal /></ProtectedRoute>} />
           <Route path="/lead-discovery" element={<ProtectedRoute><LeadDiscovery /></ProtectedRoute>} />
