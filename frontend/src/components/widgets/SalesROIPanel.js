@@ -49,8 +49,8 @@ export default function SalesROIPanel() {
     expenses: false
   });
 
-  // Check if user is in Sales department
-  const isSalesDepartment = user?.department?.toLowerCase() === 'sales';
+  // Check if user is in Sales department (check if department contains 'sales')
+  const isSalesDepartment = user?.department?.toLowerCase()?.includes('sales');
 
   useEffect(() => {
     if (!isSalesDepartment) {

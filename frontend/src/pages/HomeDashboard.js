@@ -364,8 +364,8 @@ export default function HomeDashboard() {
 
   const { action_items, upcoming_leads, upcoming_meetings, today_summary, pipeline, monthly_performance, recent_activities } = dashboardData || {};
   
-  // Check if user is in Sales department for ROI Panel
-  const showSalesROIPanel = user?.department?.toLowerCase() === 'sales';
+  // Check if user is in Sales department for ROI Panel (check if department contains 'sales')
+  const showSalesROIPanel = user?.department?.toLowerCase()?.includes('sales');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex" data-testid="home-dashboard">

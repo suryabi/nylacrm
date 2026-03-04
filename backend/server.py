@@ -2986,8 +2986,8 @@ async def get_sales_roi_summary(
     user_id = current_user['id']
     user_department = current_user.get('department', '')
     
-    # Check if user belongs to Sales department
-    if user_department.lower() != 'sales':
+    # Check if user belongs to Sales department (check if department contains 'sales')
+    if 'sales' not in user_department.lower():
         raise HTTPException(
             status_code=403, 
             detail='Sales ROI Summary is only available for Sales department employees'
