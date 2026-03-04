@@ -770,7 +770,7 @@ ${userEmail}`;
       </div>
 
       {/* Lead Ranking Tiles */}
-      <Card className="p-4 mb-6">
+      <Card className="p-3 mb-6">
         <LeadRankingTiles
           currentRank={lead.rank}
           onRankChange={handleRankChange}

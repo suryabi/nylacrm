@@ -109,12 +109,10 @@ export default function LeadRankingTiles({ currentRank, onRankChange, disabled =
   const ranks = ['A+', 'A', 'B', 'C', 'D'];
   
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-muted-foreground">Lead Ranking</h3>
-        {saving && <span className="text-xs text-muted-foreground animate-pulse">Saving...</span>}
-      </div>
-      <div className="grid grid-cols-5 gap-2" data-testid="lead-ranking-tiles">
+    <div className="flex items-center gap-4">
+      <h3 className="text-sm font-medium text-muted-foreground whitespace-nowrap">Lead Ranking</h3>
+      {saving && <span className="text-xs text-muted-foreground animate-pulse">Saving...</span>}
+      <div className="flex gap-2 flex-1" data-testid="lead-ranking-tiles">
         {ranks.map((rank) => {
           const config = LEAD_RANKS[rank];
           const Icon = config.icon;
@@ -126,38 +124,33 @@ export default function LeadRankingTiles({ currentRank, onRankChange, disabled =
               onClick={() => !disabled && onRankChange(rank)}
               disabled={disabled}
               className={cn(
-                "relative flex flex-col items-center p-3 rounded-lg border-2 transition-all duration-200",
-                "hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2",
+                "relative flex items-center gap-2 px-3 py-2 rounded-lg border transition-all duration-200",
+                "hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-1",
                 config.ringColor,
                 isSelected 
-                  ? `${config.border} ${config.bgLight} shadow-md` 
-                  : "border-transparent bg-muted/30 hover:bg-muted/50",
+                  ? `${config.border} ${config.bgLight} border-2` 
+                  : "border-gray-200 bg-gray-50/50 hover:bg-gray-100/50",
                 disabled && "opacity-50 cursor-not-allowed"
               )}
               data-testid={`rank-tile-${rank}`}
             >
               {/* Rank Badge */}
               <div className={cn(
-                "w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg mb-2 transition-transform",
-                config.color,
-                isSelected && "scale-110"
+                "w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0",
+                config.color
               )}>
                 {rank}
               </div>
               
-              {/* Icon */}
-              <Icon className={cn(
-                "h-4 w-4 mb-1",
-                isSelected ? config.textDark : "text-muted-foreground"
-              )} />
-              
               {/* Description */}
-              <span className={cn(
-                "text-[10px] text-center leading-tight font-medium",
-                isSelected ? config.textDark : "text-muted-foreground"
-              )}>
-                {config.description}
-              </span>
+              <div className="text-left min-w-0">
+                <span className={cn(
+                  "text-xs font-medium block leading-tight",
+                  isSelected ? config.textDark : "text-gray-600"
+                )}>
+                  {config.description}
+                </span>
+              </div>
               
               {/* Selected indicator */}
               {isSelected && (
