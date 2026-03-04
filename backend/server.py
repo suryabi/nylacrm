@@ -28,6 +28,9 @@ import resend
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+# Setup logging
+logger = logging.getLogger(__name__)
+
 # ActiveMQ globals (will be set on startup)
 MQ_AVAILABLE = False
 mq_subscriber = None
@@ -5341,8 +5344,23 @@ async def get_users(
     users = await db.users.find({}, {'_id': 0, 'password': 0}).skip(skip).limit(limit).to_list(limit)
     
     for user in users:
-        if isinstance(user.get('created_at'), str):
-            user['created_at'] = datetime.fromisoformat(user['created_at'])
+        # Handle created_at conversion safely - ensure consistent ISO string output
+        try:
+            created_at = user.get('created_at')
+            if created_at is None:
+                user['created_at'] = datetime.now(timezone.utc).isoformat()
+            elif isinstance(created_at, datetime):
+                # Already a datetime object, convert to ISO string
+                user['created_at'] = created_at.isoformat() if created_at.tzinfo else created_at.replace(tzinfo=timezone.utc).isoformat()
+            elif isinstance(created_at, str):
+                # Validate the string is a valid ISO format, keep as string
+                datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                user['created_at'] = created_at
+        except (ValueError, AttributeError, TypeError) as e:
+            # If parsing fails, set a default value
+            logger.warning(f"Error handling created_at for user {user.get('id')}: {e}")
+            user['created_at'] = datetime.now(timezone.utc).isoformat()
+        
         # Ensure department has a default value for legacy data
         if not user.get('department'):
             user['department'] = 'Sales'
@@ -5354,10 +5372,19 @@ async def get_org_chart(current_user: dict = Depends(get_current_user)):
     """Get organizational hierarchy chart"""
     users = await db.users.find({}, {'_id': 0, 'password': 0}).to_list(1000)
     
-    # Convert datetime strings
+    # Convert datetime strings safely
     for user in users:
-        if isinstance(user.get('created_at'), str):
-            user['created_at'] = datetime.fromisoformat(user['created_at'])
+        try:
+            created_at = user.get('created_at')
+            if created_at is None:
+                user['created_at'] = datetime.now(timezone.utc).isoformat()
+            elif isinstance(created_at, datetime):
+                user['created_at'] = created_at.isoformat() if created_at.tzinfo else created_at.replace(tzinfo=timezone.utc).isoformat()
+            elif isinstance(created_at, str):
+                datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                user['created_at'] = created_at
+        except (ValueError, AttributeError, TypeError):
+            user['created_at'] = datetime.now(timezone.utc).isoformat()
     
     # Build hierarchy
     users_by_id = {user['id']: user for user in users}
