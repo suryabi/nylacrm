@@ -28,7 +28,34 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 
 ## What's Been Implemented
 
-### Mar 3, 2026 (Session 16 - Current)
+### Mar 4, 2026 (Session 17 - Current)
+
+- **NEW FEATURE**: Invoice Creation with Automatic COGS/Logistics/Margin Calculation
+  - **Purpose**: Enable users to create invoices for accounts with automatic financial calculations
+  - **Backend** (`POST /api/accounts/{account_id}/invoices`):
+    - Creates invoices with automatic COGS, logistics, and gross margin calculation
+    - COGS and logistics fetched from `cogs_data` collection based on SKU and account city
+    - Line-level calculations: cogs_per_bottle, cogs_total, logistics_per_bottle, logistics_total, margin, margin_percent
+    - Invoice-level calculations: total_cogs, total_logistics, gross_margin, gross_margin_percent
+    - Generates sequential invoice numbers: INV-YYYYMMDD-XXXX
+    - Response includes margin_summary for immediate feedback
+  - **Frontend** (`AccountDetail.js`):
+    - "Create Invoice" button in Invoice Summary section
+    - Create Invoice dialog with:
+      - Invoice date picker
+      - Account city displayed (read-only) with COGS note
+      - Line items table with SKU dropdown (from master SKU list), bottles, price/bottle inputs
+      - Auto-calculated line totals and invoice total
+      - Add Line / Remove Line functionality
+      - Notes (optional) text area
+    - Success toast shows invoice number and gross margin percentage
+    - Invoice list automatically refreshes after creation
+  - **API Method**: `accountsAPI.createInvoice(id, data)` in `/app/frontend/src/utils/api.js`
+  - **Testing**: 100% success rate (8/8 backend tests, all frontend UI flows verified)
+  - **Test Data**: Test invoices created for Oceans Fresh Seafood (OCEA-HYD-A26-001) in Hyderabad
+  - Status: VERIFIED
+
+### Mar 3, 2026 (Session 16)
 
 - **NEW FEATURE**: Sales ROI Accounting Panel
   - Fixed right-side panel on Home Dashboard (25% width)
