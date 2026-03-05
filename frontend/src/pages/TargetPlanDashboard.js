@@ -67,9 +67,22 @@ const formatCurrency = (amount, short = false) => {
   return `₹${amount.toLocaleString('en-IN')}`;
 };
 
-// Timeline Progress Bar with 15-day markers
-function TimelineProgressBar({ timeline, plan }) {
-  const { total_days, days_elapsed, days_remaining, progress_percent, intervals } = timeline;
+// Timeline Progress Bar with clickable milestones
+function TimelineProgressBar({ timeline, plan, onMilestoneClick }) {
+  const { total_days, days_elapsed, days_remaining, progress_percent, milestones } = timeline;
+  const [selectedMilestone, setSelectedMilestone] = useState(null);
+  
+  const handleMilestoneClick = (milestone) => {
+    setSelectedMilestone(selectedMilestone === milestone.milestone ? null : milestone.milestone);
+    if (onMilestoneClick) onMilestoneClick(milestone);
+  };
+
+  // Format currency
+  const formatAmount = (amount) => {
+    if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(1)} Cr`;
+    if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)} L`;
+    return `₹${amount.toLocaleString('en-IN')}`;
+  };
   
   return (
     <Card className="p-6 mb-6">
@@ -94,43 +107,80 @@ function TimelineProgressBar({ timeline, plan }) {
         </div>
       </div>
       
-      {/* Progress Bar */}
-      <div className="relative">
-        <div className="h-8 bg-gray-100 rounded-lg overflow-hidden">
+      {/* Progress Bar with Milestones */}
+      <div className="relative pt-8 pb-4">
+        {/* Main Progress Bar */}
+        <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
           <div 
-            className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg transition-all duration-500 flex items-center justify-end pr-2"
+            className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500"
             style={{ width: `${Math.min(100, progress_percent)}%` }}
-          >
-            {progress_percent >= 10 && (
-              <span className="text-white text-sm font-semibold">{progress_percent}%</span>
-            )}
-          </div>
+          />
         </div>
         
-        {/* 15-day interval markers */}
-        <div className="flex justify-between mt-2">
-          {intervals.slice(0, 12).map((interval, idx) => (
-            <div 
-              key={idx} 
-              className="text-center group relative"
-              style={{ flex: 1 }}
-            >
-              <div className="h-2 w-px bg-gray-300 mx-auto" />
-              <p className="text-[10px] text-muted-foreground mt-1 truncate px-1">{interval.label}</p>
-              
-              {/* Tooltip */}
-              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-10">
-                <div className="bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
-                  {interval.start} to {interval.end}
+        {/* Milestone Markers */}
+        <div className="absolute top-0 left-0 right-0 flex justify-between">
+          {milestones.map((milestone, idx) => {
+            const position = ((milestone.days / total_days) * 100);
+            const isActive = selectedMilestone === milestone.milestone;
+            
+            return (
+              <div 
+                key={milestone.milestone}
+                className="absolute transform -translate-x-1/2 flex flex-col items-center cursor-pointer group"
+                style={{ left: `${position}%` }}
+                onClick={() => handleMilestoneClick(milestone)}
+                data-testid={`milestone-${milestone.milestone}`}
+              >
+                {/* Milestone Circle */}
+                <div className={cn(
+                  "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all",
+                  milestone.is_completed 
+                    ? "bg-green-500 border-green-500 text-white" 
+                    : milestone.is_current 
+                      ? "bg-blue-500 border-blue-500 text-white animate-pulse" 
+                      : "bg-white border-gray-300 text-gray-600",
+                  isActive && "ring-2 ring-offset-2 ring-blue-400 scale-110"
+                )}>
+                  {milestone.is_completed ? (
+                    <CheckCircle className="h-4 w-4" />
+                  ) : (
+                    milestone.milestone
+                  )}
+                </div>
+                
+                {/* Days Label */}
+                <div className={cn(
+                  "mt-1 text-center transition-all",
+                  isActive ? "opacity-100" : "opacity-80"
+                )}>
+                  <p className={cn(
+                    "text-sm font-semibold",
+                    milestone.is_completed ? "text-green-600" : milestone.is_current ? "text-blue-600" : "text-gray-600"
+                  )}>
+                    Day {milestone.days}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">{milestone.date_label}</p>
+                </div>
+
+                {/* Tooltip on hover */}
+                <div className={cn(
+                  "absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 z-10 transition-all",
+                  "bg-gray-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap",
+                  isActive ? "opacity-100 visible" : "opacity-0 invisible group-hover:opacity-100 group-hover:visible"
+                )}>
+                  <p className="font-semibold">Milestone {milestone.milestone}</p>
+                  <p>Target: {formatAmount(milestone.target_amount)}</p>
+                  <p>Due: {new Date(milestone.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
       
       {/* Date Range */}
-      <div className="flex items-center justify-between mt-4 text-sm text-muted-foreground">
+      <div className="flex items-center justify-between mt-6 text-sm text-muted-foreground">
         <span className="flex items-center gap-1">
           <Calendar className="h-4 w-4" />
           Start: {new Date(plan.start_date).toLocaleDateString('en-IN', { month: 'long', day: 'numeric', year: 'numeric' })}
@@ -437,14 +487,14 @@ function AllocationSection({ planId, allocations, onUpdate, plan }) {
             <div>
               <Label>City (Optional)</Label>
               <Select 
-                value={newAllocation.city} 
-                onValueChange={(v) => setNewAllocation({ ...newAllocation, city: v })}
+                value={newAllocation.city || "__all__"} 
+                onValueChange={(v) => setNewAllocation({ ...newAllocation, city: v === "__all__" ? "" : v })}
               >
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder="Select city" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">-- All Cities --</SelectItem>
+                  <SelectItem value="__all__">-- All Cities --</SelectItem>
                   {cities.map((c) => (
                     <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
                   ))}
@@ -455,21 +505,25 @@ function AllocationSection({ planId, allocations, onUpdate, plan }) {
             <div>
               <Label>Resource (Optional)</Label>
               <Select 
-                value={newAllocation.resource_id} 
+                value={newAllocation.resource_id || "__unassigned__"} 
                 onValueChange={(v) => {
-                  const res = resources.find(r => r.id === v);
-                  setNewAllocation({ 
-                    ...newAllocation, 
-                    resource_id: v, 
-                    resource_name: res?.name || '' 
-                  });
+                  if (v === "__unassigned__") {
+                    setNewAllocation({ ...newAllocation, resource_id: '', resource_name: '' });
+                  } else {
+                    const res = resources.find(r => r.id === v);
+                    setNewAllocation({ 
+                      ...newAllocation, 
+                      resource_id: v, 
+                      resource_name: res?.name || '' 
+                    });
+                  }
                 }}
               >
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder="Select resource" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">-- Unassigned --</SelectItem>
+                  <SelectItem value="__unassigned__">-- Unassigned --</SelectItem>
                   {resources.map((r) => (
                     <SelectItem key={r.id} value={r.id}>{r.name} ({r.role})</SelectItem>
                   ))}

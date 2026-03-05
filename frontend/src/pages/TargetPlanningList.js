@@ -80,6 +80,7 @@ export default function TargetPlanningList() {
     end_date: '',
     target_type: 'revenue',
     total_amount: '',
+    milestones: '4',
     description: ''
   });
 
@@ -119,7 +120,8 @@ export default function TargetPlanningList() {
         },
         body: JSON.stringify({
           ...formData,
-          total_amount: parseFloat(formData.total_amount)
+          total_amount: parseFloat(formData.total_amount),
+          milestones: parseInt(formData.milestones) || 4
         })
       });
 
@@ -127,7 +129,7 @@ export default function TargetPlanningList() {
         const newPlan = await response.json();
         toast.success('Target plan created');
         setShowCreateDialog(false);
-        setFormData({ name: '', start_date: '', end_date: '', target_type: 'revenue', total_amount: '', description: '' });
+        setFormData({ name: '', start_date: '', end_date: '', target_type: 'revenue', total_amount: '', milestones: '4', description: '' });
         navigate(`/target-planning/${newPlan.id}`);
       } else {
         const error = await response.json();
@@ -399,6 +401,24 @@ export default function TargetPlanningList() {
                   data-testid="plan-amount-input"
                 />
               </div>
+            </div>
+
+            <div>
+              <Label>Number of Milestones</Label>
+              <Select value={formData.milestones} onValueChange={(v) => setFormData({ ...formData, milestones: v })}>
+                <SelectTrigger className="mt-1" data-testid="plan-milestones-select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="2">2 Milestones</SelectItem>
+                  <SelectItem value="3">3 Milestones</SelectItem>
+                  <SelectItem value="4">4 Milestones</SelectItem>
+                  <SelectItem value="6">6 Milestones</SelectItem>
+                  <SelectItem value="8">8 Milestones</SelectItem>
+                  <SelectItem value="12">12 Milestones</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">Target will be split into equal milestone periods</p>
             </div>
 
             <div>

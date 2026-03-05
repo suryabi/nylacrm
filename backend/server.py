@@ -10863,6 +10863,7 @@ class TargetPlanCreateV2(BaseModel):
     end_date: str    # YYYY-MM-DD
     target_type: str = "revenue"  # revenue, volume, etc.
     total_amount: float
+    milestones: int = 4  # Number of milestones to split the target into
     description: Optional[str] = None
 
 class TargetPlanUpdateV2(BaseModel):
@@ -10871,6 +10872,7 @@ class TargetPlanUpdateV2(BaseModel):
     end_date: Optional[str] = None
     target_type: Optional[str] = None
     total_amount: Optional[float] = None
+    milestones: Optional[int] = None
     description: Optional[str] = None
     status: Optional[str] = None  # draft, active, completed, locked
 
@@ -10911,6 +10913,7 @@ async def create_target_planning(
         'end_date': plan.end_date,
         'target_type': plan.target_type,
         'total_amount': plan.total_amount,
+        'milestones': plan.milestones,
         'allocated_amount': 0,
         'description': plan.description,
         'status': 'draft',
@@ -11083,20 +11086,38 @@ async def get_target_planning_dashboard(
     invoices = await db.invoices.find(invoices_query, {'_id': 0}).to_list(1000)
     actual_revenue = sum(inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0 for inv in invoices)
     
-    # Calculate 15-day intervals
-    intervals = []
+    # Calculate milestones based on plan configuration
+    num_milestones = plan.get('milestones', 4)
+    days_per_milestone = total_days // num_milestones if num_milestones > 0 else total_days
+    
+    milestones = []
     current = start_date
-    interval_num = 1
-    while current < end_date:
-        interval_end = min(current + timedelta(days=15), end_date)
-        intervals.append({
-            'interval': interval_num,
-            'start': current.strftime('%Y-%m-%d'),
-            'end': interval_end.strftime('%Y-%m-%d'),
-            'label': f"{current.strftime('%b %d')} - {interval_end.strftime('%b %d')}"
+    cumulative_days = 0
+    target_per_milestone = plan['total_amount'] / num_milestones if num_milestones > 0 else plan['total_amount']
+    
+    for i in range(num_milestones):
+        milestone_end = start_date + timedelta(days=days_per_milestone * (i + 1))
+        if i == num_milestones - 1:
+            milestone_end = end_date  # Last milestone ends exactly at plan end
+        
+        cumulative_days += days_per_milestone if i < num_milestones - 1 else (end_date - current).days
+        milestone_date = milestone_end
+        
+        # Check if milestone is completed (date has passed)
+        is_completed = today >= milestone_end
+        is_current = not is_completed and (i == 0 or today >= start_date + timedelta(days=days_per_milestone * i))
+        
+        milestones.append({
+            'milestone': i + 1,
+            'days': cumulative_days,
+            'date': milestone_date.strftime('%Y-%m-%d'),
+            'date_label': milestone_date.strftime('%b %d'),
+            'target_amount': target_per_milestone * (i + 1),
+            'is_completed': is_completed,
+            'is_current': is_current
         })
-        current = interval_end
-        interval_num += 1
+        
+        current = milestone_end
     
     # Territory breakdown for won leads
     territory_breakdown = {}
@@ -11129,7 +11150,7 @@ async def get_target_planning_dashboard(
             'days_elapsed': days_elapsed,
             'days_remaining': days_remaining,
             'progress_percent': round((days_elapsed / total_days) * 100, 1) if total_days > 0 else 0,
-            'intervals': intervals
+            'milestones': milestones
         },
         'estimated_revenue': {
             'achieved': estimated_revenue,
