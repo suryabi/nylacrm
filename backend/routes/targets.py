@@ -422,18 +422,27 @@ async def get_target_plan_dashboard(plan_id: str, current_user: dict = Depends(g
             }, {'_id': 0, 'net_invoice_value': 1}).to_list(1000)
             month['invoice_value'] = sum(inv.get('net_invoice_value', 0) for inv in invoices)
     
-    # Estimated revenue (from won leads)
-    won_leads = await db.leads.find({
-        'status': 'won',
-        'updated_at': {'$gte': plan['start_date'], '$lte': plan['end_date']}
-    }, {'_id': 0, 'estimated_value': 1}).to_list(1000)
+    # Estimated revenue from customers on-boarded
+    # Criteria: Leads that were set to WON within the target period AND
+    # either stayed in WON status OR progressed to active Customer (converted to account)
+    onboarded_leads = await db.leads.find({
+        '$and': [
+            # Lead was updated (status changed) within the target period
+            {'updated_at': {'$gte': plan['start_date'], '$lte': plan['end_date']}},
+            # Either still in WON status OR converted to account (active customer)
+            {'$or': [
+                {'status': 'won'},
+                {'converted_to_account': True}
+            ]}
+        ]
+    }, {'_id': 0, 'estimated_value': 1, 'status': 1, 'converted_to_account': 1}).to_list(1000)
     
-    estimated_achieved = sum(lead.get('estimated_value', 0) for lead in won_leads)
+    estimated_achieved = sum(lead.get('estimated_value', 0) or 0 for lead in onboarded_leads)
     estimated_revenue = {
         'achieved': estimated_achieved,
         'remaining': max(target - estimated_achieved, 0),
         'percent': round((estimated_achieved / target * 100), 1) if target > 0 else 0,
-        'won_leads_count': len(won_leads)
+        'won_leads_count': len(onboarded_leads)
     }
     
     # Actual revenue (from invoices)

@@ -191,14 +191,14 @@ function RevenueSummaryCards({ estimated, plan }) {
   
   return (
     <div className="mb-6">
-      {/* Revenue from Won Leads Card - Only for Cumulative */}
+      {/* Estimated Revenue from Customers On-boarded - Only for Cumulative */}
       <Card className="p-5 border-2 border-green-200 bg-green-50/50">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold flex items-center gap-2 text-green-700">
             <TrendingUp className="h-5 w-5" />
             Estimated Revenue from the Customers on-boarded
           </h3>
-          <Badge variant="outline" className="text-green-700">{estimated.won_leads_count} Won Leads</Badge>
+          <Badge variant="outline" className="text-green-700">{estimated.won_leads_count} Customers</Badge>
         </div>
         
         <div className="mb-4">
