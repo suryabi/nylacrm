@@ -35,7 +35,7 @@ export default function AuthCallback() {
         const userData = response.data.user;
 
         // Navigate to dashboard with user data
-        navigate('/dashboard', { state: { user: userData }, replace: true });
+        navigate('/home', { state: { user: userData }, replace: true });
       } catch (error) {
         console.error('Auth error:', error);
         

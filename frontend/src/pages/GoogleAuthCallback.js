@@ -32,7 +32,7 @@ export default function GoogleAuthCallback() {
 
         // Success - user logged in
         toast.success('Logged in successfully!');
-        navigate('/dashboard');
+        navigate('/home');
       } catch (error) {
         console.error('OAuth error:', error);
         const errorMsg = error.response?.data?.detail || 'Authentication failed';
