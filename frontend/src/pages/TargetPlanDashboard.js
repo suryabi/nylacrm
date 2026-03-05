@@ -196,7 +196,7 @@ function RevenueSummaryCards({ estimated, plan }) {
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold flex items-center gap-2 text-green-700">
             <TrendingUp className="h-5 w-5" />
-            Revenue from Won leads this month
+            Estimated Revenue from the Customers on-boarded
           </h3>
           <Badge variant="outline" className="text-green-700">{estimated.won_leads_count} Won Leads</Badge>
         </div>
