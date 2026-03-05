@@ -1,0 +1,59 @@
+{
+  "summary": "Complete frontend testing of Target Plan Dashboard redesign based on Goal Type. All 9 features tested successfully across both plan types.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "Monthly Run Rate: Badge visible showing 'Monthly Run Rate'",
+    "Monthly Run Rate: Timeline Progress section visible",
+    "Monthly Run Rate: Monthly Performance table visible with current/past months only",
+    "Monthly Run Rate: 'Revenue Added' column visible (renamed from 'Monthly Revenue')",
+    "Monthly Run Rate: '% of Target Run Rate Achieved' column visible",
+    "Monthly Run Rate: 'Expected Run Rate' column correctly REMOVED",
+    "Monthly Run Rate: 'vs Expected' column correctly REMOVED",
+    "Monthly Run Rate: 'Collections' column correctly REMOVED",
+    "Monthly Run Rate: 'Collection %' column correctly REMOVED",
+    "Monthly Run Rate: 'Estimated Revenue' widget correctly REMOVED",
+    "Monthly Run Rate: 'Actual Revenue' widget correctly REMOVED",
+    "Monthly Run Rate: Territory Allocations section visible",
+    "Cumulative Target: Badge visible showing 'Cumulative Target'",
+    "Cumulative Target: Timeline Progress section visible",
+    "Cumulative Target: Monthly Performance table correctly HIDDEN",
+    "Cumulative Target: 'Revenue from Won leads this month' widget visible (renamed)",
+    "Cumulative Target: 'Actual Revenue' widget correctly REMOVED",
+    "Cumulative Target: Territory Allocations section visible"
+  ],
+  "test_report_links": [
+    "/app/frontend/src/pages/TargetPlanDashboard.js"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "RevenueSummaryCards correctly returns null for run_rate goal type (line 188-190)",
+    "MonthlyPerformanceTable correctly filters to show only current/past months (line 240)",
+    "MonthlyPerformanceTable correctly returns null for cumulative goal type (line 235-237)",
+    "Column renamed from 'Monthly Revenue' to 'Revenue Added' (line 270)",
+    "New column '% of Target Run Rate Achieved' added with cumulative calculation logic (lines 273-329)",
+    "Widget renamed from 'Estimated Revenue' to 'Revenue from Won leads this month' (line 199)",
+    "Removed columns (Expected Run Rate, vs Expected, Collections, Collection %) - code cleaned up"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only testing)",
+    "frontend": "100% (18/18 feature checks passed)"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "surya123"
+  },
+  "seed_data_creation": "",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Target Plan Dashboard redesign tested at /target-planning/{planId}. Two plans tested: 'Hyderabad - March' (Cumulative Target type) and 'H2 2026 Sales Target' (Monthly Run Rate type). Key components: RevenueSummaryCards, MonthlyPerformanceTable, TimelineProgressBar, HierarchicalAllocationSection. Goal type determines which widgets/tables are shown via conditional rendering based on plan.goal_type field.",
+  "rca_of_the_issue": "N/A - All features working correctly as per redesign requirements"
+}

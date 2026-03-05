@@ -29,9 +29,6 @@ import {
   Clock,
   TrendingUp,
   Receipt,
-  ChevronRight,
-  ChevronDown,
-  ChevronUp,
   Plus,
   Trash2,
   Loader2,
@@ -40,13 +37,9 @@ import {
   Medal,
   MapPin,
   Building2,
-  Users,
   Percent,
-  Award,
   User,
-  ArrowUpRight,
   Pencil,
-  Banknote,
   BarChart3
 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -187,16 +180,23 @@ function TimelineProgressBar({ timeline, plan }) {
   );
 }
 
-// Revenue Summary Cards
-function RevenueSummaryCards({ estimated, actual, plan }) {
+// Revenue Summary Cards - Only for Cumulative Target plans
+function RevenueSummaryCards({ estimated, plan }) {
+  const goalType = plan.goal_type || 'run_rate';
+  
+  // Only show for cumulative target plans
+  if (goalType !== 'cumulative') {
+    return null;
+  }
+  
   return (
-    <div className="grid grid-cols-2 gap-6 mb-6">
-      {/* Estimated Revenue Card */}
+    <div className="mb-6">
+      {/* Revenue from Won Leads Card - Only for Cumulative */}
       <Card className="p-5 border-2 border-green-200 bg-green-50/50">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold flex items-center gap-2 text-green-700">
             <TrendingUp className="h-5 w-5" />
-            Estimated Revenue
+            Revenue from Won leads this month
           </h3>
           <Badge variant="outline" className="text-green-700">{estimated.won_leads_count} Won Leads</Badge>
         </div>
@@ -222,61 +222,25 @@ function RevenueSummaryCards({ estimated, actual, plan }) {
           </div>
         </div>
       </Card>
-
-      {/* Actual Revenue Card */}
-      <Card className="p-5 border-2 border-blue-200 bg-blue-50/50">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold flex items-center gap-2 text-blue-700">
-            <Receipt className="h-5 w-5" />
-            Actual Revenue
-          </h3>
-          <Badge variant="outline" className="text-blue-700">{actual.invoices_count} Invoices</Badge>
-        </div>
-        
-        <div className="mb-4">
-          <Progress value={actual.percent} className="h-3 bg-blue-100" />
-        </div>
-        
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div>
-            <p className="text-2xl font-bold text-blue-700">{formatCurrency(actual.achieved, true)}</p>
-            <p className="text-xs text-muted-foreground">Achieved</p>
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-gray-600">{formatCurrency(actual.remaining, true)}</p>
-            <p className="text-xs text-muted-foreground">Remaining</p>
-          </div>
-          <div>
-            <p className={cn("text-2xl font-bold", actual.percent >= 100 ? "text-green-600" : "text-blue-700")}>
-              {actual.percent}%
-            </p>
-            <p className="text-xs text-muted-foreground">Achievement</p>
-          </div>
-        </div>
-      </Card>
     </div>
   );
 }
 
-// Monthly Performance Table
+// Monthly Performance Table - Only for Run Rate plans
 function MonthlyPerformanceTable({ monthlyData, plan }) {
   const target = plan.total_amount || 0;
   const goalType = plan.goal_type || 'run_rate';
   
-  // Calculate totals
-  const totalInvoice = monthlyData.reduce((sum, m) => sum + (m.invoice_value || 0), 0);
-  const totalCollections = monthlyData.reduce((sum, m) => sum + (m.collections || 0), 0);
+  // Only show for run_rate plans (hide for cumulative)
+  if (goalType === 'cumulative') {
+    return null;
+  }
   
-  // For run_rate: Calculate cumulative monthly revenue (recurring revenue building up)
-  // Each month shows the total recurring revenue that month
-  const monthsCount = monthlyData.length;
+  // Filter to show only current month and past months (hide future months)
+  const filteredMonthlyData = monthlyData.filter(m => m.is_current || m.is_past);
   
-  // Calculate expected milestone targets for run_rate
-  const getExpectedRunRate = (monthIndex) => {
-    // Linear ramp from 0 to target over the period
-    // Month 1: target/months, Month 2: 2*target/months, etc.
-    return Math.round((target / monthsCount) * (monthIndex + 1));
-  };
+  // Calculate cumulative revenue for % of Target Run Rate Achieved
+  let cumulativeRevenue = 0;
 
   return (
     <Card className="p-6 mb-6">
@@ -287,16 +251,12 @@ function MonthlyPerformanceTable({ monthlyData, plan }) {
             Monthly Performance
           </h3>
           <p className="text-xs text-muted-foreground mt-1">
-            {goalType === 'run_rate' 
-              ? 'Track monthly revenue growth towards target run rate' 
-              : 'Track cumulative revenue against period target'}
+            Track monthly revenue growth towards target run rate
           </p>
         </div>
         <div className="text-right">
-          <span className="text-muted-foreground text-sm">
-            {goalType === 'run_rate' ? 'Monthly Goal:' : 'Period Target:'}
-          </span>
-          <p className="font-bold text-primary text-xl">{formatCurrency(target, true)}</p>
+          <span className="text-muted-foreground text-sm">Target Run Rate:</span>
+          <p className="font-bold text-primary text-xl">{formatCurrency(target, true)}/month</p>
         </div>
       </div>
 
@@ -305,50 +265,28 @@ function MonthlyPerformanceTable({ monthlyData, plan }) {
           <thead>
             <tr className="border-b text-left">
               <th className="pb-3 font-semibold text-sm text-muted-foreground">Month</th>
-              {goalType === 'run_rate' ? (
-                <>
-                  <th className="pb-3 font-semibold text-sm text-muted-foreground text-right">Expected Run Rate</th>
-                  <th className="pb-3 font-semibold text-sm text-muted-foreground text-right">
-                    <span className="flex items-center justify-end gap-1">
-                      <Receipt className="h-3 w-3" /> Monthly Revenue
-                    </span>
-                  </th>
-                  <th className="pb-3 font-semibold text-sm text-muted-foreground text-center">vs Expected</th>
-                </>
-              ) : (
-                <>
-                  <th className="pb-3 font-semibold text-sm text-muted-foreground text-right">Target</th>
-                  <th className="pb-3 font-semibold text-sm text-muted-foreground text-right">
-                    <span className="flex items-center justify-end gap-1">
-                      <Receipt className="h-3 w-3" /> Invoice Value
-                    </span>
-                  </th>
-                  <th className="pb-3 font-semibold text-sm text-muted-foreground text-center">Achievement</th>
-                </>
-              )}
               <th className="pb-3 font-semibold text-sm text-muted-foreground text-right">
                 <span className="flex items-center justify-end gap-1">
-                  <Banknote className="h-3 w-3" /> Collections
+                  <Receipt className="h-3 w-3" /> Revenue Added
                 </span>
               </th>
-              <th className="pb-3 font-semibold text-sm text-muted-foreground text-center">Collection %</th>
+              <th className="pb-3 font-semibold text-sm text-muted-foreground text-center">% of Target Run Rate Achieved</th>
             </tr>
           </thead>
           <tbody>
-            {monthlyData.map((month, idx) => {
-              const isFuture = !month.is_current && !month.is_past;
-              const expectedRunRate = goalType === 'run_rate' ? getExpectedRunRate(idx) : target;
-              const monthTarget = goalType === 'run_rate' ? expectedRunRate : target;
-              const achievementPercent = monthTarget > 0 ? Math.round((month.invoice_value / monthTarget) * 100) : 0;
-              const collectionPercent = month.invoice_value > 0 ? Math.round((month.collections / month.invoice_value) * 100) : 0;
+            {filteredMonthlyData.map((month, idx) => {
+              // Track cumulative revenue added
+              cumulativeRevenue += (month.invoice_value || 0);
+              
+              // Calculate % of target run rate achieved (based on cumulative revenue vs target)
+              const runRateAchievedPercent = target > 0 ? Math.round((cumulativeRevenue / target) * 100) : 0;
               
               return (
                 <tr 
                   key={idx} 
                   className={cn(
                     "border-b last:border-0",
-                    month.is_current && "bg-blue-50",
-                    isFuture && "opacity-50"
+                    month.is_current && "bg-blue-50"
                   )}
                 >
                   <td className="py-3">
@@ -364,67 +302,31 @@ function MonthlyPerformanceTable({ monthlyData, plan }) {
                       )}
                     </div>
                   </td>
-                  <td className="py-3 text-right font-medium">
-                    {formatCurrency(monthTarget, true)}
-                    {goalType === 'run_rate' && (
-                      <span className="text-[10px] text-muted-foreground block">
-                        ({Math.round((monthTarget / target) * 100)}% of goal)
-                      </span>
-                    )}
-                  </td>
                   <td className="py-3 text-right">
-                    {isFuture ? (
-                      <span className="text-muted-foreground italic">-</span>
-                    ) : (
-                      <span className="font-semibold">{formatCurrency(month.invoice_value, true)}</span>
-                    )}
+                    <span className="font-semibold">{formatCurrency(month.invoice_value, true)}</span>
                   </td>
                   <td className="py-3">
-                    {isFuture ? (
-                      <span className="text-muted-foreground italic text-center block">-</span>
-                    ) : (
-                      <div className="flex items-center gap-2 justify-center">
-                        <div className="w-16 h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div 
-                            className={cn(
-                              "h-full rounded-full",
-                              achievementPercent >= 100 ? "bg-green-500" : 
-                              achievementPercent >= 75 ? "bg-teal-500" :
-                              achievementPercent >= 50 ? "bg-amber-500" : "bg-red-400"
-                            )}
-                            style={{ width: `${Math.min(100, achievementPercent)}%` }}
-                          />
-                        </div>
-                        <span className={cn(
-                          "text-sm font-semibold w-12",
-                          achievementPercent >= 100 ? "text-green-600" : 
-                          achievementPercent >= 75 ? "text-teal-600" :
-                          achievementPercent >= 50 ? "text-amber-600" : "text-red-500"
-                        )}>
-                          {achievementPercent}%
-                        </span>
+                    <div className="flex items-center gap-2 justify-center">
+                      <div className="w-20 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div 
+                          className={cn(
+                            "h-full rounded-full",
+                            runRateAchievedPercent >= 100 ? "bg-green-500" : 
+                            runRateAchievedPercent >= 75 ? "bg-teal-500" :
+                            runRateAchievedPercent >= 50 ? "bg-amber-500" : "bg-red-400"
+                          )}
+                          style={{ width: `${Math.min(100, runRateAchievedPercent)}%` }}
+                        />
                       </div>
-                    )}
-                  </td>
-                  <td className="py-3 text-right">
-                    {isFuture ? (
-                      <span className="text-muted-foreground italic">-</span>
-                    ) : (
-                      <span className="font-medium text-green-700">{formatCurrency(month.collections, true)}</span>
-                    )}
-                  </td>
-                  <td className="py-3 text-center">
-                    {isFuture ? (
-                      <span className="text-muted-foreground italic">-</span>
-                    ) : (
                       <span className={cn(
-                        "text-sm font-medium",
-                        collectionPercent >= 80 ? "text-green-600" : 
-                        collectionPercent >= 50 ? "text-amber-600" : "text-red-500"
+                        "text-sm font-semibold w-14",
+                        runRateAchievedPercent >= 100 ? "text-green-600" : 
+                        runRateAchievedPercent >= 75 ? "text-teal-600" :
+                        runRateAchievedPercent >= 50 ? "text-amber-600" : "text-red-500"
                       )}>
-                        {collectionPercent}%
+                        {runRateAchievedPercent}%
                       </span>
-                    )}
+                    </div>
                   </td>
                 </tr>
               );
@@ -432,41 +334,30 @@ function MonthlyPerformanceTable({ monthlyData, plan }) {
           </tbody>
           <tfoot>
             <tr className="border-t-2 bg-gray-50 font-semibold">
-              <td className="py-3">
-                {goalType === 'run_rate' ? 'Final Goal' : 'Total'}
-              </td>
+              <td className="py-3">Total Revenue (Run Rate)</td>
               <td className="py-3 text-right">
-                {goalType === 'run_rate' ? formatCurrency(target, true) : formatCurrency(target * monthsCount, true)}
-              </td>
-              <td className="py-3 text-right">
-                {goalType === 'run_rate' 
-                  ? formatCurrency(monthlyData.filter(m => m.is_past || m.is_current).slice(-1)[0]?.invoice_value || 0, true)
-                  : formatCurrency(totalInvoice, true)
-                }
+                {formatCurrency(cumulativeRevenue || filteredMonthlyData.reduce((sum, m) => sum + (m.invoice_value || 0), 0), true)}
               </td>
               <td className="py-3 text-center">
-                {goalType === 'run_rate'
-                  ? `${target > 0 ? Math.round(((monthlyData.filter(m => m.is_past || m.is_current).slice(-1)[0]?.invoice_value || 0) / target) * 100) : 0}%`
-                  : `${target > 0 ? Math.round((totalInvoice / (target * monthlyData.filter(m => m.is_past || m.is_current).length || 1)) * 100) : 0}%`
-                }
-              </td>
-              <td className="py-3 text-right text-green-700">{formatCurrency(totalCollections, true)}</td>
-              <td className="py-3 text-center">
-                {totalInvoice > 0 ? Math.round((totalCollections / totalInvoice) * 100) : 0}%
+                <span className={cn(
+                  "font-bold",
+                  (target > 0 && (filteredMonthlyData.reduce((sum, m) => sum + (m.invoice_value || 0), 0) / target) * 100 >= 100) 
+                    ? "text-green-600" 
+                    : "text-primary"
+                )}>
+                  {target > 0 ? Math.round((filteredMonthlyData.reduce((sum, m) => sum + (m.invoice_value || 0), 0) / target) * 100) : 0}% of Target
+                </span>
               </td>
             </tr>
           </tfoot>
         </table>
       </div>
       
-      {goalType === 'run_rate' && (
-        <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-          <p className="text-sm text-blue-700">
-            <strong>Run Rate Goal:</strong> Build up monthly recurring revenue from clients acquired over the period. 
-            Each month's revenue includes revenue from all clients acquired so far.
-          </p>
-        </div>
-      )}
+      <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+        <p className="text-sm text-blue-700">
+          <strong>Run Rate Goal:</strong> Build up monthly recurring revenue to reach {formatCurrency(target, true)}/month by the end of the period.
+        </p>
+      </div>
     </Card>
   );
 }
@@ -1297,6 +1188,7 @@ export default function TargetPlanDashboard() {
   }
 
   const { plan, timeline, estimated_revenue, actual_revenue, allocations, monthly_breakdown } = dashboardData;
+  const goalType = plan.goal_type || 'run_rate';
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -1312,10 +1204,14 @@ export default function TargetPlanDashboard() {
               <Badge className={plan.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}>
                 {plan.status}
               </Badge>
+              <Badge variant="outline" className="ml-1">
+                {goalType === 'cumulative' ? 'Cumulative Target' : 'Monthly Run Rate'}
+              </Badge>
             </div>
             <p className="text-muted-foreground flex items-center gap-2 mt-1">
               <Target className="h-4 w-4" />
-              Monthly Target: <span className="font-semibold text-foreground">{formatCurrency(plan.total_amount)}</span>
+              {goalType === 'run_rate' ? 'Target Run Rate:' : 'Total Target:'} <span className="font-semibold text-foreground">{formatCurrency(plan.total_amount)}</span>
+              {goalType === 'run_rate' && <span className="text-xs">/month</span>}
               <span className="text-xs">• {plan.milestones || 4} Milestones</span>
             </p>
           </div>
@@ -1325,13 +1221,15 @@ export default function TargetPlanDashboard() {
       {/* Timeline Progress */}
       <TimelineProgressBar timeline={timeline} plan={plan} />
 
-      {/* Monthly Performance Table */}
-      {monthly_breakdown && monthly_breakdown.length > 0 && (
+      {/* Monthly Performance Table - Only for Run Rate */}
+      {goalType === 'run_rate' && monthly_breakdown && monthly_breakdown.length > 0 && (
         <MonthlyPerformanceTable monthlyData={monthly_breakdown} plan={plan} />
       )}
 
-      {/* Revenue Summary */}
-      <RevenueSummaryCards estimated={estimated_revenue} actual={actual_revenue} plan={plan} />
+      {/* Revenue Summary - Only for Cumulative */}
+      {goalType === 'cumulative' && (
+        <RevenueSummaryCards estimated={estimated_revenue} plan={plan} />
+      )}
 
       {/* Hierarchical Allocations Section - Full Width */}
       <HierarchicalAllocationSection 

@@ -2,75 +2,65 @@
 The user wants to build a comprehensive, mobile-ready Sales CRM application.
 
 PRODUCT REQUIREMENTS added in this session:
-1.  **Pipeline Filter Bug Fixes:**
-    *   **Dashboard View:** Resolved a bug where the My Pipeline widget's Sales Resource dropdown excluded users with roles like 'CEO' and 'Director', preventing admins from filtering their own or other key members' pipelines.
-    *   **Kanban View:** Fixed an issue where the Leads Kanban view () would not show all leads if the total count exceeded 100. Also implemented a default filter to show only the logged-in user's leads upon loading the page.
-2.  **Department Management:**
-    *   Added a  field to the User model with options: 'Admin', 'Sales', 'Production', 'Marketing', 'Finance'.
-    *   Fixed a bug that caused errors when updating a user's department in production by making the frontend and backend more resilient to legacy data (e.g., lowercase or null values).
-    *   Created a data migration script to normalize existing department data.
-3.  **Sales ROI Accounting Panel:**
-    *   Removed the My Performance widget from the homepage.
-    *   Implemented a new, fixed-width (25%) Sales ROI Accounting Panel on the right side of the homepage, visible only to users in the 'Sales' department.
-    *   The panel displays a detailed financial breakdown including:
-        *   **Costs:** Prorated Team CTC (for the user and their entire reporting hierarchy) and total sales expenses.
-        *   **Revenue & Margin:** Gross Invoice Value, deductions for Distribution (10%), Logistics (8%), and COGS, resulting in a final Gross Margin.
-        *   **Profitability:** Net Contribution (Gross Margin - Total Cost) and ROI %.
-    *   Created a new backend endpoint () to perform the complex, hierarchical calculations.
-    *   Populated the database with extensive test data (user CTCs, joining dates, expenses, and invoices with line items) to validate the feature.
-4.  **Invoice Display and Calculation:**
-    *   Updated the Account Detail page to display associated invoices as expandable cards, showing detailed line items (SKU, quantity, price).
-    *   Fixed a bug preventing invoices from appearing on the Account Detail page.
-    *   Implemented automatic calculation of COGS, distribution cost, and logistics cost for the Sales ROI panel based on invoice line items and the account's city.
-5.  **Refactor :** The user requested to break down the monolithic  file. The agent started this process but was interrupted.
-6.  **Automatic Invoice Margin Calculation (In Progress):** The user requested that when an invoice is generated, the system should automatically calculate and store its COGS, logistics cost, and gross margin.
+1.  **Hierarchical Target Allocation**: Implemented a full Territory -> City -> Resource allocation system.
+2.  **Target Allocation UI Redesign**: The UI was redesigned from a drill-down system to a side-by-side card layout (like subscription plans) that shows allocated vs. achieved revenue for each city and allows editing allocations.
+3.  **Target Goal Types**: Introduced two distinct types of target plans:
+    *   **Cumulative Target**: A simple total revenue goal for the period.
+    *   **Monthly Run Rate**: A goal to build up to a specific monthly recurring revenue figure by the end of the period.
+4.  **Dashboard V1 for Goal Types**: Created distinct dashboard views for each goal type. The Run Rate plan included a detailed table showing the linear ramp-up to the target.
+5.  **Module Deprecation**: The old, legacy Target module was completely removed from the frontend (pages, routes) and backend (API endpoints, models).
+6.  **Dashboard V2 Redesign (New Requirement)**: The user has requested a significant redesign of the Target Plan Dashboard for both goal types to make them more focused and less cluttered.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack Sales CRM application featuring modules for leads, accounts, teams, and various expense/budget requests. The homepage now includes a sophisticated, fixed-position Sales ROI Accounting Panel that provides a detailed financial summary for sales managers. The application's data filtering and display logic for sales pipelines have been significantly improved. Department management is now more robust. The agent was in the process of implementing a feature to automatically calculate and store cost/margin data at the point of invoice creation.
+A full-stack Sales CRM application featuring a new Target Planning module that supports both Cumulative and Monthly Run Rate goal types. The system allows for creating plans and performing hierarchical revenue target allocations (Territory -> City -> Resource) via a side-by-side card interface. The old Target module has been successfully deprecated and removed. The application is stable, but the user has just requested a major redesign of the Target Plan Dashboard's UI and data presentation logic.
 
 **Last working item**:
--   **Last item agent was working:** Implementing the user's request to automatically calculate and store COGS, logistics cost, and gross margin at the time of invoice creation. The agent had analyzed the existing data structures and determined that a new backend endpoint was needed to handle invoice creation with these automatic calculations, as invoices were previously only ingested via a webhook.
--   **Status:** IN PROGRESS
+-   **Last item agent was working:** The agent was about to begin implementing a new, detailed set of user requirements to redesign the Target Plan Dashboard. The user specified different layouts and data points for Cumulative vs. Monthly Run Rate plans.
+-   **Status:** NOT STARTED
 -   **Agent Testing Done:** N
--   **Which testing method agent to use?** Both. First, the backend agent should create the new  endpoint and test it with  to ensure the calculations are correct and the data is saved properly. Then, the frontend will need to be updated with a UI to create invoices, which will require frontend testing.
+-   **Which testing method agent to use?** Frontend testing agent. The required changes are primarily in the UI and display logic within the  component.
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   There are no pending bugs. The current work is feature implementation.
+-   There are no pending bugs. The work is driven by a new feature/redesign request.
 
 **In progress Task List**:
--   **Task 1: Implement Automatic COGS/Logistics/Margin Calculation on Invoice Generation**
+-   **Task 1: Redesign Target Plan Dashboard based on Goal Type**
     -   **Priority:** P0
-    -   **Where to resume:** In , create the new API endpoint .
-        1.  Define a Pydantic model for the invoice creation payload, including a list of line items (SKU, quantity).
-        2.  Implement the endpoint logic:
-            *   For each line item, fetch  and  from the  collection based on the SKU and the account's city.
-            *   Calculate  and  for the invoice.
-            *   Calculate .
-            *   Save the new invoice document to the  collection, including these newly calculated financial fields.
-        3.  After the backend is done, create a UI component (e.g., a button and modal on the Account Detail page) to allow users to create invoices.
-    -   **What will be achieved with this?** Invoices will have their financial performance data (COGS, logistics, margin) calculated and stored upon creation, providing immediate, transaction-level profitability insights.
-    -   **Status:** IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?** Both
+    -   **Where to resume:** The agent must begin modifying  to implement the new display logic.
+    -   **Requirements for Monthly Run Rate plan:**
+        1.  Remove the Estimated Revenue and Actual Revenue widgets.
+        2.  In the Monthly Performance table, show only the current month and past months. Hide future months.
+        3.  Remove the Expected Run Rate and vs Expected columns.
+        4.  Rename the Monthly Revenue column to Revenue Added.
+        5.  Add a new column: % of Target Run rate Achieved.
+        6.  Remove the Collections and Collection % columns.
+    -   **Requirements for Cumulative Target plan:**
+        1.  Remove the entire Monthly Performance table.
+        2.  Keep the Estimated Revenue widget but rename its title to Revenue from Won leads this month.
+        3.  Remove the Actual Revenue widget entirely.
+    -   **What will be achieved with this?** A cleaner, more focused dashboard that is tailored to the specific logic of each target goal type, fulfilling the user's explicit request.
+    -   **Status:** NOT STARTED
+    -   **Should Test frontend/backend/both after fix?** Both. Frontend is primary, but the backend API may need to be adjusted to provide slightly different data for these simplified views.
 
 **Upcoming and Future Tasks**
 -   **Upcoming Tasks:**
-    -   **P0: Refactor :** The user explicitly requested this. Break down the monolithic  into smaller, more manageable  modules (e.g., , , , ). The agent started this but did not complete it.
-    -   **P1: Admin Settings for Hardcoded Rules:** Create a settings page for admins to configure rules that are currently hardcoded, such as the  (10%) and  (8%) percentages used in the ROI panel.
-    -   **P1: Build Out Production Modules:** Implement functionality for the placeholder modules (Maintenance, Inventory, Quality Control, Assets, Vendors).
-    -   **P1: Re-implement Grid View:** Re-introduce the spreadsheet-style Grid View for the Sales Target module.
+    -   **P0: Refactor :** Break down the monolithic  into smaller, domain-specific  modules (e.g., , , ). This is a high-priority technical debt item.
+    -   **P1: Admin Settings for Hardcoded Rules:** Create a settings page for admins to configure financial rules that are currently hardcoded (e.g., , ).
 -   **Future Tasks:**
-    -   **P2: Google Workspace Authentication:** Implement Google Workspace login as a full, alternative authentication method.
+    -   **P1: Build Out Placeholder Modules:** Implement functionality for the empty modules (Maintenance, Inventory, Quality Control, Assets, Vendors).
+    -   **P2: Google Workspace Authentication:** Implement Google Workspace login as a full authentication method.
 
 **Completed work in this session**
--   **Sales ROI Accounting Panel:** Successfully implemented the new, fixed-position financial summary panel on the homepage with complex, hierarchical calculations for costs, revenue, and margin.
--   **Pipeline Filter Bug Fix (Dashboard):** Resolved the issue where the dashboard's sales resource filter was missing key roles like 'CEO' and 'Director'.
--   **Pipeline Kanban View Fix (Leads Page):** Fixed the Kanban view to show all leads (bypassing the 100-item limit) and to default its filter to the logged-in user.
--   **Department Management Fix:** Corrected a bug that prevented department updates and created a script to normalize legacy data.
--   **Invoice Display Enhancement:** Updated the Account Detail page to show invoices as expandable cards with line-item details.
--   **Test Data Population:** Created a comprehensive script to populate the database with realistic test data for users (CTC/join dates), expenses, and invoices, enabling thorough testing of the ROI panel.
+-   **Feature: Target Goal Types:** Implemented a  selection ('Cumulative' vs. 'Monthly Run Rate') when creating target plans and built out distinct dashboard views for each.
+-   **Feature: Redesigned Target Allocation UI:** Replaced the drill-down allocation system with a side-by-side card layout showing city-level allocations with achieved revenue and edit functionality.
+-   **Task: Removed Old Target Module:** Successfully deprecated and deleted all frontend files, routes, backend API endpoints, and Pydantic models related to the legacy Target module.
+-   **Bug Fix: Immediate UI Refresh:** Fixed a bug where territory cards would not refresh instantly after adding a new city allocation.
+-   **Bug Fix: Filtered Allocation Dropdown:** Corrected the Add Territory dialog to only show territories that have not yet been allocated.
+-   **Bug Fix: FastAPI Route Reordering:** Resolved a routing conflict by reordering API endpoints to ensure specific paths were matched before dynamic ones.
+-   **UI Fix:** Corrected overlapping text on the  component.
 
 **Earlier issues found/mentioned but not fixed**
 -   None.
@@ -82,68 +72,63 @@ A full-stack Sales CRM application featuring modules for leads, accounts, teams,
 
 
 **Key Technical Concepts**
--   **Hierarchical Data Aggregation (MongoDB):** Used a recursive function in the backend to build an entire reporting hierarchy for a user, enabling team-wide CTC and revenue calculations.
--   **Complex Financial Modeling:** Implemented multi-step financial calculations in the backend for the ROI panel, involving prorated costs, revenue, COGS, and other deductions to arrive at Net Contribution and ROI.
--   **Dynamic Backend-Driven UI:** The Sales ROI panel's visibility is conditionally rendered based on the user's department, which is fetched from the backend.
--   **Data Migration & Normalization:** Created and executed a Python script to clean up inconsistent  data in the database, ensuring stability for production environments.
--   **Resilient Frontend State:** Fortified the Edit Team Member form to handle inconsistent data formats from the backend by normalizing values (e.g., department name casing) on the client side before rendering.
+-   **Conditional Rendering by Data Type:** The dashboard's UI must render completely different components and data points based on the  of the target plan ( vs. ).
+-   **Code Deprecation:** Safely removed a legacy feature module (Targets) by deleting frontend components/routes and backend API endpoints, cleaning up the codebase significantly.
+-   **Component-Driven UI:** The dashboard is composed of several new, specialized components (, , ) that will now need to be conditionally rendered.
+-   **State Management for UI Refresh:** Implemented logic to refetch data and update the UI immediately after a child entity (like a city allocation) is created.
 
 **key DB schema**
--   **:**  field values updated and normalized.  and  fields populated with test data.
--   **:** Populated with test data. Each document contains a  array with SKU, quantity, and price. The next step is to add fields like , , and .
--   **:** Contains COGS and logistics costs per SKU and city. Used for lookups.
--   ** & :** Populated with approved test data to feed into the ROI panel's expense calculations.
+-   ****:
+    -   Added  (String): Stores 'cumulative' or 'run_rate'.
+    -   The  array now supports a nested  key to represent the Territory -> City -> Resource hierarchy.
 
 **changes in tech stack**
 -   None.
 
 **All files of reference**
--   
--   
--   
--   
--   
+-    (Primary file for the next task)
+-    (The dashboard endpoint may need modification)
+-    (Recently simplified)
 -   
 -   
 
 **Areas that need refactoring**:
--    is a large monolith. The user has explicitly requested this be broken down into domain-specific  files. This is a high-priority technical debt item.
--   The hardcoded percentages for  (10%) and  (8%) in  should be extracted into a configuration or a new settings module in the application.
+-    remains a large monolith. Refactoring is the highest priority technical debt and is the next task after the current dashboard redesign.
 
 **key api endpoints**
--   : **(New)** Fetches all data for the Sales ROI Accounting Panel.
--   : **(Modified)** Now accepts a  query parameter to bypass pagination.
--   : **(Fixed)** Corrected the database query to use the right field (), allowing invoices to appear on the account detail page.
--   : **(Modified)** Logic was made more robust to handle department updates correctly.
+-   **Modified:**
+    -   : Modified to accept a  ('cumulative' or 'run_rate').
+    -   : Heavily modified to return nested allocation data and monthly performance data. Will likely need adjustments for the new dashboard design.
+    -   : New endpoint to edit allocations.
+-   **Removed:**
+    -   All old  endpoints and their dependencies have been deleted from .
 
 **Critical Info for New Agent**
--   Your immediate P0 task is to implement automatic cost and margin calculation *at the time of invoice creation*. This requires creating a new  endpoint for invoices in  and then building a UI for it.
--   Once the invoice creation feature is done, the next priority is to refactor the monolithic  file into smaller  modules, as requested by the user.
--   The Sales ROI panel currently uses hardcoded 10% for distribution and 8% for logistics costs. This is a good candidate for a future enhancement where these values can be configured by an admin.
+-   Your immediate P0 task is to implement the user's latest, very specific requirements for the .
+-   The dashboard's content must now change drastically depending on whether the plan's  is Cumulative Target or Monthly Run Rate.
+-   Carefully follow the detailed list of changes in the **In progress Task List** for each goal type. This is a significant redesign, not a minor tweak.
+-   Once the dashboard redesign is complete and verified, the next priority is to begin refactoring the  monolith.
 
 **documents and test reports created in this job**
 -   
--   
--   
+-    (updated)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  : Each invoice should have multiple line items, with SKU and No of bottles. Please change the model accordingly for account level invoices. - **Status: Done**. Agent updated the data model and UI to show expandable line items on invoice cards.
-2.  : now, COGS should be calculated based on the SKU in invoice. also it should consider the COGS for the same city as the account. - **Status: Done**. Agent implemented this logic in the backend for the Sales ROI panel.
-3.  : why are you stopping ? - **Status: Acknowledged**. Agent was paused and resumed work.
-4.  : Refactor server.py into smaller APIRouter modules - **Status: In Progress (Paused)**. Agent started but was interrupted. This is a key pending task.
-5.  : unpause - **Status: Acknowledged**.
-6.  : unpause - **Status: Acknowledged**.
-7.  : Provided detailed requirements for automatic calculation of COGS/logistics/margin during invoice generation. - **Status: In Progress**. This is the current .
-8.  : unpause - This was a command to the platform, not a request.
-9.  : unpause - This was a command to the platform, not a request.
-10. : the tools are working again - This was a notification to the agent.
+1.  : And if the target plan type is Cumulative Target... - **Pending**. This is the final part of the new redesign request for the dashboard.
+2.  : ...in the Monthly Performance section. Only show the current month and previous months... - **Pending**. This is part of the new redesign request.
+3.  : Remove estimated revenue and actual revenue modules... - **Pending**. This is the start of the new redesign request for the dashboard.
+4.  : No the requirements is understood diffferently... [explains Run Rate goal] - **Done**. Agent understood and implemented the Monthly Run Rate goal type and dashboard.
+5.  : target planning list should not show all the data... - **Done**. Agent simplified the list page and moved details to the dashboard.
+6.  : on the target listing in addition to time elapsed and allocated and show also the achieved progress bar - **Done**.
+7.  : check the right bottom corner of the section, the text is overlapped... - **Done**. Agent fixed the timeline progress bar UI.
+8.  : In territory allocations section, in Add territory pop-up... only remaining territories... should only be shown - **Done**.
+9.  : After adding the city allocation, the tile need to be refreshed to reflect the city allocation immediately - **Done**.
+10. : The cities that are associated with the territories are not getting populated in target detail page - **Done**. This was a misunderstanding; the agent verified cities were populating correctly.
 
 **Project Health Check:**
--   **Broken**: No features are currently broken.
--   **Mocked**:
-    -   Several top-level modules (Maintenance, Inventory, Quality Control, Assets, Vendors) are UI placeholders.
-    -   The user interface for *creating* an invoice does not exist yet. Invoices are currently populated via script or an assumed webhook.
--   **Refactoring Needed**:  is a monolith and the user has explicitly requested it be refactored into smaller, domain-specific router files.
+-   **Broken**: None.
+-   **Mocked**: The  component is functional but does not meet the user's latest requirements. It is the focus of the next set of changes.
+-   **Refactoring Needed**:  is a monolith and is explicitly marked as the next high-priority refactoring task.
 
 **3rd Party Integrations**
 -   Zoom API (for meetings)
@@ -155,9 +140,9 @@ A full-stack Sales CRM application featuring modules for leads, accounts, teams,
 -   Amazon MQ (via Stomp.py, for receiving invoice data)
 
 **Testing status**
--   **Testing agent used after significant changes**: YES (For the pipeline filter fix).
+-   **Testing agent used after significant changes**: YES, to validate the full hierarchical allocation system.
 -   **Troubleshoot agent used after agent stuck in loop**: NO
--   **Test files created**: None. However, two data utility scripts were created:  and .
+-   **Test files created**: None.
 -   **Known regressions**: None.
 
 **Credentials to test flow:**
@@ -166,4 +151,4 @@ A full-stack Sales CRM application featuring modules for leads, accounts, teams,
 -   **Partner - Sales:**  / 
 
 **What agent forgot to execute**
--   The agent did not complete the user's explicit request to refactor . The work was started but then paused and never resumed. This should be prioritized after the current invoice-creation task.</analysis>
+-   The recurring task of refactoring  remains pending but is correctly identified as the next major task after the current feature work is completed. Nothing was forgotten.</analysis>
