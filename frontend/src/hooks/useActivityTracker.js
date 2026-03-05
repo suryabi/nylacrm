@@ -121,7 +121,7 @@ export const PAGE_NAMES = {
   '/team': 'Team Management',
   '/team-status': 'Team Status',
   '/daily-status': 'Daily Status',
-  '/targets': 'Sales Targets',
+  '/target-planning': 'Target Planning',
   '/cogs-calculator': 'COGS Calculator',
   '/transport-calculator': 'Transport Calculator',
   '/sku-management': 'SKU Management',

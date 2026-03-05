@@ -1231,6 +1231,88 @@ class ExpenseApproval(BaseModel):
     status: str  # 'approved' or 'rejected'
     rejection_reason: Optional[str] = None
 
+class TargetPlan(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    plan_name: str
+    time_period: str  # 'monthly', 'quarterly', 'half_yearly', 'yearly'
+    start_date: str  # YYYY-MM-DD
+    end_date: str  # YYYY-MM-DD
+    country: str = 'India'
+    country_target: float  # Total revenue target
+    currency: str = 'INR'
+    status: str = 'draft'  # 'draft', 'finalized', 'locked'
+    created_by: str
+    locked_by: Optional[str] = None
+    locked_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class TargetPlanCreate(BaseModel):
+    plan_name: str
+    time_period: str
+    start_date: str
+    end_date: str
+    country_target: float
+
+class TerritoryTarget(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    plan_id: str
+    territory: str
+    allocation_percentage: float  # Percentage of country target
+    target_revenue: float  # Calculated from percentage
+    allocated_revenue: float = 0  # Sum of city targets
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class TerritoryTargetCreate(BaseModel):
+    territory: str
+    allocation_percentage: float  # User enters percentage
+
+class CityTarget(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    plan_id: str
+    territory: str
+    state: str
+    city: str
+    allocation_percentage: float  # Percentage of territory target
+    target_revenue: float  # Calculated from percentage
+    allocated_revenue: float = 0  # Sum of resource targets
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class CityTargetCreate(BaseModel):
+    state: str
+    city: str
+    allocation_percentage: float  # User enters percentage
+
+class ResourceTarget(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    plan_id: str
+    city_id: str
+    resource_id: str  # user_id
+    allocation_percentage: float  # Percentage of city target
+    target_revenue: float  # Calculated from percentage
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class ResourceTargetCreate(BaseModel):
+    resource_id: str
+    allocation_percentage: float  # User enters percentage
+
+class SKUTarget(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    plan_id: str
+    city_id: str
+    sku_name: str
+    allocation_percentage: float  # Percentage of city target
+    target_revenue: float  # Calculated from percentage
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class SKUTargetCreate(BaseModel):
+    sku_name: str
+    allocation_percentage: float
 
 class COGSData(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -8091,6 +8173,396 @@ async def get_sku_price_for_city(city: str, sku_name: str, current_user: dict = 
     
     return {**cogs_data, 'found': True}
 
+# ============= SALES TARGET ROUTES =============
+
+@api_router.post("/target-plans", response_model=TargetPlan)
+async def create_target_plan(plan: TargetPlanCreate, current_user: dict = Depends(get_current_user)):
+    """Create sales target plan"""
+    
+    if current_user['role'] not in ['CEO', 'Director', 'Vice President']:
+        raise HTTPException(status_code=403, detail='Only leadership can create target plans')
+    
+    plan_data = plan.model_dump()
+    plan_data['created_by'] = current_user['id']
+    plan_obj = TargetPlan(**plan_data)
+    
+    doc = plan_obj.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    doc['updated_at'] = doc['updated_at'].isoformat()
+    if doc.get('locked_at'):
+        doc['locked_at'] = doc['locked_at'].isoformat()
+    
+    await db.target_plans.insert_one(doc)
+    
+    return plan_obj
+
+@api_router.delete("/target-plans/{plan_id}")
+async def delete_target_plan(plan_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete target plan and all allocations"""
+    
+    if current_user['role'] not in ['ceo', 'director', 'vp', 'admin']:
+        raise HTTPException(status_code=403, detail='Only leadership can delete target plans')
+    
+    # Delete plan
+    result = await db.target_plans.delete_one({'id': plan_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail='Plan not found')
+    
+    # Delete all related allocations
+    await db.territory_targets.delete_many({'plan_id': plan_id})
+    await db.city_targets.delete_many({'plan_id': plan_id})
+    await db.resource_targets.delete_many({'plan_id': plan_id})
+    await db.sku_targets.delete_many({'plan_id': plan_id})
+    
+    return {'message': 'Target plan deleted successfully'}
+
+@api_router.put("/target-plans/{plan_id}")
+async def update_target_plan(plan_id: str, plan_data: dict, current_user: dict = Depends(get_current_user)):
+    """Update target plan"""
+    
+    if current_user['role'] not in ['ceo', 'director', 'vp', 'admin']:
+        raise HTTPException(status_code=403, detail='Only leadership can update target plans')
+    
+    plan = await db.target_plans.find_one({'id': plan_id}, {'_id': 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail='Plan not found')
+    
+    if plan['status'] == 'locked':
+        raise HTTPException(status_code=400, detail='Cannot modify locked plan')
+    
+    # Update fields
+    update_data = {}
+    if 'plan_name' in plan_data:
+        update_data['plan_name'] = plan_data['plan_name']
+    if 'time_period' in plan_data:
+        update_data['time_period'] = plan_data['time_period']
+    if 'country_target' in plan_data:
+        update_data['country_target'] = plan_data['country_target']
+    if 'start_date' in plan_data:
+        update_data['start_date'] = plan_data['start_date']
+    if 'end_date' in plan_data:
+        update_data['end_date'] = plan_data['end_date']
+    
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.target_plans.update_one({'id': plan_id}, {'$set': update_data})
+    
+    return {'message': 'Target plan updated successfully'}
+
+@api_router.get("/target-plans")
+async def get_target_plans(current_user: dict = Depends(get_current_user)):
+    """Get all target plans"""
+    
+    plans = await db.target_plans.find({}, {'_id': 0}).sort('created_at', -1).to_list(100)
+    
+    for plan in plans:
+        if isinstance(plan.get('created_at'), str):
+            plan['created_at'] = datetime.fromisoformat(plan['created_at'])
+        if isinstance(plan.get('updated_at'), str):
+            plan['updated_at'] = datetime.fromisoformat(plan['updated_at'])
+        if plan.get('locked_at') and isinstance(plan['locked_at'], str):
+            plan['locked_at'] = datetime.fromisoformat(plan['locked_at'])
+    
+    return plans
+
+@api_router.post("/target-plans/{plan_id}/territories")
+async def allocate_territory_targets(
+    plan_id: str,
+    territories: List[TerritoryTargetCreate],
+    current_user: dict = Depends(get_current_user)
+):
+    """Allocate country target to territories"""
+    
+    if current_user['role'] not in ['CEO', 'Director', 'Vice President']:
+        raise HTTPException(status_code=403, detail='Only leadership can allocate territory targets')
+    
+    # Get plan
+    plan = await db.target_plans.find_one({'id': plan_id}, {'_id': 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail='Target plan not found')
+    
+    if plan['status'] == 'locked':
+        raise HTTPException(status_code=400, detail='Cannot modify locked plan')
+    
+    # Validate total equals country target
+    total_percentage = sum([t.allocation_percentage for t in territories])
+    if abs(total_percentage - 100) > 0.01:
+        raise HTTPException(
+            status_code=400,
+            detail=f'Territory percentages must total 100% (current: {total_percentage}%)'
+        )
+    
+    # Delete existing territory targets
+    await db.territory_targets.delete_many({'plan_id': plan_id})
+    
+    # Create new territory targets with calculated values
+    created_targets = []
+    for territory in territories:
+        target_data = territory.model_dump()
+        target_data['plan_id'] = plan_id
+        # Calculate actual revenue from percentage
+        target_data['target_revenue'] = (territory.allocation_percentage / 100) * plan['country_target']
+        target_obj = TerritoryTarget(**target_data)
+        
+        doc = target_obj.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        
+        await db.territory_targets.insert_one(doc)
+        created_targets.append(target_obj)
+    
+    return {'message': 'Territory targets allocated', 'targets': created_targets}
+
+@api_router.post("/target-plans/{plan_id}/territories/{territory}/cities")
+async def allocate_city_targets(
+    plan_id: str,
+    territory: str,
+    cities: List[CityTargetCreate],
+    current_user: dict = Depends(get_current_user)
+):
+    """Allocate territory target to cities"""
+    
+    # Get territory target
+    territory_target = await db.territory_targets.find_one(
+        {'plan_id': plan_id, 'territory': territory},
+        {'_id': 0}
+    )
+    
+    if not territory_target:
+        raise HTTPException(status_code=404, detail='Territory target not found')
+    
+    # Validate total
+    total_percentage = sum([c.allocation_percentage for c in cities])
+    if abs(total_percentage - 100) > 0.01:
+        raise HTTPException(
+            status_code=400,
+            detail=f'City percentages must total 100% (current: {total_percentage}%)'
+        )
+    
+    # Delete existing city targets
+    await db.city_targets.delete_many({'plan_id': plan_id, 'territory': territory})
+    
+    # Create new city targets with calculated values
+    for city in cities:
+        city_data = city.model_dump()
+        city_data['plan_id'] = plan_id
+        city_data['territory'] = territory
+        # Calculate actual revenue from percentage
+        city_data['target_revenue'] = (city.allocation_percentage / 100) * territory_target['target_revenue']
+        city_obj = CityTarget(**city_data)
+        
+        doc = city_obj.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        
+        await db.city_targets.insert_one(doc)
+    
+    # Update territory allocated amount
+    total_city_revenue = sum([(c.allocation_percentage / 100) * territory_target['target_revenue'] for c in cities])
+    await db.territory_targets.update_one(
+        {'plan_id': plan_id, 'territory': territory},
+        {'$set': {'allocated_revenue': total_city_revenue}}
+    )
+    
+    return {'message': 'City targets allocated'}
+
+@api_router.get("/target-plans/{plan_id}/hierarchy")
+async def get_target_hierarchy(plan_id: str, current_user: dict = Depends(get_current_user)):
+    """Get complete target hierarchy with roll-ups"""
+    
+    plan = await db.target_plans.find_one({'id': plan_id}, {'_id': 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail='Plan not found')
+    
+    # Get territories
+    territories = await db.territory_targets.find({'plan_id': plan_id}, {'_id': 0}).to_list(100)
+    
+    # Get cities
+    cities = await db.city_targets.find({'plan_id': plan_id}, {'_id': 0}).to_list(1000)
+    
+    # Get resources
+    resources = await db.resource_targets.find({'plan_id': plan_id}, {'_id': 0}).to_list(1000)
+    
+    # Build hierarchy
+    hierarchy = {
+        'plan': plan,
+        'territories': []
+    }
+    
+    for territory in territories:
+        territory_data = {
+            **territory,
+            'states': {}
+        }
+        
+        # Group cities by state
+        territory_cities = [c for c in cities if c['territory'] == territory['territory']]
+        
+        for city in territory_cities:
+            state = city['state']
+            if state not in territory_data['states']:
+                territory_data['states'][state] = {
+                    'state_name': state,
+                    'state_target': 0,
+                    'cities': []
+                }
+            
+            # Get resources for this city
+            city_resources = [r for r in resources if r['city_id'] == city['id']]
+            
+            city_data = {
+                **city,
+                'resources': city_resources
+            }
+            
+            territory_data['states'][state]['cities'].append(city_data)
+            territory_data['states'][state]['state_target'] += city['target_revenue']
+        
+        # Convert states dict to list
+        territory_data['states'] = list(territory_data['states'].values())
+        
+        hierarchy['territories'].append(territory_data)
+    
+    return hierarchy
+
+@api_router.get("/target-plans/{plan_id}/cities/{city_id}/resources")
+async def get_city_resources(plan_id: str, city_id: str, current_user: dict = Depends(get_current_user)):
+    """Get resource allocations for a city"""
+    
+    resources = await db.resource_targets.find({'city_id': city_id}, {'_id': 0}).to_list(100)
+    
+    return {'resources': resources}
+
+@api_router.post("/target-plans/{plan_id}/cities/{city_id}/resources")
+async def assign_city_resources(
+    plan_id: str,
+    city_id: str,
+    resources: List[ResourceTargetCreate],
+    current_user: dict = Depends(get_current_user)
+):
+    """Assign city target to sales resources"""
+    
+    # Get city target
+    city = await db.city_targets.find_one({'id': city_id}, {'_id': 0})
+    if not city:
+        raise HTTPException(status_code=404, detail='City not found')
+    
+    # Validate total
+    total_percentage = sum([r.allocation_percentage for r in resources])
+    if abs(total_percentage - 100) > 0.01:
+        raise HTTPException(
+            status_code=400,
+            detail=f'Resource percentages must total 100% (current: {total_percentage}%)'
+        )
+    
+    # Delete existing resource targets for this city
+    await db.resource_targets.delete_many({'city_id': city_id})
+    
+    # Create new resource targets with calculated values
+    for resource in resources:
+        resource_data = resource.model_dump()
+        resource_data['plan_id'] = plan_id
+        resource_data['city_id'] = city_id
+        # Calculate actual revenue from percentage
+        resource_data['target_revenue'] = (resource.allocation_percentage / 100) * city['target_revenue']
+        resource_obj = ResourceTarget(**resource_data)
+        
+        doc = resource_obj.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        
+        await db.resource_targets.insert_one(doc)
+    
+    return {'message': 'Resources assigned successfully'}
+
+@api_router.get("/target-plans/{plan_id}/resource-summary")
+async def get_resource_summary(plan_id: str, current_user: dict = Depends(get_current_user)):
+    """Get resource-wise summary with city breakdowns"""
+    
+    # Get all resource targets for this plan
+    resources = await db.resource_targets.find({'plan_id': plan_id}, {'_id': 0}).to_list(1000)
+    
+    # Get cities
+    cities = await db.city_targets.find({'plan_id': plan_id}, {'_id': 0}).to_list(1000)
+    city_map = {c['id']: c for c in cities}
+    
+    # Get users
+    user_ids = list(set([r['resource_id'] for r in resources]))
+    users = await db.users.find({'id': {'$in': user_ids}}, {'_id': 0}).to_list(100)
+    user_map = {u['id']: u for u in users}
+    
+    # Build resource summary
+    resource_summary = {}
+    for res in resources:
+        user_id = res['resource_id']
+        if user_id not in resource_summary:
+            user_info = user_map.get(user_id, {})
+            resource_summary[user_id] = {
+                'resource_name': user_info.get('name', 'Unknown'),
+                'designation': user_info.get('designation', ''),
+                'territory': user_info.get('territory', ''),
+                'total_target': 0,
+                'city_breakdown': []
+            }
+        
+        city_info = city_map.get(res['city_id'], {})
+        resource_summary[user_id]['total_target'] += res['target_revenue']
+        resource_summary[user_id]['city_breakdown'].append({
+            'city': city_info.get('city', 'Unknown'),
+            'state': city_info.get('state', ''),
+            'target': res['target_revenue']
+        })
+    
+    return {
+        'resources': list(resource_summary.values()),
+        'plan_id': plan_id
+    }
+
+@api_router.get("/target-plans/{plan_id}/cities/{city_id}/skus")
+async def get_city_skus(plan_id: str, city_id: str, current_user: dict = Depends(get_current_user)):
+    """Get SKU allocations for a city"""
+    
+    skus = await db.sku_targets.find({'city_id': city_id}, {'_id': 0}).to_list(100)
+    
+    return {'skus': skus}
+
+@api_router.post("/target-plans/{plan_id}/cities/{city_id}/skus")
+async def assign_city_skus(
+    plan_id: str,
+    city_id: str,
+    skus: List[SKUTargetCreate],
+    current_user: dict = Depends(get_current_user)
+):
+    """Assign city target to SKUs (independent from resource allocation)"""
+    
+    # Get city target
+    city = await db.city_targets.find_one({'id': city_id}, {'_id': 0})
+    if not city:
+        raise HTTPException(status_code=404, detail='City not found')
+    
+    # Validate total
+    total_percentage = sum([s.allocation_percentage for s in skus])
+    if abs(total_percentage - 100) > 0.01:
+        raise HTTPException(
+            status_code=400,
+            detail=f'SKU percentages must total 100% (current: {total_percentage}%)'
+        )
+    
+    # Delete existing SKU targets for this city
+    await db.sku_targets.delete_many({'city_id': city_id})
+    
+    # Create new SKU targets with calculated values
+    for sku in skus:
+        sku_data = sku.model_dump()
+        sku_data['plan_id'] = plan_id
+        sku_data['city_id'] = city_id
+        # Calculate actual revenue from percentage
+        sku_data['target_revenue'] = (sku.allocation_percentage / 100) * city['target_revenue']
+        sku_obj = SKUTarget(**sku_data)
+        
+        doc = sku_obj.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        
+        await db.sku_targets.insert_one(doc)
+    
+    return {'message': 'SKUs assigned successfully'}
 
 @api_router.get("/reports/target-resource-allocation")
 async def get_target_resource_allocation_report(current_user: dict = Depends(get_current_user)):

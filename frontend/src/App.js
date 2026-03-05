@@ -28,7 +28,6 @@ import StatusSummary from './pages/StatusSummary';
 import DashboardPreview from './pages/DashboardPreview';
 import BottlePreview from './pages/BottlePreview';
 import LeaveManagement from './pages/LeaveManagement';
-import SalesTargets from './pages/SalesTargets';
 import TargetPlanningList from './pages/TargetPlanningList';
 import TargetPlanDashboard from './pages/TargetPlanDashboard';
 import ReportsPage from './pages/ReportsPage';
@@ -36,8 +35,6 @@ import SalesPortal from './pages/SalesPortal';
 import LeadDiscovery from './pages/LeadDiscovery';
 import COGSCalculator from './pages/COGSCalculator';
 import SalesRevenueDashboard from './pages/SalesRevenueDashboard';
-import TargetSKUReport from './pages/TargetSKUReport';
-import TargetResourceReport from './pages/TargetResourceReport';
 import SKUPerformance from './pages/SKUPerformance';
 import ResourcePerformance from './pages/ResourcePerformance';
 import AccountsList from './pages/AccountsList';
@@ -134,7 +131,6 @@ function AppRouter() {
           <Route path="/leaves" element={<ProtectedRoute><LeaveManagement /></ProtectedRoute>} />
           <Route path="/travel-requests" element={<ProtectedRoute><TravelRequest /></ProtectedRoute>} />
           <Route path="/budget-requests" element={<ProtectedRoute><BudgetRequest /></ProtectedRoute>} />
-          <Route path="/targets" element={<ProtectedRoute><SalesTargets /></ProtectedRoute>} />
           <Route path="/target-planning" element={<ProtectedRoute><TargetPlanningList /></ProtectedRoute>} />
           <Route path="/target-planning/:planId" element={<ProtectedRoute><TargetPlanDashboard /></ProtectedRoute>} />
           <Route path="/reports-new" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
@@ -142,8 +138,6 @@ function AppRouter() {
           <Route path="/lead-discovery" element={<ProtectedRoute><LeadDiscovery /></ProtectedRoute>} />
           <Route path="/cogs-calculator" element={<ProtectedRoute><COGSCalculator /></ProtectedRoute>} />
           <Route path="/sales-revenue" element={<ProtectedRoute><SalesRevenueDashboard /></ProtectedRoute>} />
-          <Route path="/target-sku" element={<ProtectedRoute><TargetSKUReport /></ProtectedRoute>} />
-          <Route path="/target-resource" element={<ProtectedRoute><TargetResourceReport /></ProtectedRoute>} />
           <Route path="/sku-performance" element={<ProtectedRoute><SKUPerformance /></ProtectedRoute>} />
           <Route path="/resource-performance" element={<ProtectedRoute><ResourcePerformance /></ProtectedRoute>} />
           <Route path="/accounts" element={<ProtectedRoute><AccountsList /></ProtectedRoute>} />
