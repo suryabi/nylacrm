@@ -261,21 +261,42 @@ function RevenueSummaryCards({ estimated, actual, plan }) {
 // Monthly Performance Table
 function MonthlyPerformanceTable({ monthlyData, plan }) {
   const target = plan.total_amount || 0;
+  const goalType = plan.goal_type || 'run_rate';
   
   // Calculate totals
   const totalInvoice = monthlyData.reduce((sum, m) => sum + (m.invoice_value || 0), 0);
   const totalCollections = monthlyData.reduce((sum, m) => sum + (m.collections || 0), 0);
+  
+  // For run_rate: Calculate cumulative monthly revenue (recurring revenue building up)
+  // Each month shows the total recurring revenue that month
+  const monthsCount = monthlyData.length;
+  
+  // Calculate expected milestone targets for run_rate
+  const getExpectedRunRate = (monthIndex) => {
+    // Linear ramp from 0 to target over the period
+    // Month 1: target/months, Month 2: 2*target/months, etc.
+    return Math.round((target / monthsCount) * (monthIndex + 1));
+  };
 
   return (
     <Card className="p-6 mb-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-lg flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-primary" />
-          Monthly Performance
-        </h3>
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">Monthly Target:</span>
-          <span className="font-bold text-primary">{formatCurrency(target, true)}</span>
+        <div>
+          <h3 className="font-semibold text-lg flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-primary" />
+            Monthly Performance
+          </h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            {goalType === 'run_rate' 
+              ? 'Track monthly revenue growth towards target run rate' 
+              : 'Track cumulative revenue against period target'}
+          </p>
+        </div>
+        <div className="text-right">
+          <span className="text-muted-foreground text-sm">
+            {goalType === 'run_rate' ? 'Monthly Goal:' : 'Period Target:'}
+          </span>
+          <p className="font-bold text-primary text-xl">{formatCurrency(target, true)}</p>
         </div>
       </div>
 
@@ -284,13 +305,27 @@ function MonthlyPerformanceTable({ monthlyData, plan }) {
           <thead>
             <tr className="border-b text-left">
               <th className="pb-3 font-semibold text-sm text-muted-foreground">Month</th>
-              <th className="pb-3 font-semibold text-sm text-muted-foreground text-right">Target</th>
-              <th className="pb-3 font-semibold text-sm text-muted-foreground text-right">
-                <span className="flex items-center justify-end gap-1">
-                  <Receipt className="h-3 w-3" /> Invoice Value
-                </span>
-              </th>
-              <th className="pb-3 font-semibold text-sm text-muted-foreground text-center">Achievement</th>
+              {goalType === 'run_rate' ? (
+                <>
+                  <th className="pb-3 font-semibold text-sm text-muted-foreground text-right">Expected Run Rate</th>
+                  <th className="pb-3 font-semibold text-sm text-muted-foreground text-right">
+                    <span className="flex items-center justify-end gap-1">
+                      <Receipt className="h-3 w-3" /> Monthly Revenue
+                    </span>
+                  </th>
+                  <th className="pb-3 font-semibold text-sm text-muted-foreground text-center">vs Expected</th>
+                </>
+              ) : (
+                <>
+                  <th className="pb-3 font-semibold text-sm text-muted-foreground text-right">Target</th>
+                  <th className="pb-3 font-semibold text-sm text-muted-foreground text-right">
+                    <span className="flex items-center justify-end gap-1">
+                      <Receipt className="h-3 w-3" /> Invoice Value
+                    </span>
+                  </th>
+                  <th className="pb-3 font-semibold text-sm text-muted-foreground text-center">Achievement</th>
+                </>
+              )}
               <th className="pb-3 font-semibold text-sm text-muted-foreground text-right">
                 <span className="flex items-center justify-end gap-1">
                   <Banknote className="h-3 w-3" /> Collections
@@ -301,9 +336,11 @@ function MonthlyPerformanceTable({ monthlyData, plan }) {
           </thead>
           <tbody>
             {monthlyData.map((month, idx) => {
-              const achievementPercent = target > 0 ? Math.round((month.invoice_value / target) * 100) : 0;
-              const collectionPercent = month.invoice_value > 0 ? Math.round((month.collections / month.invoice_value) * 100) : 0;
               const isFuture = !month.is_current && !month.is_past;
+              const expectedRunRate = goalType === 'run_rate' ? getExpectedRunRate(idx) : target;
+              const monthTarget = goalType === 'run_rate' ? expectedRunRate : target;
+              const achievementPercent = monthTarget > 0 ? Math.round((month.invoice_value / monthTarget) * 100) : 0;
+              const collectionPercent = month.invoice_value > 0 ? Math.round((month.collections / month.invoice_value) * 100) : 0;
               
               return (
                 <tr 
@@ -327,7 +364,14 @@ function MonthlyPerformanceTable({ monthlyData, plan }) {
                       )}
                     </div>
                   </td>
-                  <td className="py-3 text-right font-medium">{formatCurrency(target, true)}</td>
+                  <td className="py-3 text-right font-medium">
+                    {formatCurrency(monthTarget, true)}
+                    {goalType === 'run_rate' && (
+                      <span className="text-[10px] text-muted-foreground block">
+                        ({Math.round((monthTarget / target) * 100)}% of goal)
+                      </span>
+                    )}
+                  </td>
                   <td className="py-3 text-right">
                     {isFuture ? (
                       <span className="text-muted-foreground italic">-</span>
@@ -388,11 +432,23 @@ function MonthlyPerformanceTable({ monthlyData, plan }) {
           </tbody>
           <tfoot>
             <tr className="border-t-2 bg-gray-50 font-semibold">
-              <td className="py-3">Total</td>
-              <td className="py-3 text-right">{formatCurrency(target * monthlyData.length, true)}</td>
-              <td className="py-3 text-right">{formatCurrency(totalInvoice, true)}</td>
+              <td className="py-3">
+                {goalType === 'run_rate' ? 'Final Goal' : 'Total'}
+              </td>
+              <td className="py-3 text-right">
+                {goalType === 'run_rate' ? formatCurrency(target, true) : formatCurrency(target * monthsCount, true)}
+              </td>
+              <td className="py-3 text-right">
+                {goalType === 'run_rate' 
+                  ? formatCurrency(monthlyData.filter(m => m.is_past || m.is_current).slice(-1)[0]?.invoice_value || 0, true)
+                  : formatCurrency(totalInvoice, true)
+                }
+              </td>
               <td className="py-3 text-center">
-                {target > 0 ? Math.round((totalInvoice / (target * monthlyData.filter(m => m.is_past || m.is_current).length || 1)) * 100) : 0}%
+                {goalType === 'run_rate'
+                  ? `${target > 0 ? Math.round(((monthlyData.filter(m => m.is_past || m.is_current).slice(-1)[0]?.invoice_value || 0) / target) * 100) : 0}%`
+                  : `${target > 0 ? Math.round((totalInvoice / (target * monthlyData.filter(m => m.is_past || m.is_current).length || 1)) * 100) : 0}%`
+                }
               </td>
               <td className="py-3 text-right text-green-700">{formatCurrency(totalCollections, true)}</td>
               <td className="py-3 text-center">
@@ -402,6 +458,15 @@ function MonthlyPerformanceTable({ monthlyData, plan }) {
           </tfoot>
         </table>
       </div>
+      
+      {goalType === 'run_rate' && (
+        <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <p className="text-sm text-blue-700">
+            <strong>Run Rate Goal:</strong> Build up monthly recurring revenue from clients acquired over the period. 
+            Each month's revenue includes revenue from all clients acquired so far.
+          </p>
+        </div>
+      )}
     </Card>
   );
 }

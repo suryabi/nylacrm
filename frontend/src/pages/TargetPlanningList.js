@@ -87,7 +87,7 @@ export default function TargetPlanningList() {
     name: '',
     start_date: '',
     end_date: '',
-    target_type: 'revenue',
+    goal_type: 'run_rate',  // "run_rate" or "cumulative"
     total_amount: '',
     milestones: '4',
     description: ''
@@ -138,7 +138,7 @@ export default function TargetPlanningList() {
         const newPlan = await response.json();
         toast.success('Target plan created');
         setShowCreateDialog(false);
-        setFormData({ name: '', start_date: '', end_date: '', target_type: 'revenue', total_amount: '', milestones: '4', description: '' });
+        setFormData({ name: '', start_date: '', end_date: '', goal_type: 'run_rate', total_amount: '', milestones: '4', description: '' });
         navigate(`/target-planning/${newPlan.id}`);
       } else {
         const error = await response.json();
@@ -306,8 +306,13 @@ export default function TargetPlanningList() {
                   <div className="flex items-center gap-2">
                     <Target className="h-4 w-4 text-primary" />
                     <span className="text-xl font-bold">{formatCurrency(plan.total_amount)}</span>
-                    <span className="text-xs text-muted-foreground">/month target</span>
+                    <span className="text-xs text-muted-foreground">
+                      {plan.goal_type === 'cumulative' ? 'total target' : '/month goal'}
+                    </span>
                   </div>
+                  <Badge variant="outline" className="text-[10px]">
+                    {plan.goal_type === 'cumulative' ? 'Cumulative' : 'Monthly Run Rate'}
+                  </Badge>
                 </div>
 
                 {/* Progress Bars */}
@@ -404,18 +409,32 @@ export default function TargetPlanningList() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Target Type</Label>
-                <Select value={formData.target_type} onValueChange={(v) => setFormData({ ...formData, target_type: v })}>
-                  <SelectTrigger className="mt-1">
+                <Label>Goal Type *</Label>
+                <Select value={formData.goal_type} onValueChange={(v) => setFormData({ ...formData, goal_type: v })}>
+                  <SelectTrigger className="mt-1" data-testid="goal-type-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="revenue">Revenue (₹)</SelectItem>
+                    <SelectItem value="run_rate">
+                      <div className="flex flex-col">
+                        <span className="font-medium">Monthly Run Rate Goal</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="cumulative">
+                      <div className="flex flex-col">
+                        <span className="font-medium">Cumulative Target</span>
+                      </div>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {formData.goal_type === 'run_rate' 
+                    ? 'Build monthly revenue up to target by end date' 
+                    : 'Total revenue to achieve over the period'}
+                </p>
               </div>
               <div>
-                <Label>Total Target Amount (₹) *</Label>
+                <Label>{formData.goal_type === 'run_rate' ? 'Monthly Target (₹)' : 'Total Target (₹)'} *</Label>
                 <Input
                   type="number"
                   value={formData.total_amount}
@@ -424,6 +443,11 @@ export default function TargetPlanningList() {
                   className="mt-1"
                   data-testid="plan-amount-input"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {formData.goal_type === 'run_rate' 
+                    ? 'Target monthly revenue by the end date' 
+                    : 'Total revenue target for the period'}
+                </p>
               </div>
             </div>
 

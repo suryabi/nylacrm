@@ -10861,7 +10861,7 @@ class TargetPlanCreateV2(BaseModel):
     name: str
     start_date: str  # YYYY-MM-DD
     end_date: str    # YYYY-MM-DD
-    target_type: str = "revenue"  # revenue, volume, etc.
+    goal_type: str = "run_rate"  # "run_rate" (monthly revenue goal by end date) or "cumulative" (total over period)
     total_amount: float
     milestones: int = 4  # Number of milestones to split the target into
     description: Optional[str] = None
@@ -10870,7 +10870,7 @@ class TargetPlanUpdateV2(BaseModel):
     name: Optional[str] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
-    target_type: Optional[str] = None
+    goal_type: Optional[str] = None
     total_amount: Optional[float] = None
     milestones: Optional[int] = None
     description: Optional[str] = None
@@ -10978,7 +10978,7 @@ async def create_target_planning(
         'name': plan.name,
         'start_date': plan.start_date,
         'end_date': plan.end_date,
-        'target_type': plan.target_type,
+        'goal_type': plan.goal_type,  # "run_rate" or "cumulative"
         'total_amount': plan.total_amount,
         'milestones': plan.milestones,
         'allocated_amount': 0,
