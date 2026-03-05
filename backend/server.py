@@ -10895,12 +10895,33 @@ async def get_target_planning_list(
     status: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get all target plans for new Target Planning module"""
+    """Get all target plans for new Target Planning module with achieved revenue"""
     query = {}
     if status:
         query['status'] = status
     
     plans = await db.target_plans_v2.find(query, {'_id': 0}).sort('created_at', -1).to_list(100)
+    
+    # Calculate achieved revenue for each plan
+    for plan in plans:
+        # Get invoices within the plan's date range
+        invoices = await db.invoices.find({
+            'invoice_date': {'$gte': plan['start_date'], '$lte': plan['end_date']}
+        }, {'_id': 0}).to_list(1000)
+        achieved = sum(inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0 for inv in invoices)
+        
+        # Get won leads for estimated revenue
+        won_leads = await db.leads.find({
+            'status': 'won',
+            'updated_at': {'$gte': plan['start_date'], '$lte': plan['end_date']}
+        }, {'_id': 0}).to_list(1000)
+        estimated = sum(lead.get('estimated_value', 0) or 0 for lead in won_leads)
+        
+        plan['achieved_revenue'] = achieved
+        plan['estimated_revenue'] = estimated
+        plan['invoices_count'] = len(invoices)
+        plan['won_leads_count'] = len(won_leads)
+    
     return plans
 
 @api_router.post("/target-planning")

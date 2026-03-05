@@ -34,7 +34,9 @@ import {
   Lock,
   Loader2,
   TrendingUp,
-  Clock
+  Clock,
+  CheckCircle2,
+  Receipt
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -244,6 +246,9 @@ export default function TargetPlanningList() {
             const allocationPercent = plan.total_amount > 0 
               ? Math.round((plan.allocated_amount / plan.total_amount) * 100) 
               : 0;
+            const achievedPercent = plan.total_amount > 0
+              ? Math.round((plan.achieved_revenue / plan.total_amount) * 100)
+              : 0;
 
             return (
               <Card 
@@ -311,7 +316,7 @@ export default function TargetPlanningList() {
                 </div>
 
                 {/* Allocation Progress */}
-                <div className="mb-4">
+                <div className="mb-3">
                   <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
                     <span className="flex items-center gap-1"><TrendingUp className="h-3 w-3" /> Allocated</span>
                     <span>{formatCurrency(plan.allocated_amount)} ({allocationPercent}%)</span>
@@ -320,6 +325,20 @@ export default function TargetPlanningList() {
                     <div 
                       className={`h-full rounded-full transition-all ${allocationPercent >= 100 ? 'bg-green-500' : 'bg-amber-500'}`}
                       style={{ width: `${Math.min(100, allocationPercent)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Achieved Progress */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                    <span className="flex items-center gap-1"><Receipt className="h-3 w-3" /> Achieved</span>
+                    <span>{formatCurrency(plan.achieved_revenue || 0)} ({achievedPercent}%)</span>
+                  </div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full transition-all ${achievedPercent >= 100 ? 'bg-green-600' : achievedPercent >= 50 ? 'bg-teal-500' : 'bg-purple-500'}`}
+                      style={{ width: `${Math.min(100, achievedPercent)}%` }}
                     />
                   </div>
                 </div>
