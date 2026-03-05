@@ -528,6 +528,15 @@ function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) 
     return cities;
   };
 
+  // Get territories that haven't been allocated yet
+  const getAvailableTerritories = () => {
+    const allocatedTerritoryNames = allocations
+      .filter(a => a.level === 'territory' || !a.level)
+      .map(a => a.territory_name);
+    
+    return masterLocations.filter(t => !allocatedTerritoryNames.includes(t.name));
+  };
+
   const getParentAmount = () => {
     // For the add dialog
     if (!parentAllocation) return plan.total_amount - totalAllocated;
@@ -690,7 +699,12 @@ function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) 
           </h3>
           <p className="text-sm text-muted-foreground">Distribute targets across territories and cities</p>
         </div>
-        <Button size="sm" onClick={() => openAddDialog(null)} data-testid="add-allocation-btn">
+        <Button 
+          size="sm" 
+          onClick={() => openAddDialog(null)} 
+          data-testid="add-allocation-btn"
+          disabled={getAvailableTerritories().length === 0 || remaining <= 0}
+        >
           <Plus className="h-4 w-4 mr-1" /> Add Territory
         </Button>
       </div>
@@ -795,14 +809,20 @@ function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) 
                     <SelectValue placeholder="Select territory" />
                   </SelectTrigger>
                   <SelectContent>
-                    {masterLocations.map((territory) => (
-                      <SelectItem key={territory.id} value={territory.id}>
-                        <span className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4" />
-                          {territory.name}
-                        </span>
-                      </SelectItem>
-                    ))}
+                    {getAvailableTerritories().length === 0 ? (
+                      <div className="p-2 text-sm text-muted-foreground text-center">
+                        All territories have been allocated
+                      </div>
+                    ) : (
+                      getAvailableTerritories().map((territory) => (
+                        <SelectItem key={territory.id} value={territory.id}>
+                          <span className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4" />
+                            {territory.name}
+                          </span>
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
