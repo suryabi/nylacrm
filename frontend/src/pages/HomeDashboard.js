@@ -23,7 +23,6 @@ import {
   UpcomingFollowupsWidget,
   UpcomingMeetingsWidget,
   PipelineSummaryWidget,
-  RecentActivityWidget,
   SalesROIPanel,
   NewTaskDialog,
   NewMeetingDialog,
@@ -434,11 +433,8 @@ export default function HomeDashboard() {
                 }}
               />
               
-              {/* Bottom Row - Two cards side by side */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <UpcomingFollowupsWidget upcomingLeads={upcoming_leads} />
-                <RecentActivityWidget recentActivities={recent_activities} />
-              </div>
+              {/* Bottom Row - Upcoming Follow-ups full width */}
+              <UpcomingFollowupsWidget upcomingLeads={upcoming_leads} />
             </div>
 
             {/* Right Column - Secondary Content (4 cols) */}
