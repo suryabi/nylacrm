@@ -36,7 +36,9 @@ import {
   TrendingUp,
   Clock,
   CheckCircle2,
-  Receipt
+  Receipt,
+  Banknote,
+  ChevronRight
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -53,8 +55,13 @@ const getAuthHeaders = () => {
 };
 
 // Format currency in Indian style
-const formatCurrency = (amount) => {
+const formatCurrency = (amount, short = false) => {
   if (!amount) return '₹0';
+  if (short) {
+    if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(1)} Cr`;
+    if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)} L`;
+    if (amount >= 1000) return `₹${(amount / 1000).toFixed(0)}K`;
+  }
   if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(2)} Cr`;
   if (amount >= 100000) return `₹${(amount / 100000).toFixed(2)} L`;
   return `₹${amount.toLocaleString('en-IN')}`;
@@ -240,15 +247,14 @@ export default function TargetPlanningList() {
           </Button>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {plans.map((plan) => {
             const progress = calculateProgress(plan);
             const allocationPercent = plan.total_amount > 0 
               ? Math.round((plan.allocated_amount / plan.total_amount) * 100) 
               : 0;
-            const achievedPercent = plan.total_amount > 0
-              ? Math.round((plan.achieved_revenue / plan.total_amount) * 100)
-              : 0;
+            const currentMonth = plan.current_month;
+            const monthlyData = plan.monthly_breakdown || [];
 
             return (
               <Card 
@@ -289,61 +295,99 @@ export default function TargetPlanningList() {
                 </div>
 
                 {/* Duration & Target */}
-                <div className="space-y-3 mb-4">
+                <div className="space-y-2 mb-4">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Calendar className="h-4 w-4" />
                     <span>{new Date(plan.start_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} - {new Date(plan.end_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                     <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{calculateDuration(plan.start_date, plan.end_date)}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <IndianRupee className="h-4 w-4 text-primary" />
-                    <span className="text-xl font-bold">{formatCurrency(plan.total_amount)}</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Target className="h-4 w-4 text-primary" />
+                      <span className="text-xl font-bold">{formatCurrency(plan.total_amount)}</span>
+                      <span className="text-xs text-muted-foreground">/month target</span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Time Progress */}
-                <div className="mb-3">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                    <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Time Elapsed</span>
-                    <span>{progress}%</span>
+                {/* Time & Allocation Progress */}
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                      <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Time</span>
+                      <span>{progress}%</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${progress}%` }} />
+                    </div>
                   </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-blue-500 rounded-full transition-all"
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Allocation Progress */}
-                <div className="mb-3">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                    <span className="flex items-center gap-1"><TrendingUp className="h-3 w-3" /> Allocated</span>
-                    <span>{formatCurrency(plan.allocated_amount)} ({allocationPercent}%)</span>
-                  </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full transition-all ${allocationPercent >= 100 ? 'bg-green-500' : 'bg-amber-500'}`}
-                      style={{ width: `${Math.min(100, allocationPercent)}%` }}
-                    />
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                      <span className="flex items-center gap-1"><TrendingUp className="h-3 w-3" /> Allocated</span>
+                      <span>{allocationPercent}%</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${allocationPercent >= 100 ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(100, allocationPercent)}%` }} />
+                    </div>
                   </div>
                 </div>
 
-                {/* Achieved Progress */}
-                <div className="mb-4">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                    <span className="flex items-center gap-1"><Receipt className="h-3 w-3" /> Achieved</span>
-                    <span>{formatCurrency(plan.achieved_revenue || 0)} ({achievedPercent}%)</span>
+                {/* Monthly Revenue Breakdown */}
+                <div className="border-t pt-3">
+                  <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Monthly Revenue</p>
+                  <div className="space-y-1.5 max-h-[140px] overflow-y-auto">
+                    {monthlyData.map((month, idx) => {
+                      const invoicePercent = plan.total_amount > 0 ? Math.round((month.invoice_value / plan.total_amount) * 100) : 0;
+                      const isFuture = !month.is_current && !month.is_past;
+                      
+                      return (
+                        <div 
+                          key={idx} 
+                          className={`flex items-center gap-2 p-1.5 rounded text-xs ${
+                            month.is_current ? 'bg-blue-50 border border-blue-200' : 
+                            month.is_past ? 'bg-gray-50' : 'bg-gray-50/50 opacity-60'
+                          }`}
+                        >
+                          <span className={`w-16 font-medium ${month.is_current ? 'text-blue-700' : 'text-gray-700'}`}>
+                            {month.month}
+                          </span>
+                          
+                          {isFuture ? (
+                            <span className="text-muted-foreground italic flex-1 text-center">Upcoming</span>
+                          ) : (
+                            <>
+                              <div className="flex-1 flex items-center gap-1">
+                                <Receipt className="h-3 w-3 text-purple-500" />
+                                <span className="font-semibold">{formatCurrency(month.invoice_value, true)}</span>
+                                <span className="text-[10px] text-muted-foreground">({invoicePercent}%)</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-green-700">
+                                <Banknote className="h-3 w-3" />
+                                <span className="font-medium">{formatCurrency(month.collections, true)}</span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full transition-all ${achievedPercent >= 100 ? 'bg-green-600' : achievedPercent >= 50 ? 'bg-teal-500' : 'bg-purple-500'}`}
-                      style={{ width: `${Math.min(100, achievedPercent)}%` }}
-                    />
+                  
+                  {/* Totals Summary */}
+                  <div className="flex items-center justify-between mt-2 pt-2 border-t text-xs">
+                    <div className="flex items-center gap-1">
+                      <Receipt className="h-3 w-3 text-purple-500" />
+                      <span className="text-muted-foreground">Total Invoice:</span>
+                      <span className="font-semibold">{formatCurrency(plan.total_invoice_value, true)}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Banknote className="h-3 w-3 text-green-600" />
+                      <span className="text-muted-foreground">Collections:</span>
+                      <span className="font-semibold text-green-700">{formatCurrency(plan.total_collections, true)}</span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end text-sm text-primary font-medium group-hover:underline">
+                <div className="flex items-center justify-end text-sm text-primary font-medium group-hover:underline mt-3">
                   View Dashboard <ArrowRight className="h-4 w-4 ml-1" />
                 </div>
               </Card>

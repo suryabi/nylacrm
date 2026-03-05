@@ -10895,32 +10895,75 @@ async def get_target_planning_list(
     status: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get all target plans for new Target Planning module with achieved revenue"""
+    """Get all target plans for new Target Planning module with monthly revenue breakdown"""
     query = {}
     if status:
         query['status'] = status
     
     plans = await db.target_plans_v2.find(query, {'_id': 0}).sort('created_at', -1).to_list(100)
     
-    # Calculate achieved revenue for each plan
+    # Calculate monthly revenue breakdown for each plan
     for plan in plans:
-        # Get invoices within the plan's date range
-        invoices = await db.invoices.find({
-            'invoice_date': {'$gte': plan['start_date'], '$lte': plan['end_date']}
-        }, {'_id': 0}).to_list(1000)
-        achieved = sum(inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0 for inv in invoices)
+        start = datetime.fromisoformat(plan['start_date'])
+        end = datetime.fromisoformat(plan['end_date'])
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         
-        # Get won leads for estimated revenue
-        won_leads = await db.leads.find({
-            'status': 'won',
-            'updated_at': {'$gte': plan['start_date'], '$lte': plan['end_date']}
-        }, {'_id': 0}).to_list(1000)
-        estimated = sum(lead.get('estimated_value', 0) or 0 for lead in won_leads)
+        # Generate monthly breakdown
+        monthly_data = []
+        current = start.replace(day=1)
         
-        plan['achieved_revenue'] = achieved
-        plan['estimated_revenue'] = estimated
-        plan['invoices_count'] = len(invoices)
-        plan['won_leads_count'] = len(won_leads)
+        while current <= end:
+            month_start = current.strftime('%Y-%m-01')
+            # Get last day of month
+            if current.month == 12:
+                next_month = current.replace(year=current.year + 1, month=1, day=1)
+            else:
+                next_month = current.replace(month=current.month + 1, day=1)
+            month_end = (next_month - timedelta(days=1)).strftime('%Y-%m-%d')
+            
+            is_past_or_current = current <= now
+            
+            month_entry = {
+                'month': current.strftime('%b %Y'),
+                'month_num': current.month,
+                'year': current.year,
+                'is_current': current.month == now.month and current.year == now.year,
+                'is_past': current < now.replace(day=1),
+                'invoice_value': 0,
+                'collections': 0
+            }
+            
+            # Only fetch actual data for past and current months
+            if is_past_or_current:
+                # Get invoices for this month
+                invoices = await db.invoices.find({
+                    'invoice_date': {'$gte': month_start, '$lte': month_end}
+                }, {'_id': 0}).to_list(500)
+                month_entry['invoice_value'] = sum(inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0 for inv in invoices)
+                
+                # Get collections (payments) for this month
+                payments = await db.payments.find({
+                    'payment_date': {'$gte': month_start, '$lte': month_end}
+                }, {'_id': 0}).to_list(500)
+                month_entry['collections'] = sum(p.get('amount', 0) or 0 for p in payments)
+            
+            monthly_data.append(month_entry)
+            
+            # Move to next month
+            if current.month == 12:
+                current = current.replace(year=current.year + 1, month=1)
+            else:
+                current = current.replace(month=current.month + 1)
+        
+        plan['monthly_breakdown'] = monthly_data
+        
+        # Current month stats
+        current_month_data = next((m for m in monthly_data if m['is_current']), None)
+        plan['current_month'] = current_month_data
+        
+        # Total achieved (sum of all past months' invoice values)
+        plan['total_invoice_value'] = sum(m['invoice_value'] for m in monthly_data)
+        plan['total_collections'] = sum(m['collections'] for m in monthly_data)
     
     return plans
 
