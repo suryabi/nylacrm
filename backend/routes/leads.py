@@ -112,6 +112,7 @@ class LeadUpdate(BaseModel):
     next_followup_date: Optional[str] = None
     converted_to_account: Optional[bool] = False
     account_id: Optional[str] = None
+    updated_at: Optional[str] = None  # Admin can set custom date for status changes
 
 
 class PaginatedLeadsResponse(BaseModel):
@@ -140,6 +141,7 @@ class ActivityCreate(BaseModel):
     activity_type: str
     description: str
     interaction_method: Optional[str] = None
+    created_at: Optional[str] = None  # Admin can set custom date
 
 
 class FollowUp(BaseModel):
@@ -362,7 +364,16 @@ async def update_lead(lead_id: str, lead_update: LeadUpdate, current_user: dict 
         raise HTTPException(status_code=404, detail='Lead not found')
     
     update_data = {k: v for k, v in lead_update.model_dump().items() if v is not None}
-    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    # Use custom updated_at if provided (admin feature), otherwise use current time
+    if 'updated_at' in update_data and update_data['updated_at']:
+        try:
+            custom_date = datetime.fromisoformat(update_data['updated_at'].replace('Z', '+00:00'))
+            update_data['updated_at'] = custom_date.isoformat()
+        except:
+            update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    else:
+        update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
     await db.leads.update_one({'id': lead_id}, {'$set': update_data})
     
@@ -411,11 +422,21 @@ async def create_activity(activity: ActivityCreate, current_user: dict = Depends
     activity_data = activity.model_dump()
     activity_data['id'] = str(uuid.uuid4())
     activity_data['created_by'] = current_user['id']
-    activity_data['created_at'] = datetime.now(timezone.utc).isoformat()
+    
+    # Use custom created_at if provided (admin feature), otherwise use current time
+    if activity_data.get('created_at'):
+        # Validate and use the provided date
+        try:
+            custom_date = datetime.fromisoformat(activity_data['created_at'].replace('Z', '+00:00'))
+            activity_data['created_at'] = custom_date.isoformat()
+        except:
+            activity_data['created_at'] = datetime.now(timezone.utc).isoformat()
+    else:
+        activity_data['created_at'] = datetime.now(timezone.utc).isoformat()
     
     await db.activities.insert_one(activity_data)
     
-    activity_data['created_at'] = datetime.fromisoformat(activity_data['created_at'])
+    activity_data['created_at'] = datetime.fromisoformat(activity_data['created_at'].replace('Z', '+00:00'))
     return Activity(**activity_data)
 
 

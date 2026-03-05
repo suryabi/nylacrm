@@ -62,6 +62,9 @@ export default function LeadDetail() {
   const [submittingComment, setSubmittingComment] = useState(false);
   const [invoiceData, setInvoiceData] = useState(null);
   
+  // Check if user is admin (CEO or Director)
+  const isAdmin = user?.role === 'CEO' || user?.role === 'Director';
+  
   // SKU Pricing state
   const [masterSkus, setMasterSkus] = useState([]);
   const [proposedSkuPricing, setProposedSkuPricing] = useState([]);
@@ -76,6 +79,7 @@ export default function LeadDetail() {
   const [submittingActivity, setSubmittingActivity] = useState(false);
   const [activityStatus, setActivityStatus] = useState('');
   const [activityFollowUpDate, setActivityFollowUpDate] = useState('');
+  const [activityDate, setActivityDate] = useState(''); // Admin-only: backdate activity
   const [convertingToAccount, setConvertingToAccount] = useState(false);
   const [generatingLeadId, setGeneratingLeadId] = useState(false);
   const [savingRank, setSavingRank] = useState(false);
@@ -516,17 +520,28 @@ ${userEmail}`;
     setSubmittingActivity(true);
     try {
       // First log the activity
-      await activitiesAPI.create({
+      const activityPayload = {
         lead_id: id,
         activity_type: activityType,
         description: activityDescription,
         interaction_method: interactionMethod
-      });
+      };
+      
+      // Admin can set a custom activity date
+      if (activityDate && isAdmin) {
+        activityPayload.created_at = new Date(activityDate + 'T12:00:00Z').toISOString();
+      }
+      
+      await activitiesAPI.create(activityPayload);
       
       // Update lead status and follow-up date if provided
       const leadUpdates = {};
       if (activityStatus) {
         leadUpdates.status = activityStatus;
+        // If admin set a custom date, also update lead's updated_at
+        if (activityDate && isAdmin) {
+          leadUpdates.updated_at = new Date(activityDate + 'T12:00:00Z').toISOString();
+        }
       }
       if (activityFollowUpDate) {
         leadUpdates.next_followup_date = activityFollowUpDate;
@@ -540,6 +555,7 @@ ${userEmail}`;
       setActivityDescription('');
       setActivityStatus('');
       setActivityFollowUpDate('');
+      setActivityDate('');
       setShowActivityForm(false);
       fetchData();
     } catch (error) {
@@ -1251,7 +1267,7 @@ ${userEmail}`;
                       <span className="text-xs font-semibold uppercase tracking-wide">Quick Actions</span>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className={`grid ${isAdmin ? 'grid-cols-3' : 'grid-cols-2'} gap-4`}>
                       {/* Status Update */}
                       <div className="space-y-2">
                         <Label className="text-xs font-medium text-gray-600">Update Status</Label>
@@ -1280,6 +1296,26 @@ ${userEmail}`;
                           data-testid="activity-followup-date"
                         />
                       </div>
+                      
+                      {/* Activity Date - Admin Only */}
+                      {isAdmin && (
+                        <div className="space-y-2">
+                          <Label className="text-xs font-medium text-gray-600">
+                            Activity Date
+                            <span className="ml-1 text-[10px] text-amber-600 font-normal">(Admin)</span>
+                          </Label>
+                          <Input
+                            type="date"
+                            value={activityDate}
+                            onChange={(e) => setActivityDate(e.target.value)}
+                            max={new Date().toISOString().split('T')[0]}
+                            className="bg-white h-10 border-amber-200 focus:border-amber-400"
+                            placeholder="Default: Today"
+                            data-testid="activity-date-admin"
+                          />
+                          <p className="text-[10px] text-amber-600">Leave empty for today's date</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                   
