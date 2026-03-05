@@ -53,6 +53,21 @@ Build a comprehensive, mobile-ready Sales CRM application with:
   - **Test Data**: Plan H2 2026 (₹1.2Cr) with South India territory (₹48L) → Bengaluru city (₹20L)
   - Status: VERIFIED
 
+- **UI IMPROVEMENT**: Redesigned Territory Allocation Cards (Side-by-Side Layout)
+  - **Purpose**: Make territory allocations more compact and visually clear, like subscription plan cards
+  - **Changes**:
+    - Territory cards now display in a **2-3 column grid** (responsive)
+    - Each card shows: Territory name, target amount, distribution progress, and remaining budget
+    - **Cities section** within each card shows: City name, % of territory, Allocated amount, Achieved amount (from invoices)
+    - **Edit functionality**: Hover on city row to reveal edit/delete buttons
+    - **City Achievement API**: `GET /api/target-planning/city-achievement?city=Bengaluru&start_date=...&end_date=...`
+    - **Update Allocation API**: `PUT /api/target-planning/{plan_id}/allocations/{allocation_id}` to edit city amounts
+  - **Visual Features**:
+    - Rank badges with trophy/medal icons for top 3 territories
+    - Progress bars showing distribution percentage
+    - Color-coded remaining budget (amber if remaining, green if fully distributed)
+  - Status: VERIFIED
+
 ### Mar 4, 2026 (Session 17)
 
 - **NEW FEATURE**: Invoice Creation with Automatic COGS/Logistics/Margin Calculation

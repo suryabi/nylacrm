@@ -10930,6 +10930,71 @@ async def create_target_planning(
     plan_data.pop('_id', None)
     return plan_data
 
+
+@api_router.get("/target-planning/city-achievement")
+async def get_city_achievement(
+    city: str,
+    start_date: str,
+    end_date: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get achievement (actual revenue from invoices) for a specific city within a date range"""
+    # Get accounts in this city
+    accounts = await db.accounts.find({'city': city}, {'account_id': 1}).to_list(1000)
+    account_ids = [a['account_id'] for a in accounts]
+    
+    # Get invoices for these accounts within the date range
+    invoices_query = {
+        'account_id': {'$in': account_ids},
+        'invoice_date': {'$gte': start_date, '$lte': end_date}
+    }
+    
+    invoices = await db.invoices.find(invoices_query, {'_id': 0}).to_list(1000)
+    achieved = sum(inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0 for inv in invoices)
+    
+    # Also get won leads for estimated revenue
+    won_leads = await db.leads.find({
+        'city': city,
+        'status': 'won',
+        'updated_at': {'$gte': start_date, '$lte': end_date}
+    }, {'_id': 0}).to_list(1000)
+    estimated = sum(lead.get('estimated_value', 0) or 0 for lead in won_leads)
+    
+    return {
+        'city': city,
+        'achieved': achieved,
+        'estimated': estimated,
+        'invoices_count': len(invoices),
+        'won_leads_count': len(won_leads)
+    }
+
+
+@api_router.get("/target-planning/resources/by-location")
+async def get_resources_by_location(
+    territory: Optional[str] = None,
+    city: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get sales resources filtered by territory or city"""
+    query = {'is_active': True}
+    
+    # Include all sales-related roles
+    sales_roles = ['National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Head of Business', 
+                   'Business Development Executive', 'Sales Executive', 'Area Sales Manager']
+    query['role'] = {'$in': sales_roles}
+    
+    if city:
+        query['city'] = city
+    elif territory:
+        query['territory'] = territory
+    
+    users = await db.users.find(
+        query,
+        {'_id': 0, 'id': 1, 'name': 1, 'email': 1, 'role': 1, 'city': 1, 'state': 1, 'territory': 1}
+    ).to_list(200)
+    return users
+
+
 @api_router.get("/target-planning/{plan_id}")
 async def get_target_planning_detail(
     plan_id: str,
@@ -11081,30 +11146,43 @@ async def get_allocation_children(
     return children
 
 
-@api_router.get("/target-planning/resources/by-location")
-async def get_resources_by_location(
-    territory: Optional[str] = None,
-    city: Optional[str] = None,
+@api_router.put("/target-planning/{plan_id}/allocations/{allocation_id}")
+async def update_target_allocation_v2(
+    plan_id: str,
+    allocation_id: str,
+    update_data: TargetAllocationUpdateV2,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get sales resources filtered by territory or city"""
-    query = {'is_active': True}
+    """Update an existing allocation amount"""
+    existing = await db.target_allocations_v2.find_one({'id': allocation_id, 'plan_id': plan_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Allocation not found")
     
-    # Include all sales-related roles
-    sales_roles = ['National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Head of Business', 
-                   'Business Development Executive', 'Sales Executive', 'Area Sales Manager']
-    query['role'] = {'$in': sales_roles}
+    update_fields = {'updated_at': datetime.now(timezone.utc).isoformat()}
+    if update_data.amount is not None:
+        update_fields['amount'] = update_data.amount
     
-    if city:
-        query['city'] = city
-    elif territory:
-        query['territory'] = territory
+    await db.target_allocations_v2.update_one(
+        {'id': allocation_id},
+        {'$set': update_fields}
+    )
     
-    users = await db.users.find(
-        query,
-        {'_id': 0, 'id': 1, 'name': 1, 'email': 1, 'role': 1, 'city': 1, 'state': 1, 'territory': 1}
-    ).to_list(200)
-    return users
+    # Recalculate territory totals if this is a territory-level allocation
+    if existing.get('level') == 'territory' or not existing.get('level'):
+        territory_allocations = await db.target_allocations_v2.aggregate([
+            {'$match': {'plan_id': plan_id, 'level': 'territory'}},
+            {'$group': {'_id': None, 'total': {'$sum': '$amount'}}}
+        ]).to_list(1)
+        
+        allocated = territory_allocations[0]['total'] if territory_allocations else 0
+        await db.target_plans_v2.update_one(
+            {'id': plan_id}, 
+            {'$set': {'allocated_amount': allocated, 'updated_at': datetime.now(timezone.utc).isoformat()}}
+        )
+    
+    updated = await db.target_allocations_v2.find_one({'id': allocation_id}, {'_id': 0})
+    return updated
+
 
 @api_router.get("/target-planning/{plan_id}/dashboard")
 async def get_target_planning_dashboard(

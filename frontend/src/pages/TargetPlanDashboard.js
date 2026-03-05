@@ -44,7 +44,8 @@ import {
   Percent,
   Award,
   User,
-  ArrowUpRight
+  ArrowUpRight,
+  Pencil
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -248,112 +249,180 @@ function RevenueSummaryCards({ estimated, actual, plan }) {
   );
 }
 
-// Hierarchical Allocation Card Component
-function AllocationCard({ allocation, rank, onDrillDown, onAddChild, onDelete, level = 'territory' }) {
+// Compact Territory Card (like subscription plan cards)
+function TerritoryCard({ allocation, rank, onAddCity, onEditCity, onDeleteCity, onDelete, planStartDate, planEndDate }) {
   const style = getRankStyle(rank);
   const Icon = style.icon;
-  const allocatedToChildren = allocation.allocated_to_children || 0;
-  const remaining = allocation.amount - allocatedToChildren;
-  const percentAllocated = allocation.amount > 0 ? ((allocatedToChildren / allocation.amount) * 100).toFixed(0) : 0;
-  
-  const getLevelIcon = () => {
-    if (level === 'territory') return <MapPin className="h-4 w-4" />;
-    if (level === 'city') return <Building2 className="h-4 w-4" />;
-    return <User className="h-4 w-4" />;
-  };
-
-  const getLevelLabel = () => {
-    if (level === 'territory') return allocation.territory_name;
-    if (level === 'city') return allocation.city;
-    return allocation.resource_name;
-  };
+  const children = allocation.children || [];
+  const totalAllocatedToChildren = children.reduce((sum, c) => sum + (c.amount || 0), 0);
+  const remaining = allocation.amount - totalAllocatedToChildren;
+  const percentDistributed = allocation.amount > 0 ? ((totalAllocatedToChildren / allocation.amount) * 100).toFixed(0) : 0;
 
   return (
     <div className={cn(
-      "p-4 rounded-xl border-2 transition-all hover:shadow-lg cursor-pointer group",
-      style.bg, style.border
+      "flex flex-col rounded-xl border-2 transition-all hover:shadow-lg overflow-hidden",
+      style.border
     )}>
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3" onClick={() => level !== 'resource' && onDrillDown && onDrillDown(allocation)}>
-          <div className={cn(
-            "w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg shrink-0",
-            rank <= 3 ? style.bg : "bg-gray-100",
-            style.text
-          )}>
-            {Icon ? <Icon className="h-5 w-5" /> : rank}
+      {/* Header */}
+      <div className={cn("p-4", style.bg)}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <div className={cn(
+              "w-8 h-8 rounded-full flex items-center justify-center font-bold shrink-0",
+              style.text, "bg-white/60"
+            )}>
+              {Icon ? <Icon className="h-4 w-4" /> : rank}
+            </div>
+            <div>
+              <h3 className="font-bold text-lg flex items-center gap-1">
+                <MapPin className="h-4 w-4" />
+                {allocation.territory_name}
+              </h3>
+            </div>
           </div>
-          <div>
-            <h4 className="font-semibold flex items-center gap-2">
-              {getLevelIcon()}
-              {getLevelLabel()}
-              {level !== 'resource' && (
-                <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-              )}
-            </h4>
-            <p className="text-xs text-muted-foreground">
-              {level === 'territory' && allocation.children?.length > 0 && `${allocation.children.length} cities`}
-              {level === 'city' && allocation.children?.length > 0 && `${allocation.children.length} resources`}
-              {level === 'resource' && allocation.role}
-            </p>
-          </div>
+          <Button 
+            size="icon" 
+            variant="ghost" 
+            className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-100"
+            onClick={() => onDelete && onDelete(allocation)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         </div>
-        <div className="text-right">
-          <p className={cn("text-xl font-bold", style.text)}>{formatCurrency(allocation.amount, true)}</p>
-          {level !== 'resource' && allocatedToChildren > 0 && (
-            <p className="text-xs text-muted-foreground">{percentAllocated}% distributed</p>
-          )}
+        
+        <div className="text-center py-2">
+          <p className={cn("text-3xl font-bold", style.text)}>{formatCurrency(allocation.amount, true)}</p>
+          <p className="text-xs text-muted-foreground">Territory Target</p>
+        </div>
+
+        {/* Distribution Progress */}
+        <div className="mt-2">
+          <div className="flex justify-between text-xs mb-1">
+            <span className="font-medium">{percentDistributed}% distributed</span>
+            <span className={remaining > 0 ? 'text-amber-700' : 'text-green-700'}>
+              {formatCurrency(remaining, true)} left
+            </span>
+          </div>
+          <Progress value={parseFloat(percentDistributed)} className="h-1.5" />
         </div>
       </div>
 
-      {/* Progress bar for allocated children */}
-      {level !== 'resource' && (
-        <div className="mt-3">
-          <Progress value={parseFloat(percentAllocated)} className="h-2" />
-          <div className="flex justify-between text-xs text-muted-foreground mt-1">
-            <span>{formatCurrency(allocatedToChildren, true)} allocated</span>
-            <span className={remaining > 0 ? 'text-amber-600' : 'text-green-600'}>
-              {formatCurrency(remaining, true)} remaining
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Action buttons */}
-      <div className="flex gap-2 mt-3 pt-3 border-t border-dashed opacity-0 group-hover:opacity-100 transition-opacity">
-        {level !== 'resource' && remaining > 0 && (
+      {/* City List */}
+      <div className="flex-1 bg-white p-3">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cities</p>
           <Button 
             size="sm" 
-            variant="outline" 
-            className="flex-1" 
-            onClick={(e) => { e.stopPropagation(); onAddChild && onAddChild(allocation); }}
+            variant="ghost" 
+            className="h-6 text-xs"
+            onClick={() => onAddCity && onAddCity(allocation)}
+            disabled={remaining <= 0}
           >
-            <Plus className="h-3 w-3 mr-1" />
-            {level === 'territory' ? 'Add City' : 'Add Resource'}
+            <Plus className="h-3 w-3 mr-1" /> Add
           </Button>
+        </div>
+
+        {children.length === 0 ? (
+          <div className="text-center py-4 text-muted-foreground text-sm border border-dashed rounded-lg">
+            No cities allocated
+          </div>
+        ) : (
+          <div className="space-y-2 max-h-[200px] overflow-y-auto">
+            {children.map((city) => (
+              <CityAllocationRow 
+                key={city.id} 
+                city={city} 
+                parentAmount={allocation.amount}
+                onEdit={() => onEditCity && onEditCity(city, allocation)}
+                onDelete={() => onDeleteCity && onDeleteCity(city)}
+                planStartDate={planStartDate}
+                planEndDate={planEndDate}
+              />
+            ))}
+          </div>
         )}
-        <Button 
-          size="sm" 
-          variant="ghost" 
-          className="text-red-500 hover:text-red-700 hover:bg-red-50"
-          onClick={(e) => { e.stopPropagation(); onDelete && onDelete(allocation); }}
-        >
-          <Trash2 className="h-3 w-3" />
-        </Button>
       </div>
     </div>
   );
 }
 
-// Main Allocation Section with Hierarchical Navigation
+// City Row with Allocated vs Achieved
+function CityAllocationRow({ city, parentAmount, onEdit, onDelete, planStartDate, planEndDate }) {
+  const [achieved, setAchieved] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const percentOfParent = parentAmount > 0 ? ((city.amount / parentAmount) * 100).toFixed(0) : 0;
+  const achievedPercent = city.amount > 0 ? ((achieved / city.amount) * 100).toFixed(0) : 0;
+
+  useEffect(() => {
+    fetchCityAchievement();
+  }, [city.city, planStartDate, planEndDate]);
+
+  const fetchCityAchievement = async () => {
+    try {
+      const response = await fetch(`${API_URL}/target-planning/city-achievement?city=${encodeURIComponent(city.city)}&start_date=${planStartDate}&end_date=${planEndDate}`, {
+        headers: getAuthHeaders()
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAchieved(data.achieved || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching city achievement:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="p-2 rounded-lg border bg-gray-50/50 hover:bg-gray-100/50 group">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <span className="font-medium text-sm truncate">{city.city}</span>
+          <span className="text-xs text-muted-foreground shrink-0">({percentOfParent}%)</span>
+        </div>
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={onEdit}>
+            <Pencil className="h-3 w-3" />
+          </Button>
+          <Button size="icon" variant="ghost" className="h-6 w-6 text-red-500 hover:text-red-700" onClick={onDelete}>
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </div>
+      </div>
+      
+      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+        <div className="bg-white rounded px-2 py-1 border">
+          <p className="text-muted-foreground">Allocated</p>
+          <p className="font-semibold text-blue-600">{formatCurrency(city.amount, true)}</p>
+        </div>
+        <div className="bg-white rounded px-2 py-1 border">
+          <p className="text-muted-foreground">Achieved</p>
+          {loading ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <p className={cn("font-semibold", parseFloat(achievedPercent) >= 100 ? "text-green-600" : parseFloat(achievedPercent) >= 50 ? "text-amber-600" : "text-red-500")}>
+              {formatCurrency(achieved, true)} <span className="text-[10px] text-muted-foreground">({achievedPercent}%)</span>
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Main Allocation Section with Side-by-Side Territory Cards
 function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) {
   const [masterLocations, setMasterLocations] = useState([]);
   const [salesResources, setSalesResources] = useState([]);
-  const [breadcrumb, setBreadcrumb] = useState([{ level: 'plan', label: 'All Territories', data: null }]);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [adding, setAdding] = useState(false);
   const [allocationType, setAllocationType] = useState('percentage');
   const [parentAllocation, setParentAllocation] = useState(null);
   const [addLevel, setAddLevel] = useState('territory');
+  const [editingCity, setEditingCity] = useState(null);
+  const [editAmount, setEditAmount] = useState('');
   const [newAllocation, setNewAllocation] = useState({
     territory_id: '',
     territory_name: '',
@@ -592,125 +661,129 @@ function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) 
     }
   };
 
+  const handleEditCity = (city, parentTerritory) => {
+    setEditingCity({ ...city, parentTerritory });
+    setEditAmount(city.amount.toString());
+    setShowEditDialog(true);
+  };
+
+  const handleUpdateCityAllocation = async () => {
+    if (!editingCity) return;
+    
+    const newAmount = parseFloat(editAmount);
+    if (!newAmount || newAmount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    // Check if it exceeds parent budget
+    const parentTerritory = editingCity.parentTerritory;
+    const otherCitiesTotal = (parentTerritory.children || [])
+      .filter(c => c.id !== editingCity.id)
+      .reduce((sum, c) => sum + (c.amount || 0), 0);
+    
+    if (newAmount + otherCitiesTotal > parentTerritory.amount) {
+      toast.error(`Amount exceeds territory budget. Max available: ${formatCurrency(parentTerritory.amount - otherCitiesTotal)}`);
+      return;
+    }
+
+    setAdding(true);
+    try {
+      const response = await fetch(`${API_URL}/target-planning/${planId}/allocations/${editingCity.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ amount: newAmount })
+      });
+
+      if (response.ok) {
+        toast.success('Allocation updated');
+        setShowEditDialog(false);
+        setEditingCity(null);
+        onUpdate();
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || 'Failed to update allocation');
+      }
+    } catch (error) {
+      toast.error('Failed to update allocation');
+    } finally {
+      setAdding(false);
+    }
+  };
+
   const totalAllocated = allocations.filter(a => a.level === 'territory' || !a.level).reduce((sum, a) => sum + (a.amount || 0), 0);
   const remaining = plan.total_amount - totalAllocated;
   const allocatedPercent = plan.total_amount > 0 ? ((totalAllocated / plan.total_amount) * 100).toFixed(1) : 0;
-  const currentItems = getCurrentItems();
-  const currentLevel = breadcrumb[breadcrumb.length - 1].level;
+  const territoryAllocations = allocations.filter(a => a.level === 'territory' || !a.level).sort((a, b) => (b.amount || 0) - (a.amount || 0));
 
   return (
     <Card className="p-6">
-      {/* Header with Breadcrumb */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            {breadcrumb.map((crumb, idx) => (
-              <React.Fragment key={idx}>
-                <button
-                  onClick={() => handleBreadcrumbClick(idx)}
-                  className={cn(
-                    "hover:text-primary transition-colors",
-                    idx === breadcrumb.length - 1 ? "text-foreground font-semibold" : ""
-                  )}
-                >
-                  {crumb.label}
-                </button>
-                {idx < breadcrumb.length - 1 && <ChevronRight className="h-3 w-3" />}
-              </React.Fragment>
-            ))}
-          </div>
           <h3 className="font-semibold text-lg flex items-center gap-2">
             <Building2 className="h-5 w-5 text-primary" />
-            Target Allocations
+            Territory Allocations
           </h3>
+          <p className="text-sm text-muted-foreground">Distribute targets across territories and cities</p>
         </div>
-        <Button size="sm" onClick={() => openAddDialog(breadcrumb[breadcrumb.length - 1].data)} data-testid="add-allocation-btn">
-          <Plus className="h-4 w-4 mr-1" /> 
-          {currentLevel === 'plan' ? 'Add Territory' : currentLevel === 'territory' ? 'Add City' : 'Add Resource'}
+        <Button size="sm" onClick={() => openAddDialog(null)} data-testid="add-allocation-btn">
+          <Plus className="h-4 w-4 mr-1" /> Add Territory
         </Button>
       </div>
 
       {/* Allocation Summary */}
-      {currentLevel === 'plan' && (
-        <div className="grid grid-cols-4 gap-4 mb-6 p-4 bg-muted/30 rounded-lg">
-          <div className="text-center">
-            <p className="text-sm text-muted-foreground">Total Target</p>
-            <p className="text-xl font-bold">{formatCurrency(plan.total_amount, true)}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-sm text-muted-foreground">Allocated</p>
-            <p className="text-xl font-bold text-green-600">{formatCurrency(totalAllocated, true)}</p>
-          </div>
-          <div className="text-center">
-            <p className="text-sm text-muted-foreground">Remaining</p>
-            <p className={cn("text-xl font-bold", remaining > 0 ? "text-amber-600" : "text-green-600")}>
-              {formatCurrency(remaining, true)}
-            </p>
-          </div>
-          <div className="text-center">
-            <p className="text-sm text-muted-foreground">Progress</p>
-            <p className={cn("text-xl font-bold", parseFloat(allocatedPercent) >= 100 ? "text-green-600" : "text-blue-600")}>
-              {allocatedPercent}%
-            </p>
-          </div>
+      <div className="grid grid-cols-4 gap-4 mb-6 p-4 bg-muted/30 rounded-lg">
+        <div className="text-center">
+          <p className="text-sm text-muted-foreground">Total Target</p>
+          <p className="text-xl font-bold">{formatCurrency(plan.total_amount, true)}</p>
         </div>
-      )}
-
-      {/* Parent Info when drilling down */}
-      {currentLevel !== 'plan' && breadcrumb[breadcrumb.length - 1].data && (
-        <div className="mb-4 p-4 bg-primary/5 rounded-lg border border-primary/20">
-          <div className="flex justify-between items-center">
-            <div>
-              <p className="text-sm text-muted-foreground">
-                {currentLevel === 'territory' ? 'Territory' : 'City'} Budget
-              </p>
-              <p className="text-2xl font-bold">{formatCurrency(breadcrumb[breadcrumb.length - 1].data.amount)}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-muted-foreground">Available to Allocate</p>
-              <p className={cn(
-                "text-2xl font-bold",
-                getParentAmount(true) > 0 ? "text-amber-600" : "text-green-600"
-              )}>
-                {formatCurrency(getParentAmount(true))}
-              </p>
-            </div>
-          </div>
+        <div className="text-center">
+          <p className="text-sm text-muted-foreground">Allocated</p>
+          <p className="text-xl font-bold text-green-600">{formatCurrency(totalAllocated, true)}</p>
         </div>
-      )}
-
-      {/* Allocation Progress Bar (plan level only) */}
-      {currentLevel === 'plan' && (
-        <div className="mb-6">
-          <Progress value={Math.min(100, parseFloat(allocatedPercent))} className="h-3" />
-          <p className="text-xs text-muted-foreground mt-1 text-center">
-            {formatCurrency(totalAllocated)} of {formatCurrency(plan.total_amount)} allocated
+        <div className="text-center">
+          <p className="text-sm text-muted-foreground">Remaining</p>
+          <p className={cn("text-xl font-bold", remaining > 0 ? "text-amber-600" : "text-green-600")}>
+            {formatCurrency(remaining, true)}
           </p>
         </div>
-      )}
+        <div className="text-center">
+          <p className="text-sm text-muted-foreground">Progress</p>
+          <p className={cn("text-xl font-bold", parseFloat(allocatedPercent) >= 100 ? "text-green-600" : "text-blue-600")}>
+            {allocatedPercent}%
+          </p>
+        </div>
+      </div>
 
-      {/* Allocation Cards */}
-      {currentItems.length === 0 ? (
+      {/* Progress Bar */}
+      <div className="mb-6">
+        <Progress value={Math.min(100, parseFloat(allocatedPercent))} className="h-3" />
+        <p className="text-xs text-muted-foreground mt-1 text-center">
+          {formatCurrency(totalAllocated)} of {formatCurrency(plan.total_amount)} allocated
+        </p>
+      </div>
+
+      {/* Territory Cards - Side by Side Grid */}
+      {territoryAllocations.length === 0 ? (
         <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
           <Target className="h-10 w-10 mx-auto mb-3 opacity-50" />
-          <p className="font-medium">No allocations yet</p>
-          <p className="text-sm">
-            {currentLevel === 'plan' && 'Add territories to distribute the target'}
-            {currentLevel === 'territory' && 'Add cities to distribute this territory\'s target'}
-            {currentLevel === 'city' && 'Add sales resources to distribute this city\'s target'}
-          </p>
+          <p className="font-medium">No territories allocated yet</p>
+          <p className="text-sm">Add territories to distribute the target</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {currentItems.sort((a, b) => (b.amount || 0) - (a.amount || 0)).map((item, idx) => (
-            <AllocationCard
-              key={item.id}
-              allocation={item}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {territoryAllocations.map((territory, idx) => (
+            <TerritoryCard
+              key={territory.id}
+              allocation={territory}
               rank={idx + 1}
-              level={item.level || 'territory'}
-              onDrillDown={handleDrillDown}
-              onAddChild={openAddDialog}
+              onAddCity={openAddDialog}
+              onEditCity={handleEditCity}
+              onDeleteCity={handleDeleteAllocation}
               onDelete={handleDeleteAllocation}
+              planStartDate={plan.start_date}
+              planEndDate={plan.end_date}
             />
           ))}
         </div>
@@ -906,6 +979,58 @@ function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) 
             <Button onClick={handleAddAllocation} disabled={adding}>
               {adding ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Add Allocation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit City Allocation Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5 text-primary" />
+              Edit City Allocation
+            </DialogTitle>
+          </DialogHeader>
+
+          {editingCity && (
+            <div className="space-y-4">
+              <div className="p-4 bg-muted/30 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium">{editingCity.city}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Territory Budget</p>
+                    <p className="font-semibold">{formatCurrency(editingCity.parentTerritory?.amount)}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Current Allocation</p>
+                    <p className="font-semibold text-blue-600">{formatCurrency(editingCity.amount)}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <Label>New Amount (₹)</Label>
+                <Input
+                  type="number"
+                  value={editAmount}
+                  onChange={(e) => setEditAmount(e.target.value)}
+                  placeholder="Enter amount"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
+            <Button onClick={handleUpdateCityAllocation} disabled={adding}>
+              {adding ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Update
             </Button>
           </DialogFooter>
         </DialogContent>
