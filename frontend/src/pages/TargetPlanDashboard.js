@@ -109,7 +109,7 @@ function TimelineProgressBar({ timeline, plan }) {
         </div>
       </div>
       
-      <div className="relative pt-8 pb-4">
+      <div className="relative pt-8 pb-16 px-4">
         <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
           <div 
             className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500"
@@ -117,15 +117,19 @@ function TimelineProgressBar({ timeline, plan }) {
           />
         </div>
         
-        <div className="absolute top-0 left-0 right-0 flex justify-between">
-          {milestones?.map((milestone) => {
+        <div className="absolute top-0 left-4 right-4 flex justify-between">
+          {milestones?.map((milestone, idx) => {
             const position = ((milestone.days / total_days) * 100);
             const isActive = selectedMilestone === milestone.milestone;
+            const isLast = idx === milestones.length - 1;
             
             return (
               <div 
                 key={milestone.milestone}
-                className="absolute transform -translate-x-1/2 flex flex-col items-center cursor-pointer group"
+                className={cn(
+                  "absolute flex flex-col items-center cursor-pointer group",
+                  isLast ? "-translate-x-full" : "-translate-x-1/2"
+                )}
                 style={{ left: `${position}%` }}
                 onClick={() => setSelectedMilestone(isActive ? null : milestone.milestone)}
               >
@@ -141,18 +145,21 @@ function TimelineProgressBar({ timeline, plan }) {
                   {milestone.is_completed ? <CheckCircle className="h-4 w-4" /> : milestone.milestone}
                 </div>
                 
-                <div className="mt-1 text-center">
+                <div className={cn("mt-1 text-center", isLast && "text-right")}>
                   <p className={cn(
-                    "text-sm font-semibold",
+                    "text-sm font-semibold whitespace-nowrap",
                     milestone.is_completed ? "text-green-600" : milestone.is_current ? "text-blue-600" : "text-gray-600"
                   )}>
                     Day {milestone.days}
                   </p>
-                  <p className="text-[10px] text-muted-foreground">{milestone.date_label}</p>
+                  <p className="text-[10px] text-muted-foreground whitespace-nowrap">{milestone.date_label}</p>
                 </div>
 
                 {isActive && (
-                  <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 z-10 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap">
+                  <div className={cn(
+                    "absolute bottom-full mb-2 z-10 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap",
+                    isLast ? "right-0" : "left-1/2 -translate-x-1/2"
+                  )}>
                     <p className="font-semibold">Milestone {milestone.milestone}</p>
                     <p>Target: {formatAmount(milestone.target_amount)}</p>
                     <p>Due: {new Date(milestone.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
@@ -164,7 +171,7 @@ function TimelineProgressBar({ timeline, plan }) {
         </div>
       </div>
       
-      <div className="flex items-center justify-between mt-6 text-sm text-muted-foreground">
+      <div className="flex items-center justify-between text-sm text-muted-foreground">
         <span className="flex items-center gap-1">
           <Calendar className="h-4 w-4" />
           Start: {new Date(plan.start_date).toLocaleDateString('en-IN', { month: 'long', day: 'numeric', year: 'numeric' })}
