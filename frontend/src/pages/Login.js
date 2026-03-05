@@ -29,9 +29,10 @@ export default function Login() {
   // Redirect to home if user is already authenticated
   useEffect(() => {
     if (user && !authLoading) {
-      navigate('/home', { replace: true });
+      // Force navigation with replace to prevent back button issues
+      window.location.replace('/home');
     }
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading]);
   
   // Check for inactivity logout message
   useEffect(() => {
@@ -59,8 +60,9 @@ export default function Login() {
       const userData = await login(email, password);
       
       if (userData) {
-        // Immediately redirect to home page without any toast
-        window.location.href = '/home';
+        // The useEffect will handle redirect when user state updates
+        // Force redirect as backup
+        window.location.replace('/home');
       } else {
         toast.error('Login failed - no user data received');
         setLoading(false);
