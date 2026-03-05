@@ -464,37 +464,6 @@ function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) 
     }
   };
 
-  const getCurrentItems = () => {
-    const current = breadcrumb[breadcrumb.length - 1];
-    
-    if (current.level === 'plan') {
-      return allocations.filter(a => a.level === 'territory' || !a.level);
-    }
-    
-    if (current.level === 'territory') {
-      return current.data.children || [];
-    }
-    
-    if (current.level === 'city') {
-      return current.data.children || [];
-    }
-    
-    return [];
-  };
-
-  const handleDrillDown = (allocation) => {
-    if (allocation.level === 'territory' || !allocation.level) {
-      setBreadcrumb([...breadcrumb, { level: 'territory', label: allocation.territory_name, data: allocation }]);
-    } else if (allocation.level === 'city') {
-      fetchResourcesForCity(allocation.city);
-      setBreadcrumb([...breadcrumb, { level: 'city', label: allocation.city, data: allocation }]);
-    }
-  };
-
-  const handleBreadcrumbClick = (index) => {
-    setBreadcrumb(breadcrumb.slice(0, index + 1));
-  };
-
   const openAddDialog = (parent = null) => {
     setParentAllocation(parent);
     
@@ -542,8 +511,13 @@ function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) 
     });
   };
 
-  const getCitiesForTerritory = (territoryId) => {
-    const territory = masterLocations.find(t => t.id === territoryId);
+  const getCitiesForTerritory = (territoryId, territoryName = '') => {
+    // First try to find by ID
+    let territory = masterLocations.find(t => t.id === territoryId);
+    // If not found, try to find by name
+    if (!territory && territoryName) {
+      territory = masterLocations.find(t => t.name === territoryName);
+    }
     if (!territory) return [];
     const cities = [];
     territory.states?.forEach(state => {
@@ -554,16 +528,7 @@ function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) 
     return cities;
   };
 
-  const getParentAmount = (forBreadcrumb = false) => {
-    // For the banner display when drilling down
-    if (forBreadcrumb) {
-      const currentData = breadcrumb[breadcrumb.length - 1].data;
-      if (currentData) {
-        return currentData.amount - (currentData.allocated_to_children || 0);
-      }
-      return plan.total_amount - totalAllocated;
-    }
-    
+  const getParentAmount = () => {
     // For the add dialog
     if (!parentAllocation) return plan.total_amount - totalAllocated;
     return parentAllocation.amount - (parentAllocation.allocated_to_children || 0);
@@ -628,7 +593,6 @@ function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) 
         setShowAddDialog(false);
         setNewAllocation({ territory_id: '', territory_name: '', city: '', state: '', resource_id: '', resource_name: '', amount: '', percentage: '' });
         setParentAllocation(null);
-        setBreadcrumb([{ level: 'plan', label: 'All Territories', data: null }]);
         onUpdate();
       } else {
         const error = await response.json();
@@ -653,7 +617,6 @@ function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) 
       });
       if (response.ok) {
         toast.success('Allocation deleted');
-        setBreadcrumb([{ level: 'plan', label: 'All Territories', data: null }]);
         onUpdate();
       }
     } catch (error) {
@@ -852,7 +815,7 @@ function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) 
                 <Select 
                   value={newAllocation.city || ""} 
                   onValueChange={(v) => {
-                    const cities = getCitiesForTerritory(newAllocation.territory_id);
+                    const cities = getCitiesForTerritory(newAllocation.territory_id, newAllocation.territory_name);
                     const city = cities.find(c => c.name === v);
                     setNewAllocation({ ...newAllocation, city: v, state: city?.state || '' });
                   }}
@@ -861,7 +824,7 @@ function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) 
                     <SelectValue placeholder="Select city" />
                   </SelectTrigger>
                   <SelectContent>
-                    {getCitiesForTerritory(newAllocation.territory_id).map((city) => (
+                    {getCitiesForTerritory(newAllocation.territory_id, newAllocation.territory_name).map((city) => (
                       <SelectItem key={city.id} value={city.name}>
                         <span className="flex items-center gap-2">
                           <Building2 className="h-4 w-4" />
