@@ -178,6 +178,15 @@ security = HTTPBearer()
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
+# Import modular routes
+from routes import routes_router
+
+# Include modular routes - these are the refactored endpoints
+# Note: We're including them here but the original routes in this file
+# will take precedence due to FastAPI route ordering
+# As we migrate more routes to the modular structure, we'll remove them from here
+# Keeping both during transition to ensure backward compatibility
+
 # Static files for logos
 from fastapi.staticfiles import StaticFiles
 import os
@@ -10995,8 +11004,14 @@ async def get_sales_resources_v2(
 
 # ==================== END TARGET PLANNING MODULE (V2) ====================
 
-# ============= INCLUDE ROUTER =============
+# ============= INCLUDE ROUTERS =============
 
+# Include the modular routes (refactored endpoints)
+# The modular routes are organized in /app/backend/routes/
+# This includes: auth, leads, accounts, targets, tasks, meetings, users, requests
+api_router.include_router(routes_router)
+
+# Include the main api_router with all routes
 app.include_router(api_router)
 
 # CORS configuration - reads from environment variable for deployment flexibility

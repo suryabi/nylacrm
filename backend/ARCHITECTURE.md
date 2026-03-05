@@ -7,9 +7,7 @@ The Sales CRM backend has been refactored into a modular architecture. This docu
 
 ```
 backend/
-├── server.py              # Main FastAPI application (monolith - being migrated)
-├── server_backup.py       # Backup of original server.py
-├── server_modular.py      # New modular entry point (for future use)
+├── server.py              # Main FastAPI application with legacy routes
 ├── database.py            # MongoDB connection singleton
 ├── config.py              # Environment configuration
 ├── deps.py                # Authentication dependencies
@@ -26,116 +24,115 @@ backend/
 │   ├── cogs.py            # COGSData models
 │   ├── invoice.py         # Invoice models
 │   └── user_activity.py   # UserActivity tracking models
-├── routes/                # API route modules
-│   ├── __init__.py
-│   ├── auth.py            # Authentication routes
-│   └── master_data.py     # SKUs, Locations, Categories
+├── routes/                # Domain-specific API routers (ACTIVE)
+│   ├── __init__.py        # Routes aggregator
+│   ├── auth.py            # Authentication (256 lines)
+│   ├── leads.py           # Lead CRUD, activities, comments (630 lines)
+│   ├── accounts.py        # Account CRUD, invoices (350 lines)
+│   ├── targets.py         # Target planning V2 (415 lines)
+│   ├── tasks.py           # Tasks CRUD (155 lines)
+│   ├── meetings.py        # Meetings with Zoom (245 lines)
+│   ├── users.py           # User management (215 lines)
+│   ├── requests.py        # Leave/Travel/Budget/Expense (560 lines)
+│   └── master_data.py     # SKUs, Locations, Categories (existing)
 └── mq_subscriber.py       # ActiveMQ integration
 ```
 
-## Module Descriptions
+## Refactoring Status (March 2026)
 
-### database.py
-Single source of truth for MongoDB connection.
-```python
-from database import db, client, get_db
-```
+### Phase 1: Completed ✅
+Created modular routers in `/app/backend/routes/`:
 
-### config.py
-Environment configuration (JWT, API keys).
-```python
-from config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS
-```
+| Router | Lines | Endpoints |
+|--------|-------|-----------|
+| auth.py | 256 | Login, Register, OAuth, Sessions |
+| leads.py | 630 | Lead CRUD, Activities, Comments, Proposals |
+| accounts.py | 350 | Account CRUD, Invoices, Logo upload |
+| targets.py | 415 | Target Planning V2, Allocations, Dashboard |
+| tasks.py | 155 | Tasks CRUD |
+| meetings.py | 245 | Meetings CRUD, Zoom integration |
+| users.py | 215 | User management, Org chart |
+| requests.py | 560 | Leave, Travel, Budget, Expense requests |
+| **Total** | **~3,500** | Modular code |
 
-### deps.py
-Authentication and authorization utilities.
-```python
-from deps import get_current_user, hash_password, verify_password, create_access_token
-```
+### Routes Still in server.py
+The following routes remain in the main server.py file (~11,000 lines):
+- Dashboard & Analytics (`/api/dashboard`, `/api/analytics/*`)
+- Daily Status (`/api/daily-status/*`)
+- COGS Management (`/api/cogs/*`)
+- Master Data (`/api/master-skus`, `/api/master/*`)
+- Documents (`/api/documents/*`)
+- Lead Discovery (`/api/lead-discovery/*`)
+- Transport (`/api/transport/*`)
+- Invoices (`/api/invoices/*`)
+- Sales Revenue (`/api/sales-revenue/*`)
+- Reports (`/api/reports/*`)
+- Weather & Quotes (`/api/weather`, `/api/quotes/*`)
+- Admin (`/api/admin/*`)
+- MQ Status (`/api/mq/*`)
 
-### utils.py
-Shared utility functions.
-```python
-from utils import generate_lead_id, generate_account_id
-```
+### Phase 2: Planned
+- Create `routes/dashboard.py` - Dashboard & Analytics
+- Create `routes/daily_status.py` - Daily status updates
+- Create `routes/documents.py` - Document management
+- Create `routes/reports.py` - Performance reports
 
-## Route Modules (routes/)
-
-### auth.py
-- POST /api/auth/register
-- POST /api/auth/login
-- POST /api/auth/logout
-- GET /api/auth/me
-- POST /api/auth/google-callback
-- POST /api/auth/google-session
-
-### master_data.py
-- GET/POST/PUT/DELETE /api/master-skus
-- GET /api/sku-categories
-- GET /api/master-locations
-- GET /api/master-locations/flat
-- POST/PUT/DELETE /api/master-locations/territories
-- POST/PUT/DELETE /api/master-locations/states
-- POST/PUT/DELETE /api/master-locations/cities
-
-## Migration Plan
-
-### Phase 1 (Complete)
-- Created modular structure (database.py, config.py, deps.py, utils.py)
-- Created model files in models/
-- Created route modules for auth and master_data
-
-### Phase 2 (Planned)
-- Create routes/leads.py - Lead CRUD and proposals
-- Create routes/accounts.py - Account CRUD and contracts
-- Create routes/activities.py - Activities, comments, follow-ups
-
-### Phase 3 (Planned)
-- Create routes/daily_status.py - Daily status updates
-- Create routes/analytics.py - Dashboard and reports
-- Create routes/targets.py - Sales targets and plans
-
-### Phase 4 (Planned)
-- Create routes/documents.py - Document management
-- Create routes/discovery.py - Lead discovery and transport
-- Create routes/leave.py - Leave requests
-
-### Phase 5 (Final)
-- Switch server.py to use server_modular.py structure
+### Phase 3: Final
+- Move remaining routes to modular structure
+- Remove duplicate code from server.py
 - Full testing and validation
-- Remove deprecated code
+
+## How It Works
+
+### Route Inclusion
+The `routes/__init__.py` aggregates all domain routers:
+```python
+from routes import routes_router
+# routes_router is included in server.py via:
+api_router.include_router(routes_router)
+```
+
+### Route Priority
+FastAPI matches routes in definition order. The modular routes are included BEFORE the legacy routes in server.py, so they take precedence for overlapping paths.
+
+### Adding New Routes
+1. Create a new router file in `routes/` (e.g., `routes/dashboard.py`)
+2. Define routes using `router = APIRouter()`
+3. Import and include in `routes/__init__.py`
+4. Remove corresponding routes from server.py
 
 ## Usage Notes
 
-### Current State
-The application currently runs from `server.py` which contains all routes in a single file (~7000 lines). The modular files have been created but are not yet actively used.
-
-### To Use Modular Imports
+### Import Patterns
 ```python
-# Instead of defining models in server.py, import from models/
-from models.user import User, UserCreate, UserLogin
-from models.lead import Lead, LeadCreate, LeadUpdate
+# Database
+from database import db
 
-# Instead of defining auth functions in server.py, import from deps
+# Authentication
 from deps import get_current_user, hash_password
 
-# Instead of defining db connection in server.py, import from database
-from database import db
+# Configuration
+from config import JWT_SECRET
+
+# To use a router in tests
+from routes.leads import router as leads_router
 ```
 
-## API Organization
+### API Organization
 
 | Domain | Prefix | Module |
 |--------|--------|--------|
-| Authentication | /api/auth | routes/auth.py |
-| Users | /api/users | routes/users.py (planned) |
-| Leads | /api/leads | routes/leads.py (planned) |
-| Accounts | /api/accounts | routes/accounts.py (planned) |
-| Activities | /api/activities | routes/activities.py (planned) |
-| Daily Status | /api/daily-status | routes/daily_status.py (planned) |
-| Analytics | /api/analytics | routes/analytics.py (planned) |
-| Targets | /api/target-plans | routes/targets.py (planned) |
-| Master Data | /api/master-* | routes/master_data.py |
-| Documents | /api/documents | routes/documents.py (planned) |
-| Discovery | /api/lead-discovery | routes/discovery.py (planned) |
-| Leave | /api/leave-requests | routes/leave.py (planned) |
+| Authentication | /api/auth | routes/auth.py ✅ |
+| Users | /api/users | routes/users.py ✅ |
+| Leads | /api/leads | routes/leads.py ✅ |
+| Accounts | /api/accounts | routes/accounts.py ✅ |
+| Target Planning | /api/target-planning | routes/targets.py ✅ |
+| Tasks | /api/tasks | routes/tasks.py ✅ |
+| Meetings | /api/meetings | routes/meetings.py ✅ |
+| Requests | /api/*-requests | routes/requests.py ✅ |
+| Master Data | /api/master-* | routes/master_data.py ✅ |
+| Dashboard | /api/dashboard | server.py (pending) |
+| Analytics | /api/analytics | server.py (pending) |
+| Daily Status | /api/daily-status | server.py (pending) |
+| Documents | /api/documents | server.py (pending) |
+| Discovery | /api/lead-discovery | server.py (pending) |
