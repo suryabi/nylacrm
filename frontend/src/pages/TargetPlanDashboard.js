@@ -152,7 +152,7 @@ function CombinedProgressWidget({ timeline, plan, estimated }) {
         </div>
 
         {/* Timeline Progress Bar */}
-        <div className="relative">
+        <div className="relative pb-12">
           <div className="h-2 bg-white/20 rounded-full overflow-hidden">
             <div 
               className="h-full bg-gradient-to-r from-blue-400 to-cyan-400 rounded-full transition-all duration-700"
@@ -161,30 +161,37 @@ function CombinedProgressWidget({ timeline, plan, estimated }) {
           </div>
           
           {/* Milestones */}
-          <div className="relative mt-3">
+          <div className="relative h-12 mt-2">
             {milestones?.map((milestone, idx) => {
               const position = ((milestone.days / total_days) * 100);
               const isActive = selectedMilestone === milestone.milestone;
+              const isFirst = idx === 0;
               const isLast = idx === milestones.length - 1;
+              
+              // Adjust position for first and last to prevent overflow
+              const adjustedPosition = isLast ? Math.min(position, 95) : isFirst ? Math.max(position, 5) : position;
               
               return (
                 <div 
                   key={milestone.milestone}
                   className={cn(
                     "absolute flex flex-col items-center cursor-pointer group transition-transform",
-                    isLast ? "-translate-x-full" : "-translate-x-1/2",
                     isActive && "scale-110"
                   )}
-                  style={{ left: `${position}%`, top: '-8px' }}
+                  style={{ 
+                    left: `${adjustedPosition}%`, 
+                    top: '0',
+                    transform: 'translateX(-50%)'
+                  }}
                   onClick={() => setSelectedMilestone(isActive ? null : milestone.milestone)}
                 >
                   <div className={cn(
-                    "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all",
+                    "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-lg",
                     milestone.is_completed 
                       ? "bg-emerald-500 text-white" 
                       : milestone.is_current 
                         ? "bg-blue-500 text-white ring-2 ring-blue-300 ring-offset-2 ring-offset-slate-800" 
-                        : "bg-white/30 text-white/70"
+                        : "bg-slate-600 text-white/70"
                   )}>
                     {milestone.is_completed ? '✓' : milestone.milestone}
                   </div>
@@ -208,8 +215,8 @@ function CombinedProgressWidget({ timeline, plan, estimated }) {
           </div>
         </div>
 
-        {/* Date Range */}
-        <div className="flex justify-between mt-6 text-xs opacity-60">
+        {/* Date Range - Positioned below milestones */}
+        <div className="flex justify-between text-xs opacity-60 -mt-2">
           <span>{new Date(plan.start_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
           <span>{new Date(plan.end_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
         </div>
