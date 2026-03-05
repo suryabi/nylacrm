@@ -4,7 +4,7 @@ import axios from 'axios';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
-import { Package, Filter, Loader2, TrendingUp, TrendingDown, Target, ShoppingBag, BarChart3 } from 'lucide-react';
+import { Package, Filter, Loader2, TrendingUp, TrendingDown, ShoppingBag, BarChart3 } from 'lucide-react';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -110,7 +110,6 @@ export default function SKUPerformance() {
   const availableCities = stateFilter !== 'all' && stateFilter !== 'All States' ? ['All Cities', ...getCityNamesByStateName(stateFilter)] : ['All Cities'];
 
   const stats = [
-    { label: 'Total Target', value: formatCurrency(data.summary.total_target), icon: Target, gradient: 'from-violet-500 to-purple-600', bgGradient: 'from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/20', iconBg: 'bg-violet-100 dark:bg-violet-900/50', textColor: 'text-violet-700 dark:text-violet-300' },
     { label: 'Total Achieved', value: formatCurrency(data.summary.total_achieved), icon: TrendingUp, gradient: 'from-emerald-500 to-teal-600', bgGradient: 'from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20', iconBg: 'bg-emerald-100 dark:bg-emerald-900/50', textColor: 'text-emerald-700 dark:text-emerald-300' },
     { label: 'Units Sold', value: data.summary.total_units?.toLocaleString() || '0', icon: ShoppingBag, gradient: 'from-blue-500 to-indigo-600', bgGradient: 'from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20', iconBg: 'bg-blue-100 dark:bg-blue-900/50', textColor: 'text-blue-700 dark:text-blue-300' },
     { label: 'Avg Achievement', value: `${data.summary.avg_achievement || 0}%`, icon: BarChart3, gradient: 'from-amber-500 to-orange-600', bgGradient: 'from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20', iconBg: 'bg-amber-100 dark:bg-amber-900/50', textColor: 'text-amber-700 dark:text-amber-300' }

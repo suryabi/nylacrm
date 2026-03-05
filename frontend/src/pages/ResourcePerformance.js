@@ -4,7 +4,7 @@ import axios from 'axios';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
-import { Users, Filter, Loader2, TrendingUp, TrendingDown, Award, Target, Trophy, Phone, MapPin } from 'lucide-react';
+import { Users, Filter, Loader2, TrendingUp, TrendingDown, Award, Trophy, Phone, MapPin } from 'lucide-react';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -125,7 +125,6 @@ export default function ResourcePerformance() {
   const rankedResources = [...(data.resources || [])].sort((a, b) => b.achievement_pct - a.achievement_pct);
 
   const stats = [
-    { label: 'Total Target', value: formatCurrency(data.summary.total_target), icon: Target, gradient: 'from-violet-500 to-purple-600', bgGradient: 'from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/20', iconBg: 'bg-violet-100 dark:bg-violet-900/50', textColor: 'text-violet-700 dark:text-violet-300' },
     { label: 'Total Achieved', value: formatCurrency(data.summary.total_achieved), icon: TrendingUp, gradient: 'from-emerald-500 to-teal-600', bgGradient: 'from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20', iconBg: 'bg-emerald-100 dark:bg-emerald-900/50', textColor: 'text-emerald-700 dark:text-emerald-300' },
     { label: 'Total Leads', value: data.summary.total_leads || 0, icon: Users, gradient: 'from-blue-500 to-indigo-600', bgGradient: 'from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20', iconBg: 'bg-blue-100 dark:bg-blue-900/50', textColor: 'text-blue-700 dark:text-blue-300' },
     { label: 'Won Deals', value: data.summary.total_won || 0, icon: Trophy, gradient: 'from-green-500 to-emerald-600', bgGradient: 'from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/20', iconBg: 'bg-green-100 dark:bg-green-900/50', textColor: 'text-green-700 dark:text-green-300' },

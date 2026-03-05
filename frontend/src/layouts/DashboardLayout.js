@@ -23,8 +23,6 @@ const dashboardSubmenu = [
   { name: 'SKU Performance', href: '/sku-performance', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
   { name: 'Resource Performance', href: '/resource-performance', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
   { name: 'Account Performance', href: '/account-performance', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
-  { name: 'Target x SKU', href: '/target-sku', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
-  { name: 'Target x Resource', href: '/target-resource', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
 ];
 
 // Sales Context Navigation
