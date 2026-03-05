@@ -28,7 +28,34 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 
 ## What's Been Implemented
 
-### Mar 5, 2026 (Session 18 - Current)
+### Mar 5, 2026 (Session 19 - Current)
+
+- **UI REDESIGN**: Target Plan Dashboard by Goal Type
+  - **Purpose**: Simplify and focus the dashboard based on the specific target goal type
+  - **Changes for "Monthly Run Rate" plans:**
+    - Removed "Estimated Revenue" and "Actual Revenue" widgets completely
+    - Monthly Performance table now shows only **current and past months** (future months hidden)
+    - Removed columns: "Expected Run Rate", "vs Expected", "Collections", "Collection %"
+    - Renamed column: "Monthly Revenue" → "Revenue Added"
+    - Added new column: "% of Target Run Rate Achieved" (cumulative calculation)
+    - Footer shows "Total Revenue (Run Rate)" with cumulative percentage vs target
+    - Info box explains: "Build up monthly recurring revenue to reach ₹X/month by the end of the period"
+  - **Changes for "Cumulative Target" plans:**
+    - Removed the entire "Monthly Performance" table
+    - Removed "Actual Revenue" widget
+    - Renamed widget: "Estimated Revenue" → "Revenue from Won leads this month"
+  - **Both plan types retain:**
+    - Timeline Progress bar with milestones
+    - Territory Allocations section
+  - **Header updates:**
+    - Shows "Monthly Run Rate" or "Cumulative Target" badge
+    - Label changes: "Target Run Rate" vs "Total Target" based on goal type
+  - **Files Modified:**
+    - `/app/frontend/src/pages/TargetPlanDashboard.js` - Complete conditional rendering based on goal_type
+  - **Testing**: 100% success rate (18/18 frontend checks passed)
+  - Status: VERIFIED
+
+### Mar 5, 2026 (Session 18)
 
 - **NEW FEATURE**: Complete Hierarchical Target Allocation System
   - **Purpose**: Enable managers to distribute revenue targets from Plan → Territory → City → Resource levels
