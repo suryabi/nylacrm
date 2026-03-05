@@ -4,7 +4,7 @@ import axios from 'axios';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
-import { Users, Filter, Loader2, TrendingUp, TrendingDown, Award, Trophy, Phone, MapPin } from 'lucide-react';
+import { Users, Filter, Loader2, TrendingUp, TrendingDown, Trophy, Phone, MapPin, Award } from 'lucide-react';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -127,8 +127,7 @@ export default function ResourcePerformance() {
   const stats = [
     { label: 'Total Achieved', value: formatCurrency(data.summary.total_achieved), icon: TrendingUp, gradient: 'from-emerald-500 to-teal-600', bgGradient: 'from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20', iconBg: 'bg-emerald-100 dark:bg-emerald-900/50', textColor: 'text-emerald-700 dark:text-emerald-300' },
     { label: 'Total Leads', value: data.summary.total_leads || 0, icon: Users, gradient: 'from-blue-500 to-indigo-600', bgGradient: 'from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20', iconBg: 'bg-blue-100 dark:bg-blue-900/50', textColor: 'text-blue-700 dark:text-blue-300' },
-    { label: 'Won Deals', value: data.summary.total_won || 0, icon: Trophy, gradient: 'from-green-500 to-emerald-600', bgGradient: 'from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/20', iconBg: 'bg-green-100 dark:bg-green-900/50', textColor: 'text-green-700 dark:text-green-300' },
-    { label: 'Avg Achievement', value: `${data.summary.avg_achievement || 0}%`, icon: Award, gradient: 'from-amber-500 to-orange-600', bgGradient: 'from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20', iconBg: 'bg-amber-100 dark:bg-amber-900/50', textColor: 'text-amber-700 dark:text-amber-300' }
+    { label: 'Won Deals', value: data.summary.total_won || 0, icon: Trophy, gradient: 'from-green-500 to-emerald-600', bgGradient: 'from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/20', iconBg: 'bg-green-100 dark:bg-green-900/50', textColor: 'text-green-700 dark:text-green-300' }
   ];
 
   return (
@@ -238,13 +237,12 @@ export default function ResourcePerformance() {
                     <th className="text-center py-4 px-4 font-semibold text-slate-600 dark:text-slate-400 w-16">Rank</th>
                     <th className="text-left py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Resource</th>
                     <th className="text-left py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Territory</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Target</th>
                     <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Achieved</th>
                     <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Leads</th>
                     <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Won</th>
                     <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Visits</th>
                     <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Calls</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Achievement</th>
+                    <th className="text-center py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Trend</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -275,7 +273,6 @@ export default function ResourcePerformance() {
                           <span>{row.territory || '-'}</span>
                         </div>
                       </td>
-                      <td className="py-4 px-5 text-right text-muted-foreground">{formatCurrency(row.target_revenue)}</td>
                       <td className="py-4 px-5 text-right font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(row.achieved_revenue)}</td>
                       <td className="py-4 px-5 text-right text-slate-700 dark:text-slate-300">{row.leads_count || 0}</td>
                       <td className="py-4 px-5 text-right font-semibold text-green-600 dark:text-green-400">{row.won_deals || 0}</td>
@@ -286,18 +283,8 @@ export default function ResourcePerformance() {
                           <span>{row.calls || 0}</span>
                         </div>
                       </td>
-                      <td className="py-4 px-5 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <span className={`font-semibold ${
-                            row.achievement_pct >= 100 ? 'text-emerald-600 dark:text-emerald-400' :
-                            row.achievement_pct >= 75 ? 'text-blue-600 dark:text-blue-400' :
-                            row.achievement_pct >= 50 ? 'text-amber-600 dark:text-amber-400' :
-                            'text-red-600 dark:text-red-400'
-                          }`}>
-                            {row.achievement_pct || 0}%
-                          </span>
-                          {row.achievement_pct >= 75 ? <TrendingUp className="h-4 w-4 text-emerald-500" /> : <TrendingDown className="h-4 w-4 text-red-500" />}
-                        </div>
+                      <td className="py-4 px-5 text-center">
+                        {row.achieved_revenue > 0 ? <TrendingUp className="h-5 w-5 text-emerald-500 mx-auto" /> : <TrendingDown className="h-5 w-5 text-red-500 mx-auto" />}
                       </td>
                     </tr>
                   ))}

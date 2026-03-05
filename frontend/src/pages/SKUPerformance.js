@@ -4,7 +4,7 @@ import axios from 'axios';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
-import { Package, Filter, Loader2, TrendingUp, TrendingDown, ShoppingBag, BarChart3 } from 'lucide-react';
+import { Package, Filter, Loader2, TrendingUp, TrendingDown, ShoppingBag } from 'lucide-react';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -111,8 +111,7 @@ export default function SKUPerformance() {
 
   const stats = [
     { label: 'Total Achieved', value: formatCurrency(data.summary.total_achieved), icon: TrendingUp, gradient: 'from-emerald-500 to-teal-600', bgGradient: 'from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20', iconBg: 'bg-emerald-100 dark:bg-emerald-900/50', textColor: 'text-emerald-700 dark:text-emerald-300' },
-    { label: 'Units Sold', value: data.summary.total_units?.toLocaleString() || '0', icon: ShoppingBag, gradient: 'from-blue-500 to-indigo-600', bgGradient: 'from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20', iconBg: 'bg-blue-100 dark:bg-blue-900/50', textColor: 'text-blue-700 dark:text-blue-300' },
-    { label: 'Avg Achievement', value: `${data.summary.avg_achievement || 0}%`, icon: BarChart3, gradient: 'from-amber-500 to-orange-600', bgGradient: 'from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20', iconBg: 'bg-amber-100 dark:bg-amber-900/50', textColor: 'text-amber-700 dark:text-amber-300' }
+    { label: 'Units Sold', value: data.summary.total_units?.toLocaleString() || '0', icon: ShoppingBag, gradient: 'from-blue-500 to-indigo-600', bgGradient: 'from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20', iconBg: 'bg-blue-100 dark:bg-blue-900/50', textColor: 'text-blue-700 dark:text-blue-300' }
   ];
 
   return (
@@ -227,11 +226,9 @@ export default function SKUPerformance() {
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
                     <th className="text-left py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">SKU</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Target Revenue</th>
                     <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Achieved</th>
                     <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Units Sold</th>
                     <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Leads</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Achievement</th>
                     <th className="text-center py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Trend</th>
                   </tr>
                 </thead>
@@ -239,15 +236,11 @@ export default function SKUPerformance() {
                   {data.skus.map((row, idx) => (
                     <tr key={idx} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                       <td className="py-4 px-5 font-medium text-slate-800 dark:text-white">{row.sku}</td>
-                      <td className="py-4 px-5 text-right text-muted-foreground">{formatCurrency(row.target_revenue)}</td>
                       <td className="py-4 px-5 text-right font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(row.achieved_revenue)}</td>
                       <td className="py-4 px-5 text-right text-slate-700 dark:text-slate-300">{row.units_sold?.toLocaleString() || 0}</td>
                       <td className="py-4 px-5 text-right text-slate-700 dark:text-slate-300">{row.leads_count || 0}</td>
-                      <td className={`py-4 px-5 text-right font-semibold ${row.achievement_pct >= 100 ? 'text-emerald-600 dark:text-emerald-400' : row.achievement_pct >= 75 ? 'text-blue-600 dark:text-blue-400' : row.achievement_pct >= 50 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
-                        {row.achievement_pct || 0}%
-                      </td>
                       <td className="py-4 px-5 text-center">
-                        {row.achievement_pct >= 75 ? <TrendingUp className="h-5 w-5 text-emerald-500 mx-auto" /> : <TrendingDown className="h-5 w-5 text-red-500 mx-auto" />}
+                        {row.achieved_revenue > 0 ? <TrendingUp className="h-5 w-5 text-emerald-500 mx-auto" /> : <TrendingDown className="h-5 w-5 text-red-500 mx-auto" />}
                       </td>
                     </tr>
                   ))}
