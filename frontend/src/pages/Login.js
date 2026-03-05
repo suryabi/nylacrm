@@ -24,7 +24,6 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(!!rememberedEmail);
   const [loading, setLoading] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
-  const [loginSuccess, setLoginSuccess] = useState(false);
   const errorMessage = location.state?.error;
   
   // Redirect to home if user is already authenticated
@@ -48,7 +47,6 @@ export default function Login() {
     if (loading) return; // Prevent double submission
     
     setLoading(true);
-    setLoginSuccess(false);
     
     try {
       // Save or remove remembered email
@@ -61,7 +59,7 @@ export default function Login() {
       const userData = await login(email, password);
       
       if (userData) {
-        // Force navigation to home page
+        // Immediately redirect to home page without any toast
         window.location.href = '/home';
       } else {
         toast.error('Login failed - no user data received');
@@ -95,9 +93,8 @@ export default function Login() {
     window.location.href = authUrl;
   };
 
-  // Show loading only during initial auth check, not after failed login attempts
-  // authLoading is true only during the initial checkAuth call
-  if (authLoading && !loginSuccess) {
+  // Show loading only during initial auth check
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">

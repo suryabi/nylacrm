@@ -30,9 +30,8 @@ export default function GoogleAuthCallback() {
           { withCredentials: true }
         );
 
-        // Success - user logged in
-        toast.success('Logged in successfully!');
-        navigate('/home');
+        // Success - user logged in, redirect without toast
+        navigate('/home', { replace: true });
       } catch (error) {
         console.error('OAuth error:', error);
         const errorMsg = error.response?.data?.detail || 'Authentication failed';
