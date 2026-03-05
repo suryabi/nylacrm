@@ -64,167 +64,218 @@ const formatCurrency = (amount, short = false) => {
 
 // Rank colors for leaderboard
 const getRankStyle = (rank) => {
-  if (rank === 1) return { bg: 'bg-amber-100', border: 'border-amber-400', text: 'text-amber-700', icon: Trophy };
-  if (rank === 2) return { bg: 'bg-gray-100', border: 'border-gray-400', text: 'text-gray-600', icon: Medal };
-  if (rank === 3) return { bg: 'bg-orange-100', border: 'border-orange-400', text: 'text-orange-700', icon: Medal };
-  return { bg: 'bg-white', border: 'border-gray-200', text: 'text-gray-600', icon: null };
+  if (rank === 1) return { 
+    bg: 'bg-gradient-to-br from-violet-500 to-purple-600', 
+    border: 'border-violet-400', 
+    text: 'text-white', 
+    icon: Trophy,
+    headerBg: 'bg-gradient-to-r from-violet-600 to-purple-700'
+  };
+  if (rank === 2) return { 
+    bg: 'bg-gradient-to-br from-cyan-500 to-teal-600', 
+    border: 'border-cyan-400', 
+    text: 'text-white', 
+    icon: Medal,
+    headerBg: 'bg-gradient-to-r from-cyan-600 to-teal-700'
+  };
+  if (rank === 3) return { 
+    bg: 'bg-gradient-to-br from-rose-500 to-pink-600', 
+    border: 'border-rose-400', 
+    text: 'text-white', 
+    icon: Medal,
+    headerBg: 'bg-gradient-to-r from-rose-600 to-pink-700'
+  };
+  return { 
+    bg: 'bg-gradient-to-br from-slate-500 to-slate-600', 
+    border: 'border-slate-300', 
+    text: 'text-white', 
+    icon: null,
+    headerBg: 'bg-gradient-to-r from-slate-600 to-slate-700'
+  };
 };
 
-// Timeline Progress Bar with clickable milestones
-function TimelineProgressBar({ timeline, plan }) {
+// Combined Progress & Revenue Widget - Modern Contemporary Design
+function CombinedProgressWidget({ timeline, plan, estimated }) {
   const { total_days, days_elapsed, days_remaining, progress_percent, milestones } = timeline;
   const [selectedMilestone, setSelectedMilestone] = useState(null);
+  const goalType = plan.goal_type || 'run_rate';
 
   const formatAmount = (amount) => {
     if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(1)} Cr`;
     if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)} L`;
     return `₹${amount.toLocaleString('en-IN')}`;
   };
-  
-  return (
-    <Card className="p-6 mb-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-lg flex items-center gap-2">
-          <Clock className="h-5 w-5 text-blue-500" />
-          Timeline Progress
-        </h3>
-        <div className="flex items-center gap-6 text-sm">
-          <div className="text-center">
-            <p className="text-2xl font-bold text-blue-600">{days_elapsed}</p>
-            <p className="text-muted-foreground text-xs">Days Completed</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl font-bold text-gray-600">{days_remaining}</p>
-            <p className="text-muted-foreground text-xs">Days Remaining</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl font-bold">{total_days}</p>
-            <p className="text-muted-foreground text-xs">Total Days</p>
-          </div>
-        </div>
-      </div>
-      
-      <div className="relative pt-8 pb-16 px-4">
-        <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500"
-            style={{ width: `${Math.min(100, progress_percent)}%` }}
-          />
-        </div>
-        
-        <div className="absolute top-0 left-4 right-4 flex justify-between">
-          {milestones?.map((milestone, idx) => {
-            const position = ((milestone.days / total_days) * 100);
-            const isActive = selectedMilestone === milestone.milestone;
-            const isLast = idx === milestones.length - 1;
-            
-            return (
-              <div 
-                key={milestone.milestone}
-                className={cn(
-                  "absolute flex flex-col items-center cursor-pointer group",
-                  isLast ? "-translate-x-full" : "-translate-x-1/2"
-                )}
-                style={{ left: `${position}%` }}
-                onClick={() => setSelectedMilestone(isActive ? null : milestone.milestone)}
-              >
-                <div className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all",
-                  milestone.is_completed 
-                    ? "bg-green-500 border-green-500 text-white" 
-                    : milestone.is_current 
-                      ? "bg-blue-500 border-blue-500 text-white animate-pulse" 
-                      : "bg-white border-gray-300 text-gray-600",
-                  isActive && "ring-2 ring-offset-2 ring-blue-400 scale-110"
-                )}>
-                  {milestone.is_completed ? <CheckCircle className="h-4 w-4" /> : milestone.milestone}
-                </div>
-                
-                <div className={cn("mt-1 text-center", isLast && "text-right")}>
-                  <p className={cn(
-                    "text-sm font-semibold whitespace-nowrap",
-                    milestone.is_completed ? "text-green-600" : milestone.is_current ? "text-blue-600" : "text-gray-600"
-                  )}>
-                    Day {milestone.days}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground whitespace-nowrap">{milestone.date_label}</p>
-                </div>
 
-                {isActive && (
-                  <div className={cn(
-                    "absolute bottom-full mb-2 z-10 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap",
-                    isLast ? "right-0" : "left-1/2 -translate-x-1/2"
-                  )}>
-                    <p className="font-semibold">Milestone {milestone.milestone}</p>
-                    <p>Target: {formatAmount(milestone.target_amount)}</p>
-                    <p>Due: {new Date(milestone.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                  </div>
-                )}
+  // Calculate achievement status
+  const achievementPercent = estimated?.percent || 0;
+  const getAchievementColor = () => {
+    if (achievementPercent >= 100) return 'from-emerald-500 to-green-600';
+    if (achievementPercent >= 75) return 'from-teal-500 to-cyan-600';
+    if (achievementPercent >= 50) return 'from-amber-500 to-orange-500';
+    return 'from-rose-500 to-red-500';
+  };
+
+  return (
+    <Card className="mb-6 overflow-hidden border-0 shadow-lg">
+      {/* Gradient Header */}
+      <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 p-6 text-white">
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <h3 className="text-lg font-semibold opacity-80 mb-1">Target Progress</h3>
+            <p className="text-3xl font-bold">{formatAmount(plan.total_amount)}</p>
+            <p className="text-sm opacity-60 mt-1">
+              {goalType === 'cumulative' ? 'Total Target' : 'Monthly Run Rate Target'}
+            </p>
+          </div>
+          
+          {/* Time Stats */}
+          <div className="flex gap-6">
+            <div className="text-center">
+              <div className="w-14 h-14 rounded-full bg-white/10 backdrop-blur flex items-center justify-center mb-1">
+                <span className="text-xl font-bold text-emerald-400">{days_elapsed}</span>
               </div>
-            );
-          })}
+              <p className="text-[10px] opacity-60 uppercase tracking-wider">Completed</p>
+            </div>
+            <div className="text-center">
+              <div className="w-14 h-14 rounded-full bg-white/10 backdrop-blur flex items-center justify-center mb-1">
+                <span className="text-xl font-bold text-amber-400">{days_remaining}</span>
+              </div>
+              <p className="text-[10px] opacity-60 uppercase tracking-wider">Remaining</p>
+            </div>
+            <div className="text-center">
+              <div className="w-14 h-14 rounded-full bg-white/10 backdrop-blur flex items-center justify-center mb-1">
+                <span className="text-xl font-bold">{total_days}</span>
+              </div>
+              <p className="text-[10px] opacity-60 uppercase tracking-wider">Total Days</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Timeline Progress Bar */}
+        <div className="relative">
+          <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-blue-400 to-cyan-400 rounded-full transition-all duration-700"
+              style={{ width: `${Math.min(100, progress_percent)}%` }}
+            />
+          </div>
+          
+          {/* Milestones */}
+          <div className="relative mt-3">
+            {milestones?.map((milestone, idx) => {
+              const position = ((milestone.days / total_days) * 100);
+              const isActive = selectedMilestone === milestone.milestone;
+              const isLast = idx === milestones.length - 1;
+              
+              return (
+                <div 
+                  key={milestone.milestone}
+                  className={cn(
+                    "absolute flex flex-col items-center cursor-pointer group transition-transform",
+                    isLast ? "-translate-x-full" : "-translate-x-1/2",
+                    isActive && "scale-110"
+                  )}
+                  style={{ left: `${position}%`, top: '-8px' }}
+                  onClick={() => setSelectedMilestone(isActive ? null : milestone.milestone)}
+                >
+                  <div className={cn(
+                    "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all",
+                    milestone.is_completed 
+                      ? "bg-emerald-500 text-white" 
+                      : milestone.is_current 
+                        ? "bg-blue-500 text-white ring-2 ring-blue-300 ring-offset-2 ring-offset-slate-800" 
+                        : "bg-white/30 text-white/70"
+                  )}>
+                    {milestone.is_completed ? '✓' : milestone.milestone}
+                  </div>
+                  
+                  <p className={cn(
+                    "text-[10px] mt-1 whitespace-nowrap",
+                    milestone.is_completed ? "text-emerald-400" : milestone.is_current ? "text-blue-300" : "text-white/50"
+                  )}>
+                    {milestone.date_label}
+                  </p>
+
+                  {isActive && (
+                    <div className="absolute bottom-full mb-2 bg-white text-slate-800 text-xs rounded-lg px-3 py-2 shadow-xl z-20">
+                      <p className="font-semibold">Milestone {milestone.milestone}</p>
+                      <p>Target: {formatAmount(milestone.target_amount)}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Date Range */}
+        <div className="flex justify-between mt-6 text-xs opacity-60">
+          <span>{new Date(plan.start_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+          <span>{new Date(plan.end_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
         </div>
       </div>
-      
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <Calendar className="h-4 w-4" />
-          Start: {new Date(plan.start_date).toLocaleDateString('en-IN', { month: 'long', day: 'numeric', year: 'numeric' })}
-        </span>
-        <span className="flex items-center gap-1">
-          End: {new Date(plan.end_date).toLocaleDateString('en-IN', { month: 'long', day: 'numeric', year: 'numeric' })}
-          <Calendar className="h-4 w-4" />
-        </span>
-      </div>
+
+      {/* Revenue Section - Only for Cumulative */}
+      {goalType === 'cumulative' && estimated && (
+        <div className="p-6 bg-gradient-to-br from-slate-50 to-white">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h4 className="font-semibold text-slate-700 flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-emerald-500" />
+                Customers On-boarded Revenue
+              </h4>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Estimated revenue from won leads & active customers
+              </p>
+            </div>
+            <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">
+              {estimated.won_leads_count} Customers
+            </Badge>
+          </div>
+
+          {/* Revenue Progress */}
+          <div className="relative h-4 bg-slate-100 rounded-full overflow-hidden mb-4">
+            <div 
+              className={cn("h-full rounded-full transition-all duration-700 bg-gradient-to-r", getAchievementColor())}
+              style={{ width: `${Math.min(100, achievementPercent)}%` }}
+            />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className={cn(
+                "text-xs font-bold",
+                achievementPercent > 50 ? "text-white" : "text-slate-600"
+              )}>
+                {achievementPercent}% achieved
+              </span>
+            </div>
+          </div>
+
+          {/* Revenue Stats */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="text-center p-4 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100">
+              <p className="text-2xl font-bold text-emerald-600">{formatAmount(estimated.achieved)}</p>
+              <p className="text-xs text-emerald-700/70 font-medium mt-1">Achieved</p>
+            </div>
+            <div className="text-center p-4 rounded-xl bg-gradient-to-br from-slate-50 to-gray-50 border border-slate-100">
+              <p className="text-2xl font-bold text-slate-600">{formatAmount(estimated.remaining)}</p>
+              <p className="text-xs text-slate-500 font-medium mt-1">Remaining</p>
+            </div>
+            <div className="text-center p-4 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100">
+              <p className={cn(
+                "text-2xl font-bold",
+                achievementPercent >= 100 ? "text-emerald-600" : achievementPercent >= 50 ? "text-blue-600" : "text-amber-600"
+              )}>
+                {achievementPercent}%
+              </p>
+              <p className="text-xs text-blue-700/70 font-medium mt-1">Achievement</p>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
 
-// Revenue Summary Cards - Only for Cumulative Target plans
-function RevenueSummaryCards({ estimated, plan }) {
-  const goalType = plan.goal_type || 'run_rate';
-  
-  // Only show for cumulative target plans
-  if (goalType !== 'cumulative') {
-    return null;
-  }
-  
-  return (
-    <div className="mb-6">
-      {/* Estimated Revenue from Customers On-boarded - Only for Cumulative */}
-      <Card className="p-5 border-2 border-green-200 bg-green-50/50">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold flex items-center gap-2 text-green-700">
-            <TrendingUp className="h-5 w-5" />
-            Estimated Revenue from the Customers on-boarded
-          </h3>
-          <Badge variant="outline" className="text-green-700">{estimated.won_leads_count} Customers</Badge>
-        </div>
-        
-        <div className="mb-4">
-          <Progress value={estimated.percent} className="h-3 bg-green-100" />
-        </div>
-        
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div>
-            <p className="text-2xl font-bold text-green-700">{formatCurrency(estimated.achieved, true)}</p>
-            <p className="text-xs text-muted-foreground">Achieved</p>
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-gray-600">{formatCurrency(estimated.remaining, true)}</p>
-            <p className="text-xs text-muted-foreground">Remaining</p>
-          </div>
-          <div>
-            <p className={cn("text-2xl font-bold", estimated.percent >= 100 ? "text-green-600" : "text-green-700")}>
-              {estimated.percent}%
-            </p>
-            <p className="text-xs text-muted-foreground">Achievement</p>
-          </div>
-        </div>
-      </Card>
-    </div>
-  );
-}
+// Revenue Summary component is now integrated into CombinedProgressWidget
 
 // Monthly Performance Table - Only for Run Rate plans
 function MonthlyPerformanceTable({ monthlyData, plan }) {
@@ -362,7 +413,7 @@ function MonthlyPerformanceTable({ monthlyData, plan }) {
   );
 }
 
-// Compact Territory Card (like subscription plan cards)
+// Compact Territory Card (like subscription plan cards) - Modern gradient design
 function TerritoryCard({ allocation, rank, onAddCity, onEditCity, onDeleteCity, onDelete, planStartDate, planEndDate }) {
   const style = getRankStyle(rank);
   const Icon = style.icon;
@@ -373,74 +424,78 @@ function TerritoryCard({ allocation, rank, onAddCity, onEditCity, onDeleteCity, 
 
   return (
     <div className={cn(
-      "flex flex-col rounded-xl border-2 transition-all hover:shadow-lg overflow-hidden",
-      style.border
+      "flex flex-col rounded-2xl transition-all hover:shadow-2xl hover:-translate-y-1 overflow-hidden shadow-lg",
+      "border-0"
     )}>
-      {/* Header */}
-      <div className={cn("p-4", style.bg)}>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <div className={cn(
-              "w-8 h-8 rounded-full flex items-center justify-center font-bold shrink-0",
-              style.text, "bg-white/60"
-            )}>
-              {Icon ? <Icon className="h-4 w-4" /> : rank}
+      {/* Header with gradient */}
+      <div className={cn("p-5", style.bg)}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center font-bold shrink-0">
+              {Icon ? <Icon className="h-5 w-5 text-white" /> : <span className="text-white text-lg">{rank}</span>}
             </div>
             <div>
-              <h3 className="font-bold text-lg flex items-center gap-1">
-                <MapPin className="h-4 w-4" />
+              <h3 className="font-bold text-lg text-white flex items-center gap-1.5">
+                <MapPin className="h-4 w-4 opacity-80" />
                 {allocation.territory_name}
               </h3>
+              <p className="text-xs text-white/60">Territory #{rank}</p>
             </div>
           </div>
           <Button 
             size="icon" 
             variant="ghost" 
-            className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-100"
+            className="h-8 w-8 text-white/70 hover:text-white hover:bg-white/20 rounded-lg"
             onClick={() => onDelete && onDelete(allocation)}
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
         
-        <div className="text-center py-2">
-          <p className={cn("text-3xl font-bold", style.text)}>{formatCurrency(allocation.amount, true)}</p>
-          <p className="text-xs text-muted-foreground">Territory Target</p>
+        <div className="text-center py-3">
+          <p className="text-4xl font-bold text-white">{formatCurrency(allocation.amount, true)}</p>
+          <p className="text-xs text-white/60 mt-1">Territory Target</p>
         </div>
 
         {/* Distribution Progress */}
-        <div className="mt-2">
-          <div className="flex justify-between text-xs mb-1">
-            <span className="font-medium">{percentDistributed}% distributed</span>
-            <span className={remaining > 0 ? 'text-amber-700' : 'text-green-700'}>
-              {formatCurrency(remaining, true)} left
+        <div className="mt-3 bg-white/10 rounded-xl p-3">
+          <div className="flex justify-between text-xs mb-2">
+            <span className="font-medium text-white/80">{percentDistributed}% distributed to cities</span>
+            <span className={remaining > 0 ? 'text-amber-300' : 'text-emerald-300'}>
+              {formatCurrency(remaining, true)} available
             </span>
           </div>
-          <Progress value={parseFloat(percentDistributed)} className="h-1.5" />
+          <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-white/80 rounded-full transition-all duration-500"
+              style={{ width: `${percentDistributed}%` }}
+            />
+          </div>
         </div>
       </div>
 
       {/* City List */}
-      <div className="flex-1 bg-white p-3">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cities</p>
+      <div className="flex-1 bg-white p-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">City Allocations</p>
           <Button 
             size="sm" 
-            variant="ghost" 
-            className="h-6 text-xs"
+            variant="outline"
+            className="h-7 text-xs rounded-lg"
             onClick={() => onAddCity && onAddCity(allocation)}
             disabled={remaining <= 0}
           >
-            <Plus className="h-3 w-3 mr-1" /> Add
+            <Plus className="h-3 w-3 mr-1" /> Add City
           </Button>
         </div>
 
         {children.length === 0 ? (
-          <div className="text-center py-4 text-muted-foreground text-sm border border-dashed rounded-lg">
-            No cities allocated
+          <div className="text-center py-6 text-muted-foreground text-sm border-2 border-dashed rounded-xl bg-slate-50">
+            <Building2 className="h-8 w-8 mx-auto mb-2 opacity-30" />
+            <p>No cities allocated yet</p>
           </div>
         ) : (
-          <div className="space-y-2 max-h-[200px] overflow-y-auto">
+          <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
             {children.map((city) => (
               <CityAllocationRow 
                 key={city.id} 
@@ -1195,40 +1250,33 @@ export default function TargetPlanDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => navigate('/target-planning')} className="p-2">
+          <Button variant="ghost" onClick={() => navigate('/target-planning')} className="p-2 rounded-xl hover:bg-slate-100">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold">{plan.name}</h1>
-              <Badge className={plan.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}>
+              <Badge className={plan.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}>
                 {plan.status}
               </Badge>
-              <Badge variant="outline" className="ml-1">
+              <Badge variant="outline" className="ml-1 bg-slate-50">
                 {goalType === 'cumulative' ? 'Cumulative Target' : 'Monthly Run Rate'}
               </Badge>
             </div>
             <p className="text-muted-foreground flex items-center gap-2 mt-1">
               <Target className="h-4 w-4" />
-              {goalType === 'run_rate' ? 'Target Run Rate:' : 'Total Target:'} <span className="font-semibold text-foreground">{formatCurrency(plan.total_amount)}</span>
-              {goalType === 'run_rate' && <span className="text-xs">/month</span>}
-              <span className="text-xs">• {plan.milestones || 4} Milestones</span>
+              {plan.milestones || 4} Milestones
             </p>
           </div>
         </div>
       </div>
 
-      {/* Timeline Progress */}
-      <TimelineProgressBar timeline={timeline} plan={plan} />
+      {/* Combined Progress & Revenue Widget */}
+      <CombinedProgressWidget timeline={timeline} plan={plan} estimated={estimated_revenue} />
 
       {/* Monthly Performance Table - Only for Run Rate */}
       {goalType === 'run_rate' && monthly_breakdown && monthly_breakdown.length > 0 && (
         <MonthlyPerformanceTable monthlyData={monthly_breakdown} plan={plan} />
-      )}
-
-      {/* Revenue Summary - Only for Cumulative */}
-      {goalType === 'cumulative' && (
-        <RevenueSummaryCards estimated={estimated_revenue} plan={plan} />
       )}
 
       {/* Hierarchical Allocations Section - Full Width */}
