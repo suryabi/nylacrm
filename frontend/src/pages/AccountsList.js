@@ -21,7 +21,7 @@ import {
 } from '../components/ui/select';
 import { 
   Search, Building2, ChevronLeft, ChevronRight, Loader2, 
-  Filter, Users, Calendar, Phone, User, MapPin, LayoutGrid, List, Image as ImageIcon, Download, Layers
+  Filter, Users, Calendar, Phone, User, MapPin, LayoutGrid, List, Image as ImageIcon, Download, Layers, Trash2
 } from 'lucide-react';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 import html2canvas from 'html2canvas';
@@ -75,6 +75,30 @@ export default function AccountsList() {
   const [viewMode, setViewMode] = useState('list');
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const logoGridRef = useRef(null);
+  const [deletingAccountId, setDeletingAccountId] = useState(null);
+
+  // Check if user is admin (CEO or Director)
+  const isAdmin = user?.role === 'CEO' || user?.role === 'Director';
+
+  const handleDeleteAccount = async (accountId, accountName, e) => {
+    e.stopPropagation(); // Prevent row click navigation
+    
+    if (!window.confirm(`Are you sure you want to delete account "${accountName}"? This action cannot be undone.`)) {
+      return;
+    }
+    
+    setDeletingAccountId(accountId);
+    try {
+      await axios.delete(`${API_URL}/accounts/${accountId}`, { withCredentials: true });
+      toast.success('Account deleted successfully');
+      fetchAccounts(); // Refresh the list
+    } catch (error) {
+      const errorMsg = error.response?.data?.detail || 'Failed to delete account';
+      toast.error(errorMsg);
+    } finally {
+      setDeletingAccountId(null);
+    }
+  };
 
   const downloadLogoPdf = async () => {
     if (!logoGridRef.current) return;
@@ -340,6 +364,9 @@ export default function AccountsList() {
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Account Age</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Onboarded</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Sales Contact</th>
+                      {isAdmin && (
+                        <th className="text-center py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Actions</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
@@ -428,6 +455,24 @@ export default function AccountsList() {
                             <span className="text-slate-400">-</span>
                           )}
                         </td>
+                        {isAdmin && (
+                          <td className="py-5 px-5 text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                              onClick={(e) => handleDeleteAccount(account.id, account.account_name, e)}
+                              disabled={deletingAccountId === account.id}
+                              data-testid={`delete-account-${account.account_id}`}
+                            >
+                              {deletingAccountId === account.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>

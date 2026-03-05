@@ -704,6 +704,28 @@ ${googleMapsLink}`;
     setSkuPricing(updated);
   };
 
+  // Check if user is admin (CEO or Director)
+  const isAdmin = user?.role === 'CEO' || user?.role === 'Director';
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm(`Are you sure you want to delete account "${account.account_name}"? This action cannot be undone.`)) {
+      return;
+    }
+    
+    setDeleting(true);
+    try {
+      await axios.delete(`${API_URL}/accounts/${id}`, { withCredentials: true });
+      toast.success('Account deleted successfully');
+      navigate('/accounts');
+    } catch (error) {
+      const errorMsg = error.response?.data?.detail || 'Failed to delete account';
+      toast.error(errorMsg);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -771,6 +793,21 @@ ${googleMapsLink}`;
             setSkuPricing(account.sku_pricing || []);
           }}>
             Cancel
+          </Button>
+        )}
+        {isAdmin && !isEditing && (
+          <Button 
+            variant="outline" 
+            className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+            onClick={handleDeleteAccount}
+            disabled={deleting}
+            data-testid="delete-account-button"
+          >
+            {deleting ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Deleting...</>
+            ) : (
+              <><Trash2 className="h-4 w-4 mr-2" /> Delete Account</>
+            )}
           </Button>
         )}
       </div>
