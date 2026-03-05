@@ -10880,8 +10880,11 @@ class TargetAllocationCreateV2(BaseModel):
     territory_id: str
     territory_name: str
     city: Optional[str] = None
+    state: Optional[str] = None  # State for city-level allocations
     resource_id: Optional[str] = None
     resource_name: Optional[str] = None
+    parent_allocation_id: Optional[str] = None  # For hierarchical allocations
+    level: str = 'territory'  # 'territory', 'city', 'resource'
     amount: float
 
 class TargetAllocationUpdateV2(BaseModel):
@@ -10989,26 +10992,39 @@ async def create_target_allocation_v2(
     if not plan:
         raise HTTPException(status_code=404, detail="Target plan not found")
     
+    # Determine allocation level
+    level = allocation.level
+    if allocation.resource_id:
+        level = 'resource'
+    elif allocation.city:
+        level = 'city'
+    else:
+        level = 'territory'
+    
     allocation_data = {
         'id': str(uuid.uuid4()),
         'plan_id': plan_id,
         'territory_id': allocation.territory_id,
         'territory_name': allocation.territory_name,
         'city': allocation.city,
+        'state': allocation.state,
         'resource_id': allocation.resource_id,
         'resource_name': allocation.resource_name,
+        'parent_allocation_id': allocation.parent_allocation_id,
+        'level': level,
         'amount': allocation.amount,
         'created_at': datetime.now(timezone.utc).isoformat()
     }
     
     await db.target_allocations_v2.insert_one(allocation_data)
     
-    total_allocated = await db.target_allocations_v2.aggregate([
-        {'$match': {'plan_id': plan_id}},
+    # Recalculate total allocated at territory level only
+    territory_allocations = await db.target_allocations_v2.aggregate([
+        {'$match': {'plan_id': plan_id, 'level': 'territory'}},
         {'$group': {'_id': None, 'total': {'$sum': '$amount'}}}
     ]).to_list(1)
     
-    allocated = total_allocated[0]['total'] if total_allocated else 0
+    allocated = territory_allocations[0]['total'] if territory_allocations else 0
     await db.target_plans_v2.update_one(
         {'id': plan_id}, 
         {'$set': {'allocated_amount': allocated, 'updated_at': datetime.now(timezone.utc).isoformat()}}
@@ -11023,25 +11039,72 @@ async def delete_target_allocation_v2(
     allocation_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Delete an allocation"""
+    """Delete an allocation and its child allocations"""
     existing = await db.target_allocations_v2.find_one({'id': allocation_id, 'plan_id': plan_id})
     if not existing:
         raise HTTPException(status_code=404, detail="Allocation not found")
     
-    await db.target_allocations_v2.delete_one({'id': allocation_id})
+    # Delete this allocation and all its children (cascading delete)
+    await db.target_allocations_v2.delete_many({
+        '$or': [
+            {'id': allocation_id},
+            {'parent_allocation_id': allocation_id}
+        ]
+    })
     
-    total_allocated = await db.target_allocations_v2.aggregate([
-        {'$match': {'plan_id': plan_id}},
+    # Recalculate total allocated at territory level only
+    territory_allocations = await db.target_allocations_v2.aggregate([
+        {'$match': {'plan_id': plan_id, 'level': 'territory'}},
         {'$group': {'_id': None, 'total': {'$sum': '$amount'}}}
     ]).to_list(1)
     
-    allocated = total_allocated[0]['total'] if total_allocated else 0
+    allocated = territory_allocations[0]['total'] if territory_allocations else 0
     await db.target_plans_v2.update_one(
         {'id': plan_id}, 
         {'$set': {'allocated_amount': allocated, 'updated_at': datetime.now(timezone.utc).isoformat()}}
     )
     
     return {"message": "Allocation deleted successfully"}
+
+
+@api_router.get("/target-planning/{plan_id}/allocations/{allocation_id}/children")
+async def get_allocation_children(
+    plan_id: str,
+    allocation_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get child allocations for a parent allocation"""
+    children = await db.target_allocations_v2.find(
+        {'plan_id': plan_id, 'parent_allocation_id': allocation_id},
+        {'_id': 0}
+    ).to_list(500)
+    return children
+
+
+@api_router.get("/target-planning/resources/by-location")
+async def get_resources_by_location(
+    territory: Optional[str] = None,
+    city: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get sales resources filtered by territory or city"""
+    query = {'is_active': True}
+    
+    # Include all sales-related roles
+    sales_roles = ['National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Head of Business', 
+                   'Business Development Executive', 'Sales Executive', 'Area Sales Manager']
+    query['role'] = {'$in': sales_roles}
+    
+    if city:
+        query['city'] = city
+    elif territory:
+        query['territory'] = territory
+    
+    users = await db.users.find(
+        query,
+        {'_id': 0, 'id': 1, 'name': 1, 'email': 1, 'role': 1, 'city': 1, 'state': 1, 'territory': 1}
+    ).to_list(200)
+    return users
 
 @api_router.get("/target-planning/{plan_id}/dashboard")
 async def get_target_planning_dashboard(
@@ -11061,11 +11124,34 @@ async def get_target_planning_dashboard(
     days_elapsed = max(0, (today - start_date).days)
     days_remaining = max(0, (end_date - today).days)
     
-    allocations = await db.target_allocations_v2.find(
+    # Get all allocations
+    all_allocations = await db.target_allocations_v2.find(
         {'plan_id': plan_id}, {'_id': 0}
     ).to_list(500)
     
-    cities = list(set(a['city'] for a in allocations if a.get('city')))
+    # Build hierarchical structure
+    territory_allocations = [a for a in all_allocations if a.get('level', 'territory') == 'territory']
+    city_allocations = [a for a in all_allocations if a.get('level') == 'city']
+    resource_allocations = [a for a in all_allocations if a.get('level') == 'resource']
+    
+    # Build territory hierarchy with children
+    territories_with_children = []
+    for t_alloc in territory_allocations:
+        t_children = [c for c in city_allocations if c.get('parent_allocation_id') == t_alloc['id']]
+        t_alloc['children'] = []
+        t_alloc['allocated_to_children'] = 0
+        
+        for c_alloc in t_children:
+            c_children = [r for r in resource_allocations if r.get('parent_allocation_id') == c_alloc['id']]
+            c_alloc['children'] = c_children
+            c_alloc['allocated_to_children'] = sum(r.get('amount', 0) for r in c_children)
+            t_alloc['children'].append(c_alloc)
+            t_alloc['allocated_to_children'] += c_alloc['amount']
+        
+        territories_with_children.append(t_alloc)
+    
+    # Calculate cities list from allocations
+    cities = list(set(a['city'] for a in all_allocations if a.get('city')))
     
     # Estimated Revenue from Won Leads
     won_leads_query = {
@@ -11166,7 +11252,8 @@ async def get_target_planning_dashboard(
             'invoices_count': len(invoices),
             'city_breakdown': city_breakdown
         },
-        'allocations': allocations
+        'allocations': territories_with_children,
+        'all_allocations': all_allocations
     }
 
 # Sales roles for resource filtering

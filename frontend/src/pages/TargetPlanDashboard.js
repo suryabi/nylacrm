@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { Progress } from '../components/ui/progress';
 import {
   Dialog,
   DialogContent,
@@ -19,14 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../components/ui/table';
 import { toast } from 'sonner';
 import {
   Target,
@@ -38,14 +31,20 @@ import {
   Receipt,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   Plus,
   Trash2,
   Loader2,
   CheckCircle,
-  AlertCircle,
+  Trophy,
+  Medal,
+  MapPin,
   Building2,
+  Users,
+  Percent,
+  Award,
   User,
-  MapPin
+  ArrowUpRight
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -67,17 +66,19 @@ const formatCurrency = (amount, short = false) => {
   return `₹${amount.toLocaleString('en-IN')}`;
 };
 
+// Rank colors for leaderboard
+const getRankStyle = (rank) => {
+  if (rank === 1) return { bg: 'bg-amber-100', border: 'border-amber-400', text: 'text-amber-700', icon: Trophy };
+  if (rank === 2) return { bg: 'bg-gray-100', border: 'border-gray-400', text: 'text-gray-600', icon: Medal };
+  if (rank === 3) return { bg: 'bg-orange-100', border: 'border-orange-400', text: 'text-orange-700', icon: Medal };
+  return { bg: 'bg-white', border: 'border-gray-200', text: 'text-gray-600', icon: null };
+};
+
 // Timeline Progress Bar with clickable milestones
-function TimelineProgressBar({ timeline, plan, onMilestoneClick }) {
+function TimelineProgressBar({ timeline, plan }) {
   const { total_days, days_elapsed, days_remaining, progress_percent, milestones } = timeline;
   const [selectedMilestone, setSelectedMilestone] = useState(null);
-  
-  const handleMilestoneClick = (milestone) => {
-    setSelectedMilestone(selectedMilestone === milestone.milestone ? null : milestone.milestone);
-    if (onMilestoneClick) onMilestoneClick(milestone);
-  };
 
-  // Format currency
   const formatAmount = (amount) => {
     if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(1)} Cr`;
     if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)} L`;
@@ -107,9 +108,7 @@ function TimelineProgressBar({ timeline, plan, onMilestoneClick }) {
         </div>
       </div>
       
-      {/* Progress Bar with Milestones */}
       <div className="relative pt-8 pb-4">
-        {/* Main Progress Bar */}
         <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
           <div 
             className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500"
@@ -117,9 +116,8 @@ function TimelineProgressBar({ timeline, plan, onMilestoneClick }) {
           />
         </div>
         
-        {/* Milestone Markers */}
         <div className="absolute top-0 left-0 right-0 flex justify-between">
-          {milestones.map((milestone, idx) => {
+          {milestones?.map((milestone) => {
             const position = ((milestone.days / total_days) * 100);
             const isActive = selectedMilestone === milestone.milestone;
             
@@ -128,10 +126,8 @@ function TimelineProgressBar({ timeline, plan, onMilestoneClick }) {
                 key={milestone.milestone}
                 className="absolute transform -translate-x-1/2 flex flex-col items-center cursor-pointer group"
                 style={{ left: `${position}%` }}
-                onClick={() => handleMilestoneClick(milestone)}
-                data-testid={`milestone-${milestone.milestone}`}
+                onClick={() => setSelectedMilestone(isActive ? null : milestone.milestone)}
               >
-                {/* Milestone Circle */}
                 <div className={cn(
                   "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all",
                   milestone.is_completed 
@@ -141,18 +137,10 @@ function TimelineProgressBar({ timeline, plan, onMilestoneClick }) {
                       : "bg-white border-gray-300 text-gray-600",
                   isActive && "ring-2 ring-offset-2 ring-blue-400 scale-110"
                 )}>
-                  {milestone.is_completed ? (
-                    <CheckCircle className="h-4 w-4" />
-                  ) : (
-                    milestone.milestone
-                  )}
+                  {milestone.is_completed ? <CheckCircle className="h-4 w-4" /> : milestone.milestone}
                 </div>
                 
-                {/* Days Label */}
-                <div className={cn(
-                  "mt-1 text-center transition-all",
-                  isActive ? "opacity-100" : "opacity-80"
-                )}>
+                <div className="mt-1 text-center">
                   <p className={cn(
                     "text-sm font-semibold",
                     milestone.is_completed ? "text-green-600" : milestone.is_current ? "text-blue-600" : "text-gray-600"
@@ -162,24 +150,19 @@ function TimelineProgressBar({ timeline, plan, onMilestoneClick }) {
                   <p className="text-[10px] text-muted-foreground">{milestone.date_label}</p>
                 </div>
 
-                {/* Tooltip on hover */}
-                <div className={cn(
-                  "absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 z-10 transition-all",
-                  "bg-gray-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap",
-                  isActive ? "opacity-100 visible" : "opacity-0 invisible group-hover:opacity-100 group-hover:visible"
-                )}>
-                  <p className="font-semibold">Milestone {milestone.milestone}</p>
-                  <p>Target: {formatAmount(milestone.target_amount)}</p>
-                  <p>Due: {new Date(milestone.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
-                </div>
+                {isActive && (
+                  <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 z-10 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap">
+                    <p className="font-semibold">Milestone {milestone.milestone}</p>
+                    <p>Target: {formatAmount(milestone.target_amount)}</p>
+                    <p>Due: {new Date(milestone.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
       </div>
       
-      {/* Date Range */}
       <div className="flex items-center justify-between mt-6 text-sm text-muted-foreground">
         <span className="flex items-center gap-1">
           <Calendar className="h-4 w-4" />
@@ -194,150 +177,393 @@ function TimelineProgressBar({ timeline, plan, onMilestoneClick }) {
   );
 }
 
-// Revenue Progress Bar Component
-function RevenueProgressBar({ title, icon, color, achieved, remaining, percent, count, label, onClick, breakdown }) {
-  const [expanded, setExpanded] = useState(false);
-  const Icon = icon;
-  
-  const colorClasses = {
-    green: { bg: 'bg-green-500', light: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
-    blue: { bg: 'bg-blue-500', light: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
-    amber: { bg: 'bg-amber-500', light: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' }
-  };
-  const c = colorClasses[color] || colorClasses.blue;
-  
+// Revenue Summary Cards
+function RevenueSummaryCards({ estimated, actual, plan }) {
   return (
-    <Card className={cn("p-5 border-2", c.border, c.light)}>
-      <div className="flex items-center justify-between mb-3">
-        <h3 className={cn("font-semibold flex items-center gap-2", c.text)}>
-          <Icon className="h-5 w-5" />
-          {title}
-        </h3>
-        <Badge variant="outline" className={c.text}>{count} {label}</Badge>
-      </div>
-      
-      {/* Progress Bar */}
-      <div className="mb-4">
-        <div className="h-6 bg-white rounded-lg overflow-hidden border">
-          <div 
-            className={cn("h-full rounded-lg transition-all duration-500 flex items-center justify-end pr-2", c.bg)}
-            style={{ width: `${Math.min(100, percent)}%` }}
-          >
-            {percent >= 15 && (
-              <span className="text-white text-sm font-semibold">{percent}%</span>
-            )}
+    <div className="grid grid-cols-2 gap-6 mb-6">
+      {/* Estimated Revenue Card */}
+      <Card className="p-5 border-2 border-green-200 bg-green-50/50">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold flex items-center gap-2 text-green-700">
+            <TrendingUp className="h-5 w-5" />
+            Estimated Revenue
+          </h3>
+          <Badge variant="outline" className="text-green-700">{estimated.won_leads_count} Won Leads</Badge>
+        </div>
+        
+        <div className="mb-4">
+          <Progress value={estimated.percent} className="h-3 bg-green-100" />
+        </div>
+        
+        <div className="grid grid-cols-3 gap-4 text-center">
+          <div>
+            <p className="text-2xl font-bold text-green-700">{formatCurrency(estimated.achieved, true)}</p>
+            <p className="text-xs text-muted-foreground">Achieved</p>
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-gray-600">{formatCurrency(estimated.remaining, true)}</p>
+            <p className="text-xs text-muted-foreground">Remaining</p>
+          </div>
+          <div>
+            <p className={cn("text-2xl font-bold", estimated.percent >= 100 ? "text-green-600" : "text-green-700")}>
+              {estimated.percent}%
+            </p>
+            <p className="text-xs text-muted-foreground">Achievement</p>
           </div>
         </div>
-      </div>
-      
-      {/* Values */}
-      <div className="grid grid-cols-3 gap-4 text-center">
-        <div>
-          <p className={cn("text-xl font-bold", c.text)}>{formatCurrency(achieved, true)}</p>
-          <p className="text-xs text-muted-foreground">Achieved</p>
+      </Card>
+
+      {/* Actual Revenue Card */}
+      <Card className="p-5 border-2 border-blue-200 bg-blue-50/50">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold flex items-center gap-2 text-blue-700">
+            <Receipt className="h-5 w-5" />
+            Actual Revenue
+          </h3>
+          <Badge variant="outline" className="text-blue-700">{actual.invoices_count} Invoices</Badge>
         </div>
-        <div>
-          <p className="text-xl font-bold text-gray-600">{formatCurrency(remaining, true)}</p>
-          <p className="text-xs text-muted-foreground">Remaining</p>
+        
+        <div className="mb-4">
+          <Progress value={actual.percent} className="h-3 bg-blue-100" />
         </div>
-        <div>
-          <p className={cn("text-xl font-bold", percent >= 100 ? 'text-green-600' : c.text)}>{percent}%</p>
-          <p className="text-xs text-muted-foreground">Achievement</p>
+        
+        <div className="grid grid-cols-3 gap-4 text-center">
+          <div>
+            <p className="text-2xl font-bold text-blue-700">{formatCurrency(actual.achieved, true)}</p>
+            <p className="text-xs text-muted-foreground">Achieved</p>
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-gray-600">{formatCurrency(actual.remaining, true)}</p>
+            <p className="text-xs text-muted-foreground">Remaining</p>
+          </div>
+          <div>
+            <p className={cn("text-2xl font-bold", actual.percent >= 100 ? "text-green-600" : "text-blue-700")}>
+              {actual.percent}%
+            </p>
+            <p className="text-xs text-muted-foreground">Achievement</p>
+          </div>
         </div>
-      </div>
-      
-      {/* Drilldown */}
-      {breakdown && Object.keys(breakdown).length > 0 && (
-        <div className="mt-4 pt-4 border-t">
-          <button 
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground w-full"
-            onClick={() => setExpanded(!expanded)}
-          >
-            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-            View Breakdown
-          </button>
-          
-          {expanded && (
-            <div className="mt-3 space-y-2">
-              {Object.entries(breakdown).map(([key, data]) => (
-                <div key={key} className="flex items-center justify-between text-sm p-2 bg-white rounded">
-                  <span className="flex items-center gap-2">
-                    <MapPin className="h-3 w-3 text-muted-foreground" />
-                    {key}
-                  </span>
-                  <span className="font-medium">{formatCurrency(data.value)} ({data.count})</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </Card>
+      </Card>
+    </div>
   );
 }
 
-// Allocation Management Section
-function AllocationSection({ planId, allocations, onUpdate, plan }) {
-  const [territories, setTerritories] = useState([]);
-  const [cities, setCities] = useState([]);
-  const [resources, setResources] = useState([]);
+// Hierarchical Allocation Card Component
+function AllocationCard({ allocation, rank, onDrillDown, onAddChild, onDelete, level = 'territory' }) {
+  const style = getRankStyle(rank);
+  const Icon = style.icon;
+  const allocatedToChildren = allocation.allocated_to_children || 0;
+  const remaining = allocation.amount - allocatedToChildren;
+  const percentAllocated = allocation.amount > 0 ? ((allocatedToChildren / allocation.amount) * 100).toFixed(0) : 0;
+  
+  const getLevelIcon = () => {
+    if (level === 'territory') return <MapPin className="h-4 w-4" />;
+    if (level === 'city') return <Building2 className="h-4 w-4" />;
+    return <User className="h-4 w-4" />;
+  };
+
+  const getLevelLabel = () => {
+    if (level === 'territory') return allocation.territory_name;
+    if (level === 'city') return allocation.city;
+    return allocation.resource_name;
+  };
+
+  return (
+    <div className={cn(
+      "p-4 rounded-xl border-2 transition-all hover:shadow-lg cursor-pointer group",
+      style.bg, style.border
+    )}>
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-3" onClick={() => level !== 'resource' && onDrillDown && onDrillDown(allocation)}>
+          <div className={cn(
+            "w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg shrink-0",
+            rank <= 3 ? style.bg : "bg-gray-100",
+            style.text
+          )}>
+            {Icon ? <Icon className="h-5 w-5" /> : rank}
+          </div>
+          <div>
+            <h4 className="font-semibold flex items-center gap-2">
+              {getLevelIcon()}
+              {getLevelLabel()}
+              {level !== 'resource' && (
+                <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+              )}
+            </h4>
+            <p className="text-xs text-muted-foreground">
+              {level === 'territory' && allocation.children?.length > 0 && `${allocation.children.length} cities`}
+              {level === 'city' && allocation.children?.length > 0 && `${allocation.children.length} resources`}
+              {level === 'resource' && allocation.role}
+            </p>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className={cn("text-xl font-bold", style.text)}>{formatCurrency(allocation.amount, true)}</p>
+          {level !== 'resource' && allocatedToChildren > 0 && (
+            <p className="text-xs text-muted-foreground">{percentAllocated}% distributed</p>
+          )}
+        </div>
+      </div>
+
+      {/* Progress bar for allocated children */}
+      {level !== 'resource' && (
+        <div className="mt-3">
+          <Progress value={parseFloat(percentAllocated)} className="h-2" />
+          <div className="flex justify-between text-xs text-muted-foreground mt-1">
+            <span>{formatCurrency(allocatedToChildren, true)} allocated</span>
+            <span className={remaining > 0 ? 'text-amber-600' : 'text-green-600'}>
+              {formatCurrency(remaining, true)} remaining
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex gap-2 mt-3 pt-3 border-t border-dashed opacity-0 group-hover:opacity-100 transition-opacity">
+        {level !== 'resource' && remaining > 0 && (
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="flex-1" 
+            onClick={(e) => { e.stopPropagation(); onAddChild && onAddChild(allocation); }}
+          >
+            <Plus className="h-3 w-3 mr-1" />
+            {level === 'territory' ? 'Add City' : 'Add Resource'}
+          </Button>
+        )}
+        <Button 
+          size="sm" 
+          variant="ghost" 
+          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+          onClick={(e) => { e.stopPropagation(); onDelete && onDelete(allocation); }}
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Main Allocation Section with Hierarchical Navigation
+function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) {
+  const [masterLocations, setMasterLocations] = useState([]);
+  const [salesResources, setSalesResources] = useState([]);
+  const [breadcrumb, setBreadcrumb] = useState([{ level: 'plan', label: 'All Territories', data: null }]);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [allocationType, setAllocationType] = useState('percentage');
+  const [parentAllocation, setParentAllocation] = useState(null);
+  const [addLevel, setAddLevel] = useState('territory');
   const [newAllocation, setNewAllocation] = useState({
     territory_id: '',
     territory_name: '',
     city: '',
+    state: '',
     resource_id: '',
     resource_name: '',
-    amount: ''
+    amount: '',
+    percentage: ''
   });
 
   useEffect(() => {
-    fetchMasterData();
+    fetchMasterLocations();
   }, []);
 
-  const fetchMasterData = async () => {
+  const fetchMasterLocations = async () => {
     try {
-      // Fetch territories
-      const terrResponse = await fetch(`${API_URL}/master-locations`, { headers: getAuthHeaders() });
-      if (terrResponse.ok) {
-        const data = await terrResponse.json();
-        setTerritories(data.territories || []);
-        setCities(data.cities || []);
-      }
-      
-      // Fetch sales resources
-      const resResponse = await fetch(`${API_URL}/target-planning/resources/sales`, { headers: getAuthHeaders() });
-      if (resResponse.ok) {
-        const data = await resResponse.json();
-        setResources(data);
+      const response = await fetch(`${API_URL}/master-locations`, { headers: getAuthHeaders() });
+      if (response.ok) {
+        const data = await response.json();
+        setMasterLocations(data);
       }
     } catch (error) {
-      console.error('Error fetching master data:', error);
+      console.error('Error fetching master locations:', error);
     }
   };
 
+  const fetchResourcesForCity = async (city) => {
+    try {
+      const response = await fetch(`${API_URL}/target-planning/resources/by-location?city=${encodeURIComponent(city)}`, { 
+        headers: getAuthHeaders() 
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSalesResources(data);
+      }
+    } catch (error) {
+      console.error('Error fetching resources:', error);
+    }
+  };
+
+  const getCurrentItems = () => {
+    const current = breadcrumb[breadcrumb.length - 1];
+    
+    if (current.level === 'plan') {
+      return allocations.filter(a => a.level === 'territory' || !a.level);
+    }
+    
+    if (current.level === 'territory') {
+      return current.data.children || [];
+    }
+    
+    if (current.level === 'city') {
+      return current.data.children || [];
+    }
+    
+    return [];
+  };
+
+  const handleDrillDown = (allocation) => {
+    if (allocation.level === 'territory' || !allocation.level) {
+      setBreadcrumb([...breadcrumb, { level: 'territory', label: allocation.territory_name, data: allocation }]);
+    } else if (allocation.level === 'city') {
+      fetchResourcesForCity(allocation.city);
+      setBreadcrumb([...breadcrumb, { level: 'city', label: allocation.city, data: allocation }]);
+    }
+  };
+
+  const handleBreadcrumbClick = (index) => {
+    setBreadcrumb(breadcrumb.slice(0, index + 1));
+  };
+
+  const openAddDialog = (parent = null) => {
+    setParentAllocation(parent);
+    
+    if (!parent) {
+      setAddLevel('territory');
+      setNewAllocation({ territory_id: '', territory_name: '', city: '', state: '', resource_id: '', resource_name: '', amount: '', percentage: '' });
+    } else if (parent.level === 'territory' || !parent.level) {
+      setAddLevel('city');
+      setNewAllocation({ 
+        territory_id: parent.territory_id, 
+        territory_name: parent.territory_name, 
+        city: '', 
+        state: '',
+        resource_id: '', 
+        resource_name: '', 
+        amount: '', 
+        percentage: '' 
+      });
+    } else if (parent.level === 'city') {
+      setAddLevel('resource');
+      fetchResourcesForCity(parent.city);
+      setNewAllocation({ 
+        territory_id: parent.territory_id, 
+        territory_name: parent.territory_name, 
+        city: parent.city,
+        state: parent.state,
+        resource_id: '', 
+        resource_name: '', 
+        amount: '', 
+        percentage: '' 
+      });
+    }
+    
+    setShowAddDialog(true);
+  };
+
+  const handleTerritoryChange = (territoryId) => {
+    const territory = masterLocations.find(t => t.id === territoryId);
+    setNewAllocation({
+      ...newAllocation,
+      territory_id: territoryId,
+      territory_name: territory?.name || '',
+      city: '',
+      state: ''
+    });
+  };
+
+  const getCitiesForTerritory = (territoryId) => {
+    const territory = masterLocations.find(t => t.id === territoryId);
+    if (!territory) return [];
+    const cities = [];
+    territory.states?.forEach(state => {
+      state.cities?.forEach(city => {
+        cities.push({ id: city.id, name: city.name, state: state.name });
+      });
+    });
+    return cities;
+  };
+
+  const getParentAmount = (forBreadcrumb = false) => {
+    // For the banner display when drilling down
+    if (forBreadcrumb) {
+      const currentData = breadcrumb[breadcrumb.length - 1].data;
+      if (currentData) {
+        return currentData.amount - (currentData.allocated_to_children || 0);
+      }
+      return plan.total_amount - totalAllocated;
+    }
+    
+    // For the add dialog
+    if (!parentAllocation) return plan.total_amount - totalAllocated;
+    return parentAllocation.amount - (parentAllocation.allocated_to_children || 0);
+  };
+
+  const calculateAmount = () => {
+    const parentAmount = getParentAmount();
+    if (allocationType === 'percentage' && newAllocation.percentage) {
+      return (parentAmount * parseFloat(newAllocation.percentage)) / 100;
+    }
+    return parseFloat(newAllocation.amount) || 0;
+  };
+
   const handleAddAllocation = async () => {
-    if (!newAllocation.territory_id || !newAllocation.amount) {
-      toast.error('Territory and amount are required');
+    if (addLevel === 'territory' && !newAllocation.territory_id) {
+      toast.error('Please select a territory');
+      return;
+    }
+    if (addLevel === 'city' && !newAllocation.city) {
+      toast.error('Please select a city');
+      return;
+    }
+    if (addLevel === 'resource' && !newAllocation.resource_id) {
+      toast.error('Please select a resource');
+      return;
+    }
+
+    const amount = calculateAmount();
+    if (!amount || amount <= 0) {
+      toast.error('Please enter a valid amount or percentage');
+      return;
+    }
+
+    const parentAmount = getParentAmount();
+    if (amount > parentAmount) {
+      toast.error(`Amount exceeds available budget of ${formatCurrency(parentAmount)}`);
       return;
     }
 
     setAdding(true);
     try {
+      const payload = {
+        territory_id: newAllocation.territory_id,
+        territory_name: newAllocation.territory_name,
+        city: newAllocation.city || null,
+        state: newAllocation.state || null,
+        resource_id: newAllocation.resource_id || null,
+        resource_name: newAllocation.resource_name || null,
+        parent_allocation_id: parentAllocation?.id || null,
+        level: addLevel,
+        amount: amount
+      };
+
       const response = await fetch(`${API_URL}/target-planning/${planId}/allocations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({
-          ...newAllocation,
-          amount: parseFloat(newAllocation.amount)
-        })
+        body: JSON.stringify(payload)
       });
 
       if (response.ok) {
+        toast.success('Allocation added');
         setShowAddDialog(false);
-        setNewAllocation({ territory_id: '', territory_name: '', city: '', resource_id: '', resource_name: '', amount: '' });
+        setNewAllocation({ territory_id: '', territory_name: '', city: '', state: '', resource_id: '', resource_name: '', amount: '', percentage: '' });
+        setParentAllocation(null);
+        setBreadcrumb([{ level: 'plan', label: 'All Territories', data: null }]);
         onUpdate();
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || 'Failed to add allocation');
       }
     } catch (error) {
       toast.error('Failed to add allocation');
@@ -346,13 +572,19 @@ function AllocationSection({ planId, allocations, onUpdate, plan }) {
     }
   };
 
-  const handleDeleteAllocation = async (allocationId) => {
+  const handleDeleteAllocation = async (allocation) => {
+    if (!window.confirm(`Delete this allocation? ${allocation.children?.length > 0 ? 'This will also delete all child allocations.' : ''}`)) {
+      return;
+    }
+
     try {
-      const response = await fetch(`${API_URL}/target-planning/${planId}/allocations/${allocationId}`, {
+      const response = await fetch(`${API_URL}/target-planning/${planId}/allocations/${allocation.id}`, {
         method: 'DELETE',
         headers: getAuthHeaders()
       });
       if (response.ok) {
+        toast.success('Allocation deleted');
+        setBreadcrumb([{ level: 'plan', label: 'All Territories', data: null }]);
         onUpdate();
       }
     } catch (error) {
@@ -360,189 +592,316 @@ function AllocationSection({ planId, allocations, onUpdate, plan }) {
     }
   };
 
-  // Group allocations by territory
-  const groupedAllocations = allocations.reduce((acc, alloc) => {
-    const territory = alloc.territory_name || 'Unassigned';
-    if (!acc[territory]) acc[territory] = [];
-    acc[territory].push(alloc);
-    return acc;
-  }, {});
-
-  const totalAllocated = allocations.reduce((sum, a) => sum + (a.amount || 0), 0);
-  const remaining = (plan?.total_amount || 0) - totalAllocated;
+  const totalAllocated = allocations.filter(a => a.level === 'territory' || !a.level).reduce((sum, a) => sum + (a.amount || 0), 0);
+  const remaining = plan.total_amount - totalAllocated;
+  const allocatedPercent = plan.total_amount > 0 ? ((totalAllocated / plan.total_amount) * 100).toFixed(1) : 0;
+  const currentItems = getCurrentItems();
+  const currentLevel = breadcrumb[breadcrumb.length - 1].level;
 
   return (
     <Card className="p-6">
+      {/* Header with Breadcrumb */}
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-lg flex items-center gap-2">
-          <Building2 className="h-5 w-5 text-primary" />
-          Target Allocations
-        </h3>
-        <div className="flex items-center gap-4">
-          <div className="text-sm">
-            <span className="text-muted-foreground">Allocated: </span>
-            <span className="font-semibold">{formatCurrency(totalAllocated)}</span>
-            <span className="text-muted-foreground"> / {formatCurrency(plan?.total_amount)}</span>
-            {remaining > 0 && (
-              <span className="text-amber-600 ml-2">({formatCurrency(remaining)} remaining)</span>
-            )}
+        <div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+            {breadcrumb.map((crumb, idx) => (
+              <React.Fragment key={idx}>
+                <button
+                  onClick={() => handleBreadcrumbClick(idx)}
+                  className={cn(
+                    "hover:text-primary transition-colors",
+                    idx === breadcrumb.length - 1 ? "text-foreground font-semibold" : ""
+                  )}
+                >
+                  {crumb.label}
+                </button>
+                {idx < breadcrumb.length - 1 && <ChevronRight className="h-3 w-3" />}
+              </React.Fragment>
+            ))}
           </div>
-          <Button size="sm" onClick={() => setShowAddDialog(true)} data-testid="add-allocation-btn">
-            <Plus className="h-4 w-4 mr-1" /> Add Allocation
-          </Button>
+          <h3 className="font-semibold text-lg flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-primary" />
+            Target Allocations
+          </h3>
         </div>
+        <Button size="sm" onClick={() => openAddDialog(breadcrumb[breadcrumb.length - 1].data)} data-testid="add-allocation-btn">
+          <Plus className="h-4 w-4 mr-1" /> 
+          {currentLevel === 'plan' ? 'Add Territory' : currentLevel === 'territory' ? 'Add City' : 'Add Resource'}
+        </Button>
       </div>
 
-      {allocations.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground">
-          <Target className="h-8 w-8 mx-auto mb-2 opacity-50" />
-          <p>No allocations yet. Add allocations to distribute the target.</p>
+      {/* Allocation Summary */}
+      {currentLevel === 'plan' && (
+        <div className="grid grid-cols-4 gap-4 mb-6 p-4 bg-muted/30 rounded-lg">
+          <div className="text-center">
+            <p className="text-sm text-muted-foreground">Total Target</p>
+            <p className="text-xl font-bold">{formatCurrency(plan.total_amount, true)}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm text-muted-foreground">Allocated</p>
+            <p className="text-xl font-bold text-green-600">{formatCurrency(totalAllocated, true)}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm text-muted-foreground">Remaining</p>
+            <p className={cn("text-xl font-bold", remaining > 0 ? "text-amber-600" : "text-green-600")}>
+              {formatCurrency(remaining, true)}
+            </p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm text-muted-foreground">Progress</p>
+            <p className={cn("text-xl font-bold", parseFloat(allocatedPercent) >= 100 ? "text-green-600" : "text-blue-600")}>
+              {allocatedPercent}%
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Parent Info when drilling down */}
+      {currentLevel !== 'plan' && breadcrumb[breadcrumb.length - 1].data && (
+        <div className="mb-4 p-4 bg-primary/5 rounded-lg border border-primary/20">
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                {currentLevel === 'territory' ? 'Territory' : 'City'} Budget
+              </p>
+              <p className="text-2xl font-bold">{formatCurrency(breadcrumb[breadcrumb.length - 1].data.amount)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-muted-foreground">Available to Allocate</p>
+              <p className={cn(
+                "text-2xl font-bold",
+                getParentAmount(true) > 0 ? "text-amber-600" : "text-green-600"
+              )}>
+                {formatCurrency(getParentAmount(true))}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Allocation Progress Bar (plan level only) */}
+      {currentLevel === 'plan' && (
+        <div className="mb-6">
+          <Progress value={Math.min(100, parseFloat(allocatedPercent))} className="h-3" />
+          <p className="text-xs text-muted-foreground mt-1 text-center">
+            {formatCurrency(totalAllocated)} of {formatCurrency(plan.total_amount)} allocated
+          </p>
+        </div>
+      )}
+
+      {/* Allocation Cards */}
+      {currentItems.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
+          <Target className="h-10 w-10 mx-auto mb-3 opacity-50" />
+          <p className="font-medium">No allocations yet</p>
+          <p className="text-sm">
+            {currentLevel === 'plan' && 'Add territories to distribute the target'}
+            {currentLevel === 'territory' && 'Add cities to distribute this territory\'s target'}
+            {currentLevel === 'city' && 'Add sales resources to distribute this city\'s target'}
+          </p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {Object.entries(groupedAllocations).map(([territory, items]) => {
-            const territoryTotal = items.reduce((sum, a) => sum + (a.amount || 0), 0);
-            
-            return (
-              <div key={territory} className="border rounded-lg overflow-hidden">
-                <div className="bg-gray-50 px-4 py-2 flex items-center justify-between">
-                  <span className="font-medium flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    {territory}
-                  </span>
-                  <span className="font-semibold text-primary">{formatCurrency(territoryTotal)}</span>
-                </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>City</TableHead>
-                      <TableHead>Resource</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead className="w-12"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {items.map((alloc) => (
-                      <TableRow key={alloc.id}>
-                        <TableCell>{alloc.city || '-'}</TableCell>
-                        <TableCell>
-                          {alloc.resource_name ? (
-                            <span className="flex items-center gap-1">
-                              <User className="h-3 w-3" /> {alloc.resource_name}
-                            </span>
-                          ) : '-'}
-                        </TableCell>
-                        <TableCell className="text-right font-medium">{formatCurrency(alloc.amount)}</TableCell>
-                        <TableCell>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-red-500 hover:text-red-700"
-                            onClick={() => handleDeleteAllocation(alloc.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            );
-          })}
+        <div className="space-y-3">
+          {currentItems.sort((a, b) => (b.amount || 0) - (a.amount || 0)).map((item, idx) => (
+            <AllocationCard
+              key={item.id}
+              allocation={item}
+              rank={idx + 1}
+              level={item.level || 'territory'}
+              onDrillDown={handleDrillDown}
+              onAddChild={openAddDialog}
+              onDelete={handleDeleteAllocation}
+            />
+          ))}
         </div>
       )}
 
       {/* Add Allocation Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Add Target Allocation</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5 text-primary" />
+              Add {addLevel === 'territory' ? 'Territory' : addLevel === 'city' ? 'City' : 'Resource'} Allocation
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label>Territory *</Label>
-              <Select 
-                value={newAllocation.territory_id} 
-                onValueChange={(v) => {
-                  const terr = territories.find(t => t.id === v);
-                  setNewAllocation({ 
-                    ...newAllocation, 
-                    territory_id: v, 
-                    territory_name: terr?.name || '' 
-                  });
-                }}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select territory" />
-                </SelectTrigger>
-                <SelectContent>
-                  {territories.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
 
-            <div>
-              <Label>City (Optional)</Label>
-              <Select 
-                value={newAllocation.city || "__all__"} 
-                onValueChange={(v) => setNewAllocation({ ...newAllocation, city: v === "__all__" ? "" : v })}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select city" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">-- All Cities --</SelectItem>
-                  {cities.map((c) => (
-                    <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>Resource (Optional)</Label>
-              <Select 
-                value={newAllocation.resource_id || "__unassigned__"} 
-                onValueChange={(v) => {
-                  if (v === "__unassigned__") {
-                    setNewAllocation({ ...newAllocation, resource_id: '', resource_name: '' });
-                  } else {
-                    const res = resources.find(r => r.id === v);
-                    setNewAllocation({ 
-                      ...newAllocation, 
-                      resource_id: v, 
-                      resource_name: res?.name || '' 
-                    });
-                  }
-                }}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select resource" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__unassigned__">-- Unassigned --</SelectItem>
-                  {resources.map((r) => (
-                    <SelectItem key={r.id} value={r.id}>{r.name} ({r.role})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>Amount (₹) *</Label>
-              <Input
-                type="number"
-                value={newAllocation.amount}
-                onChange={(e) => setNewAllocation({ ...newAllocation, amount: e.target.value })}
-                placeholder="Enter target amount"
-                className="mt-1"
-              />
+          {/* Budget Banner */}
+          <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 mb-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  {parentAllocation ? `${parentAllocation.level === 'territory' || !parentAllocation.level ? 'Territory' : 'City'} Budget` : 'Total Target'}
+                </p>
+                <p className="text-2xl font-bold">
+                  {formatCurrency(parentAllocation ? parentAllocation.amount : plan.total_amount)}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-muted-foreground">Available to Allocate</p>
+                <p className={cn("text-2xl font-bold", getParentAmount() > 0 ? "text-amber-600" : "text-green-600")}>
+                  {formatCurrency(getParentAmount())}
+                </p>
+              </div>
             </div>
           </div>
-          <DialogFooter>
+
+          <div className="space-y-4">
+            {/* Territory Selection */}
+            {addLevel === 'territory' && (
+              <div>
+                <Label>Territory *</Label>
+                <Select 
+                  value={newAllocation.territory_id} 
+                  onValueChange={handleTerritoryChange}
+                >
+                  <SelectTrigger className="mt-1" data-testid="territory-select">
+                    <SelectValue placeholder="Select territory" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {masterLocations.map((territory) => (
+                      <SelectItem key={territory.id} value={territory.id}>
+                        <span className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4" />
+                          {territory.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* City Selection */}
+            {addLevel === 'city' && (
+              <div>
+                <Label>City *</Label>
+                <Select 
+                  value={newAllocation.city || ""} 
+                  onValueChange={(v) => {
+                    const cities = getCitiesForTerritory(newAllocation.territory_id);
+                    const city = cities.find(c => c.name === v);
+                    setNewAllocation({ ...newAllocation, city: v, state: city?.state || '' });
+                  }}
+                >
+                  <SelectTrigger className="mt-1" data-testid="city-select">
+                    <SelectValue placeholder="Select city" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getCitiesForTerritory(newAllocation.territory_id).map((city) => (
+                      <SelectItem key={city.id} value={city.name}>
+                        <span className="flex items-center gap-2">
+                          <Building2 className="h-4 w-4" />
+                          {city.name} <span className="text-muted-foreground">({city.state})</span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Resource Selection */}
+            {addLevel === 'resource' && (
+              <div>
+                <Label>Sales Resource *</Label>
+                <Select 
+                  value={newAllocation.resource_id || ""} 
+                  onValueChange={(v) => {
+                    const resource = salesResources.find(r => r.id === v);
+                    setNewAllocation({ ...newAllocation, resource_id: v, resource_name: resource?.name || '' });
+                  }}
+                >
+                  <SelectTrigger className="mt-1" data-testid="resource-select">
+                    <SelectValue placeholder="Select resource" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {salesResources.length === 0 ? (
+                      <div className="p-2 text-sm text-muted-foreground text-center">
+                        No sales resources found for this city
+                      </div>
+                    ) : (
+                      salesResources.map((resource) => (
+                        <SelectItem key={resource.id} value={resource.id}>
+                          <span className="flex items-center gap-2">
+                            <User className="h-4 w-4" />
+                            {resource.name} <span className="text-muted-foreground">({resource.role})</span>
+                          </span>
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Allocation Method Toggle */}
+            <div>
+              <Label>Allocation Method</Label>
+              <div className="flex gap-2 mt-2">
+                <Button
+                  type="button"
+                  variant={allocationType === 'percentage' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setAllocationType('percentage')}
+                >
+                  <Percent className="h-4 w-4 mr-1" /> Percentage
+                </Button>
+                <Button
+                  type="button"
+                  variant={allocationType === 'amount' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setAllocationType('amount')}
+                >
+                  <IndianRupee className="h-4 w-4 mr-1" /> Amount
+                </Button>
+              </div>
+            </div>
+
+            {/* Amount Input */}
+            {allocationType === 'percentage' ? (
+              <div>
+                <Label>Percentage of Available Budget (%)</Label>
+                <div className="flex gap-2 items-center mt-1">
+                  <Input
+                    type="number"
+                    value={newAllocation.percentage}
+                    onChange={(e) => setNewAllocation({ ...newAllocation, percentage: e.target.value })}
+                    placeholder="e.g., 25"
+                    min="0"
+                    max="100"
+                    className="flex-1"
+                  />
+                  <span className="text-muted-foreground">%</span>
+                </div>
+                {newAllocation.percentage && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    = {formatCurrency((getParentAmount() * parseFloat(newAllocation.percentage || 0)) / 100)}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div>
+                <Label>Amount (₹)</Label>
+                <Input
+                  type="number"
+                  value={newAllocation.amount}
+                  onChange={(e) => setNewAllocation({ ...newAllocation, amount: e.target.value })}
+                  placeholder="Enter amount"
+                  className="mt-1"
+                />
+                {newAllocation.amount && getParentAmount() > 0 && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    = {((parseFloat(newAllocation.amount || 0) / getParentAmount()) * 100).toFixed(1)}% of available budget
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
             <Button onClick={handleAddAllocation} disabled={adding}>
               {adding ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
@@ -627,6 +986,7 @@ export default function TargetPlanDashboard() {
             <p className="text-muted-foreground flex items-center gap-2 mt-1">
               <Target className="h-4 w-4" />
               Total Target: <span className="font-semibold text-foreground">{formatCurrency(plan.total_amount)}</span>
+              <span className="text-xs">• {plan.milestones || 4} Milestones</span>
             </p>
           </div>
         </div>
@@ -635,64 +995,11 @@ export default function TargetPlanDashboard() {
       {/* Timeline Progress */}
       <TimelineProgressBar timeline={timeline} plan={plan} />
 
-      {/* Revenue Progress Bars */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <RevenueProgressBar
-          title="Estimated Revenue (Won Leads)"
-          icon={TrendingUp}
-          color="green"
-          achieved={estimated_revenue.achieved}
-          remaining={estimated_revenue.remaining}
-          percent={estimated_revenue.percent}
-          count={estimated_revenue.won_leads_count}
-          label="Won Leads"
-          breakdown={estimated_revenue.territory_breakdown}
-        />
-        
-        <RevenueProgressBar
-          title="Actual Revenue (Invoices)"
-          icon={Receipt}
-          color="blue"
-          achieved={actual_revenue.achieved}
-          remaining={actual_revenue.remaining}
-          percent={actual_revenue.percent}
-          count={actual_revenue.invoices_count}
-          label="Invoices"
-          breakdown={actual_revenue.city_breakdown}
-        />
-      </div>
+      {/* Revenue Summary */}
+      <RevenueSummaryCards estimated={estimated_revenue} actual={actual_revenue} plan={plan} />
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <Card className="p-4 text-center">
-          <p className="text-sm text-muted-foreground">Target</p>
-          <p className="text-xl font-bold">{formatCurrency(plan.total_amount, true)}</p>
-        </Card>
-        <Card className="p-4 text-center">
-          <p className="text-sm text-muted-foreground">Estimated</p>
-          <p className="text-xl font-bold text-green-600">{formatCurrency(estimated_revenue.achieved, true)}</p>
-        </Card>
-        <Card className="p-4 text-center">
-          <p className="text-sm text-muted-foreground">Actual</p>
-          <p className="text-xl font-bold text-blue-600">{formatCurrency(actual_revenue.achieved, true)}</p>
-        </Card>
-        <Card className="p-4 text-center">
-          <p className="text-sm text-muted-foreground">Gap</p>
-          <p className={cn(
-            "text-xl font-bold",
-            actual_revenue.remaining > 0 ? 'text-amber-600' : 'text-green-600'
-          )}>
-            {actual_revenue.remaining > 0 ? formatCurrency(actual_revenue.remaining, true) : (
-              <span className="flex items-center justify-center gap-1">
-                <CheckCircle className="h-5 w-5" /> Met!
-              </span>
-            )}
-          </p>
-        </Card>
-      </div>
-
-      {/* Allocations Section */}
-      <AllocationSection 
+      {/* Hierarchical Allocations Section - Full Width */}
+      <HierarchicalAllocationSection 
         planId={planId} 
         allocations={allocations} 
         onUpdate={fetchDashboard}
