@@ -45,7 +45,9 @@ import {
   Award,
   User,
   ArrowUpRight,
-  Pencil
+  Pencil,
+  Banknote,
+  BarChart3
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -253,6 +255,154 @@ function RevenueSummaryCards({ estimated, actual, plan }) {
         </div>
       </Card>
     </div>
+  );
+}
+
+// Monthly Performance Table
+function MonthlyPerformanceTable({ monthlyData, plan }) {
+  const target = plan.total_amount || 0;
+  
+  // Calculate totals
+  const totalInvoice = monthlyData.reduce((sum, m) => sum + (m.invoice_value || 0), 0);
+  const totalCollections = monthlyData.reduce((sum, m) => sum + (m.collections || 0), 0);
+
+  return (
+    <Card className="p-6 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-semibold text-lg flex items-center gap-2">
+          <BarChart3 className="h-5 w-5 text-primary" />
+          Monthly Performance
+        </h3>
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Monthly Target:</span>
+          <span className="font-bold text-primary">{formatCurrency(target, true)}</span>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b text-left">
+              <th className="pb-3 font-semibold text-sm text-muted-foreground">Month</th>
+              <th className="pb-3 font-semibold text-sm text-muted-foreground text-right">Target</th>
+              <th className="pb-3 font-semibold text-sm text-muted-foreground text-right">
+                <span className="flex items-center justify-end gap-1">
+                  <Receipt className="h-3 w-3" /> Invoice Value
+                </span>
+              </th>
+              <th className="pb-3 font-semibold text-sm text-muted-foreground text-center">Achievement</th>
+              <th className="pb-3 font-semibold text-sm text-muted-foreground text-right">
+                <span className="flex items-center justify-end gap-1">
+                  <Banknote className="h-3 w-3" /> Collections
+                </span>
+              </th>
+              <th className="pb-3 font-semibold text-sm text-muted-foreground text-center">Collection %</th>
+            </tr>
+          </thead>
+          <tbody>
+            {monthlyData.map((month, idx) => {
+              const achievementPercent = target > 0 ? Math.round((month.invoice_value / target) * 100) : 0;
+              const collectionPercent = month.invoice_value > 0 ? Math.round((month.collections / month.invoice_value) * 100) : 0;
+              const isFuture = !month.is_current && !month.is_past;
+              
+              return (
+                <tr 
+                  key={idx} 
+                  className={cn(
+                    "border-b last:border-0",
+                    month.is_current && "bg-blue-50",
+                    isFuture && "opacity-50"
+                  )}
+                >
+                  <td className="py-3">
+                    <div className="flex items-center gap-2">
+                      <span className={cn(
+                        "font-medium",
+                        month.is_current && "text-blue-700"
+                      )}>
+                        {month.month}
+                      </span>
+                      {month.is_current && (
+                        <Badge className="bg-blue-100 text-blue-700 text-[10px]">Current</Badge>
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-3 text-right font-medium">{formatCurrency(target, true)}</td>
+                  <td className="py-3 text-right">
+                    {isFuture ? (
+                      <span className="text-muted-foreground italic">-</span>
+                    ) : (
+                      <span className="font-semibold">{formatCurrency(month.invoice_value, true)}</span>
+                    )}
+                  </td>
+                  <td className="py-3">
+                    {isFuture ? (
+                      <span className="text-muted-foreground italic text-center block">-</span>
+                    ) : (
+                      <div className="flex items-center gap-2 justify-center">
+                        <div className="w-16 h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className={cn(
+                              "h-full rounded-full",
+                              achievementPercent >= 100 ? "bg-green-500" : 
+                              achievementPercent >= 75 ? "bg-teal-500" :
+                              achievementPercent >= 50 ? "bg-amber-500" : "bg-red-400"
+                            )}
+                            style={{ width: `${Math.min(100, achievementPercent)}%` }}
+                          />
+                        </div>
+                        <span className={cn(
+                          "text-sm font-semibold w-12",
+                          achievementPercent >= 100 ? "text-green-600" : 
+                          achievementPercent >= 75 ? "text-teal-600" :
+                          achievementPercent >= 50 ? "text-amber-600" : "text-red-500"
+                        )}>
+                          {achievementPercent}%
+                        </span>
+                      </div>
+                    )}
+                  </td>
+                  <td className="py-3 text-right">
+                    {isFuture ? (
+                      <span className="text-muted-foreground italic">-</span>
+                    ) : (
+                      <span className="font-medium text-green-700">{formatCurrency(month.collections, true)}</span>
+                    )}
+                  </td>
+                  <td className="py-3 text-center">
+                    {isFuture ? (
+                      <span className="text-muted-foreground italic">-</span>
+                    ) : (
+                      <span className={cn(
+                        "text-sm font-medium",
+                        collectionPercent >= 80 ? "text-green-600" : 
+                        collectionPercent >= 50 ? "text-amber-600" : "text-red-500"
+                      )}>
+                        {collectionPercent}%
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 bg-gray-50 font-semibold">
+              <td className="py-3">Total</td>
+              <td className="py-3 text-right">{formatCurrency(target * monthlyData.length, true)}</td>
+              <td className="py-3 text-right">{formatCurrency(totalInvoice, true)}</td>
+              <td className="py-3 text-center">
+                {target > 0 ? Math.round((totalInvoice / (target * monthlyData.filter(m => m.is_past || m.is_current).length || 1)) * 100) : 0}%
+              </td>
+              <td className="py-3 text-right text-green-700">{formatCurrency(totalCollections, true)}</td>
+              <td className="py-3 text-center">
+                {totalInvoice > 0 ? Math.round((totalCollections / totalInvoice) * 100) : 0}%
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </Card>
   );
 }
 
@@ -1081,7 +1231,7 @@ export default function TargetPlanDashboard() {
     );
   }
 
-  const { plan, timeline, estimated_revenue, actual_revenue, allocations } = dashboardData;
+  const { plan, timeline, estimated_revenue, actual_revenue, allocations, monthly_breakdown } = dashboardData;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -1100,7 +1250,7 @@ export default function TargetPlanDashboard() {
             </div>
             <p className="text-muted-foreground flex items-center gap-2 mt-1">
               <Target className="h-4 w-4" />
-              Total Target: <span className="font-semibold text-foreground">{formatCurrency(plan.total_amount)}</span>
+              Monthly Target: <span className="font-semibold text-foreground">{formatCurrency(plan.total_amount)}</span>
               <span className="text-xs">• {plan.milestones || 4} Milestones</span>
             </p>
           </div>
@@ -1109,6 +1259,11 @@ export default function TargetPlanDashboard() {
 
       {/* Timeline Progress */}
       <TimelineProgressBar timeline={timeline} plan={plan} />
+
+      {/* Monthly Performance Table */}
+      {monthly_breakdown && monthly_breakdown.length > 0 && (
+        <MonthlyPerformanceTable monthlyData={monthly_breakdown} plan={plan} />
+      )}
 
       {/* Revenue Summary */}
       <RevenueSummaryCards estimated={estimated_revenue} actual={actual_revenue} plan={plan} />

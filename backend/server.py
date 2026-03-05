@@ -11394,9 +11394,62 @@ async def get_target_planning_dashboard(
             'invoices_count': len(invoices),
             'city_breakdown': city_breakdown
         },
+        'monthly_breakdown': await get_monthly_breakdown(plan, start_date, end_date, today),
         'allocations': territories_with_children,
         'all_allocations': all_allocations
     }
+
+
+async def get_monthly_breakdown(plan, start_date, end_date, today):
+    """Calculate monthly revenue breakdown for a target plan"""
+    monthly_data = []
+    current = start_date.replace(day=1)
+    
+    while current <= end_date:
+        month_start = current.strftime('%Y-%m-01')
+        if current.month == 12:
+            next_month = current.replace(year=current.year + 1, month=1, day=1)
+        else:
+            next_month = current.replace(month=current.month + 1, day=1)
+        month_end = (next_month - timedelta(days=1)).strftime('%Y-%m-%d')
+        
+        is_past_or_current = current <= today
+        
+        month_entry = {
+            'month': current.strftime('%b %Y'),
+            'month_short': current.strftime('%b'),
+            'month_num': current.month,
+            'year': current.year,
+            'is_current': current.month == today.month and current.year == today.year,
+            'is_past': current < today.replace(day=1),
+            'invoice_value': 0,
+            'collections': 0,
+            'target': plan['total_amount']
+        }
+        
+        if is_past_or_current:
+            # Get invoices for this month
+            invoices = await db.invoices.find({
+                'invoice_date': {'$gte': month_start, '$lte': month_end}
+            }, {'_id': 0}).to_list(500)
+            month_entry['invoice_value'] = sum(inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0 for inv in invoices)
+            month_entry['invoices_count'] = len(invoices)
+            
+            # Get collections (payments) for this month
+            payments = await db.payments.find({
+                'payment_date': {'$gte': month_start, '$lte': month_end}
+            }, {'_id': 0}).to_list(500)
+            month_entry['collections'] = sum(p.get('amount', 0) or 0 for p in payments)
+            month_entry['payments_count'] = len(payments)
+        
+        monthly_data.append(month_entry)
+        
+        if current.month == 12:
+            current = current.replace(year=current.year + 1, month=1)
+        else:
+            current = current.replace(month=current.month + 1)
+    
+    return monthly_data
 
 # Sales roles for resource filtering
 SALES_ROLES_V2 = ['National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Head of Business']
