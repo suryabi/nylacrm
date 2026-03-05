@@ -1334,6 +1334,65 @@ async def get_current_user(request: Request):
     """Get user from cookie or JWT token"""
     return await get_current_user_from_cookie_or_header(request)
 
+@api_router.post("/admin/backdate-won-leads")
+async def backdate_won_leads(request: Request):
+    """Admin endpoint to backdate won leads to a specific date"""
+    body = await request.json()
+    target_date = body.get('target_date', '2026-02-15')
+    dry_run = body.get('dry_run', True)
+    
+    # Parse target date
+    try:
+        backdate = datetime.strptime(target_date, '%Y-%m-%d').replace(
+            hour=12, minute=0, second=0, microsecond=0, tzinfo=timezone.utc
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f'Invalid date format: {target_date}. Use YYYY-MM-DD')
+    
+    # Find leads that are WON or converted to accounts
+    query = {
+        '$or': [
+            {'status': 'won'},
+            {'converted_to_account': True}
+        ]
+    }
+    
+    leads = await db.leads.find(query, {
+        '_id': 0,
+        'id': 1,
+        'lead_id': 1,
+        'company': 1,
+        'status': 1,
+        'converted_to_account': 1,
+        'estimated_value': 1,
+        'updated_at': 1
+    }).to_list(1000)
+    
+    total_value = sum(lead.get('estimated_value', 0) or 0 for lead in leads)
+    
+    result = {
+        'dry_run': dry_run,
+        'target_date': backdate.isoformat(),
+        'leads_found': len(leads),
+        'total_estimated_value': total_value,
+        'leads': leads
+    }
+    
+    if not dry_run:
+        # Perform the update
+        lead_ids = [lead['id'] for lead in leads]
+        update_result = await db.leads.update_many(
+            {'id': {'$in': lead_ids}},
+            {'$set': {'updated_at': backdate.isoformat()}}
+        )
+        result['leads_updated'] = update_result.modified_count
+        result['message'] = f'Successfully updated {update_result.modified_count} leads'
+    else:
+        result['message'] = 'Dry run - no changes made. Set dry_run: false to apply changes.'
+    
+    return result
+
+
 @api_router.post("/admin/setup-production-database")
 async def setup_production_database_endpoint(request: Request):
     """TEMPORARY ENDPOINT: Setup production database - REMOVE AFTER USE"""
