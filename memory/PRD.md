@@ -28,7 +28,32 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 
 ## What's Been Implemented
 
-### Mar 4, 2026 (Session 17 - Current)
+### Mar 5, 2026 (Session 18 - Current)
+
+- **NEW FEATURE**: Complete Hierarchical Target Allocation System
+  - **Purpose**: Enable managers to distribute revenue targets from Plan → Territory → City → Resource levels
+  - **Implementation**:
+    - **Territory Level**: Allocate % or fixed amount of total plan target to territories (e.g., South India ₹48L)
+    - **City Level**: Drill down into territory, allocate to cities within (e.g., Bengaluru ₹20L)
+    - **Resource Level**: Drill down into city, allocate to individual sales resources
+  - **Features**:
+    - **Breadcrumb Navigation**: "All Territories > South India > Bengaluru" with click-to-navigate
+    - **Allocation Cards**: Show amount, progress bar, allocated vs remaining, rank badges (#1, #2, #3 with medals)
+    - **Dynamic Budget Display**: Territory/City Budget and Available to Allocate shown at each level
+    - **Add Allocation Dialog**: Percentage or Amount toggle with real-time calculation
+    - **Cascade Delete**: Deleting parent allocation removes all child allocations
+    - **Resources by Location API**: `/api/target-planning/resources/by-location?city=Bengaluru`
+  - **Backend APIs Added**:
+    - `GET /api/target-planning/{plan_id}/allocations/{allocation_id}/children` - Get child allocations
+    - `GET /api/target-planning/resources/by-location` - Get sales resources filtered by city/territory
+    - Enhanced `POST /api/target-planning/{plan_id}/allocations` with `level`, `parent_allocation_id`, `state` fields
+  - **DB Schema Updates**:
+    - `target_allocations_v2` collection now includes: `level` ('territory'/'city'/'resource'), `parent_allocation_id`, `state`
+  - **Testing**: 100% success rate (Backend 10/10, Frontend all flows verified)
+  - **Test Data**: Plan H2 2026 (₹1.2Cr) with South India territory (₹48L) → Bengaluru city (₹20L)
+  - Status: VERIFIED
+
+### Mar 4, 2026 (Session 17)
 
 - **NEW FEATURE**: Invoice Creation with Automatic COGS/Logistics/Margin Calculation
   - **Purpose**: Enable users to create invoices for accounts with automatic financial calculations
