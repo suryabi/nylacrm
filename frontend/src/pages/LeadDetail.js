@@ -34,6 +34,7 @@ import LogoUploader from '../components/LogoUploader';
 import ExpenseRequestSection from '../components/ExpenseRequestSection';
 import LeadRankingTiles from '../components/LeadRankingTiles';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
+import CelebrationAnimation from '../components/CelebrationAnimation';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -106,6 +107,13 @@ export default function LeadDetail() {
   const [shareEmailMessage, setShareEmailMessage] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
   const [isEmailComposerExpanded, setIsEmailComposerExpanded] = useState(false);
+  
+  // Celebration animation state
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationType, setCelebrationType] = useState('won'); // 'won' or 'customer'
+
+  // Celebration trigger statuses (lowercase for comparison)
+  const CELEBRATION_STATUSES = ['won', 'closed_won', 'active_customer'];
 
   useEffect(() => {
     fetchData();
@@ -461,9 +469,21 @@ ${userEmail}`;
   };
 
   const handleStatusChange = async (newStatus) => {
+    const previousStatus = lead?.status;
     try {
       await leadsAPI.update(id, { status: newStatus });
       toast.success('Status updated successfully');
+      
+      // Check if we should trigger celebration
+      const isNewStatusCelebration = CELEBRATION_STATUSES.includes(newStatus.toLowerCase());
+      const wasPreviouslyCelebration = previousStatus && CELEBRATION_STATUSES.includes(previousStatus.toLowerCase());
+      
+      // Only celebrate if moving TO a celebration status (not already in one)
+      if (isNewStatusCelebration && !wasPreviouslyCelebration) {
+        setCelebrationType(newStatus.toLowerCase().includes('customer') ? 'customer' : 'won');
+        setShowCelebration(true);
+      }
+      
       fetchData();
     } catch (error) {
       const errorMessage = error.response?.data?.detail || 'Failed to update status';
@@ -517,6 +537,7 @@ ${userEmail}`;
       return;
     }
 
+    const previousStatus = lead?.status;
     setSubmittingActivity(true);
     try {
       // First log the activity
@@ -536,7 +557,7 @@ ${userEmail}`;
       
       // Update lead status and follow-up date if provided
       const leadUpdates = {};
-      if (activityStatus) {
+      if (activityStatus && activityStatus !== 'keep_current') {
         leadUpdates.status = activityStatus;
         // If admin set a custom date, also update lead's updated_at
         if (activityDate && isAdmin) {
@@ -549,6 +570,17 @@ ${userEmail}`;
       
       if (Object.keys(leadUpdates).length > 0) {
         await leadsAPI.update(id, leadUpdates);
+        
+        // Check if we should trigger celebration (status changed via activity)
+        if (activityStatus && activityStatus !== 'keep_current') {
+          const isNewStatusCelebration = CELEBRATION_STATUSES.includes(activityStatus.toLowerCase());
+          const wasPreviouslyCelebration = previousStatus && CELEBRATION_STATUSES.includes(previousStatus.toLowerCase());
+          
+          if (isNewStatusCelebration && !wasPreviouslyCelebration) {
+            setCelebrationType(activityStatus.toLowerCase().includes('customer') ? 'customer' : 'won');
+            setShowCelebration(true);
+          }
+        }
       }
       
       toast.success('Activity logged successfully');
@@ -602,12 +634,19 @@ ${userEmail}`;
     setConvertingToAccount(true);
     try {
       const response = await accountsAPI.convertFromLead(lead.id);
-      toast.success(`Account created: ${response.data.account_id}`);
-      navigate(`/accounts/${response.data.account_id}`);
+      
+      // Trigger celebration for customer activation
+      setCelebrationType('customer');
+      setShowCelebration(true);
+      
+      // Wait for celebration to show briefly before navigating
+      setTimeout(() => {
+        toast.success(`Account created: ${response.data.account_id}`);
+        navigate(`/accounts/${response.data.account_id}`);
+      }, 1500);
     } catch (error) {
       const message = error.response?.data?.detail || 'Failed to convert lead to account';
       toast.error(message);
-    } finally {
       setConvertingToAccount(false);
     }
   };
@@ -1795,6 +1834,14 @@ ${userEmail}`;
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Celebration Animation */}
+      <CelebrationAnimation
+        show={showCelebration}
+        onComplete={() => setShowCelebration(false)}
+        type={celebrationType}
+        leadName={lead?.company_name || lead?.contact_name || ''}
+      />
     </div>
   );
 }
