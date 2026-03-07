@@ -5,8 +5,15 @@ import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
 import { Card } from '../components/ui/card';
 import { toast } from 'sonner';
-import { Calendar, Send, Loader2, Download, Phone, MapPin, Mail, MessageSquare, Activity, Copy, Check, Share2 } from 'lucide-react';
+import { Calendar, Send, Loader2, Download, Phone, MapPin, Mail, MessageSquare, Activity, Copy, Check, Share2, Users, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -213,6 +220,15 @@ export default function DailyStatusUpdate() {
   const [loading, setLoading] = useState(false);
   const [pastStatuses, setPastStatuses] = useState([]);
   
+  // Resource selection state (for managers to view subordinates' status)
+  const [subordinates, setSubordinates] = useState([]);
+  const [selectedResource, setSelectedResource] = useState('');
+  const [loadingSubordinates, setLoadingSubordinates] = useState(false);
+  
+  // Check if viewing own status or subordinate's
+  const isViewingOwnStatus = !selectedResource || selectedResource === user?.id;
+  const viewingUserId = selectedResource || user?.id;
+  
   // Three sections state (simplified - removed AI revision state)
   const [yesterdayUpdates, setYesterdayUpdates] = useState('');
   const [todayActions, setTodayActions] = useState('');
@@ -220,19 +236,46 @@ export default function DailyStatusUpdate() {
   const [hasFetchedActivities, setHasFetchedActivities] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Fetch all subordinates at any level
+  const fetchSubordinates = useCallback(async () => {
+    if (!user?.id) return; // Don't fetch if user not logged in
+    
+    setLoadingSubordinates(true);
+    try {
+      const response = await axios.get(`${API_URL}/users/subordinates/all`, {
+        withCredentials: true
+      });
+      setSubordinates(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch subordinates:', error);
+      setSubordinates([]);
+    } finally {
+      setLoadingSubordinates(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchSubordinates();
+    }
+  }, [user?.id, fetchSubordinates]);
+
   useEffect(() => {
     fetchPastStatuses();
-  }, []);
+  }, [selectedResource]);
 
   useEffect(() => {
     loadExistingStatus();
-  }, [selectedDate, pastStatuses]);
+  }, [selectedDate, pastStatuses, selectedResource]);
 
   const fetchPastStatuses = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_URL}/daily-status`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const params = new URLSearchParams();
+      if (selectedResource) {
+        params.append('user_id', selectedResource);
+      }
+      const response = await axios.get(`${API_URL}/daily-status?${params.toString()}`, {
+        withCredentials: true
       });
       setPastStatuses(response.data);
     } catch (error) {
@@ -528,45 +571,94 @@ export default function DailyStatusUpdate() {
         </p>
       </Card>
 
-      {/* Fetch from Lead Activities Button - Dynamic text */}
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full h-14 text-base font-medium border-dashed border-slate-300 dark:border-slate-600"
-        onClick={handleFetchFromActivities}
-        disabled={loading}
-        data-testid="fetch-activities-button"
-      >
-        {loading ? (
-          <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Loading activities...</>
-        ) : (
-          <><Download className="h-5 w-5 mr-2" /> 
-            {isToday ? "Fetch Today's Lead Activities" : 
-             isYesterday ? "Fetch Yesterday's Lead Activities" :
-             `Fetch Lead Activities from ${format(new Date(selectedDate), 'MMM d')}`}
-          </>
-        )}
-      </Button>
+      {/* Resource Selection - For managers to view subordinates' status */}
+      {subordinates.length > 0 && (
+        <Card className="p-5 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
+          <div className="flex items-center gap-2 mb-3">
+            <Users className="h-4 w-4 text-primary" />
+            <label className="text-sm font-semibold">View Status For</label>
+          </div>
+          <Select 
+            value={selectedResource || 'self'} 
+            onValueChange={(val) => {
+              setSelectedResource(val === 'self' ? '' : val);
+              setYesterdayUpdates('');
+              setTodayActions('');
+              setHelpNeeded('');
+              setHasFetchedActivities(false);
+            }}
+          >
+            <SelectTrigger className="w-full h-12 text-base" data-testid="resource-selector">
+              <SelectValue placeholder="Select a team member" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="self">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">Myself</span>
+                  <span className="text-xs text-muted-foreground">({user?.name})</span>
+                </div>
+              </SelectItem>
+              {subordinates.map((sub) => (
+                <SelectItem key={sub.id} value={sub.id}>
+                  <div className="flex items-center justify-between w-full">
+                    <span className="font-medium">{sub.name}</span>
+                    <span className="text-xs text-muted-foreground ml-2">{sub.role}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {!isViewingOwnStatus && (
+            <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+              <Activity className="h-3 w-3" />
+              Viewing {subordinates.find(s => s.id === selectedResource)?.name}'s daily status (read-only)
+            </p>
+          )}
+        </Card>
+      )}
+
+      {/* Fetch from Lead Activities Button - Dynamic text (only show for own status) */}
+      {isViewingOwnStatus && (
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full h-14 text-base font-medium border-dashed border-slate-300 dark:border-slate-600"
+          onClick={handleFetchFromActivities}
+          disabled={loading}
+          data-testid="fetch-activities-button"
+        >
+          {loading ? (
+            <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Loading activities...</>
+          ) : (
+            <><Download className="h-5 w-5 mr-2" /> 
+              {isToday ? "Fetch Today's Lead Activities" : 
+               isYesterday ? "Fetch Yesterday's Lead Activities" :
+               `Fetch Lead Activities from ${format(new Date(selectedDate), 'MMM d')}`}
+            </>
+          )}
+        </Button>
+      )}
 
       {/* Section 1: Yesterday's Updates / Today's Updates / Date-specific */}
       <StatusSection
         title={firstSectionTitle}
         value={yesterdayUpdates}
-        onChange={setYesterdayUpdates}
+        onChange={isViewingOwnStatus ? setYesterdayUpdates : () => {}}
         placeholder={isToday ? "What did you accomplish today? Enter each item on a new line..." : "What did you accomplish on this day? Enter each item on a new line..."}
         showCopyButton={hasFetchedActivities}
         onCopy={handleCopyActivities}
         copied={copied}
         onShare={handleShareActivities}
         canShare={canShare}
+        disabled={!isViewingOwnStatus}
       />
 
-      {/* Section 2: Today's / Tomorrow's Action Items (Disabled for past dates) */}
+      {/* Section 2: Today's / Tomorrow's Action Items (Disabled for past dates or viewing others) */}
       <StatusSection
         title={secondSectionTitle}
         value={todayActions}
-        onChange={setTodayActions}
-        disabled={isPastDate}
+        onChange={isViewingOwnStatus ? setTodayActions : () => {}}
+        disabled={isPastDate || !isViewingOwnStatus}
         placeholder={isToday ? "What are your plans for tomorrow? Enter each item on a new line..." : "What are your plans for today? Enter each item on a new line..."}
       />
 
@@ -574,24 +666,27 @@ export default function DailyStatusUpdate() {
       <StatusSection
         title="Help Needed from the Team"
         value={helpNeeded}
-        onChange={setHelpNeeded}
+        onChange={isViewingOwnStatus ? setHelpNeeded : () => {}}
         placeholder="Do you need support from colleagues? Enter each item on a new line..."
+        disabled={!isViewingOwnStatus}
       />
 
-      {/* Submit Button - Prominent & Mobile-Friendly */}
-      <Button
-        type="button"
-        className="w-full h-16 text-lg font-semibold"
-        onClick={handleSubmit}
-        disabled={loading}
-        data-testid="submit-status-button"
-      >
-        {loading ? (
-          <><Loader2 className="h-6 w-6 mr-2 animate-spin" /> Saving...</>
-        ) : (
-          <><Send className="h-6 w-6 mr-2" /> Post Status Update</>
-        )}
-      </Button>
+      {/* Submit Button - Only show for own status */}
+      {isViewingOwnStatus && (
+        <Button
+          type="button"
+          className="w-full h-16 text-lg font-semibold"
+          onClick={handleSubmit}
+          disabled={loading}
+          data-testid="submit-status-button"
+        >
+          {loading ? (
+            <><Loader2 className="h-6 w-6 mr-2 animate-spin" /> Saving...</>
+          ) : (
+            <><Send className="h-6 w-6 mr-2" /> Post Status Update</>
+          )}
+        </Button>
+      )}
 
       {/* Past Statuses - with bulleted display */}
       {pastStatuses.length > 0 && (

@@ -5532,12 +5532,39 @@ async def get_daily_statuses(
 ):
     query = {}
     
-    # Leadership can see all statuses, others see only their own
-    if current_user['role'] in ['ceo', 'director', 'vp', 'admin']:
-        if user_id:
+    # If user_id is provided, check if current user can view it
+    if user_id and user_id != current_user['id']:
+        # Leadership can see all statuses
+        if current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'CEO', 'Director', 'Vice President', 'Admin']:
             query['user_id'] = user_id
+        else:
+            # Check if the requested user is a subordinate (direct or indirect)
+            async def is_subordinate(manager_id, target_id, visited=None):
+                if visited is None:
+                    visited = set()
+                if manager_id in visited:
+                    return False
+                visited.add(manager_id)
+                
+                direct_reports = await db.users.find(
+                    {'reports_to': manager_id, 'is_active': True},
+                    {'_id': 0, 'id': 1}
+                ).to_list(100)
+                
+                for report in direct_reports:
+                    if report['id'] == target_id:
+                        return True
+                    if await is_subordinate(report['id'], target_id, visited):
+                        return True
+                return False
+            
+            if await is_subordinate(current_user['id'], user_id):
+                query['user_id'] = user_id
+            else:
+                # Not authorized to view this user's status
+                query['user_id'] = current_user['id']
     else:
-        query['user_id'] = current_user['id']
+        query['user_id'] = user_id if user_id else current_user['id']
     
     if start_date:
         query['status_date'] = {'$gte': start_date}

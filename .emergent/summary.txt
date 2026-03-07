@@ -2,65 +2,76 @@
 The user wants to build a comprehensive, mobile-ready Sales CRM application.
 
 PRODUCT REQUIREMENTS added in this session:
-1.  **Hierarchical Target Allocation**: Implemented a full Territory -> City -> Resource allocation system.
-2.  **Target Allocation UI Redesign**: The UI was redesigned from a drill-down system to a side-by-side card layout (like subscription plans) that shows allocated vs. achieved revenue for each city and allows editing allocations.
-3.  **Target Goal Types**: Introduced two distinct types of target plans:
-    *   **Cumulative Target**: A simple total revenue goal for the period.
-    *   **Monthly Run Rate**: A goal to build up to a specific monthly recurring revenue figure by the end of the period.
-4.  **Dashboard V1 for Goal Types**: Created distinct dashboard views for each goal type. The Run Rate plan included a detailed table showing the linear ramp-up to the target.
-5.  **Module Deprecation**: The old, legacy Target module was completely removed from the frontend (pages, routes) and backend (API endpoints, models).
-6.  **Dashboard V2 Redesign (New Requirement)**: The user has requested a significant redesign of the Target Plan Dashboard for both goal types to make them more focused and less cluttered.
+1.  **Dashboard Redesign (Cumulative & Run Rate)**: The Target Plan Dashboard was redesigned with distinct, cleaner layouts for Cumulative and Monthly Run Rate goal types.
+2.  **Server.py Refactoring**: A large-scale refactoring of the monolithic  was initiated, breaking it down into a modular, domain-driven structure with separate router files (e.g., , ).
+3.  **On-boarded Customer Revenue Logic**: The logic for the Estimated Revenue widget on the cumulative target dashboard was changed to calculate revenue from leads that were set to 'WON' and either stayed 'WON' or were converted to an active account within the target period.
+4.  **UI/UX Overhaul**: The Target Plan dashboard widgets (Timeline, Revenue Stats) were combined into a single, modern component, and Territory Cards were restyled with appealing gradients.
+5.  **Login Flow Fixes**: The post-login redirect was fixed to land on the  page seamlessly, without requiring a page refresh or showing a toast message.
+6.  **Admin Data Management Scripts**: Provided scripts (Python, JS, and a browser console version via a new admin API endpoint) to allow an admin to backdate the 'WON' status of leads to a specific date (e.g., February).
+7.  **Homepage Cleanup**: Removed the Recent Activity widget from the Home page.
+8.  **Report Cleanup**: Removed all references to Target metrics (e.g., Target x SKU, Target Revenue, Achievement %) from the SKU Performance and Resource Performance reports under the Dashboard section.
+9.  **Admin Account Deletion**: Added functionality for 'CEO' and 'Director' roles to delete customer accounts from both the list and detail pages.
+10. **Admin Activity Backdating**: Provided an 'Activity Date' field in the Log Activity form, visible only to admins, allowing them to backdate a lead's status change and associated activity log.
+11. **Hierarchical Daily Status View**: Implement a feature on the Daily Status page for managers to select any subordinate (direct or indirect) from a dropdown and view their status report.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack Sales CRM application featuring a new Target Planning module that supports both Cumulative and Monthly Run Rate goal types. The system allows for creating plans and performing hierarchical revenue target allocations (Territory -> City -> Resource) via a side-by-side card interface. The old Target module has been successfully deprecated and removed. The application is stable, but the user has just requested a major redesign of the Target Plan Dashboard's UI and data presentation logic.
+The application is a full-stack Sales CRM. It features a robust, redesigned Target Planning module and a partially refactored FastAPI backend that is now more modular. Multiple UI/UX enhancements have been implemented, including a redesigned target dashboard, an improved login flow, and cleaned-up reports. Admins have new capabilities, such as deleting accounts and backdating lead activities. The agent was implementing a feature to allow managers to view daily status reports for their subordinates.
 
 **Last working item**:
--   **Last item agent was working:** The agent was about to begin implementing a new, detailed set of user requirements to redesign the Target Plan Dashboard. The user specified different layouts and data points for Cumulative vs. Monthly Run Rate plans.
--   **Status:** NOT STARTED
+-   **Last item agent was working:** The agent was trying to fix a bug preventing the Daily Status page from fetching a list of a manager's subordinates. This list is required to populate a dropdown that allows managers to view their team's status reports.
+-   **Status:** BLOCKED
 -   **Agent Testing Done:** N
--   **Which testing method agent to use?** Frontend testing agent. The required changes are primarily in the UI and display logic within the  component.
+-   **Which testing method agent to use?** Backend testing agent. The issue is a persistent 401 error from the backend API, and a focused test is needed to diagnose the authentication problem on the  endpoint.
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   There are no pending bugs. The work is driven by a new feature/redesign request.
+-   **Issue 1: Subordinates API Endpoint Fails with 401 Unauthorized (P0)**
+    -   **Description:** The  endpoint consistently returns a 401 Unauthorized error, even for authenticated users. This blocks the Daily Status page from fetching the list of subordinates for the manager view feature.
+    -   **Attempted fixes:**
+        1.  The agent identified a FastAPI route-ordering conflict where the dynamic route  was incorrectly matching the request before the static route .
+        2.  The agent corrected the order in , moving the  before the user detail router.
+        3.  Despite this logical fix, tests continued to show 401 errors, suggesting the fix was not applied correctly, the backend didn't restart, or another authentication issue exists.
+    -   **Next debug checklist:**
+        1.  Force-restart the backend server to ensure the code changes are active: backend: stopped
+backend: started.
+        2.  Re-examine the FastAPI dependency  to ensure it's correctly authenticating requests that use cookies.
+        3.  Add temporary logging/print statements to the  endpoint in  and its authentication dependency to trace where the request fails.
+        4.  Run a definitive  command with the correct session cookie to isolate the problem from any test environment flakiness.
+    -   **Why fix this issue and what will be achieved with the fix?** Fixing this will unblock the development of the hierarchical daily status view, a key user request.
+    -   **Status:** BLOCKED
+    -   **Is recurring issue?** Y
+    -   **Should Test frontend/backend/both after fix?** Backend
+    -   **Blocked on other issue:** None. This is the primary blocker.
 
 **In progress Task List**:
--   **Task 1: Redesign Target Plan Dashboard based on Goal Type**
-    -   **Priority:** P0
-    -   **Where to resume:** The agent must begin modifying  to implement the new display logic.
-    -   **Requirements for Monthly Run Rate plan:**
-        1.  Remove the Estimated Revenue and Actual Revenue widgets.
-        2.  In the Monthly Performance table, show only the current month and past months. Hide future months.
-        3.  Remove the Expected Run Rate and vs Expected columns.
-        4.  Rename the Monthly Revenue column to Revenue Added.
-        5.  Add a new column: % of Target Run rate Achieved.
-        6.  Remove the Collections and Collection % columns.
-    -   **Requirements for Cumulative Target plan:**
-        1.  Remove the entire Monthly Performance table.
-        2.  Keep the Estimated Revenue widget but rename its title to Revenue from Won leads this month.
-        3.  Remove the Actual Revenue widget entirely.
-    -   **What will be achieved with this?** A cleaner, more focused dashboard that is tailored to the specific logic of each target goal type, fulfilling the user's explicit request.
-    -   **Status:** NOT STARTED
-    -   **Should Test frontend/backend/both after fix?** Both. Frontend is primary, but the backend API may need to be adjusted to provide slightly different data for these simplified views.
+-   **Task 1: Implement Hierarchical Daily Status View**
+    -   **Description:** Add a dropdown on the Daily Status page for managers to select a subordinate and view their status report.
+    -   **Where to resume:** The frontend logic in  is mostly complete. Once the backend API  is fixed, the dropdown should populate, and the feature should become functional. The final step is to verify the read-only state when viewing another user's report.
+    -   **What will be achieved with this?** Managers will gain visibility into their team's daily activities.
+    -   **Status:** BLOCKED
+    -   **Should Test frontend/backend/both after fix?** Both
+    -   **Blocked on something:** Issue 1: Subordinates API Endpoint Fails with 401 Unauthorized.
 
 **Upcoming and Future Tasks**
 -   **Upcoming Tasks:**
-    -   **P0: Refactor :** Break down the monolithic  into smaller, domain-specific  modules (e.g., , , ). This is a high-priority technical debt item.
+    -   **P0: Complete  Refactoring:** Move all remaining endpoints from the legacy  file into their respective modular router files.
     -   **P1: Admin Settings for Hardcoded Rules:** Create a settings page for admins to configure financial rules that are currently hardcoded (e.g., , ).
 -   **Future Tasks:**
     -   **P1: Build Out Placeholder Modules:** Implement functionality for the empty modules (Maintenance, Inventory, Quality Control, Assets, Vendors).
     -   **P2: Google Workspace Authentication:** Implement Google Workspace login as a full authentication method.
 
 **Completed work in this session**
--   **Feature: Target Goal Types:** Implemented a  selection ('Cumulative' vs. 'Monthly Run Rate') when creating target plans and built out distinct dashboard views for each.
--   **Feature: Redesigned Target Allocation UI:** Replaced the drill-down allocation system with a side-by-side card layout showing city-level allocations with achieved revenue and edit functionality.
--   **Task: Removed Old Target Module:** Successfully deprecated and deleted all frontend files, routes, backend API endpoints, and Pydantic models related to the legacy Target module.
--   **Bug Fix: Immediate UI Refresh:** Fixed a bug where territory cards would not refresh instantly after adding a new city allocation.
--   **Bug Fix: Filtered Allocation Dropdown:** Corrected the Add Territory dialog to only show territories that have not yet been allocated.
--   **Bug Fix: FastAPI Route Reordering:** Resolved a routing conflict by reordering API endpoints to ensure specific paths were matched before dynamic ones.
--   **UI Fix:** Corrected overlapping text on the  component.
+-   **Feature: Target Plan Dashboard Redesign:** Implemented new, distinct UIs for Cumulative and Monthly Run Rate target plans.
+-   **Refactor: Backend  Monolith:** Initiated a major refactoring, moving significant portions of  into a new  directory with domain-specific files.
+-   **Feature: Admin Account Deletion:** Enabled 'CEO' and 'Director' roles to delete accounts.
+-   **Feature: Admin Activity Backdating:** Added an admin-only 'Activity Date' field to backdate lead status changes.
+-   **Feature: Data Management Script:** Created a backend API and browser console script to backdate 'WON' leads.
+-   **Fix: Login Flow:** Corrected the post-login behavior to redirect users seamlessly to the home page without requiring a refresh.
+-   **UI/UX: Component Redesign:** Combined the timeline and revenue widgets on the target dashboard into a single modern component and applied new gradient styles to territory cards.
+-   **UI/UX: Report & Homepage Cleanup:** Removed all target-related data from dashboard reports and removed the Recent Activity section from the homepage.
+-   **Fix: Timeline UI Overlap:** Resolved an issue where milestone text overlapped on the timeline progress bar.
 
 **Earlier issues found/mentioned but not fixed**
 -   None.
@@ -72,63 +83,65 @@ A full-stack Sales CRM application featuring a new Target Planning module that s
 
 
 **Key Technical Concepts**
--   **Conditional Rendering by Data Type:** The dashboard's UI must render completely different components and data points based on the  of the target plan ( vs. ).
--   **Code Deprecation:** Safely removed a legacy feature module (Targets) by deleting frontend components/routes and backend API endpoints, cleaning up the codebase significantly.
--   **Component-Driven UI:** The dashboard is composed of several new, specialized components (, , ) that will now need to be conditionally rendered.
--   **State Management for UI Refresh:** Implemented logic to refetch data and update the UI immediately after a child entity (like a city allocation) is created.
+-   **Backend Refactoring (Monolith to Modular Routers):** Breaking down a large  into domain-specific  instances to improve maintainability and organization.
+-   **FastAPI Route Precedence:** Understanding that FastAPI matches routes in the order they are defined, which caused a bug where a dynamic path () was incorrectly capturing a static path ().
+-   **Recursive Data Fetching:** The  function in the backend traverses a user hierarchy to fetch all direct and indirect reports.
+-   **Role-Based Conditional Rendering:** The frontend uses the user's role (, ) from the  to conditionally render UI elements like delete buttons and admin-only form fields.
 
 **key DB schema**
--   ****:
-    -   Added  (String): Stores 'cumulative' or 'run_rate'.
-    -   The  array now supports a nested  key to represent the Territory -> City -> Resource hierarchy.
+-   No schema changes were made in this session.
 
 **changes in tech stack**
 -   None.
 
 **All files of reference**
--    (Primary file for the next task)
--    (The dashboard endpoint may need modification)
--    (Recently simplified)
--   
+-    (Location of the P0 bug)
+-    (Frontend for the blocked feature)
+-    (Partially refactored monolith)
+-    (Recently redesigned)
+-    (Recently fixed)
+-    (Recently fixed)
 -   
 
 **Areas that need refactoring**:
--    remains a large monolith. Refactoring is the highest priority technical debt and is the next task after the current dashboard redesign.
+-   : The refactoring is incomplete. There are still many routes in this file that need to be migrated to their respective modular router files in the  directory.
 
 **key api endpoints**
+-   **New:**
+    -   : Admin-only endpoint to backdate the  field for 'WON' leads.
+-   **Problematic:**
+    -   : Fails with a 401 error, blocking the Daily Status feature.
 -   **Modified:**
-    -   : Modified to accept a  ('cumulative' or 'run_rate').
-    -   : Heavily modified to return nested allocation data and monthly performance data. Will likely need adjustments for the new dashboard design.
-    -   : New endpoint to edit allocations.
--   **Removed:**
-    -   All old  endpoints and their dependencies have been deleted from .
+    -   : Now functional for admin roles.
+    -   : Modified to accept a custom  date from admins.
+    -   : Modified to accept a custom  date when status is changed by an admin.
+    -   : Backend logic was updated to allow managers to query for their subordinates' statuses.
 
 **Critical Info for New Agent**
--   Your immediate P0 task is to implement the user's latest, very specific requirements for the .
--   The dashboard's content must now change drastically depending on whether the plan's  is Cumulative Target or Monthly Run Rate.
--   Carefully follow the detailed list of changes in the **In progress Task List** for each goal type. This is a significant redesign, not a minor tweak.
--   Once the dashboard redesign is complete and verified, the next priority is to begin refactoring the  monolith.
+-   Your immediate priority is the **P0 blocker**: the  endpoint is returning a  error.
+-   The previous agent correctly identified a route ordering issue in  and attempted a fix. You must verify if this fix was successfully applied and if the backend was restarted. If the issue persists, you need to debug the authentication flow for this specific endpoint, as detailed in the **All Pending/In progress Issue list**.
+-   Do not proceed with any other tasks until this API endpoint is returning a 200 OK status for an authenticated manager. Fixing this will unblock the  feature.
 
 **documents and test reports created in this job**
 -   
 -    (updated)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  : And if the target plan type is Cumulative Target... - **Pending**. This is the final part of the new redesign request for the dashboard.
-2.  : ...in the Monthly Performance section. Only show the current month and previous months... - **Pending**. This is part of the new redesign request.
-3.  : Remove estimated revenue and actual revenue modules... - **Pending**. This is the start of the new redesign request for the dashboard.
-4.  : No the requirements is understood diffferently... [explains Run Rate goal] - **Done**. Agent understood and implemented the Monthly Run Rate goal type and dashboard.
-5.  : target planning list should not show all the data... - **Done**. Agent simplified the list page and moved details to the dashboard.
-6.  : on the target listing in addition to time elapsed and allocated and show also the achieved progress bar - **Done**.
-7.  : check the right bottom corner of the section, the text is overlapped... - **Done**. Agent fixed the timeline progress bar UI.
-8.  : In territory allocations section, in Add territory pop-up... only remaining territories... should only be shown - **Done**.
-9.  : After adding the city allocation, the tile need to be refreshed to reflect the city allocation immediately - **Done**.
-10. : The cities that are associated with the territories are not getting populated in target detail page - **Done**. This was a misunderstanding; the agent verified cities were populating correctly.
+1.  : Requested a dropdown in the Daily Status module to view reports for any subordinate. **IN PROGRESS / BLOCKED**
+2.  : Requested an option for admins to set/change the date for lead status/activity logs. **DONE**
+3.  : Requested a delete option for Accounts for admin roles. **DONE**
+4.  : Requested removal of all Target references from the Dashboard reports (SKU/Resource Performance). **DONE**
+5.  : Requested removal of Target x SKU and Target x Resource modules from the dashboard submenu. **DONE**
+6.  : Reported that the user remains on the login page after login and needs a force refresh. **DONE**
+7.  : Requested removal of the Recent Activity widget from the Home page. **DONE**
+8.  : Requested a script to run in the browser console to backdate leads. **DONE**
+9.  : Requested a script to backdate 'WON' leads in production. **DONE**
+10. : Requested that login should not show a toast message and should redirect directly to the home page. **DONE**
 
 **Project Health Check:**
--   **Broken**: None.
--   **Mocked**: The  component is functional but does not meet the user's latest requirements. It is the focus of the next set of changes.
--   **Refactoring Needed**:  is a monolith and is explicitly marked as the next high-priority refactoring task.
+-   **Broken**: The Daily Status page's new feature is broken due to the backend 401 error.
+-   **Mocked**: None.
+-   **Refactoring Needed**:  is only partially refactored and remains a source of technical debt.
 
 **3rd Party Integrations**
 -   Zoom API (for meetings)
@@ -140,10 +153,10 @@ A full-stack Sales CRM application featuring a new Target Planning module that s
 -   Amazon MQ (via Stomp.py, for receiving invoice data)
 
 **Testing status**
--   **Testing agent used after significant changes**: YES, to validate the full hierarchical allocation system.
+-   **Testing agent used after significant changes**: NO (Agent was about to, but got blocked)
 -   **Troubleshoot agent used after agent stuck in loop**: NO
 -   **Test files created**: None.
--   **Known regressions**: None.
+-   **Known regressions**: The  endpoint, which may have worked previously, is now failing.
 
 **Credentials to test flow:**
 -   **CEO:**  / 
@@ -151,4 +164,4 @@ A full-stack Sales CRM application featuring a new Target Planning module that s
 -   **Partner - Sales:**  / 
 
 **What agent forgot to execute**
--   The recurring task of refactoring  remains pending but is correctly identified as the next major task after the current feature work is completed. Nothing was forgotten.</analysis>
+-   The agent did not forget any tasks but was unable to complete the Hierarchical Daily Status View due to a persistent backend bug that it was actively debugging.</analysis>

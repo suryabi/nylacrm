@@ -163,6 +163,39 @@ async def get_org_chart(current_user: dict = Depends(get_current_user)):
     return {'users': users, 'top_level': [u['id'] for u in top_level]}
 
 
+@router.get("/subordinates/all")
+async def get_all_subordinates(current_user: dict = Depends(get_current_user)):
+    """Get all subordinates at any level (direct and indirect reports)"""
+    all_subordinates = []
+    visited = set()
+    
+    async def get_reports(manager_id):
+        """Recursively get all reports under a manager"""
+        if manager_id in visited:
+            return
+        visited.add(manager_id)
+        
+        # Find direct reports
+        direct_reports = await db.users.find(
+            {'reports_to': manager_id, 'is_active': True},
+            {'_id': 0, 'password': 0}
+        ).to_list(100)
+        
+        for report in direct_reports:
+            if report['id'] not in [s['id'] for s in all_subordinates]:
+                all_subordinates.append(report)
+                # Recursively get their reports
+                await get_reports(report['id'])
+    
+    # Start from current user
+    await get_reports(current_user['id'])
+    
+    # Sort by name
+    all_subordinates.sort(key=lambda x: x.get('name', ''))
+    
+    return all_subordinates
+
+
 @router.get("/{user_id}")
 async def get_user(user_id: str, current_user: dict = Depends(get_current_user)):
     """Get a single user"""

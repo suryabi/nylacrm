@@ -34,8 +34,8 @@ async def get_current_user_from_cookie_or_header(request: Request):
     session_token = request.cookies.get('session_token')
     
     if session_token:
-        # Look up session in database
-        session = await db.sessions.find_one({'session_token': session_token})
+        # Look up session in database (use user_sessions collection)
+        session = await db.user_sessions.find_one({'session_token': session_token})
         if session:
             # Check if session is expired
             expires_at = session.get('expires_at')
@@ -55,7 +55,7 @@ async def get_current_user_from_cookie_or_header(request: Request):
         
         # First try as session token (UUID format)
         if len(token) == 36 and '-' in token:
-            session = await db.sessions.find_one({'session_token': token})
+            session = await db.user_sessions.find_one({'session_token': token})
             if session:
                 expires_at = session.get('expires_at')
                 if expires_at:
@@ -89,8 +89,8 @@ async def create_session(user_id: str, response: Response = None):
     session_token = str(uuid.uuid4())
     expires_at = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
     
-    # Store session in database
-    await db.sessions.insert_one({
+    # Store session in database (use user_sessions collection)
+    await db.user_sessions.insert_one({
         'session_token': session_token,
         'user_id': user_id,
         'created_at': datetime.now(timezone.utc).isoformat(),
