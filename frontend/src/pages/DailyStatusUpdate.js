@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
 import { Card } from '../components/ui/card';
 import { toast } from 'sonner';
-import { Calendar, Send, Loader2, Download, Phone, MapPin, Mail, MessageSquare, Activity, Copy, Check, Share2, Users, ChevronDown, User, Clock } from 'lucide-react';
+import { Calendar, Send, Loader2, Download, Phone, MapPin, Mail, MessageSquare, Activity, Copy, Check, Share2, Users, ChevronDown, User, Clock, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Select,
@@ -14,6 +14,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -204,7 +214,9 @@ export default function DailyStatusUpdate() {
   const [yesterdayUpdates, setYesterdayUpdates] = useState('');
   const [todayActions, setTodayActions] = useState('');
   const [helpNeeded, setHelpNeeded] = useState('');
-
+  
+  // Confirmation dialog state
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   // Fetch subordinates
   const fetchSubordinates = useCallback(async () => {
     if (!user?.id) return;
@@ -284,12 +296,24 @@ export default function DailyStatusUpdate() {
     }
   };
 
-  const handleSubmit = async () => {
+  // Handle submit button click - show confirmation if posting for someone else
+  const handleSubmitClick = () => {
     if (!yesterdayUpdates.trim() && !todayActions.trim() && !helpNeeded.trim()) {
       toast.error('Please fill at least one section');
       return;
     }
+    
+    // If posting for someone else, show confirmation dialog
+    if (!isViewingOwnStatus && selectedResource) {
+      setShowConfirmDialog(true);
+    } else {
+      // Posting for self, submit directly
+      handleSubmit();
+    }
+  };
 
+  const handleSubmit = async () => {
+    setShowConfirmDialog(false);
     setLoading(true);
     try {
       const existing = pastStatuses.find(s => s.status_date === selectedDate);
@@ -425,7 +449,7 @@ export default function DailyStatusUpdate() {
               </Button>
               <Button
                 size="sm"
-                onClick={handleSubmit}
+                onClick={handleSubmitClick}
                 disabled={loading}
                 className="h-9 text-sm px-4 bg-primary hover:bg-primary/90"
                 data-testid="submit-status-button"
@@ -562,6 +586,33 @@ export default function DailyStatusUpdate() {
           </Card>
         )}
       </div>
+
+      {/* Confirmation Dialog for posting on behalf of subordinate */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-500" />
+              Confirm Status Posting
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>
+                You are about to post a daily status on behalf of <span className="font-semibold text-foreground">{selectedSubordinate?.name}</span>.
+              </p>
+              <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-3 text-sm">
+                <p className="text-muted-foreground mb-1">Date: <span className="text-foreground font-medium">{format(new Date(selectedDate), 'EEEE, MMMM d, yyyy')}</span></p>
+                <p className="text-muted-foreground">This action will be recorded as posted by <span className="text-foreground font-medium">{user?.name}</span>.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSubmit} className="bg-primary hover:bg-primary/90">
+              Confirm & Post
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
