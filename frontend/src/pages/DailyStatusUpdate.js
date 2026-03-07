@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
 import { Card } from '../components/ui/card';
 import { toast } from 'sonner';
-import { Calendar, Send, Loader2, Download, Phone, MapPin, Mail, MessageSquare, Activity, Copy, Check, Share2, Users, ChevronDown } from 'lucide-react';
+import { Calendar, Send, Loader2, Download, Phone, MapPin, Mail, MessageSquare, Activity, Copy, Check, Share2, Users, ChevronDown, User, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Select,
@@ -17,195 +17,63 @@ import {
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
-// Styled activity display component with highlighted headers
-const StyledActivityDisplay = ({ text, onChange }) => {
-  if (!text) {
-    return (
-      <Textarea
-        value=""
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="What did you accomplish today? Enter each item on a new line..."
-        rows={8}
-        className="text-base resize-none"
-      />
-    );
-  }
-
-  const lines = text.split('\n').filter(line => line.trim());
-  
-  return (
-    <div className="border rounded-lg p-4 bg-background min-h-[200px] space-y-2">
-      {lines.map((line, index) => {
-        const trimmedLine = line.trim();
-        
-        // Summary line - highlighted with gradient background
-        if (trimmedLine.startsWith('[SUMMARY]')) {
-          const summaryText = trimmedLine.replace('[SUMMARY]', '').trim();
-          return (
-            <div key={index} className="bg-gradient-to-r from-primary/20 to-primary/5 rounded-lg p-3 mb-3">
-              <div className="flex items-center gap-2">
-                <Activity className="h-5 w-5 text-primary" />
-                <span className="font-bold text-primary text-base">{summaryText}</span>
-              </div>
-            </div>
-          );
-        }
-        
-        // Section headers - highlighted
-        if (trimmedLine.startsWith('[HEADER]')) {
-          const headerText = trimmedLine.replace('[HEADER]', '').trim();
-          const iconMap = {
-            'CUSTOMER VISITS': <MapPin className="h-4 w-4" />,
-            'PHONE CALLS': <Phone className="h-4 w-4" />,
-            'EMAILS': <Mail className="h-4 w-4" />,
-            'WHATSAPP': <MessageSquare className="h-4 w-4" />,
-            'SMS': <MessageSquare className="h-4 w-4" />,
-            'OTHER ACTIVITIES': <Activity className="h-4 w-4" />
-          };
-          return (
-            <div key={index} className="flex items-center gap-2 mt-4 mb-2 pb-1 border-b border-primary/30">
-              <span className="text-primary">{iconMap[headerText] || <Activity className="h-4 w-4" />}</span>
-              <span className="font-semibold text-sm text-primary uppercase tracking-wide">{headerText}</span>
-            </div>
-          );
-        }
-        
-        // Regular bullet items
-        if (trimmedLine.startsWith('•')) {
-          const itemText = trimmedLine.replace('•', '').trim();
-          return (
-            <div key={index} className="flex items-start gap-2 pl-2">
-              <span className="text-muted-foreground mt-1">•</span>
-              <span className="text-sm leading-relaxed">{itemText}</span>
-            </div>
-          );
-        }
-        
-        // Any other line
-        return (
-          <div key={index} className="text-sm pl-2">{trimmedLine}</div>
-        );
-      })}
-    </div>
-  );
-};
-
-// Simple status section with styled display option
-const StatusSection = ({ title, value, onChange, placeholder, disabled, showStyledView, showCopyButton, onCopy, copied, onShare, canShare }) => {
-  const hasSpecialFormatting = value && (value.includes('[SUMMARY]') || value.includes('[HEADER]'));
-  
-  return (
-    <Card className={`p-5 ${disabled ? 'bg-muted/30' : ''}`}>
-      <div className="flex items-center justify-between mb-3">
-        <label className="block text-sm font-semibold">{title}</label>
-        {showCopyButton && value && (
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant={copied ? "default" : "ghost"}
-              size="sm"
-              className={`h-8 px-3 text-xs ${copied ? 'bg-green-600 hover:bg-green-600 text-white' : ''}`}
-              onClick={onCopy}
-              data-testid="copy-activities-button"
-            >
-              {copied ? (
-                <><Check className="h-3.5 w-3.5 mr-1.5" /> Copied!</>
-              ) : (
-                <><Copy className="h-3.5 w-3.5 mr-1.5" /> Copy</>
-              )}
-            </Button>
-            {canShare && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 px-3 text-xs"
-                onClick={onShare}
-                data-testid="share-activities-button"
-              >
-                <Share2 className="h-3.5 w-3.5 mr-1.5" /> Share
-              </Button>
-            )}
-          </div>
-        )}
-      </div>
-      {disabled ? (
-        <p className="text-sm text-muted-foreground italic">Action items not available for past dates</p>
-      ) : hasSpecialFormatting ? (
-        <StyledActivityDisplay text={value} onChange={onChange} />
-      ) : (
-        <Textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          rows={6}
-          className="text-base resize-none"
-        />
-      )}
-    </Card>
-  );
-};
-
-// Helper function to convert text to bullet format (preserve special markers)
+// Helper function to convert text to bullet format
 const convertToBulletFormat = (text) => {
   if (!text || !text.trim()) return '';
-  
   const lines = text.split(/\n/).filter(line => line.trim());
-  
   return lines.map(line => {
     const trimmedLine = line.trim();
-    // Preserve special markers
-    if (trimmedLine.startsWith('[SUMMARY]') || trimmedLine.startsWith('[HEADER]')) {
-      return trimmedLine;
-    }
-    // Skip if already has bullet or is empty
-    if (trimmedLine.startsWith('•') || trimmedLine.startsWith('-') || trimmedLine.startsWith('*')) {
-      return trimmedLine;
-    }
-    // Skip emoji prefixed lines (manual edits)
-    if (trimmedLine.startsWith('📊') || trimmedLine.startsWith('📌')) {
-      return trimmedLine;
-    }
+    if (trimmedLine.startsWith('[SUMMARY]') || trimmedLine.startsWith('[HEADER]')) return trimmedLine;
+    if (trimmedLine.startsWith('•') || trimmedLine.startsWith('-') || trimmedLine.startsWith('*')) return trimmedLine;
+    if (trimmedLine.startsWith('📊') || trimmedLine.startsWith('📌')) return trimmedLine;
     return `• ${trimmedLine}`;
   }).join('\n');
 };
 
-// Helper function to render bulleted content with styling
+// Compact status input section
+const StatusInput = ({ title, value, onChange, placeholder, disabled, icon: Icon }) => (
+  <div className={`space-y-2 ${disabled ? 'opacity-50' : ''}`}>
+    <div className="flex items-center gap-2">
+      {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
+      <label className="text-sm font-medium text-muted-foreground">{title}</label>
+    </div>
+    <Textarea
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      rows={4}
+      disabled={disabled}
+      className="text-sm resize-none bg-slate-50/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 focus:border-primary/50 transition-colors"
+    />
+  </div>
+);
+
+// Bulleted content display for past statuses
 const BulletedContent = ({ text }) => {
   if (!text) return null;
-  
   const lines = text.split('\n').filter(line => line.trim());
-  
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       {lines.map((line, index) => {
         const trimmedLine = line.trim();
-        
-        // Summary line
         if (trimmedLine.startsWith('[SUMMARY]') || trimmedLine.startsWith('📊')) {
           const summaryText = trimmedLine.replace('[SUMMARY]', '').replace('📊 SUMMARY:', '').trim();
           return (
             <div key={index} className="bg-primary/10 rounded px-2 py-1 mb-2">
-              <span className="font-semibold text-primary text-sm">{summaryText}</span>
+              <span className="font-medium text-primary text-xs">{summaryText}</span>
             </div>
           );
         }
-        
-        // Header line
         if (trimmedLine.startsWith('[HEADER]') || trimmedLine.startsWith('📌')) {
           const headerText = trimmedLine.replace('[HEADER]', '').replace('📌', '').trim();
           return (
-            <div key={index} className="font-semibold text-xs text-primary uppercase mt-2 mb-1">
-              {headerText}
-            </div>
+            <div key={index} className="font-medium text-xs text-primary uppercase mt-2 mb-1">{headerText}</div>
           );
         }
-        
-        // Regular bullet
         const cleanLine = trimmedLine.replace(/^[•\-\*]\s*/, '').trim();
         return (
-          <div key={index} className="flex items-start gap-2 text-sm">
-            <span className="text-primary mt-0.5">•</span>
+          <div key={index} className="flex items-start gap-1.5 text-xs">
+            <span className="text-muted-foreground mt-0.5">•</span>
             <span className="leading-relaxed">{cleanLine}</span>
           </div>
         );
@@ -218,33 +86,29 @@ export default function DailyStatusUpdate() {
   const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [loading, setLoading] = useState(false);
+  const [fetchingActivities, setFetchingActivities] = useState(false);
   const [pastStatuses, setPastStatuses] = useState([]);
   
-  // Resource selection state (for managers to view subordinates' status)
+  // Resource selection state
   const [subordinates, setSubordinates] = useState([]);
   const [selectedResource, setSelectedResource] = useState('');
   const [loadingSubordinates, setLoadingSubordinates] = useState(false);
   
-  // Check if viewing own status or subordinate's
   const isViewingOwnStatus = !selectedResource || selectedResource === user?.id;
   const viewingUserId = selectedResource || user?.id;
+  const selectedSubordinate = subordinates.find(s => s.id === selectedResource);
   
-  // Three sections state (simplified - removed AI revision state)
+  // Form state
   const [yesterdayUpdates, setYesterdayUpdates] = useState('');
   const [todayActions, setTodayActions] = useState('');
   const [helpNeeded, setHelpNeeded] = useState('');
-  const [hasFetchedActivities, setHasFetchedActivities] = useState(false);
-  const [copied, setCopied] = useState(false);
 
-  // Fetch all subordinates at any level
+  // Fetch subordinates
   const fetchSubordinates = useCallback(async () => {
-    if (!user?.id) return; // Don't fetch if user not logged in
-    
+    if (!user?.id) return;
     setLoadingSubordinates(true);
     try {
-      const response = await axios.get(`${API_URL}/users/subordinates/all`, {
-        withCredentials: true
-      });
+      const response = await axios.get(`${API_URL}/users/subordinates/all`, { withCredentials: true });
       setSubordinates(response.data || []);
     } catch (error) {
       console.error('Failed to fetch subordinates:', error);
@@ -255,9 +119,7 @@ export default function DailyStatusUpdate() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (user?.id) {
-      fetchSubordinates();
-    }
+    if (user?.id) fetchSubordinates();
   }, [user?.id, fetchSubordinates]);
 
   useEffect(() => {
@@ -271,12 +133,8 @@ export default function DailyStatusUpdate() {
   const fetchPastStatuses = async () => {
     try {
       const params = new URLSearchParams();
-      if (selectedResource) {
-        params.append('user_id', selectedResource);
-      }
-      const response = await axios.get(`${API_URL}/daily-status?${params.toString()}`, {
-        withCredentials: true
-      });
+      if (selectedResource) params.append('user_id', selectedResource);
+      const response = await axios.get(`${API_URL}/daily-status?${params.toString()}`, { withCredentials: true });
       setPastStatuses(response.data);
     } catch (error) {
       console.error('Failed to load past statuses');
@@ -294,153 +152,33 @@ export default function DailyStatusUpdate() {
       setTodayActions('');
       setHelpNeeded('');
     }
-    // Reset fetched activities state when date changes
-    setHasFetchedActivities(false);
-    setCopied(false);
   }, [selectedDate, pastStatuses]);
 
   const handleFetchFromActivities = async () => {
-    setLoading(true);
+    setFetchingActivities(true);
     try {
-      const token = localStorage.getItem('token');
+      const params = new URLSearchParams();
+      if (!isViewingOwnStatus && selectedResource) {
+        params.append('target_user_id', selectedResource);
+      }
       const response = await axios.get(
-        `${API_URL}/daily-status/auto-populate/${selectedDate}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        `${API_URL}/daily-status/auto-populate/${selectedDate}?${params.toString()}`,
+        { withCredentials: true }
       );
       
       if (response.data.activity_count === 0) {
-        toast.info('No activities found for this date');
-        setHasFetchedActivities(false);
+        toast.info(`No activities found for ${isViewingOwnStatus ? 'you' : selectedSubordinate?.name} on this date`);
         return;
       }
       
       if (response.data.formatted_text) {
-        // Convert to bullet format before setting
         setYesterdayUpdates(convertToBulletFormat(response.data.formatted_text));
-        setHasFetchedActivities(true);
-        setCopied(false);
         toast.success(`Loaded ${response.data.activity_count} activities from ${response.data.leads_contacted} leads`);
       }
     } catch (error) {
       toast.error('Failed to fetch activities');
-      setHasFetchedActivities(false);
     } finally {
-      setLoading(false);
-    }
-  };
-
-  // Copy fetched activities to clipboard (clean format without special markers)
-  const handleCopyActivities = async () => {
-    if (!yesterdayUpdates) {
-      toast.error('No activities to copy');
-      return;
-    }
-    
-    // Convert the formatted text to a clean, readable format for clipboard
-    const lines = yesterdayUpdates.split('\n').filter(line => line.trim());
-    const cleanedLines = lines.map(line => {
-      const trimmedLine = line.trim();
-      // Convert [SUMMARY] to plain text
-      if (trimmedLine.startsWith('[SUMMARY]')) {
-        return trimmedLine.replace('[SUMMARY]', 'SUMMARY:');
-      }
-      // Convert [HEADER] to plain text with separator
-      if (trimmedLine.startsWith('[HEADER]')) {
-        return '\n' + trimmedLine.replace('[HEADER]', '').trim() + ':';
-      }
-      return trimmedLine;
-    });
-    
-    const textToCopy = cleanedLines.join('\n').trim();
-    
-    try {
-      await navigator.clipboard.writeText(textToCopy);
-      setCopied(true);
-      toast.success('Activities copied to clipboard!');
-      // Reset copied state after 2 seconds
-      setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      // Fallback for older browsers
-      const textArea = document.createElement('textarea');
-      textArea.value = textToCopy;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      setCopied(true);
-      toast.success('Activities copied to clipboard!');
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  // Check if Web Share API is supported (mainly for mobile)
-  // We show the button on all devices - it will fallback to copy if share isn't available
-  const canShare = true; // Always show share button
-
-  // Share activities via native share (WhatsApp, etc.)
-  const handleShareActivities = async () => {
-    if (!yesterdayUpdates) {
-      toast.error('No activities to share');
-      return;
-    }
-    
-    // Convert the formatted text to a clean, readable format for sharing
-    const lines = yesterdayUpdates.split('\n').filter(line => line.trim());
-    const cleanedLines = lines.map(line => {
-      const trimmedLine = line.trim();
-      // Convert [SUMMARY] to plain text
-      if (trimmedLine.startsWith('[SUMMARY]')) {
-        return trimmedLine.replace('[SUMMARY]', '📊 SUMMARY:');
-      }
-      // Convert [HEADER] to plain text with emoji
-      if (trimmedLine.startsWith('[HEADER]')) {
-        const headerText = trimmedLine.replace('[HEADER]', '').trim();
-        if (headerText.toUpperCase().includes('PHONE') || headerText.toUpperCase().includes('CALL')) {
-          return '\n📞 ' + headerText + ':';
-        } else if (headerText.toUpperCase().includes('EMAIL')) {
-          return '\n📧 ' + headerText + ':';
-        } else if (headerText.toUpperCase().includes('MEETING') || headerText.toUpperCase().includes('VISIT')) {
-          return '\n🤝 ' + headerText + ':';
-        } else {
-          return '\n📋 ' + headerText + ':';
-        }
-      }
-      return trimmedLine;
-    });
-    
-    const dateLabel = format(new Date(selectedDate), 'EEEE, MMM d, yyyy');
-    const textToShare = `*Daily Status Update - ${dateLabel}*\n\n${cleanedLines.join('\n').trim()}`;
-    
-    // Check if native share is available (mobile)
-    if (typeof navigator !== 'undefined' && navigator.share) {
-      try {
-        await navigator.share({
-          title: `Daily Status - ${dateLabel}`,
-          text: textToShare
-        });
-        toast.success('Shared successfully!');
-        return;
-      } catch (error) {
-        // User cancelled or share failed - fall through to clipboard
-        if (error.name === 'AbortError') {
-          return; // User cancelled, don't show any message
-        }
-      }
-    }
-    
-    // Fallback: copy to clipboard (for desktop or if share fails)
-    try {
-      await navigator.clipboard.writeText(textToShare);
-      toast.success('Text copied! Paste it in WhatsApp or any app to share.');
-    } catch (copyError) {
-      // Final fallback
-      const textArea = document.createElement('textarea');
-      textArea.value = textToShare;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      toast.success('Text copied! Paste it in WhatsApp or any app to share.');
+      setFetchingActivities(false);
     }
   };
 
@@ -452,49 +190,29 @@ export default function DailyStatusUpdate() {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
       const existing = pastStatuses.find(s => s.status_date === selectedDate);
-      
-      // Convert all sections to bullet format before saving
       const data = {
         status_date: selectedDate,
         yesterday_updates: convertToBulletFormat(yesterdayUpdates),
-        yesterday_original: null,
-        yesterday_ai_revised: false,
         today_actions: convertToBulletFormat(todayActions),
-        today_original: null,
-        today_ai_revised: false,
-        help_needed: convertToBulletFormat(helpNeeded),
-        help_original: null,
-        help_ai_revised: false
+        help_needed: convertToBulletFormat(helpNeeded)
       };
       
-      // If posting for a subordinate, include target_user_id
       if (!isViewingOwnStatus && selectedResource) {
         data.target_user_id = selectedResource;
       }
 
       if (existing) {
-        await axios.put(`${API_URL}/daily-status/${existing.id}`, data, {
-          headers: { Authorization: `Bearer ${token}` },
-          withCredentials: true
-        });
-        toast.success(isViewingOwnStatus ? 'Status updated!' : `Status updated for ${subordinates.find(s => s.id === selectedResource)?.name}!`);
+        await axios.put(`${API_URL}/daily-status/${existing.id}`, data, { withCredentials: true });
+        toast.success(isViewingOwnStatus ? 'Status updated!' : `Status updated for ${selectedSubordinate?.name}!`);
       } else {
-        await axios.post(`${API_URL}/daily-status`, data, {
-          headers: { Authorization: `Bearer ${token}` },
-          withCredentials: true
-        });
-        toast.success(isViewingOwnStatus ? 'Status posted!' : `Status posted for ${subordinates.find(s => s.id === selectedResource)?.name}!`);
+        await axios.post(`${API_URL}/daily-status`, data, { withCredentials: true });
+        toast.success(isViewingOwnStatus ? 'Status posted!' : `Status posted for ${selectedSubordinate?.name}!`);
       }
       
       fetchPastStatuses();
     } catch (error) {
-      const errorMessage = error.response?.data?.detail || 'Failed to save status';
-      toast.error(errorMessage, {
-        description: 'Your status update was not saved',
-        duration: 6000
-      });
+      toast.error(error.response?.data?.detail || 'Failed to save status');
     } finally {
       setLoading(false);
     }
@@ -502,241 +220,240 @@ export default function DailyStatusUpdate() {
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const yesterday = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd');
-
-  // Dynamic section titles based on selected date
   const isToday = selectedDate === today;
   const isYesterday = selectedDate === yesterday;
   const isPastDate = selectedDate < yesterday;
-  
-  const firstSectionTitle = isToday 
-    ? "Today's Updates" 
-    : isYesterday 
-      ? "Yesterday's Updates"
-      : format(new Date(selectedDate), "EEEE, MMM d") + " - Updates";
-  
-  const secondSectionTitle = isToday
-    ? "Tomorrow's Action Items & Follow-ups"
-    : "Today's Action Items & Follow-ups";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-rose-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="daily-status-page">
-      <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-30 dark:opacity-10 pointer-events-none" />
-      
-      <div className="relative max-w-3xl mx-auto space-y-6 pb-8 px-4 py-6 lg:py-8">
-      {/* Header */}
-      <div className="text-center">
-        <div className="inline-flex items-center gap-3 mb-4">
-          <div className="p-2.5 rounded-xl bg-gradient-to-br from-rose-100 to-pink-100 dark:from-rose-900/50 dark:to-pink-900/30">
-            <Activity className="h-6 w-6 text-rose-600 dark:text-rose-400" />
-          </div>
-          <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800 dark:text-white">Daily Status Update</h1>
-        </div>
-        <p className="text-muted-foreground">Share your daily sales activities and progress</p>
-      </div>
-
-      {/* Date Selection - Mobile Optimized */}
-      <Card className="p-5 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
-        <label className="block text-sm font-semibold mb-3">Select Date</label>
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <Button
-            type="button"
-            variant={selectedDate === yesterday ? 'default' : 'outline'}
-            className="h-16 text-base font-medium border-slate-200 dark:border-slate-700"
-            onClick={() => setSelectedDate(yesterday)}
-            data-testid="date-yesterday"
-          >
-            <Calendar className="h-5 w-5 mr-2" />
-            Yesterday
-          </Button>
-          <Button
-            type="button"
-            variant={selectedDate === today ? 'default' : 'outline'}
-            className="h-16 text-base font-medium border-slate-200 dark:border-slate-700"
-            onClick={() => setSelectedDate(today)}
-            data-testid="date-today"
-          >
-            <Calendar className="h-5 w-5 mr-2" />
-            Today
-          </Button>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="daily-status-page">
+      <div className="max-w-5xl mx-auto px-4 py-6">
         
-        {/* Custom Date Picker for Past Dates */}
-        <div className="space-y-2">
-          <label className="text-xs text-muted-foreground font-medium">Or select any past date:</label>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            max={today}
-            className="w-full h-12 px-4 rounded-md border border-slate-200 dark:border-slate-700 bg-background text-base"
-            data-testid="date-picker"
-          />
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Daily Status Update</h1>
+          <p className="text-sm text-muted-foreground mt-1">Track and manage daily sales activities</p>
         </div>
-        
-        <p className="text-sm text-center mt-4 font-medium text-primary">
-          {format(new Date(selectedDate), 'EEEE, MMMM d, yyyy')}
-        </p>
-      </Card>
 
-      {/* Resource Selection - For managers to view subordinates' status */}
-      {subordinates.length > 0 && (
-        <Card className="p-5 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
-          <div className="flex items-center gap-2 mb-3">
-            <Users className="h-4 w-4 text-primary" />
-            <label className="text-sm font-semibold">View Status For</label>
-          </div>
-          <Select 
-            value={selectedResource || 'self'} 
-            onValueChange={(val) => {
-              setSelectedResource(val === 'self' ? '' : val);
-              setYesterdayUpdates('');
-              setTodayActions('');
-              setHelpNeeded('');
-              setHasFetchedActivities(false);
-            }}
-          >
-            <SelectTrigger className="w-full h-12 text-base" data-testid="resource-selector">
-              <SelectValue placeholder="Select a team member" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="self">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">Myself</span>
-                  <span className="text-xs text-muted-foreground">({user?.name})</span>
-                </div>
-              </SelectItem>
-              {subordinates.map((sub) => (
-                <SelectItem key={sub.id} value={sub.id}>
-                  <div className="flex items-center justify-between w-full">
-                    <span className="font-medium">{sub.name}</span>
-                    <span className="text-xs text-muted-foreground ml-2">{sub.role}</span>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {!isViewingOwnStatus && (
-            <p className="text-xs text-blue-600 mt-2 flex items-center gap-1">
-              <Activity className="h-3 w-3" />
-              Managing {subordinates.find(s => s.id === selectedResource)?.name}'s daily status
-            </p>
-          )}
-        </Card>
-      )}
-
-      {/* Fetch from Lead Activities Button - Dynamic text (only show for own status) */}
-      {isViewingOwnStatus && (
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full h-14 text-base font-medium border-dashed border-slate-300 dark:border-slate-600"
-          onClick={handleFetchFromActivities}
-          disabled={loading}
-          data-testid="fetch-activities-button"
-        >
-          {loading ? (
-            <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Loading activities...</>
-          ) : (
-            <><Download className="h-5 w-5 mr-2" /> 
-              {isToday ? "Fetch Today's Lead Activities" : 
-               isYesterday ? "Fetch Yesterday's Lead Activities" :
-               `Fetch Lead Activities from ${format(new Date(selectedDate), 'MMM d')}`}
-            </>
-          )}
-        </Button>
-      )}
-
-      {/* Section 1: Yesterday's Updates / Today's Updates / Date-specific */}
-      <StatusSection
-        title={firstSectionTitle}
-        value={yesterdayUpdates}
-        onChange={setYesterdayUpdates}
-        placeholder={isToday ? "What did you accomplish today? Enter each item on a new line..." : "What did you accomplish on this day? Enter each item on a new line..."}
-        showCopyButton={hasFetchedActivities}
-        onCopy={handleCopyActivities}
-        copied={copied}
-        onShare={handleShareActivities}
-        canShare={canShare}
-      />
-
-      {/* Section 2: Today's / Tomorrow's Action Items (Disabled for past dates) */}
-      <StatusSection
-        title={secondSectionTitle}
-        value={todayActions}
-        onChange={setTodayActions}
-        disabled={isPastDate}
-        placeholder={isToday ? "What are your plans for tomorrow? Enter each item on a new line..." : "What are your plans for today? Enter each item on a new line..."}
-      />
-
-      {/* Section 3: Help Needed from Team */}
-      <StatusSection
-        title="Help Needed from the Team"
-        value={helpNeeded}
-        onChange={setHelpNeeded}
-        placeholder="Do you need support from colleagues? Enter each item on a new line..."
-      />
-
-      {/* Submit Button - Always show (for self or subordinates) */}
-      <Button
-        type="button"
-        className="w-full h-16 text-lg font-semibold"
-        onClick={handleSubmit}
-        disabled={loading}
-        data-testid="submit-status-button"
-      >
-        {loading ? (
-          <><Loader2 className="h-6 w-6 mr-2 animate-spin" /> Saving...</>
-        ) : (
-          <><Send className="h-6 w-6 mr-2" /> 
-            {isViewingOwnStatus ? 'Post Status Update' : `Post Status for ${subordinates.find(s => s.id === selectedResource)?.name}`}
-          </>
-        )}
-      </Button>
-
-      {/* Past Statuses - with bulleted display */}
-      {pastStatuses.length > 0 && (
-        <div className="space-y-4 mt-8">
-          <h2 className="text-xl font-bold">Recent Updates</h2>
-          {pastStatuses.slice(0, 5).map((status) => (
-            <Card key={status.id} className="p-5" data-testid={`past-status-${status.id}`}>
-              <div className="mb-4">
-                <p className="font-bold text-lg">{format(new Date(status.status_date), 'EEEE, MMM d')}</p>
-                <div className="flex flex-col gap-0.5 mt-1">
-                  <p className="text-xs text-muted-foreground">
-                    Posted {format(new Date(status.created_at), 'h:mm a')}
-                  </p>
-                  {status.posted_by_name && (
-                    <p className="text-xs text-blue-600 font-medium">
-                      Posted by {status.posted_by_name}
-                    </p>
-                  )}
-                </div>
+        {/* Main Control Bar - Date, Resource, Actions */}
+        <Card className="p-4 mb-6 border-0 shadow-sm bg-white/80 dark:bg-slate-900/80 backdrop-blur">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+            
+            {/* Date Selection */}
+            <div className="flex items-center gap-2 flex-1">
+              <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  size="sm"
+                  variant={selectedDate === yesterday ? 'default' : 'outline'}
+                  onClick={() => setSelectedDate(yesterday)}
+                  className="h-8 text-xs"
+                  data-testid="date-yesterday"
+                >
+                  Yesterday
+                </Button>
+                <Button
+                  size="sm"
+                  variant={selectedDate === today ? 'default' : 'outline'}
+                  onClick={() => setSelectedDate(today)}
+                  className="h-8 text-xs"
+                  data-testid="date-today"
+                >
+                  Today
+                </Button>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  max={today}
+                  className="h-8 px-2 text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-transparent"
+                  data-testid="date-picker"
+                />
               </div>
+            </div>
 
-              {status.yesterday_updates && (
-                <div className="mb-4">
-                  <p className="text-sm font-semibold text-muted-foreground mb-2">Updates</p>
-                  <BulletedContent text={status.yesterday_updates} />
-                </div>
-              )}
+            {/* Resource Selector */}
+            {subordinates.length > 0 && (
+              <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+                <Select 
+                  value={selectedResource || 'self'} 
+                  onValueChange={(val) => {
+                    setSelectedResource(val === 'self' ? '' : val);
+                    setYesterdayUpdates('');
+                    setTodayActions('');
+                    setHelpNeeded('');
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-xs flex-1" data-testid="resource-selector">
+                    <SelectValue placeholder="Select resource" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="self">
+                      <span className="font-medium">Myself</span>
+                    </SelectItem>
+                    {subordinates.map((sub) => (
+                      <SelectItem key={sub.id} value={sub.id}>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{sub.name}</span>
+                          <span className="text-xs text-muted-foreground">({sub.role})</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
-              {status.today_actions && (
-                <div className="mb-4">
-                  <p className="text-sm font-semibold text-muted-foreground mb-2">Action Items</p>
-                  <BulletedContent text={status.today_actions} />
-                </div>
-              )}
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleFetchFromActivities}
+                disabled={fetchingActivities}
+                className="h-8 text-xs"
+                data-testid="fetch-activities-button"
+              >
+                {fetchingActivities ? (
+                  <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                ) : (
+                  <Download className="h-3 w-3 mr-1.5" />
+                )}
+                Fetch Activities
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSubmit}
+                disabled={loading}
+                className="h-8 text-xs bg-primary hover:bg-primary/90"
+                data-testid="submit-status-button"
+              >
+                {loading ? (
+                  <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                ) : (
+                  <Send className="h-3 w-3 mr-1.5" />
+                )}
+                {isViewingOwnStatus ? 'Post Status' : `Post for ${selectedSubordinate?.name?.split(' ')[0]}`}
+              </Button>
+            </div>
+          </div>
 
-              {status.help_needed && (
-                <div>
-                  <p className="text-sm font-semibold text-muted-foreground mb-2">Help Needed</p>
-                  <BulletedContent text={status.help_needed} />
-                </div>
+          {/* Status Indicator */}
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-4">
+              <span className="font-medium text-primary">
+                {format(new Date(selectedDate), 'EEEE, MMMM d, yyyy')}
+              </span>
+              {!isViewingOwnStatus && selectedSubordinate && (
+                <span className="text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                  <User className="h-3 w-3" />
+                  Managing {selectedSubordinate.name}'s status
+                </span>
               )}
-            </Card>
-          ))}
+            </div>
+            {pastStatuses.find(s => s.status_date === selectedDate) && (
+              <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
+                <Check className="h-3 w-3" />
+                Status exists for this date
+              </span>
+            )}
+          </div>
+        </Card>
+
+        {/* Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+          {/* Updates Section */}
+          <Card className="p-4 border-0 shadow-sm bg-white/80 dark:bg-slate-900/80">
+            <StatusInput
+              title={isToday ? "Today's Updates" : isYesterday ? "Yesterday's Updates" : `${format(new Date(selectedDate), 'MMM d')} Updates`}
+              value={yesterdayUpdates}
+              onChange={setYesterdayUpdates}
+              placeholder="What was accomplished? One item per line..."
+              icon={Activity}
+            />
+          </Card>
+
+          {/* Action Items Section */}
+          <Card className={`p-4 border-0 shadow-sm bg-white/80 dark:bg-slate-900/80 ${isPastDate ? 'opacity-60' : ''}`}>
+            <StatusInput
+              title={isToday ? "Tomorrow's Action Items" : "Today's Action Items"}
+              value={todayActions}
+              onChange={setTodayActions}
+              placeholder="Planned follow-ups and tasks..."
+              disabled={isPastDate}
+              icon={Clock}
+            />
+          </Card>
+
+          {/* Help Needed Section */}
+          <Card className="p-4 border-0 shadow-sm bg-white/80 dark:bg-slate-900/80">
+            <StatusInput
+              title="Help Needed"
+              value={helpNeeded}
+              onChange={setHelpNeeded}
+              placeholder="Support needed from the team..."
+              icon={Users}
+            />
+          </Card>
         </div>
-      )}
+
+        {/* Recent Updates - Compact Timeline */}
+        {pastStatuses.length > 0 && (
+          <Card className="p-4 border-0 shadow-sm bg-white/80 dark:bg-slate-900/80">
+            <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              Recent Updates
+            </h3>
+            <div className="space-y-3">
+              {pastStatuses.slice(0, 5).map((status) => (
+                <div 
+                  key={status.id} 
+                  className="p-3 rounded-lg bg-slate-50/80 dark:bg-slate-800/50 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition-colors cursor-pointer"
+                  onClick={() => setSelectedDate(status.status_date)}
+                  data-testid={`past-status-${status.id}`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <p className="font-medium text-sm">{format(new Date(status.status_date), 'EEEE, MMM d')}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-muted-foreground">
+                          {format(new Date(status.created_at), 'h:mm a')}
+                        </span>
+                        {status.posted_by_name && (
+                          <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                            • Posted by {status.posted_by_name}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90" />
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                    {status.yesterday_updates && (
+                      <div>
+                        <p className="font-medium text-muted-foreground mb-1">Updates</p>
+                        <BulletedContent text={status.yesterday_updates} />
+                      </div>
+                    )}
+                    {status.today_actions && (
+                      <div>
+                        <p className="font-medium text-muted-foreground mb-1">Action Items</p>
+                        <BulletedContent text={status.today_actions} />
+                      </div>
+                    )}
+                    {status.help_needed && (
+                      <div>
+                        <p className="font-medium text-muted-foreground mb-1">Help Needed</p>
+                        <BulletedContent text={status.help_needed} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
       </div>
     </div>
   );

@@ -5688,17 +5688,50 @@ async def update_daily_status(
     return updated_status
 
 @api_router.get("/daily-status/auto-populate/{status_date}")
-async def auto_populate_from_activities(status_date: str, current_user: dict = Depends(get_current_user)):
+async def auto_populate_from_activities(
+    status_date: str, 
+    target_user_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
     """Auto-populate daily status from logged lead activities, grouped by interaction method"""
     
     try:
-        # Get all activities created by user on this date
+        # Determine which user's activities to fetch
+        fetch_user_id = target_user_id if target_user_id else current_user['id']
+        
+        # If fetching for someone else, verify authorization
+        if target_user_id and target_user_id != current_user['id']:
+            async def is_subordinate(manager_id, target_id, visited=None):
+                if visited is None:
+                    visited = set()
+                if manager_id in visited:
+                    return False
+                visited.add(manager_id)
+                
+                direct_reports = await db.users.find(
+                    {'reports_to': manager_id, 'is_active': True},
+                    {'_id': 0, 'id': 1}
+                ).to_list(100)
+                
+                for report in direct_reports:
+                    if report['id'] == target_id:
+                        return True
+                    if await is_subordinate(report['id'], target_id, visited):
+                        return True
+                return False
+            
+            is_leadership = current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'CEO', 'Director', 'Vice President', 'Admin']
+            
+            if not is_leadership and not await is_subordinate(current_user['id'], target_user_id):
+                raise HTTPException(status_code=403, detail='Not authorized to fetch activities for this user')
+        
+        # Get all activities created by target user on this date
         start_datetime = datetime.fromisoformat(f'{status_date}T00:00:00').replace(tzinfo=timezone.utc).isoformat()
         end_datetime = datetime.fromisoformat(f'{status_date}T23:59:59').replace(tzinfo=timezone.utc).isoformat()
         
         activities = await db.activities.find(
             {
-                'created_by': current_user['id'],
+                'created_by': fetch_user_id,
                 'created_at': {'$gte': start_datetime, '$lte': end_datetime}
             },
             {'_id': 0}
