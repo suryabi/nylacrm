@@ -468,17 +468,24 @@ export default function DailyStatusUpdate() {
         help_original: null,
         help_ai_revised: false
       };
+      
+      // If posting for a subordinate, include target_user_id
+      if (!isViewingOwnStatus && selectedResource) {
+        data.target_user_id = selectedResource;
+      }
 
       if (existing) {
         await axios.put(`${API_URL}/daily-status/${existing.id}`, data, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
         });
-        toast.success('Status updated!');
+        toast.success(isViewingOwnStatus ? 'Status updated!' : `Status updated for ${subordinates.find(s => s.id === selectedResource)?.name}!`);
       } else {
         await axios.post(`${API_URL}/daily-status`, data, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
         });
-        toast.success('Status posted!');
+        toast.success(isViewingOwnStatus ? 'Status posted!' : `Status posted for ${subordinates.find(s => s.id === selectedResource)?.name}!`);
       }
       
       fetchPastStatuses();
@@ -609,9 +616,9 @@ export default function DailyStatusUpdate() {
             </SelectContent>
           </Select>
           {!isViewingOwnStatus && (
-            <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+            <p className="text-xs text-blue-600 mt-2 flex items-center gap-1">
               <Activity className="h-3 w-3" />
-              Viewing {subordinates.find(s => s.id === selectedResource)?.name}'s daily status (read-only)
+              Managing {subordinates.find(s => s.id === selectedResource)?.name}'s daily status
             </p>
           )}
         </Card>
@@ -643,22 +650,21 @@ export default function DailyStatusUpdate() {
       <StatusSection
         title={firstSectionTitle}
         value={yesterdayUpdates}
-        onChange={isViewingOwnStatus ? setYesterdayUpdates : () => {}}
+        onChange={setYesterdayUpdates}
         placeholder={isToday ? "What did you accomplish today? Enter each item on a new line..." : "What did you accomplish on this day? Enter each item on a new line..."}
         showCopyButton={hasFetchedActivities}
         onCopy={handleCopyActivities}
         copied={copied}
         onShare={handleShareActivities}
         canShare={canShare}
-        disabled={!isViewingOwnStatus}
       />
 
-      {/* Section 2: Today's / Tomorrow's Action Items (Disabled for past dates or viewing others) */}
+      {/* Section 2: Today's / Tomorrow's Action Items (Disabled for past dates) */}
       <StatusSection
         title={secondSectionTitle}
         value={todayActions}
-        onChange={isViewingOwnStatus ? setTodayActions : () => {}}
-        disabled={isPastDate || !isViewingOwnStatus}
+        onChange={setTodayActions}
+        disabled={isPastDate}
         placeholder={isToday ? "What are your plans for tomorrow? Enter each item on a new line..." : "What are your plans for today? Enter each item on a new line..."}
       />
 
@@ -666,27 +672,26 @@ export default function DailyStatusUpdate() {
       <StatusSection
         title="Help Needed from the Team"
         value={helpNeeded}
-        onChange={isViewingOwnStatus ? setHelpNeeded : () => {}}
+        onChange={setHelpNeeded}
         placeholder="Do you need support from colleagues? Enter each item on a new line..."
-        disabled={!isViewingOwnStatus}
       />
 
-      {/* Submit Button - Only show for own status */}
-      {isViewingOwnStatus && (
-        <Button
-          type="button"
-          className="w-full h-16 text-lg font-semibold"
-          onClick={handleSubmit}
-          disabled={loading}
-          data-testid="submit-status-button"
-        >
-          {loading ? (
-            <><Loader2 className="h-6 w-6 mr-2 animate-spin" /> Saving...</>
-          ) : (
-            <><Send className="h-6 w-6 mr-2" /> Post Status Update</>
-          )}
-        </Button>
-      )}
+      {/* Submit Button - Always show (for self or subordinates) */}
+      <Button
+        type="button"
+        className="w-full h-16 text-lg font-semibold"
+        onClick={handleSubmit}
+        disabled={loading}
+        data-testid="submit-status-button"
+      >
+        {loading ? (
+          <><Loader2 className="h-6 w-6 mr-2 animate-spin" /> Saving...</>
+        ) : (
+          <><Send className="h-6 w-6 mr-2" /> 
+            {isViewingOwnStatus ? 'Post Status Update' : `Post Status for ${subordinates.find(s => s.id === selectedResource)?.name}`}
+          </>
+        )}
+      </Button>
 
       {/* Past Statuses - with bulleted display */}
       {pastStatuses.length > 0 && (
@@ -696,9 +701,16 @@ export default function DailyStatusUpdate() {
             <Card key={status.id} className="p-5" data-testid={`past-status-${status.id}`}>
               <div className="mb-4">
                 <p className="font-bold text-lg">{format(new Date(status.status_date), 'EEEE, MMM d')}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Posted {format(new Date(status.created_at), 'h:mm a')}
-                </p>
+                <div className="flex flex-col gap-0.5 mt-1">
+                  <p className="text-xs text-muted-foreground">
+                    Posted {format(new Date(status.created_at), 'h:mm a')}
+                  </p>
+                  {status.posted_by_name && (
+                    <p className="text-xs text-blue-600 font-medium">
+                      Posted by {status.posted_by_name}
+                    </p>
+                  )}
+                </div>
               </div>
 
               {status.yesterday_updates && (

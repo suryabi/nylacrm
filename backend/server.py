@@ -821,6 +821,10 @@ class DailyStatus(BaseModel):
     help_original: Optional[str] = None
     help_ai_revised: bool = False
     
+    # Track who posted this status (for manager posting on behalf of subordinate)
+    posted_by: Optional[str] = None  # User ID of who posted
+    posted_by_name: Optional[str] = None  # Name of who posted
+    
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -829,6 +833,7 @@ class DailyStatusCreate(BaseModel):
     yesterday_updates: str = ''
     today_actions: str = ''
     help_needed: str = ''
+    target_user_id: Optional[str] = None  # For managers posting on behalf of subordinates
 
 class DailyStatusUpdate(BaseModel):
     yesterday_updates: Optional[str] = None
@@ -5503,9 +5508,46 @@ async def get_location_config():
 
 @api_router.post("/daily-status", response_model=DailyStatus)
 async def create_daily_status(status_input: DailyStatusCreate, current_user: dict = Depends(get_current_user)):
+    # Determine target user (self or subordinate)
+    target_user_id = status_input.target_user_id if status_input.target_user_id else current_user['id']
+    posted_by = None
+    posted_by_name = None
+    
+    # If posting for someone else, verify authorization
+    if target_user_id != current_user['id']:
+        # Check if current user is a manager of the target user
+        async def is_subordinate(manager_id, target_id, visited=None):
+            if visited is None:
+                visited = set()
+            if manager_id in visited:
+                return False
+            visited.add(manager_id)
+            
+            direct_reports = await db.users.find(
+                {'reports_to': manager_id, 'is_active': True},
+                {'_id': 0, 'id': 1}
+            ).to_list(100)
+            
+            for report in direct_reports:
+                if report['id'] == target_id:
+                    return True
+                if await is_subordinate(report['id'], target_id, visited):
+                    return True
+            return False
+        
+        # Leadership roles can post for anyone
+        is_leadership = current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'CEO', 'Director', 'Vice President', 'Admin']
+        
+        if not is_leadership and not await is_subordinate(current_user['id'], target_user_id):
+            raise HTTPException(status_code=403, detail='Not authorized to post status for this user')
+        
+        # Mark who posted this status
+        posted_by = current_user['id']
+        posted_by_name = current_user.get('name', current_user.get('email'))
+    
     # Check if status already exists for this date
     existing = await db.daily_status.find_one({
-        'user_id': current_user['id'],
+        'user_id': target_user_id,
         'status_date': status_input.status_date
     }, {'_id': 0})
     
@@ -5513,7 +5555,10 @@ async def create_daily_status(status_input: DailyStatusCreate, current_user: dic
         raise HTTPException(status_code=400, detail='Status already exists for this date')
     
     status_data = status_input.model_dump()
-    status_data['user_id'] = current_user['id']
+    status_data.pop('target_user_id', None)  # Remove from data
+    status_data['user_id'] = target_user_id
+    status_data['posted_by'] = posted_by
+    status_data['posted_by_name'] = posted_by_name
     status_obj = DailyStatus(**status_data)
     
     doc = status_obj.model_dump()
@@ -5594,11 +5639,43 @@ async def update_daily_status(
     if not status:
         raise HTTPException(status_code=404, detail='Status not found')
     
-    if status['user_id'] != current_user['id']:
-        raise HTTPException(status_code=403, detail='Can only update your own status')
+    # Check authorization
+    is_own_status = status['user_id'] == current_user['id']
+    
+    if not is_own_status:
+        # Check if current user is a manager of the status owner
+        async def is_subordinate(manager_id, target_id, visited=None):
+            if visited is None:
+                visited = set()
+            if manager_id in visited:
+                return False
+            visited.add(manager_id)
+            
+            direct_reports = await db.users.find(
+                {'reports_to': manager_id, 'is_active': True},
+                {'_id': 0, 'id': 1}
+            ).to_list(100)
+            
+            for report in direct_reports:
+                if report['id'] == target_id:
+                    return True
+                if await is_subordinate(report['id'], target_id, visited):
+                    return True
+            return False
+        
+        # Leadership roles can update anyone's status
+        is_leadership = current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'CEO', 'Director', 'Vice President', 'Admin']
+        
+        if not is_leadership and not await is_subordinate(current_user['id'], status['user_id']):
+            raise HTTPException(status_code=403, detail='Not authorized to update this status')
     
     update_data = status_update.model_dump()
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    # Track who updated if different from owner
+    if not is_own_status:
+        update_data['posted_by'] = current_user['id']
+        update_data['posted_by_name'] = current_user.get('name', current_user.get('email'))
     
     await db.daily_status.update_one({'id': status_id}, {'$set': update_data})
     
