@@ -28,6 +28,32 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 
 ## What's Been Implemented
 
+### Mar 7, 2026 (Session 20)
+
+- **BUG FIX**: Hierarchical Daily Status View - Subordinates API 401 Error
+  - **Issue**: The `GET /api/users/subordinates/all` endpoint was returning 401 Unauthorized for authenticated users
+  - **Root Cause**: Database collection name mismatch in `deps.py`:
+    - Login endpoint stored sessions in `db.user_sessions` collection
+    - Authentication dependency (`get_current_user_from_cookie_or_header`) was looking for sessions in `db.sessions` collection
+  - **Fix Applied**: Changed `deps.py` to use `db.user_sessions` on lines 38, 58, and 93
+  - **Files Modified**: `/app/backend/deps.py`
+  - **Testing**: 100% success rate - 11/11 backend tests, all frontend flows verified
+  - Status: VERIFIED
+
+- **FEATURE COMPLETE**: Hierarchical Daily Status View for Managers
+  - **Purpose**: Allow managers to view daily status reports of their subordinates (direct and indirect reports)
+  - **Implementation**:
+    - Dropdown selector "View Status For" on Daily Status page
+    - Lists "Myself" and all subordinates sorted alphabetically
+    - Shows user's role next to their name in dropdown
+    - Read-only mode when viewing subordinate's status
+    - Form fields disabled with indicator message
+    - Dropdown only visible for users with subordinates
+  - **Files**: 
+    - `/app/backend/routes/users.py` - `get_all_subordinates` endpoint (line 166)
+    - `/app/frontend/src/pages/DailyStatusUpdate.js` - Dropdown UI (line 575)
+  - Status: VERIFIED
+
 ### Mar 5, 2026 (Session 19 - Continued)
 
 - **REFACTORING**: Backend server.py Modularization (Phase 1)
