@@ -140,8 +140,8 @@ export default function DashboardLayout({ children }) {
   );
   const [collapsedGroups, setCollapsedGroups] = useState({});
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 
