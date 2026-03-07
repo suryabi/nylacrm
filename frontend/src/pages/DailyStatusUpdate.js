@@ -30,54 +30,156 @@ const convertToBulletFormat = (text) => {
   }).join('\n');
 };
 
-// Compact status input section
-const StatusInput = ({ title, value, onChange, placeholder, disabled, icon: Icon }) => (
-  <div className={`space-y-2 ${disabled ? 'opacity-50' : ''}`}>
-    <div className="flex items-center gap-2">
-      {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
-      <label className="text-sm font-medium text-muted-foreground">{title}</label>
-    </div>
-    <Textarea
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      rows={4}
-      disabled={disabled}
-      className="text-sm resize-none bg-slate-50/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 focus:border-primary/50 transition-colors"
-    />
-  </div>
-);
+// Styled activity display component with highlighted headers (for form input)
+const StyledActivityDisplay = ({ text, onChange }) => {
+  if (!text) {
+    return (
+      <Textarea
+        value=""
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="What did you accomplish? Enter each item on a new line..."
+        rows={10}
+        className="text-sm resize-none bg-slate-50/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700"
+      />
+    );
+  }
 
-// Bulleted content display for past statuses
-const BulletedContent = ({ text }) => {
-  if (!text) return null;
   const lines = text.split('\n').filter(line => line.trim());
+  
   return (
-    <div className="space-y-1">
+    <div className="border rounded-lg p-4 bg-slate-50/50 dark:bg-slate-800/50 min-h-[250px] space-y-2">
       {lines.map((line, index) => {
         const trimmedLine = line.trim();
-        if (trimmedLine.startsWith('[SUMMARY]') || trimmedLine.startsWith('📊')) {
-          const summaryText = trimmedLine.replace('[SUMMARY]', '').replace('📊 SUMMARY:', '').trim();
+        
+        // Summary line - highlighted with gradient background
+        if (trimmedLine.startsWith('[SUMMARY]')) {
+          const summaryText = trimmedLine.replace('[SUMMARY]', '').trim();
           return (
-            <div key={index} className="bg-primary/10 rounded px-2 py-1 mb-2">
-              <span className="font-medium text-primary text-xs">{summaryText}</span>
+            <div key={index} className="bg-gradient-to-r from-primary/20 to-primary/5 rounded-lg p-3 mb-3">
+              <div className="flex items-center gap-2">
+                <Activity className="h-5 w-5 text-primary" />
+                <span className="font-bold text-primary text-sm">{summaryText}</span>
+              </div>
             </div>
           );
         }
-        if (trimmedLine.startsWith('[HEADER]') || trimmedLine.startsWith('📌')) {
-          const headerText = trimmedLine.replace('[HEADER]', '').replace('📌', '').trim();
+        
+        // Section headers - highlighted
+        if (trimmedLine.startsWith('[HEADER]')) {
+          const headerText = trimmedLine.replace('[HEADER]', '').trim();
+          const iconMap = {
+            'CUSTOMER VISITS': <MapPin className="h-4 w-4" />,
+            'PHONE CALLS': <Phone className="h-4 w-4" />,
+            'EMAILS': <Mail className="h-4 w-4" />,
+            'WHATSAPP': <MessageSquare className="h-4 w-4" />,
+            'SMS': <MessageSquare className="h-4 w-4" />,
+            'OTHER ACTIVITIES': <Activity className="h-4 w-4" />
+          };
           return (
-            <div key={index} className="font-medium text-xs text-primary uppercase mt-2 mb-1">{headerText}</div>
+            <div key={index} className="flex items-center gap-2 mt-4 mb-2 pb-1 border-b border-primary/30">
+              <span className="text-primary">{iconMap[headerText] || <Activity className="h-4 w-4" />}</span>
+              <span className="font-semibold text-xs text-primary uppercase tracking-wide">{headerText}</span>
+            </div>
           );
         }
+        
+        // Regular bullet items
+        if (trimmedLine.startsWith('•')) {
+          const itemText = trimmedLine.replace('•', '').trim();
+          return (
+            <div key={index} className="flex items-start gap-2 pl-2">
+              <span className="text-muted-foreground mt-0.5">•</span>
+              <span className="text-sm leading-relaxed">{itemText}</span>
+            </div>
+          );
+        }
+        
+        // Any other line
+        return (
+          <div key={index} className="text-sm pl-2">{trimmedLine}</div>
+        );
+      })}
+    </div>
+  );
+};
+
+// Styled content display for past statuses (read-only)
+const StyledContentDisplay = ({ text }) => {
+  if (!text) return null;
+  const lines = text.split('\n').filter(line => line.trim());
+  
+  return (
+    <div className="space-y-1.5">
+      {lines.map((line, index) => {
+        const trimmedLine = line.trim();
+        
+        // Summary line
+        if (trimmedLine.startsWith('[SUMMARY]') || trimmedLine.startsWith('📊')) {
+          const summaryText = trimmedLine.replace('[SUMMARY]', '').replace('📊 SUMMARY:', '').trim();
+          return (
+            <div key={index} className="bg-gradient-to-r from-primary/15 to-primary/5 rounded px-2.5 py-1.5 mb-2">
+              <div className="flex items-center gap-1.5">
+                <Activity className="h-3.5 w-3.5 text-primary" />
+                <span className="font-semibold text-primary text-xs">{summaryText}</span>
+              </div>
+            </div>
+          );
+        }
+        
+        // Header line
+        if (trimmedLine.startsWith('[HEADER]') || trimmedLine.startsWith('📌')) {
+          const headerText = trimmedLine.replace('[HEADER]', '').replace('📌', '').trim();
+          const iconMap = {
+            'CUSTOMER VISITS': <MapPin className="h-3 w-3" />,
+            'PHONE CALLS': <Phone className="h-3 w-3" />,
+            'EMAILS': <Mail className="h-3 w-3" />,
+            'WHATSAPP': <MessageSquare className="h-3 w-3" />,
+            'SMS': <MessageSquare className="h-3 w-3" />,
+            'OTHER ACTIVITIES': <Activity className="h-3 w-3" />
+          };
+          return (
+            <div key={index} className="flex items-center gap-1.5 mt-3 mb-1.5 pb-1 border-b border-primary/20">
+              <span className="text-primary">{iconMap[headerText] || <Activity className="h-3 w-3" />}</span>
+              <span className="font-semibold text-xs text-primary uppercase tracking-wide">{headerText}</span>
+            </div>
+          );
+        }
+        
+        // Regular bullet
         const cleanLine = trimmedLine.replace(/^[•\-\*]\s*/, '').trim();
         return (
-          <div key={index} className="flex items-start gap-1.5 text-xs">
-            <span className="text-muted-foreground mt-0.5">•</span>
+          <div key={index} className="flex items-start gap-1.5 text-xs pl-1">
+            <span className="text-primary mt-0.5">•</span>
             <span className="leading-relaxed">{cleanLine}</span>
           </div>
         );
       })}
+    </div>
+  );
+};
+
+// Status input section
+const StatusInput = ({ title, value, onChange, placeholder, disabled, icon: Icon, useStyledDisplay }) => {
+  const hasSpecialFormatting = value && (value.includes('[SUMMARY]') || value.includes('[HEADER]'));
+  
+  return (
+    <div className={`space-y-3 ${disabled ? 'opacity-50' : ''}`}>
+      <div className="flex items-center gap-2">
+        {Icon && <Icon className="h-4 w-4 text-primary" />}
+        <label className="text-sm font-semibold">{title}</label>
+      </div>
+      {useStyledDisplay && hasSpecialFormatting ? (
+        <StyledActivityDisplay text={value} onChange={onChange} />
+      ) : (
+        <Textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          rows={8}
+          disabled={disabled}
+          className="text-sm resize-none bg-slate-50/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 focus:border-primary/50 transition-colors min-h-[200px]"
+        />
+      )}
     </div>
   );
 };
@@ -226,7 +328,7 @@ export default function DailyStatusUpdate() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="daily-status-page">
-      <div className="max-w-5xl mx-auto px-4 py-6">
+      <div className="max-w-6xl mx-auto px-4 py-6">
         
         {/* Header */}
         <div className="mb-6">
@@ -234,19 +336,19 @@ export default function DailyStatusUpdate() {
           <p className="text-sm text-muted-foreground mt-1">Track and manage daily sales activities</p>
         </div>
 
-        {/* Main Control Bar - Date, Resource, Actions */}
-        <Card className="p-4 mb-6 border-0 shadow-sm bg-white/80 dark:bg-slate-900/80 backdrop-blur">
+        {/* Main Control Bar */}
+        <Card className="p-4 mb-6 border-0 shadow-sm bg-white/90 dark:bg-slate-900/90 backdrop-blur">
           <div className="flex flex-col lg:flex-row lg:items-center gap-4">
             
             {/* Date Selection */}
             <div className="flex items-center gap-2 flex-1">
-              <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+              <Calendar className="h-4 w-4 text-primary shrink-0" />
               <div className="flex items-center gap-2 flex-wrap">
                 <Button
                   size="sm"
                   variant={selectedDate === yesterday ? 'default' : 'outline'}
                   onClick={() => setSelectedDate(yesterday)}
-                  className="h-8 text-xs"
+                  className="h-9 text-sm"
                   data-testid="date-yesterday"
                 >
                   Yesterday
@@ -255,7 +357,7 @@ export default function DailyStatusUpdate() {
                   size="sm"
                   variant={selectedDate === today ? 'default' : 'outline'}
                   onClick={() => setSelectedDate(today)}
-                  className="h-8 text-xs"
+                  className="h-9 text-sm"
                   data-testid="date-today"
                 >
                   Today
@@ -265,7 +367,7 @@ export default function DailyStatusUpdate() {
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
                   max={today}
-                  className="h-8 px-2 text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-transparent"
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-transparent"
                   data-testid="date-picker"
                 />
               </div>
@@ -273,8 +375,8 @@ export default function DailyStatusUpdate() {
 
             {/* Resource Selector */}
             {subordinates.length > 0 && (
-              <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-                <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div className="flex items-center gap-2 flex-1 min-w-[220px]">
+                <Users className="h-4 w-4 text-primary shrink-0" />
                 <Select 
                   value={selectedResource || 'self'} 
                   onValueChange={(val) => {
@@ -284,7 +386,7 @@ export default function DailyStatusUpdate() {
                     setHelpNeeded('');
                   }}
                 >
-                  <SelectTrigger className="h-8 text-xs flex-1" data-testid="resource-selector">
+                  <SelectTrigger className="h-9 text-sm flex-1" data-testid="resource-selector">
                     <SelectValue placeholder="Select resource" />
                   </SelectTrigger>
                   <SelectContent>
@@ -311,13 +413,13 @@ export default function DailyStatusUpdate() {
                 variant="outline"
                 onClick={handleFetchFromActivities}
                 disabled={fetchingActivities}
-                className="h-8 text-xs"
+                className="h-9 text-sm px-4"
                 data-testid="fetch-activities-button"
               >
                 {fetchingActivities ? (
-                  <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
-                  <Download className="h-3 w-3 mr-1.5" />
+                  <Download className="h-4 w-4 mr-2" />
                 )}
                 Fetch Activities
               </Button>
@@ -325,13 +427,13 @@ export default function DailyStatusUpdate() {
                 size="sm"
                 onClick={handleSubmit}
                 disabled={loading}
-                className="h-8 text-xs bg-primary hover:bg-primary/90"
+                className="h-9 text-sm px-4 bg-primary hover:bg-primary/90"
                 data-testid="submit-status-button"
               >
                 {loading ? (
-                  <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
-                  <Send className="h-3 w-3 mr-1.5" />
+                  <Send className="h-4 w-4 mr-2" />
                 )}
                 {isViewingOwnStatus ? 'Post Status' : `Post for ${selectedSubordinate?.name?.split(' ')[0]}`}
               </Button>
@@ -339,113 +441,118 @@ export default function DailyStatusUpdate() {
           </div>
 
           {/* Status Indicator */}
-          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-sm">
             <div className="flex items-center gap-4">
-              <span className="font-medium text-primary">
+              <span className="font-semibold text-primary">
                 {format(new Date(selectedDate), 'EEEE, MMMM d, yyyy')}
               </span>
               {!isViewingOwnStatus && selectedSubordinate && (
-                <span className="text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                  <User className="h-3 w-3" />
+                <span className="text-blue-600 dark:text-blue-400 flex items-center gap-1.5 font-medium">
+                  <User className="h-4 w-4" />
                   Managing {selectedSubordinate.name}'s status
                 </span>
               )}
             </div>
             {pastStatuses.find(s => s.status_date === selectedDate) && (
-              <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
-                <Check className="h-3 w-3" />
+              <span className="text-green-600 dark:text-green-400 flex items-center gap-1.5">
+                <Check className="h-4 w-4" />
                 Status exists for this date
               </span>
             )}
           </div>
         </Card>
 
-        {/* Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        {/* Form Sections - Full Width, Larger */}
+        <div className="space-y-4 mb-6">
           {/* Updates Section */}
-          <Card className="p-4 border-0 shadow-sm bg-white/80 dark:bg-slate-900/80">
+          <Card className="p-5 border-0 shadow-sm bg-white/90 dark:bg-slate-900/90">
             <StatusInput
-              title={isToday ? "Today's Updates" : isYesterday ? "Yesterday's Updates" : `${format(new Date(selectedDate), 'MMM d')} Updates`}
+              title={isToday ? "Today's Updates" : isYesterday ? "Yesterday's Updates" : `${format(new Date(selectedDate), 'EEEE, MMM d')} - Updates`}
               value={yesterdayUpdates}
               onChange={setYesterdayUpdates}
-              placeholder="What was accomplished? One item per line..."
+              placeholder="What was accomplished? Enter each item on a new line..."
               icon={Activity}
+              useStyledDisplay={true}
             />
           </Card>
 
-          {/* Action Items Section */}
-          <Card className={`p-4 border-0 shadow-sm bg-white/80 dark:bg-slate-900/80 ${isPastDate ? 'opacity-60' : ''}`}>
-            <StatusInput
-              title={isToday ? "Tomorrow's Action Items" : "Today's Action Items"}
-              value={todayActions}
-              onChange={setTodayActions}
-              placeholder="Planned follow-ups and tasks..."
-              disabled={isPastDate}
-              icon={Clock}
-            />
-          </Card>
+          {/* Two Column Layout for Action Items and Help Needed */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Action Items Section */}
+            <Card className={`p-5 border-0 shadow-sm bg-white/90 dark:bg-slate-900/90 ${isPastDate ? 'opacity-60' : ''}`}>
+              <StatusInput
+                title={isToday ? "Tomorrow's Action Items & Follow-ups" : "Today's Action Items & Follow-ups"}
+                value={todayActions}
+                onChange={setTodayActions}
+                placeholder="Planned follow-ups and tasks for the next day..."
+                disabled={isPastDate}
+                icon={Clock}
+              />
+            </Card>
 
-          {/* Help Needed Section */}
-          <Card className="p-4 border-0 shadow-sm bg-white/80 dark:bg-slate-900/80">
-            <StatusInput
-              title="Help Needed"
-              value={helpNeeded}
-              onChange={setHelpNeeded}
-              placeholder="Support needed from the team..."
-              icon={Users}
-            />
-          </Card>
+            {/* Help Needed Section */}
+            <Card className="p-5 border-0 shadow-sm bg-white/90 dark:bg-slate-900/90">
+              <StatusInput
+                title="Help Needed from the Team"
+                value={helpNeeded}
+                onChange={setHelpNeeded}
+                placeholder="Support needed from colleagues or management..."
+                icon={Users}
+              />
+            </Card>
+          </div>
         </div>
 
-        {/* Recent Updates - Compact Timeline */}
+        {/* Recent Updates */}
         {pastStatuses.length > 0 && (
-          <Card className="p-4 border-0 shadow-sm bg-white/80 dark:bg-slate-900/80">
-            <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
-              <Clock className="h-4 w-4 text-muted-foreground" />
+          <Card className="p-5 border-0 shadow-sm bg-white/90 dark:bg-slate-900/90">
+            <h3 className="text-base font-semibold mb-4 flex items-center gap-2">
+              <Clock className="h-5 w-5 text-primary" />
               Recent Updates
             </h3>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {pastStatuses.slice(0, 5).map((status) => (
                 <div 
                   key={status.id} 
-                  className="p-3 rounded-lg bg-slate-50/80 dark:bg-slate-800/50 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition-colors cursor-pointer"
+                  className="p-4 rounded-xl bg-slate-50/80 dark:bg-slate-800/50 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition-colors cursor-pointer border border-slate-100 dark:border-slate-800"
                   onClick={() => setSelectedDate(status.status_date)}
                   data-testid={`past-status-${status.id}`}
                 >
-                  <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-start justify-between mb-3">
                     <div>
-                      <p className="font-medium text-sm">{format(new Date(status.status_date), 'EEEE, MMM d')}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
+                      <p className="font-semibold text-base">{format(new Date(status.status_date), 'EEEE, MMM d')}</p>
+                      <div className="flex items-center gap-3 mt-1">
                         <span className="text-xs text-muted-foreground">
-                          {format(new Date(status.created_at), 'h:mm a')}
+                          Posted {format(new Date(status.created_at), 'h:mm a')}
                         </span>
                         {status.posted_by_name && (
-                          <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
-                            • Posted by {status.posted_by_name}
+                          <span className="text-xs text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            Posted by {status.posted_by_name}
                           </span>
                         )}
                       </div>
                     </div>
-                    <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90" />
+                    <ChevronDown className="h-5 w-5 text-muted-foreground -rotate-90" />
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {status.yesterday_updates && (
-                      <div>
-                        <p className="font-medium text-muted-foreground mb-1">Updates</p>
-                        <BulletedContent text={status.yesterday_updates} />
+                      <div className="bg-white/60 dark:bg-slate-900/60 rounded-lg p-3">
+                        <p className="font-semibold text-xs text-muted-foreground mb-2 uppercase tracking-wide">Updates</p>
+                        <StyledContentDisplay text={status.yesterday_updates} />
                       </div>
                     )}
                     {status.today_actions && (
-                      <div>
-                        <p className="font-medium text-muted-foreground mb-1">Action Items</p>
-                        <BulletedContent text={status.today_actions} />
+                      <div className="bg-white/60 dark:bg-slate-900/60 rounded-lg p-3">
+                        <p className="font-semibold text-xs text-muted-foreground mb-2 uppercase tracking-wide">Action Items</p>
+                        <StyledContentDisplay text={status.today_actions} />
                       </div>
                     )}
                     {status.help_needed && (
-                      <div>
-                        <p className="font-medium text-muted-foreground mb-1">Help Needed</p>
-                        <BulletedContent text={status.help_needed} />
+                      <div className="bg-white/60 dark:bg-slate-900/60 rounded-lg p-3">
+                        <p className="font-semibold text-xs text-muted-foreground mb-2 uppercase tracking-wide">Help Needed</p>
+                        <StyledContentDisplay text={status.help_needed} />
                       </div>
                     )}
                   </div>
