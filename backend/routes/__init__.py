@@ -18,6 +18,7 @@ from .tasks import router as tasks_router
 from .meetings import router as meetings_router
 from .users import router as users_router
 from .requests import router as requests_router
+from .expense_master import router as expense_master_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -28,6 +29,7 @@ routes_router.include_router(targets_router, prefix="/target-planning", tags=["T
 routes_router.include_router(tasks_router, prefix="/tasks", tags=["Tasks"])
 routes_router.include_router(meetings_router, prefix="/meetings", tags=["Meetings"])
 routes_router.include_router(users_router, prefix="/users", tags=["Users"])
+routes_router.include_router(expense_master_router, tags=["Expense Master"])
 
 # Requests routes are at root level (leave-requests, travel-requests, etc.)
 routes_router.include_router(requests_router, tags=["Requests"])

@@ -12,7 +12,7 @@ import {
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
   Kanban, Wrench, Box, ShieldCheck, Boxes,
-  Factory, ArrowLeftRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet
+  Factory, ArrowLeftRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt
 } from 'lucide-react';
 
 const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
@@ -84,6 +84,7 @@ const salesNavigationGroups = [
       { name: 'Master Locations', href: '/master-locations', icon: MapPin, roles: ['CEO', 'Director', 'System Admin'] },
       { name: 'Lead Statuses', href: '/master-lead-status', icon: Settings, roles: ['CEO', 'Director', 'System Admin'] },
       { name: 'Business Categories', href: '/master-business-categories', icon: Building, roles: ['CEO', 'Director', 'System Admin'] },
+      { name: 'Expense Categories', href: '/expense-category-master', icon: Receipt, roles: ['CEO', 'Director', 'System Admin'] },
     ]
   },
 ];
