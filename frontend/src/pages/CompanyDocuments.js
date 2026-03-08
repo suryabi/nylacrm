@@ -613,24 +613,21 @@ export default function CompanyDocuments() {
       title: 'Leave Policy',
       description: 'Types of leaves, eligibility, and application procedures',
       icon: CalendarOff,
-      status: 'available',
-      tab: 'leave'
+      comingSoon: true
     },
     {
       id: 'incentive-policy',
       title: 'Incentive Policy',
       description: 'Sales incentives, bonuses, and reward programs',
       icon: Gift,
-      status: 'available',
-      tab: 'incentive'
+      comingSoon: true
     },
     {
       id: 'payslips',
       title: 'Payslips',
       description: 'Monthly salary statements and tax documents',
       icon: Receipt,
-      status: 'available',
-      tab: 'payslips'
+      comingSoon: true
     },
     {
       id: 'hr-policies',
@@ -684,18 +681,6 @@ export default function CompanyDocuments() {
             <Plane className="h-4 w-4 mr-2" />
             Travel Policy
           </TabsTrigger>
-          <TabsTrigger value="leave" className="data-[state=active]:bg-white">
-            <CalendarOff className="h-4 w-4 mr-2" />
-            Leave Policy
-          </TabsTrigger>
-          <TabsTrigger value="incentive" className="data-[state=active]:bg-white">
-            <Gift className="h-4 w-4 mr-2" />
-            Incentive Policy
-          </TabsTrigger>
-          <TabsTrigger value="payslips" className="data-[state=active]:bg-white">
-            <Receipt className="h-4 w-4 mr-2" />
-            Payslips
-          </TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -718,21 +703,6 @@ export default function CompanyDocuments() {
         {/* Travel Policy Tab */}
         <TabsContent value="travel" className="mt-6">
           <TravelPolicyContent userRole={user?.role} />
-        </TabsContent>
-
-        {/* Leave Policy Tab */}
-        <TabsContent value="leave" className="mt-6">
-          <LeavePolicyContent />
-        </TabsContent>
-
-        {/* Incentive Policy Tab */}
-        <TabsContent value="incentive" className="mt-6">
-          <IncentivePolicyContent />
-        </TabsContent>
-
-        {/* Payslips Tab */}
-        <TabsContent value="payslips" className="mt-6">
-          <PayslipsContent />
         </TabsContent>
       </Tabs>
     </div>
