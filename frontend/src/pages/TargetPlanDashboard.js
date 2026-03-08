@@ -15,6 +15,12 @@ import {
   DialogFooter,
 } from '../components/ui/dialog';
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '../components/ui/sheet';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -44,7 +50,8 @@ import {
   BarChart3,
   Package,
   Users,
-  ChevronRight
+  ChevronRight,
+  X
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import AppBreadcrumb from '../components/AppBreadcrumb';
@@ -636,12 +643,14 @@ function CityAllocationDetailDialog({ open, onOpenChange, city, parentTerritory,
 
       if (resourcesRes.ok) {
         const resources = await resourcesRes.json();
-        setAvailableResources(resources);
+        // Handle both array and object responses
+        setAvailableResources(Array.isArray(resources) ? resources : (resources.resources || resources.data || []));
       }
 
       if (skusRes.ok) {
-        const skus = await skusRes.json();
-        setAvailableSKUs(skus);
+        const skusData = await skusRes.json();
+        // Handle both array and object responses - API returns { skus: [...] }
+        setAvailableSKUs(Array.isArray(skusData) ? skusData : (skusData.skus || skusData.data || []));
       }
 
       if (childrenRes.ok) {
@@ -763,298 +772,302 @@ function CityAllocationDetailDialog({ open, onOpenChange, city, parentTerritory,
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-[500px] sm:w-[540px] overflow-y-auto">
+        <SheetHeader className="pb-4 border-b">
+          <SheetTitle className="flex items-center gap-2 text-lg">
             <Building2 className="h-5 w-5 text-primary" />
             {city?.city} - Allocation Breakdown
-          </DialogTitle>
-        </DialogHeader>
+          </SheetTitle>
+        </SheetHeader>
 
-        {/* City Budget Summary */}
-        <div className="bg-gradient-to-r from-slate-100 to-slate-50 rounded-lg p-4 mb-4">
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <p className="text-xs text-muted-foreground">City Target</p>
-              <p className="text-xl font-bold text-slate-700">{formatCurrency(city?.amount, true)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Allocated</p>
-              <p className="text-xl font-bold text-blue-600">
-                {formatCurrency(totalResourceAllocated + totalSKUAllocated, true)}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Available</p>
-              <p className={cn("text-xl font-bold", getAvailableBudget() > 0 ? "text-amber-600" : "text-green-600")}>
-                {formatCurrency(getAvailableBudget(), true)}
-              </p>
+        <div className="py-4 space-y-4">
+          {/* City Budget Summary */}
+          <div className="bg-gradient-to-r from-slate-100 to-slate-50 rounded-lg p-4">
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div>
+                <p className="text-xs text-muted-foreground">City Target</p>
+                <p className="text-lg font-bold text-slate-700">{formatCurrency(city?.amount, true)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Allocated</p>
+                <p className="text-lg font-bold text-blue-600">
+                  {formatCurrency(totalResourceAllocated + totalSKUAllocated, true)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Available</p>
+                <p className={cn("text-lg font-bold", getAvailableBudget() > 0 ? "text-amber-600" : "text-green-600")}>
+                  {formatCurrency(getAvailableBudget(), true)}
+                </p>
+              </div>
             </div>
           </div>
+
+          {/* Tabs */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="resources" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Resources
+                <Badge variant="secondary" className="ml-1 text-xs">{resourcePercent}%</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="skus" className="flex items-center gap-2">
+                <Package className="h-4 w-4" />
+                SKUs
+                <Badge variant="secondary" className="ml-1 text-xs">{skuPercent}%</Badge>
+              </TabsTrigger>
+            </TabsList>
+
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : (
+              <>
+                {/* Resources Tab */}
+                <TabsContent value="resources" className="mt-4">
+                  <div className="space-y-4">
+                    {/* Add Resource Form */}
+                    <div className="bg-blue-50/50 rounded-lg p-3 border border-blue-100">
+                      <div className="space-y-3">
+                        <div>
+                          <Label className="text-xs">Select Resource</Label>
+                          <Select 
+                            value={newAllocation.id} 
+                            onValueChange={(v) => {
+                              const resource = availableResources.find(r => r.id === v);
+                              setNewAllocation({ ...newAllocation, id: v, name: resource?.name || '' });
+                            }}
+                          >
+                            <SelectTrigger className="mt-1 bg-white">
+                              <SelectValue placeholder="Choose resource" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {getAvailableItems().length === 0 ? (
+                                <div className="p-2 text-sm text-muted-foreground text-center">
+                                  All resources allocated
+                                </div>
+                              ) : (
+                                getAvailableItems().map((resource) => (
+                                  <SelectItem key={resource.id} value={resource.id}>
+                                    <span className="flex items-center gap-2">
+                                      <User className="h-4 w-4" />
+                                      {resource.name} <span className="text-muted-foreground">({resource.role})</span>
+                                    </span>
+                                  </SelectItem>
+                                ))
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex gap-2 items-end">
+                          <div className="flex-1">
+                            <Label className="text-xs">
+                              {allocationType === 'percentage' ? '% of Available Budget' : 'Amount (₹)'}
+                            </Label>
+                            <Input
+                              type="number"
+                              value={allocationType === 'percentage' ? newAllocation.percentage : newAllocation.amount}
+                              onChange={(e) => setNewAllocation({ 
+                                ...newAllocation, 
+                                [allocationType === 'percentage' ? 'percentage' : 'amount']: e.target.value 
+                              })}
+                              placeholder={allocationType === 'percentage' ? '% of budget' : '₹ amount'}
+                              className="mt-1 bg-white"
+                            />
+                          </div>
+                          <Button size="sm" onClick={handleAddAllocation} disabled={adding} className="h-9">
+                            {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4 mr-1" /> Add</>}
+                          </Button>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant={allocationType === 'percentage' ? 'default' : 'outline'}
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => setAllocationType('percentage')}
+                          >
+                            <Percent className="h-3 w-3 mr-1" /> Percentage
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={allocationType === 'amount' ? 'default' : 'outline'}
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => setAllocationType('amount')}
+                          >
+                            <IndianRupee className="h-3 w-3 mr-1" /> Amount
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Resource Allocations List */}
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground uppercase">Allocated Resources</p>
+                      {resourceAllocations.length === 0 ? (
+                        <div className="text-center py-6 text-muted-foreground border-2 border-dashed rounded-lg">
+                          <Users className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                          <p className="text-sm">No resources allocated yet</p>
+                        </div>
+                      ) : (
+                        resourceAllocations.map((alloc) => (
+                          <div key={alloc.id} className="flex items-center justify-between p-3 rounded-lg border bg-white group">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                                <User className="h-4 w-4 text-blue-600" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-sm">{alloc.resource_name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {cityAmount > 0 ? ((alloc.amount / cityAmount) * 100).toFixed(0) : 0}% of city target
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <p className="font-semibold text-blue-600">{formatCurrency(alloc.amount, true)}</p>
+                              <Button 
+                                size="icon" 
+                                variant="ghost" 
+                                className="h-7 w-7 opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
+                                onClick={() => handleDeleteAllocation(alloc)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </TabsContent>
+
+                {/* SKUs Tab */}
+                <TabsContent value="skus" className="mt-4">
+                  <div className="space-y-4">
+                    {/* Add SKU Form */}
+                    <div className="bg-emerald-50/50 rounded-lg p-3 border border-emerald-100">
+                      <div className="space-y-3">
+                        <div>
+                          <Label className="text-xs">Select SKU</Label>
+                          <Select 
+                            value={newAllocation.id} 
+                            onValueChange={(v) => {
+                              const sku = availableSKUs.find(s => s.id === v);
+                              setNewAllocation({ ...newAllocation, id: v, name: sku?.name || '' });
+                            }}
+                          >
+                            <SelectTrigger className="mt-1 bg-white">
+                              <SelectValue placeholder="Choose SKU" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {getAvailableItems().length === 0 ? (
+                                <div className="p-2 text-sm text-muted-foreground text-center">
+                                  All SKUs allocated
+                                </div>
+                              ) : (
+                                getAvailableItems().map((sku) => (
+                                  <SelectItem key={sku.id} value={sku.id}>
+                                    <span className="flex items-center gap-2">
+                                      <Package className="h-4 w-4" />
+                                      {sku.name} {sku.category && <span className="text-muted-foreground">({sku.category})</span>}
+                                    </span>
+                                  </SelectItem>
+                                ))
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex gap-2 items-end">
+                          <div className="flex-1">
+                            <Label className="text-xs">
+                              {allocationType === 'percentage' ? '% of Available Budget' : 'Amount (₹)'}
+                            </Label>
+                            <Input
+                              type="number"
+                              value={allocationType === 'percentage' ? newAllocation.percentage : newAllocation.amount}
+                              onChange={(e) => setNewAllocation({ 
+                                ...newAllocation, 
+                                [allocationType === 'percentage' ? 'percentage' : 'amount']: e.target.value 
+                              })}
+                              placeholder={allocationType === 'percentage' ? '% of budget' : '₹ amount'}
+                              className="mt-1 bg-white"
+                            />
+                          </div>
+                          <Button size="sm" onClick={handleAddAllocation} disabled={adding} className="h-9">
+                            {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Plus className="h-4 w-4 mr-1" /> Add</>}
+                          </Button>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant={allocationType === 'percentage' ? 'default' : 'outline'}
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => setAllocationType('percentage')}
+                          >
+                            <Percent className="h-3 w-3 mr-1" /> Percentage
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={allocationType === 'amount' ? 'default' : 'outline'}
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => setAllocationType('amount')}
+                          >
+                            <IndianRupee className="h-3 w-3 mr-1" /> Amount
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* SKU Allocations List */}
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground uppercase">Allocated SKUs</p>
+                      {skuAllocations.length === 0 ? (
+                        <div className="text-center py-6 text-muted-foreground border-2 border-dashed rounded-lg">
+                          <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                          <p className="text-sm">No SKUs allocated yet</p>
+                        </div>
+                      ) : (
+                        skuAllocations.map((alloc) => (
+                          <div key={alloc.id} className="flex items-center justify-between p-3 rounded-lg border bg-white group">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                                <Package className="h-4 w-4 text-emerald-600" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-sm">{alloc.sku_name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {cityAmount > 0 ? ((alloc.amount / cityAmount) * 100).toFixed(0) : 0}% of city target
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <p className="font-semibold text-emerald-600">{formatCurrency(alloc.amount, true)}</p>
+                              <Button 
+                                size="icon" 
+                                variant="ghost" 
+                                className="h-7 w-7 opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
+                                onClick={() => handleDeleteAllocation(alloc)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </TabsContent>
+              </>
+            )}
+          </Tabs>
         </div>
-
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="resources" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Resources
-              <Badge variant="secondary" className="ml-1 text-xs">{resourcePercent}%</Badge>
-            </TabsTrigger>
-            <TabsTrigger value="skus" className="flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              SKUs
-              <Badge variant="secondary" className="ml-1 text-xs">{skuPercent}%</Badge>
-            </TabsTrigger>
-          </TabsList>
-
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : (
-            <>
-              {/* Resources Tab */}
-              <TabsContent value="resources" className="flex-1 overflow-hidden mt-4">
-                <div className="flex flex-col h-full">
-                  {/* Add Resource Form */}
-                  <div className="bg-blue-50/50 rounded-lg p-3 mb-3 border border-blue-100">
-                    <div className="flex gap-3 items-end">
-                      <div className="flex-1">
-                        <Label className="text-xs">Select Resource</Label>
-                        <Select 
-                          value={newAllocation.id} 
-                          onValueChange={(v) => {
-                            const resource = availableResources.find(r => r.id === v);
-                            setNewAllocation({ ...newAllocation, id: v, name: resource?.name || '' });
-                          }}
-                        >
-                          <SelectTrigger className="mt-1 bg-white">
-                            <SelectValue placeholder="Choose resource" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {getAvailableItems().length === 0 ? (
-                              <div className="p-2 text-sm text-muted-foreground text-center">
-                                All resources allocated
-                              </div>
-                            ) : (
-                              getAvailableItems().map((resource) => (
-                                <SelectItem key={resource.id} value={resource.id}>
-                                  <span className="flex items-center gap-2">
-                                    <User className="h-4 w-4" />
-                                    {resource.name} <span className="text-muted-foreground">({resource.role})</span>
-                                  </span>
-                                </SelectItem>
-                              ))
-                            )}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="w-28">
-                        <Label className="text-xs">
-                          {allocationType === 'percentage' ? '% of Budget' : 'Amount (₹)'}
-                        </Label>
-                        <Input
-                          type="number"
-                          value={allocationType === 'percentage' ? newAllocation.percentage : newAllocation.amount}
-                          onChange={(e) => setNewAllocation({ 
-                            ...newAllocation, 
-                            [allocationType === 'percentage' ? 'percentage' : 'amount']: e.target.value 
-                          })}
-                          placeholder={allocationType === 'percentage' ? '%' : '₹'}
-                          className="mt-1 bg-white"
-                        />
-                      </div>
-                      <Button size="sm" onClick={handleAddAllocation} disabled={adding}>
-                        {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                    <div className="flex gap-2 mt-2">
-                      <Button
-                        type="button"
-                        variant={allocationType === 'percentage' ? 'default' : 'outline'}
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => setAllocationType('percentage')}
-                      >
-                        <Percent className="h-3 w-3 mr-1" /> %
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={allocationType === 'amount' ? 'default' : 'outline'}
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => setAllocationType('amount')}
-                      >
-                        <IndianRupee className="h-3 w-3 mr-1" /> ₹
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Resource Allocations List */}
-                  <div className="flex-1 overflow-y-auto space-y-2">
-                    {resourceAllocations.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
-                        <Users className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                        <p className="text-sm">No resources allocated yet</p>
-                      </div>
-                    ) : (
-                      resourceAllocations.map((alloc) => (
-                        <div key={alloc.id} className="flex items-center justify-between p-3 rounded-lg border bg-white group">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                              <User className="h-4 w-4 text-blue-600" />
-                            </div>
-                            <div>
-                              <p className="font-medium text-sm">{alloc.resource_name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {cityAmount > 0 ? ((alloc.amount / cityAmount) * 100).toFixed(0) : 0}% of city target
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <p className="font-semibold text-blue-600">{formatCurrency(alloc.amount, true)}</p>
-                            <Button 
-                              size="icon" 
-                              variant="ghost" 
-                              className="h-7 w-7 opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
-                              onClick={() => handleDeleteAllocation(alloc)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </TabsContent>
-
-              {/* SKUs Tab */}
-              <TabsContent value="skus" className="flex-1 overflow-hidden mt-4">
-                <div className="flex flex-col h-full">
-                  {/* Add SKU Form */}
-                  <div className="bg-emerald-50/50 rounded-lg p-3 mb-3 border border-emerald-100">
-                    <div className="flex gap-3 items-end">
-                      <div className="flex-1">
-                        <Label className="text-xs">Select SKU</Label>
-                        <Select 
-                          value={newAllocation.id} 
-                          onValueChange={(v) => {
-                            const sku = availableSKUs.find(s => s.id === v);
-                            setNewAllocation({ ...newAllocation, id: v, name: sku?.name || '' });
-                          }}
-                        >
-                          <SelectTrigger className="mt-1 bg-white">
-                            <SelectValue placeholder="Choose SKU" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {getAvailableItems().length === 0 ? (
-                              <div className="p-2 text-sm text-muted-foreground text-center">
-                                All SKUs allocated
-                              </div>
-                            ) : (
-                              getAvailableItems().map((sku) => (
-                                <SelectItem key={sku.id} value={sku.id}>
-                                  <span className="flex items-center gap-2">
-                                    <Package className="h-4 w-4" />
-                                    {sku.name} <span className="text-muted-foreground">({sku.category})</span>
-                                  </span>
-                                </SelectItem>
-                              ))
-                            )}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="w-28">
-                        <Label className="text-xs">
-                          {allocationType === 'percentage' ? '% of Budget' : 'Amount (₹)'}
-                        </Label>
-                        <Input
-                          type="number"
-                          value={allocationType === 'percentage' ? newAllocation.percentage : newAllocation.amount}
-                          onChange={(e) => setNewAllocation({ 
-                            ...newAllocation, 
-                            [allocationType === 'percentage' ? 'percentage' : 'amount']: e.target.value 
-                          })}
-                          placeholder={allocationType === 'percentage' ? '%' : '₹'}
-                          className="mt-1 bg-white"
-                        />
-                      </div>
-                      <Button size="sm" onClick={handleAddAllocation} disabled={adding}>
-                        {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                    <div className="flex gap-2 mt-2">
-                      <Button
-                        type="button"
-                        variant={allocationType === 'percentage' ? 'default' : 'outline'}
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => setAllocationType('percentage')}
-                      >
-                        <Percent className="h-3 w-3 mr-1" /> %
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={allocationType === 'amount' ? 'default' : 'outline'}
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => setAllocationType('amount')}
-                      >
-                        <IndianRupee className="h-3 w-3 mr-1" /> ₹
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* SKU Allocations List */}
-                  <div className="flex-1 overflow-y-auto space-y-2">
-                    {skuAllocations.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
-                        <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                        <p className="text-sm">No SKUs allocated yet</p>
-                      </div>
-                    ) : (
-                      skuAllocations.map((alloc) => (
-                        <div key={alloc.id} className="flex items-center justify-between p-3 rounded-lg border bg-white group">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                              <Package className="h-4 w-4 text-emerald-600" />
-                            </div>
-                            <div>
-                              <p className="font-medium text-sm">{alloc.sku_name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {cityAmount > 0 ? ((alloc.amount / cityAmount) * 100).toFixed(0) : 0}% of city target
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <p className="font-semibold text-emerald-600">{formatCurrency(alloc.amount, true)}</p>
-                            <Button 
-                              size="icon" 
-                              variant="ghost" 
-                              className="h-7 w-7 opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
-                              onClick={() => handleDeleteAllocation(alloc)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </TabsContent>
-            </>
-          )}
-        </Tabs>
-
-        <DialogFooter className="mt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }
 
