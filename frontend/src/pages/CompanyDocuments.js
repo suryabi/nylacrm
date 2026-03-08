@@ -56,24 +56,29 @@ const formatCurrency = (value) => {
 const DocumentItem = ({ title, description, icon: Icon, status, onClick, comingSoon }) => (
   <Card 
     className={cn(
-      "cursor-pointer transition-all hover:shadow-md hover:border-primary/30",
-      comingSoon && "opacity-60"
+      "transition-all",
+      comingSoon ? "opacity-50 cursor-not-allowed bg-muted/30" : "cursor-pointer hover:shadow-md hover:border-primary/30"
     )}
-    onClick={onClick}
+    onClick={comingSoon ? undefined : onClick}
   >
     <CardContent className="p-4">
       <div className="flex items-start gap-4">
-        <div className="p-3 rounded-xl bg-gradient-to-br from-primary/10 to-primary/5">
-          <Icon className="h-6 w-6 text-primary" />
+        <div className={cn(
+          "p-3 rounded-xl",
+          comingSoon ? "bg-muted" : "bg-gradient-to-br from-primary/10 to-primary/5"
+        )}>
+          <Icon className={cn("h-6 w-6", comingSoon ? "text-muted-foreground" : "text-primary")} />
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="font-semibold">{title}</h3>
+            <h3 className={cn("font-semibold", comingSoon && "text-muted-foreground")}>{title}</h3>
             {comingSoon && (
-              <Badge variant="secondary" className="text-xs">Coming Soon</Badge>
+              <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-300">
+                Coming Soon
+              </Badge>
             )}
             {status === 'available' && (
-              <Badge variant="outline" className="text-xs text-green-600 border-green-300">
+              <Badge variant="outline" className="text-xs text-green-600 border-green-300 bg-green-50">
                 <CheckCircle className="h-3 w-3 mr-1" /> Available
               </Badge>
             )}
