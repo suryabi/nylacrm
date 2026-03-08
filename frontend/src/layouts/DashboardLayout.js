@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useAppContext } from '../context/AppContextContext';
 import { useTheme } from '../context/ThemeContext';
+import { useNavigation } from '../context/NavigationContext';
 import { Button } from '../components/ui/button';
 import { 
   LogOut, Menu, ChevronDown, ChevronRight, 
@@ -129,6 +130,7 @@ export default function DashboardLayout({ children }) {
   const { user, logout } = useAuth();
   const { currentContext, switchContext, canAccessBothContexts } = useAppContext();
   const { theme, toggleTheme } = useTheme();
+  const { navigateTo } = useNavigation();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -149,13 +151,19 @@ export default function DashboardLayout({ children }) {
     setCollapsedGroups(prev => ({ ...prev, [title]: !prev[title] }));
   };
 
+  // Handle sidebar navigation - resets the breadcrumb trail
+  const handleSidebarNav = (href) => {
+    setSidebarOpen(false);
+    navigateTo(href, { fromSidebar: true });
+  };
+
   const handleContextSwitch = (newContext) => {
     switchContext(newContext);
     // Navigate to appropriate default page
     if (newContext === 'production') {
-      navigate('/maintenance');
+      navigateTo('/maintenance', { fromSidebar: true });
     } else {
-      navigate('/home');
+      navigateTo('/home', { fromSidebar: true });
     }
   };
 
@@ -269,18 +277,17 @@ export default function DashboardLayout({ children }) {
                                 {filteredDashboardSubmenu.map((subItem) => {
                                   const isSubActive = location.pathname === subItem.href;
                                   return (
-                                    <Link
+                                    <button
                                       key={subItem.name}
-                                      to={subItem.href}
-                                      onClick={() => setSidebarOpen(false)}
-                                      className={`block px-3 py-2 rounded-md text-sm transition-all ${
+                                      onClick={() => handleSidebarNav(subItem.href)}
+                                      className={`block w-full text-left px-3 py-2 rounded-md text-sm transition-all ${
                                         isSubActive
                                           ? 'bg-primary/20 text-primary font-medium'
                                           : 'text-white/60 hover:bg-white/10 hover:text-white/90'
                                       }`}
                                     >
                                       {subItem.name}
-                                    </Link>
+                                    </button>
                                   );
                                 })}
                               </div>
@@ -291,11 +298,10 @@ export default function DashboardLayout({ children }) {
                       
                       const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
                       return (
-                        <Link
+                        <button
                           key={item.name}
-                          to={item.href}
-                          onClick={() => setSidebarOpen(false)}
-                          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                          onClick={() => handleSidebarNav(item.href)}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                             isActive
                               ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/30'
                               : 'text-white/80 hover:bg-white/10 hover:text-white'
@@ -303,7 +309,7 @@ export default function DashboardLayout({ children }) {
                         >
                           <Icon className="h-4 w-4" />
                           {item.name}
-                        </Link>
+                        </button>
                       );
                     })}
                   </div>

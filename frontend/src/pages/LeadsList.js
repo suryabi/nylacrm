@@ -46,6 +46,7 @@ import { useMasterLocations } from '../hooks/useMasterLocations';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
 import { LeadRankBadge } from '../components/LeadRankingTiles';
 import AppBreadcrumb from '../components/AppBreadcrumb';
+import { useNavigation } from '../context/NavigationContext';
 
 const TIME_FILTERS = [
   { value: 'this_week', label: 'This Week' }, { value: 'last_week', label: 'Last Week' },
@@ -57,6 +58,7 @@ const TIME_FILTERS = [
 
 export default function LeadsList() {
   const navigate = useNavigate();
+  const { navigateTo, saveFilters } = useNavigation();
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -402,7 +404,11 @@ export default function LeadsList() {
                   </TableHeader>
                   <TableBody>
                     {displayLeads.map((lead) => (
-                      <TableRow key={lead.id} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/30 border-b border-slate-50 dark:border-slate-800/50 transition-colors" onClick={() => navigate(`/leads/${lead.id}`)} data-testid={`lead-row-${lead.id}`}>
+                      <TableRow key={lead.id} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/30 border-b border-slate-50 dark:border-slate-800/50 transition-colors" onClick={() => {
+                        // Save current filters before navigating
+                        saveFilters({ searchQuery, statusFilter, territoryFilter, stateFilter, cityFilter, assignedToFilter, timeFilter });
+                        navigateTo(`/leads/${lead.id}`, { label: lead.company || lead.name || 'Lead Details' });
+                      }} data-testid={`lead-row-${lead.id}`}>
                         <TableCell data-testid={`lead-cell-${lead.id}`}>
                           <div className="flex items-center gap-2">
                             {lead.rank && <LeadRankBadge rank={lead.rank} size="xs" />}

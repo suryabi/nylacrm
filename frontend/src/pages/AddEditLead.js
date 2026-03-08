@@ -18,9 +18,11 @@ import { Card } from '../components/ui/card';
 import { toast } from 'sonner';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useNavigation } from '../context/NavigationContext';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
 import { useBusinessCategories } from '../hooks/useBusinessCategories';
+import AppBreadcrumb from '../components/AppBreadcrumb';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -48,6 +50,7 @@ const LEAD_SOURCES = [
 export default function AddEditLead() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { navigateTo, updateCurrentLabel } = useNavigation();
   const { user } = useAuth();
   const isEdit = !!id;
   const [loading, setLoading] = useState(false);
@@ -214,7 +217,7 @@ export default function AddEditLead() {
         await leadsAPI.create(submitData);
         toast.success('Lead created successfully');
       }
-      navigate('/leads');
+      navigateTo('/leads', { fromSidebar: true });
     } catch (error) {
       console.error('Save error:', error);
       console.error('Error response:', error.response?.data);
@@ -265,8 +268,11 @@ export default function AddEditLead() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6" data-testid="add-edit-lead-page">
+      {/* Breadcrumb */}
+      <AppBreadcrumb currentLabel={isEdit ? 'Edit Lead' : 'New Lead'} />
+      
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/leads')} data-testid="back-button">
+        <Button variant="ghost" size="icon" onClick={() => navigateTo('/leads', { fromSidebar: true })} data-testid="back-button">
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <h1 className="text-3xl font-semibold">{isEdit ? 'Edit Lead' : 'Add New Lead'}</h1>
@@ -576,7 +582,7 @@ export default function AddEditLead() {
           <Button type="submit" disabled={loading} data-testid="save-lead-button">
             {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : (isEdit ? 'Update Lead' : 'Create Lead')}
           </Button>
-          <Button type="button" variant="outline" onClick={() => navigate('/leads')} data-testid="cancel-button">
+          <Button type="button" variant="outline" onClick={() => navigateTo('/leads', { fromSidebar: true })} data-testid="cancel-button">
             Cancel
           </Button>
         </div>

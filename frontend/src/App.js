@@ -57,6 +57,7 @@ import TravelRequest from './pages/TravelRequest';
 import BudgetRequest from './pages/BudgetRequest';
 import '@/App.css';
 import { useActivityTracker } from './hooks/useActivityTracker';
+import { NavigationProvider } from './context/NavigationContext';
 
 function ActivityTrackerWrapper({ children }) {
   useActivityTracker();
@@ -89,7 +90,9 @@ function App() {
       <AuthProvider>
         <AppContextProvider>
           <BrowserRouter>
-            <AppRouter />
+            <NavigationProvider>
+              <AppRouter />
+            </NavigationProvider>
           </BrowserRouter>
         </AppContextProvider>
       </AuthProvider>

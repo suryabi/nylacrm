@@ -11,7 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { useAuth } from '../context/AuthContext';
+import { useNavigation } from '../context/NavigationContext';
 import { LeadRankBadge } from '../components/LeadRankingTiles';
+import AppBreadcrumb from '../components/AppBreadcrumb';
 import { 
   Search, 
   Filter, 
@@ -341,6 +343,7 @@ const ActivityLogDialog = ({ open, onClose, lead, fromStatus, toStatus, onSubmit
 
 export default function LeadsKanban() {
   const navigate = useNavigate();
+  const { navigateTo, saveFilters } = useNavigation();
   const { user } = useAuth();
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
@@ -597,7 +600,8 @@ export default function LeadsKanban() {
   };
   
   const handleCardClick = (lead) => {
-    navigate(`/leads/${lead.id}`);
+    saveFilters({ searchQuery, cityFilter, assignedToFilter, categoryFilter });
+    navigateTo(`/leads/${lead.id}`, { label: lead.company || lead.name || 'Lead Details' });
   };
   
   const resetFilters = () => {
@@ -620,6 +624,9 @@ export default function LeadsKanban() {
   
   return (
     <div className="h-full flex flex-col" data-testid="leads-kanban">
+      {/* Breadcrumb */}
+      <AppBreadcrumb />
+      
       {/* Header */}
       <div className="flex-shrink-0 mb-4">
         <div className="flex items-center justify-between mb-4">
@@ -633,7 +640,7 @@ export default function LeadsKanban() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => navigate('/leads')}
+              onClick={() => navigateTo('/leads', { fromSidebar: true })}
               className="gap-2"
               data-testid="switch-to-list-view"
             >
@@ -643,7 +650,7 @@ export default function LeadsKanban() {
             <Button
               variant="default"
               size="sm"
-              onClick={() => navigate('/leads/new')}
+              onClick={() => navigateTo('/leads/new')}
               className="gap-2"
               data-testid="add-new-lead"
             >

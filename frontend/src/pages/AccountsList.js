@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useNavigation } from '../context/NavigationContext';
 import axios from 'axios';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -56,6 +57,7 @@ function calculateAccountAge(createdAt) {
 export default function AccountsList() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { navigateTo, saveFilters } = useNavigation();
   const [accounts, setAccounts] = useState([]);
   const [stats, setStats] = useState({ total_accounts: 0, by_type: {}, by_category: {} });
   const [loading, setLoading] = useState(true);
@@ -337,7 +339,10 @@ export default function AccountsList() {
             <div className="p-4">
               <div ref={logoGridRef} className="flex flex-wrap gap-3 p-3 bg-white dark:bg-slate-900">
                 {accounts.map((account, idx) => (
-                  <div key={account.id || idx} onClick={() => navigate(`/accounts/${account.account_id}`)} className="group cursor-pointer">
+                  <div key={account.id || idx} onClick={() => {
+                    saveFilters({ searchTerm, territoryFilter, stateFilter, cityFilter, accountTypeFilter });
+                    navigateTo(`/accounts/${account.account_id}`, { label: account.account_name || 'Account Details' });
+                  }} className="group cursor-pointer">
                     <div className="relative rounded-lg overflow-hidden bg-white border border-gray-200 hover:border-primary/50 transition-all duration-200 hover:shadow-lg" style={{ width: '132px', height: '132px' }}>
                       {account.logo_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${account.logo_url}`} alt={account.account_name} className="w-full h-full object-contain p-1" /> : <div className="w-full h-full flex items-center justify-center p-1 bg-gradient-to-br from-gray-50 to-gray-100"><p className="text-[8px] font-medium text-gray-500 text-center leading-tight line-clamp-3 px-1">{account.account_name}</p></div>}
                       <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center"><p className="text-[8px] font-medium text-white text-center px-1 leading-tight">{account.account_name}</p></div>
@@ -378,7 +383,10 @@ export default function AccountsList() {
                       <tr 
                         key={account.id || idx} 
                         className="group hover:bg-gradient-to-r hover:from-amber-50/50 hover:to-orange-50/30 dark:hover:from-amber-900/10 dark:hover:to-orange-900/5 transition-all duration-200 cursor-pointer" 
-                        onClick={() => navigate(`/accounts/${account.account_id}`)} 
+                        onClick={() => {
+                          saveFilters({ searchTerm, territoryFilter, stateFilter, cityFilter, accountTypeFilter });
+                          navigateTo(`/accounts/${account.account_id}`, { label: account.account_name || 'Account Details' });
+                        }} 
                         data-testid={`account-row-${account.account_id}`}
                       >
                         <td className="py-5 px-5">

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { accountsAPI, usersAPI, skusAPI } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
+import { useNavigation } from '../context/NavigationContext';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -170,6 +171,7 @@ export default function AccountDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { updateCurrentLabel, navigateTo } = useNavigation();
   const [account, setAccount] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -431,6 +433,11 @@ ${googleMapsLink}`;
       setNextFollowUp(data.next_follow_up || '');
       setSkuPricing(data.sku_pricing || []);
       
+      // Update breadcrumb with account name
+      if (data.account_name) {
+        updateCurrentLabel(data.account_name);
+      }
+      
       // Load delivery address if exists
       if (data.delivery_address) {
         setDeliveryAddress(data.delivery_address);
@@ -442,7 +449,7 @@ ${googleMapsLink}`;
       fetchContract(data.account_id || id);
     } catch (error) {
       toast.error('Failed to load account details');
-      navigate('/accounts');
+      navigateTo('/accounts', { fromSidebar: true });
     } finally {
       setLoading(false);
     }
@@ -718,7 +725,7 @@ ${googleMapsLink}`;
     try {
       await axios.delete(`${API_URL}/accounts/${id}`, { withCredentials: true });
       toast.success('Account deleted successfully');
-      navigate('/accounts');
+      navigateTo('/accounts', { fromSidebar: true });
     } catch (error) {
       const errorMsg = error.response?.data?.detail || 'Failed to delete account';
       toast.error(errorMsg);
@@ -739,7 +746,7 @@ ${googleMapsLink}`;
     return (
       <div className="text-center py-12">
         <p className="text-lg">Account not found</p>
-        <Button onClick={() => navigate('/accounts')} className="mt-4">
+        <Button onClick={() => navigateTo('/accounts', { fromSidebar: true })} className="mt-4">
           Back to Accounts
         </Button>
       </div>
@@ -749,11 +756,11 @@ ${googleMapsLink}`;
   return (
     <div className="space-y-6" data-testid="account-detail-page">
       {/* Breadcrumb */}
-      <AppBreadcrumb context={{ accountName: account?.account_name || 'Account Details' }} />
+      <AppBreadcrumb currentLabel={account?.account_name} />
       
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/accounts')} data-testid="back-button">
+        <Button variant="ghost" size="icon" onClick={() => navigateTo('/accounts', { fromSidebar: true })} data-testid="back-button">
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex-1">

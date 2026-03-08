@@ -36,6 +36,7 @@ import LeadRankingTiles from '../components/LeadRankingTiles';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
 import CelebrationAnimation from '../components/CelebrationAnimation';
 import AppBreadcrumb from '../components/AppBreadcrumb';
+import { useNavigation } from '../context/NavigationContext';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -55,6 +56,7 @@ export default function LeadDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { statuses, getStatusLabel, getStatusColor } = useLeadStatuses();
+  const { updateCurrentLabel } = useNavigation();
   const [lead, setLead] = useState(null);
   const [activities, setActivities] = useState([]);
   const [comments, setComments] = useState([]);
@@ -445,6 +447,11 @@ ${userEmail}`;
       setLead(leadRes.data);
       setProposedSkuPricing(leadRes.data.proposed_sku_pricing || []);
       
+      // Update breadcrumb with lead name
+      if (leadRes.data.company || leadRes.data.company_name) {
+        updateCurrentLabel(leadRes.data.company || leadRes.data.company_name);
+      }
+      
       const activitiesRes = await activitiesAPI.getByLeadId(id);
       setActivities(activitiesRes.data);
       
@@ -734,7 +741,7 @@ ${userEmail}`;
   return (
     <div className="space-y-6" data-testid="lead-detail-page">
       {/* Breadcrumb */}
-      <AppBreadcrumb context={{ leadName: lead?.company || 'Lead Details' }} />
+      <AppBreadcrumb />
       
       {/* Header */}
       <div className="flex items-center gap-4">

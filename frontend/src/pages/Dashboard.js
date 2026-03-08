@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
+import { useNavigation } from '../context/NavigationContext';
 import AppBreadcrumb from '../components/AppBreadcrumb';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -65,6 +66,7 @@ const getIconForColor = (color) => STATUS_ICONS[color] || Target;
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { navigateTo, saveFilters } = useNavigation();
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [salesTeam, setSalesTeam] = useState([]);
@@ -152,6 +154,20 @@ export default function Dashboard() {
     if (additionalParams.metric) params.set('metric', additionalParams.metric);
     
     return `/leads?${params.toString()}`;
+  };
+
+  // Navigate to leads with filters (in-app navigation - preserves breadcrumb)
+  const navigateToLeads = (additionalParams = {}) => {
+    const url = buildLeadsUrl(additionalParams);
+    // Save current dashboard filters
+    saveFilters({
+      timeFilter,
+      territoryFilter,
+      stateFilter,
+      cityFilter,
+      salesResource
+    });
+    navigateTo(url, { label: 'Leads' });
   };
 
   const totalLeads = analytics?.status_distribution ? Object.values(analytics.status_distribution).reduce((sum, val) => sum + val, 0) : 0;
@@ -280,7 +296,7 @@ export default function Dashboard() {
                     return (
                       <div
                         key={status.id}
-                        onClick={() => navigate(buildLeadsUrl({ status: status.id }))}
+                        onClick={() => navigateToLeads({ status: status.id })}
                         className={`p-3 rounded-xl bg-gradient-to-br border cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 ${colorClass}`}
                         data-testid={`status-card-${status.id}`}
                       >
@@ -309,7 +325,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card 
                 className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/20 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer"
-                onClick={() => navigate(buildLeadsUrl({ status: 'won' }))}
+                onClick={() => navigateToLeads({ status: 'won' })}
                 data-testid="won-summary-card"
               >
                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-green-600" />
@@ -334,7 +350,7 @@ export default function Dashboard() {
 
               <Card 
                 className="relative overflow-hidden border-0 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/20 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer"
-                onClick={() => navigate(buildLeadsUrl({ status: 'lost' }))}
+                onClick={() => navigateToLeads({ status: 'lost' })}
                 data-testid="lost-summary-card"
               >
                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-rose-600" />
