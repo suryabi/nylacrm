@@ -12,7 +12,7 @@ import {
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
   Kanban, Wrench, Box, ShieldCheck, Boxes,
-  Factory, ArrowLeftRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText
+  Factory, ArrowLeftRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact
 } from 'lucide-react';
 
 const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
@@ -82,9 +82,11 @@ const salesNavigationGroups = [
     items: [
       { name: 'Company Profile', href: '/company-profile', icon: Building, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
       { name: 'Team', href: '/team', icon: UserCog, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
+      { name: 'Contacts', href: '/contacts', icon: Contact, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Business Development Executive', 'Sales Representative'] },
       { name: 'Master Locations', href: '/master-locations', icon: MapPin, roles: ['CEO', 'Director', 'System Admin'] },
       { name: 'Lead Statuses', href: '/master-lead-status', icon: Settings, roles: ['CEO', 'Director', 'System Admin'] },
       { name: 'Business Categories', href: '/master-business-categories', icon: Building, roles: ['CEO', 'Director', 'System Admin'] },
+      { name: 'Contact Categories', href: '/master-contact-categories', icon: Users, roles: ['CEO', 'Director', 'System Admin'] },
       { name: 'Expense Categories', href: '/expense-category-master', icon: Receipt, roles: ['CEO', 'Director', 'System Admin'] },
     ]
   },
