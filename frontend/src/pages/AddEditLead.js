@@ -95,7 +95,7 @@ export default function AddEditLead() {
     current_selling_price: '',
     interested_skus: [],
     notes: '',
-    estimated_value: 50000
+    estimated_value: ''
   });
   
   // Set initial region when user or masterTerritories change
@@ -150,7 +150,7 @@ export default function AddEditLead() {
         current_selling_price: lead.current_selling_price || '',
         interested_skus: lead.interested_skus || [],
         notes: lead.notes || '',
-        estimated_value: lead.estimated_value || 50000
+        estimated_value: lead.estimated_value || ''
       });
     } catch (error) {
       toast.error('Failed to load lead');
@@ -547,11 +547,11 @@ export default function AddEditLead() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="estimated_value">Estimated Deal Value (₹)</Label>
+              <Label htmlFor="estimated_value">Estimated Deal Value (₹) <span className="text-muted-foreground text-xs font-normal">(Optional)</span></Label>
               <Input
                 id="estimated_value"
                 type="number"
-                placeholder="Enter estimated value"
+                placeholder="Enter estimated value (optional)"
                 value={formData.estimated_value}
                 onChange={(e) => updateField('estimated_value', e.target.value)}
                 data-testid="lead-value-input"

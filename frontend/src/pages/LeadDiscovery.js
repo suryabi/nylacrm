@@ -270,7 +270,7 @@ export default function LeadDiscovery() {
             current_selling_price: null,
             interested_skus: [],
             notes: `Discovered via Lead Discovery. Rating: ${outlet.rating || 'N/A'}★, Price: ${outlet.price_range || 'N/A'}. Address: ${outlet.address || 'N/A'}`,
-            estimated_value: 50000
+            estimated_value: null
           };
           
           // Check if lead exists and we're doing a re-import
