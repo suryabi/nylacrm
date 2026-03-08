@@ -548,7 +548,7 @@ ${userEmail}`;
     const previousStatus = lead?.status;
     setSubmittingActivity(true);
     try {
-      // First log the activity
+      // Build the activity payload with optional status change and follow-up
       const activityPayload = {
         lead_id: id,
         activity_type: activityType,
@@ -556,38 +556,32 @@ ${userEmail}`;
         interaction_method: interactionMethod
       };
       
+      // Include status change if provided
+      if (activityStatus && activityStatus !== 'keep_current') {
+        activityPayload.new_status = activityStatus;
+      }
+      
+      // Include follow-up date if provided
+      if (activityFollowUpDate) {
+        activityPayload.next_followup_date = activityFollowUpDate;
+      }
+      
       // Admin can set a custom activity date
       if (activityDate && isAdmin) {
         activityPayload.created_at = new Date(activityDate + 'T12:00:00Z').toISOString();
       }
       
+      // Single API call handles everything: activity logging + status update + follow-up
       await activitiesAPI.create(activityPayload);
       
-      // Update lead status and follow-up date if provided
-      const leadUpdates = {};
+      // Check if we should trigger celebration
       if (activityStatus && activityStatus !== 'keep_current') {
-        leadUpdates.status = activityStatus;
-        // If admin set a custom date, also update lead's updated_at
-        if (activityDate && isAdmin) {
-          leadUpdates.updated_at = new Date(activityDate + 'T12:00:00Z').toISOString();
-        }
-      }
-      if (activityFollowUpDate) {
-        leadUpdates.next_followup_date = activityFollowUpDate;
-      }
-      
-      if (Object.keys(leadUpdates).length > 0) {
-        await leadsAPI.update(id, leadUpdates);
+        const isNewStatusCelebration = CELEBRATION_STATUSES.includes(activityStatus.toLowerCase());
+        const wasPreviouslyCelebration = previousStatus && CELEBRATION_STATUSES.includes(previousStatus.toLowerCase());
         
-        // Check if we should trigger celebration (status changed via activity)
-        if (activityStatus && activityStatus !== 'keep_current') {
-          const isNewStatusCelebration = CELEBRATION_STATUSES.includes(activityStatus.toLowerCase());
-          const wasPreviouslyCelebration = previousStatus && CELEBRATION_STATUSES.includes(previousStatus.toLowerCase());
-          
-          if (isNewStatusCelebration && !wasPreviouslyCelebration) {
-            setCelebrationType(activityStatus.toLowerCase().includes('customer') ? 'customer' : 'won');
-            setShowCelebration(true);
-          }
+        if (isNewStatusCelebration && !wasPreviouslyCelebration) {
+          setCelebrationType(activityStatus.toLowerCase().includes('customer') ? 'customer' : 'won');
+          setShowCelebration(true);
         }
       }
       

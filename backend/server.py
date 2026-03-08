@@ -769,6 +769,10 @@ class ActivityCreate(BaseModel):
     activity_type: str
     description: str
     interaction_method: Optional[str] = None
+    # Optional fields for combined activity + status change
+    new_status: Optional[str] = None
+    next_followup_date: Optional[str] = None
+    created_at: Optional[str] = None  # Admin override for activity date
 
 class FollowUp(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -3755,7 +3759,12 @@ async def get_lead(lead_id: str, current_user: dict = Depends(get_current_user))
     return lead
 
 @api_router.put("/leads/{lead_id}", response_model=Lead)
-async def update_lead(lead_id: str, lead_update: LeadUpdate, current_user: dict = Depends(get_current_user)):
+async def update_lead(
+    lead_id: str, 
+    lead_update: LeadUpdate, 
+    current_user: dict = Depends(get_current_user),
+    skip_activity_log: bool = False
+):
     lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
@@ -3813,8 +3822,8 @@ async def update_lead(lead_id: str, lead_update: LeadUpdate, current_user: dict 
     
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    # Track status change
-    if 'status' in update_data and update_data['status'] != lead.get('status'):
+    # Track status change (skip if activity was already logged via activity endpoint)
+    if 'status' in update_data and update_data['status'] != lead.get('status') and not skip_activity_log:
         activity = Activity(
             lead_id=lead_id,
             activity_type='status_change',
@@ -5207,12 +5216,52 @@ async def delete_lead_logo(lead_id: str, current_user: dict = Depends(get_curren
 async def create_activity(activity_input: ActivityCreate, current_user: dict = Depends(get_current_user)):
     activity_data = activity_input.model_dump()
     activity_data['created_by'] = current_user['id']
+    
+    # Extract optional fields before creating activity object
+    new_status = activity_data.pop('new_status', None)
+    next_followup_date = activity_data.pop('next_followup_date', None)
+    custom_created_at = activity_data.pop('created_at', None)
+    
+    # Build the final description - combine activity text with status change if applicable
+    description_parts = [activity_data['description']]
+    
+    # Get the lead for status change tracking
+    lead = None
+    old_status = None
+    if new_status:
+        lead = await db.leads.find_one({'id': activity_data['lead_id']}, {'_id': 0})
+        if lead:
+            old_status = lead.get('status')
+            if old_status != new_status:
+                # Get status labels for readable display
+                old_status_label = old_status.replace('_', ' ').title() if old_status else 'Unknown'
+                new_status_label = new_status.replace('_', ' ').title()
+                description_parts.append(f"[Status: {old_status_label} → {new_status_label}]")
+    
+    # Combine description parts
+    activity_data['description'] = ' '.join(description_parts)
+    
     activity_obj = Activity(**activity_data)
+    
+    # Override created_at if admin provided a custom date
+    if custom_created_at:
+        activity_obj.created_at = datetime.fromisoformat(custom_created_at.replace('Z', '+00:00'))
     
     doc = activity_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     
     await db.activities.insert_one(doc)
+    
+    # Update lead status and follow-up date if provided
+    if new_status or next_followup_date:
+        lead_updates = {'updated_at': datetime.now(timezone.utc).isoformat()}
+        if new_status and old_status != new_status:
+            lead_updates['status'] = new_status
+        if next_followup_date:
+            lead_updates['next_followup_date'] = next_followup_date
+        
+        await db.leads.update_one({'id': activity_data['lead_id']}, {'$set': lead_updates})
+    
     return activity_obj
 
 @api_router.get("/activities/{lead_id}", response_model=List[Activity])
