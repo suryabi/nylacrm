@@ -30,6 +30,27 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 
 ### Mar 8, 2026 (Session 22)
 
+- **FEATURE COMPLETE**: Company Documents Page
+  - **Purpose**: Centralized access to company policies, guidelines, and documents for all employees
+  - **Route**: `/company-documents`
+  - **Navigation**: Added to sidebar under "Documents" section with FileText icon
+  - **Tabs Implemented**:
+    1. **Overview**: Grid of 8 document categories (4 available, 4 coming soon)
+    2. **Travel Policy**: Dynamic role-based expense limits from Expense Category Master
+       - Shows user's role at top
+       - Displays policy guidelines per category
+       - Table: Expense Type, Your Limit, Receipt Required, Justification, Status
+       - Supports Travel, Accommodation, Meals & Entertainment categories
+       - CEO gets 5x limits (₹75,000 Domestic Flight), Partner gets 1.2x (₹18,000)
+    3. **Leave Policy**: Casual (12d), Sick (12d), Earned (18d), Public Holidays (12d)
+       - Special Leaves: Maternity (26wk), Paternity (5d), Bereavement (5d), Marriage (5d)
+    4. **Incentive Policy**: Monthly targets, quarterly bonuses, annual awards
+    5. **Payslips**: Salary structure info (earnings/deductions breakdown)
+  - **Coming Soon Placeholders**: HR Policies, Compliance Documents, Employee Handbook, Org Structure
+  - **New API**: `GET /api/expense-master/policy?role={role}` - Returns role-specific limits
+  - **Testing**: 100% success rate (18/18 backend, all frontend flows verified)
+  - Status: COMPLETE
+
 - **MODULE COMPLETE**: Expense Category Master
   - **Purpose**: Centralized management of expense policies, categories, types, and role-based limits for expense claims
   - **Backend Implementation** (`/app/backend/routes/expense_master.py`):
