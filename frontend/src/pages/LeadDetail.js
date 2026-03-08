@@ -767,37 +767,52 @@ ${userEmail}`;
         </div>
         
         <div className="flex-1">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-3xl font-semibold">{lead.company}</h1>
+            {/* Current Status Badge - Prominent */}
+            <Badge 
+              className={`${getStatusColor(lead.status)} text-sm px-3 py-1 font-medium`}
+              data-testid="lead-status-badge-header"
+            >
+              {getStatusLabel(lead.status)}
+            </Badge>
             {lead.category && (
               <Badge variant="outline" className="text-sm capitalize">
                 {lead.category}
               </Badge>
             )}
           </div>
-          {lead.lead_id ? (
-            <p className="text-sm font-mono text-muted-foreground mt-1" data-testid="lead-unique-id">
-              ID: {lead.lead_id}
-            </p>
-          ) : (
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-sm text-amber-600">No Lead ID</span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleGenerateLeadId}
-                disabled={generatingLeadId}
-                className="h-7 text-xs border-amber-500 text-amber-700 hover:bg-amber-50"
-                data-testid="generate-lead-id-btn"
-              >
-                {generatingLeadId ? (
-                  <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Generating...</>
-                ) : (
-                  <><Plus className="h-3 w-3 mr-1" /> Generate ID</>
-                )}
-              </Button>
-            </div>
-          )}
+          <div className="flex items-center gap-4 mt-1">
+            {lead.lead_id ? (
+              <p className="text-sm font-mono text-muted-foreground" data-testid="lead-unique-id">
+                ID: {lead.lead_id}
+              </p>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-amber-600">No Lead ID</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleGenerateLeadId}
+                  disabled={generatingLeadId}
+                  className="h-7 text-xs border-amber-500 text-amber-700 hover:bg-amber-50"
+                  data-testid="generate-lead-id-btn"
+                >
+                  {generatingLeadId ? (
+                    <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Generating...</>
+                  ) : (
+                    <><Plus className="h-3 w-3 mr-1" /> Generate ID</>
+                  )}
+                </Button>
+              </div>
+            )}
+            {lead.next_followup_date && (
+              <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <Clock className="h-4 w-4" />
+                <span>Follow-up: {format(new Date(lead.next_followup_date), 'MMM d, yyyy')}</span>
+              </div>
+            )}
+          </div>
           {lead.contact_person && (
             <p className="text-muted-foreground mt-1">Contact: {lead.contact_person}</p>
           )}
@@ -1317,7 +1332,8 @@ ${userEmail}`;
                       <span className="text-xs font-semibold uppercase tracking-wide">Quick Actions</span>
                     </div>
                     
-                    <div className={`grid ${isAdmin ? 'grid-cols-3' : 'grid-cols-2'} gap-4`}>
+                    {/* Row 1: Status Update + Activity Date (for Admin) */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Status Update */}
                       <div className="space-y-2">
                         <Label className="text-xs font-medium text-gray-600">Update Status</Label>
@@ -1334,21 +1350,8 @@ ${userEmail}`;
                         </Select>
                       </div>
                       
-                      {/* Follow-up Date */}
-                      <div className="space-y-2">
-                        <Label className="text-xs font-medium text-gray-600">Next Follow-up</Label>
-                        <Input
-                          type="date"
-                          value={activityFollowUpDate}
-                          onChange={(e) => setActivityFollowUpDate(e.target.value)}
-                          min={new Date().toISOString().split('T')[0]}
-                          className="bg-white h-10"
-                          data-testid="activity-followup-date"
-                        />
-                      </div>
-                      
-                      {/* Activity Date - Admin Only */}
-                      {isAdmin && (
+                      {/* Activity Date - Admin Only (or empty space for alignment) */}
+                      {isAdmin ? (
                         <div className="space-y-2">
                           <Label className="text-xs font-medium text-gray-600">
                             Activity Date
@@ -1365,7 +1368,30 @@ ${userEmail}`;
                           />
                           <p className="text-[10px] text-amber-600">Leave empty for today's date</p>
                         </div>
+                      ) : (
+                        <div></div>
                       )}
+                    </div>
+                    
+                    {/* Row 2: Next Follow-up Date - Full width on separate row */}
+                    <div className="pt-2 border-t border-amber-200/50">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-medium text-gray-600 flex items-center gap-2">
+                          <Clock className="h-3.5 w-3.5 text-amber-600" />
+                          Schedule Next Follow-up
+                        </Label>
+                        <div className="flex items-center gap-3">
+                          <Input
+                            type="date"
+                            value={activityFollowUpDate}
+                            onChange={(e) => setActivityFollowUpDate(e.target.value)}
+                            min={new Date().toISOString().split('T')[0]}
+                            className="bg-white h-10 max-w-[200px]"
+                            data-testid="activity-followup-date"
+                          />
+                          <span className="text-xs text-gray-500">Optional - Set a reminder for your next touchpoint</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                   
