@@ -121,6 +121,38 @@ export default function Dashboard() {
   const availableStates = territoryFilter !== 'all' && territoryFilter !== 'All Territories' ? ['All States', ...getStateNamesByTerritoryName(territoryFilter)] : ['All States'];
   const availableCities = stateFilter !== 'all' && stateFilter !== 'All States' ? ['All Cities', ...getCityNamesByStateName(stateFilter)] : ['All Cities'];
 
+  // Build URL with all current filters for navigation to leads page
+  const buildLeadsUrl = (additionalParams = {}) => {
+    const params = new URLSearchParams();
+    
+    // Add status if provided
+    if (additionalParams.status) params.set('status', additionalParams.status);
+    
+    // Add time filter
+    if (timeFilter && timeFilter !== 'lifetime') params.set('time_filter', timeFilter);
+    
+    // Add location filters
+    if (territoryFilter && territoryFilter !== 'all' && territoryFilter !== 'All Territories') {
+      params.set('territory', territoryFilter);
+    }
+    if (stateFilter && stateFilter !== 'all' && stateFilter !== 'All States') {
+      params.set('state', stateFilter);
+    }
+    if (cityFilter && cityFilter !== 'all' && cityFilter !== 'All Cities') {
+      params.set('city', cityFilter);
+    }
+    
+    // Add sales resource filter
+    if (salesResource && salesResource !== 'all') {
+      params.set('assigned_to', salesResource);
+    }
+    
+    // Add any additional params (like metric)
+    if (additionalParams.metric) params.set('metric', additionalParams.metric);
+    
+    return `/leads?${params.toString()}`;
+  };
+
   const totalLeads = analytics?.status_distribution ? Object.values(analytics.status_distribution).reduce((sum, val) => sum + val, 0) : 0;
 
   const activityStats = [
@@ -244,7 +276,7 @@ export default function Dashboard() {
                     return (
                       <div
                         key={status.id}
-                        onClick={() => navigate(`/leads?status=${status.id}`)}
+                        onClick={() => navigate(buildLeadsUrl({ status: status.id }))}
                         className={`p-3 rounded-xl bg-gradient-to-br border cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 ${colorClass}`}
                         data-testid={`status-card-${status.id}`}
                       >
@@ -271,7 +303,11 @@ export default function Dashboard() {
 
             {/* Quick Summary - Won/Lost */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/20 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300">
+              <Card 
+                className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/20 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer"
+                onClick={() => navigate(buildLeadsUrl({ status: 'won' }))}
+                data-testid="won-summary-card"
+              >
                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-green-600" />
                 <div className="p-5">
                   <div className="flex items-center gap-4">
@@ -292,7 +328,11 @@ export default function Dashboard() {
                 </div>
               </Card>
 
-              <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/20 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300">
+              <Card 
+                className="relative overflow-hidden border-0 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/20 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer"
+                onClick={() => navigate(buildLeadsUrl({ status: 'lost' }))}
+                data-testid="lost-summary-card"
+              >
                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-rose-600" />
                 <div className="p-5">
                   <div className="flex items-center gap-4">
