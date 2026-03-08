@@ -70,7 +70,7 @@ export default function Dashboard() {
   const [salesTeam, setSalesTeam] = useState([]);
   const { statuses } = useLeadStatuses();
   
-  const [timeFilter, setTimeFilter] = useState('this_week');
+  const [timeFilter, setTimeFilter] = useState('this_month');
   const [territoryFilter, setTerritoryFilter] = useState('all');
   const [stateFilter, setStateFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');

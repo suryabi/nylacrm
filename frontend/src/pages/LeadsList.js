@@ -62,13 +62,23 @@ export default function LeadsList() {
   const [loading, setLoading] = useState(true);
   const { statuses, getStatusLabel, getStatusColor } = useLeadStatuses();
   
-  // Initialize filters from sessionStorage or defaults
-  const getInitialFilter = (key, defaultValue) => {
+  // Check if we have URL params from dashboard navigation
+  const urlParams = new URLSearchParams(window.location.search);
+  const hasUrlFilters = urlParams.toString().length > 0;
+  
+  // Initialize filters - prioritize URL params over localStorage
+  const getInitialFilter = (key, defaultValue, urlKey = null) => {
+    const urlValue = urlKey ? urlParams.get(urlKey) : null;
+    if (urlValue) return urlValue;
+    if (hasUrlFilters) return defaultValue; // If coming from dashboard, don't use localStorage
     const saved = localStorage.getItem(`leads_filter_${key}`);
     return saved !== null ? saved : defaultValue;
   };
   
-  const getInitialArrayFilter = (key) => {
+  const getInitialArrayFilter = (key, urlKey = null) => {
+    const urlValue = urlKey ? urlParams.get(urlKey) : null;
+    if (urlValue) return [urlValue];
+    if (hasUrlFilters) return []; // If coming from dashboard, don't use localStorage
     const saved = localStorage.getItem(`leads_filter_${key}`);
     if (saved) {
       try {
@@ -79,14 +89,14 @@ export default function LeadsList() {
   };
   
   const [searchQuery, setSearchQuery] = useState(() => getInitialFilter('search', ''));
-  const [statusFilter, setStatusFilter] = useState(() => getInitialArrayFilter('status'));
-  const [territoryFilter, setTerritoryFilter] = useState(() => getInitialFilter('territory', 'all'));
-  const [stateFilter, setStateFilter] = useState(() => getInitialFilter('state', 'all'));
-  const [cityFilter, setCityFilter] = useState(() => getInitialFilter('city', 'all'));
-  const [assignedToFilter, setAssignedToFilter] = useState(() => getInitialArrayFilter('assigned_to'));
+  const [statusFilter, setStatusFilter] = useState(() => getInitialArrayFilter('status', 'status'));
+  const [territoryFilter, setTerritoryFilter] = useState(() => getInitialFilter('territory', 'all', 'territory'));
+  const [stateFilter, setStateFilter] = useState(() => getInitialFilter('state', 'all', 'state'));
+  const [cityFilter, setCityFilter] = useState(() => getInitialFilter('city', 'all', 'city'));
+  const [assignedToFilter, setAssignedToFilter] = useState(() => getInitialArrayFilter('assigned_to', 'assigned_to'));
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
-  const [timeFilter, setTimeFilter] = useState(() => getInitialFilter('time', 'lifetime'));
+  const [timeFilter, setTimeFilter] = useState(() => getInitialFilter('time', 'lifetime', 'time_filter'));
   
   const { territories, getStateNamesByTerritoryName, getCityNamesByStateName } = useMasterLocations();
   
@@ -122,49 +132,8 @@ export default function LeadsList() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // Fetch users on mount
   useEffect(() => {
-    // Read filters from URL params (from Dashboard navigation)
-    const params = new URLSearchParams(window.location.search);
-    
-    // Status filter
-    const statusParam = params.get('status');
-    if (statusParam) {
-      setStatusFilter([statusParam]);
-    }
-    
-    // Time filter
-    const timeFilterParam = params.get('time_filter');
-    if (timeFilterParam) setTimeFilter(timeFilterParam);
-    
-    // Territory filter
-    const territoryParam = params.get('territory');
-    if (territoryParam) setTerritoryFilter(territoryParam);
-    
-    // State filter
-    const stateParam = params.get('state');
-    if (stateParam) setStateFilter(stateParam);
-    
-    // City filter
-    const cityParam = params.get('city');
-    if (cityParam) setCityFilter(cityParam);
-    
-    // Assigned to filter (sales resource)
-    const assignedToParam = params.get('assigned_to');
-    if (assignedToParam) setAssignedToFilter([assignedToParam]);
-    
-    // Legacy metric param handling
-    const metric = params.get('metric');
-    if (metric) {
-      if (metric === 'won') setStatusFilter(['won']);
-      else if (metric === 'lost') setStatusFilter(['lost']);
-      else if (metric === 'new_leads') setStatusFilter(['new']);
-    }
-    
-    // Reset page to 1 when coming from dashboard with filters
-    if (params.toString()) {
-      setCurrentPage(1);
-    }
-    
     fetchUsers();
   }, []);
   
