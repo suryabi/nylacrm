@@ -606,6 +606,112 @@ function CityAllocationRow({ city, parentAmount, parentTerritory, planId, onEdit
   );
 }
 
+// Allocation Item with Achievement Progress Bar (for Resources and SKUs)
+function AllocationItemWithProgress({ allocation, type, cityAmount, planStartDate, planEndDate, city, onDelete }) {
+  const [achieved, setAchieved] = useState(0);
+  const [loading, setLoading] = useState(true);
+  
+  const isResource = type === 'resource';
+  const name = isResource ? allocation.resource_name : allocation.sku_name;
+  const targetAmount = allocation.amount || 0;
+  const achievedPercent = targetAmount > 0 ? ((achieved / targetAmount) * 100).toFixed(0) : 0;
+  const cityPercent = cityAmount > 0 ? ((targetAmount / cityAmount) * 100).toFixed(0) : 0;
+
+  useEffect(() => {
+    fetchAchievement();
+  }, [allocation, planStartDate, planEndDate]);
+
+  const fetchAchievement = async () => {
+    setLoading(true);
+    try {
+      // Build query params based on type
+      let url = `${API_URL}/target-planning/achievement?start_date=${planStartDate}&end_date=${planEndDate}`;
+      
+      if (isResource) {
+        url += `&resource_id=${allocation.resource_id}`;
+      } else {
+        url += `&sku_id=${allocation.sku_id}`;
+      }
+      
+      if (city) {
+        url += `&city=${encodeURIComponent(city)}`;
+      }
+      
+      const response = await fetch(url, { headers: getAuthHeaders() });
+      if (response.ok) {
+        const data = await response.json();
+        setAchieved(data.achieved || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching achievement:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const progressColor = parseFloat(achievedPercent) >= 100 
+    ? 'bg-green-500' 
+    : parseFloat(achievedPercent) >= 50 
+      ? 'bg-amber-500' 
+      : 'bg-red-400';
+
+  const iconBg = isResource ? 'bg-blue-100' : 'bg-emerald-100';
+  const iconColor = isResource ? 'text-blue-600' : 'text-emerald-600';
+  const amountColor = isResource ? 'text-blue-600' : 'text-emerald-600';
+
+  return (
+    <div className="p-3 rounded-lg border bg-white group">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-3">
+          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", iconBg)}>
+            {isResource ? <User className={cn("h-4 w-4", iconColor)} /> : <Package className={cn("h-4 w-4", iconColor)} />}
+          </div>
+          <div>
+            <p className="font-medium text-sm">{name}</p>
+            <p className="text-xs text-muted-foreground">
+              {cityPercent}% of city target
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="text-right">
+            <p className={cn("font-semibold text-sm", amountColor)}>{formatCurrency(targetAmount, true)}</p>
+            {loading ? (
+              <Loader2 className="h-3 w-3 animate-spin ml-auto" />
+            ) : (
+              <p className={cn("text-xs", parseFloat(achievedPercent) >= 100 ? "text-green-600" : parseFloat(achievedPercent) >= 50 ? "text-amber-600" : "text-red-500")}>
+                {formatCurrency(achieved, true)} ({achievedPercent}%)
+              </p>
+            )}
+          </div>
+          <Button 
+            size="icon" 
+            variant="ghost" 
+            className="h-7 w-7 opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
+            onClick={onDelete}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+      
+      {/* Progress Bar */}
+      <div className="mt-2">
+        <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+          <span>Achievement</span>
+          <span>{achievedPercent}%</span>
+        </div>
+        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div 
+            className={cn("h-full rounded-full transition-all duration-500", progressColor)}
+            style={{ width: `${Math.min(parseFloat(achievedPercent), 100)}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // City Allocation Detail Dialog - Drill down to Resources and SKUs
 function CityAllocationDetailDialog({ open, onOpenChange, city, parentTerritory, planId, planStartDate, planEndDate, onUpdate }) {
   const [activeTab, setActiveTab] = useState('resources');
@@ -914,30 +1020,16 @@ function CityAllocationDetailDialog({ open, onOpenChange, city, parentTerritory,
                         </div>
                       ) : (
                         resourceAllocations.map((alloc) => (
-                          <div key={alloc.id} className="flex items-center justify-between p-3 rounded-lg border bg-white group">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                                <User className="h-4 w-4 text-blue-600" />
-                              </div>
-                              <div>
-                                <p className="font-medium text-sm">{alloc.resource_name}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {cityAmount > 0 ? ((alloc.amount / cityAmount) * 100).toFixed(0) : 0}% of city target
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <p className="font-semibold text-blue-600">{formatCurrency(alloc.amount, true)}</p>
-                              <Button 
-                                size="icon" 
-                                variant="ghost" 
-                                className="h-7 w-7 opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
-                                onClick={() => handleDeleteAllocation(alloc)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </div>
+                          <AllocationItemWithProgress
+                            key={alloc.id}
+                            allocation={alloc}
+                            type="resource"
+                            cityAmount={cityAmount}
+                            planStartDate={planStartDate}
+                            planEndDate={planEndDate}
+                            city={city?.city}
+                            onDelete={() => handleDeleteAllocation(alloc)}
+                          />
                         ))
                       )}
                     </div>
@@ -956,7 +1048,8 @@ function CityAllocationDetailDialog({ open, onOpenChange, city, parentTerritory,
                             value={newAllocation.id} 
                             onValueChange={(v) => {
                               const sku = availableSKUs.find(s => s.id === v);
-                              setNewAllocation({ ...newAllocation, id: v, name: sku?.name || '' });
+                              // Use sku_name field from API
+                              setNewAllocation({ ...newAllocation, id: v, name: sku?.sku_name || sku?.name || '' });
                             }}
                           >
                             <SelectTrigger className="mt-1 bg-white">
@@ -972,7 +1065,7 @@ function CityAllocationDetailDialog({ open, onOpenChange, city, parentTerritory,
                                   <SelectItem key={sku.id} value={sku.id}>
                                     <span className="flex items-center gap-2">
                                       <Package className="h-4 w-4" />
-                                      {sku.name} {sku.category && <span className="text-muted-foreground">({sku.category})</span>}
+                                      {sku.sku_name || sku.name} {sku.category && <span className="text-muted-foreground">({sku.category})</span>}
                                     </span>
                                   </SelectItem>
                                 ))
@@ -1033,30 +1126,16 @@ function CityAllocationDetailDialog({ open, onOpenChange, city, parentTerritory,
                         </div>
                       ) : (
                         skuAllocations.map((alloc) => (
-                          <div key={alloc.id} className="flex items-center justify-between p-3 rounded-lg border bg-white group">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                                <Package className="h-4 w-4 text-emerald-600" />
-                              </div>
-                              <div>
-                                <p className="font-medium text-sm">{alloc.sku_name}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {cityAmount > 0 ? ((alloc.amount / cityAmount) * 100).toFixed(0) : 0}% of city target
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <p className="font-semibold text-emerald-600">{formatCurrency(alloc.amount, true)}</p>
-                              <Button 
-                                size="icon" 
-                                variant="ghost" 
-                                className="h-7 w-7 opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
-                                onClick={() => handleDeleteAllocation(alloc)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </div>
+                          <AllocationItemWithProgress
+                            key={alloc.id}
+                            allocation={alloc}
+                            type="sku"
+                            cityAmount={cityAmount}
+                            planStartDate={planStartDate}
+                            planEndDate={planEndDate}
+                            city={city?.city}
+                            onDelete={() => handleDeleteAllocation(alloc)}
+                          />
                         ))
                       )}
                     </div>

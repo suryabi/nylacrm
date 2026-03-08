@@ -212,6 +212,85 @@ async def get_city_achievement(
     return {'city': city, 'achieved': achieved}
 
 
+@router.get("/achievement")
+async def get_achievement(
+    start_date: str,
+    end_date: str,
+    resource_id: Optional[str] = None,
+    sku_id: Optional[str] = None,
+    city: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get achieved revenue filtered by resource (sales person) or SKU within a date range"""
+    
+    pipeline = []
+    
+    if resource_id:
+        # Get achievement by sales person - match leads assigned to this resource
+        pipeline = [
+            {
+                '$lookup': {
+                    'from': 'leads',
+                    'localField': 'ca_lead_id',
+                    'foreignField': 'lead_id',
+                    'as': 'lead'
+                }
+            },
+            {'$unwind': {'path': '$lead', 'preserveNullAndEmptyArrays': False}},
+            {
+                '$match': {
+                    'lead.assigned_to': resource_id,
+                    'invoice_date': {'$gte': start_date, '$lte': end_date},
+                    **(({'lead.city': city} if city else {}))
+                }
+            },
+            {
+                '$group': {
+                    '_id': None,
+                    'achieved': {'$sum': '$net_invoice_value'}
+                }
+            }
+        ]
+    elif sku_id:
+        # Get achievement by SKU - sum invoice line items for this SKU
+        # First check invoice_items for SKU-level tracking, or use estimates
+        pipeline = [
+            {
+                '$match': {
+                    'invoice_date': {'$gte': start_date, '$lte': end_date}
+                }
+            },
+            {'$unwind': {'path': '$items', 'preserveNullAndEmptyArrays': True}},
+            {
+                '$match': {
+                    '$or': [
+                        {'items.sku_id': sku_id},
+                        {'items.sku': sku_id}
+                    ]
+                }
+            },
+            {
+                '$group': {
+                    '_id': None,
+                    'achieved': {'$sum': {'$ifNull': ['$items.amount', '$items.value', 0]}}
+                }
+            }
+        ]
+        
+        # If no SKU-level data, return 0 for now
+        result = await db.invoices.aggregate(pipeline).to_list(1)
+        if not result:
+            # Fallback: estimate based on total invoices (placeholder)
+            return {'achieved': 0, 'note': 'SKU-level tracking not available'}
+    else:
+        return {'achieved': 0, 'error': 'Either resource_id or sku_id is required'}
+    
+    result = await db.invoices.aggregate(pipeline).to_list(1)
+    achieved = result[0]['achieved'] if result else 0
+    
+    return {'achieved': achieved}
+
+
 @router.get("/resources/by-location")
 async def get_resources_by_location(
     city: Optional[str] = None,
