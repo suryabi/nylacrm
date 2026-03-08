@@ -6,6 +6,7 @@ import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Progress } from '../components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -40,7 +41,10 @@ import {
   Percent,
   User,
   Pencil,
-  BarChart3
+  BarChart3,
+  Package,
+  Users,
+  ChevronRight
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import AppBreadcrumb from '../components/AppBreadcrumb';
@@ -422,7 +426,7 @@ function MonthlyPerformanceTable({ monthlyData, plan }) {
 }
 
 // Compact Territory Card (like subscription plan cards) - Modern gradient design
-function TerritoryCard({ allocation, rank, onAddCity, onEditCity, onDeleteCity, onDelete, planStartDate, planEndDate }) {
+function TerritoryCard({ allocation, rank, planId, onAddCity, onEditCity, onDeleteCity, onDelete, onOpenCityDetail, planStartDate, planEndDate }) {
   const style = getRankStyle(rank);
   const Icon = style.icon;
   const children = allocation.children || [];
@@ -509,8 +513,11 @@ function TerritoryCard({ allocation, rank, onAddCity, onEditCity, onDeleteCity, 
                 key={city.id} 
                 city={city} 
                 parentAmount={allocation.amount}
+                parentTerritory={allocation}
+                planId={planId}
                 onEdit={() => onEditCity && onEditCity(city, allocation)}
                 onDelete={() => onDeleteCity && onDeleteCity(city)}
+                onOpenDetail={onOpenCityDetail}
                 planStartDate={planStartDate}
                 planEndDate={planEndDate}
               />
@@ -523,7 +530,7 @@ function TerritoryCard({ allocation, rank, onAddCity, onEditCity, onDeleteCity, 
 }
 
 // City Row with Allocated vs Achieved
-function CityAllocationRow({ city, parentAmount, onEdit, onDelete, planStartDate, planEndDate }) {
+function CityAllocationRow({ city, parentAmount, parentTerritory, planId, onEdit, onDelete, onOpenDetail, planStartDate, planEndDate }) {
   const [achieved, setAchieved] = useState(0);
   const [loading, setLoading] = useState(true);
   const percentOfParent = parentAmount > 0 ? ((city.amount / parentAmount) * 100).toFixed(0) : 0;
@@ -550,14 +557,19 @@ function CityAllocationRow({ city, parentAmount, onEdit, onDelete, planStartDate
   };
 
   return (
-    <div className="p-2 rounded-lg border bg-gray-50/50 hover:bg-gray-100/50 group">
+    <div 
+      className="p-2 rounded-lg border bg-gray-50/50 hover:bg-gray-100/50 group cursor-pointer transition-all hover:shadow-sm"
+      onClick={() => onOpenDetail && onOpenDetail(city, parentTerritory)}
+      data-testid={`city-allocation-${city.city?.toLowerCase().replace(/\s+/g, '-')}`}
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           <span className="font-medium text-sm truncate">{city.city}</span>
           <span className="text-xs text-muted-foreground shrink-0">({percentOfParent}%)</span>
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
           <Button size="icon" variant="ghost" className="h-6 w-6" onClick={onEdit}>
             <Pencil className="h-3 w-3" />
           </Button>
@@ -587,12 +599,474 @@ function CityAllocationRow({ city, parentAmount, onEdit, onDelete, planStartDate
   );
 }
 
+// City Allocation Detail Dialog - Drill down to Resources and SKUs
+function CityAllocationDetailDialog({ open, onOpenChange, city, parentTerritory, planId, planStartDate, planEndDate, onUpdate }) {
+  const [activeTab, setActiveTab] = useState('resources');
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [resourceAllocations, setResourceAllocations] = useState([]);
+  const [skuAllocations, setSkuAllocations] = useState([]);
+  const [availableResources, setAvailableResources] = useState([]);
+  const [availableSKUs, setAvailableSKUs] = useState([]);
+  const [newAllocation, setNewAllocation] = useState({ id: '', name: '', amount: '', percentage: '' });
+  const [allocationType, setAllocationType] = useState('percentage');
+
+  // Reset form when city changes
+  useEffect(() => {
+    if (open && city) {
+      setNewAllocation({ id: '', name: '', amount: '', percentage: '' });
+      fetchData();
+    }
+  }, [open, city]);
+
+  // Guard against null city
+  if (!city) {
+    return null;
+  }
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      // Fetch existing allocations for this city
+      const [resourcesRes, skusRes, childrenRes] = await Promise.all([
+        fetch(`${API_URL}/target-planning/resources/by-location?city=${encodeURIComponent(city.city)}`, { headers: getAuthHeaders() }),
+        fetch(`${API_URL}/master-skus`, { headers: getAuthHeaders() }),
+        fetch(`${API_URL}/target-planning/${planId}/allocations/${city.id}/children`, { headers: getAuthHeaders() })
+      ]);
+
+      if (resourcesRes.ok) {
+        const resources = await resourcesRes.json();
+        setAvailableResources(resources);
+      }
+
+      if (skusRes.ok) {
+        const skus = await skusRes.json();
+        setAvailableSKUs(skus);
+      }
+
+      if (childrenRes.ok) {
+        const children = await childrenRes.json();
+        setResourceAllocations(children.filter(c => c.level === 'resource'));
+        setSkuAllocations(children.filter(c => c.level === 'sku'));
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast.error('Failed to load allocation data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cityAmount = city?.amount || 0;
+
+  const getAvailableBudget = () => {
+    const totalAllocated = [...resourceAllocations, ...skuAllocations].reduce((sum, a) => sum + (a.amount || 0), 0);
+    return cityAmount - totalAllocated;
+  };
+
+  const calculateAmount = () => {
+    const availableBudget = getAvailableBudget();
+    if (allocationType === 'percentage' && newAllocation.percentage) {
+      return (availableBudget * parseFloat(newAllocation.percentage)) / 100;
+    }
+    return parseFloat(newAllocation.amount) || 0;
+  };
+
+  const handleAddAllocation = async () => {
+    if (!newAllocation.id) {
+      toast.error(`Please select a ${activeTab === 'resources' ? 'resource' : 'SKU'}`);
+      return;
+    }
+
+    const amount = calculateAmount();
+    if (!amount || amount <= 0) {
+      toast.error('Please enter a valid amount or percentage');
+      return;
+    }
+
+    const availableBudget = getAvailableBudget();
+    if (amount > availableBudget) {
+      toast.error(`Amount exceeds available budget of ${formatCurrency(availableBudget)}`);
+      return;
+    }
+
+    setAdding(true);
+    try {
+      const payload = {
+        territory_id: city.territory_id,
+        territory_name: city.territory_name,
+        city: city.city,
+        state: city.state,
+        parent_allocation_id: city.id,
+        level: activeTab === 'resources' ? 'resource' : 'sku',
+        amount: amount,
+        ...(activeTab === 'resources' 
+          ? { resource_id: newAllocation.id, resource_name: newAllocation.name }
+          : { sku_id: newAllocation.id, sku_name: newAllocation.name }
+        )
+      };
+
+      const response = await fetch(`${API_URL}/target-planning/${planId}/allocations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        toast.success(`${activeTab === 'resources' ? 'Resource' : 'SKU'} allocation added`);
+        setNewAllocation({ id: '', name: '', amount: '', percentage: '' });
+        fetchData();
+        onUpdate();
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || 'Failed to add allocation');
+      }
+    } catch (error) {
+      toast.error('Failed to add allocation');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleDeleteAllocation = async (allocation) => {
+    if (!window.confirm('Delete this allocation?')) return;
+
+    try {
+      const response = await fetch(`${API_URL}/target-planning/${planId}/allocations/${allocation.id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      if (response.ok) {
+        toast.success('Allocation deleted');
+        fetchData();
+        onUpdate();
+      }
+    } catch (error) {
+      toast.error('Failed to delete allocation');
+    }
+  };
+
+  const totalResourceAllocated = resourceAllocations.reduce((sum, a) => sum + (a.amount || 0), 0);
+  const totalSKUAllocated = skuAllocations.reduce((sum, a) => sum + (a.amount || 0), 0);
+  const resourcePercent = cityAmount > 0 ? ((totalResourceAllocated / cityAmount) * 100).toFixed(0) : 0;
+  const skuPercent = cityAmount > 0 ? ((totalSKUAllocated / cityAmount) * 100).toFixed(0) : 0;
+
+  // Get available items (not already allocated)
+  const getAvailableItems = () => {
+    if (activeTab === 'resources') {
+      const allocatedIds = resourceAllocations.map(a => a.resource_id);
+      return availableResources.filter(r => !allocatedIds.includes(r.id));
+    } else {
+      const allocatedIds = skuAllocations.map(a => a.sku_id);
+      return availableSKUs.filter(s => !allocatedIds.includes(s.id));
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-primary" />
+            {city?.city} - Allocation Breakdown
+          </DialogTitle>
+        </DialogHeader>
+
+        {/* City Budget Summary */}
+        <div className="bg-gradient-to-r from-slate-100 to-slate-50 rounded-lg p-4 mb-4">
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div>
+              <p className="text-xs text-muted-foreground">City Target</p>
+              <p className="text-xl font-bold text-slate-700">{formatCurrency(city?.amount, true)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Allocated</p>
+              <p className="text-xl font-bold text-blue-600">
+                {formatCurrency(totalResourceAllocated + totalSKUAllocated, true)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Available</p>
+              <p className={cn("text-xl font-bold", getAvailableBudget() > 0 ? "text-amber-600" : "text-green-600")}>
+                {formatCurrency(getAvailableBudget(), true)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="resources" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Resources
+              <Badge variant="secondary" className="ml-1 text-xs">{resourcePercent}%</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="skus" className="flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              SKUs
+              <Badge variant="secondary" className="ml-1 text-xs">{skuPercent}%</Badge>
+            </TabsTrigger>
+          </TabsList>
+
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <>
+              {/* Resources Tab */}
+              <TabsContent value="resources" className="flex-1 overflow-hidden mt-4">
+                <div className="flex flex-col h-full">
+                  {/* Add Resource Form */}
+                  <div className="bg-blue-50/50 rounded-lg p-3 mb-3 border border-blue-100">
+                    <div className="flex gap-3 items-end">
+                      <div className="flex-1">
+                        <Label className="text-xs">Select Resource</Label>
+                        <Select 
+                          value={newAllocation.id} 
+                          onValueChange={(v) => {
+                            const resource = availableResources.find(r => r.id === v);
+                            setNewAllocation({ ...newAllocation, id: v, name: resource?.name || '' });
+                          }}
+                        >
+                          <SelectTrigger className="mt-1 bg-white">
+                            <SelectValue placeholder="Choose resource" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getAvailableItems().length === 0 ? (
+                              <div className="p-2 text-sm text-muted-foreground text-center">
+                                All resources allocated
+                              </div>
+                            ) : (
+                              getAvailableItems().map((resource) => (
+                                <SelectItem key={resource.id} value={resource.id}>
+                                  <span className="flex items-center gap-2">
+                                    <User className="h-4 w-4" />
+                                    {resource.name} <span className="text-muted-foreground">({resource.role})</span>
+                                  </span>
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="w-28">
+                        <Label className="text-xs">
+                          {allocationType === 'percentage' ? '% of Budget' : 'Amount (₹)'}
+                        </Label>
+                        <Input
+                          type="number"
+                          value={allocationType === 'percentage' ? newAllocation.percentage : newAllocation.amount}
+                          onChange={(e) => setNewAllocation({ 
+                            ...newAllocation, 
+                            [allocationType === 'percentage' ? 'percentage' : 'amount']: e.target.value 
+                          })}
+                          placeholder={allocationType === 'percentage' ? '%' : '₹'}
+                          className="mt-1 bg-white"
+                        />
+                      </div>
+                      <Button size="sm" onClick={handleAddAllocation} disabled={adding}>
+                        {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        type="button"
+                        variant={allocationType === 'percentage' ? 'default' : 'outline'}
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setAllocationType('percentage')}
+                      >
+                        <Percent className="h-3 w-3 mr-1" /> %
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={allocationType === 'amount' ? 'default' : 'outline'}
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setAllocationType('amount')}
+                      >
+                        <IndianRupee className="h-3 w-3 mr-1" /> ₹
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Resource Allocations List */}
+                  <div className="flex-1 overflow-y-auto space-y-2">
+                    {resourceAllocations.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
+                        <Users className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                        <p className="text-sm">No resources allocated yet</p>
+                      </div>
+                    ) : (
+                      resourceAllocations.map((alloc) => (
+                        <div key={alloc.id} className="flex items-center justify-between p-3 rounded-lg border bg-white group">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                              <User className="h-4 w-4 text-blue-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm">{alloc.resource_name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {cityAmount > 0 ? ((alloc.amount / cityAmount) * 100).toFixed(0) : 0}% of city target
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <p className="font-semibold text-blue-600">{formatCurrency(alloc.amount, true)}</p>
+                            <Button 
+                              size="icon" 
+                              variant="ghost" 
+                              className="h-7 w-7 opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
+                              onClick={() => handleDeleteAllocation(alloc)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* SKUs Tab */}
+              <TabsContent value="skus" className="flex-1 overflow-hidden mt-4">
+                <div className="flex flex-col h-full">
+                  {/* Add SKU Form */}
+                  <div className="bg-emerald-50/50 rounded-lg p-3 mb-3 border border-emerald-100">
+                    <div className="flex gap-3 items-end">
+                      <div className="flex-1">
+                        <Label className="text-xs">Select SKU</Label>
+                        <Select 
+                          value={newAllocation.id} 
+                          onValueChange={(v) => {
+                            const sku = availableSKUs.find(s => s.id === v);
+                            setNewAllocation({ ...newAllocation, id: v, name: sku?.name || '' });
+                          }}
+                        >
+                          <SelectTrigger className="mt-1 bg-white">
+                            <SelectValue placeholder="Choose SKU" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getAvailableItems().length === 0 ? (
+                              <div className="p-2 text-sm text-muted-foreground text-center">
+                                All SKUs allocated
+                              </div>
+                            ) : (
+                              getAvailableItems().map((sku) => (
+                                <SelectItem key={sku.id} value={sku.id}>
+                                  <span className="flex items-center gap-2">
+                                    <Package className="h-4 w-4" />
+                                    {sku.name} <span className="text-muted-foreground">({sku.category})</span>
+                                  </span>
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="w-28">
+                        <Label className="text-xs">
+                          {allocationType === 'percentage' ? '% of Budget' : 'Amount (₹)'}
+                        </Label>
+                        <Input
+                          type="number"
+                          value={allocationType === 'percentage' ? newAllocation.percentage : newAllocation.amount}
+                          onChange={(e) => setNewAllocation({ 
+                            ...newAllocation, 
+                            [allocationType === 'percentage' ? 'percentage' : 'amount']: e.target.value 
+                          })}
+                          placeholder={allocationType === 'percentage' ? '%' : '₹'}
+                          className="mt-1 bg-white"
+                        />
+                      </div>
+                      <Button size="sm" onClick={handleAddAllocation} disabled={adding}>
+                        {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        type="button"
+                        variant={allocationType === 'percentage' ? 'default' : 'outline'}
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setAllocationType('percentage')}
+                      >
+                        <Percent className="h-3 w-3 mr-1" /> %
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={allocationType === 'amount' ? 'default' : 'outline'}
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setAllocationType('amount')}
+                      >
+                        <IndianRupee className="h-3 w-3 mr-1" /> ₹
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* SKU Allocations List */}
+                  <div className="flex-1 overflow-y-auto space-y-2">
+                    {skuAllocations.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
+                        <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                        <p className="text-sm">No SKUs allocated yet</p>
+                      </div>
+                    ) : (
+                      skuAllocations.map((alloc) => (
+                        <div key={alloc.id} className="flex items-center justify-between p-3 rounded-lg border bg-white group">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                              <Package className="h-4 w-4 text-emerald-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm">{alloc.sku_name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {cityAmount > 0 ? ((alloc.amount / cityAmount) * 100).toFixed(0) : 0}% of city target
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <p className="font-semibold text-emerald-600">{formatCurrency(alloc.amount, true)}</p>
+                            <Button 
+                              size="icon" 
+                              variant="ghost" 
+                              className="h-7 w-7 opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
+                              onClick={() => handleDeleteAllocation(alloc)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+            </>
+          )}
+        </Tabs>
+
+        <DialogFooter className="mt-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // Main Allocation Section with Side-by-Side Territory Cards
 function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) {
   const [masterLocations, setMasterLocations] = useState([]);
   const [salesResources, setSalesResources] = useState([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showCityDetailDialog, setShowCityDetailDialog] = useState(false);
+  const [selectedCityForDetail, setSelectedCityForDetail] = useState(null);
+  const [selectedParentTerritory, setSelectedParentTerritory] = useState(null);
   const [adding, setAdding] = useState(false);
   const [allocationType, setAllocationType] = useState('percentage');
   const [parentAllocation, setParentAllocation] = useState(null);
@@ -931,10 +1405,16 @@ function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) 
               key={territory.id}
               allocation={territory}
               rank={idx + 1}
+              planId={planId}
               onAddCity={openAddDialog}
               onEditCity={handleEditCity}
               onDeleteCity={handleDeleteAllocation}
               onDelete={handleDeleteAllocation}
+              onOpenCityDetail={(city, parentTerritory) => {
+                setSelectedCityForDetail(city);
+                setSelectedParentTerritory(parentTerritory);
+                setShowCityDetailDialog(true);
+              }}
               planStartDate={plan.start_date}
               planEndDate={plan.end_date}
             />
@@ -1194,6 +1674,18 @@ function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* City Detail Dialog - Resources & SKUs */}
+      <CityAllocationDetailDialog
+        open={showCityDetailDialog}
+        onOpenChange={setShowCityDetailDialog}
+        city={selectedCityForDetail}
+        parentTerritory={selectedParentTerritory}
+        planId={planId}
+        planStartDate={plan.start_date}
+        planEndDate={plan.end_date}
+        onUpdate={onUpdate}
+      />
     </Card>
   );
 }

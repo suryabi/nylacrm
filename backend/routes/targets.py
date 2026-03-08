@@ -43,8 +43,10 @@ class AllocationCreate(BaseModel):
     state: Optional[str] = None
     resource_id: Optional[str] = None
     resource_name: Optional[str] = None
+    sku_id: Optional[str] = None
+    sku_name: Optional[str] = None
     parent_allocation_id: Optional[str] = None
-    level: str = 'territory'  # 'territory', 'city', 'resource'
+    level: str = 'territory'  # 'territory', 'city', 'resource', 'sku'
     amount: float
 
 
@@ -321,6 +323,8 @@ async def create_allocation(plan_id: str, allocation: AllocationCreate, current_
         'state': allocation.state,
         'resource_id': allocation.resource_id,
         'resource_name': allocation.resource_name,
+        'sku_id': allocation.sku_id,
+        'sku_name': allocation.sku_name,
         'parent_allocation_id': allocation.parent_allocation_id,
         'level': allocation.level,
         'amount': allocation.amount,
