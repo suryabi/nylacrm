@@ -821,6 +821,8 @@ function CityAllocationDetailDialog({ open, onOpenChange, city, parentTerritory,
         )
       };
 
+      console.log('Creating allocation with payload:', payload);
+
       const response = await fetch(`${API_URL}/target-planning/${planId}/allocations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -830,13 +832,16 @@ function CityAllocationDetailDialog({ open, onOpenChange, city, parentTerritory,
       if (response.ok) {
         toast.success(`${activeTab === 'resources' ? 'Resource' : 'SKU'} allocation added`);
         setNewAllocation({ id: '', name: '', amount: '', percentage: '' });
-        fetchData();
-        onUpdate();
+        // Refresh only the local data, keep panel open
+        await fetchData();
+        // Don't call onUpdate here - it causes panel to close by triggering parent re-render
+        // Parent will be updated when user closes the panel
       } else {
         const error = await response.json();
         toast.error(error.detail || 'Failed to add allocation');
       }
     } catch (error) {
+      console.error('Error adding allocation:', error);
       toast.error('Failed to add allocation');
     } finally {
       setAdding(false);
@@ -853,8 +858,8 @@ function CityAllocationDetailDialog({ open, onOpenChange, city, parentTerritory,
       });
       if (response.ok) {
         toast.success('Allocation deleted');
-        fetchData();
-        onUpdate();
+        // Only refresh local data, don't call onUpdate to prevent panel closing
+        await fetchData();
       }
     } catch (error) {
       toast.error('Failed to delete allocation');
@@ -911,7 +916,11 @@ function CityAllocationDetailDialog({ open, onOpenChange, city, parentTerritory,
           </div>
 
           {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs value={activeTab} onValueChange={(tab) => {
+            setActiveTab(tab);
+            // Reset form when switching tabs
+            setNewAllocation({ id: '', name: '', amount: '', percentage: '' });
+          }} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="resources" className="flex items-center gap-2">
                 <Users className="h-4 w-4" />
@@ -1770,13 +1779,22 @@ function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) 
       {/* City Detail Dialog - Resources & SKUs */}
       <CityAllocationDetailDialog
         open={showCityDetailDialog}
-        onOpenChange={setShowCityDetailDialog}
+        onOpenChange={(isOpen) => {
+          setShowCityDetailDialog(isOpen);
+          // Refresh parent data when panel is closed
+          if (!isOpen) {
+            onUpdate();
+          }
+        }}
         city={selectedCityForDetail}
         parentTerritory={selectedParentTerritory}
         planId={planId}
         planStartDate={plan.start_date}
         planEndDate={plan.end_date}
-        onUpdate={onUpdate}
+        onUpdate={() => {
+          // This is now called only when needed
+          onUpdate();
+        }}
       />
     </Card>
   );

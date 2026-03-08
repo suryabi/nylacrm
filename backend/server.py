@@ -10670,8 +10670,10 @@ class TargetAllocationCreateV2(BaseModel):
     state: Optional[str] = None  # State for city-level allocations
     resource_id: Optional[str] = None
     resource_name: Optional[str] = None
+    sku_id: Optional[str] = None
+    sku_name: Optional[str] = None
     parent_allocation_id: Optional[str] = None  # For hierarchical allocations
-    level: str = 'territory'  # 'territory', 'city', 'resource'
+    level: str = 'territory'  # 'territory', 'city', 'resource', 'sku'
     amount: float
 
 class TargetAllocationUpdateV2(BaseModel):
@@ -10908,14 +10910,18 @@ async def create_target_allocation_v2(
     if not plan:
         raise HTTPException(status_code=404, detail="Target plan not found")
     
-    # Determine allocation level
+    # Use explicit level if provided, otherwise infer from data
     level = allocation.level
-    if allocation.resource_id:
-        level = 'resource'
-    elif allocation.city:
-        level = 'city'
-    else:
-        level = 'territory'
+    if not level or level == 'territory':
+        # Only auto-determine if no explicit level or default
+        if allocation.resource_id:
+            level = 'resource'
+        elif allocation.sku_id:
+            level = 'sku'
+        elif allocation.city:
+            level = 'city'
+        else:
+            level = 'territory'
     
     allocation_data = {
         'id': str(uuid.uuid4()),
@@ -10926,6 +10932,8 @@ async def create_target_allocation_v2(
         'state': allocation.state,
         'resource_id': allocation.resource_id,
         'resource_name': allocation.resource_name,
+        'sku_id': allocation.sku_id,
+        'sku_name': allocation.sku_name,
         'parent_allocation_id': allocation.parent_allocation_id,
         'level': level,
         'amount': allocation.amount,

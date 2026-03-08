@@ -389,6 +389,8 @@ async def delete_target_plan(plan_id: str, current_user: dict = Depends(get_curr
 @router.post("/{plan_id}/allocations")
 async def create_allocation(plan_id: str, allocation: AllocationCreate, current_user: dict = Depends(get_current_user)):
     """Create a new allocation for a target plan"""
+    print(f"Creating allocation with level: {allocation.level}, sku_id: {allocation.sku_id}, sku_name: {allocation.sku_name}")
+    
     plan = await db.target_plans_v2.find_one({'id': plan_id}, {'_id': 0})
     if not plan:
         raise HTTPException(status_code=404, detail='Target plan not found')
