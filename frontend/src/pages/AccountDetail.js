@@ -32,6 +32,7 @@ import {
 } from '../components/ui/dialog';
 import LogoUploader from '../components/LogoUploader';
 import ExpenseRequestSection from '../components/ExpenseRequestSection';
+import AppBreadcrumb from '../components/AppBreadcrumb';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -747,6 +748,9 @@ ${googleMapsLink}`;
 
   return (
     <div className="space-y-6" data-testid="account-detail-page">
+      {/* Breadcrumb */}
+      <AppBreadcrumb context={{ accountName: account?.account_name || 'Account Details' }} />
+      
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => navigate('/accounts')} data-testid="back-button">

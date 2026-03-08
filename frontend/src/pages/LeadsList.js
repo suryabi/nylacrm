@@ -45,6 +45,7 @@ import {
 import { useMasterLocations } from '../hooks/useMasterLocations';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
 import { LeadRankBadge } from '../components/LeadRankingTiles';
+import AppBreadcrumb from '../components/AppBreadcrumb';
 
 const TIME_FILTERS = [
   { value: 'this_week', label: 'This Week' }, { value: 'last_week', label: 'Last Week' },
@@ -263,6 +264,9 @@ export default function LeadsList() {
       <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-30 dark:opacity-10 pointer-events-none" />
       
       <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto">
+        {/* Breadcrumb */}
+        <AppBreadcrumb />
+        
         {/* Header */}
         <header className="mb-6">
           <div className="flex flex-col sm:flex-row justify-between gap-4">

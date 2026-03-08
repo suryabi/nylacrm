@@ -24,6 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
+import AppBreadcrumb from '../components/AppBreadcrumb';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -353,6 +354,9 @@ export default function DailyStatusUpdate() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="daily-status-page">
       <div className="max-w-6xl mx-auto px-4 py-6">
+        
+        {/* Breadcrumb */}
+        <AppBreadcrumb />
         
         {/* Header */}
         <div className="mb-6">

@@ -43,6 +43,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import AppBreadcrumb from '../components/AppBreadcrumb';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -1254,6 +1255,9 @@ export default function TargetPlanDashboard() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
+      {/* Breadcrumb */}
+      <AppBreadcrumb context={{ planName: plan?.name || 'Plan Dashboard' }} />
+      
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">

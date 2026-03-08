@@ -35,6 +35,7 @@ import ExpenseRequestSection from '../components/ExpenseRequestSection';
 import LeadRankingTiles from '../components/LeadRankingTiles';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
 import CelebrationAnimation from '../components/CelebrationAnimation';
+import AppBreadcrumb from '../components/AppBreadcrumb';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -732,6 +733,9 @@ ${userEmail}`;
 
   return (
     <div className="space-y-6" data-testid="lead-detail-page">
+      {/* Breadcrumb */}
+      <AppBreadcrumb context={{ leadName: lead?.company || 'Lead Details' }} />
+      
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => navigate('/leads')} data-testid="back-button">

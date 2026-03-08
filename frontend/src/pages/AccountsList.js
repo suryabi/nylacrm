@@ -26,6 +26,7 @@ import {
 import { useMasterLocations } from '../hooks/useMasterLocations';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import AppBreadcrumb from '../components/AppBreadcrumb';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const ACCOUNT_TYPES = ['Tier 1', 'Tier 2', 'Tier 3'];
@@ -169,6 +170,9 @@ export default function AccountsList() {
       <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-30 dark:opacity-10 pointer-events-none" />
       
       <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto">
+        {/* Breadcrumb */}
+        <AppBreadcrumb />
+        
         {/* Header */}
         <header className="mb-6">
           <div className="flex items-center gap-3">
