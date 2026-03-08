@@ -5222,21 +5222,23 @@ async def create_activity(activity_input: ActivityCreate, current_user: dict = D
     next_followup_date = activity_data.pop('next_followup_date', None)
     custom_created_at = activity_data.pop('created_at', None)
     
-    # Build the final description - combine activity text with status change if applicable
+    # Build the final description - combine activity text with status info
     description_parts = [activity_data['description']]
     
-    # Get the lead for status change tracking
-    lead = None
-    old_status = None
-    if new_status:
-        lead = await db.leads.find_one({'id': activity_data['lead_id']}, {'_id': 0})
-        if lead:
-            old_status = lead.get('status')
-            if old_status != new_status:
-                # Get status labels for readable display
-                old_status_label = old_status.replace('_', ' ').title() if old_status else 'Unknown'
-                new_status_label = new_status.replace('_', ' ').title()
-                description_parts.append(f"[Status: {old_status_label} → {new_status_label}]")
+    # Get the lead to include current status in activity
+    lead = await db.leads.find_one({'id': activity_data['lead_id']}, {'_id': 0})
+    current_status = lead.get('status') if lead else None
+    
+    # Always include status in activity for consolidated view
+    if new_status and current_status and current_status != new_status:
+        # Status is being changed - show transition
+        old_status_label = current_status.replace('_', ' ').title()
+        new_status_label = new_status.replace('_', ' ').title()
+        description_parts.append(f"[Status: {old_status_label} → {new_status_label}]")
+    elif current_status:
+        # Status not changed - just show current status
+        status_label = current_status.replace('_', ' ').title()
+        description_parts.append(f"[Status: {status_label}]")
     
     # Combine description parts
     activity_data['description'] = ' '.join(description_parts)
@@ -5255,7 +5257,7 @@ async def create_activity(activity_input: ActivityCreate, current_user: dict = D
     # Update lead status and follow-up date if provided
     if new_status or next_followup_date:
         lead_updates = {'updated_at': datetime.now(timezone.utc).isoformat()}
-        if new_status and old_status != new_status:
+        if new_status and current_status != new_status:
             lead_updates['status'] = new_status
         if next_followup_date:
             lead_updates['next_followup_date'] = next_followup_date
