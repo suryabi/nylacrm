@@ -519,3 +519,73 @@ async def initialize_default_data():
                     'updated_at': datetime.now(timezone.utc).isoformat()
                 }
                 await db.expense_types.insert_one(expense_type)
+
+
+@router.get("/policy")
+async def get_expense_policy_for_role(
+    role: str = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get expense policy with role-specific limits for the requesting user.
+    Returns categories with expense types and the user's specific limits.
+    """
+    # Use provided role or current user's role
+    user_role = role if role else current_user.get('role', 'Sales Representative')
+    
+    # Get all active categories
+    categories = await db.expense_categories.find(
+        {'is_active': True},
+        {'_id': 0}
+    ).sort('name', 1).to_list(100)
+    
+    # Get all active expense types
+    expense_types = await db.expense_types.find(
+        {'is_active': True},
+        {'_id': 0}
+    ).to_list(500)
+    
+    # Group expense types by category and apply role-specific limits
+    result = []
+    for category in categories:
+        category_types = []
+        
+        for exp_type in expense_types:
+            if exp_type.get('category_id') == category.get('id'):
+                # Find the role-specific limit
+                role_limit = None
+                is_allowed = True
+                
+                for rl in exp_type.get('role_limits', []):
+                    if rl.get('role') == user_role:
+                        role_limit = rl.get('max_limit', exp_type.get('default_limit', 0))
+                        is_allowed = rl.get('is_allowed', True)
+                        break
+                
+                # If no specific role limit found, use default
+                if role_limit is None:
+                    role_limit = exp_type.get('default_limit', 0)
+                
+                category_types.append({
+                    'id': exp_type.get('id'),
+                    'name': exp_type.get('name'),
+                    'description': exp_type.get('description'),
+                    'default_limit': exp_type.get('default_limit', 0),
+                    'role_limit': role_limit,
+                    'is_allowed_for_role': is_allowed,
+                    'requires_receipt': exp_type.get('requires_receipt', True),
+                    'requires_justification': exp_type.get('requires_justification', False),
+                    'policy_guidelines': exp_type.get('policy_guidelines')
+                })
+        
+        result.append({
+            'id': category.get('id'),
+            'name': category.get('name'),
+            'description': category.get('description'),
+            'icon': category.get('icon'),
+            'color': category.get('color'),
+            'policy_guidelines': category.get('policy_guidelines'),
+            'expense_types': category_types
+        })
+    
+    return result

@@ -56,6 +56,7 @@ import MasterBusinessCategories from './pages/MasterBusinessCategories';
 import TravelRequest from './pages/TravelRequest';
 import BudgetRequest from './pages/BudgetRequest';
 import ExpenseCategoryMaster from './pages/ExpenseCategoryMaster';
+import CompanyDocuments from './pages/CompanyDocuments';
 import '@/App.css';
 import { useActivityTracker } from './hooks/useActivityTracker';
 import { NavigationProvider } from './context/NavigationContext';
@@ -155,6 +156,7 @@ function AppRouter() {
           <Route path="/master-lead-status" element={<ProtectedRoute><MasterLeadStatus /></ProtectedRoute>} />
           <Route path="/master-business-categories" element={<ProtectedRoute><MasterBusinessCategories /></ProtectedRoute>} />
           <Route path="/expense-category-master" element={<ProtectedRoute><ExpenseCategoryMaster /></ProtectedRoute>} />
+          <Route path="/company-documents" element={<ProtectedRoute><CompanyDocuments /></ProtectedRoute>} />
           
           {/* Production Context Routes */}
           <Route path="/maintenance" element={<ProtectedRoute><Maintenance /></ProtectedRoute>} />
