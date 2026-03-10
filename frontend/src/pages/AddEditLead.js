@@ -113,10 +113,14 @@ export default function AddEditLead() {
 
   useEffect(() => {
     fetchUsers();
-    if (isEdit) {
+  }, []);
+  
+  // Fetch lead after users are loaded (for edit mode)
+  useEffect(() => {
+    if (isEdit && users.length > 0) {
       fetchLead();
     }
-  }, []);
+  }, [isEdit, users.length]);
 
   const fetchUsers = async () => {
     try {
@@ -458,9 +462,13 @@ export default function AddEditLead() {
                   <SelectValue placeholder="Select user" />
                 </SelectTrigger>
                 <SelectContent>
-                  {users.filter(u => u.is_active).map(usr => (
-                    <SelectItem key={usr.id} value={usr.id}>{usr.name}</SelectItem>
-                  ))}
+                  {users
+                    .filter(u => u.is_active || u.id === formData.assigned_to)
+                    .map(usr => (
+                      <SelectItem key={usr.id} value={usr.id}>
+                        {usr.name}{!usr.is_active ? ' (Inactive)' : ''}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
