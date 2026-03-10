@@ -3697,7 +3697,7 @@ async def get_leads(
     lead_ids = [lead['id'] for lead in leads]
     activities = await db.activities.find(
         {'lead_id': {'$in': lead_ids}},
-        {'_id': 0, 'lead_id': 1, 'created_at': 1, 'interaction_method': 1}
+        {'_id': 0, 'lead_id': 1, 'created_at': 1, 'interaction_method': 1, 'activity_type': 1}
     ).to_list(len(lead_ids) * 10)  # Reasonable limit per page
     
     # Group activities by lead_id and get the most recent
@@ -3706,32 +3706,36 @@ async def get_leads(
         lead_id = activity['lead_id']
         activity_date = activity['created_at'] if isinstance(activity['created_at'], str) else activity['created_at'].isoformat()
         
+        # Use interaction_method if available, otherwise fall back to activity_type
+        contact_method = activity.get('interaction_method') or activity.get('activity_type', '')
+        
         if lead_id not in lead_last_activity:
             lead_last_activity[lead_id] = {
                 'created_at': activity_date,
-                'interaction_method': activity.get('interaction_method', '')
+                'interaction_method': contact_method
             }
         elif activity_date and lead_last_activity[lead_id]['created_at'] and activity_date > lead_last_activity[lead_id]['created_at']:
             lead_last_activity[lead_id] = {
                 'created_at': activity_date,
-                'interaction_method': activity.get('interaction_method', '')
+                'interaction_method': contact_method
             }
     
-    # Add last contacted info to leads
+    # Add last contacted info to leads (prefer stored value, fallback to activity lookup)
     for lead in leads:
         if isinstance(lead['created_at'], str):
             lead['created_at'] = datetime.fromisoformat(lead['created_at'])
         if isinstance(lead['updated_at'], str):
             lead['updated_at'] = datetime.fromisoformat(lead['updated_at'])
         
-        # Add last contacted info
-        last_activity = lead_last_activity.get(lead['id'])
-        if last_activity:
-            lead['last_contacted_date'] = last_activity['created_at']
-            lead['last_contact_method'] = last_activity['interaction_method']
-        else:
-            lead['last_contacted_date'] = None
-            lead['last_contact_method'] = None
+        # Use stored value if available, otherwise lookup from activities
+        if not lead.get('last_contacted_date'):
+            last_activity = lead_last_activity.get(lead['id'])
+            if last_activity:
+                lead['last_contacted_date'] = last_activity['created_at']
+                lead['last_contact_method'] = last_activity['interaction_method']
+            else:
+                lead['last_contacted_date'] = None
+                lead['last_contact_method'] = None
     
     return PaginatedLeadsResponse(
         data=leads,
@@ -5254,15 +5258,19 @@ async def create_activity(activity_input: ActivityCreate, current_user: dict = D
     
     await db.activities.insert_one(doc)
     
-    # Update lead status and follow-up date if provided
-    if new_status or next_followup_date:
-        lead_updates = {'updated_at': datetime.now(timezone.utc).isoformat()}
-        if new_status and current_status != new_status:
-            lead_updates['status'] = new_status
-        if next_followup_date:
-            lead_updates['next_followup_date'] = next_followup_date
-        
-        await db.leads.update_one({'id': activity_data['lead_id']}, {'$set': lead_updates})
+    # Update lead with last contacted info and optionally status/follow-up
+    lead_updates = {
+        'updated_at': datetime.now(timezone.utc).isoformat(),
+        'last_contacted_date': doc['created_at'],
+        'last_contact_method': activity_data.get('activity_type', '')
+    }
+    
+    if new_status and current_status != new_status:
+        lead_updates['status'] = new_status
+    if next_followup_date:
+        lead_updates['next_followup_date'] = next_followup_date
+    
+    await db.leads.update_one({'id': activity_data['lead_id']}, {'$set': lead_updates})
     
     return activity_obj
 
