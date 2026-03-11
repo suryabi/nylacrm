@@ -58,11 +58,29 @@ Build a comprehensive, mobile-ready Sales CRM application with:
     - Toast message updated: "Module settings saved - sidebar updated"
     - Sidebar updates immediately without page refresh
   - **Testing Results**: 100% (16/16 tests passed)
-    - Module toggle saves correctly
-    - Sidebar hides disabled modules immediately
-    - Direct URL access shows "Module Not Available" message
-    - Dashboard submenu filtering works
-    - Re-enabling modules restores access
+  - Status: **COMPLETE**
+
+- **FEATURE COMPLETE**: Apply Tenant Branding (Phase 2.6)
+  - **Dynamic Color Application** (`/app/frontend/src/context/TenantConfigContext.js`):
+    - `hexToHSL()` - Converts hex colors to HSL format for CSS custom properties
+    - `applyBrandingColors()` - Sets CSS variables: --primary, --accent, --ring, --tenant-primary, --tenant-accent
+    - DEFAULT_BRANDING - Fallback values when branding not set
+    - Branding applied automatically when tenant config is fetched
+  - **Sidebar Branding** (`/app/frontend/src/layouts/DashboardLayout.js`):
+    - Uses `branding` from `useTenantConfig()` hook
+    - Displays custom `appName` and `tagline`
+    - Logo fallback shows first letter of app name when no logo URL
+    - Mobile header also displays custom branding
+  - **Immediate Theme Updates** (`/app/frontend/src/pages/TenantSettings.js`):
+    - `saveBranding()` calls `refreshConfig()` for instant theme update
+    - Toast message: "Branding saved - theme updated"
+    - No page reload required
+  - **CSS Variables Applied**:
+    - `--primary`: Main UI color (buttons, active states)
+    - `--accent`: Accent color for highlights
+    - `--ring`: Focus ring color
+    - `--tenant-primary`, `--tenant-accent`, `--tenant-secondary`: Raw hex values
+  - **Testing Results**: 100% (21/21 tests passed)
   - Status: **COMPLETE**
 
 ### Mar 11, 2026 (Session 24)
