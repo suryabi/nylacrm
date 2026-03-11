@@ -255,7 +255,7 @@ export default function TenantSettings() {
     directors: []
   });
 
-  const isAdmin = ['CEO', 'Director', 'System Admin'].includes(user?.role);
+  const isAdmin = ['CEO', 'Director', 'System Admin', 'Admin'].includes(user?.role);
 
   // Fetch current tenant config
   const fetchTenantConfig = useCallback(async () => {
@@ -477,7 +477,7 @@ export default function TenantSettings() {
             <Settings className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <h2 className="text-xl font-semibold mb-2">Access Restricted</h2>
             <p className="text-muted-foreground">
-              Tenant settings are only available to CEO, Director, and System Admin roles.
+              Tenant settings are only available to Admin roles.
             </p>
           </CardContent>
         </Card>
