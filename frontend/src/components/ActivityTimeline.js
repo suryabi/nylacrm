@@ -2,6 +2,39 @@ import React from 'react';
 import { format, differenceInDays, differenceInHours, differenceInMinutes } from 'date-fns';
 import { Calendar } from 'lucide-react';
 
+// Helper to render description with highlighted status
+const renderDescriptionWithStatus = (description) => {
+  if (!description) return null;
+  
+  // Match [Status: ...] pattern
+  const statusMatch = description.match(/\[Status:\s*([^\]]+)\]/);
+  
+  if (!statusMatch) {
+    return <span>{description}</span>;
+  }
+  
+  const beforeStatus = description.substring(0, statusMatch.index).trim();
+  const statusText = statusMatch[1].trim();
+  const afterStatus = description.substring(statusMatch.index + statusMatch[0].length).trim();
+  
+  // Check if it's a status change (has arrow) or just current status
+  const isStatusChange = statusText.includes('→');
+  
+  return (
+    <>
+      {beforeStatus && <span>{beforeStatus} </span>}
+      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+        isStatusChange 
+          ? 'bg-gradient-to-r from-amber-100 to-green-100 text-amber-800 border border-amber-200' 
+          : 'bg-blue-100 text-blue-700 border border-blue-200'
+      }`}>
+        {isStatusChange ? '📊 ' : '📌 '}{statusText}
+      </span>
+      {afterStatus && <span> {afterStatus}</span>}
+    </>
+  );
+};
+
 export default function ActivityTimeline({ activities }) {
   if (!activities || activities.length === 0) {
     return <p className="text-muted-foreground text-sm">No activities yet</p>;
@@ -119,7 +152,7 @@ export default function ActivityTimeline({ activities }) {
                 </div>
               </div>
               
-              <p className="text-sm leading-relaxed">{activity.description}</p>
+              <p className="text-sm leading-relaxed">{renderDescriptionWithStatus(activity.description)}</p>
             </div>
           </div>
         ))}

@@ -114,6 +114,39 @@ const StyledActivityDisplay = ({ text, onChange }) => {
   );
 };
 
+// Helper to render text with highlighted status
+const renderTextWithStatus = (text) => {
+  if (!text) return null;
+  
+  // Match [Status: ...] pattern
+  const statusMatch = text.match(/\[Status:\s*([^\]]+)\]/);
+  
+  if (!statusMatch) {
+    return <span>{text}</span>;
+  }
+  
+  const beforeStatus = text.substring(0, statusMatch.index).trim();
+  const statusText = statusMatch[1].trim();
+  const afterStatus = text.substring(statusMatch.index + statusMatch[0].length).trim();
+  
+  // Check if it's a status change (has arrow) or just current status
+  const isStatusChange = statusText.includes('→');
+  
+  return (
+    <>
+      {beforeStatus && <span>{beforeStatus} </span>}
+      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap ${
+        isStatusChange 
+          ? 'bg-gradient-to-r from-amber-100 to-green-100 text-amber-800 border border-amber-200' 
+          : 'bg-blue-100 text-blue-700 border border-blue-200'
+      }`}>
+        {isStatusChange ? '📊 ' : '📌 '}{statusText}
+      </span>
+      {afterStatus && <span> {afterStatus}</span>}
+    </>
+  );
+};
+
 // Styled content display for past statuses (read-only)
 const StyledContentDisplay = ({ text }) => {
   if (!text) return null;
@@ -156,12 +189,12 @@ const StyledContentDisplay = ({ text }) => {
           );
         }
         
-        // Regular bullet
+        // Regular bullet - with status highlighting
         const cleanLine = trimmedLine.replace(/^[•\-\*]\s*/, '').trim();
         return (
           <div key={index} className="flex items-start gap-1.5 text-xs pl-1">
             <span className="text-primary mt-0.5">•</span>
-            <span className="leading-relaxed">{cleanLine}</span>
+            <span className="leading-relaxed">{renderTextWithStatus(cleanLine)}</span>
           </div>
         );
       })}
