@@ -8,11 +8,14 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 - COGS calculator and proposal generator
 - Lead discovery and Google Workspace authentication
 - **Account management from converted leads**
+- **Multi-tenant support for multiple customer deployments**
 
 ## User Personas
 - **National Sales Head**: Full access to all features, territories, and reports
 - **Regional Sales Manager / Partner - Sales**: Regional access and team management
 - **Sales Representative**: Individual lead and activity management
+- **Super Admin**: Platform-wide tenant management
+- **Tenant Admin**: Tenant-specific configuration and branding
 
 ## Core Requirements
 1. Lead Management (CRUD operations, status tracking, activity logging)
@@ -23,10 +26,44 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 6. COGS Calculator
 7. Proposal Generator with customizable templates
 8. **Account Management (convert leads to accounts, SKU pricing, invoices)**
+9. **Multi-Tenancy (data isolation, per-tenant branding, module configuration)**
 
 ---
 
 ## What's Been Implemented
+
+### Mar 11, 2026 (Session 24) - CURRENT
+
+- **CRITICAL COMPLETE**: Multi-Tenant Query Refactoring (Phase 1.5)
+  - **TenantDB Wrapper** (`/app/backend/core/tenant.py`):
+    - TenantCollection class automatically adds tenant_id to ALL queries
+    - Supports: find, find_one, count_documents, insert_one, insert_many, update_one, update_many, delete_one, delete_many, distinct, aggregate
+    - GLOBAL_COLLECTIONS excluded from filtering: tenants, user_sessions, master_skus, master_territories, master_states, master_cities, lead_statuses, business_categories, document_categories, document_subcategories
+  - **Database Helper** (`/app/backend/database.py`):
+    - `get_tenant_db()` function returns tenant-aware TenantDB instance
+    - Raw `db` still available for global collections
+  - **All Route Files Updated**:
+    - `/app/backend/routes/leads.py` - get_tdb() for all queries
+    - `/app/backend/routes/accounts.py` - get_tdb() for all queries
+    - `/app/backend/routes/users.py` - get_tdb() for all queries
+    - `/app/backend/routes/auth.py` - get_tdb() for user lookup
+    - `/app/backend/routes/tasks.py` - get_tdb() for all queries
+    - `/app/backend/routes/meetings.py` - get_tdb() for all queries
+    - `/app/backend/routes/contacts.py` - get_tdb() for all queries
+    - `/app/backend/routes/expense_master.py` - get_tdb() for all queries
+    - `/app/backend/routes/requests.py` - get_tdb() for all queries
+  - **Server.py Updated** (`/app/backend/server.py`):
+    - All 466 database calls audited
+    - Tenant-specific collections use get_tdb(): leads, accounts, users, activities, invoices, tasks, meetings, follow_ups, comments, lead_proposals, lead_activities, daily_status, documents, account_contracts, travel_requests, leave_requests, budget_requests, expense_requests, resource_targets, target_allocations, contacts, contact_categories, expense_categories, expense_types, cogs_data
+    - Global collections use raw db: master_skus, master_cities, master_territories, master_states, lead_statuses, business_categories, document_categories, document_subcategories, user_sessions, user_activity
+  - **Testing Results**: 100% (16/16 tests passed)
+    - Login works for both tenants
+    - Cross-tenant login blocked (401)
+    - Data isolation verified:
+      - nyla-air-water: 68 leads, 23 users, 6 accounts, 29 tasks
+      - acme-corp: 0 leads, 1 user, 0 accounts, 0 tasks
+    - Cross-tenant resource access returns 404
+  - Status: **COMPLETE**
 
 ### Mar 11, 2026 (Session 23)
 
