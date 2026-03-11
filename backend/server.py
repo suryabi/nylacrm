@@ -6205,7 +6205,7 @@ async def generate_period_summary(request: dict, current_user: dict = Depends(ge
         raise HTTPException(status_code=500, detail=f'Summary generation failed: {str(e)}')
 
 @api_router.post("/users/create", response_model=User)
-async def create_team_member(user_input: UserCreate, current_user: dict = Depends(get_current_user)):
+async def create_team_member(user_input: UserCreate, request: Request, current_user: dict = Depends(get_current_user)):
     # Only admin/CEO/Director/VP can create users
     if current_user['role'] not in ['admin', 'ceo', 'CEO', 'Director', 'Vice President', 'National Sales Head']:
         raise HTTPException(status_code=403, detail='Only leadership can create team members')
@@ -6219,6 +6219,10 @@ async def create_team_member(user_input: UserCreate, current_user: dict = Depend
     hashed_pw = hash_password(user_input.password)
     user_data = user_input.model_dump()
     user_data.pop('password')
+    
+    # Add tenant_id from request context
+    tenant_id = getattr(request.state, 'tenant_id', None) or get_current_tenant_id()
+    user_data['tenant_id'] = tenant_id
     
     # Sync role with designation if Partner - Sales
     if user_data.get('designation') == 'Partner - Sales':
@@ -6234,6 +6238,7 @@ async def create_team_member(user_input: UserCreate, current_user: dict = Depend
     doc = user_obj.model_dump()
     doc['password'] = hashed_pw
     doc['created_at'] = doc['created_at'].isoformat()
+    doc['tenant_id'] = tenant_id  # Ensure tenant_id is in the document
     
     await db.users.insert_one(doc)
     return user_obj

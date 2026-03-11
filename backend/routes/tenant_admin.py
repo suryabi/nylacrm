@@ -44,6 +44,31 @@ async def ensure_default_tenant():
     return existing
 
 
+# ============== PUBLIC ENDPOINTS (No Auth Required) ==============
+
+@router.get("/public-list")
+async def list_public_tenants():
+    """
+    List active tenants for login dropdown (no auth required).
+    Only returns tenant_id and name for security.
+    """
+    await ensure_default_tenant()
+    
+    tenants = await db.tenants.find(
+        {'is_active': True},
+        {'_id': 0, 'tenant_id': 1, 'name': 1, 'branding.app_name': 1}
+    ).to_list(100)
+    
+    return [
+        {
+            'tenant_id': t['tenant_id'],
+            'name': t['name'],
+            'app_name': t.get('branding', {}).get('app_name', t['name'])
+        }
+        for t in tenants
+    ]
+
+
 # ============== SUPER ADMIN ENDPOINTS ==============
 
 @router.get("")

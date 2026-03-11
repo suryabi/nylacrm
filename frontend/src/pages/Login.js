@@ -5,10 +5,18 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Checkbox } from '../components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
 import { toast } from 'sonner';
-import { Mail, Lock, Loader2 } from 'lucide-react';
+import { Mail, Lock, Loader2, Building2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
+const API_URL = process.env.REACT_APP_BACKEND_URL;
 const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
 const MOUNTAIN_BG = 'https://images.unsplash.com/photo-1761589951732-2795cd6ecdbf?crop=entropy&cs=srgb&fm=jpg&q=85';
 
@@ -19,12 +27,37 @@ export default function Login() {
   
   // Check for remembered email
   const rememberedEmail = localStorage.getItem('rememberedEmail') || '';
+  const rememberedTenant = localStorage.getItem('selectedTenant') || 'nyla-air-water';
   const [email, setEmail] = useState(rememberedEmail || '');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(!!rememberedEmail);
   const [loading, setLoading] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
+  const [tenants, setTenants] = useState([]);
+  const [selectedTenant, setSelectedTenant] = useState(rememberedTenant);
+  const [loadingTenants, setLoadingTenants] = useState(true);
   const errorMessage = location.state?.error;
+  
+  // Fetch available tenants for testing
+  useEffect(() => {
+    const fetchTenants = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/tenants/public-list`);
+        if (response.ok) {
+          const data = await response.json();
+          setTenants(data);
+        } else {
+          // Fallback to default
+          setTenants([{ tenant_id: 'nyla-air-water', name: 'Nyla Air Water' }]);
+        }
+      } catch (error) {
+        setTenants([{ tenant_id: 'nyla-air-water', name: 'Nyla Air Water' }]);
+      } finally {
+        setLoadingTenants(false);
+      }
+    };
+    fetchTenants();
+  }, []);
   
   // Redirect to home if user is already authenticated
   useEffect(() => {
@@ -42,6 +75,11 @@ export default function Login() {
     }
   }, [location.search]);
 
+  const handleTenantChange = (value) => {
+    setSelectedTenant(value);
+    localStorage.setItem('selectedTenant', value);
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     
@@ -57,7 +95,10 @@ export default function Login() {
         localStorage.removeItem('rememberedEmail');
       }
       
-      const userData = await login(email, password);
+      // Store selected tenant for API calls
+      localStorage.setItem('selectedTenant', selectedTenant);
+      
+      const userData = await login(email, password, selectedTenant);
       
       if (userData) {
         // The useEffect will handle redirect when user state updates
@@ -162,6 +203,28 @@ export default function Login() {
           {!showRegister ? (
             <div className="space-y-6" data-testid="login-form">
               <form onSubmit={handleLogin} className="space-y-4">
+                {/* Tenant Selector (for testing) */}
+                {tenants.length > 1 && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <Label className="text-amber-800 flex items-center gap-2 mb-2">
+                      <Building2 className="h-4 w-4" />
+                      Select Organization (Testing Mode)
+                    </Label>
+                    <Select value={selectedTenant} onValueChange={handleTenantChange}>
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="Select organization" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tenants.map((tenant) => (
+                          <SelectItem key={tenant.tenant_id} value={tenant.tenant_id}>
+                            {tenant.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                
                 <div>
                   <Label>Email</Label>
                   <Input

@@ -129,9 +129,15 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (email, password) => {
+  const login = async (email, password, tenantId = null) => {
+    // Get tenant from parameter or localStorage
+    const tenant = tenantId || localStorage.getItem('selectedTenant') || 'nyla-air-water';
+    
     const response = await axios.post(`${API_URL}/auth/login`, { email, password }, {
-      withCredentials: true  // Important: receive and store cookies
+      withCredentials: true,  // Important: receive and store cookies
+      headers: {
+        'X-Tenant-ID': tenant
+      }
     });
     const { session_token, user: userData } = response.data;
     // Store session token as backup (cookie is primary)
@@ -139,7 +145,9 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('token', session_token);
       setToken(session_token);
     }
-    setUser(userData);
+    // Store tenant_id with user
+    localStorage.setItem('selectedTenant', tenant);
+    setUser({ ...userData, tenant_id: tenant });
     // Set session start time
     const now = Date.now();
     setSessionStartTime(now);
