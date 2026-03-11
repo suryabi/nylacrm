@@ -32,7 +32,40 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 
 ## What's Been Implemented
 
-### Mar 11, 2026 (Session 24) - CURRENT
+### Mar 11, 2026 (Session 25) - CURRENT
+
+- **FEATURE COMPLETE**: Module Enable/Disable Enforcement (Phase 2.5)
+  - **TenantConfigContext** (`/app/frontend/src/context/TenantConfigContext.js`):
+    - New React context to fetch and store tenant module configuration globally
+    - `isModuleEnabled(moduleKey)` - Check if a specific module is enabled
+    - `isRouteAccessible(route)` - Check if a route is accessible based on module config
+    - `refreshConfig()` - Refresh config after saving (used in TenantSettings)
+    - MODULE_ROUTE_MAP - Maps module keys to their corresponding routes
+    - ROUTE_TO_MODULE_MAP - Reverse mapping for route protection
+  - **Sidebar Navigation Filtering** (`/app/frontend/src/layouts/DashboardLayout.js`):
+    - All navigation items now have `moduleKey` property
+    - `filteredGroups` filters items using `isModuleEnabled(item.moduleKey)`
+    - Dashboard submenu items filtered based on report module settings
+    - Empty groups are automatically hidden
+  - **Route Protection** (`/app/frontend/src/App.js`):
+    - `ProtectedRoute` component now accepts `moduleKey` prop
+    - Checks module status via `useTenantConfig().isModuleEnabled()`
+    - Displays "Module Not Available" UI for disabled modules
+    - "Go Back" button for user navigation
+    - All routes updated with appropriate moduleKey values
+  - **TenantSettings Integration** (`/app/frontend/src/pages/TenantSettings.js`):
+    - `refreshConfig()` called after saving modules
+    - Toast message updated: "Module settings saved - sidebar updated"
+    - Sidebar updates immediately without page refresh
+  - **Testing Results**: 100% (16/16 tests passed)
+    - Module toggle saves correctly
+    - Sidebar hides disabled modules immediately
+    - Direct URL access shows "Module Not Available" message
+    - Dashboard submenu filtering works
+    - Re-enabling modules restores access
+  - Status: **COMPLETE**
+
+### Mar 11, 2026 (Session 24)
 
 - **CRITICAL COMPLETE**: Multi-Tenant Query Refactoring (Phase 1.5)
   - **TenantDB Wrapper** (`/app/backend/core/tenant.py`):
