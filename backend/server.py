@@ -5826,6 +5826,9 @@ async def auto_populate_from_activities(
         for activity in activities:
             lead_name = lead_map.get(activity['lead_id'], 'Unknown Lead')
             description = activity.get('description') or ''
+            # Replace newlines with space to keep activity as single line
+            description = ' '.join(description.split('\n')).strip()
+            description = ' '.join(description.split())  # Normalize multiple spaces
             interaction_method = (activity.get('interaction_method') or activity.get('activity_type') or '').lower()
             
             activity_text = f"{lead_name} - {description}" if description else lead_name
