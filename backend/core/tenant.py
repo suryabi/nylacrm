@@ -210,8 +210,14 @@ class TenantCollection:
         """
         return self._collection.find(self._add_tenant(query or {}), projection)
     
-    async def find_one(self, query: dict = None, projection: dict = None):
-        """Find one document with tenant filtering"""
+    async def find_one(self, query: dict = None, projection: dict = None, sort: list = None):
+        """Find one document with tenant filtering. Optionally sort before picking the first one."""
+        if sort:
+            # If sort is provided, use find().sort().limit(1) instead
+            cursor = self._collection.find(self._add_tenant(query or {}), projection)
+            cursor = cursor.sort(sort).limit(1)
+            results = await cursor.to_list(1)
+            return results[0] if results else None
         return await self._collection.find_one(self._add_tenant(query or {}), projection)
     
     async def count_documents(self, query: dict = None):
