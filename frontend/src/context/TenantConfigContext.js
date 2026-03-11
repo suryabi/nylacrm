@@ -6,6 +6,86 @@ const TenantConfigContext = createContext();
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
+// Default branding values
+const DEFAULT_BRANDING = {
+  app_name: 'Sales CRM',
+  tagline: '',
+  logo_url: '',
+  primary_color: '#0d9488', // Teal
+  accent_color: '#ffffff',
+  secondary_color: '#374151',
+};
+
+// Convert hex color to HSL values for CSS variables
+const hexToHSL = (hex) => {
+  // Remove # if present
+  hex = hex.replace('#', '');
+  
+  // Parse hex to RGB
+  const r = parseInt(hex.substring(0, 2), 16) / 255;
+  const g = parseInt(hex.substring(2, 4), 16) / 255;
+  const b = parseInt(hex.substring(4, 6), 16) / 255;
+  
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h, s, l = (max + min) / 2;
+  
+  if (max === min) {
+    h = s = 0; // achromatic
+  } else {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    
+    switch (max) {
+      case r:
+        h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+        break;
+      case g:
+        h = ((b - r) / d + 2) / 6;
+        break;
+      case b:
+        h = ((r - g) / d + 4) / 6;
+        break;
+      default:
+        h = 0;
+    }
+  }
+  
+  return {
+    h: Math.round(h * 360),
+    s: Math.round(s * 100),
+    l: Math.round(l * 100)
+  };
+};
+
+// Apply branding colors to CSS custom properties
+const applyBrandingColors = (branding) => {
+  const root = document.documentElement;
+  
+  if (branding?.primary_color) {
+    const primary = hexToHSL(branding.primary_color);
+    // Set primary color for both light and dark modes
+    root.style.setProperty('--primary', `${primary.h} ${primary.s}% ${primary.l}%`);
+    root.style.setProperty('--accent', `${primary.h} ${primary.s}% ${primary.l}%`);
+    root.style.setProperty('--ring', `${primary.h} ${primary.s}% ${primary.l}%`);
+    
+    // Chart colors based on primary
+    root.style.setProperty('--chart-1', `${primary.h} ${primary.s}% ${Math.min(primary.l + 5, 60)}%`);
+    root.style.setProperty('--chart-2', `${(primary.h + 10) % 360} ${Math.max(primary.s - 5, 40)}% ${Math.min(primary.l + 10, 65)}%`);
+  }
+  
+  // Store branding in CSS custom properties for other components
+  if (branding?.primary_color) {
+    root.style.setProperty('--tenant-primary', branding.primary_color);
+  }
+  if (branding?.accent_color) {
+    root.style.setProperty('--tenant-accent', branding.accent_color);
+  }
+  if (branding?.secondary_color) {
+    root.style.setProperty('--tenant-secondary', branding.secondary_color);
+  }
+};
+
 // Mapping from module keys to their corresponding routes
 export const MODULE_ROUTE_MAP = {
   // Core Modules
@@ -81,7 +161,7 @@ export const TenantConfigProvider = ({ children }) => {
   const { user, token } = useAuth();
   const [tenantConfig, setTenantConfig] = useState(null);
   const [modules, setModules] = useState({});
-  const [branding, setBranding] = useState({});
+  const [branding, setBranding] = useState(DEFAULT_BRANDING);
   const [loading, setLoading] = useState(true);
 
   const fetchTenantConfig = useCallback(async () => {
@@ -98,11 +178,21 @@ export const TenantConfigProvider = ({ children }) => {
       const config = response.data;
       setTenantConfig(config);
       setModules(config.modules || {});
-      setBranding(config.branding || {});
+      
+      // Merge fetched branding with defaults
+      const fetchedBranding = {
+        ...DEFAULT_BRANDING,
+        ...config.branding
+      };
+      setBranding(fetchedBranding);
+      
+      // Apply branding colors to CSS custom properties
+      applyBrandingColors(fetchedBranding);
     } catch (error) {
       console.error('Failed to fetch tenant config:', error);
-      // Set default modules (all enabled) on error
+      // Set defaults on error
       setModules({});
+      setBranding(DEFAULT_BRANDING);
     } finally {
       setLoading(false);
     }

@@ -321,9 +321,9 @@ export default function TenantSettings() {
       await axios.put(`${API_URL}/api/tenants/current/branding`, branding, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      toast.success('Branding saved successfully');
-      document.documentElement.style.setProperty('--primary', branding.primary_color);
-      document.documentElement.style.setProperty('--accent', branding.accent_color);
+      toast.success('Branding saved - theme updated');
+      // Refresh the tenant config context to apply branding globally
+      refreshConfig();
     } catch (error) {
       console.error('Failed to save branding:', error);
       toast.error('Failed to save branding');

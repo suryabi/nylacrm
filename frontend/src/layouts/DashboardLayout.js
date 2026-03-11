@@ -142,9 +142,14 @@ export default function DashboardLayout({ children }) {
   const { currentContext, switchContext, canAccessBothContexts } = useAppContext();
   const { theme, toggleTheme } = useTheme();
   const { navigateTo } = useNavigation();
-  const { isModuleEnabled } = useTenantConfig();
+  const { isModuleEnabled, branding } = useTenantConfig();
   const location = useLocation();
   const navigate = useNavigate();
+  
+  // Get branding values with fallbacks
+  const logoUrl = branding?.logo_url || NYLA_LOGO;
+  const appName = branding?.app_name || 'Nyla Air Water';
+  const tagline = branding?.tagline || (currentContext === 'production' ? 'Production' : 'Sales CRM');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(
     location.pathname === '/dashboard' || location.pathname === '/sales-revenue' || 
@@ -214,10 +219,16 @@ export default function DashboardLayout({ children }) {
           {/* Logo */}
           <div className="p-5 border-b border-white/10">
             <div className="flex items-center gap-3">
-              <img src={NYLA_LOGO} alt="Nyla Air Water" className="h-10 w-10 rounded-lg object-cover" />
+              {logoUrl ? (
+                <img src={logoUrl} alt={appName} className="h-10 w-10 rounded-lg object-cover" />
+              ) : (
+                <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
+                  <span className="text-primary-foreground font-bold text-lg">{appName.charAt(0)}</span>
+                </div>
+              )}
               <div>
-                <h1 className="text-white font-bold text-lg tracking-tight">Nyla Air Water</h1>
-                <p className="text-white/60 text-xs">{currentContext === 'production' ? 'Production' : 'Sales CRM'}</p>
+                <h1 className="text-white font-bold text-lg tracking-tight">{appName}</h1>
+                <p className="text-white/60 text-xs">{tagline}</p>
               </div>
             </div>
           </div>
@@ -407,8 +418,14 @@ export default function DashboardLayout({ children }) {
               <Menu className="h-5 w-5 text-foreground" />
             </Button>
             <div className="flex items-center gap-2">
-              <img src={NYLA_LOGO} alt="Nyla Air Water" className="h-8 w-8 rounded-lg" />
-              <span className="font-bold text-foreground">Nyla Air Water</span>
+              {logoUrl ? (
+                <img src={logoUrl} alt={appName} className="h-8 w-8 rounded-lg object-cover" />
+              ) : (
+                <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+                  <span className="text-primary-foreground font-bold">{appName.charAt(0)}</span>
+                </div>
+              )}
+              <span className="font-bold text-foreground">{appName}</span>
             </div>
             <div className="w-10" />
           </div>
