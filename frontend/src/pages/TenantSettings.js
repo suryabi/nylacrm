@@ -15,9 +15,10 @@ import {
   Globe, Clock, DollarSign, Calendar, RefreshCw, MapPin,
   Users, Kanban, Target, CalendarDays, Contact, Plane, Wallet, FolderOpen,
   Wrench, Boxes, ShieldCheck, Box, Landmark, Phone, Mail, FileText,
-  Plus, Trash2, User
+  Plus, Trash2, User, Shield
 } from 'lucide-react';
 import axios from 'axios';
+import RoleManagement from '../components/RoleManagement';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -516,7 +517,7 @@ export default function TenantSettings() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 lg:w-[500px]">
+        <TabsList className="grid w-full grid-cols-5 lg:w-[600px]">
           <TabsTrigger value="company" className="flex items-center gap-2" data-testid="tab-company">
             <Building2 className="h-4 w-4" />
             Company
@@ -528,6 +529,10 @@ export default function TenantSettings() {
           <TabsTrigger value="modules" className="flex items-center gap-2" data-testid="tab-modules">
             <Puzzle className="h-4 w-4" />
             Modules
+          </TabsTrigger>
+          <TabsTrigger value="roles" className="flex items-center gap-2" data-testid="tab-roles">
+            <Shield className="h-4 w-4" />
+            Roles
           </TabsTrigger>
           <TabsTrigger value="settings" className="flex items-center gap-2" data-testid="tab-settings">
             <Settings className="h-4 w-4" />
@@ -1228,6 +1233,11 @@ export default function TenantSettings() {
               </Button>
             </div>
           </div>
+        </TabsContent>
+
+        {/* Roles Tab */}
+        <TabsContent value="roles" className="space-y-6">
+          <RoleManagement />
         </TabsContent>
 
         {/* Settings Tab */}

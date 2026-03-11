@@ -16,13 +16,11 @@ from models.tenant import (
     TenantSettings, TenantAuthConfig, TenantPublicInfo, GoogleWorkspaceConfig
 )
 from models.user import User
+from models.role import get_default_roles
 from deps import hash_password
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-# Default roles for new tenants
-DEFAULT_ROLES = ["Admin", "Manager", "User"]
 
 
 @router.get("/check-subdomain/{subdomain}")
@@ -148,6 +146,10 @@ async def register_tenant(registration: TenantRegistration, background_tasks: Ba
         {"id": str(uuid.uuid4()), "tenant_id": subdomain, "name": "Lost", "color": "#ef4444", "order": 6},
     ]
     await db.lead_statuses.insert_many(default_statuses)
+    
+    # Create default roles for the tenant
+    default_roles = get_default_roles(subdomain)
+    await db.roles.insert_many(default_roles)
     
     # TODO: Send verification email in background
     # background_tasks.add_task(send_verification_email, admin_email, verification_token, subdomain)
