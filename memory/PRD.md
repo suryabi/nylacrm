@@ -32,7 +32,29 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 
 ## What's Been Implemented
 
-### Mar 11, 2026 (Session 25) - CURRENT
+### Mar 11, 2026 (Session 26) - CURRENT
+
+- **BUG FIX COMPLETE**: Role Management ObjectId Serialization (P0)
+  - **Issue**: `POST /api/roles` returned 500 Internal Server Error due to MongoDB `ObjectId` not being JSON serializable
+  - **Root Cause**: After `insert_one()`, MongoDB adds `_id` (ObjectId) to the document, which was returned directly
+  - **Fix Location**: `/app/backend/routes/roles.py` line 115-118
+  - **Fix Code**: Added `role_doc.pop('_id', None)` after insert_one to remove MongoDB's ObjectId before returning
+  - **Testing Results**: 100% (12/12 backend tests, all frontend tests passed)
+  - **All CRUD Operations Working**:
+    - `GET /api/roles` - List roles for tenant
+    - `POST /api/roles` - Create custom role (FIXED)
+    - `PUT /api/roles/{role_id}` - Update role permissions
+    - `DELETE /api/roles/{role_id}` - Delete custom roles (system roles protected)
+    - `POST /api/roles/{role_id}/set-default` - Set default role for new users
+  - **Frontend Role Management UI**: Fully functional at `/tenant-settings` > Roles tab
+    - Create/Edit/Delete custom roles
+    - Expandable permission matrix by category (Core, Reports, Operations, etc.)
+    - View/Create/Edit/Delete permission checkboxes
+    - System role protection (lock icon, cannot delete)
+    - Default role badge
+  - Status: **COMPLETE**
+
+### Mar 11, 2026 (Session 25)
 
 - **FEATURE COMPLETE**: Module Enable/Disable Enforcement (Phase 2.5)
   - TenantConfigContext with `isModuleEnabled()` and route protection
