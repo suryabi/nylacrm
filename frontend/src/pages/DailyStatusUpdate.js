@@ -41,6 +41,54 @@ const convertToBulletFormat = (text) => {
   }).join('\n');
 };
 
+// Helper to parse and render activity line with styled client name and status
+const renderStyledActivityLine = (text) => {
+  if (!text) return null;
+  
+  // Pattern: "Client Name - description [Status: X] or [Status: X → Y]"
+  const dashIndex = text.indexOf(' - ');
+  const statusMatch = text.match(/\[Status:\s*([^\]]+)\]/);
+  
+  let clientName = '';
+  let description = text;
+  let statusText = '';
+  let isStatusChange = false;
+  
+  // Extract client name (before the first " - ")
+  if (dashIndex > 0) {
+    clientName = text.substring(0, dashIndex).trim();
+    description = text.substring(dashIndex + 3);
+  }
+  
+  // Extract status (at the end)
+  if (statusMatch) {
+    statusText = statusMatch[1].trim();
+    isStatusChange = statusText.includes('→');
+    description = description.replace(statusMatch[0], '').trim();
+  }
+  
+  return (
+    <span className="leading-relaxed">
+      {clientName && (
+        <>
+          <span className="font-semibold text-primary">{clientName}</span>
+          <span className="text-muted-foreground"> - </span>
+        </>
+      )}
+      <span>{description}</span>
+      {statusText && (
+        <span className={`ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+          isStatusChange 
+            ? 'bg-gradient-to-r from-amber-100 to-green-100 text-amber-800 border border-amber-200' 
+            : 'bg-blue-100 text-blue-700 border border-blue-200'
+        }`}>
+          {isStatusChange ? '↗ ' : '● '}{statusText}
+        </span>
+      )}
+    </span>
+  );
+};
+
 // Styled activity display component with highlighted headers (for form input)
 const StyledActivityDisplay = ({ text, onChange }) => {
   if (!text) {
@@ -94,20 +142,20 @@ const StyledActivityDisplay = ({ text, onChange }) => {
           );
         }
         
-        // Regular bullet items
+        // Regular bullet items - with styled client name and status
         if (trimmedLine.startsWith('•')) {
           const itemText = trimmedLine.replace('•', '').trim();
           return (
             <div key={index} className="flex items-start gap-2 pl-2">
               <span className="text-muted-foreground mt-0.5">•</span>
-              <span className="text-sm leading-relaxed">{itemText}</span>
+              <span className="text-sm">{renderStyledActivityLine(itemText)}</span>
             </div>
           );
         }
         
         // Any other line
         return (
-          <div key={index} className="text-sm pl-2">{trimmedLine}</div>
+          <div key={index} className="text-sm pl-2">{renderStyledActivityLine(trimmedLine)}</div>
         );
       })}
     </div>
@@ -118,31 +166,46 @@ const StyledActivityDisplay = ({ text, onChange }) => {
 const renderTextWithStatus = (text) => {
   if (!text) return null;
   
-  // Match [Status: ...] pattern
+  // Pattern: "Client Name - description [Status: X] or [Status: X → Y]"
+  const dashIndex = text.indexOf(' - ');
   const statusMatch = text.match(/\[Status:\s*([^\]]+)\]/);
   
-  if (!statusMatch) {
-    return <span>{text}</span>;
+  let clientName = '';
+  let description = text;
+  let statusText = '';
+  let isStatusChange = false;
+  
+  // Extract client name (before the first " - ")
+  if (dashIndex > 0) {
+    clientName = text.substring(0, dashIndex).trim();
+    description = text.substring(dashIndex + 3);
   }
   
-  const beforeStatus = text.substring(0, statusMatch.index).trim();
-  const statusText = statusMatch[1].trim();
-  const afterStatus = text.substring(statusMatch.index + statusMatch[0].length).trim();
-  
-  // Check if it's a status change (has arrow) or just current status
-  const isStatusChange = statusText.includes('→');
+  // Extract status (at the end)
+  if (statusMatch) {
+    statusText = statusMatch[1].trim();
+    isStatusChange = statusText.includes('→');
+    description = description.replace(statusMatch[0], '').trim();
+  }
   
   return (
     <>
-      {beforeStatus && <span>{beforeStatus} </span>}
-      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap ${
-        isStatusChange 
-          ? 'bg-gradient-to-r from-amber-100 to-green-100 text-amber-800 border border-amber-200' 
-          : 'bg-blue-100 text-blue-700 border border-blue-200'
-      }`}>
-        {isStatusChange ? '📊 ' : '📌 '}{statusText}
-      </span>
-      {afterStatus && <span> {afterStatus}</span>}
+      {clientName && (
+        <>
+          <span className="font-semibold text-primary">{clientName}</span>
+          <span className="text-muted-foreground"> - </span>
+        </>
+      )}
+      <span>{description}</span>
+      {statusText && (
+        <span className={`ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap ${
+          isStatusChange 
+            ? 'bg-gradient-to-r from-amber-100 to-green-100 text-amber-800 border border-amber-200' 
+            : 'bg-blue-100 text-blue-700 border border-blue-200'
+        }`}>
+          {isStatusChange ? '↗ ' : '● '}{statusText}
+        </span>
+      )}
     </>
   );
 };
