@@ -35,52 +35,47 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 ### Mar 11, 2026 (Session 25) - CURRENT
 
 - **FEATURE COMPLETE**: Module Enable/Disable Enforcement (Phase 2.5)
-  - **TenantConfigContext** (`/app/frontend/src/context/TenantConfigContext.js`):
-    - New React context to fetch and store tenant module configuration globally
-    - `isModuleEnabled(moduleKey)` - Check if a specific module is enabled
-    - `isRouteAccessible(route)` - Check if a route is accessible based on module config
-    - `refreshConfig()` - Refresh config after saving (used in TenantSettings)
-    - MODULE_ROUTE_MAP - Maps module keys to their corresponding routes
-    - ROUTE_TO_MODULE_MAP - Reverse mapping for route protection
-  - **Sidebar Navigation Filtering** (`/app/frontend/src/layouts/DashboardLayout.js`):
-    - All navigation items now have `moduleKey` property
-    - `filteredGroups` filters items using `isModuleEnabled(item.moduleKey)`
-    - Dashboard submenu items filtered based on report module settings
-    - Empty groups are automatically hidden
-  - **Route Protection** (`/app/frontend/src/App.js`):
-    - `ProtectedRoute` component now accepts `moduleKey` prop
-    - Checks module status via `useTenantConfig().isModuleEnabled()`
-    - Displays "Module Not Available" UI for disabled modules
-    - "Go Back" button for user navigation
-    - All routes updated with appropriate moduleKey values
-  - **TenantSettings Integration** (`/app/frontend/src/pages/TenantSettings.js`):
-    - `refreshConfig()` called after saving modules
-    - Toast message updated: "Module settings saved - sidebar updated"
-    - Sidebar updates immediately without page refresh
-  - **Testing Results**: 100% (16/16 tests passed)
+  - TenantConfigContext with `isModuleEnabled()` and route protection
+  - Sidebar conditionally renders navigation based on module config
+  - ProtectedRoute blocks access to disabled modules with "Module Not Available" message
+  - Testing Results: 100% (16/16 tests passed)
   - Status: **COMPLETE**
 
 - **FEATURE COMPLETE**: Apply Tenant Branding (Phase 2.6)
-  - **Dynamic Color Application** (`/app/frontend/src/context/TenantConfigContext.js`):
-    - `hexToHSL()` - Converts hex colors to HSL format for CSS custom properties
-    - `applyBrandingColors()` - Sets CSS variables: --primary, --accent, --ring, --tenant-primary, --tenant-accent
-    - DEFAULT_BRANDING - Fallback values when branding not set
-    - Branding applied automatically when tenant config is fetched
-  - **Sidebar Branding** (`/app/frontend/src/layouts/DashboardLayout.js`):
-    - Uses `branding` from `useTenantConfig()` hook
-    - Displays custom `appName` and `tagline`
-    - Logo fallback shows first letter of app name when no logo URL
-    - Mobile header also displays custom branding
-  - **Immediate Theme Updates** (`/app/frontend/src/pages/TenantSettings.js`):
-    - `saveBranding()` calls `refreshConfig()` for instant theme update
-    - Toast message: "Branding saved - theme updated"
-    - No page reload required
-  - **CSS Variables Applied**:
-    - `--primary`: Main UI color (buttons, active states)
-    - `--accent`: Accent color for highlights
-    - `--ring`: Focus ring color
-    - `--tenant-primary`, `--tenant-accent`, `--tenant-secondary`: Raw hex values
-  - **Testing Results**: 100% (21/21 tests passed)
+  - Dynamic CSS variables (--primary, --accent, --ring) from tenant branding
+  - Sidebar displays custom app name, tagline, logo
+  - Immediate theme updates after saving branding
+  - Testing Results: 100% (21/21 tests passed)
+  - Status: **COMPLETE**
+
+- **FEATURE COMPLETE**: SaaS Multi-Tenant Registration & Google Workspace SSO (Phase 3.0)
+  - **Self-Service Tenant Registration** (`/app/frontend/src/pages/RegisterTenant.js`):
+    - Company name, subdomain selection, admin account creation
+    - Real-time subdomain availability check with debouncing
+    - Success page with next steps and tenant URL
+    - 14-day trial period for new tenants
+  - **Backend Registration API** (`/app/backend/routes/tenant_registration.py`):
+    - `POST /api/tenants/register` - Creates tenant + admin user
+    - `GET /api/tenants/check-subdomain/{subdomain}` - Real-time availability check
+    - `GET /api/tenants/info/{tenant_id}` - Public tenant info for login page
+    - Default lead statuses created for new tenants
+    - Reserved subdomain validation (www, api, admin, etc.)
+  - **Google Workspace SSO Configuration** (`TenantAuthConfig` model):
+    - Enable/disable per tenant
+    - Allowed domain configuration (e.g., @acme.com)
+    - UI in Tenant Settings -> Settings tab
+    - Login page shows "Sign in with Google Workspace" when enabled
+    - Domain hint displayed for users
+  - **Updated Login Page** (`/app/frontend/src/pages/Login.js`):
+    - Fetches tenant info via `GET /api/tenants/info/{tenant_id}`
+    - Displays tenant branding (logo, name, tagline)
+    - Shows Google Workspace SSO button when enabled
+    - "Create workspace" link to registration page
+  - **Backend Google Workspace Login** (`/app/backend/routes/auth.py`):
+    - `POST /api/auth/google-workspace-login` - Validates domain, auto-provisions users
+    - Users provisioned with "User" role, admins can change later
+  - **Default Roles**: Admin, Manager, User (first user is Admin)
+  - **Testing Results**: Backend 95%, Frontend 100%
   - Status: **COMPLETE**
 
 ### Mar 11, 2026 (Session 24)
