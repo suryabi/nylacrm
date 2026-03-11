@@ -22,6 +22,23 @@ def get_tdb():
     return get_tenant_db()
 
 
+async def get_tenant_google_config(tenant_id: str):
+    """Get Google Workspace config for a tenant"""
+    tenant = await db.tenants.find_one({"tenant_id": tenant_id}, {"_id": 0, "auth_config": 1})
+    if not tenant:
+        return None
+    
+    auth_config = tenant.get('auth_config', {})
+    google_ws = auth_config.get('google_workspace', {})
+    
+    return {
+        "enabled": google_ws.get('enabled', False),
+        "allowed_domain": google_ws.get('allowed_domain'),
+        "client_id": google_ws.get('client_id'),
+        "client_secret": google_ws.get('client_secret')
+    }
+
+
 @router.post("/register", response_model=User)
 async def register(user_input: UserCreate):
     """Register a new user"""
@@ -272,3 +289,154 @@ async def exchange_google_session(request: Request, response: Response):
         'user': user_doc,
         'session_token': session_token
     }
+
+
+
+@router.post("/google-workspace-login")
+async def google_workspace_login(request: Request, response: Response):
+    """
+    Handle Google Workspace SSO login for a specific tenant.
+    Validates that the user's email domain matches the tenant's allowed domain.
+    Creates user if not exists (auto-provisioning for Workspace users).
+    """
+    tdb = get_tdb()
+    body = await request.json()
+    code = body.get('code')
+    redirect_uri = body.get('redirect_uri')
+    tenant_id = get_current_tenant_id()
+    
+    if not code:
+        raise HTTPException(status_code=400, detail='Authorization code required')
+    
+    # Get tenant's Google Workspace config
+    google_config = await get_tenant_google_config(tenant_id)
+    
+    if not google_config or not google_config.get('enabled'):
+        raise HTTPException(status_code=403, detail='Google Workspace SSO is not enabled for this workspace')
+    
+    allowed_domain = google_config.get('allowed_domain')
+    if not allowed_domain:
+        raise HTTPException(status_code=403, detail='Google Workspace domain not configured')
+    
+    try:
+        # Use tenant's client credentials if provided, otherwise use platform credentials
+        client_id = google_config.get('client_id') or os.environ.get('GOOGLE_OAUTH_CLIENT_ID')
+        client_secret = google_config.get('client_secret') or os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET')
+        
+        if not client_id or not client_secret:
+            raise HTTPException(status_code=500, detail='Google OAuth not configured')
+        
+        if not redirect_uri:
+            redirect_uri = os.environ.get('GOOGLE_OAUTH_REDIRECT_URI', '')
+        
+        async with httpx.AsyncClient() as client:
+            # Exchange code for tokens
+            token_response = await client.post(
+                'https://oauth2.googleapis.com/token',
+                data={
+                    'code': code,
+                    'client_id': client_id,
+                    'client_secret': client_secret,
+                    'redirect_uri': redirect_uri,
+                    'grant_type': 'authorization_code'
+                }
+            )
+            
+            tokens = token_response.json()
+            
+            if 'error' in tokens:
+                logger.error(f"Google token error: {tokens}")
+                raise HTTPException(status_code=400, detail=tokens.get('error_description', tokens['error']))
+            
+            # Get user info from Google
+            user_info_response = await client.get(
+                'https://www.googleapis.com/oauth2/v2/userinfo',
+                headers={'Authorization': f"Bearer {tokens['access_token']}"}
+            )
+            
+            user_info = user_info_response.json()
+        
+        user_email = user_info['email'].strip().lower()
+        user_domain = user_email.split('@')[1] if '@' in user_email else ''
+        
+        # Validate domain matches tenant's allowed domain
+        if user_domain.lower() != allowed_domain.lower():
+            raise HTTPException(
+                status_code=403,
+                detail=f'Access denied. Only @{allowed_domain} email addresses can access this workspace.'
+            )
+        
+        # Check if user exists in this tenant
+        existing_user = await tdb.users.find_one(
+            {'email': {'$regex': f'^{user_email}$', '$options': 'i'}},
+            {'_id': 0}
+        )
+        
+        if existing_user:
+            # Update existing user with Google info
+            user_id = existing_user['id']
+            await tdb.users.update_one(
+                {'email': user_email},
+                {'$set': {
+                    'name': user_info.get('name', existing_user.get('name')),
+                    'avatar': user_info.get('picture', ''),
+                    'updated_at': datetime.now(timezone.utc).isoformat()
+                }}
+            )
+        else:
+            # Auto-provision new user from Google Workspace
+            user_id = str(uuid.uuid4())
+            new_user = {
+                'id': user_id,
+                'tenant_id': tenant_id,
+                'email': user_email,
+                'name': user_info.get('name', user_email.split('@')[0]),
+                'avatar': user_info.get('picture', ''),
+                'role': 'User',  # Default role for auto-provisioned users
+                'is_active': True,
+                'phone': '',
+                'territory_id': None,
+                'reports_to': None,
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'updated_at': datetime.now(timezone.utc).isoformat(),
+                'provisioned_via': 'google_workspace'
+            }
+            await tdb.users.insert_one(new_user)
+            logger.info(f"Auto-provisioned user {user_email} for tenant {tenant_id}")
+        
+        # Create session
+        session_token = str(uuid.uuid4())
+        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        
+        await db.user_sessions.insert_one({
+            'user_id': user_id,
+            'tenant_id': tenant_id,
+            'session_token': session_token,
+            'expires_at': expires_at.isoformat(),
+            'created_at': datetime.now(timezone.utc).isoformat(),
+            'auth_method': 'google_workspace'
+        })
+        
+        response.set_cookie(
+            key='session_token',
+            value=session_token,
+            httponly=True,
+            secure=True,
+            samesite='none',
+            max_age=7*24*60*60,
+            path='/'
+        )
+        
+        user_doc = await tdb.users.find_one({'id': user_id}, {'_id': 0, 'password': 0})
+        
+        return {
+            'user': user_doc,
+            'session_token': session_token,
+            'message': 'Google Workspace login successful'
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f'Google Workspace login error: {str(e)}')
+        raise HTTPException(status_code=500, detail=f'Authentication failed: {str(e)}')

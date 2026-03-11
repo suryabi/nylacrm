@@ -2,10 +2,11 @@
 Tenant Model and Configuration
 Multi-tenant support for the Sales CRM
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 import uuid
+import re
 
 
 class TenantBranding(BaseModel):
@@ -17,6 +18,33 @@ class TenantBranding(BaseModel):
     secondary_color: str = "#374151"  # Gray-700 for subtle elements
     app_name: str = "Sales CRM"
     tagline: Optional[str] = None
+
+
+class GoogleWorkspaceConfig(BaseModel):
+    """Google Workspace SSO configuration per tenant"""
+    enabled: bool = False
+    allowed_domain: Optional[str] = None  # e.g., "acme.com" - only emails from this domain can login
+    client_id: Optional[str] = None  # Tenant's own Google OAuth client ID (optional)
+    client_secret: Optional[str] = None  # Tenant's own Google OAuth client secret (optional)
+    # If client_id/secret not provided, use platform's shared credentials
+    
+    @field_validator('allowed_domain')
+    @classmethod
+    def validate_domain(cls, v):
+        if v:
+            # Remove @ if present and validate format
+            v = v.lstrip('@').lower().strip()
+            if not re.match(r'^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$', v):
+                raise ValueError('Invalid domain format')
+        return v
+
+
+class TenantAuthConfig(BaseModel):
+    """Authentication configuration for a tenant"""
+    allow_password_login: bool = True  # Allow regular email/password login
+    allow_user_registration: bool = False  # Allow users to self-register (admin creates users by default)
+    google_workspace: GoogleWorkspaceConfig = Field(default_factory=GoogleWorkspaceConfig)
+    # Future: SAML, Okta, Azure AD configs can be added here
 
 
 class TenantModules(BaseModel):
@@ -192,20 +220,28 @@ class Tenant(BaseModel):
     
     # Status
     is_active: bool = True
-    is_trial: bool = False
+    is_trial: bool = True  # New tenants start with trial
     trial_ends_at: Optional[str] = None
+    subscription_plan: str = "trial"  # trial, starter, professional, enterprise
+    
+    # Registration Info
+    registered_email: Optional[str] = None  # Email used during registration
+    email_verified: bool = False
+    verification_token: Optional[str] = None
+    verification_expires_at: Optional[str] = None
     
     # Configuration
     branding: TenantBranding = Field(default_factory=TenantBranding)
     modules: TenantModules = Field(default_factory=TenantModules)
     integrations: TenantIntegrations = Field(default_factory=TenantIntegrations)
     settings: TenantSettings = Field(default_factory=TenantSettings)
+    auth_config: TenantAuthConfig = Field(default_factory=TenantAuthConfig)
     
     # Company Profile
     company_profile: CompanyProfile = Field(default_factory=CompanyProfile)
     
     # Admin
-    owner_id: Optional[str] = None  # Primary admin user
+    owner_id: Optional[str] = None  # Primary admin user ID
     
     # Metadata
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -236,6 +272,39 @@ class TenantUpdate(BaseModel):
     modules: Optional[TenantModules] = None
     integrations: Optional[TenantIntegrations] = None
     settings: Optional[TenantSettings] = None
+    auth_config: Optional[TenantAuthConfig] = None
+
+
+class TenantRegistration(BaseModel):
+    """Schema for self-service tenant registration"""
+    # Company Info
+    company_name: str = Field(..., min_length=2, max_length=100)
+    subdomain: str = Field(..., min_length=3, max_length=50)  # Will become tenant_id
+    
+    # Admin User Info
+    admin_name: str = Field(..., min_length=2, max_length=100)
+    admin_email: str = Field(..., pattern=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+    admin_password: str = Field(..., min_length=8)
+    
+    @field_validator('subdomain')
+    @classmethod
+    def validate_subdomain(cls, v):
+        v = v.lower().strip()
+        if not re.match(r'^[a-z][a-z0-9-]*[a-z0-9]$', v) and len(v) > 2:
+            raise ValueError('Subdomain must start with a letter, contain only lowercase letters, numbers, and hyphens')
+        # Reserved subdomains
+        reserved = ['www', 'api', 'admin', 'app', 'mail', 'ftp', 'localhost', 'test', 'demo', 'staging', 'production']
+        if v in reserved:
+            raise ValueError(f'Subdomain "{v}" is reserved')
+        return v
+
+
+class TenantPublicInfo(BaseModel):
+    """Public tenant info returned for login page"""
+    tenant_id: str
+    name: str
+    branding: TenantBranding
+    auth_config_public: dict  # Only safe fields: allow_password_login, google_workspace.enabled, google_workspace.allowed_domain
 
 
 # Default tenant configuration

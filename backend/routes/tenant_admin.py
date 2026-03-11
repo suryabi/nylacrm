@@ -346,6 +346,10 @@ async def update_current_tenant_config(
         else:
             raise HTTPException(status_code=403, detail="Module changes require Super Admin access")
     
+    # Auth config (Google Workspace, etc.) requires admin
+    if 'auth_config' in data:
+        update_data['auth_config'] = data['auth_config']
+    
     if update_data:
         update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
         await db.tenants.update_one(

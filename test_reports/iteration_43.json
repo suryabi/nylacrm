@@ -1,0 +1,138 @@
+{
+  "summary": "Tenant Registration & Google Workspace SSO Testing - ALL MAJOR FEATURES VERIFIED. Backend: 18/19 tests passed (tenant/list requires auth - expected). Frontend: Registration flow, login, and SSO settings all working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/tenants/list", "issue": "Returns 401 - requires authentication (expected behavior for protected endpoint)"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "Subdomain availability check - short subdomain rejected (< 3 chars)",
+    "Subdomain availability check - reserved subdomains rejected (www, api, admin, etc.)",
+    "Subdomain availability check - existing subdomain marked as taken",
+    "Subdomain availability check - new unique subdomain marked as available",
+    "Tenant registration - success with valid data",
+    "Tenant registration - duplicate subdomain rejected (400)",
+    "Tenant registration - duplicate email rejected (400)",
+    "Tenant registration - invalid email format rejected (422)",
+    "Tenant registration - short password rejected (422)",
+    "Tenant info - existing tenant info returned correctly",
+    "Tenant info - non-existent tenant returns 404",
+    "Tenant info - newly registered tenant info accessible",
+    "New tenant login - registration + login flow works",
+    "New tenant login - wrong password rejected (401)",
+    "Existing admin login - successful with correct credentials",
+    "Google Workspace config - auth_config structure includes google_workspace_enabled/domain",
+    "Google Workspace login - blocked for tenants without config enabled",
+    "UI - Registration form loads with all fields visible",
+    "UI - Company name auto-generates subdomain on blur",
+    "UI - Subdomain availability check shows 'Available' indicator",
+    "UI - Registration creates workspace and shows success page",
+    "UI - Success page shows tenant URL, next steps, trial end date",
+    "UI - Login page shows tenant branding (name, logo, tagline)",
+    "UI - Login page shows 'Sign in with Google Workspace' button when SSO enabled",
+    "UI - Login page shows domain hint '@testdomain.com accounts'",
+    "UI - Login page shows 'Or use password' divider",
+    "UI - Login redirects to /home after successful login",
+    "UI - Tenant Settings page loads correctly",
+    "UI - Settings tab shows Google Workspace SSO section",
+    "UI - Google Workspace toggle enables/disables SSO",
+    "UI - Domain input field appears when Google Workspace enabled",
+    "UI - Save Auth Settings shows success toast",
+    "jane@demosaas.com login for demo-saas-incdemosaas tenant - SUCCESS"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_tenant_registration.py",
+    "/app/test_reports/pytest/tenant_registration_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "tenant_registration.py: Well-structured with proper validation for subdomain format, reserved names, and uniqueness",
+    "tenant_registration.py: Admin user correctly created with 'Admin' role and password hashed",
+    "tenant_registration.py: Default lead statuses created for new tenants",
+    "tenant_registration.py: Google Workspace config pre-filled with admin's email domain",
+    "auth.py: google-workspace-login endpoint validates tenant's allowed_domain before login",
+    "auth.py: Auto-provisions new users from Google Workspace with 'User' role",
+    "models/tenant.py: TenantRegistration validates subdomain format and reserved names",
+    "models/tenant.py: GoogleWorkspaceConfig validates domain format",
+    "RegisterTenant.js: Debounced subdomain availability check (500ms)",
+    "RegisterTenant.js: Shows success page with next steps after registration",
+    "Login.js: Fetches tenant info and shows appropriate branding/auth options",
+    "Login.js: Shows 'Sign in with Google Workspace' when google_workspace_enabled=true",
+    "TenantSettings.js: Settings tab has complete Google Workspace SSO configuration UI"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_tenant_registration.py"
+  ],
+  "success_rate": {
+    "backend": "95% (18/19 tests passed - 1 expected auth failure)",
+    "frontend": "100% (all UI tests passed)"
+  },
+  "test_credentials": {
+    "existing_admin": {
+      "email": "admin@nylaairwater.earth",
+      "password": "admin123",
+      "tenant_id": "nyla-air-water"
+    },
+    "new_tenant_admin": {
+      "email": "jane@demosaas.com",
+      "password": "Demo@123",
+      "tenant_id": "demo-saas-incdemosaas"
+    }
+  },
+  "seed_data_creation": "Multiple test tenants created during testing (pw-test-*, test-reg-*, test-info-*, test-login-*)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Tenant registration and Google Workspace SSO features fully tested. Key endpoints: POST /api/tenants/register, GET /api/tenants/check-subdomain/{subdomain}, GET /api/tenants/info/{tenant_id}. Google Workspace SSO enabled for nyla-air-water tenant with allowed_domain='testdomain.com'. Actual Google OAuth callback requires GOOGLE_OAUTH_CLIENT_ID env var - UI/backend logic verified but actual OAuth flow not testable without real Google credentials.",
+  "features_verified": {
+    "tenant_registration_form": {
+      "status": "PASS",
+      "company_name_input": true,
+      "subdomain_input": true,
+      "auto_subdomain_generation": true,
+      "real_time_availability_check": true,
+      "admin_fields": true,
+      "password_validation": true,
+      "submit_creates_tenant": true
+    },
+    "subdomain_availability_api": {
+      "status": "PASS",
+      "validates_length": true,
+      "validates_format": true,
+      "checks_reserved": true,
+      "checks_existing": true
+    },
+    "tenant_registration_api": {
+      "status": "PASS",
+      "creates_tenant": true,
+      "creates_admin_user": true,
+      "sets_admin_role": true,
+      "creates_default_statuses": true,
+      "returns_login_url": true
+    },
+    "tenant_info_api": {
+      "status": "PASS",
+      "returns_branding": true,
+      "returns_auth_config": true,
+      "returns_trial_info": true
+    },
+    "new_tenant_login": {
+      "status": "PASS",
+      "admin_can_login": true,
+      "wrong_password_rejected": true
+    },
+    "google_workspace_sso_settings": {
+      "status": "PASS",
+      "toggle_visible": true,
+      "domain_input_appears": true,
+      "save_works": true,
+      "login_button_shows_when_enabled": true,
+      "domain_hint_shows": true
+    }
+  }
+}

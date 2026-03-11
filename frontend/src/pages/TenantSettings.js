@@ -195,6 +195,18 @@ export default function TenantSettings() {
     fiscal_year_start: '04-01'
   });
   
+  // Auth config for Google Workspace SSO
+  const [authConfig, setAuthConfig] = useState({
+    allow_password_login: true,
+    allow_user_registration: false,
+    google_workspace: {
+      enabled: false,
+      allowed_domain: '',
+      client_id: '',
+      client_secret: ''
+    }
+  });
+  
   // Company Profile state
   const [companyProfile, setCompanyProfile] = useState({
     legal_name: '',
@@ -276,6 +288,14 @@ export default function TenantSettings() {
         setSettings(config.settings);
       }
       
+      if (config.auth_config) {
+        setAuthConfig(prev => ({
+          ...prev,
+          ...config.auth_config,
+          google_workspace: { ...prev.google_workspace, ...config.auth_config.google_workspace }
+        }));
+      }
+      
       if (config.company_profile) {
         setCompanyProfile(prev => ({
           ...prev,
@@ -297,6 +317,23 @@ export default function TenantSettings() {
   useEffect(() => {
     fetchTenantConfig();
   }, [fetchTenantConfig]);
+  
+  // Save auth config (Google Workspace)
+  const saveAuthConfig = async () => {
+    try {
+      setSaving(true);
+      await axios.put(`${API_URL}/api/tenants/current/config`, { auth_config: authConfig }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success('Authentication settings saved');
+      refreshConfig();
+    } catch (error) {
+      console.error('Failed to save auth config:', error);
+      toast.error('Failed to save authentication settings');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // Save company profile
   const saveCompanyProfile = async () => {
@@ -1195,6 +1232,88 @@ export default function TenantSettings() {
 
         {/* Settings Tab */}
         <TabsContent value="settings" className="space-y-6">
+          {/* Google Workspace SSO */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <svg className="h-5 w-5" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Google Workspace SSO
+              </CardTitle>
+              <CardDescription>
+                Allow users with your company's Google Workspace accounts to sign in
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                <div>
+                  <p className="font-medium">Enable Google Workspace Login</p>
+                  <p className="text-sm text-muted-foreground">Users with @{authConfig.google_workspace?.allowed_domain || 'yourdomain.com'} emails can sign in</p>
+                </div>
+                <Switch 
+                  checked={authConfig.google_workspace?.enabled || false} 
+                  onCheckedChange={(checked) => setAuthConfig(prev => ({
+                    ...prev,
+                    google_workspace: { ...prev.google_workspace, enabled: checked }
+                  }))}
+                  data-testid="toggle-google-workspace"
+                />
+              </div>
+              
+              {authConfig.google_workspace?.enabled && (
+                <div className="space-y-4 p-4 border rounded-lg">
+                  <div className="space-y-2">
+                    <Label>Allowed Email Domain</Label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">@</span>
+                      <Input
+                        placeholder="yourdomain.com"
+                        value={authConfig.google_workspace?.allowed_domain || ''}
+                        onChange={(e) => setAuthConfig(prev => ({
+                          ...prev,
+                          google_workspace: { ...prev.google_workspace, allowed_domain: e.target.value.toLowerCase().replace('@', '') }
+                        }))}
+                        data-testid="input-google-domain"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Only users with emails ending in this domain can sign in via Google
+                    </p>
+                  </div>
+                  
+                  <div className="pt-4 border-t">
+                    <p className="text-sm font-medium mb-2">How it works:</p>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li>• Users click "Sign in with Google Workspace" on the login page</li>
+                      <li>• They authenticate with their company Google account</li>
+                      <li>• New users are automatically provisioned with "User" role</li>
+                      <li>• You can change their role in Team Management after</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                <div>
+                  <p className="font-medium">Allow Password Login</p>
+                  <p className="text-sm text-muted-foreground">Users can also sign in with email and password</p>
+                </div>
+                <Switch 
+                  checked={authConfig.allow_password_login !== false} 
+                  onCheckedChange={(checked) => setAuthConfig(prev => ({
+                    ...prev,
+                    allow_password_login: checked
+                  }))}
+                  data-testid="toggle-password-login"
+                />
+              </div>
+            </CardContent>
+          </Card>
+          
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Regional Settings</CardTitle>
@@ -1243,10 +1362,14 @@ export default function TenantSettings() {
             </CardContent>
           </Card>
           <div className="sticky bottom-0 bg-background pt-4 pb-2 border-t border-border mt-6">
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-3">
+              <Button onClick={saveAuthConfig} disabled={saving} variant="outline" data-testid="save-auth-config-btn">
+                {saving ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                Save Auth Settings
+              </Button>
               <Button onClick={saveSettings} disabled={saving} data-testid="save-settings-btn">
                 {saving ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                Save Settings
+                Save Regional Settings
               </Button>
             </div>
           </div>
