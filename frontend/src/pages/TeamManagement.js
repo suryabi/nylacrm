@@ -35,25 +35,21 @@ import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
-const DESIGNATIONS = [
+// Default designations (can be overridden by tenant config)
+const DEFAULT_DESIGNATIONS = [
   'CEO',
   'Director',
   'Vice President',
   'National Sales Head',
   'Regional Sales Manager',
   'Partner - Sales',
-  'Head of Business'
+  'Head of Business',
+  'Business Development Executive',
+  'Sales Representative',
+  'Production Manager',
+  'Production Supervisor',
+  'System Admin'
 ];
-
-const ROLE_MAPPING = {
-  'CEO': 'CEO',
-  'Director': 'Director',
-  'Vice President': 'Vice President',
-  'National Sales Head': 'National Sales Head',
-  'Regional Sales Manager': 'Regional Sales Manager',
-  'Partner - Sales': 'Partner - Sales',
-  'Head of Business': 'Head of Business'
-};
 
 const DEPARTMENTS = [
   'Admin',
@@ -653,6 +649,8 @@ export default function TeamManagement() {
 function AddTeamMemberForm({ onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [designations, setDesignations] = useState(DEFAULT_DESIGNATIONS);
   const [formData, setFormData] = useState({
     name: '',
     designation: '',
@@ -661,7 +659,7 @@ function AddTeamMemberForm({ onSuccess }) {
     city: '',
     state: '',
     territory: '',
-    role: 'sales_rep',
+    role: '',
     department: 'Sales',
     password: '',
     reports_to: '',
@@ -676,18 +674,39 @@ function AddTeamMemberForm({ onSuccess }) {
   } = useMasterLocations();
 
   React.useEffect(() => {
-    const fetchManagers = async () => {
+    const fetchData = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get(`${API_URL}/users`, {
+        
+        // Fetch managers
+        const usersResponse = await axios.get(`${API_URL}/users`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        setAllUsers(response.data);
+        setAllUsers(usersResponse.data);
+        
+        // Fetch roles from Role Management
+        const rolesResponse = await axios.get(`${API_URL}/roles`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setRoles(rolesResponse.data.roles || []);
+        
+        // Fetch designations
+        try {
+          const designationsResponse = await axios.get(`${API_URL}/designations`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (designationsResponse.data.designations?.length > 0) {
+            setDesignations(designationsResponse.data.designations.map(d => d.name));
+          }
+        } catch (err) {
+          // Use default designations if endpoint doesn't exist yet
+          console.log('Using default designations');
+        }
       } catch (error) {
-        console.error('Failed to load users');
+        console.error('Failed to load data:', error);
       }
     };
-    fetchManagers();
+    fetchData();
   }, []);
 
   const updateField = (field, value) => {
@@ -699,11 +718,9 @@ function AddTeamMemberForm({ onSuccess }) {
   };
 
   const handleDesignationChange = (designation) => {
-    const role = ROLE_MAPPING[designation] || 'sales_rep';
     setFormData(prev => ({ 
       ...prev, 
-      designation: designation,
-      role: role 
+      designation: designation
     }));
   };
 
@@ -753,7 +770,7 @@ function AddTeamMemberForm({ onSuccess }) {
               <SelectValue placeholder="Select designation" />
             </SelectTrigger>
             <SelectContent>
-              {DESIGNATIONS.map(des => (
+              {designations.map(des => (
                 <SelectItem key={des} value={des}>{des}</SelectItem>
               ))}
             </SelectContent>
@@ -876,13 +893,17 @@ function AddTeamMemberForm({ onSuccess }) {
           </Select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="role_display">Role (Auto-set based on Designation)</Label>
-          <Input
-            id="role_display"
-            value={formData.role.replace('_', ' ').toUpperCase()}
-            disabled
-            className="bg-muted"
-          />
+          <Label htmlFor="role">Role *</Label>
+          <Select value={formData.role} onValueChange={(v) => setFormData(prev => ({ ...prev, role: v }))} required>
+            <SelectTrigger data-testid="team-role-select">
+              <SelectValue placeholder="Select role" />
+            </SelectTrigger>
+            <SelectContent>
+              {roles.map(role => (
+                <SelectItem key={role.id} value={role.name}>{role.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
       

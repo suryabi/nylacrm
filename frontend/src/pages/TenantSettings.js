@@ -7,6 +7,8 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Switch } from '../components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
+import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
@@ -15,7 +17,7 @@ import {
   Globe, Clock, DollarSign, Calendar, RefreshCw, MapPin,
   Users, Kanban, Target, CalendarDays, Contact, Plane, Wallet, FolderOpen,
   Wrench, Boxes, ShieldCheck, Box, Landmark, Phone, Mail, FileText,
-  Plus, Trash2, User, Shield
+  Plus, Trash2, User, Shield, Edit2
 } from 'lucide-react';
 import axios from 'axios';
 import RoleManagement from '../components/RoleManagement';
@@ -517,7 +519,7 @@ export default function TenantSettings() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5 lg:w-[600px]">
+        <TabsList className="grid w-full grid-cols-6 lg:w-[720px]">
           <TabsTrigger value="company" className="flex items-center gap-2" data-testid="tab-company">
             <Building2 className="h-4 w-4" />
             Company
@@ -533,6 +535,10 @@ export default function TenantSettings() {
           <TabsTrigger value="roles" className="flex items-center gap-2" data-testid="tab-roles">
             <Shield className="h-4 w-4" />
             Roles
+          </TabsTrigger>
+          <TabsTrigger value="designations" className="flex items-center gap-2" data-testid="tab-designations">
+            <User className="h-4 w-4" />
+            Designations
           </TabsTrigger>
           <TabsTrigger value="settings" className="flex items-center gap-2" data-testid="tab-settings">
             <Settings className="h-4 w-4" />
@@ -1240,6 +1246,11 @@ export default function TenantSettings() {
           <RoleManagement />
         </TabsContent>
 
+        {/* Designations Tab */}
+        <TabsContent value="designations" className="space-y-6">
+          <DesignationManagement />
+        </TabsContent>
+
         {/* Settings Tab */}
         <TabsContent value="settings" className="space-y-6">
           {/* Google Workspace SSO */}
@@ -1385,6 +1396,319 @@ export default function TenantSettings() {
           </div>
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+
+// Designation Management Component
+function DesignationManagement() {
+  const { token } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [designations, setDesignations] = useState([]);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [selectedDesignation, setSelectedDesignation] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editDepartment, setEditDepartment] = useState('');
+  const [editLevel, setEditLevel] = useState(10);
+  
+  const [newDesignation, setNewDesignation] = useState({
+    name: '',
+    department: 'Sales',
+    level: 10
+  });
+
+  const DEPARTMENTS = ['Admin', 'Sales', 'Production', 'Marketing', 'Finance'];
+
+  const fetchDesignations = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API_URL}/api/designations`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setDesignations(response.data.designations || []);
+    } catch (error) {
+      console.error('Failed to fetch designations:', error);
+      toast.error('Failed to load designations');
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    fetchDesignations();
+  }, [fetchDesignations]);
+
+  const handleCreate = async () => {
+    if (!newDesignation.name.trim()) {
+      toast.error('Designation name is required');
+      return;
+    }
+    
+    try {
+      setSaving(true);
+      await axios.post(`${API_URL}/api/designations`, newDesignation, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success(`Designation '${newDesignation.name}' created`);
+      setShowCreateDialog(false);
+      setNewDesignation({ name: '', department: 'Sales', level: 10 });
+      fetchDesignations();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to create designation');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdate = async (id) => {
+    try {
+      setSaving(true);
+      await axios.put(`${API_URL}/api/designations/${id}`, {
+        name: editName,
+        department: editDepartment,
+        level: editLevel
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success('Designation updated');
+      setEditingId(null);
+      fetchDesignations();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to update designation');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedDesignation) return;
+    
+    try {
+      await axios.delete(`${API_URL}/api/designations/${selectedDesignation.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success(`Designation '${selectedDesignation.name}' deleted`);
+      setShowDeleteDialog(false);
+      setSelectedDesignation(null);
+      fetchDesignations();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete designation');
+    }
+  };
+
+  const startEditing = (designation) => {
+    setEditingId(designation.id);
+    setEditName(designation.name);
+    setEditDepartment(designation.department || 'Sales');
+    setEditLevel(designation.level || 10);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <User className="w-5 h-5" />
+            Designation Management
+          </h2>
+          <p className="text-sm text-muted-foreground">Create and manage job titles for your team</p>
+        </div>
+        
+        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+          <DialogTrigger asChild>
+            <Button data-testid="create-designation-btn">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Designation
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add New Designation</DialogTitle>
+              <DialogDescription>Create a new job title for your organization</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Designation Name *</Label>
+                <Input
+                  placeholder="e.g., Senior Sales Executive"
+                  value={newDesignation.name}
+                  onChange={(e) => setNewDesignation(prev => ({ ...prev, name: e.target.value }))}
+                  data-testid="new-designation-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Department</Label>
+                <Select 
+                  value={newDesignation.department} 
+                  onValueChange={(v) => setNewDesignation(prev => ({ ...prev, department: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DEPARTMENTS.map(dept => (
+                      <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Hierarchy Level (1 = highest)</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={newDesignation.level}
+                  onChange={(e) => setNewDesignation(prev => ({ ...prev, level: parseInt(e.target.value) || 10 }))}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
+              <Button onClick={handleCreate} disabled={saving} data-testid="confirm-create-designation">
+                {saving ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+                Add Designation
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Designations Table */}
+      <Card>
+        <CardContent className="p-0">
+          <table className="w-full">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="text-left p-4 font-medium">Designation</th>
+                <th className="text-left p-4 font-medium">Department</th>
+                <th className="text-center p-4 font-medium w-24">Level</th>
+                <th className="text-center p-4 font-medium w-24">Type</th>
+                <th className="text-right p-4 font-medium w-32">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {designations.map((designation) => (
+                <tr key={designation.id} className="border-t">
+                  <td className="p-4">
+                    {editingId === designation.id ? (
+                      <Input
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="max-w-xs"
+                      />
+                    ) : (
+                      <span className="font-medium">{designation.name}</span>
+                    )}
+                  </td>
+                  <td className="p-4">
+                    {editingId === designation.id ? (
+                      <Select value={editDepartment} onValueChange={setEditDepartment}>
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DEPARTMENTS.map(dept => (
+                            <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span className="text-muted-foreground">{designation.department || 'Sales'}</span>
+                    )}
+                  </td>
+                  <td className="p-4 text-center">
+                    {editingId === designation.id ? (
+                      <Input
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={editLevel}
+                        onChange={(e) => setEditLevel(parseInt(e.target.value) || 10)}
+                        className="w-20 mx-auto"
+                      />
+                    ) : (
+                      <span>{designation.level || '-'}</span>
+                    )}
+                  </td>
+                  <td className="p-4 text-center">
+                    {designation.is_system ? (
+                      <Badge variant="secondary" className="text-xs">System</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-xs">Custom</Badge>
+                    )}
+                  </td>
+                  <td className="p-4 text-right">
+                    {editingId === designation.id ? (
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" onClick={() => handleUpdate(designation.id)} disabled={saving}>
+                          <Save className="w-4 h-4" />
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex justify-end gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={() => startEditing(designation)}
+                          data-testid={`edit-designation-${designation.id}`}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </Button>
+                        {!designation.is_system && (
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="text-destructive"
+                            onClick={() => {
+                              setSelectedDesignation(designation);
+                              setShowDeleteDialog(true);
+                            }}
+                            data-testid={`delete-designation-${designation.id}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Designation</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{selectedDesignation?.name}"? This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
