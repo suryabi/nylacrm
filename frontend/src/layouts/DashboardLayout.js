@@ -13,8 +13,11 @@ import {
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
   Kanban, Wrench, Box, ShieldCheck, Boxes,
-  Factory, ArrowLeftRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact
+  Factory, ArrowLeftRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact, Crown
 } from 'lucide-react';
+
+// Platform Admin emails
+const PLATFORM_ADMIN_EMAILS = ['surya.yadavalli@gmail.com', 'surya.yadavalli@nylaairwater.earth'];
 
 const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
 
@@ -94,7 +97,8 @@ const salesNavigationGroups = [
   {
     title: 'Admin',
     items: [
-      { name: 'Tenant Settings', href: '/tenant-settings', icon: Settings, roles: ['CEO', 'Director', 'System Admin'] },
+      { name: 'Tenant Settings', href: '/tenant-settings', icon: Settings, roles: ['CEO', 'Director', 'System Admin', 'Admin'] },
+      { name: 'Platform Admin', href: '/platform-admin', icon: Crown, isPlatformAdminOnly: true },
     ]
   },
 ];
@@ -199,12 +203,20 @@ export default function DashboardLayout({ children }) {
     location.pathname === '/sku-performance' || location.pathname === '/resource-performance' ||
     location.pathname === '/account-performance';
 
+  // Check if user is platform admin
+  const isPlatformAdmin = user && PLATFORM_ADMIN_EMAILS.includes(user.email?.toLowerCase());
+
   // Filter navigation groups based on user role AND module configuration
   // If item has no roles array, it's available to all users
   // If item has no moduleKey, it's always available
+  // If item has isPlatformAdminOnly, only show to platform admins
   const filteredGroups = navigationGroups.map(group => ({
     ...group,
     items: group.items.filter(item => {
+      // Platform admin only items
+      if (item.isPlatformAdminOnly) {
+        return isPlatformAdmin;
+      }
       const roleAllowed = !item.roles || item.roles.includes(user?.role);
       const moduleEnabled = !item.moduleKey || isModuleEnabled(item.moduleKey);
       return roleAllowed && moduleEnabled;

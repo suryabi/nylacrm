@@ -22,6 +22,7 @@ from .expense_master import router as expense_master_router
 from .contacts import router as contacts_router
 from .tenant_admin import router as tenant_admin_router
 from .tenant_registration import router as tenant_registration_router
+from .platform_admin import router as platform_admin_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -36,6 +37,7 @@ routes_router.include_router(expense_master_router, tags=["Expense Master"])
 routes_router.include_router(contacts_router, tags=["Contacts"])
 routes_router.include_router(tenant_admin_router, tags=["Tenant Administration"])
 routes_router.include_router(tenant_registration_router, prefix="/tenants", tags=["Tenant Registration"])
+routes_router.include_router(platform_admin_router, prefix="/platform-admin", tags=["Platform Administration"])
 
 # Requests routes are at root level (leave-requests, travel-requests, etc.)
 routes_router.include_router(requests_router, tags=["Requests"])

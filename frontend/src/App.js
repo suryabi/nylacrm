@@ -62,6 +62,7 @@ import CompanyDocuments from './pages/CompanyDocuments';
 import MasterContactCategories from './pages/MasterContactCategories';
 import ContactsList from './pages/ContactsList';
 import TenantSettings from './pages/TenantSettings';
+import PlatformAdmin from './pages/PlatformAdmin';
 import '@/App.css';
 import { useActivityTracker } from './hooks/useActivityTracker';
 import { NavigationProvider } from './context/NavigationContext';
@@ -197,6 +198,7 @@ function AppRouter() {
           <Route path="/master-contact-categories" element={<ProtectedRoute moduleKey="contact_categories"><MasterContactCategories /></ProtectedRoute>} />
           <Route path="/contacts" element={<ProtectedRoute moduleKey="contacts"><ContactsList /></ProtectedRoute>} />
           <Route path="/tenant-settings" element={<ProtectedRoute><TenantSettings /></ProtectedRoute>} />
+          <Route path="/platform-admin" element={<ProtectedRoute><PlatformAdmin /></ProtectedRoute>} />
           
           {/* Production Context Routes */}
           <Route path="/maintenance" element={<ProtectedRoute moduleKey="maintenance"><Maintenance /></ProtectedRoute>} />

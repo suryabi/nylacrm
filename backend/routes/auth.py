@@ -65,7 +65,7 @@ async def login(credentials: UserLogin, response: Response):
     """Login with email and password"""
     tdb = get_tdb()
     user_doc = await tdb.users.find_one({'email': credentials.email}, {'_id': 0})
-    if not user_doc or not verify_password(credentials.password, user_doc['password']):
+    if not user_doc or not user_doc.get('password') or not verify_password(credentials.password, user_doc['password']):
         raise HTTPException(status_code=401, detail='Invalid credentials')
     
     if not user_doc.get('is_active', True):
