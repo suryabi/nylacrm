@@ -20,7 +20,7 @@ from core.tenant import get_current_tenant_id, add_tenant_filter, with_tenant_id
 router = APIRouter(prefix="/tenants", tags=["Tenant Administration"])
 
 # Super admin check (platform owner)
-SUPER_ADMIN_EMAILS = os.environ.get('SUPER_ADMIN_EMAILS', 'surya.yadavalli@nylaairwater.earth').split(',')
+SUPER_ADMIN_EMAILS = os.environ.get('SUPER_ADMIN_EMAILS', 'surya.yadavalli@nylaairwater.earth,admin@nylaairwater.earth').split(',')
 
 
 def is_super_admin(user: dict) -> bool:

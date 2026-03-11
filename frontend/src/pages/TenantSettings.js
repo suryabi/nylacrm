@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useTenantConfig } from '../context/TenantConfigContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -20,42 +21,106 @@ import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
-// Module definitions
+// Complete Module Configuration - All features that can be enabled/disabled
 const MODULE_CONFIG = {
   core: {
     title: 'Core Modules',
+    description: 'Essential CRM features',
     modules: [
+      { key: 'home', label: 'Home', icon: Building2, description: 'Homepage & welcome screen' },
+      { key: 'dashboard', label: 'Dashboard', icon: Kanban, description: 'Main dashboard view' },
       { key: 'leads', label: 'Leads', icon: Users, description: 'Lead management and tracking' },
+      { key: 'pipeline', label: 'Pipeline', icon: Kanban, description: 'Visual sales pipeline (Kanban)' },
       { key: 'accounts', label: 'Accounts', icon: Building2, description: 'Customer account management' },
-      { key: 'pipeline', label: 'Pipeline', icon: Kanban, description: 'Visual sales pipeline' },
+      { key: 'sales_portal', label: 'Sales Portal', icon: Building2, description: 'Sales portal & order management' },
       { key: 'contacts', label: 'Contacts', icon: Contact, description: 'Contact directory' },
     ]
   },
-  sales: {
-    title: 'Sales Operations',
+  reports: {
+    title: 'Dashboard Reports',
+    description: 'Analytics and reporting modules',
     modules: [
+      { key: 'report_sales_overview', label: 'Sales Overview', icon: Kanban, description: 'Sales dashboard overview' },
+      { key: 'report_revenue', label: 'Revenue Report', icon: DollarSign, description: 'Revenue analytics' },
+      { key: 'report_sku_performance', label: 'SKU Performance', icon: Boxes, description: 'Product/SKU analysis' },
+      { key: 'report_resource_performance', label: 'Resource Performance', icon: Users, description: 'Team performance metrics' },
+      { key: 'report_account_performance', label: 'Account Performance', icon: Building2, description: 'Account-level analytics' },
+    ]
+  },
+  sales_ops: {
+    title: 'Lead & Sales Operations',
+    description: 'Sales workflow and operations',
+    modules: [
+      { key: 'lead_discovery', label: 'Lead Discovery', icon: Users, description: 'Find & import new leads' },
       { key: 'target_planning', label: 'Target Planning', icon: Target, description: 'Sales target management' },
       { key: 'daily_status', label: 'Daily Status', icon: CalendarDays, description: 'Daily activity updates' },
-      { key: 'meetings', label: 'Meetings', icon: Calendar, description: 'Meeting scheduling' },
-      { key: 'tasks', label: 'Tasks', icon: Calendar, description: 'Task management' },
+      { key: 'status_summary', label: 'Status Summary', icon: Users, description: 'Team status aggregation' },
+    ]
+  },
+  pricing: {
+    title: 'Pricing & Logistics',
+    description: 'Cost and logistics calculators',
+    modules: [
+      { key: 'cogs_calculator', label: 'COGS Calculator', icon: DollarSign, description: 'Cost of goods calculator' },
+      { key: 'transport_calculator', label: 'Transport Calculator', icon: Plane, description: 'Logistics cost estimation' },
+    ]
+  },
+  products: {
+    title: 'Product & SKU',
+    description: 'Product catalog management',
+    modules: [
+      { key: 'sku_management', label: 'SKU Management', icon: Boxes, description: 'Product catalog & SKUs' },
+      { key: 'bottle_preview', label: 'Bottle Preview', icon: Boxes, description: 'Product visualization' },
+    ]
+  },
+  documents: {
+    title: 'Documents',
+    description: 'Document & file management',
+    modules: [
+      { key: 'company_documents', label: 'Company Documents', icon: FileText, description: 'Policies & company docs' },
+      { key: 'files_documents', label: 'Files & Documents', icon: FolderOpen, description: 'File storage & sharing' },
     ]
   },
   requests: {
     title: 'Request Management',
+    description: 'Approval workflows',
     modules: [
-      { key: 'expense_management', label: 'Expenses', icon: DollarSign, description: 'Expense tracking' },
-      { key: 'travel_requests', label: 'Travel Requests', icon: Plane, description: 'Travel request workflow' },
+      { key: 'leaves', label: 'Leave Requests', icon: CalendarDays, description: 'Leave application workflow' },
+      { key: 'travel_requests', label: 'Travel Requests', icon: Plane, description: 'Travel approval workflow' },
       { key: 'budget_requests', label: 'Budget Requests', icon: Wallet, description: 'Budget approval workflow' },
-      { key: 'files_documents', label: 'Documents', icon: FolderOpen, description: 'Document management' },
+      { key: 'expense_management', label: 'Expense Management', icon: DollarSign, description: 'Expense tracking & claims' },
+    ]
+  },
+  collaboration: {
+    title: 'Meetings & Tasks',
+    description: 'Team collaboration tools',
+    modules: [
+      { key: 'meetings', label: 'Meetings', icon: Calendar, description: 'Meeting scheduling & Zoom' },
+      { key: 'tasks', label: 'Tasks', icon: Calendar, description: 'Task assignment & tracking' },
+    ]
+  },
+  organization: {
+    title: 'Organization & Master Data',
+    description: 'Company setup & configuration',
+    modules: [
+      { key: 'company_profile', label: 'Company Profile', icon: Building2, description: 'Company information display' },
+      { key: 'team', label: 'Team Management', icon: Users, description: 'Team hierarchy & users' },
+      { key: 'master_locations', label: 'Master Locations', icon: MapPin, description: 'Territory & location setup' },
+      { key: 'lead_statuses', label: 'Lead Statuses', icon: Settings, description: 'Lead status configuration' },
+      { key: 'business_categories', label: 'Business Categories', icon: Building2, description: 'Industry categorization' },
+      { key: 'contact_categories', label: 'Contact Categories', icon: Contact, description: 'Contact type definitions' },
+      { key: 'expense_categories', label: 'Expense Categories', icon: DollarSign, description: 'Expense type setup' },
     ]
   },
   production: {
-    title: 'Production (Beta)',
+    title: 'Production Modules (Beta)',
+    description: 'Manufacturing & operations - Coming soon',
     modules: [
-      { key: 'maintenance', label: 'Maintenance', icon: Wrench, description: 'Equipment maintenance' },
-      { key: 'inventory', label: 'Inventory', icon: Boxes, description: 'Inventory tracking' },
-      { key: 'quality_control', label: 'Quality Control', icon: ShieldCheck, description: 'QC processes' },
-      { key: 'assets', label: 'Assets', icon: Box, description: 'Asset management' },
+      { key: 'maintenance', label: 'Maintenance', icon: Wrench, description: 'Equipment maintenance tracking' },
+      { key: 'inventory', label: 'Inventory', icon: Boxes, description: 'Inventory management' },
+      { key: 'quality_control', label: 'Quality Control', icon: ShieldCheck, description: 'QC processes & checks' },
+      { key: 'assets', label: 'Assets', icon: Box, description: 'Asset tracking & management' },
+      { key: 'vendors', label: 'Vendors', icon: Building2, description: 'Vendor management' },
     ]
   }
 };
@@ -103,6 +168,7 @@ const INDIAN_STATES = [
 
 export default function TenantSettings() {
   const { user, token } = useAuth();
+  const { refreshConfig } = useTenantConfig();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [tenantConfig, setTenantConfig] = useState(null);
@@ -294,7 +360,9 @@ export default function TenantSettings() {
       await axios.put(`${API_URL}/api/tenants/current/config`, { modules }, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      toast.success('Module settings saved');
+      toast.success('Module settings saved - sidebar updated');
+      // Refresh the tenant config context to update sidebar immediately
+      refreshConfig();
     } catch (error) {
       console.error('Failed to save modules:', error);
       if (error.response?.status === 403) {

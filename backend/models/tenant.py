@@ -20,23 +20,67 @@ class TenantBranding(BaseModel):
 
 
 class TenantModules(BaseModel):
-    """Module enable/disable configuration"""
+    """Module configuration for a tenant - controls which features are enabled"""
+    
+    # === CORE MODULES ===
+    home: bool = True
+    dashboard: bool = True
     leads: bool = True
-    accounts: bool = True
     pipeline: bool = True
+    accounts: bool = True
+    sales_portal: bool = True
+    contacts: bool = True
+    
+    # === DASHBOARD REPORTS ===
+    report_sales_overview: bool = True
+    report_revenue: bool = True
+    report_sku_performance: bool = True
+    report_resource_performance: bool = True
+    report_account_performance: bool = True
+    
+    # === LEAD & SALES OPERATIONS ===
+    lead_discovery: bool = True
     target_planning: bool = True
     daily_status: bool = True
-    contacts: bool = True
-    expense_management: bool = True
+    status_summary: bool = True
+    
+    # === PRICING & LOGISTICS ===
+    cogs_calculator: bool = True
+    transport_calculator: bool = True
+    
+    # === PRODUCT & SKU ===
+    sku_management: bool = True
+    bottle_preview: bool = True
+    
+    # === DOCUMENTS ===
+    company_documents: bool = True
+    files_documents: bool = True
+    
+    # === REQUESTS ===
+    leaves: bool = True
     travel_requests: bool = True
     budget_requests: bool = True
+    expense_management: bool = True
+    
+    # === MEETINGS & TASKS ===
     meetings: bool = True
     tasks: bool = True
-    files_documents: bool = True
+    
+    # === ORGANIZATION & MASTER DATA ===
+    company_profile: bool = True
+    team: bool = True
+    master_locations: bool = True
+    lead_statuses: bool = True
+    business_categories: bool = True
+    contact_categories: bool = True
+    expense_categories: bool = True
+    
+    # === PRODUCTION MODULES (Beta) ===
+    maintenance: bool = False
     inventory: bool = False
     quality_control: bool = False
-    maintenance: bool = False
     assets: bool = False
+    vendors: bool = False
 
 
 class TenantIntegrations(BaseModel):
