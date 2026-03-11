@@ -49,33 +49,36 @@ Build a comprehensive, mobile-ready Sales CRM application with:
   - Status: **COMPLETE**
 
 - **FEATURE COMPLETE**: SaaS Multi-Tenant Registration & Google Workspace SSO (Phase 3.0)
-  - **Self-Service Tenant Registration** (`/app/frontend/src/pages/RegisterTenant.js`):
-    - Company name, subdomain selection, admin account creation
-    - Real-time subdomain availability check with debouncing
-    - Success page with next steps and tenant URL
-    - 14-day trial period for new tenants
-  - **Backend Registration API** (`/app/backend/routes/tenant_registration.py`):
-    - `POST /api/tenants/register` - Creates tenant + admin user
-    - `GET /api/tenants/check-subdomain/{subdomain}` - Real-time availability check
-    - `GET /api/tenants/info/{tenant_id}` - Public tenant info for login page
-    - Default lead statuses created for new tenants
-    - Reserved subdomain validation (www, api, admin, etc.)
-  - **Google Workspace SSO Configuration** (`TenantAuthConfig` model):
-    - Enable/disable per tenant
-    - Allowed domain configuration (e.g., @acme.com)
-    - UI in Tenant Settings -> Settings tab
-    - Login page shows "Sign in with Google Workspace" when enabled
-    - Domain hint displayed for users
-  - **Updated Login Page** (`/app/frontend/src/pages/Login.js`):
-    - Fetches tenant info via `GET /api/tenants/info/{tenant_id}`
-    - Displays tenant branding (logo, name, tagline)
-    - Shows Google Workspace SSO button when enabled
-    - "Create workspace" link to registration page
-  - **Backend Google Workspace Login** (`/app/backend/routes/auth.py`):
-    - `POST /api/auth/google-workspace-login` - Validates domain, auto-provisions users
-    - Users provisioned with "User" role, admins can change later
-  - **Default Roles**: Admin, Manager, User (first user is Admin)
-  - **Testing Results**: Backend 95%, Frontend 100%
+  - Self-service tenant registration (`/register`)
+  - Real-time subdomain availability check
+  - Google Workspace SSO per tenant (enable/disable, domain restriction)
+  - Login page shows tenant branding and appropriate auth options
+  - Backend auto-provisions users from Google Workspace
+  - Testing Results: Backend 95%, Frontend 100%
+  - Status: **COMPLETE**
+
+- **FEATURE COMPLETE**: Platform Admin Dashboard (Phase 3.1)
+  - **Access Control** (`PLATFORM_ADMIN_EMAILS`):
+    - `surya.yadavalli@gmail.com`, `surya.yadavalli@nylaairwater.earth`
+    - `require_platform_admin` dependency for route protection
+  - **Backend APIs** (`/app/backend/routes/platform_admin.py`):
+    - `GET /api/platform-admin/stats` - Platform-wide statistics
+    - `GET /api/platform-admin/tenants` - List all tenants with search/filter
+    - `GET /api/platform-admin/tenants/{id}` - Full tenant details with stats
+    - `PUT /api/platform-admin/tenants/{id}` - Update any tenant config
+    - `POST /api/platform-admin/tenants/{id}/toggle-status` - Enable/disable
+    - `POST /api/platform-admin/tenants/{id}/extend-trial` - Extend trial
+    - `POST /api/platform-admin/tenants/{id}/upgrade` - Change subscription
+    - `DELETE /api/platform-admin/tenants/{id}` - Delete tenant and all data
+  - **Frontend UI** (`/app/frontend/src/pages/PlatformAdmin.js`):
+    - Stats cards: Total Tenants, Active, On Trial, Total Users
+    - Workspace list with search and status filter
+    - Tenant details panel with tabs: Overview, Branding, Modules, SSO, Danger Zone
+    - Quick actions: Disable/Enable, +14 Days trial extension
+  - **Sidebar Integration**:
+    - "Platform Admin" link (with Crown icon) only visible to platform admins
+    - Uses `isPlatformAdminOnly` flag in navigation items
+  - **Testing Results**: 100% (15/15 backend, all frontend)
   - Status: **COMPLETE**
 
 ### Mar 11, 2026 (Session 24)
