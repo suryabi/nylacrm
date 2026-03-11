@@ -439,16 +439,18 @@ export default function TenantSettings() {
             </Card>
           </div>
 
-          {/* Save Button */}
-          <div className="flex justify-end">
-            <Button onClick={saveBranding} disabled={saving} data-testid="save-branding-btn">
-              {saving ? (
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4 mr-2" />
-              )}
-              Save Branding
-            </Button>
+          {/* Save Button - Sticky at bottom */}
+          <div className="sticky bottom-0 bg-background pt-4 pb-2 border-t border-border mt-6">
+            <div className="flex justify-end">
+              <Button onClick={saveBranding} disabled={saving} data-testid="save-branding-btn">
+                {saving ? (
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                Save Branding
+              </Button>
+            </div>
           </div>
         </TabsContent>
 
@@ -492,16 +494,18 @@ export default function TenantSettings() {
             </Card>
           ))}
 
-          {/* Save Button */}
-          <div className="flex justify-end">
-            <Button onClick={saveModules} disabled={saving} data-testid="save-modules-btn">
-              {saving ? (
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4 mr-2" />
-              )}
-              Save Module Settings
-            </Button>
+          {/* Save Button - Sticky at bottom */}
+          <div className="sticky bottom-0 bg-background pt-4 pb-2 border-t border-border mt-6">
+            <div className="flex justify-end">
+              <Button onClick={saveModules} disabled={saving} data-testid="save-modules-btn">
+                {saving ? (
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                Save Module Settings
+              </Button>
+            </div>
           </div>
         </TabsContent>
 
@@ -615,16 +619,18 @@ export default function TenantSettings() {
             </CardContent>
           </Card>
 
-          {/* Save Button */}
-          <div className="flex justify-end">
-            <Button onClick={saveSettings} disabled={saving} data-testid="save-settings-btn">
-              {saving ? (
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4 mr-2" />
-              )}
-              Save Settings
-            </Button>
+          {/* Save Button - Sticky at bottom */}
+          <div className="sticky bottom-0 bg-background pt-4 pb-2 border-t border-border mt-6">
+            <div className="flex justify-end">
+              <Button onClick={saveSettings} disabled={saving} data-testid="save-settings-btn">
+                {saving ? (
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                Save Settings
+              </Button>
+            </div>
           </div>
         </TabsContent>
       </Tabs>
