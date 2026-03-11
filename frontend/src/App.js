@@ -59,6 +59,7 @@ import ExpenseCategoryMaster from './pages/ExpenseCategoryMaster';
 import CompanyDocuments from './pages/CompanyDocuments';
 import MasterContactCategories from './pages/MasterContactCategories';
 import ContactsList from './pages/ContactsList';
+import TenantSettings from './pages/TenantSettings';
 import '@/App.css';
 import { useActivityTracker } from './hooks/useActivityTracker';
 import { NavigationProvider } from './context/NavigationContext';
@@ -161,6 +162,7 @@ function AppRouter() {
           <Route path="/company-documents" element={<ProtectedRoute><CompanyDocuments /></ProtectedRoute>} />
           <Route path="/master-contact-categories" element={<ProtectedRoute><MasterContactCategories /></ProtectedRoute>} />
           <Route path="/contacts" element={<ProtectedRoute><ContactsList /></ProtectedRoute>} />
+          <Route path="/tenant-settings" element={<ProtectedRoute><TenantSettings /></ProtectedRoute>} />
           
           {/* Production Context Routes */}
           <Route path="/maintenance" element={<ProtectedRoute><Maintenance /></ProtectedRoute>} />

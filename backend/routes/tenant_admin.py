@@ -293,6 +293,46 @@ async def update_current_tenant_settings(
     return updated
 
 
+@router.put("/current/config")
+async def update_current_tenant_config(
+    request: Request,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update current tenant config (modules require Super Admin)"""
+    if not is_tenant_admin(current_user):
+        raise HTTPException(status_code=403, detail="Tenant Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    data = await request.json()
+    
+    update_data = {}
+    
+    # Branding can be updated by tenant admin
+    if 'branding' in data:
+        update_data['branding'] = data['branding']
+    
+    # Settings can be updated by tenant admin
+    if 'settings' in data:
+        update_data['settings'] = data['settings']
+    
+    # Modules require super admin
+    if 'modules' in data:
+        if is_super_admin(current_user):
+            update_data['modules'] = data['modules']
+        else:
+            raise HTTPException(status_code=403, detail="Module changes require Super Admin access")
+    
+    if update_data:
+        update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+        await db.tenants.update_one(
+            {'tenant_id': tenant_id},
+            {'$set': update_data}
+        )
+    
+    updated = await db.tenants.find_one({'tenant_id': tenant_id}, {'_id': 0})
+    return updated
+
+
 # ============== TENANT STATS ==============
 
 @router.get("/{tenant_id}/stats")

@@ -90,6 +90,12 @@ const salesNavigationGroups = [
       { name: 'Expense Categories', href: '/expense-category-master', icon: Receipt, roles: ['CEO', 'Director', 'System Admin'] },
     ]
   },
+  {
+    title: 'Admin',
+    items: [
+      { name: 'Tenant Settings', href: '/tenant-settings', icon: Settings, roles: ['CEO', 'Director', 'System Admin'] },
+    ]
+  },
 ];
 
 // Production Context Navigation

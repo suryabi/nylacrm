@@ -12,8 +12,9 @@ class TenantBranding(BaseModel):
     """Branding configuration for a tenant"""
     logo_url: Optional[str] = None
     favicon_url: Optional[str] = None
-    primary_color: str = "#0d9488"  # Teal
-    accent_color: str = "#10b981"   # Emerald
+    primary_color: str = "#000000"  # Black (default)
+    accent_color: str = "#ffffff"   # White (default)
+    secondary_color: str = "#374151"  # Gray-700 for subtle elements
     app_name: str = "Sales CRM"
     tagline: Optional[str] = None
 
@@ -117,8 +118,9 @@ DEFAULT_TENANT = Tenant(
     branding=TenantBranding(
         app_name="Nyla Sales CRM",
         tagline="Sales CRM",
-        primary_color="#0d9488",
-        accent_color="#10b981"
+        primary_color="#000000",  # Black
+        accent_color="#ffffff",   # White
+        secondary_color="#374151" # Gray
     ),
     modules=TenantModules(
         leads=True,
