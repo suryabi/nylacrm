@@ -29,8 +29,8 @@ def is_super_admin(user: dict) -> bool:
 
 
 def is_tenant_admin(user: dict) -> bool:
-    """Check if user is a tenant admin (CEO, Director, System Admin)"""
-    return user.get('role') in ['CEO', 'Director', 'System Admin']
+    """Check if user is a tenant admin (CEO, Director, System Admin, Admin)"""
+    return user.get('role') in ['CEO', 'Director', 'System Admin', 'Admin']
 
 
 async def ensure_default_tenant():
