@@ -6,19 +6,21 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Switch } from '../components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 import { 
   Palette, Settings, Puzzle, Save, Upload, Building2, 
-  Globe, Clock, DollarSign, Calendar, RefreshCw,
+  Globe, Clock, DollarSign, Calendar, RefreshCw, MapPin,
   Users, Kanban, Target, CalendarDays, Contact, Plane, Wallet, FolderOpen,
-  Wrench, Boxes, ShieldCheck, Box, Truck
+  Wrench, Boxes, ShieldCheck, Box, Landmark, Phone, Mail, FileText,
+  Plus, Trash2, User
 } from 'lucide-react';
 import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
-// Module definitions for toggle display
+// Module definitions
 const MODULE_CONFIG = {
   core: {
     title: 'Core Modules',
@@ -89,12 +91,22 @@ const DATE_FORMATS = [
   { value: 'DD-MMM-YYYY', label: 'DD-MMM-YYYY (31-Dec-2024)' },
 ];
 
+// Indian states for dropdown
+const INDIAN_STATES = [
+  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
+  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
+  'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram',
+  'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu',
+  'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+  'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Puducherry', 'Chandigarh'
+];
+
 export default function TenantSettings() {
   const { user, token } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [tenantConfig, setTenantConfig] = useState(null);
-  const [activeTab, setActiveTab] = useState('branding');
+  const [activeTab, setActiveTab] = useState('company');
   
   // Form states
   const [branding, setBranding] = useState({
@@ -108,6 +120,7 @@ export default function TenantSettings() {
   });
   
   const [modules, setModules] = useState({});
+  
   const [settings, setSettings] = useState({
     timezone: 'Asia/Kolkata',
     currency: 'INR',
@@ -115,8 +128,55 @@ export default function TenantSettings() {
     date_format: 'DD/MM/YYYY',
     fiscal_year_start: '04-01'
   });
+  
+  // Company Profile state
+  const [companyProfile, setCompanyProfile] = useState({
+    legal_name: '',
+    trade_name: '',
+    brand_name: '',
+    constitution: 'Private Limited Company',
+    gstin: '',
+    registration_type: 'Regular',
+    gst_act: 'Goods and Services Tax Act, 2017',
+    registration_approval_date: '',
+    validity_from: '',
+    certificate_issue_date: '',
+    msme_registration_number: '',
+    company_email: '',
+    company_phone: '',
+    company_website: '',
+    principal_address: {
+      building_name: '',
+      floor: '',
+      unit_flat_no: '',
+      building_plot_no: '',
+      landmark: '',
+      road_street: '',
+      locality: '',
+      city: '',
+      district: '',
+      state: '',
+      pin_code: '',
+      google_maps_url: ''
+    },
+    bank_details: {
+      account_name: '',
+      account_number: '',
+      ifsc_code: '',
+      bank_name: '',
+      branch: '',
+      terminal_id: '',
+      payment_qr_url: ''
+    },
+    office_contact: {
+      name: '',
+      phone: '',
+      email: '',
+      purpose: 'For Couriers / Parcels or directions'
+    },
+    directors: []
+  });
 
-  // Check if user has admin access
   const isAdmin = ['CEO', 'Director', 'System Admin'].includes(user?.role);
 
   // Fetch current tenant config
@@ -130,7 +190,6 @@ export default function TenantSettings() {
       const config = response.data;
       setTenantConfig(config);
       
-      // Populate form states
       if (config.branding) {
         setBranding({
           app_name: config.branding.app_name || '',
@@ -150,6 +209,17 @@ export default function TenantSettings() {
       if (config.settings) {
         setSettings(config.settings);
       }
+      
+      if (config.company_profile) {
+        setCompanyProfile(prev => ({
+          ...prev,
+          ...config.company_profile,
+          principal_address: { ...prev.principal_address, ...config.company_profile.principal_address },
+          bank_details: { ...prev.bank_details, ...config.company_profile.bank_details },
+          office_contact: { ...prev.office_contact, ...config.company_profile.office_contact },
+          directors: config.company_profile.directors || []
+        }));
+      }
     } catch (error) {
       console.error('Failed to fetch tenant config:', error);
       toast.error('Failed to load tenant settings');
@@ -162,6 +232,22 @@ export default function TenantSettings() {
     fetchTenantConfig();
   }, [fetchTenantConfig]);
 
+  // Save company profile
+  const saveCompanyProfile = async () => {
+    try {
+      setSaving(true);
+      await axios.put(`${API_URL}/api/tenants/current/company-profile`, companyProfile, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success('Company profile saved successfully');
+    } catch (error) {
+      console.error('Failed to save company profile:', error);
+      toast.error('Failed to save company profile');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Save branding
   const saveBranding = async () => {
     try {
@@ -170,8 +256,6 @@ export default function TenantSettings() {
         headers: { Authorization: `Bearer ${token}` }
       });
       toast.success('Branding saved successfully');
-      
-      // Apply colors to CSS variables
       document.documentElement.style.setProperty('--primary', branding.primary_color);
       document.documentElement.style.setProperty('--accent', branding.accent_color);
     } catch (error) {
@@ -203,11 +287,10 @@ export default function TenantSettings() {
     setModules(prev => ({ ...prev, [moduleKey]: enabled }));
   };
 
-  // Save modules (requires super admin for some)
+  // Save modules
   const saveModules = async () => {
     try {
       setSaving(true);
-      // Note: Module changes may require super admin - the API will validate
       await axios.put(`${API_URL}/api/tenants/current/config`, { modules }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -224,21 +307,61 @@ export default function TenantSettings() {
     }
   };
 
-  // Handle logo upload (base64 for simplicity)
+  // Handle logo upload
   const handleLogoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
     if (file.size > 2 * 1024 * 1024) {
       toast.error('Logo must be less than 2MB');
       return;
     }
-    
     const reader = new FileReader();
     reader.onloadend = () => {
       setBranding(prev => ({ ...prev, logo_url: reader.result }));
     };
     reader.readAsDataURL(file);
+  };
+
+  // Handle QR upload
+  const handleQRUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('QR image must be less than 2MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setCompanyProfile(prev => ({
+        ...prev,
+        bank_details: { ...prev.bank_details, payment_qr_url: reader.result }
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Add director
+  const addDirector = () => {
+    setCompanyProfile(prev => ({
+      ...prev,
+      directors: [...prev.directors, { name: '', designation: 'Director', resident_state: '', email: '', phone: '' }]
+    }));
+  };
+
+  // Remove director
+  const removeDirector = (index) => {
+    setCompanyProfile(prev => ({
+      ...prev,
+      directors: prev.directors.filter((_, i) => i !== index)
+    }));
+  };
+
+  // Update director
+  const updateDirector = (index, field, value) => {
+    setCompanyProfile(prev => ({
+      ...prev,
+      directors: prev.directors.map((d, i) => i === index ? { ...d, [field]: value } : d)
+    }));
   };
 
   if (!isAdmin) {
@@ -277,7 +400,7 @@ export default function TenantSettings() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Tenant Settings</h1>
           <p className="text-muted-foreground mt-1">
-            Customize branding, modules, and settings for your organization
+            Customize company profile, branding, modules, and settings
           </p>
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -288,7 +411,11 @@ export default function TenantSettings() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
+        <TabsList className="grid w-full grid-cols-4 lg:w-[500px]">
+          <TabsTrigger value="company" className="flex items-center gap-2" data-testid="tab-company">
+            <Building2 className="h-4 w-4" />
+            Company
+          </TabsTrigger>
           <TabsTrigger value="branding" className="flex items-center gap-2" data-testid="tab-branding">
             <Palette className="h-4 w-4" />
             Branding
@@ -303,17 +430,577 @@ export default function TenantSettings() {
           </TabsTrigger>
         </TabsList>
 
+        {/* Company Profile Tab */}
+        <TabsContent value="company" className="space-y-6">
+          {/* Business Identity */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Business Identity
+              </CardTitle>
+              <CardDescription>Legal and trade names of your company</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Legal Name</Label>
+                <Input
+                  value={companyProfile.legal_name}
+                  onChange={(e) => setCompanyProfile(prev => ({ ...prev, legal_name: e.target.value }))}
+                  placeholder="COMPANY PRIVATE LIMITED"
+                  data-testid="input-legal-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Trade Name</Label>
+                <Input
+                  value={companyProfile.trade_name}
+                  onChange={(e) => setCompanyProfile(prev => ({ ...prev, trade_name: e.target.value }))}
+                  placeholder="Company Trade Name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Brand Name</Label>
+                <Input
+                  value={companyProfile.brand_name}
+                  onChange={(e) => setCompanyProfile(prev => ({ ...prev, brand_name: e.target.value }))}
+                  placeholder="Brand Name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Constitution</Label>
+                <Select
+                  value={companyProfile.constitution}
+                  onValueChange={(value) => setCompanyProfile(prev => ({ ...prev, constitution: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Private Limited Company">Private Limited Company</SelectItem>
+                    <SelectItem value="Public Limited Company">Public Limited Company</SelectItem>
+                    <SelectItem value="LLP">LLP</SelectItem>
+                    <SelectItem value="Partnership">Partnership</SelectItem>
+                    <SelectItem value="Proprietorship">Proprietorship</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* GST & MSME Details */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5" />
+                GST & Registration Details
+              </CardTitle>
+              <CardDescription>Tax registration information</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>GSTIN</Label>
+                <Input
+                  value={companyProfile.gstin}
+                  onChange={(e) => setCompanyProfile(prev => ({ ...prev, gstin: e.target.value.toUpperCase() }))}
+                  placeholder="22AAAAA0000A1Z5"
+                  maxLength={15}
+                  data-testid="input-gstin"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Registration Type</Label>
+                <Select
+                  value={companyProfile.registration_type}
+                  onValueChange={(value) => setCompanyProfile(prev => ({ ...prev, registration_type: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Regular">Regular</SelectItem>
+                    <SelectItem value="Composition">Composition</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>MSME Registration Number</Label>
+                <Input
+                  value={companyProfile.msme_registration_number}
+                  onChange={(e) => setCompanyProfile(prev => ({ ...prev, msme_registration_number: e.target.value.toUpperCase() }))}
+                  placeholder="UDYAM-XX-00-0000000"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>GST Registration Date</Label>
+                <Input
+                  type="date"
+                  value={companyProfile.validity_from}
+                  onChange={(e) => setCompanyProfile(prev => ({ ...prev, validity_from: e.target.value }))}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Contact Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Phone className="h-5 w-5" />
+                Contact Information
+              </CardTitle>
+              <CardDescription>Company contact details</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label>Company Email</Label>
+                <Input
+                  type="email"
+                  value={companyProfile.company_email}
+                  onChange={(e) => setCompanyProfile(prev => ({ ...prev, company_email: e.target.value }))}
+                  placeholder="info@company.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Company Phone</Label>
+                <Input
+                  value={companyProfile.company_phone}
+                  onChange={(e) => setCompanyProfile(prev => ({ ...prev, company_phone: e.target.value }))}
+                  placeholder="+91 XXXXX XXXXX"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Website</Label>
+                <Input
+                  value={companyProfile.company_website}
+                  onChange={(e) => setCompanyProfile(prev => ({ ...prev, company_website: e.target.value }))}
+                  placeholder="https://www.company.com"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Principal Address */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                Principal Place of Business
+              </CardTitle>
+              <CardDescription>Registered office address</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Building Name</Label>
+                <Input
+                  value={companyProfile.principal_address.building_name}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    principal_address: { ...prev.principal_address, building_name: e.target.value }
+                  }))}
+                  placeholder="Building / Tower Name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Floor / Unit</Label>
+                <Input
+                  value={companyProfile.principal_address.floor}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    principal_address: { ...prev.principal_address, floor: e.target.value }
+                  }))}
+                  placeholder="Floor, Unit No."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Plot / Building No.</Label>
+                <Input
+                  value={companyProfile.principal_address.building_plot_no}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    principal_address: { ...prev.principal_address, building_plot_no: e.target.value }
+                  }))}
+                  placeholder="Plot No. / Door No."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Road / Street</Label>
+                <Input
+                  value={companyProfile.principal_address.road_street}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    principal_address: { ...prev.principal_address, road_street: e.target.value }
+                  }))}
+                  placeholder="Road / Street Name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Locality</Label>
+                <Input
+                  value={companyProfile.principal_address.locality}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    principal_address: { ...prev.principal_address, locality: e.target.value }
+                  }))}
+                  placeholder="Area / Locality"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Landmark</Label>
+                <Input
+                  value={companyProfile.principal_address.landmark}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    principal_address: { ...prev.principal_address, landmark: e.target.value }
+                  }))}
+                  placeholder="Near / Opposite to"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>City</Label>
+                <Input
+                  value={companyProfile.principal_address.city}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    principal_address: { ...prev.principal_address, city: e.target.value }
+                  }))}
+                  placeholder="City"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>District</Label>
+                <Input
+                  value={companyProfile.principal_address.district}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    principal_address: { ...prev.principal_address, district: e.target.value }
+                  }))}
+                  placeholder="District"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>State</Label>
+                <Select
+                  value={companyProfile.principal_address.state}
+                  onValueChange={(value) => setCompanyProfile(prev => ({
+                    ...prev,
+                    principal_address: { ...prev.principal_address, state: value }
+                  }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select state" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INDIAN_STATES.map(state => (
+                      <SelectItem key={state} value={state}>{state}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>PIN Code</Label>
+                <Input
+                  value={companyProfile.principal_address.pin_code}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    principal_address: { ...prev.principal_address, pin_code: e.target.value }
+                  }))}
+                  placeholder="500001"
+                  maxLength={6}
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Google Maps URL</Label>
+                <Input
+                  value={companyProfile.principal_address.google_maps_url}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    principal_address: { ...prev.principal_address, google_maps_url: e.target.value }
+                  }))}
+                  placeholder="https://maps.app.goo.gl/..."
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Bank Details */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Landmark className="h-5 w-5" />
+                Bank Account Details
+              </CardTitle>
+              <CardDescription>Company bank account for payments</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Account Name</Label>
+                <Input
+                  value={companyProfile.bank_details.account_name}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    bank_details: { ...prev.bank_details, account_name: e.target.value }
+                  }))}
+                  placeholder="Company Name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Account Number</Label>
+                <Input
+                  value={companyProfile.bank_details.account_number}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    bank_details: { ...prev.bank_details, account_number: e.target.value }
+                  }))}
+                  placeholder="XXXXXXXXXXXX"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>IFSC Code</Label>
+                <Input
+                  value={companyProfile.bank_details.ifsc_code}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    bank_details: { ...prev.bank_details, ifsc_code: e.target.value.toUpperCase() }
+                  }))}
+                  placeholder="XXXX0000000"
+                  maxLength={11}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Bank Name</Label>
+                <Input
+                  value={companyProfile.bank_details.bank_name}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    bank_details: { ...prev.bank_details, bank_name: e.target.value }
+                  }))}
+                  placeholder="Bank Name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Branch</Label>
+                <Input
+                  value={companyProfile.bank_details.branch}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    bank_details: { ...prev.bank_details, branch: e.target.value }
+                  }))}
+                  placeholder="Branch Name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Terminal ID (for UPI)</Label>
+                <Input
+                  value={companyProfile.bank_details.terminal_id}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    bank_details: { ...prev.bank_details, terminal_id: e.target.value }
+                  }))}
+                  placeholder="Terminal ID"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Payment QR Code</Label>
+                <div className="flex items-center gap-4">
+                  <div className="h-24 w-24 rounded-xl bg-muted flex items-center justify-center overflow-hidden border-2 border-dashed border-border">
+                    {companyProfile.bank_details.payment_qr_url ? (
+                      <img src={companyProfile.bank_details.payment_qr_url} alt="QR" className="h-full w-full object-cover" />
+                    ) : (
+                      <Upload className="h-8 w-8 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleQRUpload}
+                      className="cursor-pointer"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Upload payment QR code image</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Office Contact */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <User className="h-5 w-5" />
+                Office Contact Person
+              </CardTitle>
+              <CardDescription>Contact for couriers and visitors</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <Input
+                  value={companyProfile.office_contact.name}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    office_contact: { ...prev.office_contact, name: e.target.value }
+                  }))}
+                  placeholder="Contact Person Name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Phone</Label>
+                <Input
+                  value={companyProfile.office_contact.phone}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    office_contact: { ...prev.office_contact, phone: e.target.value }
+                  }))}
+                  placeholder="+91 XXXXX XXXXX"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  value={companyProfile.office_contact.email}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    office_contact: { ...prev.office_contact, email: e.target.value }
+                  }))}
+                  placeholder="contact@company.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Purpose</Label>
+                <Input
+                  value={companyProfile.office_contact.purpose}
+                  onChange={(e) => setCompanyProfile(prev => ({
+                    ...prev,
+                    office_contact: { ...prev.office_contact, purpose: e.target.value }
+                  }))}
+                  placeholder="For Couriers / Parcels"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Directors */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    Directors / Key Personnel
+                  </CardTitle>
+                  <CardDescription>Company directors and key management</CardDescription>
+                </div>
+                <Button onClick={addDirector} variant="outline" size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Director
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {companyProfile.directors.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No directors added yet. Click "Add Director" to add one.</p>
+                </div>
+              ) : (
+                companyProfile.directors.map((director, index) => (
+                  <div key={index} className="p-4 border rounded-lg space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">Director {index + 1}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeDirector(index)}
+                        className="text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Name</Label>
+                        <Input
+                          value={director.name}
+                          onChange={(e) => updateDirector(index, 'name', e.target.value)}
+                          placeholder="Full Name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Designation</Label>
+                        <Select
+                          value={director.designation}
+                          onValueChange={(value) => updateDirector(index, 'designation', value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Director">Director</SelectItem>
+                            <SelectItem value="Managing Director">Managing Director</SelectItem>
+                            <SelectItem value="CEO">CEO</SelectItem>
+                            <SelectItem value="CFO">CFO</SelectItem>
+                            <SelectItem value="COO">COO</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Resident State</Label>
+                        <Select
+                          value={director.resident_state}
+                          onValueChange={(value) => updateDirector(index, 'resident_state', value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select state" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {INDIAN_STATES.map(state => (
+                              <SelectItem key={state} value={state}>{state}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Phone</Label>
+                        <Input
+                          value={director.phone || ''}
+                          onChange={(e) => updateDirector(index, 'phone', e.target.value)}
+                          placeholder="+91 XXXXX XXXXX"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Save Button - Sticky */}
+          <div className="sticky bottom-0 bg-background pt-4 pb-2 border-t border-border mt-6">
+            <div className="flex justify-end">
+              <Button onClick={saveCompanyProfile} disabled={saving} data-testid="save-company-btn">
+                {saving ? (
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                Save Company Profile
+              </Button>
+            </div>
+          </div>
+        </TabsContent>
+
         {/* Branding Tab */}
         <TabsContent value="branding" className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-2">
-            {/* Logo & Identity */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Logo & Identity</CardTitle>
                 <CardDescription>Upload your company logo and set app name</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Logo Upload */}
                 <div className="space-y-2">
                   <Label>Company Logo</Label>
                   <div className="flex items-center gap-4">
@@ -325,37 +1012,23 @@ export default function TenantSettings() {
                       )}
                     </div>
                     <div className="flex-1">
-                      <Input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleLogoUpload}
-                        className="cursor-pointer"
-                        data-testid="logo-upload"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        PNG, JPG up to 2MB. Recommended: 200x200px
-                      </p>
+                      <Input type="file" accept="image/*" onChange={handleLogoUpload} className="cursor-pointer" data-testid="logo-upload" />
+                      <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 2MB</p>
                     </div>
                   </div>
                 </div>
-
-                {/* App Name */}
                 <div className="space-y-2">
-                  <Label htmlFor="app_name">Application Name</Label>
+                  <Label>Application Name</Label>
                   <Input
-                    id="app_name"
                     value={branding.app_name}
                     onChange={(e) => setBranding(prev => ({ ...prev, app_name: e.target.value }))}
                     placeholder="My Sales CRM"
                     data-testid="input-app-name"
                   />
                 </div>
-
-                {/* Tagline */}
                 <div className="space-y-2">
-                  <Label htmlFor="tagline">Tagline (Optional)</Label>
+                  <Label>Tagline</Label>
                   <Input
-                    id="tagline"
                     value={branding.tagline}
                     onChange={(e) => setBranding(prev => ({ ...prev, tagline: e.target.value }))}
                     placeholder="Your sales companion"
@@ -365,72 +1038,34 @@ export default function TenantSettings() {
               </CardContent>
             </Card>
 
-            {/* Colors */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Brand Colors</CardTitle>
                 <CardDescription>Set your brand colors for the interface</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Primary Color */}
                 <div className="space-y-2">
-                  <Label htmlFor="primary_color">Primary Color</Label>
+                  <Label>Primary Color</Label>
                   <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      id="primary_color"
-                      value={branding.primary_color}
-                      onChange={(e) => setBranding(prev => ({ ...prev, primary_color: e.target.value }))}
-                      className="h-10 w-16 rounded-lg cursor-pointer border border-border"
-                      data-testid="input-primary-color"
-                    />
-                    <Input
-                      value={branding.primary_color}
-                      onChange={(e) => setBranding(prev => ({ ...prev, primary_color: e.target.value }))}
-                      className="flex-1 font-mono"
-                      placeholder="#000000"
-                    />
+                    <input type="color" value={branding.primary_color} onChange={(e) => setBranding(prev => ({ ...prev, primary_color: e.target.value }))} className="h-10 w-16 rounded-lg cursor-pointer border border-border" data-testid="input-primary-color" />
+                    <Input value={branding.primary_color} onChange={(e) => setBranding(prev => ({ ...prev, primary_color: e.target.value }))} className="flex-1 font-mono" />
                   </div>
-                  <p className="text-xs text-muted-foreground">Used for buttons, links, and highlights</p>
                 </div>
-
-                {/* Accent Color */}
                 <div className="space-y-2">
-                  <Label htmlFor="accent_color">Accent Color</Label>
+                  <Label>Accent Color</Label>
                   <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      id="accent_color"
-                      value={branding.accent_color}
-                      onChange={(e) => setBranding(prev => ({ ...prev, accent_color: e.target.value }))}
-                      className="h-10 w-16 rounded-lg cursor-pointer border border-border"
-                      data-testid="input-accent-color"
-                    />
-                    <Input
-                      value={branding.accent_color}
-                      onChange={(e) => setBranding(prev => ({ ...prev, accent_color: e.target.value }))}
-                      className="flex-1 font-mono"
-                      placeholder="#ffffff"
-                    />
+                    <input type="color" value={branding.accent_color} onChange={(e) => setBranding(prev => ({ ...prev, accent_color: e.target.value }))} className="h-10 w-16 rounded-lg cursor-pointer border border-border" data-testid="input-accent-color" />
+                    <Input value={branding.accent_color} onChange={(e) => setBranding(prev => ({ ...prev, accent_color: e.target.value }))} className="flex-1 font-mono" />
                   </div>
-                  <p className="text-xs text-muted-foreground">Used for secondary elements</p>
                 </div>
-
-                {/* Preview */}
                 <div className="space-y-2">
                   <Label>Preview</Label>
-                  <div className="p-4 rounded-xl border border-border" style={{ backgroundColor: branding.primary_color }}>
+                  <div className="p-4 rounded-xl border" style={{ backgroundColor: branding.primary_color }}>
                     <div className="flex items-center gap-3">
-                      {branding.logo_url && (
-                        <img src={branding.logo_url} alt="Preview" className="h-10 w-10 rounded-lg object-cover" />
-                      )}
+                      {branding.logo_url && <img src={branding.logo_url} alt="Preview" className="h-10 w-10 rounded-lg object-cover" />}
                       <div>
-                        <h3 className="font-semibold" style={{ color: branding.accent_color }}>
-                          {branding.app_name || 'Your App Name'}
-                        </h3>
-                        <p className="text-sm opacity-80" style={{ color: branding.accent_color }}>
-                          {branding.tagline || 'Your tagline here'}
-                        </p>
+                        <h3 className="font-semibold" style={{ color: branding.accent_color }}>{branding.app_name || 'Your App Name'}</h3>
+                        <p className="text-sm opacity-80" style={{ color: branding.accent_color }}>{branding.tagline || 'Your tagline here'}</p>
                       </div>
                     </div>
                   </div>
@@ -438,16 +1073,10 @@ export default function TenantSettings() {
               </CardContent>
             </Card>
           </div>
-
-          {/* Save Button - Sticky at bottom */}
           <div className="sticky bottom-0 bg-background pt-4 pb-2 border-t border-border mt-6">
             <div className="flex justify-end">
               <Button onClick={saveBranding} disabled={saving} data-testid="save-branding-btn">
-                {saving ? (
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4 mr-2" />
-                )}
+                {saving ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                 Save Branding
               </Button>
             </div>
@@ -460,7 +1089,7 @@ export default function TenantSettings() {
             <Card key={groupKey}>
               <CardHeader>
                 <CardTitle className="text-lg">{group.title}</CardTitle>
-                <CardDescription>Enable or disable features for your organization</CardDescription>
+                <CardDescription>Enable or disable features</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
@@ -468,24 +1097,17 @@ export default function TenantSettings() {
                     const Icon = module.icon;
                     const isEnabled = modules[module.key] !== false;
                     return (
-                      <div
-                        key={module.key}
-                        className="flex items-center justify-between p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors"
-                      >
+                      <div key={module.key} className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors">
                         <div className="flex items-center gap-4">
                           <div className={`p-2 rounded-lg ${isEnabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
                             <Icon className="h-5 w-5" />
                           </div>
                           <div>
-                            <p className="font-medium text-foreground">{module.label}</p>
+                            <p className="font-medium">{module.label}</p>
                             <p className="text-sm text-muted-foreground">{module.description}</p>
                           </div>
                         </div>
-                        <Switch
-                          checked={isEnabled}
-                          onCheckedChange={(checked) => toggleModule(module.key, checked)}
-                          data-testid={`toggle-${module.key}`}
-                        />
+                        <Switch checked={isEnabled} onCheckedChange={(checked) => toggleModule(module.key, checked)} data-testid={`toggle-${module.key}`} />
                       </div>
                     );
                   })}
@@ -493,17 +1115,11 @@ export default function TenantSettings() {
               </CardContent>
             </Card>
           ))}
-
-          {/* Save Button - Sticky at bottom */}
           <div className="sticky bottom-0 bg-background pt-4 pb-2 border-t border-border mt-6">
             <div className="flex justify-end">
               <Button onClick={saveModules} disabled={saving} data-testid="save-modules-btn">
-                {saving ? (
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4 mr-2" />
-                )}
-                Save Module Settings
+                {saving ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                Save Modules
               </Button>
             </div>
           </div>
@@ -516,118 +1132,52 @@ export default function TenantSettings() {
               <CardTitle className="text-lg">Regional Settings</CardTitle>
               <CardDescription>Configure timezone, currency, and date formats</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid gap-6 lg:grid-cols-2">
-                {/* Timezone */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Clock className="h-4 w-4" />
-                    Timezone
-                  </Label>
-                  <Select
-                    value={settings.timezone}
-                    onValueChange={(value) => setSettings(prev => ({ ...prev, timezone: value }))}
-                  >
-                    <SelectTrigger data-testid="select-timezone">
-                      <SelectValue placeholder="Select timezone" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TIMEZONES.map((tz) => (
-                        <SelectItem key={tz.value} value={tz.value}>
-                          {tz.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Currency */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4" />
-                    Currency
-                  </Label>
-                  <Select
-                    value={settings.currency}
-                    onValueChange={(value) => {
-                      const currency = CURRENCIES.find(c => c.value === value);
-                      setSettings(prev => ({
-                        ...prev,
-                        currency: value,
-                        currency_symbol: currency?.symbol || '$'
-                      }));
-                    }}
-                  >
-                    <SelectTrigger data-testid="select-currency">
-                      <SelectValue placeholder="Select currency" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CURRENCIES.map((cur) => (
-                        <SelectItem key={cur.value} value={cur.value}>
-                          {cur.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Date Format */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    Date Format
-                  </Label>
-                  <Select
-                    value={settings.date_format}
-                    onValueChange={(value) => setSettings(prev => ({ ...prev, date_format: value }))}
-                  >
-                    <SelectTrigger data-testid="select-date-format">
-                      <SelectValue placeholder="Select date format" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DATE_FORMATS.map((fmt) => (
-                        <SelectItem key={fmt.value} value={fmt.value}>
-                          {fmt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Fiscal Year Start */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Globe className="h-4 w-4" />
-                    Fiscal Year Start
-                  </Label>
-                  <Select
-                    value={settings.fiscal_year_start}
-                    onValueChange={(value) => setSettings(prev => ({ ...prev, fiscal_year_start: value }))}
-                  >
-                    <SelectTrigger data-testid="select-fiscal-year">
-                      <SelectValue placeholder="Select fiscal year start" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="01-01">January 1st</SelectItem>
-                      <SelectItem value="04-01">April 1st (India)</SelectItem>
-                      <SelectItem value="07-01">July 1st</SelectItem>
-                      <SelectItem value="10-01">October 1st</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+            <CardContent className="grid gap-6 lg:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2"><Clock className="h-4 w-4" />Timezone</Label>
+                <Select value={settings.timezone} onValueChange={(value) => setSettings(prev => ({ ...prev, timezone: value }))}>
+                  <SelectTrigger data-testid="select-timezone"><SelectValue placeholder="Select timezone" /></SelectTrigger>
+                  <SelectContent>
+                    {TIMEZONES.map((tz) => (<SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2"><DollarSign className="h-4 w-4" />Currency</Label>
+                <Select value={settings.currency} onValueChange={(value) => { const currency = CURRENCIES.find(c => c.value === value); setSettings(prev => ({ ...prev, currency: value, currency_symbol: currency?.symbol || '$' })); }}>
+                  <SelectTrigger data-testid="select-currency"><SelectValue placeholder="Select currency" /></SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map((cur) => (<SelectItem key={cur.value} value={cur.value}>{cur.label}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2"><Calendar className="h-4 w-4" />Date Format</Label>
+                <Select value={settings.date_format} onValueChange={(value) => setSettings(prev => ({ ...prev, date_format: value }))}>
+                  <SelectTrigger data-testid="select-date-format"><SelectValue placeholder="Select format" /></SelectTrigger>
+                  <SelectContent>
+                    {DATE_FORMATS.map((fmt) => (<SelectItem key={fmt.value} value={fmt.value}>{fmt.label}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2"><Globe className="h-4 w-4" />Fiscal Year Start</Label>
+                <Select value={settings.fiscal_year_start} onValueChange={(value) => setSettings(prev => ({ ...prev, fiscal_year_start: value }))}>
+                  <SelectTrigger data-testid="select-fiscal-year"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="01-01">January 1st</SelectItem>
+                    <SelectItem value="04-01">April 1st (India)</SelectItem>
+                    <SelectItem value="07-01">July 1st</SelectItem>
+                    <SelectItem value="10-01">October 1st</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </CardContent>
           </Card>
-
-          {/* Save Button - Sticky at bottom */}
           <div className="sticky bottom-0 bg-background pt-4 pb-2 border-t border-border mt-6">
             <div className="flex justify-end">
               <Button onClick={saveSettings} disabled={saving} data-testid="save-settings-btn">
-                {saving ? (
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4 mr-2" />
-                )}
+                {saving ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                 Save Settings
               </Button>
             </div>

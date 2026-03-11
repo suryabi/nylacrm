@@ -12,6 +12,7 @@ from deps import get_current_user, db
 from models.tenant import (
     Tenant, TenantCreate, TenantUpdate, 
     TenantBranding, TenantModules, TenantIntegrations, TenantSettings,
+    CompanyProfile, CompanyAddress, BankDetails, Director, OfficeContact,
     DEFAULT_TENANT
 )
 from core.tenant import get_current_tenant_id, add_tenant_filter, with_tenant_id
@@ -285,6 +286,29 @@ async def update_current_tenant_settings(
         {'tenant_id': tenant_id},
         {'$set': {
             'settings': settings.model_dump(),
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    updated = await db.tenants.find_one({'tenant_id': tenant_id}, {'_id': 0})
+    return updated
+
+
+@router.put("/current/company-profile")
+async def update_current_tenant_company_profile(
+    company_profile: CompanyProfile,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update current tenant company profile (Tenant Admin)"""
+    if not is_tenant_admin(current_user):
+        raise HTTPException(status_code=403, detail="Tenant Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    await db.tenants.update_one(
+        {'tenant_id': tenant_id},
+        {'$set': {
+            'company_profile': company_profile.model_dump(),
             'updated_at': datetime.now(timezone.utc).isoformat()
         }}
     )

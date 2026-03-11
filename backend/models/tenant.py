@@ -56,6 +56,87 @@ class TenantSettings(BaseModel):
     currency_symbol: str = "₹"
     date_format: str = "DD/MM/YYYY"
     fiscal_year_start: str = "04-01"  # April 1st
+
+
+class CompanyAddress(BaseModel):
+    """Company address details"""
+    building_name: Optional[str] = None
+    floor: Optional[str] = None
+    unit_flat_no: Optional[str] = None
+    building_plot_no: Optional[str] = None
+    landmark: Optional[str] = None
+    road_street: Optional[str] = None
+    locality: Optional[str] = None
+    city: Optional[str] = None
+    district: Optional[str] = None
+    state: Optional[str] = None
+    pin_code: Optional[str] = None
+    google_maps_url: Optional[str] = None
+
+
+class BankDetails(BaseModel):
+    """Company bank account details"""
+    account_name: Optional[str] = None
+    account_number: Optional[str] = None
+    ifsc_code: Optional[str] = None
+    bank_name: Optional[str] = None
+    branch: Optional[str] = None
+    terminal_id: Optional[str] = None
+    payment_qr_url: Optional[str] = None
+
+
+class Director(BaseModel):
+    """Company director/key personnel"""
+    name: str
+    designation: str = "Director"
+    resident_state: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+
+
+class OfficeContact(BaseModel):
+    """Office contact person"""
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    purpose: Optional[str] = "For Couriers / Parcels or directions"
+
+
+class CompanyProfile(BaseModel):
+    """Complete company profile information"""
+    # Business Identity
+    legal_name: Optional[str] = None
+    trade_name: Optional[str] = None
+    brand_name: Optional[str] = None
+    constitution: Optional[str] = "Private Limited Company"
+    
+    # GST Details
+    gstin: Optional[str] = None
+    registration_type: Optional[str] = "Regular"
+    gst_act: Optional[str] = "Goods and Services Tax Act, 2017"
+    registration_approval_date: Optional[str] = None
+    validity_from: Optional[str] = None
+    certificate_issue_date: Optional[str] = None
+    
+    # MSME Details
+    msme_registration_number: Optional[str] = None
+    
+    # Contact Information
+    company_email: Optional[str] = None
+    company_phone: Optional[str] = None
+    company_website: Optional[str] = None
+    
+    # Address
+    principal_address: CompanyAddress = Field(default_factory=CompanyAddress)
+    
+    # Bank Details
+    bank_details: BankDetails = Field(default_factory=BankDetails)
+    
+    # Office Contact
+    office_contact: OfficeContact = Field(default_factory=OfficeContact)
+    
+    # Directors / Key Personnel
+    directors: List[Director] = Field(default_factory=list)
     
 
 class Tenant(BaseModel):
@@ -75,6 +156,9 @@ class Tenant(BaseModel):
     modules: TenantModules = Field(default_factory=TenantModules)
     integrations: TenantIntegrations = Field(default_factory=TenantIntegrations)
     settings: TenantSettings = Field(default_factory=TenantSettings)
+    
+    # Company Profile
+    company_profile: CompanyProfile = Field(default_factory=CompanyProfile)
     
     # Admin
     owner_id: Optional[str] = None  # Primary admin user
