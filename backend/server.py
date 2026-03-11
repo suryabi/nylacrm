@@ -181,6 +181,14 @@ api_router = APIRouter(prefix="/api")
 # Import modular routes
 from routes import routes_router
 
+# Import and add tenant middleware
+from core.tenant import tenant_middleware, get_current_tenant_id, add_tenant_filter, with_tenant_id
+
+@app.middleware("http")
+async def tenant_context_middleware(request: Request, call_next):
+    """Middleware to set tenant context for each request"""
+    return await tenant_middleware(request, call_next)
+
 # Include modular routes - these are the refactored endpoints
 # Note: We're including them here but the original routes in this file
 # will take precedence due to FastAPI route ordering
