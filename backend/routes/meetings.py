@@ -1,5 +1,6 @@
 """
 Meetings routes - Meeting CRUD with Zoom integration
+Multi-tenant aware - all queries automatically filter by tenant_id
 """
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
@@ -8,10 +9,14 @@ from pydantic import BaseModel, Field
 import uuid
 import asyncio
 
-from database import db
+from database import get_tenant_db
 from deps import get_current_user
 
 router = APIRouter()
+
+def get_tdb():
+    """Get tenant-aware database wrapper"""
+    return get_tenant_db()
 
 # Try to import zoom service
 try:
@@ -150,6 +155,7 @@ async def send_meeting_notification(meeting: dict, notification_type: str, organ
 @router.post("")
 async def create_meeting(meeting: MeetingCreate, current_user: dict = Depends(get_current_user)):
     """Create a new meeting"""
+    tdb = get_tdb()
     meeting_data = {
         'id': str(uuid.uuid4()),
         'title': meeting.title,
@@ -187,7 +193,7 @@ async def create_meeting(meeting: MeetingCreate, current_user: dict = Depends(ge
         except Exception as e:
             print(f"Failed to create Zoom meeting: {e}")
     
-    await db.meetings.insert_one(meeting_data)
+    await tdb.meetings.insert_one(meeting_data)
     
     # Send notification emails
     await send_meeting_notification(meeting_data, 'scheduled', current_user)
@@ -206,6 +212,7 @@ async def get_meetings(
     current_user: dict = Depends(get_current_user)
 ):
     """Get meetings with optional filters"""
+    tdb = get_tdb()
     query = {}
     
     if organizer_id:
@@ -229,7 +236,7 @@ async def get_meetings(
         else:
             query['meeting_date'] = {'$lte': to_date}
     
-    meetings = await db.meetings.find(query, {'_id': 0}).sort('meeting_date', 1).to_list(1000)
+    meetings = await tdb.meetings.find(query, {'_id': 0}).sort('meeting_date', 1).to_list(1000)
     
     return meetings
 
@@ -237,7 +244,8 @@ async def get_meetings(
 @router.get("/{meeting_id}")
 async def get_meeting(meeting_id: str, current_user: dict = Depends(get_current_user)):
     """Get a single meeting"""
-    meeting = await db.meetings.find_one({'id': meeting_id}, {'_id': 0})
+    tdb = get_tdb()
+    meeting = await tdb.meetings.find_one({'id': meeting_id}, {'_id': 0})
     if not meeting:
         raise HTTPException(status_code=404, detail='Meeting not found')
     return meeting
@@ -246,7 +254,8 @@ async def get_meeting(meeting_id: str, current_user: dict = Depends(get_current_
 @router.put("/{meeting_id}")
 async def update_meeting(meeting_id: str, update: MeetingUpdate, current_user: dict = Depends(get_current_user)):
     """Update a meeting"""
-    existing = await db.meetings.find_one({'id': meeting_id}, {'_id': 0})
+    tdb = get_tdb()
+    existing = await tdb.meetings.find_one({'id': meeting_id}, {'_id': 0})
     if not existing:
         raise HTTPException(status_code=404, detail='Meeting not found')
     
@@ -259,9 +268,9 @@ async def update_meeting(meeting_id: str, update: MeetingUpdate, current_user: d
         update.start_time and update.start_time != existing.get('start_time')
     )
     
-    await db.meetings.update_one({'id': meeting_id}, {'$set': update_data})
+    await tdb.meetings.update_one({'id': meeting_id}, {'$set': update_data})
     
-    updated = await db.meetings.find_one({'id': meeting_id}, {'_id': 0})
+    updated = await tdb.meetings.find_one({'id': meeting_id}, {'_id': 0})
     
     # Send rescheduled notification
     if date_changed and update.status != 'cancelled':
@@ -277,13 +286,14 @@ async def update_meeting(meeting_id: str, update: MeetingUpdate, current_user: d
 @router.delete("/{meeting_id}")
 async def delete_meeting(meeting_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a meeting"""
-    meeting = await db.meetings.find_one({'id': meeting_id}, {'_id': 0})
+    tdb = get_tdb()
+    meeting = await tdb.meetings.find_one({'id': meeting_id}, {'_id': 0})
     if not meeting:
         raise HTTPException(status_code=404, detail='Meeting not found')
     
     # Send cancellation notification before deleting
     await send_meeting_notification(meeting, 'cancelled', current_user)
     
-    await db.meetings.delete_one({'id': meeting_id})
+    await tdb.meetings.delete_one({'id': meeting_id})
     
     return {'message': 'Meeting deleted successfully'}

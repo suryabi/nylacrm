@@ -1,5 +1,6 @@
 """
 Requests routes - Leave, Travel, Budget, and Expense requests
+Multi-tenant aware - all queries automatically filter by tenant_id
 """
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
@@ -7,10 +8,14 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 import uuid
 
-from database import db
+from database import get_tenant_db
 from deps import get_current_user
 
 router = APIRouter()
+
+def get_tdb():
+    """Get tenant-aware database wrapper"""
+    return get_tenant_db()
 
 # ============= LEAVE REQUEST MODELS =============
 
@@ -186,7 +191,7 @@ async def create_leave_request(request: LeaveRequestCreate, current_user: dict =
         'created_at': datetime.now(timezone.utc).isoformat()
     }
     
-    await db.leave_requests.insert_one(request_data)
+    await get_tdb().leave_requests.insert_one(request_data)
     
     request_data['created_at'] = datetime.fromisoformat(request_data['created_at'])
     return LeaveRequest(**request_data)
@@ -205,7 +210,7 @@ async def get_leave_requests(
     if status:
         query['status'] = status
     
-    requests = await db.leave_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
+    requests = await get_tdb().leave_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
     return requests
 
 
@@ -217,7 +222,7 @@ async def approve_leave_request(
     current_user: dict = Depends(get_current_user)
 ):
     """Approve or reject a leave request"""
-    request = await db.leave_requests.find_one({'id': request_id}, {'_id': 0})
+    request = await get_tdb().leave_requests.find_one({'id': request_id}, {'_id': 0})
     if not request:
         raise HTTPException(status_code=404, detail='Leave request not found')
     
@@ -230,19 +235,19 @@ async def approve_leave_request(
     if not approved and rejection_reason:
         update_data['rejection_reason'] = rejection_reason
     
-    await db.leave_requests.update_one({'id': request_id}, {'$set': update_data})
+    await get_tdb().leave_requests.update_one({'id': request_id}, {'$set': update_data})
     
-    return await db.leave_requests.find_one({'id': request_id}, {'_id': 0})
+    return await get_tdb().leave_requests.find_one({'id': request_id}, {'_id': 0})
 
 
 @router.get("/leave-requests/pending-approvals")
 async def get_pending_leave_approvals(current_user: dict = Depends(get_current_user)):
     """Get pending leave requests for approval"""
     # Get users who report to current user
-    reporters = await db.users.find({'reports_to': current_user['id']}, {'_id': 0, 'id': 1}).to_list(100)
+    reporters = await get_tdb().users.find({'reports_to': current_user['id']}, {'_id': 0, 'id': 1}).to_list(100)
     reporter_ids = [r['id'] for r in reporters]
     
-    requests = await db.leave_requests.find(
+    requests = await get_tdb().leave_requests.find(
         {'user_id': {'$in': reporter_ids}, 'status': 'pending'},
         {'_id': 0}
     ).to_list(100)
@@ -276,7 +281,7 @@ async def create_travel_request(request: TravelRequestCreate, current_user: dict
         'updated_at': datetime.now(timezone.utc).isoformat()
     }
     
-    await db.travel_requests.insert_one(request_data)
+    await get_tdb().travel_requests.insert_one(request_data)
     
     return request_data
 
@@ -294,14 +299,14 @@ async def get_travel_requests(
     if status:
         query['status'] = status
     
-    requests = await db.travel_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
+    requests = await get_tdb().travel_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
     return requests
 
 
 @router.get("/travel-requests/{request_id}")
 async def get_travel_request(request_id: str, current_user: dict = Depends(get_current_user)):
     """Get a single travel request"""
-    request = await db.travel_requests.find_one({'id': request_id}, {'_id': 0})
+    request = await get_tdb().travel_requests.find_one({'id': request_id}, {'_id': 0})
     if not request:
         raise HTTPException(status_code=404, detail='Travel request not found')
     return request
@@ -314,7 +319,7 @@ async def update_travel_request(
     current_user: dict = Depends(get_current_user)
 ):
     """Update a travel request"""
-    existing = await db.travel_requests.find_one({'id': request_id}, {'_id': 0})
+    existing = await get_tdb().travel_requests.find_one({'id': request_id}, {'_id': 0})
     if not existing:
         raise HTTPException(status_code=404, detail='Travel request not found')
     
@@ -327,9 +332,9 @@ async def update_travel_request(
     update_data = {k: v for k, v in update.model_dump().items() if v is not None}
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    await db.travel_requests.update_one({'id': request_id}, {'$set': update_data})
+    await get_tdb().travel_requests.update_one({'id': request_id}, {'$set': update_data})
     
-    return await db.travel_requests.find_one({'id': request_id}, {'_id': 0})
+    return await get_tdb().travel_requests.find_one({'id': request_id}, {'_id': 0})
 
 
 @router.put("/travel-requests/{request_id}/approve")
@@ -340,7 +345,7 @@ async def approve_travel_request(
     current_user: dict = Depends(get_current_user)
 ):
     """Approve or reject a travel request"""
-    request = await db.travel_requests.find_one({'id': request_id}, {'_id': 0})
+    request = await get_tdb().travel_requests.find_one({'id': request_id}, {'_id': 0})
     if not request:
         raise HTTPException(status_code=404, detail='Travel request not found')
     
@@ -352,36 +357,36 @@ async def approve_travel_request(
         'updated_at': datetime.now(timezone.utc).isoformat()
     }
     
-    await db.travel_requests.update_one({'id': request_id}, {'$set': update_data})
+    await get_tdb().travel_requests.update_one({'id': request_id}, {'$set': update_data})
     
-    return await db.travel_requests.find_one({'id': request_id}, {'_id': 0})
+    return await get_tdb().travel_requests.find_one({'id': request_id}, {'_id': 0})
 
 
 @router.put("/travel-requests/{request_id}/cancel")
 async def cancel_travel_request(request_id: str, current_user: dict = Depends(get_current_user)):
     """Cancel a travel request"""
-    request = await db.travel_requests.find_one({'id': request_id}, {'_id': 0})
+    request = await get_tdb().travel_requests.find_one({'id': request_id}, {'_id': 0})
     if not request:
         raise HTTPException(status_code=404, detail='Travel request not found')
     
     if request['user_id'] != current_user['id']:
         raise HTTPException(status_code=403, detail='Not authorized to cancel this request')
     
-    await db.travel_requests.update_one(
+    await get_tdb().travel_requests.update_one(
         {'id': request_id},
         {'$set': {'status': 'cancelled', 'updated_at': datetime.now(timezone.utc).isoformat()}}
     )
     
-    return await db.travel_requests.find_one({'id': request_id}, {'_id': 0})
+    return await get_tdb().travel_requests.find_one({'id': request_id}, {'_id': 0})
 
 
 @router.get("/travel-requests/pending-approvals/count")
 async def get_pending_travel_count(current_user: dict = Depends(get_current_user)):
     """Get count of pending travel requests for approval"""
-    reporters = await db.users.find({'reports_to': current_user['id']}, {'_id': 0, 'id': 1}).to_list(100)
+    reporters = await get_tdb().users.find({'reports_to': current_user['id']}, {'_id': 0, 'id': 1}).to_list(100)
     reporter_ids = [r['id'] for r in reporters]
     
-    count = await db.travel_requests.count_documents({
+    count = await get_tdb().travel_requests.count_documents({
         'user_id': {'$in': reporter_ids},
         'status': 'pending'
     })
@@ -415,7 +420,7 @@ async def create_budget_request(request: BudgetRequestCreate, current_user: dict
         'updated_at': datetime.now(timezone.utc).isoformat()
     }
     
-    await db.budget_requests.insert_one(request_data)
+    await get_tdb().budget_requests.insert_one(request_data)
     
     return request_data
 
@@ -433,14 +438,14 @@ async def get_budget_requests(
     if status:
         query['status'] = status
     
-    requests = await db.budget_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
+    requests = await get_tdb().budget_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
     return requests
 
 
 @router.get("/budget-requests/{request_id}")
 async def get_budget_request(request_id: str, current_user: dict = Depends(get_current_user)):
     """Get a single budget request"""
-    request = await db.budget_requests.find_one({'id': request_id}, {'_id': 0})
+    request = await get_tdb().budget_requests.find_one({'id': request_id}, {'_id': 0})
     if not request:
         raise HTTPException(status_code=404, detail='Budget request not found')
     return request
@@ -453,7 +458,7 @@ async def update_budget_request(
     current_user: dict = Depends(get_current_user)
 ):
     """Update a budget request"""
-    existing = await db.budget_requests.find_one({'id': request_id}, {'_id': 0})
+    existing = await get_tdb().budget_requests.find_one({'id': request_id}, {'_id': 0})
     if not existing:
         raise HTTPException(status_code=404, detail='Budget request not found')
     
@@ -466,9 +471,9 @@ async def update_budget_request(
     update_data = {k: v for k, v in update.model_dump().items() if v is not None}
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    await db.budget_requests.update_one({'id': request_id}, {'$set': update_data})
+    await get_tdb().budget_requests.update_one({'id': request_id}, {'$set': update_data})
     
-    return await db.budget_requests.find_one({'id': request_id}, {'_id': 0})
+    return await get_tdb().budget_requests.find_one({'id': request_id}, {'_id': 0})
 
 
 @router.put("/budget-requests/{request_id}/approve")
@@ -479,7 +484,7 @@ async def approve_budget_request(
     current_user: dict = Depends(get_current_user)
 ):
     """Approve or reject a budget request"""
-    request = await db.budget_requests.find_one({'id': request_id}, {'_id': 0})
+    request = await get_tdb().budget_requests.find_one({'id': request_id}, {'_id': 0})
     if not request:
         raise HTTPException(status_code=404, detail='Budget request not found')
     
@@ -491,27 +496,27 @@ async def approve_budget_request(
         'updated_at': datetime.now(timezone.utc).isoformat()
     }
     
-    await db.budget_requests.update_one({'id': request_id}, {'$set': update_data})
+    await get_tdb().budget_requests.update_one({'id': request_id}, {'$set': update_data})
     
-    return await db.budget_requests.find_one({'id': request_id}, {'_id': 0})
+    return await get_tdb().budget_requests.find_one({'id': request_id}, {'_id': 0})
 
 
 @router.put("/budget-requests/{request_id}/cancel")
 async def cancel_budget_request(request_id: str, current_user: dict = Depends(get_current_user)):
     """Cancel a budget request"""
-    request = await db.budget_requests.find_one({'id': request_id}, {'_id': 0})
+    request = await get_tdb().budget_requests.find_one({'id': request_id}, {'_id': 0})
     if not request:
         raise HTTPException(status_code=404, detail='Budget request not found')
     
     if request['user_id'] != current_user['id']:
         raise HTTPException(status_code=403, detail='Not authorized to cancel this request')
     
-    await db.budget_requests.update_one(
+    await get_tdb().budget_requests.update_one(
         {'id': request_id},
         {'$set': {'status': 'cancelled', 'updated_at': datetime.now(timezone.utc).isoformat()}}
     )
     
-    return await db.budget_requests.find_one({'id': request_id}, {'_id': 0})
+    return await get_tdb().budget_requests.find_one({'id': request_id}, {'_id': 0})
 
 
 # ============= EXPENSE REQUEST ROUTES =============
@@ -547,7 +552,7 @@ async def create_expense_request(request: ExpenseRequestCreate, current_user: di
         'updated_at': datetime.now(timezone.utc).isoformat()
     }
     
-    await db.expense_requests.insert_one(request_data)
+    await get_tdb().expense_requests.insert_one(request_data)
     
     return request_data
 
@@ -565,14 +570,14 @@ async def get_expense_requests(
     if status:
         query['status'] = status
     
-    requests = await db.expense_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
+    requests = await get_tdb().expense_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
     return requests
 
 
 @router.get("/expense-requests/{request_id}")
 async def get_expense_request(request_id: str, current_user: dict = Depends(get_current_user)):
     """Get a single expense request"""
-    request = await db.expense_requests.find_one({'id': request_id}, {'_id': 0})
+    request = await get_tdb().expense_requests.find_one({'id': request_id}, {'_id': 0})
     if not request:
         raise HTTPException(status_code=404, detail='Expense request not found')
     return request
@@ -585,7 +590,7 @@ async def update_expense_request(
     current_user: dict = Depends(get_current_user)
 ):
     """Update an expense request"""
-    existing = await db.expense_requests.find_one({'id': request_id}, {'_id': 0})
+    existing = await get_tdb().expense_requests.find_one({'id': request_id}, {'_id': 0})
     if not existing:
         raise HTTPException(status_code=404, detail='Expense request not found')
     
@@ -607,9 +612,9 @@ async def update_expense_request(
     
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    await db.expense_requests.update_one({'id': request_id}, {'$set': update_data})
+    await get_tdb().expense_requests.update_one({'id': request_id}, {'$set': update_data})
     
-    return await db.expense_requests.find_one({'id': request_id}, {'_id': 0})
+    return await get_tdb().expense_requests.find_one({'id': request_id}, {'_id': 0})
 
 
 @router.put("/expense-requests/{request_id}/approve")
@@ -620,7 +625,7 @@ async def approve_expense_request(
     current_user: dict = Depends(get_current_user)
 ):
     """Approve or reject an expense request"""
-    request = await db.expense_requests.find_one({'id': request_id}, {'_id': 0})
+    request = await get_tdb().expense_requests.find_one({'id': request_id}, {'_id': 0})
     if not request:
         raise HTTPException(status_code=404, detail='Expense request not found')
     
@@ -632,15 +637,15 @@ async def approve_expense_request(
         'updated_at': datetime.now(timezone.utc).isoformat()
     }
     
-    await db.expense_requests.update_one({'id': request_id}, {'$set': update_data})
+    await get_tdb().expense_requests.update_one({'id': request_id}, {'$set': update_data})
     
-    return await db.expense_requests.find_one({'id': request_id}, {'_id': 0})
+    return await get_tdb().expense_requests.find_one({'id': request_id}, {'_id': 0})
 
 
 @router.delete("/expense-requests/{request_id}")
 async def delete_expense_request(request_id: str, current_user: dict = Depends(get_current_user)):
     """Delete an expense request"""
-    request = await db.expense_requests.find_one({'id': request_id}, {'_id': 0})
+    request = await get_tdb().expense_requests.find_one({'id': request_id}, {'_id': 0})
     if not request:
         raise HTTPException(status_code=404, detail='Expense request not found')
     
@@ -650,6 +655,6 @@ async def delete_expense_request(request_id: str, current_user: dict = Depends(g
     if request['status'] not in ['pending', 'rejected']:
         raise HTTPException(status_code=400, detail='Cannot delete approved request')
     
-    await db.expense_requests.delete_one({'id': request_id})
+    await get_tdb().expense_requests.delete_one({'id': request_id})
     
     return {'message': 'Expense request deleted successfully'}

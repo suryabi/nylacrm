@@ -1,5 +1,6 @@
 """
 Contact Categories and Contacts API Routes
+Multi-tenant aware - all queries automatically filter by tenant_id
 """
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from pydantic import BaseModel, Field
@@ -9,9 +10,14 @@ import uuid
 import base64
 import os
 
-from deps import get_current_user, db
+from deps import get_current_user
+from database import get_tenant_db
 
 router = APIRouter(prefix="/contacts", tags=["Contacts"])
+
+def get_tdb():
+    """Get tenant-aware database wrapper"""
+    return get_tenant_db()
 
 # ============== MODELS ==============
 
@@ -71,7 +77,8 @@ DEFAULT_CATEGORIES = [
 
 async def initialize_default_categories():
     """Initialize default contact categories if none exist"""
-    count = await db.contact_categories.count_documents({})
+    tdb = get_tdb()
+    count = await tdb.contact_categories.count_documents({})
     if count == 0:
         for cat_data in DEFAULT_CATEGORIES:
             category = {
@@ -82,7 +89,7 @@ async def initialize_default_categories():
                 'created_at': datetime.now(timezone.utc).isoformat(),
                 'updated_at': datetime.now(timezone.utc).isoformat()
             }
-            await db.contact_categories.insert_one(category)
+            await tdb.contact_categories.insert_one(category)
 
 # ============== CATEGORY ENDPOINTS ==============
 
@@ -92,10 +99,11 @@ async def get_contact_categories(
     current_user: dict = Depends(get_current_user)
 ):
     """Get all contact categories"""
+    tdb = get_tdb()
     await initialize_default_categories()
     
     query = {} if include_inactive else {'is_active': True}
-    categories = await db.contact_categories.find(query, {'_id': 0}).sort('name', 1).to_list(100)
+    categories = await tdb.contact_categories.find(query, {'_id': 0}).sort('name', 1).to_list(100)
     return categories
 
 @router.post("/categories")
@@ -104,11 +112,12 @@ async def create_contact_category(
     current_user: dict = Depends(get_current_user)
 ):
     """Create a new contact category"""
+    tdb = get_tdb()
     if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
         raise HTTPException(status_code=403, detail="Only admins can manage contact categories")
     
     # Check for duplicate name
-    existing = await db.contact_categories.find_one({'name': category.name}, {'_id': 0})
+    existing = await tdb.contact_categories.find_one({'name': category.name}, {'_id': 0})
     if existing:
         raise HTTPException(status_code=400, detail="Category with this name already exists")
     
@@ -121,7 +130,7 @@ async def create_contact_category(
         'updated_at': datetime.now(timezone.utc).isoformat()
     }
     
-    await db.contact_categories.insert_one(category_data)
+    await tdb.contact_categories.insert_one(category_data)
     return {k: v for k, v in category_data.items() if k != '_id'}
 
 @router.put("/categories/{category_id}")
@@ -131,18 +140,19 @@ async def update_contact_category(
     current_user: dict = Depends(get_current_user)
 ):
     """Update a contact category"""
+    tdb = get_tdb()
     if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
         raise HTTPException(status_code=403, detail="Only admins can manage contact categories")
     
-    existing = await db.contact_categories.find_one({'id': category_id}, {'_id': 0})
+    existing = await tdb.contact_categories.find_one({'id': category_id}, {'_id': 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Category not found")
     
     update_data = {k: v for k, v in category_update.model_dump().items() if v is not None}
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    await db.contact_categories.update_one({'id': category_id}, {'$set': update_data})
-    updated = await db.contact_categories.find_one({'id': category_id}, {'_id': 0})
+    await tdb.contact_categories.update_one({'id': category_id}, {'$set': update_data})
+    updated = await tdb.contact_categories.find_one({'id': category_id}, {'_id': 0})
     return updated
 
 @router.delete("/categories/{category_id}")
@@ -151,25 +161,26 @@ async def delete_contact_category(
     current_user: dict = Depends(get_current_user)
 ):
     """Soft delete a contact category"""
+    tdb = get_tdb()
     if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
         raise HTTPException(status_code=403, detail="Only admins can manage contact categories")
     
-    existing = await db.contact_categories.find_one({'id': category_id}, {'_id': 0})
+    existing = await tdb.contact_categories.find_one({'id': category_id}, {'_id': 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Category not found")
     
     # Check if category has contacts
-    contact_count = await db.contacts.count_documents({'category_id': category_id})
+    contact_count = await tdb.contacts.count_documents({'category_id': category_id})
     if contact_count > 0:
         # Soft delete
-        await db.contact_categories.update_one(
+        await tdb.contact_categories.update_one(
             {'id': category_id},
             {'$set': {'is_active': False, 'updated_at': datetime.now(timezone.utc).isoformat()}}
         )
         return {"message": f"Category deactivated (has {contact_count} contacts)"}
     else:
         # Hard delete if no contacts
-        await db.contact_categories.delete_one({'id': category_id})
+        await tdb.contact_categories.delete_one({'id': category_id})
         return {"message": "Category deleted"}
 
 # ============== CONTACT ENDPOINTS ==============
@@ -185,6 +196,7 @@ async def get_contacts(
     current_user: dict = Depends(get_current_user)
 ):
     """Get contacts with pagination and filters"""
+    tdb = get_tdb()
     query = {}
     
     if category_id:
@@ -203,15 +215,15 @@ async def get_contacts(
         ]
     
     # Get total count
-    total = await db.contacts.count_documents(query)
+    total = await tdb.contacts.count_documents(query)
     
     # Get paginated results
     skip = (page - 1) * page_size
-    contacts = await db.contacts.find(query, {'_id': 0}).sort('created_at', -1).skip(skip).limit(page_size).to_list(page_size)
+    contacts = await tdb.contacts.find(query, {'_id': 0}).sort('created_at', -1).skip(skip).limit(page_size).to_list(page_size)
     
     # Get category names for each contact
     category_ids = list(set(c.get('category_id') for c in contacts if c.get('category_id')))
-    categories = await db.contact_categories.find({'id': {'$in': category_ids}}, {'_id': 0, 'id': 1, 'name': 1, 'color': 1}).to_list(100)
+    categories = await tdb.contact_categories.find({'id': {'$in': category_ids}}, {'_id': 0, 'id': 1, 'name': 1, 'color': 1}).to_list(100)
     category_map = {c['id']: c for c in categories}
     
     for contact in contacts:
@@ -230,16 +242,17 @@ async def get_contacts(
 @router.get("/filter-options")
 async def get_contact_filter_options(current_user: dict = Depends(get_current_user)):
     """Get unique values for filter dropdowns"""
+    tdb = get_tdb()
     # Get unique companies
-    companies = await db.contacts.distinct('company')
+    companies = await tdb.contacts.distinct('company')
     companies = [c for c in companies if c]
     
     # Get unique cities
-    cities = await db.contacts.distinct('city')
+    cities = await tdb.contacts.distinct('city')
     cities = [c for c in cities if c]
     
     # Get categories
-    categories = await db.contact_categories.find({'is_active': True}, {'_id': 0, 'id': 1, 'name': 1}).to_list(100)
+    categories = await tdb.contact_categories.find({'is_active': True}, {'_id': 0, 'id': 1, 'name': 1}).to_list(100)
     
     return {
         'companies': sorted(companies),
@@ -253,13 +266,14 @@ async def get_contact(
     current_user: dict = Depends(get_current_user)
 ):
     """Get a single contact by ID"""
-    contact = await db.contacts.find_one({'id': contact_id}, {'_id': 0})
+    tdb = get_tdb()
+    contact = await tdb.contacts.find_one({'id': contact_id}, {'_id': 0})
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
     
     # Add category info
     if contact.get('category_id'):
-        category = await db.contact_categories.find_one({'id': contact['category_id']}, {'_id': 0, 'name': 1, 'color': 1})
+        category = await tdb.contact_categories.find_one({'id': contact['category_id']}, {'_id': 0, 'name': 1, 'color': 1})
         if category:
             contact['category_name'] = category.get('name')
             contact['category_color'] = category.get('color')
@@ -272,8 +286,9 @@ async def create_contact(
     current_user: dict = Depends(get_current_user)
 ):
     """Create a new contact"""
+    tdb = get_tdb()
     # Verify category exists
-    category = await db.contact_categories.find_one({'id': contact.category_id}, {'_id': 0})
+    category = await tdb.contact_categories.find_one({'id': contact.category_id}, {'_id': 0})
     if not category:
         raise HTTPException(status_code=400, detail="Invalid category")
     
@@ -287,7 +302,7 @@ async def create_contact(
         'updated_at': datetime.now(timezone.utc).isoformat()
     }
     
-    await db.contacts.insert_one(contact_data)
+    await tdb.contacts.insert_one(contact_data)
     return {k: v for k, v in contact_data.items() if k != '_id'}
 
 @router.put("/{contact_id}")
@@ -297,7 +312,8 @@ async def update_contact(
     current_user: dict = Depends(get_current_user)
 ):
     """Update a contact"""
-    existing = await db.contacts.find_one({'id': contact_id}, {'_id': 0})
+    tdb = get_tdb()
+    existing = await tdb.contacts.find_one({'id': contact_id}, {'_id': 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Contact not found")
     
@@ -305,15 +321,15 @@ async def update_contact(
     
     # If category changed, update category name
     if 'category_id' in update_data:
-        category = await db.contact_categories.find_one({'id': update_data['category_id']}, {'_id': 0})
+        category = await tdb.contact_categories.find_one({'id': update_data['category_id']}, {'_id': 0})
         if category:
             update_data['category_name'] = category['name']
     
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     update_data['updated_by'] = current_user['id']
     
-    await db.contacts.update_one({'id': contact_id}, {'$set': update_data})
-    updated = await db.contacts.find_one({'id': contact_id}, {'_id': 0})
+    await tdb.contacts.update_one({'id': contact_id}, {'$set': update_data})
+    updated = await tdb.contacts.find_one({'id': contact_id}, {'_id': 0})
     return updated
 
 @router.delete("/{contact_id}")
@@ -322,11 +338,12 @@ async def delete_contact(
     current_user: dict = Depends(get_current_user)
 ):
     """Delete a contact"""
-    existing = await db.contacts.find_one({'id': contact_id}, {'_id': 0})
+    tdb = get_tdb()
+    existing = await tdb.contacts.find_one({'id': contact_id}, {'_id': 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Contact not found")
     
-    await db.contacts.delete_one({'id': contact_id})
+    await tdb.contacts.delete_one({'id': contact_id})
     return {"message": "Contact deleted"}
 
 # ============== VISITING CARD OCR ==============

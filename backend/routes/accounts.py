@@ -1,5 +1,6 @@
 """
 Accounts routes - Account CRUD, invoices, SKU pricing, contracts
+Multi-tenant aware - all queries automatically filter by tenant_id
 """
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from typing import List, Optional
@@ -9,10 +10,14 @@ import uuid
 import re
 import base64
 
-from database import db
+from database import get_tenant_db
 from deps import get_current_user
 
 router = APIRouter()
+
+def get_tdb():
+    """Get tenant-aware database wrapper"""
+    return get_tenant_db()
 
 # ============= MODELS =============
 
@@ -83,6 +88,7 @@ class PaginatedAccountsResponse(BaseModel):
 
 async def generate_account_id(company: str, city: str) -> str:
     """Generate unique Account ID in format: NAME4-CITY-AYY-SEQ"""
+    tdb = get_tdb()
     clean_company = re.sub(r'[^a-zA-Z0-9]', '', company).upper()
     name4 = clean_company[:4].ljust(4, 'X')
     
@@ -93,7 +99,7 @@ async def generate_account_id(company: str, city: str) -> str:
     prefix = f"{name4}-{city3}-A{year2}-"
     
     regex_pattern = f"^{re.escape(prefix)}\\d{{3}}$"
-    existing = await db.accounts.find(
+    existing = await tdb.accounts.find(
         {'account_id': {'$regex': regex_pattern}},
         {'account_id': 1}
     ).sort('account_id', -1).limit(1).to_list(1)
@@ -116,12 +122,13 @@ async def generate_account_id(company: str, city: str) -> str:
 @router.post("/convert-lead")
 async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depends(get_current_user)):
     """Convert a won lead to an account"""
-    lead = await db.leads.find_one({'id': data.lead_id}, {'_id': 0})
+    tdb = get_tdb()
+    lead = await tdb.leads.find_one({'id': data.lead_id}, {'_id': 0})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     
     # Check if already converted
-    existing = await db.accounts.find_one({'lead_id': data.lead_id}, {'_id': 0})
+    existing = await tdb.accounts.find_one({'lead_id': data.lead_id}, {'_id': 0})
     if existing:
         raise HTTPException(status_code=400, detail='Lead already converted to account')
     
@@ -138,7 +145,7 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
                 'return_bottle_credit': sku_item.get('bottle_return_credit', sku_item.get('return_bottle_credit', 0))
             })
     
-    # Create account
+    # Create account - tenant_id added automatically by TenantDB
     account_data = {
         'id': str(uuid.uuid4()),
         'account_id': account_id,
@@ -159,10 +166,10 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
         'updated_at': datetime.now(timezone.utc).isoformat()
     }
     
-    await db.accounts.insert_one(account_data)
+    await tdb.accounts.insert_one(account_data)
     
     # Update lead with account reference
-    await db.leads.update_one(
+    await tdb.leads.update_one(
         {'id': data.lead_id},
         {'$set': {
             'converted_to_account': True,
@@ -187,6 +194,7 @@ async def get_accounts(
     current_user: dict = Depends(get_current_user)
 ):
     """Get paginated list of accounts"""
+    tdb = get_tdb()
     query = {}
     
     if search:
@@ -211,15 +219,15 @@ async def get_accounts(
     if category:
         query['category'] = category
     
-    total = await db.accounts.count_documents(query)
+    total = await tdb.accounts.count_documents(query)
     skip = (page - 1) * page_size
     
-    accounts = await db.accounts.find(query, {'_id': 0}).sort('created_at', -1).skip(skip).limit(page_size).to_list(page_size)
+    accounts = await tdb.accounts.find(query, {'_id': 0}).sort('created_at', -1).skip(skip).limit(page_size).to_list(page_size)
     
     # Add sales person name
     for account in accounts:
         if account.get('assigned_to'):
-            user = await db.users.find_one({'id': account['assigned_to']}, {'_id': 0, 'name': 1})
+            user = await tdb.users.find_one({'id': account['assigned_to']}, {'_id': 0, 'name': 1})
             account['sales_person_name'] = user.get('name') if user else None
         
         if isinstance(account.get('created_at'), str):
@@ -246,6 +254,7 @@ async def get_accounts_stats(
     current_user: dict = Depends(get_current_user)
 ):
     """Get account statistics summary"""
+    tdb = get_tdb()
     query = {}
     if territory:
         query['territory'] = territory
@@ -254,21 +263,20 @@ async def get_accounts_stats(
     if city:
         query['city'] = city
     
-    total = await db.accounts.count_documents(query)
+    total = await tdb.accounts.count_documents(query)
     
     # Count by type
-    tier1 = await db.accounts.count_documents({**query, 'account_type': 'Tier 1'})
-    tier2 = await db.accounts.count_documents({**query, 'account_type': 'Tier 2'})
-    tier3 = await db.accounts.count_documents({**query, 'account_type': 'Tier 3'})
+    tier1 = await tdb.accounts.count_documents({**query, 'account_type': 'Tier 1'})
+    tier2 = await tdb.accounts.count_documents({**query, 'account_type': 'Tier 2'})
+    tier3 = await tdb.accounts.count_documents({**query, 'account_type': 'Tier 3'})
     
-    # Top categories
+    # Top categories - aggregate with tenant filter
     pipeline = [
-        {'$match': query},
         {'$group': {'_id': '$category', 'count': {'$sum': 1}}},
         {'$sort': {'count': -1}},
         {'$limit': 5}
     ]
-    categories = await db.accounts.aggregate(pipeline).to_list(5)
+    categories = await tdb.accounts.aggregate(pipeline).to_list(5)
     
     return {
         'total': total,
@@ -280,13 +288,14 @@ async def get_accounts_stats(
 @router.get("/{account_id}")
 async def get_account(account_id: str, current_user: dict = Depends(get_current_user)):
     """Get a single account by ID"""
-    account = await db.accounts.find_one({'id': account_id}, {'_id': 0})
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
     
     # Add sales person name
     if account.get('assigned_to'):
-        user = await db.users.find_one({'id': account['assigned_to']}, {'_id': 0, 'name': 1})
+        user = await tdb.users.find_one({'id': account['assigned_to']}, {'_id': 0, 'name': 1})
         account['sales_person_name'] = user.get('name') if user else None
     
     return account
@@ -295,7 +304,8 @@ async def get_account(account_id: str, current_user: dict = Depends(get_current_
 @router.put("/{account_id}")
 async def update_account(account_id: str, update: AccountUpdate, current_user: dict = Depends(get_current_user)):
     """Update an account"""
-    existing = await db.accounts.find_one({'id': account_id}, {'_id': 0})
+    tdb = get_tdb()
+    existing = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
     if not existing:
         raise HTTPException(status_code=404, detail='Account not found')
     
@@ -311,26 +321,27 @@ async def update_account(account_id: str, update: AccountUpdate, current_user: d
     
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    await db.accounts.update_one({'id': account_id}, {'$set': update_data})
+    await tdb.accounts.update_one({'id': account_id}, {'$set': update_data})
     
-    return await db.accounts.find_one({'id': account_id}, {'_id': 0})
+    return await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
 
 
 @router.delete("/{account_id}")
 async def delete_account(account_id: str, current_user: dict = Depends(get_current_user)):
     """Delete an account"""
-    account = await db.accounts.find_one({'id': account_id}, {'_id': 0})
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
     
     # Remove account reference from lead
     if account.get('lead_id'):
-        await db.leads.update_one(
+        await tdb.leads.update_one(
             {'id': account['lead_id']},
             {'$set': {'converted_to_account': False, 'account_id': None}}
         )
     
-    await db.accounts.delete_one({'id': account_id})
+    await tdb.accounts.delete_one({'id': account_id})
     
     return {'message': 'Account deleted successfully'}
 
@@ -340,18 +351,19 @@ async def delete_account(account_id: str, current_user: dict = Depends(get_curre
 @router.get("/{account_id}/invoices")
 async def get_account_invoices(account_id: str, current_user: dict = Depends(get_current_user)):
     """Get all invoices for an account"""
-    account = await db.accounts.find_one({'id': account_id}, {'_id': 0})
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
     
     # Get invoices by account_id or lead's lead_id
-    lead = await db.leads.find_one({'id': account.get('lead_id')}, {'_id': 0, 'lead_id': 1})
+    lead = await tdb.leads.find_one({'id': account.get('lead_id')}, {'_id': 0, 'lead_id': 1})
     
     query = {'$or': [{'account_id': account_id}]}
     if lead and lead.get('lead_id'):
         query['$or'].append({'ca_lead_id': lead['lead_id']})
     
-    invoices = await db.invoices.find(query, {'_id': 0}).sort('invoice_date', -1).to_list(1000)
+    invoices = await tdb.invoices.find(query, {'_id': 0}).sort('invoice_date', -1).to_list(1000)
     
     # Calculate totals
     total_gross = sum(inv.get('gross_invoice_value', 0) for inv in invoices)
@@ -372,13 +384,14 @@ async def get_account_invoices(account_id: str, current_user: dict = Depends(get
 @router.post("/{account_id}/invoices")
 async def create_account_invoice(account_id: str, invoice_data: dict, current_user: dict = Depends(get_current_user)):
     """Create an invoice for an account"""
-    account = await db.accounts.find_one({'id': account_id}, {'_id': 0})
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
     
     # Generate invoice number
     today = datetime.now().strftime('%Y%m%d')
-    count = await db.invoices.count_documents({'invoice_no': {'$regex': f'^INV-{today}'}})
+    count = await tdb.invoices.count_documents({'invoice_no': {'$regex': f'^INV-{today}'}})
     invoice_no = f"INV-{today}-{str(count + 1).zfill(4)}"
     
     # Get COGS data for the account's city
@@ -395,8 +408,8 @@ async def create_account_invoice(account_id: str, invoice_data: dict, current_us
         price_per_bottle = item.get('price_per_bottle', 0)
         line_total = bottles * price_per_bottle
         
-        # Get COGS for this SKU in this city
-        cogs_data = await db.cogs_data.find_one(
+        # Get COGS for this SKU in this city - cogs_data is tenant-aware
+        cogs_data = await tdb.cogs_data.find_one(
             {'sku_name': sku_name, 'city': city},
             {'_id': 0}
         )
@@ -449,7 +462,7 @@ async def create_account_invoice(account_id: str, invoice_data: dict, current_us
         'created_at': datetime.now(timezone.utc).isoformat()
     }
     
-    await db.invoices.insert_one(invoice)
+    await tdb.invoices.insert_one(invoice)
     
     return {
         'invoice': invoice,
@@ -469,7 +482,8 @@ async def upload_account_logo(
     current_user: dict = Depends(get_current_user)
 ):
     """Upload a logo for an account"""
-    account = await db.accounts.find_one({'id': account_id}, {'_id': 0})
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
     
@@ -480,7 +494,7 @@ async def upload_account_logo(
     logo_base64 = base64.b64encode(content).decode('utf-8')
     logo_data = f"data:{logo.content_type};base64,{logo_base64}"
     
-    await db.accounts.update_one(
+    await tdb.accounts.update_one(
         {'id': account_id},
         {'$set': {'logo': logo_data, 'updated_at': datetime.now(timezone.utc).isoformat()}}
     )
@@ -491,7 +505,8 @@ async def upload_account_logo(
 @router.delete("/{account_id}/logo")
 async def delete_account_logo(account_id: str, current_user: dict = Depends(get_current_user)):
     """Delete an account's logo"""
-    result = await db.accounts.update_one(
+    tdb = get_tdb()
+    result = await tdb.accounts.update_one(
         {'id': account_id},
         {'$unset': {'logo': ''}, '$set': {'updated_at': datetime.now(timezone.utc).isoformat()}}
     )

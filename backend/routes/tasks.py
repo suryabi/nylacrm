@@ -1,5 +1,6 @@
 """
 Tasks routes - Task/Action items CRUD
+Multi-tenant aware - all queries automatically filter by tenant_id
 """
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
@@ -7,10 +8,14 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 import uuid
 
-from database import db
+from database import get_tenant_db
 from deps import get_current_user
 
 router = APIRouter()
+
+def get_tdb():
+    """Get tenant-aware database wrapper"""
+    return get_tenant_db()
 
 # ============= MODELS =============
 
@@ -70,8 +75,9 @@ class TaskUpdate(BaseModel):
 @router.post("")
 async def create_task(task: TaskCreate, current_user: dict = Depends(get_current_user)):
     """Create a new task"""
+    tdb = get_tdb()
     # Get assignee name
-    assignee = await db.users.find_one({'id': task.assigned_to}, {'_id': 0, 'name': 1})
+    assignee = await tdb.users.find_one({'id': task.assigned_to}, {'_id': 0, 'name': 1})
     assignee_name = assignee.get('name') if assignee else None
     
     task_data = {
@@ -95,7 +101,7 @@ async def create_task(task: TaskCreate, current_user: dict = Depends(get_current
         'updated_at': datetime.now(timezone.utc).isoformat()
     }
     
-    await db.tasks.insert_one(task_data)
+    await tdb.tasks.insert_one(task_data)
     
     return task_data
 
@@ -109,6 +115,7 @@ async def get_tasks(
     current_user: dict = Depends(get_current_user)
 ):
     """Get tasks with optional filters"""
+    tdb = get_tdb()
     query = {}
     
     if assigned_to:
@@ -124,7 +131,7 @@ async def get_tasks(
     if account_id:
         query['account_id'] = account_id
     
-    tasks = await db.tasks.find(query, {'_id': 0}).sort('due_date', 1).to_list(1000)
+    tasks = await tdb.tasks.find(query, {'_id': 0}).sort('due_date', 1).to_list(1000)
     
     return tasks
 
@@ -132,7 +139,8 @@ async def get_tasks(
 @router.get("/{task_id}")
 async def get_task(task_id: str, current_user: dict = Depends(get_current_user)):
     """Get a single task"""
-    task = await db.tasks.find_one({'id': task_id}, {'_id': 0})
+    tdb = get_tdb()
+    task = await tdb.tasks.find_one({'id': task_id}, {'_id': 0})
     if not task:
         raise HTTPException(status_code=404, detail='Task not found')
     return task
@@ -141,7 +149,8 @@ async def get_task(task_id: str, current_user: dict = Depends(get_current_user))
 @router.put("/{task_id}")
 async def update_task(task_id: str, update: TaskUpdate, current_user: dict = Depends(get_current_user)):
     """Update a task"""
-    existing = await db.tasks.find_one({'id': task_id}, {'_id': 0})
+    tdb = get_tdb()
+    existing = await tdb.tasks.find_one({'id': task_id}, {'_id': 0})
     if not existing:
         raise HTTPException(status_code=404, detail='Task not found')
     
@@ -154,10 +163,10 @@ async def update_task(task_id: str, update: TaskUpdate, current_user: dict = Dep
     
     # Update assignee name if changing assigned_to
     if update.assigned_to and update.assigned_to != existing.get('assigned_to'):
-        assignee = await db.users.find_one({'id': update.assigned_to}, {'_id': 0, 'name': 1})
+        assignee = await tdb.users.find_one({'id': update.assigned_to}, {'_id': 0, 'name': 1})
         update_data['assigned_to_name'] = assignee.get('name') if assignee else None
     
-    await db.tasks.update_one({'id': task_id}, {'$set': update_data})
+    await tdb.tasks.update_one({'id': task_id}, {'$set': update_data})
     
     # Add comment if provided
     if update.comment:
@@ -169,19 +178,20 @@ async def update_task(task_id: str, update: TaskUpdate, current_user: dict = Dep
             'created_by_name': current_user.get('name'),
             'created_at': datetime.now(timezone.utc).isoformat()
         }
-        await db.task_comments.insert_one(comment_data)
+        await tdb.task_comments.insert_one(comment_data)
     
-    return await db.tasks.find_one({'id': task_id}, {'_id': 0})
+    return await tdb.tasks.find_one({'id': task_id}, {'_id': 0})
 
 
 @router.delete("/{task_id}")
 async def delete_task(task_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a task"""
-    result = await db.tasks.delete_one({'id': task_id})
+    tdb = get_tdb()
+    result = await tdb.tasks.delete_one({'id': task_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail='Task not found')
     
     # Delete associated comments
-    await db.task_comments.delete_many({'task_id': task_id})
+    await tdb.task_comments.delete_many({'task_id': task_id})
     
     return {'message': 'Task deleted successfully'}

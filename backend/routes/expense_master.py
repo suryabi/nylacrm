@@ -1,6 +1,7 @@
 """
 Expense Category Master Module
 Manages expense categories, types, role-based limits, and policy guidelines
+Multi-tenant aware - all queries automatically filter by tenant_id
 """
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -8,9 +9,14 @@ from typing import Optional, List, Dict
 from datetime import datetime, timezone
 import uuid
 
-from deps import get_current_user, db
+from deps import get_current_user
+from database import get_tenant_db
 
 router = APIRouter(prefix="/expense-master", tags=["Expense Master"])
+
+def get_tdb():
+    """Get tenant-aware database wrapper"""
+    return get_tenant_db()
 
 # ============== Models ==============
 
@@ -224,21 +230,22 @@ async def get_expense_categories(
     current_user: dict = Depends(get_current_user)
 ):
     """Get all expense categories with their expense types"""
+    tdb = get_tdb()
     query = {} if include_inactive else {'is_active': True}
     
-    categories = await db.expense_categories.find(query, {'_id': 0}).sort('display_order', 1).to_list(100)
+    categories = await tdb.expense_categories.find(query, {'_id': 0}).sort('display_order', 1).to_list(100)
     
     # If no categories exist, initialize with defaults
     if not categories:
         await initialize_default_data()
-        categories = await db.expense_categories.find(query, {'_id': 0}).sort('display_order', 1).to_list(100)
+        categories = await tdb.expense_categories.find(query, {'_id': 0}).sort('display_order', 1).to_list(100)
     
     # Fetch expense types for each category
     for category in categories:
         types_query = {'category_id': category['id']}
         if not include_inactive:
             types_query['is_active'] = True
-        expense_types = await db.expense_types.find(types_query, {'_id': 0}).to_list(100)
+        expense_types = await tdb.expense_types.find(types_query, {'_id': 0}).to_list(100)
         category['expense_types'] = expense_types
     
     return categories
@@ -250,12 +257,13 @@ async def create_expense_category(
     current_user: dict = Depends(get_current_user)
 ):
     """Create a new expense category"""
+    tdb = get_tdb()
     # Check admin permission
     if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
         raise HTTPException(status_code=403, detail="Only admins can manage expense categories")
     
     # Check for duplicate name
-    existing = await db.expense_categories.find_one({'name': category.name}, {'_id': 0})
+    existing = await tdb.expense_categories.find_one({'name': category.name}, {'_id': 0})
     if existing:
         raise HTTPException(status_code=400, detail="Category with this name already exists")
     
@@ -267,7 +275,7 @@ async def create_expense_category(
         'updated_at': datetime.now(timezone.utc).isoformat()
     }
     
-    await db.expense_categories.insert_one(category_data)
+    await tdb.expense_categories.insert_one(category_data)
     # Return without MongoDB's _id field
     return {k: v for k, v in category_data.items() if k != '_id'}
 
@@ -279,19 +287,20 @@ async def update_expense_category(
     current_user: dict = Depends(get_current_user)
 ):
     """Update an expense category"""
+    tdb = get_tdb()
     if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
         raise HTTPException(status_code=403, detail="Only admins can manage expense categories")
     
-    existing = await db.expense_categories.find_one({'id': category_id}, {'_id': 0})
+    existing = await tdb.expense_categories.find_one({'id': category_id}, {'_id': 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Category not found")
     
     update_data = {k: v for k, v in category_update.model_dump().items() if v is not None}
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    await db.expense_categories.update_one({'id': category_id}, {'$set': update_data})
+    await tdb.expense_categories.update_one({'id': category_id}, {'$set': update_data})
     
-    updated = await db.expense_categories.find_one({'id': category_id}, {'_id': 0})
+    updated = await tdb.expense_categories.find_one({'id': category_id}, {'_id': 0})
     return updated
 
 
@@ -301,11 +310,12 @@ async def delete_expense_category(
     current_user: dict = Depends(get_current_user)
 ):
     """Delete an expense category (soft delete)"""
+    tdb = get_tdb()
     if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
         raise HTTPException(status_code=403, detail="Only admins can manage expense categories")
     
     # Soft delete - just mark as inactive
-    result = await db.expense_categories.update_one(
+    result = await tdb.expense_categories.update_one(
         {'id': category_id},
         {'$set': {'is_active': False, 'updated_at': datetime.now(timezone.utc).isoformat()}}
     )
@@ -314,7 +324,7 @@ async def delete_expense_category(
         raise HTTPException(status_code=404, detail="Category not found")
     
     # Also deactivate all expense types in this category
-    await db.expense_types.update_many(
+    await tdb.expense_types.update_many(
         {'category_id': category_id},
         {'$set': {'is_active': False, 'updated_at': datetime.now(timezone.utc).isoformat()}}
     )
@@ -329,13 +339,14 @@ async def get_expense_types(
     current_user: dict = Depends(get_current_user)
 ):
     """Get expense types, optionally filtered by category"""
+    tdb = get_tdb()
     query = {}
     if category_id:
         query['category_id'] = category_id
     if not include_inactive:
         query['is_active'] = True
     
-    expense_types = await db.expense_types.find(query, {'_id': 0}).to_list(500)
+    expense_types = await tdb.expense_types.find(query, {'_id': 0}).to_list(500)
     return expense_types
 
 
@@ -345,16 +356,17 @@ async def create_expense_type(
     current_user: dict = Depends(get_current_user)
 ):
     """Create a new expense type"""
+    tdb = get_tdb()
     if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
         raise HTTPException(status_code=403, detail="Only admins can manage expense types")
     
     # Verify category exists
-    category = await db.expense_categories.find_one({'id': expense_type.category_id}, {'_id': 0})
+    category = await tdb.expense_categories.find_one({'id': expense_type.category_id}, {'_id': 0})
     if not category:
         raise HTTPException(status_code=400, detail="Category not found")
     
     # Check for duplicate name within category
-    existing = await db.expense_types.find_one({
+    existing = await tdb.expense_types.find_one({
         'category_id': expense_type.category_id,
         'name': expense_type.name
     }, {'_id': 0})
@@ -374,7 +386,7 @@ async def create_expense_type(
         'updated_at': datetime.now(timezone.utc).isoformat()
     }
     
-    await db.expense_types.insert_one(type_data)
+    await tdb.expense_types.insert_one(type_data)
     # Return without MongoDB's _id field
     return {k: v for k, v in type_data.items() if k != '_id'}
 
@@ -386,10 +398,11 @@ async def update_expense_type(
     current_user: dict = Depends(get_current_user)
 ):
     """Update an expense type"""
+    tdb = get_tdb()
     if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
         raise HTTPException(status_code=403, detail="Only admins can manage expense types")
     
-    existing = await db.expense_types.find_one({'id': type_id}, {'_id': 0})
+    existing = await tdb.expense_types.find_one({'id': type_id}, {'_id': 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Expense type not found")
     
@@ -403,9 +416,9 @@ async def update_expense_type(
     
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    await db.expense_types.update_one({'id': type_id}, {'$set': update_data})
+    await tdb.expense_types.update_one({'id': type_id}, {'$set': update_data})
     
-    updated = await db.expense_types.find_one({'id': type_id}, {'_id': 0})
+    updated = await tdb.expense_types.find_one({'id': type_id}, {'_id': 0})
     return updated
 
 
@@ -415,10 +428,11 @@ async def delete_expense_type(
     current_user: dict = Depends(get_current_user)
 ):
     """Delete an expense type (soft delete)"""
+    tdb = get_tdb()
     if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
         raise HTTPException(status_code=403, detail="Only admins can manage expense types")
     
-    result = await db.expense_types.update_one(
+    result = await tdb.expense_types.update_one(
         {'id': type_id},
         {'$set': {'is_active': False, 'updated_at': datetime.now(timezone.utc).isoformat()}}
     )
@@ -435,11 +449,12 @@ async def get_expense_policy(
     current_user: dict = Depends(get_current_user)
 ):
     """Get complete expense policy, optionally filtered for a specific role"""
-    categories = await db.expense_categories.find({'is_active': True}, {'_id': 0}).sort('display_order', 1).to_list(100)
+    tdb = get_tdb()
+    categories = await tdb.expense_categories.find({'is_active': True}, {'_id': 0}).sort('display_order', 1).to_list(100)
     
     policy = []
     for category in categories:
-        expense_types = await db.expense_types.find({
+        expense_types = await tdb.expense_types.find({
             'category_id': category['id'],
             'is_active': True
         }, {'_id': 0}).to_list(100)
@@ -470,8 +485,9 @@ async def initialize_expense_master(current_user: dict = Depends(get_current_use
 
 async def initialize_default_data():
     """Initialize default categories and expense types"""
+    tdb = get_tdb()
     # Check if already initialized
-    existing = await db.expense_categories.find_one({}, {'_id': 0})
+    existing = await tdb.expense_categories.find_one({}, {'_id': 0})
     if existing:
         return
     
@@ -485,7 +501,7 @@ async def initialize_default_data():
             'created_at': datetime.now(timezone.utc).isoformat(),
             'updated_at': datetime.now(timezone.utc).isoformat()
         }
-        await db.expense_categories.insert_one(category)
+        await tdb.expense_categories.insert_one(category)
         
         # Create expense types for this category
         if cat_data['name'] in DEFAULT_EXPENSE_TYPES:
@@ -518,7 +534,7 @@ async def initialize_default_data():
                     'created_at': datetime.now(timezone.utc).isoformat(),
                     'updated_at': datetime.now(timezone.utc).isoformat()
                 }
-                await db.expense_types.insert_one(expense_type)
+                await tdb.expense_types.insert_one(expense_type)
 
 
 @router.get("/policy")
@@ -530,17 +546,18 @@ async def get_expense_policy_for_role(
     Get expense policy with role-specific limits for the requesting user.
     Returns categories with expense types and the user's specific limits.
     """
+    tdb = get_tdb()
     # Use provided role or current user's role
     user_role = role if role else current_user.get('role', 'Sales Representative')
     
     # Get all active categories
-    categories = await db.expense_categories.find(
+    categories = await tdb.expense_categories.find(
         {'is_active': True},
         {'_id': 0}
     ).sort('name', 1).to_list(100)
     
     # Get all active expense types
-    expense_types = await db.expense_types.find(
+    expense_types = await tdb.expense_types.find(
         {'is_active': True},
         {'_id': 0}
     ).to_list(500)

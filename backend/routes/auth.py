@@ -1,5 +1,6 @@
 """
 Authentication routes - Login, Register, OAuth, Sessions
+Multi-tenant aware - queries filter by tenant_id
 """
 from fastapi import APIRouter, HTTPException, Depends, Request, Response
 from datetime import datetime, timezone, timedelta
@@ -8,17 +9,24 @@ import httpx
 import os
 import logging
 
-from database import db
+from database import get_tenant_db, db
 from models.user import User, UserCreate, UserLogin
 from deps import hash_password, verify_password, get_current_user
+from core.tenant import get_current_tenant_id
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+def get_tdb():
+    """Get tenant-aware database wrapper"""
+    return get_tenant_db()
+
+
 @router.post("/register", response_model=User)
 async def register(user_input: UserCreate):
     """Register a new user"""
-    existing = await db.users.find_one({'email': user_input.email}, {'_id': 0})
+    tdb = get_tdb()
+    existing = await tdb.users.find_one({'email': user_input.email}, {'_id': 0})
     if existing:
         raise HTTPException(status_code=400, detail='Email already registered')
     
@@ -31,13 +39,15 @@ async def register(user_input: UserCreate):
     doc['password'] = hashed_pw
     doc['created_at'] = doc['created_at'].isoformat()
     
-    await db.users.insert_one(doc)
+    await tdb.users.insert_one(doc)
     return user_obj
+
 
 @router.post("/login")
 async def login(credentials: UserLogin, response: Response):
     """Login with email and password"""
-    user_doc = await db.users.find_one({'email': credentials.email}, {'_id': 0})
+    tdb = get_tdb()
+    user_doc = await tdb.users.find_one({'email': credentials.email}, {'_id': 0})
     if not user_doc or not verify_password(credentials.password, user_doc['password']):
         raise HTTPException(status_code=401, detail='Invalid credentials')
     
@@ -47,8 +57,10 @@ async def login(credentials: UserLogin, response: Response):
     session_token = str(uuid.uuid4())
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
     
+    # Sessions are global (not tenant-filtered)
     await db.user_sessions.insert_one({
         'user_id': user_doc['id'],
+        'tenant_id': get_current_tenant_id(),
         'session_token': session_token,
         'expires_at': expires_at.isoformat(),
         'created_at': datetime.now(timezone.utc).isoformat()
@@ -80,20 +92,24 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         current_user['created_at'] = datetime.fromisoformat(current_user['created_at'])
     return current_user
 
+
 @router.post("/logout")
 async def logout_user(request: Request, response: Response):
     """Logout user by deleting session"""
     session_token = request.cookies.get('session_token')
     
     if session_token:
+        # Sessions are global
         await db.user_sessions.delete_one({'session_token': session_token})
         response.delete_cookie('session_token', path='/')
     
     return {'message': 'Logged out successfully'}
 
+
 @router.post("/google-callback")
 async def google_oauth_callback(request: Request, response: Response):
     """Handle Google OAuth callback"""
+    tdb = get_tdb()
     body = await request.json()
     code = body.get('code')
     redirect_uri = body.get('redirect_uri')
@@ -133,7 +149,7 @@ async def google_oauth_callback(request: Request, response: Response):
         
         user_email = user_info['email'].strip().lower()
         
-        existing_user = await db.users.find_one(
+        existing_user = await tdb.users.find_one(
             {'email': {'$regex': f'^{user_email}$', '$options': 'i'}},
             {'_id': 0}
         )
@@ -146,7 +162,7 @@ async def google_oauth_callback(request: Request, response: Response):
         
         user_id = existing_user['id']
         
-        await db.users.update_one(
+        await tdb.users.update_one(
             {'email': user_email},
             {'$set': {
                 'name': user_info.get('name', existing_user.get('name')),
@@ -160,6 +176,7 @@ async def google_oauth_callback(request: Request, response: Response):
         
         await db.user_sessions.insert_one({
             'user_id': user_id,
+            'tenant_id': get_current_tenant_id(),
             'session_token': session_token,
             'expires_at': expires_at.isoformat(),
             'created_at': datetime.now(timezone.utc).isoformat()
@@ -175,7 +192,7 @@ async def google_oauth_callback(request: Request, response: Response):
             path='/'
         )
         
-        user_doc = await db.users.find_one({'id': user_id}, {'_id': 0, 'password': 0})
+        user_doc = await tdb.users.find_one({'id': user_id}, {'_id': 0, 'password': 0})
         
         return {'user': user_doc, 'message': 'Login successful'}
         
@@ -188,6 +205,7 @@ async def google_oauth_callback(request: Request, response: Response):
 @router.post("/google-session")
 async def exchange_google_session(request: Request, response: Response):
     """Exchange Emergent session_id for user data and create session"""
+    tdb = get_tdb()
     body = await request.json()
     session_id = body.get('session_id')
     
@@ -210,7 +228,7 @@ async def exchange_google_session(request: Request, response: Response):
     user_picture = user_data.get('picture', '')
     session_token = user_data['session_token']
     
-    existing_user = await db.users.find_one({'email': user_email}, {'_id': 0})
+    existing_user = await tdb.users.find_one({'email': user_email}, {'_id': 0})
     
     if not existing_user:
         raise HTTPException(
@@ -220,7 +238,7 @@ async def exchange_google_session(request: Request, response: Response):
     
     user_id = existing_user['id']
     
-    await db.users.update_one(
+    await tdb.users.update_one(
         {'email': user_email},
         {'$set': {
             'name': user_name,
@@ -232,6 +250,7 @@ async def exchange_google_session(request: Request, response: Response):
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
     await db.user_sessions.insert_one({
         'user_id': user_id,
+        'tenant_id': get_current_tenant_id(),
         'session_token': session_token,
         'expires_at': expires_at.isoformat(),
         'created_at': datetime.now(timezone.utc).isoformat()
@@ -247,7 +266,7 @@ async def exchange_google_session(request: Request, response: Response):
         path='/'
     )
     
-    user_doc = await db.users.find_one({'id': user_id}, {'_id': 0, 'password': 0})
+    user_doc = await tdb.users.find_one({'id': user_id}, {'_id': 0, 'password': 0})
     
     return {
         'user': user_doc,
