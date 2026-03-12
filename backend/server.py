@@ -363,6 +363,207 @@ async def debug_check_tenant_branding(tenant_id: str):
         "updated_at": tenant.get('updated_at')
     }
 
+@api_router.post("/debug/migrate-legacy-roles")
+async def debug_migrate_legacy_roles(request: Request):
+    """
+    PUBLIC DEBUG: Migrate legacy hardcoded roles to the new Role Management system.
+    Creates CEO, Director, VP Growth, Partner - Sales, Sales Executive, etc.
+    Body: {"tenant_id": "nyla-air-water", "secret": "migrate-roles-2026"}
+    """
+    body = await request.json()
+    tenant_id = body.get('tenant_id', 'nyla-air-water')
+    secret = body.get('secret')
+    
+    if secret != 'migrate-roles-2026':
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Full access permissions for executives
+    full_access = {
+        key: {"view": True, "create": True, "edit": True, "delete": True}
+        for key in [
+            "home", "dashboard", "leads", "pipeline", "accounts", "contacts", "sales_portal",
+            "report_sales_overview", "report_revenue", "report_sku_performance", 
+            "report_resource_performance", "report_account_performance",
+            "lead_discovery", "target_planning", "daily_status", "status_summary",
+            "cogs_calculator", "transport_calculator", "sku_management", "bottle_preview",
+            "company_documents", "files_documents", "leaves", "travel_requests", "budget_requests",
+            "company_profile", "team", "master_locations", "lead_statuses", 
+            "business_categories", "contact_categories", "expense_categories",
+            "tenant_settings", "maintenance", "inventory", "quality_control", "assets", "vendors"
+        ]
+    }
+    
+    # Manager level permissions
+    manager_access = {
+        key: {"view": True, "create": True, "edit": True, "delete": False}
+        for key in full_access.keys()
+    }
+    manager_access["tenant_settings"] = {"view": False, "create": False, "edit": False, "delete": False}
+    
+    # Sales level permissions
+    sales_access = {
+        "home": {"view": True, "create": False, "edit": False, "delete": False},
+        "dashboard": {"view": True, "create": False, "edit": False, "delete": False},
+        "leads": {"view": True, "create": True, "edit": True, "delete": False},
+        "pipeline": {"view": True, "create": False, "edit": True, "delete": False},
+        "accounts": {"view": True, "create": True, "edit": True, "delete": False},
+        "contacts": {"view": True, "create": True, "edit": True, "delete": False},
+        "sales_portal": {"view": True, "create": False, "edit": False, "delete": False},
+        "report_sales_overview": {"view": True, "create": False, "edit": False, "delete": False},
+        "report_revenue": {"view": True, "create": False, "edit": False, "delete": False},
+        "report_sku_performance": {"view": True, "create": False, "edit": False, "delete": False},
+        "report_resource_performance": {"view": True, "create": False, "edit": False, "delete": False},
+        "report_account_performance": {"view": True, "create": False, "edit": False, "delete": False},
+        "lead_discovery": {"view": True, "create": True, "edit": False, "delete": False},
+        "target_planning": {"view": True, "create": False, "edit": False, "delete": False},
+        "daily_status": {"view": True, "create": True, "edit": True, "delete": False},
+        "status_summary": {"view": True, "create": False, "edit": False, "delete": False},
+        "cogs_calculator": {"view": True, "create": False, "edit": False, "delete": False},
+        "transport_calculator": {"view": True, "create": False, "edit": False, "delete": False},
+        "sku_management": {"view": False, "create": False, "edit": False, "delete": False},
+        "bottle_preview": {"view": True, "create": False, "edit": False, "delete": False},
+        "company_documents": {"view": True, "create": False, "edit": False, "delete": False},
+        "files_documents": {"view": True, "create": True, "edit": True, "delete": False},
+        "leaves": {"view": True, "create": True, "edit": True, "delete": False},
+        "travel_requests": {"view": True, "create": True, "edit": True, "delete": False},
+        "budget_requests": {"view": True, "create": True, "edit": True, "delete": False},
+        "company_profile": {"view": True, "create": False, "edit": False, "delete": False},
+        "team": {"view": False, "create": False, "edit": False, "delete": False},
+        "master_locations": {"view": False, "create": False, "edit": False, "delete": False},
+        "lead_statuses": {"view": False, "create": False, "edit": False, "delete": False},
+        "business_categories": {"view": False, "create": False, "edit": False, "delete": False},
+        "contact_categories": {"view": False, "create": False, "edit": False, "delete": False},
+        "expense_categories": {"view": False, "create": False, "edit": False, "delete": False},
+        "tenant_settings": {"view": False, "create": False, "edit": False, "delete": False},
+        "maintenance": {"view": False, "create": False, "edit": False, "delete": False},
+        "inventory": {"view": False, "create": False, "edit": False, "delete": False},
+        "quality_control": {"view": False, "create": False, "edit": False, "delete": False},
+        "assets": {"view": False, "create": False, "edit": False, "delete": False},
+        "vendors": {"view": False, "create": False, "edit": False, "delete": False},
+    }
+    
+    # Legacy roles to create
+    legacy_roles = [
+        {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "name": "CEO",
+            "description": "Chief Executive Officer - Full system access",
+            "permissions": full_access,
+            "is_system_role": True,
+            "is_default": False,
+            "created_at": now,
+            "updated_at": now
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "name": "Director",
+            "description": "Director - Full system access",
+            "permissions": full_access,
+            "is_system_role": True,
+            "is_default": False,
+            "created_at": now,
+            "updated_at": now
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "name": "VP Growth",
+            "description": "Vice President Growth - Full system access",
+            "permissions": full_access,
+            "is_system_role": True,
+            "is_default": False,
+            "created_at": now,
+            "updated_at": now
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "name": "National Sales Head",
+            "description": "National Sales Head - Full sales access",
+            "permissions": full_access,
+            "is_system_role": True,
+            "is_default": False,
+            "created_at": now,
+            "updated_at": now
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "name": "Regional Sales Manager",
+            "description": "Regional Sales Manager - Manager level access",
+            "permissions": manager_access,
+            "is_system_role": True,
+            "is_default": False,
+            "created_at": now,
+            "updated_at": now
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "name": "Partner - Sales",
+            "description": "Sales Partner - Standard sales access",
+            "permissions": sales_access,
+            "is_system_role": True,
+            "is_default": False,
+            "created_at": now,
+            "updated_at": now
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "name": "Sales Executive",
+            "description": "Sales Executive - Standard sales access",
+            "permissions": sales_access,
+            "is_system_role": True,
+            "is_default": True,
+            "created_at": now,
+            "updated_at": now
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "name": "Sales Representative",
+            "description": "Sales Representative - Basic sales access",
+            "permissions": sales_access,
+            "is_system_role": True,
+            "is_default": False,
+            "created_at": now,
+            "updated_at": now
+        }
+    ]
+    
+    results = {
+        "created": [],
+        "skipped": [],
+        "errors": []
+    }
+    
+    for role in legacy_roles:
+        try:
+            # Check if role already exists
+            existing = await db.roles.find_one({
+                "tenant_id": tenant_id,
+                "name": role["name"]
+            })
+            
+            if existing:
+                results["skipped"].append(role["name"])
+            else:
+                await db.roles.insert_one(role)
+                results["created"].append(role["name"])
+        except Exception as e:
+            results["errors"].append({"role": role["name"], "error": str(e)})
+    
+    return {
+        "success": True,
+        "tenant_id": tenant_id,
+        "results": results
+    }
+
 @api_router.post("/debug/fix-user-tenant")
 async def debug_fix_user_tenant(request: Request):
     """
