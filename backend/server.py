@@ -340,6 +340,29 @@ async def debug_check_targets():
         }
     }
 
+@api_router.get("/debug/check-tenant-branding/{tenant_id}")
+async def debug_check_tenant_branding(tenant_id: str):
+    """
+    PUBLIC DEBUG: Check tenant branding configuration.
+    """
+    tenant = await db.tenants.find_one({'tenant_id': tenant_id}, {'_id': 0})
+    
+    if not tenant:
+        return {
+            "found": False,
+            "message": f"No tenant found with id: {tenant_id}",
+            "all_tenants": await db.tenants.distinct('tenant_id')
+        }
+    
+    return {
+        "found": True,
+        "tenant_id": tenant.get('tenant_id'),
+        "name": tenant.get('name'),
+        "branding": tenant.get('branding'),
+        "modules": tenant.get('modules'),
+        "updated_at": tenant.get('updated_at')
+    }
+
 @api_router.post("/debug/fix-user-tenant")
 async def debug_fix_user_tenant(request: Request):
     """
