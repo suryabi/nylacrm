@@ -127,6 +127,7 @@ async def logout_user(request: Request, response: Response):
 async def google_oauth_callback(request: Request, response: Response):
     """Handle Google OAuth callback"""
     tdb = get_tdb()
+    current_tenant = get_current_tenant_id()
     body = await request.json()
     code = body.get('code')
     redirect_uri = body.get('redirect_uri')
@@ -166,10 +167,29 @@ async def google_oauth_callback(request: Request, response: Response):
         
         user_email = user_info['email'].strip().lower()
         
+        # First try to find user in the current tenant
         existing_user = await tdb.users.find_one(
             {'email': {'$regex': f'^{user_email}$', '$options': 'i'}},
             {'_id': 0}
         )
+        
+        # If not found in tenant, search globally (for users without tenant_id set)
+        # This handles migration cases where users exist but don't have tenant_id
+        if not existing_user:
+            logger.info(f"User {user_email} not found in tenant {current_tenant}, searching globally...")
+            existing_user = await db.users.find_one(
+                {'email': {'$regex': f'^{user_email}$', '$options': 'i'}},
+                {'_id': 0}
+            )
+            
+            # If found globally, update the user with the current tenant_id
+            if existing_user:
+                logger.info(f"Found user {user_email} globally, assigning to tenant {current_tenant}")
+                await db.users.update_one(
+                    {'email': {'$regex': f'^{user_email}$', '$options': 'i'}},
+                    {'$set': {'tenant_id': current_tenant}}
+                )
+                existing_user['tenant_id'] = current_tenant
         
         if not existing_user:
             raise HTTPException(
@@ -179,12 +199,14 @@ async def google_oauth_callback(request: Request, response: Response):
         
         user_id = existing_user['id']
         
-        await tdb.users.update_one(
-            {'email': user_email},
+        # Update user info from Google
+        await db.users.update_one(
+            {'email': {'$regex': f'^{user_email}$', '$options': 'i'}},
             {'$set': {
                 'name': user_info.get('name', existing_user.get('name')),
                 'avatar': user_info.get('picture', ''),
-                'updated_at': datetime.now(timezone.utc).isoformat()
+                'updated_at': datetime.now(timezone.utc).isoformat(),
+                'tenant_id': current_tenant  # Ensure tenant_id is set
             }}
         )
         
