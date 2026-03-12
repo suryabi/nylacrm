@@ -230,6 +230,40 @@ async def debug_check_user(email: str):
         "has_tenant_id": bool(user.get('tenant_id'))
     }
 
+@api_router.get("/debug/check-cogs/{city}")
+async def debug_check_cogs(city: str):
+    """
+    PUBLIC DEBUG: Check COGS data for a city - both with and without tenant filter.
+    """
+    # Check with tenant filter (what the app sees)
+    tenant_id = get_current_tenant_id()
+    with_tenant = await db.cogs_data.find(
+        {'city': city, 'tenant_id': tenant_id},
+        {'_id': 0, 'sku_name': 1, 'primary_packaging': 1, 'tenant_id': 1}
+    ).to_list(10)
+    
+    # Check without tenant filter (all data)
+    without_tenant = await db.cogs_data.find(
+        {'city': city},
+        {'_id': 0, 'sku_name': 1, 'primary_packaging': 1, 'tenant_id': 1}
+    ).to_list(10)
+    
+    # Check all cities in cogs_data
+    all_cities = await db.cogs_data.distinct('city')
+    
+    # Check all tenant_ids in cogs_data
+    all_tenants = await db.cogs_data.distinct('tenant_id')
+    
+    return {
+        "city_requested": city,
+        "current_tenant": tenant_id,
+        "with_tenant_filter": with_tenant,
+        "without_tenant_filter": without_tenant,
+        "all_cities_in_db": all_cities,
+        "all_tenant_ids_in_cogs": all_tenants,
+        "total_cogs_records": await db.cogs_data.count_documents({})
+    }
+
 @api_router.post("/debug/fix-user-tenant")
 async def debug_fix_user_tenant(request: Request):
     """
