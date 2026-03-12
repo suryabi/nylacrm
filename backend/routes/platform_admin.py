@@ -354,3 +354,62 @@ async def delete_tenant(
         "message": f"Tenant {tenant_id} and all data deleted",
         "deleted_counts": deleted_counts
     }
+
+
+
+@router.post("/migrate-users-tenant")
+async def migrate_users_to_tenant(
+    request: Request,
+    default_tenant: str = "nyla-air-water"
+):
+    """
+    Migration endpoint: Add tenant_id to all users that don't have one.
+    This is a PUBLIC endpoint for one-time migration - should be removed after use.
+    """
+    body = await request.json()
+    secret = body.get('secret')
+    
+    # Simple secret to prevent unauthorized access
+    if secret != 'migrate-nyla-2026':
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    
+    # Find all users without tenant_id
+    users_without_tenant = await db.users.count_documents({'tenant_id': {'$exists': False}})
+    
+    if users_without_tenant == 0:
+        return {"message": "All users already have tenant_id", "migrated": 0}
+    
+    # Update all users without tenant_id
+    result = await db.users.update_many(
+        {'tenant_id': {'$exists': False}},
+        {'$set': {'tenant_id': default_tenant}}
+    )
+    
+    logger.info(f"Migrated {result.modified_count} users to tenant {default_tenant}")
+    
+    return {
+        "message": f"Migration complete",
+        "migrated": result.modified_count,
+        "tenant_id": default_tenant
+    }
+
+
+@router.get("/check-user-tenant/{email}")
+async def check_user_tenant(email: str):
+    """
+    Debug endpoint: Check if a user exists and their tenant_id.
+    PUBLIC endpoint for debugging - remove after use.
+    """
+    user = await db.users.find_one(
+        {'email': {'$regex': f'^{email}$', '$options': 'i'}},
+        {'_id': 0, 'email': 1, 'tenant_id': 1, 'name': 1, 'role': 1}
+    )
+    
+    if not user:
+        return {"found": False, "message": f"No user found with email {email}"}
+    
+    return {
+        "found": True,
+        "user": user,
+        "has_tenant_id": 'tenant_id' in user and user['tenant_id'] is not None
+    }
