@@ -6,6 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '../context/NavigationContext';
 import { useTenantConfig } from '../context/TenantConfigContext';
 import { Button } from '../components/ui/button';
+import AIChatBubble from '../components/AIChatBubble';
 import { 
   LogOut, Menu, ChevronDown, ChevronRight, 
   LayoutDashboard, Users, Building2, Store,
@@ -457,6 +458,9 @@ export default function DashboardLayout({ children }) {
           </div>
         </main>
       </div>
+      
+      {/* AI Chat Bubble - Only for CEO role */}
+      <AIChatBubble />
     </div>
   );
 }
