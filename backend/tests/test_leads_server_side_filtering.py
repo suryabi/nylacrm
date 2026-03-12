@@ -6,7 +6,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://crm-multi-tenant-3.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://tenant-admin-stage.preview.emergentagent.com')
 
 
 class TestLeadsServerSideFiltering:

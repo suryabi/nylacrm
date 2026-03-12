@@ -1,5 +1,6 @@
 """
 Users routes - User management, team hierarchy
+Multi-tenant aware - all queries automatically filter by tenant_id
 """
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
@@ -7,10 +8,14 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, Field, EmailStr
 import uuid
 
-from database import db
+from database import get_tenant_db
 from deps import get_current_user, hash_password
 
 router = APIRouter()
+
+def get_tdb():
+    """Get tenant-aware database wrapper"""
+    return get_tenant_db()
 
 # ============= MODELS =============
 
@@ -88,6 +93,7 @@ async def get_users(
     current_user: dict = Depends(get_current_user)
 ):
     """Get all users with optional filters"""
+    tdb = get_tdb()
     query = {}
     
     if role:
@@ -99,7 +105,7 @@ async def get_users(
     if department:
         query['department'] = department
     
-    users = await db.users.find(query, {'_id': 0, 'password': 0}).to_list(1000)
+    users = await tdb.users.find(query, {'_id': 0, 'password': 0}).to_list(1000)
     
     # Add default department if missing
     for user in users:
@@ -112,13 +118,14 @@ async def get_users(
 @router.post("/create", response_model=User)
 async def create_user(user: UserCreate, current_user: dict = Depends(get_current_user)):
     """Create a new user (admin only)"""
+    tdb = get_tdb()
     # Check permissions
     allowed_roles = ['ceo', 'director', 'admin', 'CEO', 'Director', 'Admin']
     if current_user.get('role') not in allowed_roles:
         raise HTTPException(status_code=403, detail='Not authorized to create users')
     
     # Check if email exists
-    existing = await db.users.find_one({'email': user.email}, {'_id': 0})
+    existing = await tdb.users.find_one({'email': user.email}, {'_id': 0})
     if existing:
         raise HTTPException(status_code=400, detail='Email already registered')
     
@@ -131,7 +138,7 @@ async def create_user(user: UserCreate, current_user: dict = Depends(get_current
     user_data['is_active'] = True
     user_data['created_at'] = datetime.now(timezone.utc).isoformat()
     
-    await db.users.insert_one(user_data)
+    await tdb.users.insert_one(user_data)
     
     user_data.pop('password')
     user_data['created_at'] = datetime.fromisoformat(user_data['created_at'])
@@ -142,7 +149,8 @@ async def create_user(user: UserCreate, current_user: dict = Depends(get_current
 @router.get("/org-chart")
 async def get_org_chart(current_user: dict = Depends(get_current_user)):
     """Get organization hierarchy"""
-    users = await db.users.find({'is_active': True}, {'_id': 0, 'password': 0}).to_list(1000)
+    tdb = get_tdb()
+    users = await tdb.users.find({'is_active': True}, {'_id': 0, 'password': 0}).to_list(1000)
     
     # Build hierarchy
     user_map = {u['id']: u for u in users}
@@ -166,6 +174,7 @@ async def get_org_chart(current_user: dict = Depends(get_current_user)):
 @router.get("/subordinates/all")
 async def get_all_subordinates(current_user: dict = Depends(get_current_user)):
     """Get all subordinates at any level (direct and indirect reports)"""
+    tdb = get_tdb()
     all_subordinates = []
     visited = set()
     
@@ -176,7 +185,7 @@ async def get_all_subordinates(current_user: dict = Depends(get_current_user)):
         visited.add(manager_id)
         
         # Find direct reports
-        direct_reports = await db.users.find(
+        direct_reports = await tdb.users.find(
             {'reports_to': manager_id, 'is_active': True},
             {'_id': 0, 'password': 0}
         ).to_list(100)
@@ -199,7 +208,8 @@ async def get_all_subordinates(current_user: dict = Depends(get_current_user)):
 @router.get("/{user_id}")
 async def get_user(user_id: str, current_user: dict = Depends(get_current_user)):
     """Get a single user"""
-    user = await db.users.find_one({'id': user_id}, {'_id': 0, 'password': 0})
+    tdb = get_tdb()
+    user = await tdb.users.find_one({'id': user_id}, {'_id': 0, 'password': 0})
     if not user:
         raise HTTPException(status_code=404, detail='User not found')
     return user
@@ -208,7 +218,8 @@ async def get_user(user_id: str, current_user: dict = Depends(get_current_user))
 @router.put("/{user_id}")
 async def update_user(user_id: str, update: UserUpdate, current_user: dict = Depends(get_current_user)):
     """Update a user"""
-    existing = await db.users.find_one({'id': user_id}, {'_id': 0})
+    tdb = get_tdb()
+    existing = await tdb.users.find_one({'id': user_id}, {'_id': 0})
     if not existing:
         raise HTTPException(status_code=404, detail='User not found')
     
@@ -221,33 +232,35 @@ async def update_user(user_id: str, update: UserUpdate, current_user: dict = Dep
     update_data = {k: v for k, v in update.model_dump().items() if v is not None}
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    await db.users.update_one({'id': user_id}, {'$set': update_data})
+    await tdb.users.update_one({'id': user_id}, {'$set': update_data})
     
-    return await db.users.find_one({'id': user_id}, {'_id': 0, 'password': 0})
+    return await tdb.users.find_one({'id': user_id}, {'_id': 0, 'password': 0})
 
 
 @router.put("/{user_id}/hr-data")
 async def update_user_hr_data(user_id: str, update: HRDataUpdate, current_user: dict = Depends(get_current_user)):
     """Update HR data for a user (CEO/Director only)"""
+    tdb = get_tdb()
     allowed_roles = ['ceo', 'director', 'CEO', 'Director']
     if current_user.get('role') not in allowed_roles:
         raise HTTPException(status_code=403, detail='Not authorized to update HR data')
     
-    existing = await db.users.find_one({'id': user_id}, {'_id': 0})
+    existing = await tdb.users.find_one({'id': user_id}, {'_id': 0})
     if not existing:
         raise HTTPException(status_code=404, detail='User not found')
     
     update_data = {k: v for k, v in update.model_dump().items() if v is not None}
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    await db.users.update_one({'id': user_id}, {'$set': update_data})
+    await tdb.users.update_one({'id': user_id}, {'$set': update_data})
     
-    return await db.users.find_one({'id': user_id}, {'_id': 0, 'password': 0})
+    return await tdb.users.find_one({'id': user_id}, {'_id': 0, 'password': 0})
 
 
 @router.delete("/{user_id}")
 async def delete_user(user_id: str, current_user: dict = Depends(get_current_user)):
     """Delete (deactivate) a user"""
+    tdb = get_tdb()
     allowed_roles = ['ceo', 'director', 'admin', 'CEO', 'Director', 'Admin']
     if current_user.get('role') not in allowed_roles:
         raise HTTPException(status_code=403, detail='Not authorized to delete users')
@@ -255,7 +268,7 @@ async def delete_user(user_id: str, current_user: dict = Depends(get_current_use
     if user_id == current_user['id']:
         raise HTTPException(status_code=400, detail='Cannot delete yourself')
     
-    result = await db.users.update_one(
+    result = await tdb.users.update_one(
         {'id': user_id},
         {'$set': {'is_active': False, 'updated_at': datetime.now(timezone.utc).isoformat()}}
     )
@@ -269,12 +282,13 @@ async def delete_user(user_id: str, current_user: dict = Depends(get_current_use
 @router.get("/{user_id}/reporting-manager")
 async def get_reporting_manager(user_id: str, current_user: dict = Depends(get_current_user)):
     """Get user's reporting manager"""
-    user = await db.users.find_one({'id': user_id}, {'_id': 0, 'reports_to': 1})
+    tdb = get_tdb()
+    user = await tdb.users.find_one({'id': user_id}, {'_id': 0, 'reports_to': 1})
     if not user:
         raise HTTPException(status_code=404, detail='User not found')
     
     if not user.get('reports_to'):
         return {'manager': None}
     
-    manager = await db.users.find_one({'id': user['reports_to']}, {'_id': 0, 'password': 0})
+    manager = await tdb.users.find_one({'id': user['reports_to']}, {'_id': 0, 'password': 0})
     return {'manager': manager}

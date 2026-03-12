@@ -138,10 +138,43 @@ class TenantDB:
 
 
 class TenantCollection:
-    """Wrapper for a MongoDB collection with tenant filtering"""
+    """
+    Wrapper for a MongoDB collection with automatic tenant filtering.
     
-    # Collections that should NOT be filtered by tenant
-    GLOBAL_COLLECTIONS = {'tenants', 'user_sessions', 'system_config'}
+    IMPORTANT: This is a synchronous wrapper that returns cursor objects.
+    You still need to call .to_list(), .sort(), etc. on the result of find().
+    
+    Usage:
+        tdb = TenantDB(db)
+        cursor = tdb.leads.find({'status': 'active'})  # Returns cursor synchronously
+        leads = await cursor.sort('created_at', -1).to_list(100)  # Await here
+        
+        # find_one, count_documents, insert_one, etc. are already awaitable
+        lead = await tdb.leads.find_one({'id': lead_id})
+    """
+    
+    # Collections that should NOT be filtered by tenant (global data)
+    GLOBAL_COLLECTIONS = {
+        'tenants',           # Tenant definitions
+        'user_sessions',     # Auth sessions (include tenant_id but don't filter)
+        'system_config',     # System-wide configuration
+        'master_skus',       # Product catalog (shared)
+        'master_territories',# Location hierarchy (shared)
+        'master_states',     # State master data (shared)
+        'master_cities',     # City master data (shared)
+        'lead_statuses',     # Status definitions (shared)
+        'business_categories', # Category definitions (shared)
+        'document_categories',  # Document category definitions (shared)
+        'document_subcategories', # Document subcategory definitions (shared)
+        'user_activity',     # Activity tracking (cross-tenant analytics)
+        'target_plans',      # Target plans (may need review)
+        'sku_targets',       # SKU targets (may need review)
+        'sales_targets',     # Sales targets (may need review)
+        'city_targets',      # City targets (may need review)
+        'resource_invoice_summary', # Invoice summaries
+        'payments',          # Payments
+        'bottle_previews',   # Bottle previews
+    }
     
     def __init__(self, collection, tenant_id: str = None):
         self._collection = collection
@@ -150,52 +183,91 @@ class TenantCollection:
     
     @property
     def _tid(self):
+        """Get tenant ID from context or use provided value"""
         return self._tenant_id or get_current_tenant_id()
     
+    @property
+    def name(self):
+        """Return collection name"""
+        return self._name
+    
     def _add_tenant(self, query: dict) -> dict:
+        """Add tenant_id to query if not a global collection"""
         if self._name in self.GLOBAL_COLLECTIONS:
             return query
         return {**query, 'tenant_id': self._tid} if query else {'tenant_id': self._tid}
     
     def _add_tenant_to_doc(self, doc: dict) -> dict:
+        """Add tenant_id to document for insert if not a global collection"""
         if self._name in self.GLOBAL_COLLECTIONS:
             return doc
         return {**doc, 'tenant_id': self._tid}
     
-    async def find(self, query: dict = None, projection: dict = None):
+    def find(self, query: dict = None, projection: dict = None):
+        """
+        Find documents with tenant filtering. Returns a cursor (synchronous).
+        Call .to_list(), .sort(), etc. on the result.
+        """
         return self._collection.find(self._add_tenant(query or {}), projection)
     
-    async def find_one(self, query: dict = None, projection: dict = None):
+    async def find_one(self, query: dict = None, projection: dict = None, sort: list = None):
+        """Find one document with tenant filtering. Optionally sort before picking the first one."""
+        if sort:
+            # If sort is provided, use find().sort().limit(1) instead
+            cursor = self._collection.find(self._add_tenant(query or {}), projection)
+            cursor = cursor.sort(sort).limit(1)
+            results = await cursor.to_list(1)
+            return results[0] if results else None
         return await self._collection.find_one(self._add_tenant(query or {}), projection)
     
     async def count_documents(self, query: dict = None):
+        """Count documents with tenant filtering"""
         return await self._collection.count_documents(self._add_tenant(query or {}))
     
     async def insert_one(self, doc: dict):
+        """Insert document with tenant_id automatically added"""
         return await self._collection.insert_one(self._add_tenant_to_doc(doc))
     
     async def insert_many(self, docs: list):
+        """Insert multiple documents with tenant_id automatically added"""
         tenant_docs = [self._add_tenant_to_doc(d) for d in docs]
         return await self._collection.insert_many(tenant_docs)
     
     async def update_one(self, query: dict, update: dict, **kwargs):
+        """Update one document with tenant filtering"""
         return await self._collection.update_one(self._add_tenant(query), update, **kwargs)
     
     async def update_many(self, query: dict, update: dict, **kwargs):
+        """Update multiple documents with tenant filtering"""
         return await self._collection.update_many(self._add_tenant(query), update, **kwargs)
     
     async def delete_one(self, query: dict):
+        """Delete one document with tenant filtering"""
         return await self._collection.delete_one(self._add_tenant(query))
     
     async def delete_many(self, query: dict):
+        """Delete multiple documents with tenant filtering"""
         return await self._collection.delete_many(self._add_tenant(query))
     
     async def distinct(self, field: str, query: dict = None):
+        """Get distinct values with tenant filtering"""
         return await self._collection.distinct(field, self._add_tenant(query or {}))
     
-    async def aggregate(self, pipeline: list):
-        # Add tenant match as first stage if not global collection
+    def aggregate(self, pipeline: list):
+        """
+        Run aggregation pipeline with tenant filtering.
+        Adds $match for tenant_id as the first stage if not a global collection.
+        Returns a cursor (synchronous) - call .to_list() on the result.
+        """
         if self._name not in self.GLOBAL_COLLECTIONS:
             tenant_match = {'$match': {'tenant_id': self._tid}}
             pipeline = [tenant_match] + list(pipeline)
         return self._collection.aggregate(pipeline)
+    
+    async def find_one_and_update(self, query: dict, update: dict, **kwargs):
+        """Find and update one document with tenant filtering"""
+        return await self._collection.find_one_and_update(self._add_tenant(query), update, **kwargs)
+    
+    async def find_one_and_delete(self, query: dict, **kwargs):
+        """Find and delete one document with tenant filtering"""
+        return await self._collection.find_one_and_delete(self._add_tenant(query), **kwargs)

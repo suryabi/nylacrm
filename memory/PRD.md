@@ -8,11 +8,14 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 - COGS calculator and proposal generator
 - Lead discovery and Google Workspace authentication
 - **Account management from converted leads**
+- **Multi-tenant support for multiple customer deployments**
 
 ## User Personas
 - **National Sales Head**: Full access to all features, territories, and reports
 - **Regional Sales Manager / Partner - Sales**: Regional access and team management
 - **Sales Representative**: Individual lead and activity management
+- **Super Admin**: Platform-wide tenant management
+- **Tenant Admin**: Tenant-specific configuration and branding
 
 ## Core Requirements
 1. Lead Management (CRUD operations, status tracking, activity logging)
@@ -23,10 +26,143 @@ Build a comprehensive, mobile-ready Sales CRM application with:
 6. COGS Calculator
 7. Proposal Generator with customizable templates
 8. **Account Management (convert leads to accounts, SKU pricing, invoices)**
+9. **Multi-Tenancy (data isolation, per-tenant branding, module configuration)**
 
 ---
 
 ## What's Been Implemented
+
+### Mar 11, 2026 (Session 26) - CURRENT
+
+- **BUG FIX COMPLETE**: Role Management ObjectId Serialization (P0)
+  - **Issue**: `POST /api/roles` returned 500 Internal Server Error due to MongoDB `ObjectId` not being JSON serializable
+  - **Root Cause**: After `insert_one()`, MongoDB adds `_id` (ObjectId) to the document, which was returned directly
+  - **Fix Location**: `/app/backend/routes/roles.py` line 115-118
+  - **Fix Code**: Added `role_doc.pop('_id', None)` after insert_one to remove MongoDB's ObjectId before returning
+  - **Testing Results**: 100% (12/12 backend tests, all frontend tests passed)
+  - **All CRUD Operations Working**:
+    - `GET /api/roles` - List roles for tenant
+    - `POST /api/roles` - Create custom role (FIXED)
+    - `PUT /api/roles/{role_id}` - Update role permissions
+    - `DELETE /api/roles/{role_id}` - Delete custom roles (system roles protected)
+    - `POST /api/roles/{role_id}/set-default` - Set default role for new users
+  - **Frontend Role Management UI**: Fully functional at `/tenant-settings` > Roles tab
+    - Create/Edit/Delete custom roles
+    - Expandable permission matrix by category (Core, Reports, Operations, etc.)
+    - View/Create/Edit/Delete permission checkboxes
+    - System role protection (lock icon, cannot delete)
+    - Default role badge
+  - Status: **COMPLETE**
+
+### Mar 11, 2026 (Session 25)
+
+- **FEATURE COMPLETE**: Module Enable/Disable Enforcement (Phase 2.5)
+  - TenantConfigContext with `isModuleEnabled()` and route protection
+  - Sidebar conditionally renders navigation based on module config
+  - ProtectedRoute blocks access to disabled modules with "Module Not Available" message
+  - Testing Results: 100% (16/16 tests passed)
+  - Status: **COMPLETE**
+
+- **FEATURE COMPLETE**: Apply Tenant Branding (Phase 2.6)
+  - Dynamic CSS variables (--primary, --accent, --ring) from tenant branding
+  - Sidebar displays custom app name, tagline, logo
+  - Immediate theme updates after saving branding
+  - Testing Results: 100% (21/21 tests passed)
+  - Status: **COMPLETE**
+
+- **FEATURE COMPLETE**: SaaS Multi-Tenant Registration & Google Workspace SSO (Phase 3.0)
+  - Self-service tenant registration (`/register`)
+  - Real-time subdomain availability check
+  - Google Workspace SSO per tenant (enable/disable, domain restriction)
+  - Login page shows tenant branding and appropriate auth options
+  - Backend auto-provisions users from Google Workspace
+  - Testing Results: Backend 95%, Frontend 100%
+  - Status: **COMPLETE**
+
+- **FEATURE COMPLETE**: Platform Admin Dashboard (Phase 3.1)
+  - **Access Control** (`PLATFORM_ADMIN_EMAILS`):
+    - `surya.yadavalli@gmail.com`, `surya.yadavalli@nylaairwater.earth`
+    - `require_platform_admin` dependency for route protection
+  - **Backend APIs** (`/app/backend/routes/platform_admin.py`):
+    - `GET /api/platform-admin/stats` - Platform-wide statistics
+    - `GET /api/platform-admin/tenants` - List all tenants with search/filter
+    - `GET /api/platform-admin/tenants/{id}` - Full tenant details with stats
+    - `PUT /api/platform-admin/tenants/{id}` - Update any tenant config
+    - `POST /api/platform-admin/tenants/{id}/toggle-status` - Enable/disable
+    - `POST /api/platform-admin/tenants/{id}/extend-trial` - Extend trial
+    - `POST /api/platform-admin/tenants/{id}/upgrade` - Change subscription
+    - `DELETE /api/platform-admin/tenants/{id}` - Delete tenant and all data
+  - **Frontend UI** (`/app/frontend/src/pages/PlatformAdmin.js`):
+    - Stats cards: Total Tenants, Active, On Trial, Total Users
+    - Workspace list with search and status filter
+    - Tenant details panel with tabs: Overview, Branding, Modules, SSO, Danger Zone
+    - Quick actions: Disable/Enable, +14 Days trial extension
+  - **Sidebar Integration**:
+    - "Platform Admin" link (with Crown icon) only visible to platform admins
+    - Uses `isPlatformAdminOnly` flag in navigation items
+  - **Testing Results**: 100% (15/15 backend, all frontend)
+  - Status: **COMPLETE**
+
+### Mar 11, 2026 (Session 24)
+
+- **CRITICAL COMPLETE**: Multi-Tenant Query Refactoring (Phase 1.5)
+  - **TenantDB Wrapper** (`/app/backend/core/tenant.py`):
+    - TenantCollection class automatically adds tenant_id to ALL queries
+    - Supports: find, find_one, count_documents, insert_one, insert_many, update_one, update_many, delete_one, delete_many, distinct, aggregate
+    - GLOBAL_COLLECTIONS excluded from filtering: tenants, user_sessions, master_skus, master_territories, master_states, master_cities, lead_statuses, business_categories, document_categories, document_subcategories
+  - **Database Helper** (`/app/backend/database.py`):
+    - `get_tenant_db()` function returns tenant-aware TenantDB instance
+    - Raw `db` still available for global collections
+  - **All Route Files Updated**:
+    - `/app/backend/routes/leads.py` - get_tdb() for all queries
+    - `/app/backend/routes/accounts.py` - get_tdb() for all queries
+    - `/app/backend/routes/users.py` - get_tdb() for all queries
+    - `/app/backend/routes/auth.py` - get_tdb() for user lookup
+    - `/app/backend/routes/tasks.py` - get_tdb() for all queries
+    - `/app/backend/routes/meetings.py` - get_tdb() for all queries
+    - `/app/backend/routes/contacts.py` - get_tdb() for all queries
+    - `/app/backend/routes/expense_master.py` - get_tdb() for all queries
+    - `/app/backend/routes/requests.py` - get_tdb() for all queries
+  - **Server.py Updated** (`/app/backend/server.py`):
+    - All 466 database calls audited
+    - Tenant-specific collections use get_tdb(): leads, accounts, users, activities, invoices, tasks, meetings, follow_ups, comments, lead_proposals, lead_activities, daily_status, documents, account_contracts, travel_requests, leave_requests, budget_requests, expense_requests, resource_targets, target_allocations, contacts, contact_categories, expense_categories, expense_types, cogs_data
+    - Global collections use raw db: master_skus, master_cities, master_territories, master_states, lead_statuses, business_categories, document_categories, document_subcategories, user_sessions, user_activity
+  - **Testing Results**: 100% (16/16 tests passed)
+    - Login works for both tenants
+    - Cross-tenant login blocked (401)
+    - Data isolation verified:
+      - nyla-air-water: 68 leads, 23 users, 6 accounts, 29 tasks
+      - acme-corp: 0 leads, 1 user, 0 accounts, 0 tasks
+    - Cross-tenant resource access returns 404
+  - Status: **COMPLETE**
+
+- **FEATURE COMPLETE**: Tenant Admin Dashboard (Phase 2)
+  - **New Page** (`/app/frontend/src/pages/TenantSettings.js`):
+    - Three-tab interface: Branding, Modules, Settings
+    - **Branding Tab**:
+      - Logo upload (base64, max 2MB)
+      - Application name and tagline
+      - Color pickers for primary (#000000), accent (#ffffff), secondary colors
+      - Live preview of branding
+    - **Modules Tab**:
+      - Toggle switches for all modules (Core, Sales Operations, Requests, Production)
+      - Module enable/disable requires Super Admin for some modules
+    - **Settings Tab**:
+      - Timezone selection
+      - Currency format (INR, USD, EUR, etc.)
+      - Date format preferences
+      - Fiscal year start configuration
+  - **Backend Updates**:
+    - `PUT /api/tenants/current/branding` - Update branding
+    - `PUT /api/tenants/current/settings` - Update settings
+    - `PUT /api/tenants/current/config` - Update full config (modules require Super Admin)
+  - **Frontend Updates**:
+    - Added axios interceptor for automatic X-Tenant-ID header
+    - New route `/tenant-settings` in App.js
+    - New "Admin" section in sidebar with "Tenant Settings" link
+    - Access restricted to CEO, Director, System Admin roles
+  - **Default Color Scheme**: Black (#000000) / White (#ffffff)
+  - Status: **COMPLETE**
 
 ### Mar 11, 2026 (Session 23)
 

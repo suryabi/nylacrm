@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useAppContext } from '../context/AppContextContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '../context/NavigationContext';
+import { useTenantConfig } from '../context/TenantConfigContext';
 import { Button } from '../components/ui/button';
 import { 
   LogOut, Menu, ChevronDown, ChevronRight, 
@@ -12,18 +13,21 @@ import {
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
   Kanban, Wrench, Box, ShieldCheck, Boxes,
-  Factory, ArrowLeftRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact
+  Factory, ArrowLeftRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact, Crown
 } from 'lucide-react';
+
+// Platform Admin emails
+const PLATFORM_ADMIN_EMAILS = ['surya.yadavalli@gmail.com', 'surya.yadavalli@nylaairwater.earth'];
 
 const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
 
 // Dashboard submenu items
 const dashboardSubmenu = [
-  { name: 'Sales Overview', href: '/dashboard', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-  { name: 'Revenue Report', href: '/sales-revenue', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
-  { name: 'SKU Performance', href: '/sku-performance', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
-  { name: 'Resource Performance', href: '/resource-performance', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
-  { name: 'Account Performance', href: '/account-performance', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
+  { name: 'Sales Overview', href: '/dashboard', moduleKey: 'report_sales_overview', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Admin', 'System Admin'] },
+  { name: 'Revenue Report', href: '/sales-revenue', moduleKey: 'report_revenue', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Admin', 'System Admin'] },
+  { name: 'SKU Performance', href: '/sku-performance', moduleKey: 'report_sku_performance', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Admin', 'System Admin'] },
+  { name: 'Resource Performance', href: '/resource-performance', moduleKey: 'report_resource_performance', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Admin', 'System Admin'] },
+  { name: 'Account Performance', href: '/account-performance', moduleKey: 'report_account_performance', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Admin', 'System Admin'] },
 ];
 
 // Sales Context Navigation
@@ -31,63 +35,70 @@ const salesNavigationGroups = [
   {
     title: 'Core',
     items: [
-      { name: 'Home', href: '/home', icon: Home, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-      { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'], hasSubmenu: true },
-      { name: 'Leads', href: '/leads', icon: Users, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-      { name: 'Pipeline', href: '/leads/kanban', icon: Kanban, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-      { name: 'Accounts', href: '/accounts', icon: Building2, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-      { name: 'Sales Portal', href: '/sales-portal', icon: Store, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
+      { name: 'Home', href: '/home', icon: Home, moduleKey: 'home', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Admin', 'System Admin'] },
+      { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, moduleKey: 'dashboard', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Admin', 'System Admin'], hasSubmenu: true },
+      { name: 'Leads', href: '/leads', icon: Users, moduleKey: 'leads', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Admin', 'System Admin'] },
+      { name: 'Pipeline', href: '/leads/kanban', icon: Kanban, moduleKey: 'pipeline', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Admin', 'System Admin'] },
+      { name: 'Accounts', href: '/accounts', icon: Building2, moduleKey: 'accounts', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Admin', 'System Admin'] },
+      { name: 'Sales Portal', href: '/sales-portal', icon: Store, moduleKey: 'sales_portal', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Admin', 'System Admin'] },
     ]
   },
   {
     title: 'Lead & Sales Operations',
     items: [
-      { name: 'Lead Discovery', href: '/lead-discovery', icon: Search, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-      { name: 'Target Planning', href: '/target-planning', icon: Target, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
-      { name: 'Daily Status', href: '/daily-status', icon: CalendarDays, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-      { name: 'Status Summary', href: '/status-summary', icon: UsersRound, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
+      { name: 'Lead Discovery', href: '/lead-discovery', icon: Search, moduleKey: 'lead_discovery', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Admin', 'System Admin'] },
+      { name: 'Target Planning', href: '/target-planning', icon: Target, moduleKey: 'target_planning', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Admin', 'System Admin'] },
+      { name: 'Daily Status', href: '/daily-status', icon: CalendarDays, moduleKey: 'daily_status', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Admin', 'System Admin'] },
+      { name: 'Status Summary', href: '/status-summary', icon: UsersRound, moduleKey: 'status_summary', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Admin', 'System Admin'] },
     ]
   },
   {
     title: 'Pricing & Logistics',
     items: [
-      { name: 'COGS Calculator', href: '/cogs-calculator', icon: Calculator },
-      { name: 'Transport Calculator', href: '/transportation-calculator', icon: Truck, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
+      { name: 'COGS Calculator', href: '/cogs-calculator', icon: Calculator, moduleKey: 'cogs_calculator' },
+      { name: 'Transport Calculator', href: '/transportation-calculator', icon: Truck, moduleKey: 'transport_calculator', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Admin', 'System Admin'] },
     ]
   },
   {
     title: 'Product & SKU',
     items: [
-      { name: 'SKU Management', href: '/sku-management', icon: Package, roles: ['CEO', 'Director', 'National Sales Head'] },
-      { name: 'Bottle Preview', href: '/bottle-preview', icon: Droplets, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
+      { name: 'SKU Management', href: '/sku-management', icon: Package, moduleKey: 'sku_management', roles: ['CEO', 'Director', 'National Sales Head', 'Admin', 'System Admin'] },
+      { name: 'Bottle Preview', href: '/bottle-preview', icon: Droplets, moduleKey: 'bottle_preview', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Admin', 'System Admin'] },
     ]
   },
   {
     title: 'Documents',
     items: [
-      { name: 'Company Documents', href: '/company-documents', icon: FileText, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Business Development Executive', 'Sales Representative', 'System Admin'] },
-      { name: 'Files & Documents', href: '/files-documents', icon: FolderOpen, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'admin', 'Admin'] },
+      { name: 'Company Documents', href: '/company-documents', icon: FileText, moduleKey: 'company_documents', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Business Development Executive', 'Sales Representative', 'Admin', 'System Admin'] },
+      { name: 'Files & Documents', href: '/files-documents', icon: FolderOpen, moduleKey: 'files_documents', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Admin', 'System Admin'] },
     ]
   },
   {
     title: 'Requests',
     items: [
-      { name: 'Leaves', href: '/leaves', icon: CalendarOff, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-      { name: 'Travel Request', href: '/travel-requests', icon: Plane, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-      { name: 'Budget Request', href: '/budget-requests', icon: Wallet, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
+      { name: 'Leaves', href: '/leaves', icon: CalendarOff, moduleKey: 'leaves', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Admin', 'System Admin'] },
+      { name: 'Travel Request', href: '/travel-requests', icon: Plane, moduleKey: 'travel_requests', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Admin', 'System Admin'] },
+      { name: 'Budget Request', href: '/budget-requests', icon: Wallet, moduleKey: 'budget_requests', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Admin', 'System Admin'] },
     ]
   },
   {
     title: 'Organization',
     items: [
-      { name: 'Company Profile', href: '/company-profile', icon: Building, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales'] },
-      { name: 'Team', href: '/team', icon: UserCog, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales'] },
-      { name: 'Contacts', href: '/contacts', icon: Contact, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Business Development Executive', 'Sales Representative'] },
-      { name: 'Master Locations', href: '/master-locations', icon: MapPin, roles: ['CEO', 'Director', 'System Admin'] },
-      { name: 'Lead Statuses', href: '/master-lead-status', icon: Settings, roles: ['CEO', 'Director', 'System Admin'] },
-      { name: 'Business Categories', href: '/master-business-categories', icon: Building, roles: ['CEO', 'Director', 'System Admin'] },
-      { name: 'Contact Categories', href: '/master-contact-categories', icon: Users, roles: ['CEO', 'Director', 'System Admin'] },
-      { name: 'Expense Categories', href: '/expense-category-master', icon: Receipt, roles: ['CEO', 'Director', 'System Admin'] },
+      { name: 'Company Profile', href: '/company-profile', icon: Building, moduleKey: 'company_profile', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Admin', 'System Admin'] },
+      { name: 'Team', href: '/team', icon: UserCog, moduleKey: 'team', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Admin', 'System Admin'] },
+      { name: 'Contacts', href: '/contacts', icon: Contact, moduleKey: 'contacts', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Business Development Executive', 'Sales Representative', 'Admin', 'System Admin'] },
+      { name: 'Master Locations', href: '/master-locations', icon: MapPin, moduleKey: 'master_locations', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
+      { name: 'Lead Statuses', href: '/master-lead-status', icon: Settings, moduleKey: 'lead_statuses', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
+      { name: 'Business Categories', href: '/master-business-categories', icon: Building, moduleKey: 'business_categories', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
+      { name: 'Contact Categories', href: '/master-contact-categories', icon: Users, moduleKey: 'contact_categories', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
+      { name: 'Expense Categories', href: '/expense-category-master', icon: Receipt, moduleKey: 'expense_categories', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
+    ]
+  },
+  {
+    title: 'Admin',
+    items: [
+      { name: 'Tenant Settings', href: '/tenant-settings', icon: Settings, roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
+      { name: 'Platform Admin', href: '/platform-admin', icon: Crown, isPlatformAdminOnly: true },
     ]
   },
 ];
@@ -97,35 +108,35 @@ const productionNavigationGroups = [
   {
     title: 'Production',
     items: [
-      { name: 'Maintenance', href: '/maintenance', icon: Wrench, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff'] },
-      { name: 'Inventory', href: '/inventory', icon: Boxes, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff'] },
-      { name: 'Quality Control', href: '/quality-control', icon: ShieldCheck, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff'] },
+      { name: 'Maintenance', href: '/maintenance', icon: Wrench, moduleKey: 'maintenance', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
+      { name: 'Inventory', href: '/inventory', icon: Boxes, moduleKey: 'inventory', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
+      { name: 'Quality Control', href: '/quality-control', icon: ShieldCheck, moduleKey: 'quality_control', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
     ]
   },
   {
     title: 'Assets & Vendors',
     items: [
-      { name: 'Assets', href: '/assets', icon: Box, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor'] },
-      { name: 'Vendors', href: '/vendors', icon: Truck, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor'] },
+      { name: 'Assets', href: '/assets', icon: Box, moduleKey: 'assets', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Admin', 'System Admin'] },
+      { name: 'Vendors', href: '/vendors', icon: Truck, moduleKey: 'vendors', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Admin', 'System Admin'] },
     ]
   },
   {
     title: 'Product & SKU',
     items: [
-      { name: 'SKU Management', href: '/sku-management', icon: Package, roles: ['CEO', 'Director', 'Vice President', 'Production Manager'] },
+      { name: 'SKU Management', href: '/sku-management', icon: Package, moduleKey: 'sku_management', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
     ]
   },
   {
     title: 'Documents',
     items: [
-      { name: 'Files & Documents', href: '/files-documents', icon: FolderOpen, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff'] },
+      { name: 'Files & Documents', href: '/files-documents', icon: FolderOpen, moduleKey: 'files_documents', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
     ]
   },
   {
     title: 'Organization',
     items: [
-      { name: 'Company Profile', href: '/company-profile', icon: Building, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor'] },
-      { name: 'Team', href: '/team', icon: UserCog, roles: ['CEO', 'Director', 'Vice President', 'Production Manager'] },
+      { name: 'Company Profile', href: '/company-profile', icon: Building, moduleKey: 'company_profile', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Admin', 'System Admin'] },
+      { name: 'Team', href: '/team', icon: UserCog, moduleKey: 'team', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
     ]
   },
 ];
@@ -135,8 +146,14 @@ export default function DashboardLayout({ children }) {
   const { currentContext, switchContext, canAccessBothContexts } = useAppContext();
   const { theme, toggleTheme } = useTheme();
   const { navigateTo } = useNavigation();
+  const { isModuleEnabled, hasRolePermission, branding } = useTenantConfig();
   const location = useLocation();
   const navigate = useNavigate();
+  
+  // Get branding values with fallbacks
+  const logoUrl = branding?.logo_url || NYLA_LOGO;
+  const appName = branding?.app_name || 'Nyla Air Water';
+  const tagline = branding?.tagline || (currentContext === 'production' ? 'Production' : 'Sales CRM');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(
     location.pathname === '/dashboard' || location.pathname === '/sales-revenue' || 
@@ -174,17 +191,43 @@ export default function DashboardLayout({ children }) {
   // Select navigation groups based on current context
   const navigationGroups = currentContext === 'production' ? productionNavigationGroups : salesNavigationGroups;
 
-  const filteredDashboardSubmenu = dashboardSubmenu.filter(item => !item.roles || item.roles.includes(user?.role));
+  // Filter dashboard submenu based on role AND module configuration
+  const filteredDashboardSubmenu = dashboardSubmenu.filter(item => {
+    const moduleEnabled = !item.moduleKey || isModuleEnabled(item.moduleKey);
+    const roleHasPermission = !item.moduleKey || hasRolePermission(item.moduleKey);
+    const hardcodedRoleAllowed = !item.roles || item.roles.includes(user?.role);
+    return moduleEnabled && (roleHasPermission || hardcodedRoleAllowed);
+  });
+  
   const isDashboardActive = location.pathname === '/dashboard' || location.pathname === '/sales-revenue' || 
     location.pathname === '/target-sku' || location.pathname === '/target-resource' ||
     location.pathname === '/sku-performance' || location.pathname === '/resource-performance' ||
     location.pathname === '/account-performance';
 
-  // Filter navigation groups based on user role
+  // Check if user is platform admin
+  const isPlatformAdmin = user && PLATFORM_ADMIN_EMAILS.includes(user.email?.toLowerCase());
+
+  // Filter navigation groups based on user role AND module configuration
   // If item has no roles array, it's available to all users
+  // If item has no moduleKey, it's always available
+  // If item has isPlatformAdminOnly, only show to platform admins
   const filteredGroups = navigationGroups.map(group => ({
     ...group,
-    items: group.items.filter(item => !item.roles || item.roles.includes(user?.role))
+    items: group.items.filter(item => {
+      // Platform admin only items
+      if (item.isPlatformAdminOnly) {
+        return isPlatformAdmin;
+      }
+      // Check if module is enabled for tenant
+      const moduleEnabled = !item.moduleKey || isModuleEnabled(item.moduleKey);
+      // Check if user's role has permission (from Role Management)
+      const roleHasPermission = !item.moduleKey || hasRolePermission(item.moduleKey);
+      // Fallback to hardcoded roles if needed
+      const hardcodedRoleAllowed = !item.roles || item.roles.includes(user?.role);
+      
+      // Module must be enabled AND (role has permission OR hardcoded role allowed)
+      return moduleEnabled && (roleHasPermission || hardcodedRoleAllowed);
+    })
   })).filter(group => group.items.length > 0);
 
   return (
@@ -195,10 +238,16 @@ export default function DashboardLayout({ children }) {
           {/* Logo */}
           <div className="p-5 border-b border-white/10">
             <div className="flex items-center gap-3">
-              <img src={NYLA_LOGO} alt="Nyla Air Water" className="h-10 w-10 rounded-lg object-cover" />
+              {logoUrl ? (
+                <img src={logoUrl} alt={appName} className="h-10 w-10 rounded-lg object-cover" />
+              ) : (
+                <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
+                  <span className="text-primary-foreground font-bold text-lg">{appName.charAt(0)}</span>
+                </div>
+              )}
               <div>
-                <h1 className="text-white font-bold text-lg tracking-tight">Nyla Air Water</h1>
-                <p className="text-white/60 text-xs">{currentContext === 'production' ? 'Production' : 'Sales CRM'}</p>
+                <h1 className="text-white font-bold text-lg tracking-tight">{appName}</h1>
+                <p className="text-white/60 text-xs">{tagline}</p>
               </div>
             </div>
           </div>
@@ -388,8 +437,14 @@ export default function DashboardLayout({ children }) {
               <Menu className="h-5 w-5 text-foreground" />
             </Button>
             <div className="flex items-center gap-2">
-              <img src={NYLA_LOGO} alt="Nyla Air Water" className="h-8 w-8 rounded-lg" />
-              <span className="font-bold text-foreground">Nyla Air Water</span>
+              {logoUrl ? (
+                <img src={logoUrl} alt={appName} className="h-8 w-8 rounded-lg object-cover" />
+              ) : (
+                <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+                  <span className="text-primary-foreground font-bold">{appName.charAt(0)}</span>
+                </div>
+              )}
+              <span className="font-bold text-foreground">{appName}</span>
             </div>
             <div className="w-10" />
           </div>

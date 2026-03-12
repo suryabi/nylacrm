@@ -6,6 +6,13 @@ const AuthContext = createContext();
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const INACTIVITY_TIMEOUT = 20 * 60 * 1000; // 20 minutes in milliseconds
 
+// Set up axios interceptor to include X-Tenant-ID header on all requests
+axios.interceptors.request.use((config) => {
+  const tenantId = localStorage.getItem('selectedTenant') || 'nyla-air-water';
+  config.headers['X-Tenant-ID'] = tenantId;
+  return config;
+});
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -107,11 +114,17 @@ export const AuthProvider = ({ children }) => {
 
   const fetchCurrentUser = async () => {
     try {
+      // Get tenant from localStorage for API calls
+      const tenant = localStorage.getItem('selectedTenant') || 'nyla-air-water';
+      
       const response = await axios.get(`${API_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'X-Tenant-ID': tenant
+        },
         withCredentials: true
       });
-      setUser(response.data);
+      setUser({ ...response.data, tenant_id: tenant });
       // Restore session start time if available
       const storedSessionStart = localStorage.getItem('sessionStartTime');
       if (storedSessionStart) {

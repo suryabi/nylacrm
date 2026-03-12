@@ -12,6 +12,7 @@ from deps import get_current_user, db
 from models.tenant import (
     Tenant, TenantCreate, TenantUpdate, 
     TenantBranding, TenantModules, TenantIntegrations, TenantSettings,
+    CompanyProfile, CompanyAddress, BankDetails, Director, OfficeContact,
     DEFAULT_TENANT
 )
 from core.tenant import get_current_tenant_id, add_tenant_filter, with_tenant_id
@@ -19,7 +20,7 @@ from core.tenant import get_current_tenant_id, add_tenant_filter, with_tenant_id
 router = APIRouter(prefix="/tenants", tags=["Tenant Administration"])
 
 # Super admin check (platform owner)
-SUPER_ADMIN_EMAILS = os.environ.get('SUPER_ADMIN_EMAILS', 'surya.yadavalli@nylaairwater.earth').split(',')
+SUPER_ADMIN_EMAILS = os.environ.get('SUPER_ADMIN_EMAILS', 'surya.yadavalli@nylaairwater.earth,admin@nylaairwater.earth').split(',')
 
 
 def is_super_admin(user: dict) -> bool:
@@ -28,8 +29,8 @@ def is_super_admin(user: dict) -> bool:
 
 
 def is_tenant_admin(user: dict) -> bool:
-    """Check if user is a tenant admin (CEO, Director, System Admin)"""
-    return user.get('role') in ['CEO', 'Director', 'System Admin']
+    """Check if user is a tenant admin (CEO, Director, System Admin, Admin)"""
+    return user.get('role') in ['CEO', 'Director', 'System Admin', 'Admin']
 
 
 async def ensure_default_tenant():
@@ -288,6 +289,73 @@ async def update_current_tenant_settings(
             'updated_at': datetime.now(timezone.utc).isoformat()
         }}
     )
+    
+    updated = await db.tenants.find_one({'tenant_id': tenant_id}, {'_id': 0})
+    return updated
+
+
+@router.put("/current/company-profile")
+async def update_current_tenant_company_profile(
+    company_profile: CompanyProfile,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update current tenant company profile (Tenant Admin)"""
+    if not is_tenant_admin(current_user):
+        raise HTTPException(status_code=403, detail="Tenant Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    await db.tenants.update_one(
+        {'tenant_id': tenant_id},
+        {'$set': {
+            'company_profile': company_profile.model_dump(),
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    updated = await db.tenants.find_one({'tenant_id': tenant_id}, {'_id': 0})
+    return updated
+
+
+@router.put("/current/config")
+async def update_current_tenant_config(
+    request: Request,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update current tenant config (modules require Super Admin)"""
+    if not is_tenant_admin(current_user):
+        raise HTTPException(status_code=403, detail="Tenant Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    data = await request.json()
+    
+    update_data = {}
+    
+    # Branding can be updated by tenant admin
+    if 'branding' in data:
+        update_data['branding'] = data['branding']
+    
+    # Settings can be updated by tenant admin
+    if 'settings' in data:
+        update_data['settings'] = data['settings']
+    
+    # Modules require super admin
+    if 'modules' in data:
+        if is_super_admin(current_user):
+            update_data['modules'] = data['modules']
+        else:
+            raise HTTPException(status_code=403, detail="Module changes require Super Admin access")
+    
+    # Auth config (Google Workspace, etc.) requires admin
+    if 'auth_config' in data:
+        update_data['auth_config'] = data['auth_config']
+    
+    if update_data:
+        update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+        await db.tenants.update_one(
+            {'tenant_id': tenant_id},
+            {'$set': update_data}
+        )
     
     updated = await db.tenants.find_one({'tenant_id': tenant_id}, {'_id': 0})
     return updated

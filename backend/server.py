@@ -167,6 +167,13 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
+# Import tenant-aware database helper
+from database import get_tenant_db
+
+def get_tdb():
+    """Get tenant-aware database wrapper for multi-tenant queries"""
+    return get_tenant_db()
+
 # JWT Configuration
 JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGORITHM = 'HS256'
@@ -231,7 +238,7 @@ async def generate_lead_id(company: str, city: str) -> str:
     
     # Find the highest sequence number for this prefix
     regex_pattern = f"^{re.escape(prefix)}\\d{{3}}$"
-    existing_leads = await db.leads.find(
+    existing_leads = await get_tdb().leads.find(
         {'lead_id': {'$regex': regex_pattern}},
         {'lead_id': 1}
     ).sort('lead_id', -1).limit(1).to_list(1)
@@ -427,7 +434,7 @@ async def create_approval_task(
         due_date = (datetime.now(timezone.utc) + timedelta(days=config['due_days'])).strftime('%Y-%m-%d')
     
     # Get approver name
-    approver = await db.users.find_one({'id': approver_id}, {'_id': 0, 'name': 1})
+    approver = await get_tdb().users.find_one({'id': approver_id}, {'_id': 0, 'name': 1})
     approver_name = approver.get('name') if approver else None
     
     # Build description with reference info
@@ -469,7 +476,7 @@ async def create_approval_task(
         'approval_requester_id': requester_id,
     }
     
-    await db.tasks.insert_one(task_doc)
+    await get_tdb().tasks.insert_one(task_doc)
     
     # Return without _id
     return {k: v for k, v in task_doc.items() if k != '_id'}
@@ -491,7 +498,7 @@ async def complete_approval_task(
     Returns:
         True if task was found and updated, False otherwise
     """
-    result = await db.tasks.update_one(
+    result = await get_tdb().tasks.update_one(
         {
             'is_approval_task': True,
             'approval_type': approval_type,
@@ -1374,7 +1381,7 @@ async def backdate_won_leads(request: Request):
         ]
     }
     
-    leads = await db.leads.find(query, {
+    leads = await get_tdb().leads.find(query, {
         '_id': 0,
         'id': 1,
         'lead_id': 1,
@@ -1398,7 +1405,7 @@ async def backdate_won_leads(request: Request):
     if not dry_run:
         # Perform the update
         lead_ids = [lead['id'] for lead in leads]
-        update_result = await db.leads.update_many(
+        update_result = await get_tdb().leads.update_many(
             {'id': {'$in': lead_ids}},
             {'$set': {'updated_at': backdate.isoformat()}}
         )
@@ -1429,7 +1436,7 @@ async def setup_production_database_endpoint(request: Request):
         admin_id = str(uuid.uuid4())
         
         # Check if users already exist
-        existing_count = await db.users.count_documents({})
+        existing_count = await get_tdb().users.count_documents({})
         if existing_count > 5:
             return {'message': 'Database already populated', 'user_count': existing_count}
         
@@ -1497,7 +1504,7 @@ async def setup_production_database_endpoint(request: Request):
             }
         ]
         
-        await db.users.insert_many(leadership)
+        await get_tdb().users.insert_many(leadership)
         
         # Create sample sales reps (simplified)
         cities = [
@@ -1525,7 +1532,7 @@ async def setup_production_database_endpoint(request: Request):
             }
             sales_team.append(member)
         
-        await db.users.insert_many(sales_team)
+        await get_tdb().users.insert_many(sales_team)
         
         total_users = len(leadership) + len(sales_team)
         
@@ -1761,7 +1768,7 @@ async def get_cogs_data(city: str, current_user: dict = Depends(get_current_user
     master_sku_docs = await db.master_skus.find({'is_active': {'$ne': False}}, {'_id': 0, 'sku_name': 1}).to_list(200)
     master_skus = [s['sku_name'] for s in master_sku_docs]
     
-    cogs_data = await db.cogs_data.find({'city': city}, {'_id': 0}).to_list(100)
+    cogs_data = await get_tdb().cogs_data.find({'city': city}, {'_id': 0}).to_list(100)
     
     # Create default data for SKUs that don't have data yet
     existing_skus = [c['sku_name'] for c in cogs_data]
@@ -1772,12 +1779,12 @@ async def get_cogs_data(city: str, current_user: dict = Depends(get_current_user
             doc['created_at'] = doc['created_at'].isoformat()
             if doc.get('last_edited_at'):
                 doc['last_edited_at'] = doc['last_edited_at'].isoformat()
-            await db.cogs_data.insert_one(doc)
+            await get_tdb().cogs_data.insert_one(doc)
             cogs_data.append(default_data.model_dump())
     
     # Get user names for last_edited_by
     user_ids = [c.get('last_edited_by') for c in cogs_data if c.get('last_edited_by')]
-    users = await db.users.find({'id': {'$in': user_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(100)
+    users = await get_tdb().users.find({'id': {'$in': user_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(100)
     user_map = {u['id']: u['name'] for u in users}
     
     # Add editor names
@@ -1795,7 +1802,7 @@ async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: d
     
     # Calculate computed values
     if any(k in update_data for k in ['primary_packaging_cost', 'secondary_packaging_cost', 'manufacturing_variable_cost', 'gross_margin', 'outbound_logistics_cost', 'distribution_cost']):
-        existing = await db.cogs_data.find_one({'id': sku_id}, {'_id': 0})
+        existing = await get_tdb().cogs_data.find_one({'id': sku_id}, {'_id': 0})
         if existing:
             # Merge with existing data
             primary = update_data.get('primary_packaging_cost', existing.get('primary_packaging_cost', 0))
@@ -1831,7 +1838,7 @@ async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: d
     update_data['last_edited_by'] = current_user['id']
     update_data['last_edited_at'] = datetime.now(timezone.utc).isoformat()
     
-    result = await db.cogs_data.update_one({'id': sku_id}, {'$set': update_data})
+    result = await get_tdb().cogs_data.update_one({'id': sku_id}, {'$set': update_data})
     
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail='COGS data not found')
@@ -1876,7 +1883,7 @@ async def copy_costs_to_all_cities(request: CopyCostsRequest, current_user: dict
     
     for city in target_cities:
         # Get all COGS data for this city
-        city_cogs = await db.cogs_data.find({'city': city}).to_list(5000)
+        city_cogs = await get_tdb().cogs_data.find({'city': city}).to_list(5000)
         
         for cogs_row in city_cogs:
             sku_name = cogs_row.get('sku_name')
@@ -1905,7 +1912,7 @@ async def copy_costs_to_all_cities(request: CopyCostsRequest, current_user: dict
                     landing_price = base_cost
                 
                 # Update all input fields + recalculated fields
-                await db.cogs_data.update_one(
+                await get_tdb().cogs_data.update_one(
                     {'id': cogs_row['id']},
                     {'$set': {
                         'primary_packaging_cost': primary,
@@ -1945,14 +1952,14 @@ async def cleanup_invalid_skus(current_user: dict = Depends(get_current_user)):
     master_sku_names = set(sku['sku_name'] for sku in master_skus if sku.get('sku_name'))
     
     # Find all unique SKU names in COGS data
-    cogs_skus = await db.cogs_data.distinct('sku_name')
+    cogs_skus = await get_tdb().cogs_data.distinct('sku_name')
     
     # Find invalid SKUs (in COGS but not in master)
     invalid_skus = [sku for sku in cogs_skus if sku not in master_sku_names]
     
     # Delete invalid SKU entries
     if invalid_skus:
-        result = await db.cogs_data.delete_many({'sku_name': {'$in': invalid_skus}})
+        result = await get_tdb().cogs_data.delete_many({'sku_name': {'$in': invalid_skus}})
         deleted_count = result.deleted_count
     else:
         deleted_count = 0
@@ -2017,7 +2024,7 @@ async def google_oauth_callback(request: Request, response: Response):
         logger.info(f'Google OAuth: Email received: "{user_email}"')
         
         # Case-insensitive email lookup
-        existing_user = await db.users.find_one(
+        existing_user = await get_tdb().users.find_one(
             {'email': {'$regex': f'^{user_email}$', '$options': 'i'}},
             {'_id': 0}
         )
@@ -2027,7 +2034,7 @@ async def google_oauth_callback(request: Request, response: Response):
         else:
             logger.warning(f'User NOT found for email: {user_email}')
             # List all emails in database for debugging
-            all_emails = await db.users.find({}, {'_id': 0, 'email': 1}).limit(5).to_list(5)
+            all_emails = await get_tdb().users.find({}, {'_id': 0, 'email': 1}).limit(5).to_list(5)
             logger.warning(f'Sample emails in DB: {[u["email"] for u in all_emails]}')
             
             raise HTTPException(
@@ -2038,7 +2045,7 @@ async def google_oauth_callback(request: Request, response: Response):
         user_id = existing_user['id']
         
         # Update user info
-        await db.users.update_one(
+        await get_tdb().users.update_one(
             {'email': user_email},
             {'$set': {
                 'name': user_info.get('name', existing_user.get('name')),
@@ -2069,7 +2076,7 @@ async def google_oauth_callback(request: Request, response: Response):
             path='/'
         )
         
-        user_doc = await db.users.find_one({'id': user_id}, {'_id': 0, 'password': 0})
+        user_doc = await get_tdb().users.find_one({'id': user_id}, {'_id': 0, 'password': 0})
         
         return {'user': user_doc, 'message': 'Login successful'}
         
@@ -2108,7 +2115,7 @@ async def exchange_google_session(request: Request, response: Response):
     session_token = user_data['session_token']
     
     # Check if user exists in database (MUST be pre-registered by admin)
-    existing_user = await db.users.find_one({'email': user_email}, {'_id': 0})
+    existing_user = await get_tdb().users.find_one({'email': user_email}, {'_id': 0})
     
     if not existing_user:
         # User not registered - reject login
@@ -2121,7 +2128,7 @@ async def exchange_google_session(request: Request, response: Response):
     user_id = existing_user['id']
     
     # Update user info from Google
-    await db.users.update_one(
+    await get_tdb().users.update_one(
         {'email': user_email},
         {'$set': {
             'name': user_name,
@@ -2151,7 +2158,7 @@ async def exchange_google_session(request: Request, response: Response):
     )
     
     # Return user data
-    user_doc = await db.users.find_one({'id': user_id}, {'_id': 0, 'password': 0})
+    user_doc = await get_tdb().users.find_one({'id': user_id}, {'_id': 0, 'password': 0})
     
     return {
         'user': user_doc,
@@ -2189,7 +2196,7 @@ async def get_current_user_from_cookie_or_header(request: Request):
         raise HTTPException(status_code=401, detail='Session expired')
     
     # Get user
-    user_doc = await db.users.find_one({'id': session_doc['user_id']}, {'_id': 0, 'password': 0})
+    user_doc = await get_tdb().users.find_one({'id': session_doc['user_id']}, {'_id': 0, 'password': 0})
     if not user_doc:
         raise HTTPException(status_code=401, detail='User not found')
     
@@ -2235,7 +2242,7 @@ async def logout_user(request: Request, response: Response, data: LogoutData = N
                 update_data['last_logout_reason'] = 'manual'
             
             # Update user record
-            await db.users.update_one(
+            await get_tdb().users.update_one(
                 {'id': user_id},
                 {'$set': update_data, '$inc': {'total_time_spent': time_spent}}
             )
@@ -2356,7 +2363,7 @@ async def activity_heartbeat(data: ActivityHeartbeat, request: Request):
     )
     
     # Also update the user's last_active field
-    await db.users.update_one(
+    await get_tdb().users.update_one(
         {'id': user_id},
         {'$set': {'last_active': now}}
     )
@@ -2397,7 +2404,7 @@ async def get_user_activity(user_id: str, current_user: dict = Depends(get_curre
     )
     
     # Get user's last_active from users collection
-    user_doc = await db.users.find_one({'id': user_id}, {'_id': 0, 'last_active': 1})
+    user_doc = await get_tdb().users.find_one({'id': user_id}, {'_id': 0, 'last_active': 1})
     last_active = user_doc.get('last_active') if user_doc else None
     
     if not activity:
@@ -2418,7 +2425,7 @@ async def get_user_activity(user_id: str, current_user: dict = Depends(get_curre
 async def get_team_activity(current_user: dict = Depends(get_current_user)):
     """Get activity summary for all team members"""
     # Get all users
-    users = await db.users.find({}, {'_id': 0, 'id': 1, 'name': 1, 'last_active': 1}).to_list(1000)
+    users = await get_tdb().users.find({}, {'_id': 0, 'id': 1, 'name': 1, 'last_active': 1}).to_list(1000)
     
     result = []
     for user in users:
@@ -2449,7 +2456,7 @@ async def get_team_activity(current_user: dict = Depends(get_current_user)):
 @api_router.post("/auth/register", response_model=User)
 async def register(user_input: UserCreate):
     # Check if user exists
-    existing = await db.users.find_one({'email': user_input.email}, {'_id': 0})
+    existing = await get_tdb().users.find_one({'email': user_input.email}, {'_id': 0})
     if existing:
         raise HTTPException(status_code=400, detail='Email already registered')
     
@@ -2463,12 +2470,12 @@ async def register(user_input: UserCreate):
     doc['password'] = hashed_pw
     doc['created_at'] = doc['created_at'].isoformat()
     
-    await db.users.insert_one(doc)
+    await get_tdb().users.insert_one(doc)
     return user_obj
 
 @api_router.post("/auth/login")
 async def login(credentials: UserLogin, request: Request, response: Response):
-    user_doc = await db.users.find_one({'email': credentials.email}, {'_id': 0})
+    user_doc = await get_tdb().users.find_one({'email': credentials.email}, {'_id': 0})
     if not user_doc or not verify_password(credentials.password, user_doc['password']):
         raise HTTPException(status_code=401, detail='Invalid credentials')
     
@@ -2497,7 +2504,7 @@ async def login(credentials: UserLogin, request: Request, response: Response):
     })
     
     # Update user's last login info
-    await db.users.update_one(
+    await get_tdb().users.update_one(
         {'id': user_doc['id']},
         {'$set': {
             'last_login_at': now.isoformat(),
@@ -2580,7 +2587,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
     manager_roles = ['CEO', 'Director', 'Vice President', 'National Sales Head']
     if user_role in manager_roles:
         # Get all users who report to this user (direct reports)
-        subordinates = await db.users.find(
+        subordinates = await get_tdb().users.find(
             {'reports_to': user_id, 'is_active': True},
             {'_id': 0, 'id': 1}
         ).to_list(length=100)
@@ -2608,7 +2615,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
     for lead in overdue_leads:
         lead['next_follow_up'] = lead.pop('next_followup_date', None)
         if lead.get('assigned_to') and lead['assigned_to'] != user_id:
-            assignee = await db.users.find_one({'id': lead['assigned_to']}, {'_id': 0, 'name': 1})
+            assignee = await get_tdb().users.find_one({'id': lead['assigned_to']}, {'_id': 0, 'name': 1})
             lead['assigned_to_name'] = assignee.get('name') if assignee else None
     
     # 3. UPCOMING LEADS - Leads with future follow-up dates within a week
@@ -2623,7 +2630,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
     for lead in upcoming_leads:
         lead['next_follow_up'] = lead.pop('next_followup_date', None)
         if lead.get('assigned_to') and lead['assigned_to'] != user_id:
-            assignee = await db.users.find_one({'id': lead['assigned_to']}, {'_id': 0, 'name': 1})
+            assignee = await get_tdb().users.find_one({'id': lead['assigned_to']}, {'_id': 0, 'name': 1})
             lead['assigned_to_name'] = assignee.get('name') if assignee else None
     
     # 3b. UPCOMING ACCOUNTS - Accounts with future follow-up dates within a week
@@ -2637,7 +2644,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
     for account in upcoming_accounts:
         account['type'] = 'account'
         if account.get('assigned_to') and account['assigned_to'] != user_id:
-            assignee = await db.users.find_one({'id': account['assigned_to']}, {'_id': 0, 'name': 1})
+            assignee = await get_tdb().users.find_one({'id': account['assigned_to']}, {'_id': 0, 'name': 1})
             account['assigned_to_name'] = assignee.get('name') if assignee else None
     
     # Mark leads with their type
@@ -2664,7 +2671,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
         score = calculate_lead_score(lead)
         
         # Get activity count in last 7 days
-        activity_count = await db.lead_activities.count_documents({
+        activity_count = await get_tdb().lead_activities.count_documents({
             'lead_id': lead_id,
             'created_at': {'$gte': week_ago}
         })
@@ -2673,7 +2680,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
         score += activity_score
         
         # Days since last contact score (max 30 points)
-        last_activity = await db.lead_activities.find_one(
+        last_activity = await get_tdb().lead_activities.find_one(
             {'lead_id': lead_id},
             sort=[('created_at', -1)]
         )
@@ -2724,24 +2731,24 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
     upcoming_meetings = await meetings_cursor.to_list(length=10)
     
     # 6. TODAY'S ACTIVITY SUMMARY
-    today_activities = await db.lead_activities.count_documents({
+    today_activities = await get_tdb().lead_activities.count_documents({
         'created_by': user_id,
         'created_at': {'$gte': today_str}
     })
     
-    today_calls = await db.lead_activities.count_documents({
+    today_calls = await get_tdb().lead_activities.count_documents({
         'created_by': user_id,
         'created_at': {'$gte': today_str},
         'activity_type': {'$in': ['call', 'phone']}
     })
     
-    today_emails = await db.lead_activities.count_documents({
+    today_emails = await get_tdb().lead_activities.count_documents({
         'created_by': user_id,
         'created_at': {'$gte': today_str},
         'activity_type': 'email'
     })
     
-    today_meetings_count = await db.lead_activities.count_documents({
+    today_meetings_count = await get_tdb().lead_activities.count_documents({
         'created_by': user_id,
         'created_at': {'$gte': today_str},
         'activity_type': {'$in': ['meeting', 'visit']}
@@ -2766,7 +2773,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             if not is_leadership:
                 query['assigned_to'] = user_id
             
-            count = await db.leads.count_documents(query)
+            count = await get_tdb().leads.count_documents(query)
             pipeline_stats.append({
                 'status': status_id,
                 'label': status_doc.get('label', status_id),
@@ -2780,7 +2787,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
             if not is_leadership:
                 query['assigned_to'] = user_id
             
-            count = await db.leads.count_documents(query)
+            count = await get_tdb().leads.count_documents(query)
             pipeline_stats.append({'status': status, 'label': status.replace('_', ' ').title(), 'count': count})
     
     # 8. MONTHLY TARGETS VS ACTUALS
@@ -2812,7 +2819,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
     for activity in recent_activities:
         lead_id = activity.get('lead_id')
         if lead_id:
-            lead = await db.leads.find_one({'id': lead_id}, {'_id': 0, 'company': 1})
+            lead = await get_tdb().leads.find_one({'id': lead_id}, {'_id': 0, 'company': 1})
             activity['company'] = lead.get('company') if lead else 'Unknown'
     
     return {
@@ -2846,7 +2853,7 @@ async def get_employee_insights(current_user: dict = Depends(get_current_user)):
     user_role = current_user.get('role', '').lower()
     
     # Get full user data including HR fields
-    user_data = await db.users.find_one({'id': user_id}, {'_id': 0})
+    user_data = await get_tdb().users.find_one({'id': user_id}, {'_id': 0})
     if not user_data:
         raise HTTPException(status_code=404, detail='User not found')
     
@@ -2879,14 +2886,14 @@ async def get_employee_insights(current_user: dict = Depends(get_current_user)):
     if joining_date_str:
         revenue_query['updated_at'] = {'$gte': joining_date_str}
     
-    won_leads = await db.leads.find(revenue_query, {'_id': 0, 'expected_value': 1, 'actual_value': 1}).to_list(1000)
+    won_leads = await get_tdb().leads.find(revenue_query, {'_id': 0, 'expected_value': 1, 'actual_value': 1}).to_list(1000)
     total_revenue = sum(lead.get('actual_value') or lead.get('expected_value', 0) or 0 for lead in won_leads)
     
     # Calculate total accounts revenue (from invoices)
     accounts_revenue = 0
     try:
         # Get accounts assigned to this user
-        user_accounts = await db.accounts.find({'sales_owner_id': user_id}, {'_id': 0, 'id': 1, 'account_id': 1}).to_list(500)
+        user_accounts = await get_tdb().accounts.find({'sales_owner_id': user_id}, {'_id': 0, 'id': 1, 'account_id': 1}).to_list(500)
         account_ids = [acc.get('id') or acc.get('account_id') for acc in user_accounts]
         
         if account_ids:
@@ -2895,7 +2902,7 @@ async def get_employee_insights(current_user: dict = Depends(get_current_user)):
                 {'$match': {'account_id': {'$in': account_ids}}},
                 {'$group': {'_id': None, 'total': {'$sum': '$grand_total'}}}
             ]
-            invoice_result = await db.invoices.aggregate(invoice_pipeline).to_list(1)
+            invoice_result = await get_tdb().invoices.aggregate(invoice_pipeline).to_list(1)
             accounts_revenue = invoice_result[0]['total'] if invoice_result else 0
     except:
         pass
@@ -2906,7 +2913,7 @@ async def get_employee_insights(current_user: dict = Depends(get_current_user)):
     # For more accuracy, this would need actual cost data
     gross_margin = 0
     try:
-        margin_leads = await db.leads.find({
+        margin_leads = await get_tdb().leads.find({
             'assigned_to': user_id,
             'status': 'won'
         }, {'_id': 0, 'expected_value': 1, 'actual_value': 1, 'gross_margin': 1, 'gross_margin_percent': 1}).to_list(1000)
@@ -2928,7 +2935,7 @@ async def get_employee_insights(current_user: dict = Depends(get_current_user)):
     
     # Budget requests created by this user (approved only)
     try:
-        budget_expenses = await db.budget_requests.find({
+        budget_expenses = await get_tdb().budget_requests.find({
             'created_by': user_id,
             'status': 'approved'
         }, {'_id': 0, 'total_budget': 1}).to_list(500)
@@ -2938,7 +2945,7 @@ async def get_employee_insights(current_user: dict = Depends(get_current_user)):
     
     # Expense requests created by this user (approved only)
     try:
-        expense_requests = await db.expense_requests.find({
+        expense_requests = await get_tdb().expense_requests.find({
             'user_id': user_id,
             'status': 'approved'
         }, {'_id': 0, 'amount': 1}).to_list(500)
@@ -3025,7 +3032,7 @@ async def get_sales_roi_summary(
         team_ids = [user_id]
         
         # Find direct reports
-        direct_reports = await db.users.find(
+        direct_reports = await get_tdb().users.find(
             {'reports_to': user_id, 'is_active': True},
             {'_id': 0, 'id': 1}
         ).to_list(100)
@@ -3041,7 +3048,7 @@ async def get_sales_roi_summary(
     team_user_ids = await get_reporting_hierarchy(user_id)
     
     # Get team member details
-    team_members = await db.users.find(
+    team_members = await get_tdb().users.find(
         {'id': {'$in': team_user_ids}},
         {'_id': 0, 'id': 1, 'name': 1, 'ctc_monthly': 1, 'joining_date': 1, 'department': 1}
     ).to_list(100)
@@ -3080,7 +3087,7 @@ async def get_sales_roi_summary(
     }
     
     # Get approved budget requests for team members
-    budget_requests = await db.budget_requests.find({
+    budget_requests = await get_tdb().budget_requests.find({
         'created_by': {'$in': team_user_ids},
         'status': 'approved',
         'created_at': {'$gte': start_date, '$lte': end_date + 'T23:59:59'}
@@ -3098,7 +3105,7 @@ async def get_sales_roi_summary(
             expense_categories['other']['amount'] += amount
     
     # Get approved expense requests for team members
-    expense_requests = await db.expense_requests.find({
+    expense_requests = await get_tdb().expense_requests.find({
         'created_by': {'$in': team_user_ids},
         'status': 'approved',
         'created_at': {'$gte': start_date, '$lte': end_date + 'T23:59:59'}
@@ -3132,7 +3139,7 @@ async def get_sales_roi_summary(
     # ==================== REVENUE SECTION ====================
     
     # Get revenue from invoices (gross invoice value) for accounts owned by team members
-    team_accounts = await db.accounts.find(
+    team_accounts = await get_tdb().accounts.find(
         {'sales_owner_id': {'$in': team_user_ids}},
         {'_id': 0, 'id': 1, 'city': 1}
     ).to_list(500)
@@ -3142,7 +3149,7 @@ async def get_sales_roi_summary(
     invoice_cogs = 0
     
     if account_ids:
-        invoices = await db.invoices.find({
+        invoices = await get_tdb().invoices.find({
             'account_id': {'$in': account_ids},
             'invoice_date': {'$gte': start_date, '$lte': end_date}
         }, {'_id': 0, 'grand_total': 1, 'total_cogs': 1, 'gross_margin': 1, 'line_items': 1, 'account_id': 1}).to_list(1000)
@@ -3249,7 +3256,7 @@ async def update_user_hr_data(
     if not update_data:
         raise HTTPException(status_code=400, detail='No data to update')
     
-    result = await db.users.update_one({'id': user_id}, {'$set': update_data})
+    result = await get_tdb().users.update_one({'id': user_id}, {'$set': update_data})
     
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail='User not found')
@@ -3262,7 +3269,7 @@ async def update_user_hr_data(
 async def create_task(task_input: TaskCreate, current_user: dict = Depends(get_current_user)):
     """Create a new task"""
     # Get assignee name
-    assignee = await db.users.find_one({'id': task_input.assigned_to}, {'_id': 0, 'name': 1})
+    assignee = await get_tdb().users.find_one({'id': task_input.assigned_to}, {'_id': 0, 'name': 1})
     
     task = Task(
         **task_input.model_dump(),
@@ -3277,7 +3284,7 @@ async def create_task(task_input: TaskCreate, current_user: dict = Depends(get_c
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
     
-    await db.tasks.insert_one(doc)
+    await get_tdb().tasks.insert_one(doc)
     return task
 
 @api_router.get("/tasks")
@@ -3309,7 +3316,7 @@ async def get_tasks(
 @api_router.get("/tasks/{task_id}")
 async def get_task(task_id: str, current_user: dict = Depends(get_current_user)):
     """Get a specific task"""
-    task = await db.tasks.find_one({'id': task_id}, {'_id': 0})
+    task = await get_tdb().tasks.find_one({'id': task_id}, {'_id': 0})
     if not task:
         raise HTTPException(status_code=404, detail='Task not found')
     return task
@@ -3317,7 +3324,7 @@ async def get_task(task_id: str, current_user: dict = Depends(get_current_user))
 @api_router.put("/tasks/{task_id}")
 async def update_task(task_id: str, task_update: TaskUpdate, current_user: dict = Depends(get_current_user)):
     """Update a task"""
-    task = await db.tasks.find_one({'id': task_id}, {'_id': 0})
+    task = await get_tdb().tasks.find_one({'id': task_id}, {'_id': 0})
     if not task:
         raise HTTPException(status_code=404, detail='Task not found')
     
@@ -3352,7 +3359,7 @@ async def update_task(task_id: str, task_update: TaskUpdate, current_user: dict 
     
     # If assignee changed, update name
     if 'assigned_to' in update_data:
-        assignee = await db.users.find_one({'id': update_data['assigned_to']}, {'_id': 0, 'name': 1})
+        assignee = await get_tdb().users.find_one({'id': update_data['assigned_to']}, {'_id': 0, 'name': 1})
         update_data['assigned_to_name'] = assignee.get('name') if assignee else None
     
     # Handle comment - append to comments array
@@ -3364,20 +3371,20 @@ async def update_task(task_id: str, task_update: TaskUpdate, current_user: dict 
             'created_by_name': current_user.get('name'),
             'created_at': datetime.now(timezone.utc).isoformat()
         }
-        await db.tasks.update_one(
+        await get_tdb().tasks.update_one(
             {'id': task_id},
             {'$push': {'comments': comment_entry}}
         )
     
-    await db.tasks.update_one({'id': task_id}, {'$set': update_data})
+    await get_tdb().tasks.update_one({'id': task_id}, {'$set': update_data})
     
-    updated = await db.tasks.find_one({'id': task_id}, {'_id': 0})
+    updated = await get_tdb().tasks.find_one({'id': task_id}, {'_id': 0})
     return updated
 
 @api_router.delete("/tasks/{task_id}")
 async def delete_task(task_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a task"""
-    result = await db.tasks.delete_one({'id': task_id})
+    result = await get_tdb().tasks.delete_one({'id': task_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail='Task not found')
     return {'message': 'Task deleted successfully'}
@@ -3432,7 +3439,7 @@ async def create_meeting(meeting_input: MeetingCreate, current_user: dict = Depe
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
     
-    await db.meetings.insert_one(doc)
+    await get_tdb().meetings.insert_one(doc)
     
     # Send email notifications to attendees
     if meeting.attendees:
@@ -3480,7 +3487,7 @@ async def get_meetings(
 @api_router.get("/meetings/{meeting_id}")
 async def get_meeting(meeting_id: str, current_user: dict = Depends(get_current_user)):
     """Get a specific meeting"""
-    meeting = await db.meetings.find_one({'id': meeting_id}, {'_id': 0})
+    meeting = await get_tdb().meetings.find_one({'id': meeting_id}, {'_id': 0})
     if not meeting:
         raise HTTPException(status_code=404, detail='Meeting not found')
     return meeting
@@ -3488,7 +3495,7 @@ async def get_meeting(meeting_id: str, current_user: dict = Depends(get_current_
 @api_router.put("/meetings/{meeting_id}")
 async def update_meeting(meeting_id: str, meeting_update: MeetingUpdate, current_user: dict = Depends(get_current_user)):
     """Update a meeting and send email notifications"""
-    meeting = await db.meetings.find_one({'id': meeting_id}, {'_id': 0})
+    meeting = await get_tdb().meetings.find_one({'id': meeting_id}, {'_id': 0})
     if not meeting:
         raise HTTPException(status_code=404, detail='Meeting not found')
     
@@ -3502,9 +3509,9 @@ async def update_meeting(meeting_id: str, meeting_update: MeetingUpdate, current
     ])
     is_cancellation = meeting_update.status == 'cancelled'
     
-    await db.meetings.update_one({'id': meeting_id}, {'$set': update_data})
+    await get_tdb().meetings.update_one({'id': meeting_id}, {'$set': update_data})
     
-    updated = await db.meetings.find_one({'id': meeting_id}, {'_id': 0})
+    updated = await get_tdb().meetings.find_one({'id': meeting_id}, {'_id': 0})
     
     # Send email notification for reschedule or cancellation
     attendees = updated.get('attendees', [])
@@ -3523,7 +3530,7 @@ async def update_meeting(meeting_id: str, meeting_update: MeetingUpdate, current
 @api_router.delete("/meetings/{meeting_id}")
 async def delete_meeting(meeting_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a meeting"""
-    result = await db.meetings.delete_one({'id': meeting_id})
+    result = await get_tdb().meetings.delete_one({'id': meeting_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail='Meeting not found')
     return {'message': 'Meeting deleted successfully'}
@@ -3545,7 +3552,7 @@ async def create_lead(lead_input: LeadCreate, current_user: dict = Depends(get_c
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
     
-    await db.leads.insert_one(doc)
+    await get_tdb().leads.insert_one(doc)
     
     # Create initial activity
     activity = Activity(
@@ -3556,7 +3563,7 @@ async def create_lead(lead_input: LeadCreate, current_user: dict = Depends(get_c
     )
     activity_doc = activity.model_dump()
     activity_doc['created_at'] = activity_doc['created_at'].isoformat()
-    await db.activities.insert_one(activity_doc)
+    await get_tdb().activities.insert_one(activity_doc)
     
     return lead_obj
 
@@ -3695,15 +3702,15 @@ async def get_leads(
         ]
     
     # Get total count for pagination
-    total = await db.leads.count_documents(query)
+    total = await get_tdb().leads.count_documents(query)
     total_pages = (total + page_size - 1) // page_size  # Ceiling division
     
     # Fetch paginated leads
-    leads = await db.leads.find(query, {'_id': 0}).sort('created_at', -1).skip(skip).limit(page_size).to_list(page_size)
+    leads = await get_tdb().leads.find(query, {'_id': 0}).sort('created_at', -1).skip(skip).limit(page_size).to_list(page_size)
     
     # Get last activity for each lead
     lead_ids = [lead['id'] for lead in leads]
-    activities = await db.activities.find(
+    activities = await get_tdb().activities.find(
         {'lead_id': {'$in': lead_ids}},
         {'_id': 0, 'lead_id': 1, 'created_at': 1, 'interaction_method': 1, 'activity_type': 1}
     ).to_list(len(lead_ids) * 10)  # Reasonable limit per page
@@ -3755,7 +3762,7 @@ async def get_leads(
 
 @api_router.get("/leads/{lead_id}", response_model=Lead)
 async def get_lead(lead_id: str, current_user: dict = Depends(get_current_user)):
-    lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    lead = await get_tdb().leads.find_one({'id': lead_id}, {'_id': 0})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     
@@ -3777,7 +3784,7 @@ async def update_lead(
     current_user: dict = Depends(get_current_user),
     skip_activity_log: bool = False
 ):
-    lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    lead = await get_tdb().leads.find_one({'id': lead_id}, {'_id': 0})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     
@@ -3809,7 +3816,7 @@ async def update_lead(
         if not is_admin:
             # Validation 1: "proposal_shared" requires an approved proposal
             if new_status == 'proposal_shared':
-                proposal = await db.lead_proposals.find_one({'lead_id': lead_id})
+                proposal = await get_tdb().lead_proposals.find_one({'lead_id': lead_id})
                 if not proposal or proposal.get('status') != 'approved':
                     raise HTTPException(
                         status_code=400, 
@@ -3844,11 +3851,11 @@ async def update_lead(
         )
         activity_doc = activity.model_dump()
         activity_doc['created_at'] = activity_doc['created_at'].isoformat()
-        await db.activities.insert_one(activity_doc)
+        await get_tdb().activities.insert_one(activity_doc)
     
-    await db.leads.update_one({'id': lead_id}, {'$set': update_data})
+    await get_tdb().leads.update_one({'id': lead_id}, {'$set': update_data})
     
-    updated_lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    updated_lead = await get_tdb().leads.find_one({'id': lead_id}, {'_id': 0})
     if isinstance(updated_lead['created_at'], str):
         updated_lead['created_at'] = datetime.fromisoformat(updated_lead['created_at'])
     if isinstance(updated_lead['updated_at'], str):
@@ -3859,7 +3866,7 @@ async def update_lead(
 @api_router.delete("/leads/{lead_id}")
 async def delete_lead(lead_id: str, current_user: dict = Depends(get_current_user)):
     # Get the lead first
-    lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    lead = await get_tdb().leads.find_one({'id': lead_id}, {'_id': 0})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     
@@ -3872,22 +3879,22 @@ async def delete_lead(lead_id: str, current_user: dict = Depends(get_current_use
     if not (is_creator or is_leadership):
         raise HTTPException(status_code=403, detail='Only lead creator or leadership can delete leads')
     
-    result = await db.leads.delete_one({'id': lead_id})
+    result = await get_tdb().leads.delete_one({'id': lead_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail='Lead not found')
     
     # Delete related data
-    await db.activities.delete_many({'lead_id': lead_id})
-    await db.follow_ups.delete_many({'lead_id': lead_id})
-    await db.comments.delete_many({'lead_id': lead_id})
-    await db.invoices.delete_many({'lead_uuid': lead_id})
+    await get_tdb().activities.delete_many({'lead_id': lead_id})
+    await get_tdb().follow_ups.delete_many({'lead_id': lead_id})
+    await get_tdb().comments.delete_many({'lead_id': lead_id})
+    await get_tdb().invoices.delete_many({'lead_uuid': lead_id})
     
     return {'message': 'Lead deleted successfully'}
 
 @api_router.post("/leads/{lead_id}/generate-lead-id")
 async def generate_lead_id_for_lead(lead_id: str, current_user: dict = Depends(get_current_user)):
     """Generate a lead_id for a lead that doesn't have one"""
-    lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    lead = await get_tdb().leads.find_one({'id': lead_id}, {'_id': 0})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     
@@ -3907,7 +3914,7 @@ async def generate_lead_id_for_lead(lead_id: str, current_user: dict = Depends(g
     new_lead_id = await generate_lead_id(company, city)
     
     # Update the lead
-    await db.leads.update_one(
+    await get_tdb().leads.update_one(
         {'id': lead_id},
         {
             '$set': {
@@ -4019,7 +4026,7 @@ async def delete_lead_status(status_id: str, current_user: dict = Depends(get_cu
         raise HTTPException(status_code=403, detail='Only admins can manage lead statuses')
     
     # Check if any leads use this status
-    leads_count = await db.leads.count_documents({'status': status_id})
+    leads_count = await get_tdb().leads.count_documents({'status': status_id})
     if leads_count > 0:
         raise HTTPException(status_code=400, detail=f'Cannot delete: {leads_count} leads have this status')
     
@@ -4110,7 +4117,7 @@ async def delete_business_category(category_id: str, current_user: dict = Depend
         raise HTTPException(status_code=404, detail='Business category not found')
     
     # Check if category is in use
-    leads_using = await db.leads.count_documents({'category': existing.get('name')})
+    leads_using = await get_tdb().leads.count_documents({'category': existing.get('name')})
     if leads_using > 0:
         # Instead of deleting, deactivate it
         await db.business_categories.update_one({'id': category_id}, {'$set': {'is_active': False}})
@@ -4201,11 +4208,11 @@ async def get_won_leads_revenue(
         query['region'] = territory
     
     # Fetch won leads
-    leads = await db.leads.find(query, {'_id': 0}).sort('updated_at', -1).to_list(1000)
+    leads = await get_tdb().leads.find(query, {'_id': 0}).sort('updated_at', -1).to_list(1000)
     
     # Get user info for assigned_to
     user_ids = list(set([l.get('assigned_to') for l in leads if l.get('assigned_to')]))
-    users = await db.users.find({'id': {'$in': user_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(100)
+    users = await get_tdb().users.find({'id': {'$in': user_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(100)
     user_map = {u['id']: u['name'] for u in users}
     
     # Build response with invoice data
@@ -4252,14 +4259,14 @@ async def get_won_leads_revenue(
 async def get_revenue_filters(current_user: dict = Depends(get_current_user)):
     """Get filter options for Sales Revenue Dashboard"""
     # Get unique cities from won leads
-    cities = await db.leads.distinct('city', {'status': 'won'})
+    cities = await get_tdb().leads.distinct('city', {'status': 'won'})
     
     # Get unique territories (regions)
-    territories = await db.leads.distinct('region', {'status': 'won'})
+    territories = await get_tdb().leads.distinct('region', {'status': 'won'})
     
     # Get resources (users who have won leads assigned)
-    assigned_users = await db.leads.distinct('assigned_to', {'status': 'won', 'assigned_to': {'$ne': None}})
-    users = await db.users.find({'id': {'$in': assigned_users}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(100)
+    assigned_users = await get_tdb().leads.distinct('assigned_to', {'status': 'won', 'assigned_to': {'$ne': None}})
+    users = await get_tdb().users.find({'id': {'$in': assigned_users}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(100)
     
     return {
         'cities': sorted([c for c in cities if c]),
@@ -4272,11 +4279,11 @@ async def get_revenue_filters(current_user: dict = Depends(get_current_user)):
 @api_router.get("/leads/{lead_id}/invoices")
 async def get_lead_invoices(lead_id: str, current_user: dict = Depends(get_current_user)):
     """Get all invoices for a specific lead"""
-    lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    lead = await get_tdb().leads.find_one({'id': lead_id}, {'_id': 0})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     
-    invoices = await db.invoices.find(
+    invoices = await get_tdb().invoices.find(
         {'lead_uuid': lead_id},
         {'_id': 0}
     ).sort('received_at', -1).to_list(100)
@@ -4303,12 +4310,12 @@ async def get_all_invoices(
     if status:
         query['status'] = status
     
-    invoices = await db.invoices.find(
+    invoices = await get_tdb().invoices.find(
         query,
         {'_id': 0}
     ).sort('received_at', -1).skip(skip).limit(limit).to_list(limit)
     
-    total = await db.invoices.count_documents(query)
+    total = await get_tdb().invoices.count_documents(query)
     
     return {
         'total': total,
@@ -4318,7 +4325,7 @@ async def get_all_invoices(
 @api_router.get("/invoices/unmatched")
 async def get_unmatched_invoices(current_user: dict = Depends(get_current_user)):
     """Get invoices that couldn't be matched to a lead"""
-    invoices = await db.invoices.find(
+    invoices = await get_tdb().invoices.find(
         {'status': 'unmatched'},
         {'_id': 0}
     ).sort('received_at', -1).to_list(100)
@@ -4329,7 +4336,7 @@ async def get_unmatched_invoices(current_user: dict = Depends(get_current_user))
 async def get_resource_invoice_summary(resource_id: str, current_user: dict = Depends(get_current_user)):
     """Get invoice summary for a specific resource (sales person)"""
     # Get user info
-    user = await db.users.find_one({'id': resource_id}, {'_id': 0, 'password': 0})
+    user = await get_tdb().users.find_one({'id': resource_id}, {'_id': 0, 'password': 0})
     if not user:
         raise HTTPException(status_code=404, detail='Resource not found')
     
@@ -4337,13 +4344,13 @@ async def get_resource_invoice_summary(resource_id: str, current_user: dict = De
     summary = await db.resource_invoice_summary.find_one({'resource_id': resource_id}, {'_id': 0})
     
     # Get all invoices for leads assigned to this resource
-    invoices = await db.invoices.find(
+    invoices = await get_tdb().invoices.find(
         {'assigned_to': resource_id, 'status': 'matched'},
         {'_id': 0}
     ).sort('received_at', -1).to_list(100)
     
     # Get resource targets
-    targets = await db.resource_targets.find({'resource_id': resource_id}, {'_id': 0}).to_list(100)
+    targets = await get_tdb().resource_targets.find({'resource_id': resource_id}, {'_id': 0}).to_list(100)
     total_target = sum(t.get('target_revenue', 0) for t in targets)
     
     achieved = summary.get('total_gross_invoice_value', 0) if summary else 0
@@ -4373,21 +4380,21 @@ async def match_invoice_to_lead(
 ):
     """Manually match an unmatched invoice to a lead"""
     # Find the invoice
-    invoice = await db.invoices.find_one({'id': invoice_id}, {'_id': 0})
+    invoice = await get_tdb().invoices.find_one({'id': invoice_id}, {'_id': 0})
     if not invoice:
         raise HTTPException(status_code=404, detail='Invoice not found')
     
     # Find the lead by formatted lead_id
-    lead = await db.leads.find_one({'lead_id': lead_id}, {'_id': 0})
+    lead = await get_tdb().leads.find_one({'lead_id': lead_id}, {'_id': 0})
     if not lead:
         # Try by UUID
-        lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+        lead = await get_tdb().leads.find_one({'id': lead_id}, {'_id': 0})
     
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     
     # Update invoice
-    await db.invoices.update_one(
+    await get_tdb().invoices.update_one(
         {'id': invoice_id},
         {
             '$set': {
@@ -4399,7 +4406,7 @@ async def match_invoice_to_lead(
     )
     
     # Recalculate lead totals
-    all_invoices = await db.invoices.find({
+    all_invoices = await get_tdb().invoices.find({
         'lead_uuid': lead['id'],
         'status': 'matched'
     }).to_list(1000)
@@ -4408,7 +4415,7 @@ async def match_invoice_to_lead(
     total_net = sum(inv.get('net_invoice_value', 0) for inv in all_invoices)
     total_credit = sum(inv.get('credit_note_value', 0) for inv in all_invoices)
     
-    await db.leads.update_one(
+    await get_tdb().leads.update_one(
         {'id': lead['id']},
         {
             '$set': {
@@ -4499,7 +4506,7 @@ async def generate_account_id(account_name: str, city: str) -> str:
     prefix = f"{name4}-{city3}-A{year2}-"
     
     regex_pattern = f"^{re.escape(prefix)}\\d{{3}}$"
-    existing = await db.accounts.find(
+    existing = await get_tdb().accounts.find(
         {'account_id': {'$regex': regex_pattern}},
         {'account_id': 1}
     ).sort('account_id', -1).limit(1).to_list(1)
@@ -4516,7 +4523,7 @@ async def generate_account_id(account_name: str, city: str) -> str:
 @api_router.post("/accounts/convert-lead")
 async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depends(get_current_user)):
     """Convert a won lead to an account"""
-    lead = await db.leads.find_one({'id': data.lead_id}, {'_id': 0})
+    lead = await get_tdb().leads.find_one({'id': data.lead_id}, {'_id': 0})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     
@@ -4590,10 +4597,10 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
     
-    await db.accounts.insert_one(doc)
+    await get_tdb().accounts.insert_one(doc)
     
     # Update lead to mark as converted
-    await db.leads.update_one(
+    await get_tdb().leads.update_one(
         {'id': data.lead_id},
         {'$set': {
             'converted_to_account': True,
@@ -4639,10 +4646,10 @@ async def get_accounts(
             {'account_id': {'$regex': search, '$options': 'i'}}
         ]
     
-    total = await db.accounts.count_documents(query)
+    total = await get_tdb().accounts.count_documents(query)
     total_pages = (total + page_size - 1) // page_size
     
-    accounts = await db.accounts.find(query, {'_id': 0}).sort('created_at', -1).skip(skip).limit(page_size).to_list(page_size)
+    accounts = await get_tdb().accounts.find(query, {'_id': 0}).sort('created_at', -1).skip(skip).limit(page_size).to_list(page_size)
     
     # Get user names for assigned_to field and category from original leads
     user_ids = list(set(a.get('assigned_to') for a in accounts if a.get('assigned_to')))
@@ -4650,12 +4657,12 @@ async def get_accounts(
     
     user_map = {}
     if user_ids:
-        users = await db.users.find({'id': {'$in': user_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(len(user_ids))
+        users = await get_tdb().users.find({'id': {'$in': user_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(len(user_ids))
         user_map = {u['id']: u['name'] for u in users}
     
     lead_map = {}
     if lead_ids:
-        leads = await db.leads.find({'id': {'$in': lead_ids}}, {'_id': 0, 'id': 1, 'category': 1}).to_list(len(lead_ids))
+        leads = await get_tdb().leads.find({'id': {'$in': lead_ids}}, {'_id': 0, 'id': 1, 'category': 1}).to_list(len(lead_ids))
         lead_map = {l['id']: l.get('category') for l in leads}
     
     # Enrich account data
@@ -4698,14 +4705,14 @@ async def get_accounts_stats(
         query['city'] = city
     
     # Total accounts
-    total_accounts = await db.accounts.count_documents(query)
+    total_accounts = await get_tdb().accounts.count_documents(query)
     
     # Accounts by type
     type_pipeline = [
         {'$match': query},
         {'$group': {'_id': '$account_type', 'count': {'$sum': 1}}}
     ]
-    type_results = await db.accounts.aggregate(type_pipeline).to_list(10)
+    type_results = await get_tdb().accounts.aggregate(type_pipeline).to_list(10)
     by_type = {r['_id'] or 'Unassigned': r['count'] for r in type_results}
     
     # Accounts by category (directly from accounts collection)
@@ -4713,12 +4720,12 @@ async def get_accounts_stats(
         {'$match': {**query, 'category': {'$ne': None}}},
         {'$group': {'_id': '$category', 'count': {'$sum': 1}}}
     ]
-    category_results = await db.accounts.aggregate(category_pipeline).to_list(20)
+    category_results = await get_tdb().accounts.aggregate(category_pipeline).to_list(20)
     by_category = {r['_id']: r['count'] for r in category_results if r['_id']}
     
     # If no categories found in accounts, try to get from linked leads (for backward compatibility)
     if not by_category:
-        all_accounts = await db.accounts.find(query, {'_id': 0, 'lead_id': 1}).to_list(10000)
+        all_accounts = await get_tdb().accounts.find(query, {'_id': 0, 'lead_id': 1}).to_list(10000)
         lead_ids = [a['lead_id'] for a in all_accounts if a.get('lead_id')]
         
         if lead_ids:
@@ -4726,7 +4733,7 @@ async def get_accounts_stats(
                 {'$match': {'id': {'$in': lead_ids}, 'category': {'$ne': None}}},
                 {'$group': {'_id': '$category', 'count': {'$sum': 1}}}
             ]
-            lead_category_results = await db.leads.aggregate(lead_category_pipeline).to_list(20)
+            lead_category_results = await get_tdb().leads.aggregate(lead_category_pipeline).to_list(20)
             by_category = {r['_id']: r['count'] for r in lead_category_results if r['_id']}
     
     return {
@@ -4738,7 +4745,7 @@ async def get_accounts_stats(
 @api_router.get("/accounts/{account_id}")
 async def get_account(account_id: str, current_user: dict = Depends(get_current_user)):
     """Get single account by ID or account_id"""
-    account = await db.accounts.find_one(
+    account = await get_tdb().accounts.find_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
         {'_id': 0}
     )
@@ -4756,18 +4763,18 @@ async def get_account(account_id: str, current_user: dict = Depends(get_current_
 async def migrate_account_categories(current_user: dict = Depends(get_current_user)):
     """Migrate categories from leads to existing accounts (one-time migration)"""
     # Get all accounts without category
-    accounts = await db.accounts.find({'category': {'$exists': False}}, {'_id': 0, 'lead_id': 1, 'account_id': 1}).to_list(10000)
+    accounts = await get_tdb().accounts.find({'category': {'$exists': False}}, {'_id': 0, 'lead_id': 1, 'account_id': 1}).to_list(10000)
     
     if not accounts:
         # Also check for null categories
-        accounts = await db.accounts.find({'category': None}, {'_id': 0, 'lead_id': 1, 'account_id': 1}).to_list(10000)
+        accounts = await get_tdb().accounts.find({'category': None}, {'_id': 0, 'lead_id': 1, 'account_id': 1}).to_list(10000)
     
     updated_count = 0
     for account in accounts:
         lead_id = account.get('lead_id')
         if lead_id:
             # Find the lead and get its category
-            lead = await db.leads.find_one(
+            lead = await get_tdb().leads.find_one(
                 {'$or': [{'id': lead_id}, {'lead_id': lead_id}]},
                 {'_id': 0, 'category': 1, 'contact_person': 1, 'name': 1, 'phone': 1}
             )
@@ -4779,7 +4786,7 @@ async def migrate_account_categories(current_user: dict = Depends(get_current_us
                 if not account.get('contact_number') and lead.get('phone'):
                     update_data['contact_number'] = lead['phone']
                 
-                await db.accounts.update_one(
+                await get_tdb().accounts.update_one(
                     {'account_id': account['account_id']},
                     {'$set': update_data}
                 )
@@ -4790,7 +4797,7 @@ async def migrate_account_categories(current_user: dict = Depends(get_current_us
 @api_router.put("/accounts/{account_id}")
 async def update_account(account_id: str, update_data: AccountUpdate, current_user: dict = Depends(get_current_user)):
     """Update account details including SKU pricing and delivery address"""
-    account = await db.accounts.find_one(
+    account = await get_tdb().accounts.find_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
         {'_id': 0}
     )
@@ -4813,12 +4820,12 @@ async def update_account(account_id: str, update_data: AccountUpdate, current_us
     
     update_dict['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    await db.accounts.update_one(
+    await get_tdb().accounts.update_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
         {'$set': update_dict}
     )
     
-    updated = await db.accounts.find_one(
+    updated = await get_tdb().accounts.find_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
         {'_id': 0}
     )
@@ -4828,7 +4835,7 @@ async def update_account(account_id: str, update_data: AccountUpdate, current_us
 @api_router.get("/accounts/{account_id}/invoices")
 async def get_account_invoices(account_id: str, current_user: dict = Depends(get_current_user)):
     """Get invoices for an account"""
-    account = await db.accounts.find_one(
+    account = await get_tdb().accounts.find_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
         {'_id': 0, 'id': 1, 'lead_id': 1, 'account_name': 1, 'account_id': 1}
     )
@@ -4856,7 +4863,7 @@ async def get_account_invoices(account_id: str, current_user: dict = Depends(get
     if not query['$or']:
         return {'invoices': [], 'total_amount': 0, 'paid_amount': 0, 'outstanding': 0}
     
-    invoices = await db.invoices.find(query, {'_id': 0}).sort('invoice_date', -1).to_list(100)
+    invoices = await get_tdb().invoices.find(query, {'_id': 0}).sort('invoice_date', -1).to_list(100)
     
     # Calculate totals - support both old and new field names
     total_amount = sum(inv.get('grand_total', inv.get('gross_invoice_value', inv.get('total_amount', 0))) or 0 for inv in invoices)
@@ -4917,7 +4924,7 @@ async def create_account_invoice(
     COGS and logistics are fetched from the cogs_data collection based on SKU and account city.
     """
     # Get account details
-    account = await db.accounts.find_one(
+    account = await get_tdb().accounts.find_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
         {'_id': 0}
     )
@@ -4929,7 +4936,7 @@ async def create_account_invoice(
     account_name = account.get('account_name') or account.get('company_name')
     
     # Get COGS data for the account's city
-    cogs_data = await db.cogs_data.find({'city': account_city}, {'_id': 0}).to_list(100)
+    cogs_data = await get_tdb().cogs_data.find({'city': account_city}, {'_id': 0}).to_list(100)
     cogs_lookup = {c['sku_name']: c for c in cogs_data}
     
     # Process line items and calculate costs
@@ -4952,7 +4959,7 @@ async def create_account_invoice(
         
         # If COGS not found for this city, try to get from any city as fallback
         if cogs_per_bottle == 0:
-            fallback_cogs = await db.cogs_data.find_one({'sku_name': sku_name}, {'_id': 0})
+            fallback_cogs = await get_tdb().cogs_data.find_one({'sku_name': sku_name}, {'_id': 0})
             if fallback_cogs:
                 cogs_per_bottle = fallback_cogs.get('total_cogs', 0) or 0
                 logistics_per_bottle = fallback_cogs.get('outbound_logistics_cost', 0) or 0
@@ -4989,7 +4996,7 @@ async def create_account_invoice(
     
     # Generate invoice number
     today = datetime.now().strftime('%Y%m%d')
-    count = await db.invoices.count_documents({'invoice_number': {'$regex': f'^INV-{today}'}})
+    count = await get_tdb().invoices.count_documents({'invoice_number': {'$regex': f'^INV-{today}'}})
     invoice_number = f"INV-{today}-{str(count + 1).zfill(4)}"
     
     # Create invoice document
@@ -5015,7 +5022,7 @@ async def create_account_invoice(
         'created_at': datetime.now(timezone.utc).isoformat()
     }
     
-    await db.invoices.insert_one(invoice)
+    await get_tdb().invoices.insert_one(invoice)
     
     # Return response with margin summary
     return {
@@ -5043,7 +5050,7 @@ async def delete_account(account_id: str, current_user: dict = Depends(get_curre
     if current_user['role'] not in ['admin', 'National Sales Head', 'CEO', 'Director']:
         raise HTTPException(status_code=403, detail='Only admins can delete accounts')
     
-    account = await db.accounts.find_one(
+    account = await get_tdb().accounts.find_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
         {'_id': 0, 'lead_id': 1}
     )
@@ -5052,12 +5059,12 @@ async def delete_account(account_id: str, current_user: dict = Depends(get_curre
     
     # Revert the lead conversion flag
     if account.get('lead_id'):
-        await db.leads.update_one(
+        await get_tdb().leads.update_one(
             {'$or': [{'id': account['lead_id']}, {'lead_id': account['lead_id']}]},
             {'$set': {'converted_to_account': False, 'account_id': None}}
         )
     
-    await db.accounts.delete_one({'$or': [{'id': account_id}, {'account_id': account_id}]})
+    await get_tdb().accounts.delete_one({'$or': [{'id': account_id}, {'account_id': account_id}]})
     
     return {'message': 'Account deleted successfully'}
 
@@ -5074,7 +5081,7 @@ async def upload_account_logo(account_id: str, request: LogoUploadRequest, curre
     import base64
     import os
     
-    account = await db.accounts.find_one(
+    account = await get_tdb().accounts.find_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
         {'_id': 0}
     )
@@ -5103,7 +5110,7 @@ async def upload_account_logo(account_id: str, request: LogoUploadRequest, curre
         
         # Update account with logo info
         logo_url = f"/api/static/logos/{file_name}"
-        await db.accounts.update_one(
+        await get_tdb().accounts.update_one(
             {'$or': [{'id': account_id}, {'account_id': account_id}]},
             {'$set': {
                 'logo_url': logo_url,
@@ -5124,7 +5131,7 @@ async def delete_account_logo(account_id: str, current_user: dict = Depends(get_
     """Delete account logo"""
     import os
     
-    account = await db.accounts.find_one(
+    account = await get_tdb().accounts.find_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
         {'_id': 0}
     )
@@ -5140,7 +5147,7 @@ async def delete_account_logo(account_id: str, current_user: dict = Depends(get_
             os.remove(file_path)
     
     # Update account to remove logo
-    await db.accounts.update_one(
+    await get_tdb().accounts.update_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
         {'$unset': {'logo_url': '', 'logo_width_mm': '', 'logo_height_mm': ''}}
     )
@@ -5155,7 +5162,7 @@ async def upload_lead_logo(lead_id: str, request: LogoUploadRequest, current_use
     import base64
     import os
     
-    lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    lead = await get_tdb().leads.find_one({'id': lead_id}, {'_id': 0})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     
@@ -5181,7 +5188,7 @@ async def upload_lead_logo(lead_id: str, request: LogoUploadRequest, current_use
         
         # Update lead with logo info
         logo_url = f"/api/static/logos/leads/{file_name}"
-        await db.leads.update_one(
+        await get_tdb().leads.update_one(
             {'id': lead_id},
             {'$set': {
                 'logo_url': logo_url,
@@ -5202,7 +5209,7 @@ async def delete_lead_logo(lead_id: str, current_user: dict = Depends(get_curren
     """Delete lead logo"""
     import os
     
-    lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    lead = await get_tdb().leads.find_one({'id': lead_id}, {'_id': 0})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     
@@ -5215,7 +5222,7 @@ async def delete_lead_logo(lead_id: str, current_user: dict = Depends(get_curren
             os.remove(file_path)
     
     # Update lead to remove logo
-    await db.leads.update_one(
+    await get_tdb().leads.update_one(
         {'id': lead_id},
         {'$unset': {'logo_url': '', 'logo_width_mm': '', 'logo_height_mm': ''}}
     )
@@ -5238,7 +5245,7 @@ async def create_activity(activity_input: ActivityCreate, current_user: dict = D
     description_parts = [activity_data['description']]
     
     # Get the lead to include current status in activity
-    lead = await db.leads.find_one({'id': activity_data['lead_id']}, {'_id': 0})
+    lead = await get_tdb().leads.find_one({'id': activity_data['lead_id']}, {'_id': 0})
     current_status = lead.get('status') if lead else None
     
     # Always include status in activity for consolidated view
@@ -5264,7 +5271,7 @@ async def create_activity(activity_input: ActivityCreate, current_user: dict = D
     doc = activity_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     
-    await db.activities.insert_one(doc)
+    await get_tdb().activities.insert_one(doc)
     
     # Update lead with last contacted info and optionally status/follow-up
     lead_updates = {
@@ -5278,7 +5285,7 @@ async def create_activity(activity_input: ActivityCreate, current_user: dict = D
     if next_followup_date:
         lead_updates['next_followup_date'] = next_followup_date
     
-    await db.leads.update_one({'id': activity_data['lead_id']}, {'$set': lead_updates})
+    await get_tdb().leads.update_one({'id': activity_data['lead_id']}, {'$set': lead_updates})
     
     return activity_obj
 
@@ -5289,7 +5296,7 @@ async def get_activities(
     limit: int = 100,
     current_user: dict = Depends(get_current_user)
 ):
-    activities = await db.activities.find({'lead_id': lead_id}, {'_id': 0}).sort('created_at', -1).skip(skip).limit(limit).to_list(limit)
+    activities = await get_tdb().activities.find({'lead_id': lead_id}, {'_id': 0}).sort('created_at', -1).skip(skip).limit(limit).to_list(limit)
     
     for activity in activities:
         if isinstance(activity['created_at'], str):
@@ -5311,7 +5318,7 @@ async def create_follow_up(follow_up_input: FollowUpCreate, current_user: dict =
     if doc.get('completed_at'):
         doc['completed_at'] = doc['completed_at'].isoformat()
     
-    await db.follow_ups.insert_one(doc)
+    await get_tdb().follow_ups.insert_one(doc)
     
     # Create activity
     activity = Activity(
@@ -5322,7 +5329,7 @@ async def create_follow_up(follow_up_input: FollowUpCreate, current_user: dict =
     )
     activity_doc = activity.model_dump()
     activity_doc['created_at'] = activity_doc['created_at'].isoformat()
-    await db.activities.insert_one(activity_doc)
+    await get_tdb().activities.insert_one(activity_doc)
     
     return follow_up_obj
 
@@ -5334,9 +5341,9 @@ async def get_follow_ups(
 ):
     # Get follow-ups assigned to current user or created by them
     if current_user['role'] in ['admin', 'sales_manager']:
-        follow_ups = await db.follow_ups.find({}, {'_id': 0}).skip(skip).limit(limit).to_list(limit)
+        follow_ups = await get_tdb().follow_ups.find({}, {'_id': 0}).skip(skip).limit(limit).to_list(limit)
     else:
-        follow_ups = await db.follow_ups.find({'assigned_to': current_user['id']}, {'_id': 0}).skip(skip).limit(limit).to_list(limit)
+        follow_ups = await get_tdb().follow_ups.find({'assigned_to': current_user['id']}, {'_id': 0}).skip(skip).limit(limit).to_list(limit)
     
     for follow_up in follow_ups:
         if isinstance(follow_up['created_at'], str):
@@ -5350,7 +5357,7 @@ async def get_follow_ups(
 
 @api_router.put("/follow-ups/{follow_up_id}/complete")
 async def complete_follow_up(follow_up_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.follow_ups.update_one(
+    result = await get_tdb().follow_ups.update_one(
         {'id': follow_up_id},
         {'$set': {'is_completed': True, 'completed_at': datetime.now(timezone.utc).isoformat()}}
     )
@@ -5371,7 +5378,7 @@ async def create_comment(comment_input: CommentCreate, current_user: dict = Depe
     doc = comment_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     
-    await db.comments.insert_one(doc)
+    await get_tdb().comments.insert_one(doc)
     
     # Create activity
     activity = Activity(
@@ -5382,7 +5389,7 @@ async def create_comment(comment_input: CommentCreate, current_user: dict = Depe
     )
     activity_doc = activity.model_dump()
     activity_doc['created_at'] = activity_doc['created_at'].isoformat()
-    await db.activities.insert_one(activity_doc)
+    await get_tdb().activities.insert_one(activity_doc)
     
     return comment_obj
 
@@ -5393,7 +5400,7 @@ async def get_comments(
     limit: int = 100,
     current_user: dict = Depends(get_current_user)
 ):
-    comments = await db.comments.find({'lead_id': lead_id}, {'_id': 0}).sort('created_at', -1).skip(skip).limit(limit).to_list(limit)
+    comments = await get_tdb().comments.find({'lead_id': lead_id}, {'_id': 0}).sort('created_at', -1).skip(skip).limit(limit).to_list(limit)
     
     for comment in comments:
         if isinstance(comment['created_at'], str):
@@ -5409,7 +5416,7 @@ async def get_users(
     limit: int = 100,
     current_user: dict = Depends(get_current_user)
 ):
-    users = await db.users.find({}, {'_id': 0, 'password': 0}).skip(skip).limit(limit).to_list(limit)
+    users = await get_tdb().users.find({}, {'_id': 0, 'password': 0}).skip(skip).limit(limit).to_list(limit)
     
     for user in users:
         # Handle created_at conversion safely - ensure consistent ISO string output
@@ -5438,7 +5445,7 @@ async def get_users(
 @api_router.get("/users/org-chart")
 async def get_org_chart(current_user: dict = Depends(get_current_user)):
     """Get organizational hierarchy chart"""
-    users = await db.users.find({}, {'_id': 0, 'password': 0}).to_list(1000)
+    users = await get_tdb().users.find({}, {'_id': 0, 'password': 0}).to_list(1000)
     
     # Convert datetime strings safely
     for user in users:
@@ -5595,7 +5602,7 @@ async def create_daily_status(status_input: DailyStatusCreate, current_user: dic
                 return False
             visited.add(manager_id)
             
-            direct_reports = await db.users.find(
+            direct_reports = await get_tdb().users.find(
                 {'reports_to': manager_id, 'is_active': True},
                 {'_id': 0, 'id': 1}
             ).to_list(100)
@@ -5618,7 +5625,7 @@ async def create_daily_status(status_input: DailyStatusCreate, current_user: dic
         posted_by_name = current_user.get('name', current_user.get('email'))
     
     # Check if status already exists for this date
-    existing = await db.daily_status.find_one({
+    existing = await get_tdb().daily_status.find_one({
         'user_id': target_user_id,
         'status_date': status_input.status_date
     }, {'_id': 0})
@@ -5637,7 +5644,7 @@ async def create_daily_status(status_input: DailyStatusCreate, current_user: dic
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
     
-    await db.daily_status.insert_one(doc)
+    await get_tdb().daily_status.insert_one(doc)
     return status_obj
 
 @api_router.get("/daily-status")
@@ -5663,7 +5670,7 @@ async def get_daily_statuses(
                     return False
                 visited.add(manager_id)
                 
-                direct_reports = await db.users.find(
+                direct_reports = await get_tdb().users.find(
                     {'reports_to': manager_id, 'is_active': True},
                     {'_id': 0, 'id': 1}
                 ).to_list(100)
@@ -5691,7 +5698,7 @@ async def get_daily_statuses(
         else:
             query['status_date'] = {'$lte': end_date}
     
-    statuses = await db.daily_status.find(query, {'_id': 0}).sort('status_date', -1).to_list(100)
+    statuses = await get_tdb().daily_status.find(query, {'_id': 0}).sort('status_date', -1).to_list(100)
     
     for status in statuses:
         if isinstance(status['created_at'], str):
@@ -5707,7 +5714,7 @@ async def update_daily_status(
     status_update: DailyStatusUpdate,
     current_user: dict = Depends(get_current_user)
 ):
-    status = await db.daily_status.find_one({'id': status_id}, {'_id': 0})
+    status = await get_tdb().daily_status.find_one({'id': status_id}, {'_id': 0})
     if not status:
         raise HTTPException(status_code=404, detail='Status not found')
     
@@ -5723,7 +5730,7 @@ async def update_daily_status(
                 return False
             visited.add(manager_id)
             
-            direct_reports = await db.users.find(
+            direct_reports = await get_tdb().users.find(
                 {'reports_to': manager_id, 'is_active': True},
                 {'_id': 0, 'id': 1}
             ).to_list(100)
@@ -5749,9 +5756,9 @@ async def update_daily_status(
         update_data['posted_by'] = current_user['id']
         update_data['posted_by_name'] = current_user.get('name', current_user.get('email'))
     
-    await db.daily_status.update_one({'id': status_id}, {'$set': update_data})
+    await get_tdb().daily_status.update_one({'id': status_id}, {'$set': update_data})
     
-    updated_status = await db.daily_status.find_one({'id': status_id}, {'_id': 0})
+    updated_status = await get_tdb().daily_status.find_one({'id': status_id}, {'_id': 0})
     if isinstance(updated_status['created_at'], str):
         updated_status['created_at'] = datetime.fromisoformat(updated_status['created_at'])
     if isinstance(updated_status['updated_at'], str):
@@ -5780,7 +5787,7 @@ async def auto_populate_from_activities(
                     return False
                 visited.add(manager_id)
                 
-                direct_reports = await db.users.find(
+                direct_reports = await get_tdb().users.find(
                     {'reports_to': manager_id, 'is_active': True},
                     {'_id': 0, 'id': 1}
                 ).to_list(100)
@@ -5801,7 +5808,7 @@ async def auto_populate_from_activities(
         start_datetime = datetime.fromisoformat(f'{status_date}T00:00:00').replace(tzinfo=timezone.utc).isoformat()
         end_datetime = datetime.fromisoformat(f'{status_date}T23:59:59').replace(tzinfo=timezone.utc).isoformat()
         
-        activities = await db.activities.find(
+        activities = await get_tdb().activities.find(
             {
                 'created_by': fetch_user_id,
                 'created_at': {'$gte': start_datetime, '$lte': end_datetime}
@@ -5814,7 +5821,7 @@ async def auto_populate_from_activities(
         
         # Get lead names for all activities
         lead_ids = list(set([a['lead_id'] for a in activities]))
-        leads = await db.leads.find(
+        leads = await get_tdb().leads.find(
             {'id': {'$in': lead_ids}},
             {'_id': 0, 'id': 1, 'company': 1, 'name': 1}
         ).to_list(100)
@@ -5971,7 +5978,7 @@ async def get_team_status_rollup(
     
     if current_user.get('role') in high_level_roles:
         # Get all active users' statuses
-        all_users = await db.users.find(
+        all_users = await get_tdb().users.find(
             {'is_active': True},
             {'_id': 0, 'id': 1, 'name': 1, 'role': 1, 'designation': 1, 'territory': 1, 'city': 1, 'state': 1}
         ).to_list(500)
@@ -5979,7 +5986,7 @@ async def get_team_status_rollup(
         user_map = {u['id']: u for u in all_users}
     else:
         # For other roles, show only direct reports
-        direct_reports = await db.users.find(
+        direct_reports = await get_tdb().users.find(
             {'reports_to': current_user['id']},
             {'_id': 0, 'id': 1, 'name': 1, 'role': 1, 'designation': 1, 'territory': 1, 'city': 1, 'state': 1}
         ).to_list(100)
@@ -5996,7 +6003,7 @@ async def get_team_status_rollup(
         'status_date': target_date
     }
     
-    statuses = await db.daily_status.find(query, {'_id': 0}).to_list(500)
+    statuses = await get_tdb().daily_status.find(query, {'_id': 0}).to_list(500)
     
     # Get activity metrics for the day
     start_datetime = datetime.fromisoformat(f'{target_date}T00:00:00').replace(tzinfo=timezone.utc).isoformat()
@@ -6008,7 +6015,7 @@ async def get_team_status_rollup(
         user_info = user_map.get(status['user_id'])
         if user_info:
             # Get activity metrics for this user
-            user_activities = await db.activities.find({
+            user_activities = await get_tdb().activities.find({
                 'created_by': status['user_id'],
                 'created_at': {'$gte': start_datetime, '$lte': end_datetime}
             }, {'_id': 0}).to_list(1000)
@@ -6018,7 +6025,7 @@ async def get_team_status_rollup(
             emails = sum(1 for a in user_activities if a.get('interaction_method') == 'email')
             messages = sum(1 for a in user_activities if a.get('interaction_method') in ['whatsapp', 'sms'])
             
-            new_leads = await db.leads.count_documents({
+            new_leads = await get_tdb().leads.count_documents({
                 'created_by': status['user_id'],
                 'created_at': {'$gte': start_datetime, '$lte': end_datetime}
             })
@@ -6128,10 +6135,10 @@ async def get_weekly_status_summary(
     if user_id:
         # Individual member summary
         query['user_id'] = user_id
-        user = await db.users.find_one({'id': user_id}, {'_id': 0})
+        user = await get_tdb().users.find_one({'id': user_id}, {'_id': 0})
     else:
         # Team summary - all direct reports
-        direct_reports = await db.users.find(
+        direct_reports = await get_tdb().users.find(
             {'reports_to': current_user['id']},
             {'_id': 0, 'id': 1}
         ).to_list(100)
@@ -6141,7 +6148,7 @@ async def get_weekly_status_summary(
             query['user_id'] = {'$in': user_ids}
     
     # Get all statuses in date range
-    statuses = await db.daily_status.find(query, {'_id': 0}).sort('status_date', 1).to_list(500)
+    statuses = await get_tdb().daily_status.find(query, {'_id': 0}).sort('status_date', 1).to_list(500)
     
     return {
         'statuses': statuses,
@@ -6211,7 +6218,7 @@ async def create_team_member(user_input: UserCreate, request: Request, current_u
         raise HTTPException(status_code=403, detail='Only leadership can create team members')
     
     # Check if user exists
-    existing = await db.users.find_one({'email': user_input.email}, {'_id': 0})
+    existing = await get_tdb().users.find_one({'email': user_input.email}, {'_id': 0})
     if existing:
         raise HTTPException(status_code=400, detail='Email already registered')
     
@@ -6240,7 +6247,7 @@ async def create_team_member(user_input: UserCreate, request: Request, current_u
     doc['created_at'] = doc['created_at'].isoformat()
     doc['tenant_id'] = tenant_id  # Ensure tenant_id is in the document
     
-    await db.users.insert_one(doc)
+    await get_tdb().users.insert_one(doc)
     return user_obj
 
 @api_router.delete("/users/{user_id}")
@@ -6251,18 +6258,18 @@ async def delete_user(user_id: str, current_user: dict = Depends(get_current_use
         raise HTTPException(status_code=403, detail='Only leadership can delete users')
     
     # Delete user
-    result = await db.users.delete_one({'id': user_id})
+    result = await get_tdb().users.delete_one({'id': user_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail='User not found')
     
     # Delete associated data
-    await db.leads.delete_many({'assigned_to': user_id})
-    await db.leads.delete_many({'created_by': user_id})
-    await db.activities.delete_many({'created_by': user_id})
-    await db.daily_status.delete_many({'user_id': user_id})
+    await get_tdb().leads.delete_many({'assigned_to': user_id})
+    await get_tdb().leads.delete_many({'created_by': user_id})
+    await get_tdb().activities.delete_many({'created_by': user_id})
+    await get_tdb().daily_status.delete_many({'user_id': user_id})
     await db.user_sessions.delete_many({'user_id': user_id})
-    await db.leave_requests.delete_many({'user_id': user_id})
-    await db.resource_targets.delete_many({'resource_id': user_id})
+    await get_tdb().leave_requests.delete_many({'user_id': user_id})
+    await get_tdb().resource_targets.delete_many({'resource_id': user_id})
     
     return {'message': 'User and all associated data deleted successfully'}
 
@@ -6284,7 +6291,7 @@ async def update_user(user_id: str, updates: dict, current_user: dict = Depends(
     ]:
         updates['role'] = updates['designation']
     
-    result = await db.users.update_one({'id': user_id}, {'$set': updates})
+    result = await get_tdb().users.update_one({'id': user_id}, {'$set': updates})
     
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail='User not found')
@@ -6376,7 +6383,7 @@ async def get_dashboard_analytics(
         activity_query['created_at'] = {'$gte': start_date, '$lte': end_date}
     
     # Get all activities
-    activities = await db.activities.find(activity_query, {'_id': 0}).to_list(10000)
+    activities = await get_tdb().activities.find(activity_query, {'_id': 0}).to_list(10000)
     
     # Filter activities by location if needed (via lead lookup)
     if territory or state or city:
@@ -6388,7 +6395,7 @@ async def get_dashboard_analytics(
         if city:
             lead_ids_query['city'] = city
         
-        matching_leads = await db.leads.find(lead_ids_query, {'_id': 0, 'id': 1}).to_list(10000)
+        matching_leads = await get_tdb().leads.find(lead_ids_query, {'_id': 0, 'id': 1}).to_list(10000)
         matching_lead_ids = [l['id'] for l in matching_leads]
         activities = [a for a in activities if a.get('lead_id') in matching_lead_ids]
     
@@ -6408,7 +6415,7 @@ async def get_dashboard_analytics(
         {'$match': match_stage},
         {'$group': {'_id': '$status', 'count': {'$sum': 1}}}
     ]
-    status_results = await db.leads.aggregate(status_pipeline).to_list(100)
+    status_results = await get_tdb().leads.aggregate(status_pipeline).to_list(100)
     status_counts = {item['_id']: item['count'] for item in status_results}
     
     # Calculate metrics
@@ -6423,7 +6430,7 @@ async def get_dashboard_analytics(
         {'$match': {**match_stage, 'status': {'$ne': 'closed_lost'}}},
         {'$group': {'_id': None, 'total_value': {'$sum': '$estimated_value'}}}
     ]
-    pipeline_value_result = await db.leads.aggregate(pipeline_value_pipeline).to_list(1)
+    pipeline_value_result = await get_tdb().leads.aggregate(pipeline_value_pipeline).to_list(1)
     pipeline_value = pipeline_value_result[0]['total_value'] if pipeline_value_result else 0
     
     # Today's follow-ups
@@ -6431,7 +6438,7 @@ async def get_dashboard_analytics(
     today_start = datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc).isoformat()
     today_end = datetime.combine(today, datetime.max.time()).replace(tzinfo=timezone.utc).isoformat()
     
-    today_follow_ups_count = await db.follow_ups.count_documents({
+    today_follow_ups_count = await get_tdb().follow_ups.count_documents({
         'is_completed': False,
         'scheduled_date': {'$gte': today_start, '$lte': today_end}
     })
@@ -6504,7 +6511,7 @@ async def get_dashboard_analytics(
         activity_query['created_at'] = {'$gte': start_date, '$lte': end_date}
     
     # Get all activities
-    activities = await db.activities.find(activity_query, {'_id': 0}).to_list(10000)
+    activities = await get_tdb().activities.find(activity_query, {'_id': 0}).to_list(10000)
     
     # Count visits and calls
     visits = [a for a in activities if a.get('interaction_method') == 'customer_visit']
@@ -6522,7 +6529,7 @@ async def get_dashboard_analytics(
         {'$match': match_stage},
         {'$group': {'_id': '$status', 'count': {'$sum': 1}}}
     ]
-    status_results = await db.leads.aggregate(status_pipeline).to_list(100)
+    status_results = await get_tdb().leads.aggregate(status_pipeline).to_list(100)
     status_counts = {item['_id']: item['count'] for item in status_results}
     
     # Calculate metrics
@@ -6537,7 +6544,7 @@ async def get_dashboard_analytics(
         {'$match': {**match_stage, 'status': {'$ne': 'closed_lost'}}},
         {'$group': {'_id': None, 'total_value': {'$sum': '$estimated_value'}}}
     ]
-    pipeline_value_result = await db.leads.aggregate(pipeline_value_pipeline).to_list(1)
+    pipeline_value_result = await get_tdb().leads.aggregate(pipeline_value_pipeline).to_list(1)
     pipeline_value = pipeline_value_result[0]['total_value'] if pipeline_value_result else 0
     
     # Today's follow-ups
@@ -6545,7 +6552,7 @@ async def get_dashboard_analytics(
     today_start = datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc).isoformat()
     today_end = datetime.combine(today, datetime.max.time()).replace(tzinfo=timezone.utc).isoformat()
     
-    today_follow_ups_count = await db.follow_ups.count_documents({
+    today_follow_ups_count = await get_tdb().follow_ups.count_documents({
         'is_completed': False,
         'scheduled_date': {'$gte': today_start, '$lte': today_end}
     })
@@ -6576,7 +6583,7 @@ async def get_reports(current_user: dict = Depends(get_current_user)):
         {'$match': match_stage},
         {'$group': {'_id': {'$ifNull': ['$source', 'unknown']}, 'count': {'$sum': 1}}}
     ]
-    source_results = await db.leads.aggregate(source_pipeline).to_list(100)
+    source_results = await get_tdb().leads.aggregate(source_pipeline).to_list(100)
     source_counts = {item['_id']: item['count'] for item in source_results}
     
     # Team performance (for leadership/managers) using aggregation
@@ -6592,11 +6599,11 @@ async def get_reports(current_user: dict = Depends(get_current_user)):
                 }
             }}
         ]
-        team_results = await db.leads.aggregate(team_pipeline).to_list(100)
+        team_results = await get_tdb().leads.aggregate(team_pipeline).to_list(100)
         
         # Get user names
         user_ids = [item['_id'] for item in team_results if item['_id']]
-        users = await db.users.find(
+        users = await get_tdb().users.find(
             {'id': {'$in': user_ids}},
             {'_id': 0, 'id': 1, 'name': 1}
         ).to_list(100)
@@ -6624,7 +6631,7 @@ async def get_reports(current_user: dict = Depends(get_current_user)):
             'count': {'$sum': 1}
         }}
     ]
-    monthly_results = await db.leads.aggregate(monthly_pipeline).to_list(1000)
+    monthly_results = await get_tdb().leads.aggregate(monthly_pipeline).to_list(1000)
     
     # Transform monthly results into desired format
     monthly_data = {}
@@ -6666,7 +6673,7 @@ async def get_activity_metrics(
         query['created_by'] = user_id
     else:
         # Get all direct reports
-        direct_reports = await db.users.find(
+        direct_reports = await get_tdb().users.find(
             {'reports_to': current_user['id']},
             {'_id': 0, 'id': 1}
         ).to_list(100)
@@ -6676,7 +6683,7 @@ async def get_activity_metrics(
             query['created_by'] = {'$in': user_ids}
     
     # Get all activities
-    activities = await db.activities.find(query, {'_id': 0}).to_list(5000)
+    activities = await get_tdb().activities.find(query, {'_id': 0}).to_list(5000)
     
     # Count by interaction method
     phone_calls = sum(1 for a in activities if a.get('interaction_method') == 'phone_call')
@@ -6696,7 +6703,7 @@ async def get_activity_metrics(
             user_ids = [u['id'] for u in direct_reports]
             leads_query['created_by'] = {'$in': user_ids}
     
-    new_leads = await db.leads.count_documents(leads_query)
+    new_leads = await get_tdb().leads.count_documents(leads_query)
     
     return {
         'new_leads': new_leads,
@@ -6723,7 +6730,7 @@ async def get_location_analytics(current_user: dict = Depends(get_current_user))
         }},
         {'$sort': {'total_leads': -1}}
     ]
-    country_results = await db.leads.aggregate(country_pipeline).to_list(100)
+    country_results = await get_tdb().leads.aggregate(country_pipeline).to_list(100)
     
     # Leads by state/region
     state_pipeline = [
@@ -6736,7 +6743,7 @@ async def get_location_analytics(current_user: dict = Depends(get_current_user))
         }},
         {'$sort': {'total_leads': -1}}
     ]
-    state_results = await db.leads.aggregate(state_pipeline).to_list(100)
+    state_results = await get_tdb().leads.aggregate(state_pipeline).to_list(100)
     
     # Leads by city
     city_pipeline = [
@@ -6750,7 +6757,7 @@ async def get_location_analytics(current_user: dict = Depends(get_current_user))
         {'$sort': {'total_leads': -1}},
         {'$limit': 20}  # Top 20 cities
     ]
-    city_results = await db.leads.aggregate(city_pipeline).to_list(20)
+    city_results = await get_tdb().leads.aggregate(city_pipeline).to_list(20)
     
     # Leads by region (business territory)
     region_pipeline = [
@@ -6763,12 +6770,12 @@ async def get_location_analytics(current_user: dict = Depends(get_current_user))
         }},
         {'$sort': {'total_leads': -1}}
     ]
-    region_results = await db.leads.aggregate(region_pipeline).to_list(100)
+    region_results = await get_tdb().leads.aggregate(region_pipeline).to_list(100)
     
     # Team locations
     team_locations = []
     if current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'sales_manager']:
-        users = await db.users.find(
+        users = await get_tdb().users.find(
             {},
             {'_id': 0, 'id': 1, 'name': 1, 'city': 1, 'state': 1, 'country': 1, 'territory': 1}
         ).to_list(100)
@@ -7265,7 +7272,7 @@ async def create_leave_request(request: LeaveRequestCreate, current_user: dict =
     if doc.get('approval_date'):
         doc['approval_date'] = doc['approval_date'].isoformat()
     
-    await db.leave_requests.insert_one(doc)
+    await get_tdb().leave_requests.insert_one(doc)
     
     # Create approval task for reporting manager
     reports_to = current_user.get('reports_to')
@@ -7293,7 +7300,7 @@ async def get_leave_requests(
     
     if current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'sales_manager']:
         # Managers see requests from their direct reports
-        direct_reports = await db.users.find(
+        direct_reports = await get_tdb().users.find(
             {'reports_to': current_user['id']},
             {'_id': 0, 'id': 1}
         ).to_list(100)
@@ -7307,11 +7314,11 @@ async def get_leave_requests(
     if status:
         query['status'] = status
     
-    requests = await db.leave_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(100)
+    requests = await get_tdb().leave_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(100)
     
     # Get user names
     user_ids = list(set([r['user_id'] for r in requests]))
-    users = await db.users.find(
+    users = await get_tdb().users.find(
         {'id': {'$in': user_ids}},
         {'_id': 0, 'id': 1, 'name': 1}
     ).to_list(100)
@@ -7338,12 +7345,12 @@ async def approve_leave_request(
 ):
     """Approve or reject leave request"""
     
-    leave_req = await db.leave_requests.find_one({'id': request_id}, {'_id': 0})
+    leave_req = await get_tdb().leave_requests.find_one({'id': request_id}, {'_id': 0})
     if not leave_req:
         raise HTTPException(status_code=404, detail='Leave request not found')
     
     # Check if user is the manager of the requester
-    requester = await db.users.find_one({'id': leave_req['user_id']}, {'_id': 0})
+    requester = await get_tdb().users.find_one({'id': leave_req['user_id']}, {'_id': 0})
     if not requester:
         raise HTTPException(status_code=404, detail='Requester not found')
     
@@ -7361,7 +7368,7 @@ async def approve_leave_request(
     if approval.rejection_reason:
         update_data['rejection_reason'] = approval.rejection_reason
     
-    await db.leave_requests.update_one({'id': request_id}, {'$set': update_data})
+    await get_tdb().leave_requests.update_one({'id': request_id}, {'$set': update_data})
     
     # Complete the approval task
     await complete_approval_task(
@@ -7377,7 +7384,7 @@ async def get_pending_approvals(current_user: dict = Depends(get_current_user)):
     """Get pending leave requests that need approval from current user"""
     
     # Get direct reports
-    direct_reports = await db.users.find(
+    direct_reports = await get_tdb().users.find(
         {'reports_to': current_user['id']},
         {'_id': 0, 'id': 1, 'name': 1}
     ).to_list(100)
@@ -7388,7 +7395,7 @@ async def get_pending_approvals(current_user: dict = Depends(get_current_user)):
     user_ids = [u['id'] for u in direct_reports]
     
     # Get pending requests from direct reports
-    pending = await db.leave_requests.find(
+    pending = await get_tdb().leave_requests.find(
         {'user_id': {'$in': user_ids}, 'status': 'pending'},
         {'_id': 0}
     ).sort('created_at', 1).to_list(100)
@@ -7498,12 +7505,12 @@ async def create_travel_request(request: TravelRequestCreate, current_user: dict
     if travel_obj.budget_breakdown:
         doc['budget_breakdown'] = travel_obj.budget_breakdown.model_dump()
     
-    await db.travel_requests.insert_one(doc)
+    await get_tdb().travel_requests.insert_one(doc)
     
     # Create approval tasks for CEO and Director if submitting for approval
     if request.submit_for_approval:
         # Find CEO and Director users
-        approvers = await db.users.find(
+        approvers = await get_tdb().users.find(
             {'role': {'$in': ['CEO', 'Director']}, 'is_active': True},
             {'_id': 0, 'id': 1, 'name': 1}
         ).to_list(10)
@@ -7554,11 +7561,11 @@ async def get_travel_requests(
         if status:
             query['status'] = status
     
-    requests = await db.travel_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(100)
+    requests = await get_tdb().travel_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(100)
     
     # Get user names for all requests
     user_ids = list(set([r['user_id'] for r in requests]))
-    users = await db.users.find(
+    users = await get_tdb().users.find(
         {'id': {'$in': user_ids}},
         {'_id': 0, 'id': 1, 'name': 1}
     ).to_list(100)
@@ -7573,7 +7580,7 @@ async def get_travel_requests(
 async def get_travel_request(request_id: str, current_user: dict = Depends(get_current_user)):
     """Get single travel request"""
     
-    travel_req = await db.travel_requests.find_one({'id': request_id}, {'_id': 0})
+    travel_req = await get_tdb().travel_requests.find_one({'id': request_id}, {'_id': 0})
     if not travel_req:
         raise HTTPException(status_code=404, detail='Travel request not found')
     
@@ -7591,7 +7598,7 @@ async def update_travel_request(
 ):
     """Update travel request (only if in draft status)"""
     
-    travel_req = await db.travel_requests.find_one({'id': request_id}, {'_id': 0})
+    travel_req = await get_tdb().travel_requests.find_one({'id': request_id}, {'_id': 0})
     if not travel_req:
         raise HTTPException(status_code=404, detail='Travel request not found')
     
@@ -7652,7 +7659,7 @@ async def update_travel_request(
         update_data['status'] = 'pending_approval'
         
         # Create approval tasks
-        approvers = await db.users.find(
+        approvers = await get_tdb().users.find(
             {'role': {'$in': ['CEO', 'Director']}, 'is_active': True},
             {'_id': 0, 'id': 1, 'name': 1}
         ).to_list(10)
@@ -7679,7 +7686,7 @@ async def update_travel_request(
     
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    await db.travel_requests.update_one({'id': request_id}, {'$set': update_data})
+    await get_tdb().travel_requests.update_one({'id': request_id}, {'$set': update_data})
     
     return {'message': 'Travel request updated successfully'}
 
@@ -7694,7 +7701,7 @@ async def approve_travel_request(
     if current_user['role'].lower() not in ['ceo', 'director']:
         raise HTTPException(status_code=403, detail='Only CEO or Director can approve travel requests')
     
-    travel_req = await db.travel_requests.find_one({'id': request_id}, {'_id': 0})
+    travel_req = await get_tdb().travel_requests.find_one({'id': request_id}, {'_id': 0})
     if not travel_req:
         raise HTTPException(status_code=404, detail='Travel request not found')
     
@@ -7712,7 +7719,7 @@ async def approve_travel_request(
     if approval.rejection_reason:
         update_data['rejection_reason'] = approval.rejection_reason
     
-    await db.travel_requests.update_one({'id': request_id}, {'$set': update_data})
+    await get_tdb().travel_requests.update_one({'id': request_id}, {'$set': update_data})
     
     # Complete approval tasks
     await complete_approval_task(
@@ -7727,7 +7734,7 @@ async def approve_travel_request(
 async def cancel_travel_request(request_id: str, current_user: dict = Depends(get_current_user)):
     """Cancel travel request"""
     
-    travel_req = await db.travel_requests.find_one({'id': request_id}, {'_id': 0})
+    travel_req = await get_tdb().travel_requests.find_one({'id': request_id}, {'_id': 0})
     if not travel_req:
         raise HTTPException(status_code=404, detail='Travel request not found')
     
@@ -7737,7 +7744,7 @@ async def cancel_travel_request(request_id: str, current_user: dict = Depends(ge
     if travel_req['status'] in ['approved', 'rejected', 'cancelled']:
         raise HTTPException(status_code=400, detail='Cannot cancel this request')
     
-    await db.travel_requests.update_one(
+    await get_tdb().travel_requests.update_one(
         {'id': request_id},
         {'$set': {
             'status': 'cancelled',
@@ -7761,7 +7768,7 @@ async def get_pending_travel_approvals_count(current_user: dict = Depends(get_cu
     if current_user['role'].lower() not in ['ceo', 'director']:
         return {'count': 0}
     
-    count = await db.travel_requests.count_documents({'status': 'pending_approval'})
+    count = await get_tdb().travel_requests.count_documents({'status': 'pending_approval'})
     return {'count': count}
 
 # ============= BUDGET REQUEST ROUTES =============
@@ -7819,12 +7826,12 @@ async def create_budget_request(request: BudgetRequestCreate, current_user: dict
     # Convert line items to dicts
     doc['line_items'] = [li.model_dump() if hasattr(li, 'model_dump') else li for li in budget_obj.line_items]
     
-    await db.budget_requests.insert_one(doc)
+    await get_tdb().budget_requests.insert_one(doc)
     
     # Create approval task for Director if submitting for approval
     if request.submit_for_approval:
         # Find Directors only
-        approvers = await db.users.find(
+        approvers = await get_tdb().users.find(
             {'role': 'Director', 'is_active': True},
             {'_id': 0, 'id': 1, 'name': 1}
         ).to_list(10)
@@ -7872,11 +7879,11 @@ async def get_budget_requests(
         if status:
             query['status'] = status
     
-    requests = await db.budget_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(100)
+    requests = await get_tdb().budget_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(100)
     
     # Get user names
     user_ids = list(set([r['user_id'] for r in requests]))
-    users = await db.users.find(
+    users = await get_tdb().users.find(
         {'id': {'$in': user_ids}},
         {'_id': 0, 'id': 1, 'name': 1}
     ).to_list(100)
@@ -7891,7 +7898,7 @@ async def get_budget_requests(
 async def get_budget_request(request_id: str, current_user: dict = Depends(get_current_user)):
     """Get single budget request"""
     
-    budget_req = await db.budget_requests.find_one({'id': request_id}, {'_id': 0})
+    budget_req = await get_tdb().budget_requests.find_one({'id': request_id}, {'_id': 0})
     if not budget_req:
         raise HTTPException(status_code=404, detail='Budget request not found')
     
@@ -7909,7 +7916,7 @@ async def update_budget_request(
 ):
     """Update budget request (only if in draft status)"""
     
-    budget_req = await db.budget_requests.find_one({'id': request_id}, {'_id': 0})
+    budget_req = await get_tdb().budget_requests.find_one({'id': request_id}, {'_id': 0})
     if not budget_req:
         raise HTTPException(status_code=404, detail='Budget request not found')
     
@@ -7941,7 +7948,7 @@ async def update_budget_request(
         update_data['status'] = 'pending_approval'
         
         # Create approval tasks for Directors
-        approvers = await db.users.find(
+        approvers = await get_tdb().users.find(
             {'role': 'Director', 'is_active': True},
             {'_id': 0, 'id': 1, 'name': 1}
         ).to_list(10)
@@ -7964,7 +7971,7 @@ async def update_budget_request(
     
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    await db.budget_requests.update_one({'id': request_id}, {'$set': update_data})
+    await get_tdb().budget_requests.update_one({'id': request_id}, {'$set': update_data})
     
     return {'message': 'Budget request updated successfully'}
 
@@ -7979,7 +7986,7 @@ async def approve_budget_request(
     if current_user['role'].lower() != 'director':
         raise HTTPException(status_code=403, detail='Only Director can approve budget requests')
     
-    budget_req = await db.budget_requests.find_one({'id': request_id}, {'_id': 0})
+    budget_req = await get_tdb().budget_requests.find_one({'id': request_id}, {'_id': 0})
     if not budget_req:
         raise HTTPException(status_code=404, detail='Budget request not found')
     
@@ -7997,7 +8004,7 @@ async def approve_budget_request(
     if approval.rejection_reason:
         update_data['rejection_reason'] = approval.rejection_reason
     
-    await db.budget_requests.update_one({'id': request_id}, {'$set': update_data})
+    await get_tdb().budget_requests.update_one({'id': request_id}, {'$set': update_data})
     
     # Complete approval tasks
     await complete_approval_task(
@@ -8012,7 +8019,7 @@ async def approve_budget_request(
 async def cancel_budget_request(request_id: str, current_user: dict = Depends(get_current_user)):
     """Cancel budget request"""
     
-    budget_req = await db.budget_requests.find_one({'id': request_id}, {'_id': 0})
+    budget_req = await get_tdb().budget_requests.find_one({'id': request_id}, {'_id': 0})
     if not budget_req:
         raise HTTPException(status_code=404, detail='Budget request not found')
     
@@ -8022,7 +8029,7 @@ async def cancel_budget_request(request_id: str, current_user: dict = Depends(ge
     if budget_req['status'] in ['approved', 'rejected', 'cancelled']:
         raise HTTPException(status_code=400, detail='Cannot cancel this request')
     
-    await db.budget_requests.update_one(
+    await get_tdb().budget_requests.update_one(
         {'id': request_id},
         {'$set': {
             'status': 'cancelled',
@@ -8060,16 +8067,16 @@ async def create_expense_request(request: ExpenseRequestCreate, current_user: di
     entity_city = None
     
     if request.entity_type == 'lead':
-        lead = await db.leads.find_one({'id': request.entity_id}, {'_id': 0, 'company': 1, 'city': 1})
+        lead = await get_tdb().leads.find_one({'id': request.entity_id}, {'_id': 0, 'company': 1, 'city': 1})
         if not lead:
             raise HTTPException(status_code=404, detail='Lead not found')
         entity_name = lead.get('company')
         entity_city = lead.get('city')
     elif request.entity_type == 'account':
-        account = await db.accounts.find_one({'id': request.entity_id}, {'_id': 0, 'account_name': 1, 'city': 1})
+        account = await get_tdb().accounts.find_one({'id': request.entity_id}, {'_id': 0, 'account_name': 1, 'city': 1})
         if not account:
             # Try with account_id
-            account = await db.accounts.find_one({'account_id': request.entity_id}, {'_id': 0, 'account_name': 1, 'city': 1})
+            account = await get_tdb().accounts.find_one({'account_id': request.entity_id}, {'_id': 0, 'account_name': 1, 'city': 1})
         if not account:
             raise HTTPException(status_code=404, detail='Account not found')
         entity_name = account.get('account_name')
@@ -8084,7 +8091,7 @@ async def create_expense_request(request: ExpenseRequestCreate, current_user: di
     if request.expense_type == 'free_trial' and request.sku_items:
         for item in request.sku_items:
             # Get minimum landing price from COGS
-            cogs_data = await db.cogs_data.find_one(
+            cogs_data = await get_tdb().cogs_data.find_one(
                 {'city': entity_city, 'sku_name': item.get('sku_name')},
                 {'_id': 0, 'minimum_landing_price': 1}
             )
@@ -8132,12 +8139,12 @@ async def create_expense_request(request: ExpenseRequestCreate, current_user: di
     # Convert SKU items to dicts
     doc['sku_items'] = [item.model_dump() for item in sku_items]
     
-    await db.expense_requests.insert_one(doc)
+    await get_tdb().expense_requests.insert_one(doc)
     
     # Create approval task if submitted for approval
     if request.submit_for_approval:
         # Find Director for approval
-        director = await db.users.find_one(
+        director = await get_tdb().users.find_one(
             {'role': {'$in': ['Director', 'director']}},
             {'_id': 0, 'id': 1, 'name': 1}
         )
@@ -8185,7 +8192,7 @@ async def get_expense_requests(
     if current_user['role'] not in ['CEO', 'Director', 'Vice President', 'ceo', 'director', 'vp']:
         query['user_id'] = current_user['id']
     
-    expenses = await db.expense_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(500)
+    expenses = await get_tdb().expense_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(500)
     
     return expenses
 
@@ -8193,7 +8200,7 @@ async def get_expense_requests(
 async def get_expense_request(request_id: str, current_user: dict = Depends(get_current_user)):
     """Get a single expense request"""
     
-    expense = await db.expense_requests.find_one({'id': request_id}, {'_id': 0})
+    expense = await get_tdb().expense_requests.find_one({'id': request_id}, {'_id': 0})
     if not expense:
         raise HTTPException(status_code=404, detail='Expense request not found')
     
@@ -8207,7 +8214,7 @@ async def update_expense_request(
 ):
     """Update an expense request"""
     
-    expense_req = await db.expense_requests.find_one({'id': request_id}, {'_id': 0})
+    expense_req = await get_tdb().expense_requests.find_one({'id': request_id}, {'_id': 0})
     if not expense_req:
         raise HTTPException(status_code=404, detail='Expense request not found')
     
@@ -8235,7 +8242,7 @@ async def update_expense_request(
         total_sku_cost = 0
         
         for item in request.sku_items:
-            cogs_data = await db.cogs_data.find_one(
+            cogs_data = await get_tdb().cogs_data.find_one(
                 {'city': entity_city, 'sku_name': item.get('sku_name')},
                 {'_id': 0, 'minimum_landing_price': 1}
             )
@@ -8262,7 +8269,7 @@ async def update_expense_request(
         update_data['status'] = 'pending_approval'
         
         # Create approval task
-        director = await db.users.find_one(
+        director = await get_tdb().users.find_one(
             {'role': {'$in': ['Director', 'director']}},
             {'_id': 0, 'id': 1, 'name': 1}
         )
@@ -8285,7 +8292,7 @@ async def update_expense_request(
     
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    await db.expense_requests.update_one({'id': request_id}, {'$set': update_data})
+    await get_tdb().expense_requests.update_one({'id': request_id}, {'$set': update_data})
     
     return {'message': 'Expense request updated'}
 
@@ -8301,7 +8308,7 @@ async def approve_expense_request(
     if current_user['role'] not in ['CEO', 'Director', 'Vice President', 'ceo', 'director', 'vp']:
         raise HTTPException(status_code=403, detail='Only Directors can approve expense requests')
     
-    expense_req = await db.expense_requests.find_one({'id': request_id}, {'_id': 0})
+    expense_req = await get_tdb().expense_requests.find_one({'id': request_id}, {'_id': 0})
     if not expense_req:
         raise HTTPException(status_code=404, detail='Expense request not found')
     
@@ -8319,7 +8326,7 @@ async def approve_expense_request(
     if approval.status == 'rejected' and approval.rejection_reason:
         update_data['rejection_reason'] = approval.rejection_reason
     
-    await db.expense_requests.update_one({'id': request_id}, {'$set': update_data})
+    await get_tdb().expense_requests.update_one({'id': request_id}, {'$set': update_data})
     
     # Complete approval task
     await complete_approval_task(
@@ -8334,7 +8341,7 @@ async def approve_expense_request(
 async def delete_expense_request(request_id: str, current_user: dict = Depends(get_current_user)):
     """Delete/cancel an expense request"""
     
-    expense_req = await db.expense_requests.find_one({'id': request_id}, {'_id': 0})
+    expense_req = await get_tdb().expense_requests.find_one({'id': request_id}, {'_id': 0})
     if not expense_req:
         raise HTTPException(status_code=404, detail='Expense request not found')
     
@@ -8344,7 +8351,7 @@ async def delete_expense_request(request_id: str, current_user: dict = Depends(g
     if expense_req['status'] in ['approved']:
         raise HTTPException(status_code=400, detail='Cannot delete approved expense requests')
     
-    await db.expense_requests.update_one(
+    await get_tdb().expense_requests.update_one(
         {'id': request_id},
         {'$set': {
             'status': 'cancelled',
@@ -8365,7 +8372,7 @@ async def delete_expense_request(request_id: str, current_user: dict = Depends(g
 async def get_sku_price_for_city(city: str, sku_name: str, current_user: dict = Depends(get_current_user)):
     """Get minimum landing price for a SKU in a specific city"""
     
-    cogs_data = await db.cogs_data.find_one(
+    cogs_data = await get_tdb().cogs_data.find_one(
         {'city': city, 'sku_name': sku_name},
         {'_id': 0, 'minimum_landing_price': 1, 'sku_name': 1, 'city': 1}
     )
@@ -8392,7 +8399,7 @@ async def get_target_resource_allocation_report(current_user: dict = Depends(get
     
     for plan in plans:
         # Get all resource targets for this plan
-        resource_targets = await db.resource_targets.find({'plan_id': plan['id']}, {'_id': 0}).to_list(1000)
+        resource_targets = await get_tdb().resource_targets.find({'plan_id': plan['id']}, {'_id': 0}).to_list(1000)
         
         # Get city info
         city_ids = list(set([r['city_id'] for r in resource_targets]))
@@ -8401,7 +8408,7 @@ async def get_target_resource_allocation_report(current_user: dict = Depends(get
         
         # Get user info
         user_ids = list(set([r['resource_id'] for r in resource_targets]))
-        users = await db.users.find({'id': {'$in': user_ids}}, {'_id': 0}).to_list(100)
+        users = await get_tdb().users.find({'id': {'$in': user_ids}}, {'_id': 0}).to_list(100)
         user_map = {u['id']: u for u in users}
         
         for res_target in resource_targets:
@@ -8706,7 +8713,7 @@ async def get_sku_performance(
         sku_target_map[sku_name]['target_units'] += t.get('target_units', 0)
     
     # Get leads with interested SKUs
-    leads_with_skus = await db.leads.find(
+    leads_with_skus = await get_tdb().leads.find(
         {**lead_query, 'interested_skus': {'$exists': True, '$ne': []}},
         {'_id': 0, 'interested_skus': 1, 'invoice_value': 1, 'status': 1, 'id': 1}
     ).to_list(1000)
@@ -8718,7 +8725,7 @@ async def get_sku_performance(
     if resource_id:
         invoice_query['created_by'] = resource_id
     
-    invoices = await db.invoices.find(invoice_query, {'_id': 0, 'total_amount': 1, 'items': 1}).to_list(500)
+    invoices = await get_tdb().invoices.find(invoice_query, {'_id': 0, 'total_amount': 1, 'items': 1}).to_list(500)
     
     # Calculate achieved revenue by SKU from invoices
     sku_invoice_revenue = {}
@@ -8831,10 +8838,10 @@ async def get_resource_performance(
     if resource_id:
         user_query['id'] = resource_id
     
-    users = await db.users.find(user_query, {'_id': 0, 'id': 1, 'name': 1, 'role': 1, 'territory': 1, 'email': 1}).to_list(100)
+    users = await get_tdb().users.find(user_query, {'_id': 0, 'id': 1, 'name': 1, 'role': 1, 'territory': 1, 'email': 1}).to_list(100)
     
     # Get targets for each resource
-    resource_targets = await db.resource_targets.find({}, {'_id': 0}).to_list(500)
+    resource_targets = await get_tdb().resource_targets.find({}, {'_id': 0}).to_list(500)
     target_map = {}
     for t in resource_targets:
         rid = t.get('resource_id')
@@ -8853,7 +8860,7 @@ async def get_resource_performance(
         }
     
     # Get activities per user
-    activities = await db.activities.find(
+    activities = await get_tdb().activities.find(
         activity_date_query,
         {'_id': 0, 'user_id': 1, 'interaction_method': 1}
     ).to_list(5000)
@@ -8880,7 +8887,7 @@ async def get_resource_performance(
             }
         }
     
-    leads = await db.leads.find(
+    leads = await get_tdb().leads.find(
         lead_date_query,
         {'_id': 0, 'assigned_to': 1, 'status': 1, 'invoice_value': 1, 'estimated_value': 1}
     ).to_list(5000)
@@ -8992,7 +8999,7 @@ async def get_account_performance(
         account_query['account_type'] = account_type
     
     # Fetch all accounts matching filters
-    accounts = await db.accounts.find(account_query, {'_id': 0}).to_list(500)
+    accounts = await get_tdb().accounts.find(account_query, {'_id': 0}).to_list(500)
     
     # Build invoice date query
     invoice_date_query = {}
@@ -9005,7 +9012,7 @@ async def get_account_performance(
         }
     
     # Get all invoices within time range
-    all_invoices = await db.invoices.find(invoice_date_query, {'_id': 0}).to_list(5000)
+    all_invoices = await get_tdb().invoices.find(invoice_date_query, {'_id': 0}).to_list(5000)
     
     # Calculate total revenue for contribution percentage
     total_gross_all = sum(inv.get('gross_amount', inv.get('total_amount', 0)) for inv in all_invoices)
@@ -9251,7 +9258,7 @@ async def delete_document_category(category_id: str, current_user: dict = Depend
         raise HTTPException(status_code=403, detail='Only Admin, CEO, and Director can delete categories')
     
     # Check if has documents
-    doc_count = await db.documents.count_documents({'category_id': category_id})
+    doc_count = await get_tdb().documents.count_documents({'category_id': category_id})
     if doc_count > 0:
         raise HTTPException(status_code=400, detail=f'Cannot delete category with {doc_count} document(s). Move or delete documents first.')
     
@@ -9349,7 +9356,7 @@ async def delete_document_subcategory(subcategory_id: str, current_user: dict = 
         raise HTTPException(status_code=403, detail='Only Admin, CEO, and Director can delete subcategories')
     
     # Check if has documents
-    doc_count = await db.documents.count_documents({'subcategory_id': subcategory_id})
+    doc_count = await get_tdb().documents.count_documents({'subcategory_id': subcategory_id})
     if doc_count > 0:
         raise HTTPException(status_code=400, detail=f'Cannot delete subcategory with {doc_count} document(s). Move or delete documents first.')
     
@@ -9387,7 +9394,7 @@ async def get_documents(
         query['subcategory_id'] = subcategory_id
     
     # Get all documents including file_data for preview
-    documents = await db.documents.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
+    documents = await get_tdb().documents.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
     
     return {'documents': documents}
 
@@ -9455,7 +9462,7 @@ async def upload_document(
     doc = document.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     
-    await db.documents.insert_one(doc)
+    await get_tdb().documents.insert_one(doc)
     
     # Return without file_data for response
     response = {k: v for k, v in doc.items() if k not in ['_id', 'file_data']}
@@ -9465,7 +9472,7 @@ async def upload_document(
 @api_router.get("/documents/{document_id}")
 async def get_document(document_id: str, current_user: dict = Depends(get_current_user)):
     """Get a single document with file data for download"""
-    document = await db.documents.find_one({'id': document_id}, {'_id': 0})
+    document = await get_tdb().documents.find_one({'id': document_id}, {'_id': 0})
     if not document:
         raise HTTPException(status_code=404, detail='Document not found')
     
@@ -9474,7 +9481,7 @@ async def get_document(document_id: str, current_user: dict = Depends(get_curren
 @api_router.get("/documents/{document_id}/download")
 async def download_document(document_id: str, current_user: dict = Depends(get_current_user)):
     """Download a document file"""
-    document = await db.documents.find_one({'id': document_id})
+    document = await get_tdb().documents.find_one({'id': document_id})
     if not document:
         raise HTTPException(status_code=404, detail='Document not found')
     
@@ -9499,7 +9506,7 @@ async def download_document(document_id: str, current_user: dict = Depends(get_c
 @api_router.delete("/documents/{document_id}")
 async def delete_document(document_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a document (uploader or key users only)"""
-    document = await db.documents.find_one({'id': document_id})
+    document = await get_tdb().documents.find_one({'id': document_id})
     if not document:
         raise HTTPException(status_code=404, detail='Document not found')
     
@@ -9507,7 +9514,7 @@ async def delete_document(document_id: str, current_user: dict = Depends(get_cur
     if document['uploaded_by'] != current_user['id'] and not is_key_user(current_user['role']):
         raise HTTPException(status_code=403, detail='Only the uploader, Admin, CEO, or Director can delete this document')
     
-    await db.documents.delete_one({'id': document_id})
+    await get_tdb().documents.delete_one({'id': document_id})
     
     return {'message': 'Document deleted successfully'}
 
@@ -9564,12 +9571,12 @@ def can_approve_proposal(role: str) -> bool:
 async def get_lead_proposal(lead_id: str, current_user: dict = Depends(get_current_user)):
     """Get the current proposal for a lead"""
     # Verify lead exists
-    lead = await db.leads.find_one({'id': lead_id})
+    lead = await get_tdb().leads.find_one({'id': lead_id})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     
     # Get proposal without file_data for listing
-    proposal = await db.lead_proposals.find_one(
+    proposal = await get_tdb().lead_proposals.find_one(
         {'lead_id': lead_id},
         {'_id': 0, 'file_data': 0}
     )
@@ -9587,7 +9594,7 @@ async def upload_lead_proposal(
 ):
     """Upload a proposal for a lead (replaces existing)"""
     # Verify lead exists
-    lead = await db.leads.find_one({'id': lead_id})
+    lead = await get_tdb().leads.find_one({'id': lead_id})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     
@@ -9607,13 +9614,13 @@ async def upload_lead_proposal(
         )
     
     # Check if there's an existing proposal
-    existing = await db.lead_proposals.find_one({'lead_id': lead_id})
+    existing = await get_tdb().lead_proposals.find_one({'lead_id': lead_id})
     version = 1
     
     if existing:
         version = existing.get('version', 1) + 1
         # Delete existing proposal
-        await db.lead_proposals.delete_one({'lead_id': lead_id})
+        await get_tdb().lead_proposals.delete_one({'lead_id': lead_id})
     
     # Determine status for new/revised proposal
     status = 'revised' if existing and existing.get('status') == 'changes_requested' else 'pending_review'
@@ -9635,7 +9642,7 @@ async def upload_lead_proposal(
     doc = proposal.model_dump()
     doc['uploaded_at'] = doc['uploaded_at'].isoformat()
     
-    await db.lead_proposals.insert_one(doc)
+    await get_tdb().lead_proposals.insert_one(doc)
     
     # Create approval task for reporting manager
     reports_to = current_user.get('reports_to')
@@ -9661,7 +9668,7 @@ async def upload_lead_proposal(
 @api_router.get("/leads/{lead_id}/proposal/download")
 async def download_lead_proposal(lead_id: str, current_user: dict = Depends(get_current_user)):
     """Download the proposal document for a lead"""
-    proposal = await db.lead_proposals.find_one({'lead_id': lead_id}, {'_id': 0})
+    proposal = await get_tdb().lead_proposals.find_one({'lead_id': lead_id}, {'_id': 0})
     
     if not proposal:
         raise HTTPException(status_code=404, detail='No proposal found for this lead')
@@ -9671,7 +9678,7 @@ async def download_lead_proposal(lead_id: str, current_user: dict = Depends(get_
 @api_router.delete("/leads/{lead_id}/proposal")
 async def delete_lead_proposal(lead_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a proposal (only uploader and only when pending_review)"""
-    proposal = await db.lead_proposals.find_one({'lead_id': lead_id})
+    proposal = await get_tdb().lead_proposals.find_one({'lead_id': lead_id})
     
     if not proposal:
         raise HTTPException(status_code=404, detail='No proposal found for this lead')
@@ -9687,7 +9694,7 @@ async def delete_lead_proposal(lead_id: str, current_user: dict = Depends(get_cu
             detail='Proposal can only be deleted while in Pending Review status'
         )
     
-    await db.lead_proposals.delete_one({'lead_id': lead_id})
+    await get_tdb().lead_proposals.delete_one({'lead_id': lead_id})
     
     return {'message': 'Proposal deleted successfully'}
 
@@ -9705,7 +9712,7 @@ async def review_lead_proposal(
             detail='Only CEO, Director, VP, or National Sales Head can review proposals'
         )
     
-    proposal = await db.lead_proposals.find_one({'lead_id': lead_id})
+    proposal = await get_tdb().lead_proposals.find_one({'lead_id': lead_id})
     
     if not proposal:
         raise HTTPException(status_code=404, detail='No proposal found for this lead')
@@ -9765,7 +9772,7 @@ async def review_lead_proposal(
             logging.error(f"Failed to stamp PDF with signature: {str(e)}")
             # Continue with approval even if stamping fails
     
-    await db.lead_proposals.update_one(
+    await get_tdb().lead_proposals.update_one(
         {'lead_id': lead_id},
         {
             '$set': update_data,
@@ -9789,7 +9796,7 @@ async def review_lead_proposal(
         )
     
     # Get updated proposal
-    updated = await db.lead_proposals.find_one({'lead_id': lead_id}, {'_id': 0, 'file_data': 0})
+    updated = await get_tdb().lead_proposals.find_one({'lead_id': lead_id}, {'_id': 0, 'file_data': 0})
     
     return {'proposal': updated, 'message': f'Proposal {action.replace("_", " ")}'}
 
@@ -9819,7 +9826,7 @@ async def share_proposal_via_email(
         )
     
     # Get the proposal
-    proposal = await db.lead_proposals.find_one({'lead_id': lead_id})
+    proposal = await get_tdb().lead_proposals.find_one({'lead_id': lead_id})
     
     if not proposal:
         raise HTTPException(status_code=404, detail='No proposal found for this lead')
@@ -9832,7 +9839,7 @@ async def share_proposal_via_email(
         )
     
     # Get lead details for context
-    lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    lead = await get_tdb().leads.find_one({'id': lead_id}, {'_id': 0})
     company_name = lead.get('company', 'Unknown Company') if lead else 'Unknown Company'
     
     # Prepare the email content
@@ -9878,7 +9885,7 @@ async def share_proposal_via_email(
     # Add reporting manager's email to CC
     reports_to_id = current_user.get('reports_to')
     if reports_to_id:
-        manager = await db.users.find_one({'id': reports_to_id}, {'_id': 0, 'email': 1})
+        manager = await get_tdb().users.find_one({'id': reports_to_id}, {'_id': 0, 'email': 1})
         if manager and manager.get('email'):
             manager_email = manager['email']
             if manager_email not in cc_list and manager_email not in email_data.to_emails:
@@ -9897,7 +9904,7 @@ async def share_proposal_via_email(
         email_result = await asyncio.to_thread(resend.Emails.send, email_params)
         
         # Log the email share action
-        await db.lead_activities.insert_one({
+        await get_tdb().lead_activities.insert_one({
             'id': str(uuid.uuid4()),
             'lead_id': lead_id,
             'activity_type': 'email',
@@ -9923,7 +9930,7 @@ async def share_proposal_via_email(
 @api_router.get("/users/{user_id}/reporting-manager")
 async def get_reporting_manager(user_id: str, current_user: dict = Depends(get_current_user)):
     """Get the reporting manager details for a user"""
-    user = await db.users.find_one({'id': user_id}, {'_id': 0})
+    user = await get_tdb().users.find_one({'id': user_id}, {'_id': 0})
     if not user:
         raise HTTPException(status_code=404, detail='User not found')
     
@@ -9931,7 +9938,7 @@ async def get_reporting_manager(user_id: str, current_user: dict = Depends(get_c
     if not reports_to:
         return {'manager': None}
     
-    manager = await db.users.find_one({'id': reports_to}, {'_id': 0, 'id': 1, 'name': 1, 'email': 1})
+    manager = await get_tdb().users.find_one({'id': reports_to}, {'_id': 0, 'id': 1, 'name': 1, 'email': 1})
     return {'manager': manager}
 
 # ============= ACCOUNT CONTRACT ENDPOINTS =============
@@ -9965,14 +9972,14 @@ def can_approve_contract(role: str) -> bool:
 async def get_account_contract(account_id: str, current_user: dict = Depends(get_current_user)):
     """Get the current contract for an account"""
     # Verify account exists
-    account = await db.accounts.find_one({'$or': [{'id': account_id}, {'account_id': account_id}]})
+    account = await get_tdb().accounts.find_one({'$or': [{'id': account_id}, {'account_id': account_id}]})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
     
     actual_account_id = account.get('account_id', account_id)
     
     # Get contract without file_data for listing
-    contract = await db.account_contracts.find_one(
+    contract = await get_tdb().account_contracts.find_one(
         {'account_id': actual_account_id},
         {'_id': 0, 'file_data': 0}
     )
@@ -9990,7 +9997,7 @@ async def upload_account_contract(
 ):
     """Upload a signed contract for an account (replaces existing)"""
     # Verify account exists
-    account = await db.accounts.find_one({'$or': [{'id': account_id}, {'account_id': account_id}]})
+    account = await get_tdb().accounts.find_one({'$or': [{'id': account_id}, {'account_id': account_id}]})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
     
@@ -10012,13 +10019,13 @@ async def upload_account_contract(
         )
     
     # Check if there's an existing contract
-    existing = await db.account_contracts.find_one({'account_id': actual_account_id})
+    existing = await get_tdb().account_contracts.find_one({'account_id': actual_account_id})
     version = 1
     
     if existing:
         version = existing.get('version', 1) + 1
         # Delete existing contract
-        await db.account_contracts.delete_one({'account_id': actual_account_id})
+        await get_tdb().account_contracts.delete_one({'account_id': actual_account_id})
     
     # Determine status for new/revised contract
     status = 'revised' if existing and existing.get('status') == 'changes_requested' else 'pending_review'
@@ -10040,7 +10047,7 @@ async def upload_account_contract(
     doc = contract.model_dump()
     doc['uploaded_at'] = doc['uploaded_at'].isoformat()
     
-    await db.account_contracts.insert_one(doc)
+    await get_tdb().account_contracts.insert_one(doc)
     
     # Create approval task for reporting manager
     reports_to = current_user.get('reports_to')
@@ -10066,13 +10073,13 @@ async def upload_account_contract(
 @api_router.get("/accounts/{account_id}/contract/download")
 async def download_account_contract(account_id: str, current_user: dict = Depends(get_current_user)):
     """Download the contract document for an account"""
-    account = await db.accounts.find_one({'$or': [{'id': account_id}, {'account_id': account_id}]})
+    account = await get_tdb().accounts.find_one({'$or': [{'id': account_id}, {'account_id': account_id}]})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
     
     actual_account_id = account.get('account_id', account_id)
     
-    contract = await db.account_contracts.find_one({'account_id': actual_account_id}, {'_id': 0})
+    contract = await get_tdb().account_contracts.find_one({'account_id': actual_account_id}, {'_id': 0})
     
     if not contract:
         raise HTTPException(status_code=404, detail='No contract found for this account')
@@ -10082,13 +10089,13 @@ async def download_account_contract(account_id: str, current_user: dict = Depend
 @api_router.delete("/accounts/{account_id}/contract")
 async def delete_account_contract(account_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a contract (only uploader and only when pending_review)"""
-    account = await db.accounts.find_one({'$or': [{'id': account_id}, {'account_id': account_id}]})
+    account = await get_tdb().accounts.find_one({'$or': [{'id': account_id}, {'account_id': account_id}]})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
     
     actual_account_id = account.get('account_id', account_id)
     
-    contract = await db.account_contracts.find_one({'account_id': actual_account_id})
+    contract = await get_tdb().account_contracts.find_one({'account_id': actual_account_id})
     
     if not contract:
         raise HTTPException(status_code=404, detail='No contract found for this account')
@@ -10104,7 +10111,7 @@ async def delete_account_contract(account_id: str, current_user: dict = Depends(
             detail='Contract can only be deleted while in Pending Review status'
         )
     
-    await db.account_contracts.delete_one({'account_id': actual_account_id})
+    await get_tdb().account_contracts.delete_one({'account_id': actual_account_id})
     
     return {'message': 'Contract deleted successfully'}
 
@@ -10122,13 +10129,13 @@ async def review_account_contract(
             detail='Only CEO, Director, VP, or National Sales Head can review contracts'
         )
     
-    account = await db.accounts.find_one({'$or': [{'id': account_id}, {'account_id': account_id}]})
+    account = await get_tdb().accounts.find_one({'$or': [{'id': account_id}, {'account_id': account_id}]})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
     
     actual_account_id = account.get('account_id', account_id)
     
-    contract = await db.account_contracts.find_one({'account_id': actual_account_id})
+    contract = await get_tdb().account_contracts.find_one({'account_id': actual_account_id})
     
     if not contract:
         raise HTTPException(status_code=404, detail='No contract found for this account')
@@ -10160,7 +10167,7 @@ async def review_account_contract(
         'reviewed_at': datetime.now(timezone.utc).isoformat()
     }
     
-    await db.account_contracts.update_one(
+    await get_tdb().account_contracts.update_one(
         {'account_id': actual_account_id},
         {
             '$set': update_data,
@@ -10183,7 +10190,7 @@ async def review_account_contract(
         )
     
     # Get updated contract
-    updated = await db.account_contracts.find_one({'account_id': actual_account_id}, {'_id': 0, 'file_data': 0})
+    updated = await get_tdb().account_contracts.find_one({'account_id': actual_account_id}, {'_id': 0, 'file_data': 0})
     
     return {'contract': updated, 'message': f'Contract {action.replace("_", " ")}'}
 
@@ -10751,7 +10758,7 @@ async def get_target_planning_list(
             # Only fetch actual data for past and current months
             if is_past_or_current:
                 # Get invoices for this month
-                invoices = await db.invoices.find({
+                invoices = await get_tdb().invoices.find({
                     'invoice_date': {'$gte': month_start, '$lte': month_end}
                 }, {'_id': 0}).to_list(500)
                 month_entry['invoice_value'] = sum(inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0 for inv in invoices)
@@ -10819,7 +10826,7 @@ async def get_city_achievement(
 ):
     """Get achievement (actual revenue from invoices) for a specific city within a date range"""
     # Get accounts in this city
-    accounts = await db.accounts.find({'city': city}, {'account_id': 1}).to_list(1000)
+    accounts = await get_tdb().accounts.find({'city': city}, {'account_id': 1}).to_list(1000)
     account_ids = [a['account_id'] for a in accounts]
     
     # Get invoices for these accounts within the date range
@@ -10828,11 +10835,11 @@ async def get_city_achievement(
         'invoice_date': {'$gte': start_date, '$lte': end_date}
     }
     
-    invoices = await db.invoices.find(invoices_query, {'_id': 0}).to_list(1000)
+    invoices = await get_tdb().invoices.find(invoices_query, {'_id': 0}).to_list(1000)
     achieved = sum(inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0 for inv in invoices)
     
     # Also get won leads for estimated revenue
-    won_leads = await db.leads.find({
+    won_leads = await get_tdb().leads.find({
         'city': city,
         'status': 'won',
         'updated_at': {'$gte': start_date, '$lte': end_date}
@@ -10867,7 +10874,7 @@ async def get_resources_by_location(
     elif territory:
         query['territory'] = territory
     
-    users = await db.users.find(
+    users = await get_tdb().users.find(
         query,
         {'_id': 0, 'id': 1, 'name': 1, 'email': 1, 'role': 1, 'city': 1, 'state': 1, 'territory': 1}
     ).to_list(200)
@@ -11124,7 +11131,7 @@ async def get_target_planning_dashboard(
     if cities:
         won_leads_query['city'] = {'$in': cities}
     
-    won_leads = await db.leads.find(won_leads_query, {'_id': 0}).to_list(1000)
+    won_leads = await get_tdb().leads.find(won_leads_query, {'_id': 0}).to_list(1000)
     estimated_revenue = sum(lead.get('estimated_value', 0) or 0 for lead in won_leads)
     
     # Actual Revenue from Invoices
@@ -11132,7 +11139,7 @@ async def get_target_planning_dashboard(
         'invoice_date': {'$gte': plan['start_date'], '$lte': plan['end_date']}
     }
     
-    invoices = await db.invoices.find(invoices_query, {'_id': 0}).to_list(1000)
+    invoices = await get_tdb().invoices.find(invoices_query, {'_id': 0}).to_list(1000)
     actual_revenue = sum(inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0 for inv in invoices)
     
     # Calculate milestones based on plan configuration
@@ -11182,7 +11189,7 @@ async def get_target_planning_dashboard(
     for inv in invoices:
         account_id = inv.get('account_id')
         if account_id:
-            account = await db.accounts.find_one({'account_id': account_id}, {'city': 1})
+            account = await get_tdb().accounts.find_one({'account_id': account_id}, {'city': 1})
             city = account.get('city', 'Unknown') if account else 'Unknown'
         else:
             city = 'Unknown'
@@ -11250,7 +11257,7 @@ async def get_monthly_breakdown(plan, start_date, end_date, today):
         
         if is_past_or_current:
             # Get invoices for this month
-            invoices = await db.invoices.find({
+            invoices = await get_tdb().invoices.find({
                 'invoice_date': {'$gte': month_start, '$lte': month_end}
             }, {'_id': 0}).to_list(500)
             month_entry['invoice_value'] = sum(inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0 for inv in invoices)
@@ -11280,7 +11287,7 @@ async def get_sales_resources_v2(
     current_user: dict = Depends(get_current_user)
 ):
     """Get all sales team members for target allocation"""
-    users = await db.users.find(
+    users = await get_tdb().users.find(
         {'role': {'$in': SALES_ROLES_V2}},
         {'_id': 0, 'id': 1, 'name': 1, 'email': 1, 'role': 1, 'city': 1, 'territory': 1}
     ).to_list(200)

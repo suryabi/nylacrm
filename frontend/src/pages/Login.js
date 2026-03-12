@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { useNavigate, Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -13,8 +13,9 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Mail, Lock, Loader2, Building2 } from 'lucide-react';
+import { Mail, Lock, Loader2, Building2, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
+import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
@@ -23,7 +24,11 @@ const MOUNTAIN_BG = 'https://images.unsplash.com/photo-1761589951732-2795cd6ecdb
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { login, user, loading: authLoading } = useAuth();
+  
+  // Get tenant from URL query param
+  const tenantFromUrl = searchParams.get('tenant');
   
   // Check for remembered email
   const rememberedEmail = localStorage.getItem('rememberedEmail') || '';
@@ -34,9 +39,34 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [tenants, setTenants] = useState([]);
-  const [selectedTenant, setSelectedTenant] = useState(rememberedTenant);
+  const [selectedTenant, setSelectedTenant] = useState(tenantFromUrl || rememberedTenant);
   const [loadingTenants, setLoadingTenants] = useState(true);
+  
+  // Tenant-specific info
+  const [tenantInfo, setTenantInfo] = useState(null);
+  const [loadingTenantInfo, setLoadingTenantInfo] = useState(false);
+  
   const errorMessage = location.state?.error;
+  
+  // Fetch tenant info when tenant changes
+  useEffect(() => {
+    const fetchTenantInfo = async () => {
+      if (!selectedTenant) return;
+      
+      setLoadingTenantInfo(true);
+      try {
+        const response = await axios.get(`${API_URL}/api/tenants/info/${selectedTenant}`);
+        setTenantInfo(response.data);
+      } catch (error) {
+        // Tenant not found - use defaults
+        setTenantInfo(null);
+      } finally {
+        setLoadingTenantInfo(false);
+      }
+    };
+    
+    fetchTenantInfo();
+  }, [selectedTenant]);
   
   // Fetch available tenants for testing
   useEffect(() => {
@@ -115,26 +145,44 @@ export default function Login() {
     }
   };
 
-  const handleGoogleLogin = () => {
-    // Use Google OAuth from environment variable
+  const handleGoogleWorkspaceLogin = () => {
+    // Use tenant's Google Workspace SSO
     const clientId = process.env.REACT_APP_GOOGLE_OAUTH_CLIENT_ID;
     if (!clientId) {
       toast.error('Google OAuth is not configured');
       return;
     }
+    
+    // Store tenant for callback
+    localStorage.setItem('selectedTenant', selectedTenant);
+    localStorage.setItem('googleWorkspaceLogin', 'true');
+    
     const redirectUri = window.location.origin + '/auth/callback';
     const scope = 'email profile openid';
     const responseType = 'code';
     
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+    // If tenant has specific domain, add hd parameter for domain hint
+    const domain = tenantInfo?.auth_config?.google_workspace_domain;
+    
+    let authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
       `client_id=${clientId}&` +
       `redirect_uri=${encodeURIComponent(redirectUri)}&` +
       `response_type=${responseType}&` +
       `scope=${encodeURIComponent(scope)}&` +
       `access_type=offline`;
     
+    if (domain) {
+      authUrl += `&hd=${encodeURIComponent(domain)}`;
+    }
+    
     window.location.href = authUrl;
   };
+
+  // Get branding from tenant info
+  const branding = tenantInfo?.branding || {};
+  const authConfig = tenantInfo?.auth_config || {};
+  const showGoogleWorkspace = authConfig.google_workspace_enabled;
+  const googleDomain = authConfig.google_workspace_domain;
 
   // Show loading only during initial auth check
   if (authLoading) {
@@ -169,11 +217,19 @@ export default function Login() {
         
         <div className="relative z-10 text-center px-8">
           {/* Circular Logo */}
-          <div className="h-32 w-32 rounded-full bg-white p-2 shadow-2xl mb-6 mx-auto overflow-hidden">
-            <img src={NYLA_LOGO} alt="Nyla Air Water" className="w-full h-full object-cover rounded-full" />
+          <div className="h-32 w-32 rounded-full bg-white p-2 shadow-2xl mb-6 mx-auto overflow-hidden flex items-center justify-center">
+            {branding.logo_url ? (
+              <img src={branding.logo_url} alt={branding.app_name || 'Logo'} className="w-full h-full object-cover rounded-full" />
+            ) : (
+              <img src={NYLA_LOGO} alt="Sales CRM" className="w-full h-full object-cover rounded-full" />
+            )}
           </div>
-          <h1 className="text-4xl font-light text-white mb-4 drop-shadow-lg">Sales CRM</h1>
-          <p className="text-lg text-white/90 font-light drop-shadow">Track leads, close deals, grow revenue</p>
+          <h1 className="text-4xl font-light text-white mb-4 drop-shadow-lg">
+            {branding.app_name || 'Sales CRM'}
+          </h1>
+          <p className="text-lg text-white/90 font-light drop-shadow">
+            {branding.tagline || 'Track leads, close deals, grow revenue'}
+          </p>
         </div>
       </div>
 
@@ -186,12 +242,24 @@ export default function Login() {
           className="w-full max-w-md space-y-8"
         >
           <div className="text-center">
+            {/* Show tenant name if available */}
+            {tenantInfo && (
+              <p className="text-sm text-muted-foreground mb-2">
+                Signing in to <span className="font-medium text-foreground">{tenantInfo.name}</span>
+              </p>
+            )}
             <h2 className="text-3xl font-semibold text-foreground mb-2" data-testid="login-form-title">
               {showRegister ? 'Create Account' : 'Welcome Back'}
             </h2>
             <p className="text-muted-foreground">
               {showRegister ? 'Register for a new account' : 'Sign in to your account'}
             </p>
+            
+            {tenantInfo?.is_trial && (
+              <div className="mt-3 inline-flex items-center gap-1 px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-xs">
+                Trial • Ends {new Date(tenantInfo.trial_ends_at).toLocaleDateString()}
+              </div>
+            )}
             
             {errorMessage && (
               <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -202,91 +270,143 @@ export default function Login() {
 
           {!showRegister ? (
             <div className="space-y-6" data-testid="login-form">
-              <form onSubmit={handleLogin} className="space-y-4">
-                {/* Tenant Selector (for testing) */}
-                {tenants.length > 1 && (
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                    <Label className="text-amber-800 flex items-center gap-2 mb-2">
-                      <Building2 className="h-4 w-4" />
-                      Select Organization (Testing Mode)
-                    </Label>
-                    <Select value={selectedTenant} onValueChange={handleTenantChange}>
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="Select organization" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {tenants.map((tenant) => (
-                          <SelectItem key={tenant.tenant_id} value={tenant.tenant_id}>
-                            {tenant.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+              {/* Google Workspace Login - Show first if enabled */}
+              {showGoogleWorkspace && (
+                <>
+                  <Button
+                    type="button"
+                    variant="default"
+                    className="w-full h-14 text-base"
+                    onClick={handleGoogleWorkspaceLogin}
+                    data-testid="google-workspace-login-button"
+                  >
+                    <svg className="mr-3 h-6 w-6" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    Sign in with Google Workspace
+                  </Button>
+                  {googleDomain && (
+                    <p className="text-xs text-center text-muted-foreground -mt-3">
+                      For @{googleDomain} accounts
+                    </p>
+                  )}
+                  
+                  {authConfig.allow_password_login !== false && (
+                    <div className="relative my-6">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-border"></div>
+                      </div>
+                      <div className="relative flex justify-center text-sm">
+                        <span className="px-4 bg-background text-muted-foreground">Or use password</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+              
+              {/* Password Login Form */}
+              {authConfig.allow_password_login !== false && (
+                <form onSubmit={handleLogin} className="space-y-4">
+                  {/* Tenant Selector (for testing) */}
+                  {tenants.length > 1 && !tenantFromUrl && (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                      <Label className="text-amber-800 flex items-center gap-2 mb-2">
+                        <Building2 className="h-4 w-4" />
+                        Select Organization (Testing Mode)
+                      </Label>
+                      <Select value={selectedTenant} onValueChange={handleTenantChange}>
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="Select organization" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {tenants.map((tenant) => (
+                            <SelectItem key={tenant.tenant_id} value={tenant.tenant_id}>
+                              {tenant.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  
+                  <div>
+                    <Label>Email</Label>
+                    <Input
+                      type="email"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      placeholder="you@company.com"
+                      required
+                      className="h-12"
+                    />
                   </div>
-                )}
-                
-                <div>
-                  <Label>Email</Label>
-                  <Input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="admin@nylaairwater.earth"
-                    required
-                    className="h-12"
-                  />
-                </div>
-                <div>
-                  <Label>Password</Label>
-                  <Input
-                    type="password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder="Enter password"
-                    required
-                    className="h-12"
-                  />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="remember-me" 
-                    checked={rememberMe}
-                    onCheckedChange={setRememberMe}
-                  />
-                  <Label htmlFor="remember-me" className="text-sm font-normal cursor-pointer">
-                    Remember me
-                  </Label>
-                </div>
-                <Button type="submit" disabled={loading} className="w-full h-12">
-                  {loading ? 'Signing in...' : 'Sign In'}
-                </Button>
-              </form>
+                  <div>
+                    <Label>Password</Label>
+                    <Input
+                      type="password"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      placeholder="Enter password"
+                      required
+                      className="h-12"
+                    />
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="remember-me" 
+                      checked={rememberMe}
+                      onCheckedChange={setRememberMe}
+                    />
+                    <Label htmlFor="remember-me" className="text-sm font-normal cursor-pointer">
+                      Remember me
+                    </Label>
+                  </div>
+                  <Button type="submit" disabled={loading} className="w-full h-12">
+                    {loading ? 'Signing in...' : 'Sign In'}
+                  </Button>
+                </form>
+              )}
+              
+              {/* Only show regular Google if Workspace not enabled */}
+              {!showGoogleWorkspace && (
+                <>
+                  <div className="relative my-6">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-border"></div>
+                    </div>
+                    <div className="relative flex justify-center text-sm">
+                      <span className="px-4 bg-background text-muted-foreground">Or</span>
+                    </div>
+                  </div>
 
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-background text-muted-foreground">Or</span>
-                </div>
-              </div>
-
-              <Button
-                type="button"
-                variant="default"
-                className="w-full h-14 text-base"
-                onClick={handleGoogleLogin}
-                data-testid="google-login-button"
-              >
-                <svg className="mr-3 h-6 w-6" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                </svg>
-                Sign in with Google Workspace
-              </Button>
-
+                  <Button
+                    type="button"
+                    variant="default"
+                    className="w-full h-14 text-base"
+                    onClick={handleGoogleWorkspaceLogin}
+                    data-testid="google-login-button"
+                  >
+                    <svg className="mr-3 h-6 w-6" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    Sign in with Google
+                  </Button>
+                </>
+              )}
+              
+              {/* Create Workspace Link */}
+              <p className="text-center text-sm text-muted-foreground pt-4">
+                Don't have a workspace?{' '}
+                <Link to="/register" className="text-primary hover:underline font-medium">
+                  Create one
+                </Link>
+              </p>
             </div>
           ) : (
             <RegisterForm onBack={() => setShowRegister(false)} />

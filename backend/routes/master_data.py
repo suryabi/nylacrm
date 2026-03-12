@@ -1,12 +1,14 @@
 """
 Master data routes - SKUs, Locations, Categories, COGS
+Note: Master data (SKUs, territories, states, cities) are GLOBAL collections
+and do NOT get filtered by tenant_id (shared across all tenants)
 """
 from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List, Optional
 from datetime import datetime, timezone
 import uuid
 
-from database import db
+from database import db  # Use raw db for global master data
 from deps import get_current_user
 
 router = APIRouter()

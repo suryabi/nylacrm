@@ -3,11 +3,13 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AppContextProvider } from './context/AppContextContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { TenantConfigProvider, useTenantConfig } from './context/TenantConfigContext';
 import { Toaster } from './components/ui/sonner';
 import axios from 'axios';
 import DashboardLayout from './layouts/DashboardLayout';
 import SplashScreen from './pages/SplashScreen';
 import Login from './pages/Login';
+import RegisterTenant from './pages/RegisterTenant';
 import AuthCallback from './components/AuthCallback';
 import GoogleAuthCallback from './pages/GoogleAuthCallback';
 import Dashboard from './pages/Dashboard';
@@ -59,6 +61,8 @@ import ExpenseCategoryMaster from './pages/ExpenseCategoryMaster';
 import CompanyDocuments from './pages/CompanyDocuments';
 import MasterContactCategories from './pages/MasterContactCategories';
 import ContactsList from './pages/ContactsList';
+import TenantSettings from './pages/TenantSettings';
+import PlatformAdmin from './pages/PlatformAdmin';
 import '@/App.css';
 import { useActivityTracker } from './hooks/useActivityTracker';
 import { NavigationProvider } from './context/NavigationContext';
@@ -68,15 +72,44 @@ function ActivityTrackerWrapper({ children }) {
   return children;
 }
 
-function ProtectedRoute({ children }) {
+function ProtectedRoute({ children, moduleKey }) {
   const { user, loading } = useAuth();
+  const { isModuleEnabled, loading: configLoading } = useTenantConfig();
+  const location = useLocation();
 
-  if (loading) {
+  if (loading || configLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Check if module is enabled (if moduleKey is provided)
+  if (moduleKey && !isModuleEnabled(moduleKey)) {
+    return (
+      <DashboardLayout>
+        <div className="min-h-[60vh] flex items-center justify-center">
+          <div className="text-center p-8 max-w-md">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+              <svg className="w-8 h-8 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m4-6V9a2 2 0 00-2-2H8a2 2 0 00-2 2v2m8 0H6m8 0a2 2 0 012 2v6a2 2 0 01-2 2H8a2 2 0 01-2-2v-6a2 2 0 012-2" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-semibold text-foreground mb-2">Module Not Available</h2>
+            <p className="text-muted-foreground mb-4">
+              This feature has been disabled by your administrator. Contact your admin to enable it.
+            </p>
+            <button 
+              onClick={() => window.history.back()}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Go Back
+            </button>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
   }
 
   return (
@@ -92,13 +125,15 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <AppContextProvider>
-          <BrowserRouter>
-            <NavigationProvider>
-              <AppRouter />
-            </NavigationProvider>
-          </BrowserRouter>
-        </AppContextProvider>
+        <TenantConfigProvider>
+          <AppContextProvider>
+            <BrowserRouter>
+              <NavigationProvider>
+                <AppRouter />
+              </NavigationProvider>
+            </BrowserRouter>
+          </AppContextProvider>
+        </TenantConfigProvider>
       </AuthProvider>
     </ThemeProvider>
   );
@@ -118,56 +153,59 @@ function AppRouter() {
       <Routes>
           <Route path="/" element={<SplashScreen />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<RegisterTenant />} />
           <Route path="/auth/callback" element={<GoogleAuthCallback />} />
           
-          <Route path="/home" element={<ProtectedRoute><HomeDashboard /></ProtectedRoute>} />
-          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/dashboard-preview" element={<ProtectedRoute><DashboardPreview /></ProtectedRoute>} />
-          <Route path="/leads" element={<ProtectedRoute><LeadsList /></ProtectedRoute>} />
-          <Route path="/leads/kanban" element={<ProtectedRoute><LeadsKanban /></ProtectedRoute>} />
-          <Route path="/leads/new" element={<ProtectedRoute><AddEditLead /></ProtectedRoute>} />
-          <Route path="/leads/:id" element={<ProtectedRoute><LeadDetail /></ProtectedRoute>} />
-          <Route path="/leads/:id/edit" element={<ProtectedRoute><AddEditLead /></ProtectedRoute>} />
-          <Route path="/follow-ups" element={<ProtectedRoute><FollowUps /></ProtectedRoute>} />
+          <Route path="/home" element={<ProtectedRoute moduleKey="home"><HomeDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute moduleKey="dashboard"><Dashboard /></ProtectedRoute>} />
+          <Route path="/dashboard-preview" element={<ProtectedRoute moduleKey="dashboard"><DashboardPreview /></ProtectedRoute>} />
+          <Route path="/leads" element={<ProtectedRoute moduleKey="leads"><LeadsList /></ProtectedRoute>} />
+          <Route path="/leads/kanban" element={<ProtectedRoute moduleKey="pipeline"><LeadsKanban /></ProtectedRoute>} />
+          <Route path="/leads/new" element={<ProtectedRoute moduleKey="leads"><AddEditLead /></ProtectedRoute>} />
+          <Route path="/leads/:id" element={<ProtectedRoute moduleKey="leads"><LeadDetail /></ProtectedRoute>} />
+          <Route path="/leads/:id/edit" element={<ProtectedRoute moduleKey="leads"><AddEditLead /></ProtectedRoute>} />
+          <Route path="/follow-ups" element={<ProtectedRoute moduleKey="leads"><FollowUps /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/locations" element={<ProtectedRoute><LocationAnalytics /></ProtectedRoute>} />
-          <Route path="/team" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
-          <Route path="/daily-status" element={<ProtectedRoute><DailyStatusUpdate /></ProtectedRoute>} />
-          <Route path="/status-summary" element={<ProtectedRoute><StatusSummary /></ProtectedRoute>} />
-          <Route path="/bottle-preview" element={<ProtectedRoute><BottlePreview /></ProtectedRoute>} />
-          <Route path="/leaves" element={<ProtectedRoute><LeaveManagement /></ProtectedRoute>} />
-          <Route path="/travel-requests" element={<ProtectedRoute><TravelRequest /></ProtectedRoute>} />
-          <Route path="/budget-requests" element={<ProtectedRoute><BudgetRequest /></ProtectedRoute>} />
-          <Route path="/target-planning" element={<ProtectedRoute><TargetPlanningList /></ProtectedRoute>} />
-          <Route path="/target-planning/:planId" element={<ProtectedRoute><TargetPlanDashboard /></ProtectedRoute>} />
+          <Route path="/team" element={<ProtectedRoute moduleKey="team"><TeamManagement /></ProtectedRoute>} />
+          <Route path="/daily-status" element={<ProtectedRoute moduleKey="daily_status"><DailyStatusUpdate /></ProtectedRoute>} />
+          <Route path="/status-summary" element={<ProtectedRoute moduleKey="status_summary"><StatusSummary /></ProtectedRoute>} />
+          <Route path="/bottle-preview" element={<ProtectedRoute moduleKey="bottle_preview"><BottlePreview /></ProtectedRoute>} />
+          <Route path="/leaves" element={<ProtectedRoute moduleKey="leaves"><LeaveManagement /></ProtectedRoute>} />
+          <Route path="/travel-requests" element={<ProtectedRoute moduleKey="travel_requests"><TravelRequest /></ProtectedRoute>} />
+          <Route path="/budget-requests" element={<ProtectedRoute moduleKey="budget_requests"><BudgetRequest /></ProtectedRoute>} />
+          <Route path="/target-planning" element={<ProtectedRoute moduleKey="target_planning"><TargetPlanningList /></ProtectedRoute>} />
+          <Route path="/target-planning/:planId" element={<ProtectedRoute moduleKey="target_planning"><TargetPlanDashboard /></ProtectedRoute>} />
           <Route path="/reports-new" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
-          <Route path="/sales-portal" element={<ProtectedRoute><SalesPortal /></ProtectedRoute>} />
-          <Route path="/lead-discovery" element={<ProtectedRoute><LeadDiscovery /></ProtectedRoute>} />
-          <Route path="/cogs-calculator" element={<ProtectedRoute><COGSCalculator /></ProtectedRoute>} />
-          <Route path="/sales-revenue" element={<ProtectedRoute><SalesRevenueDashboard /></ProtectedRoute>} />
-          <Route path="/sku-performance" element={<ProtectedRoute><SKUPerformance /></ProtectedRoute>} />
-          <Route path="/resource-performance" element={<ProtectedRoute><ResourcePerformance /></ProtectedRoute>} />
-          <Route path="/accounts" element={<ProtectedRoute><AccountsList /></ProtectedRoute>} />
-          <Route path="/accounts/:id" element={<ProtectedRoute><AccountDetail /></ProtectedRoute>} />
-          <Route path="/account-performance" element={<ProtectedRoute><AccountPerformance /></ProtectedRoute>} />
-          <Route path="/transportation-calculator" element={<ProtectedRoute><TransportationCostCalculator /></ProtectedRoute>} />
-          <Route path="/sku-management" element={<ProtectedRoute><SKUManagement /></ProtectedRoute>} />
-          <Route path="/company-profile" element={<ProtectedRoute><CompanyProfile /></ProtectedRoute>} />
-          <Route path="/files-documents" element={<ProtectedRoute><FilesDocuments /></ProtectedRoute>} />
-          <Route path="/master-locations" element={<ProtectedRoute><MasterLocations /></ProtectedRoute>} />
-          <Route path="/master-lead-status" element={<ProtectedRoute><MasterLeadStatus /></ProtectedRoute>} />
-          <Route path="/master-business-categories" element={<ProtectedRoute><MasterBusinessCategories /></ProtectedRoute>} />
-          <Route path="/expense-category-master" element={<ProtectedRoute><ExpenseCategoryMaster /></ProtectedRoute>} />
-          <Route path="/company-documents" element={<ProtectedRoute><CompanyDocuments /></ProtectedRoute>} />
-          <Route path="/master-contact-categories" element={<ProtectedRoute><MasterContactCategories /></ProtectedRoute>} />
-          <Route path="/contacts" element={<ProtectedRoute><ContactsList /></ProtectedRoute>} />
+          <Route path="/sales-portal" element={<ProtectedRoute moduleKey="sales_portal"><SalesPortal /></ProtectedRoute>} />
+          <Route path="/lead-discovery" element={<ProtectedRoute moduleKey="lead_discovery"><LeadDiscovery /></ProtectedRoute>} />
+          <Route path="/cogs-calculator" element={<ProtectedRoute moduleKey="cogs_calculator"><COGSCalculator /></ProtectedRoute>} />
+          <Route path="/sales-revenue" element={<ProtectedRoute moduleKey="report_revenue"><SalesRevenueDashboard /></ProtectedRoute>} />
+          <Route path="/sku-performance" element={<ProtectedRoute moduleKey="report_sku_performance"><SKUPerformance /></ProtectedRoute>} />
+          <Route path="/resource-performance" element={<ProtectedRoute moduleKey="report_resource_performance"><ResourcePerformance /></ProtectedRoute>} />
+          <Route path="/accounts" element={<ProtectedRoute moduleKey="accounts"><AccountsList /></ProtectedRoute>} />
+          <Route path="/accounts/:id" element={<ProtectedRoute moduleKey="accounts"><AccountDetail /></ProtectedRoute>} />
+          <Route path="/account-performance" element={<ProtectedRoute moduleKey="report_account_performance"><AccountPerformance /></ProtectedRoute>} />
+          <Route path="/transportation-calculator" element={<ProtectedRoute moduleKey="transport_calculator"><TransportationCostCalculator /></ProtectedRoute>} />
+          <Route path="/sku-management" element={<ProtectedRoute moduleKey="sku_management"><SKUManagement /></ProtectedRoute>} />
+          <Route path="/company-profile" element={<ProtectedRoute moduleKey="company_profile"><CompanyProfile /></ProtectedRoute>} />
+          <Route path="/files-documents" element={<ProtectedRoute moduleKey="files_documents"><FilesDocuments /></ProtectedRoute>} />
+          <Route path="/master-locations" element={<ProtectedRoute moduleKey="master_locations"><MasterLocations /></ProtectedRoute>} />
+          <Route path="/master-lead-status" element={<ProtectedRoute moduleKey="lead_statuses"><MasterLeadStatus /></ProtectedRoute>} />
+          <Route path="/master-business-categories" element={<ProtectedRoute moduleKey="business_categories"><MasterBusinessCategories /></ProtectedRoute>} />
+          <Route path="/expense-category-master" element={<ProtectedRoute moduleKey="expense_categories"><ExpenseCategoryMaster /></ProtectedRoute>} />
+          <Route path="/company-documents" element={<ProtectedRoute moduleKey="company_documents"><CompanyDocuments /></ProtectedRoute>} />
+          <Route path="/master-contact-categories" element={<ProtectedRoute moduleKey="contact_categories"><MasterContactCategories /></ProtectedRoute>} />
+          <Route path="/contacts" element={<ProtectedRoute moduleKey="contacts"><ContactsList /></ProtectedRoute>} />
+          <Route path="/tenant-settings" element={<ProtectedRoute><TenantSettings /></ProtectedRoute>} />
+          <Route path="/platform-admin" element={<ProtectedRoute><PlatformAdmin /></ProtectedRoute>} />
           
           {/* Production Context Routes */}
-          <Route path="/maintenance" element={<ProtectedRoute><Maintenance /></ProtectedRoute>} />
-          <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
-          <Route path="/quality-control" element={<ProtectedRoute><QualityControl /></ProtectedRoute>} />
-          <Route path="/assets" element={<ProtectedRoute><Assets /></ProtectedRoute>} />
-          <Route path="/vendors" element={<ProtectedRoute><Vendors /></ProtectedRoute>} />
+          <Route path="/maintenance" element={<ProtectedRoute moduleKey="maintenance"><Maintenance /></ProtectedRoute>} />
+          <Route path="/inventory" element={<ProtectedRoute moduleKey="inventory"><Inventory /></ProtectedRoute>} />
+          <Route path="/quality-control" element={<ProtectedRoute moduleKey="quality_control"><QualityControl /></ProtectedRoute>} />
+          <Route path="/assets" element={<ProtectedRoute moduleKey="assets"><Assets /></ProtectedRoute>} />
+          <Route path="/vendors" element={<ProtectedRoute moduleKey="vendors"><Vendors /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </>

@@ -1,18 +1,24 @@
 """
 Leads routes - Lead CRUD, activities, comments, follow-ups, proposals
+Multi-tenant aware - all queries automatically filter by tenant_id
 """
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel, Field, EmailStr
 import uuid
 import re
 import base64
 
-from database import db
+from database import get_tenant_db
 from deps import get_current_user
+from core.tenant import with_tenant_id
 
 router = APIRouter()
+
+def get_tdb():
+    """Get tenant-aware database wrapper"""
+    return get_tenant_db()
 
 # ============= MODELS =============
 
@@ -188,6 +194,7 @@ class CommentCreate(BaseModel):
 
 async def generate_lead_id(company: str, city: str) -> str:
     """Generate unique Lead ID in format: NAME4-CITY-LYY-SEQ"""
+    tdb = get_tdb()
     clean_company = re.sub(r'[^a-zA-Z0-9]', '', company).upper()
     name4 = clean_company[:4].ljust(4, 'X')
     
@@ -198,7 +205,7 @@ async def generate_lead_id(company: str, city: str) -> str:
     prefix = f"{name4}-{city3}-L{year2}-"
     
     regex_pattern = f"^{re.escape(prefix)}\\d{{3}}$"
-    existing_leads = await db.leads.find(
+    existing_leads = await tdb.leads.find(
         {'lead_id': {'$regex': regex_pattern}},
         {'lead_id': 1}
     ).sort('lead_id', -1).limit(1).to_list(1)
@@ -221,6 +228,7 @@ async def generate_lead_id(company: str, city: str) -> str:
 @router.post("", response_model=Lead)
 async def create_lead(lead: LeadCreate, current_user: dict = Depends(get_current_user)):
     """Create a new lead"""
+    tdb = get_tdb()
     lead_data = lead.model_dump()
     lead_data['id'] = str(uuid.uuid4())
     lead_data['created_by'] = current_user['id']
@@ -234,7 +242,8 @@ async def create_lead(lead: LeadCreate, current_user: dict = Depends(get_current
     if not lead_data.get('assigned_to'):
         lead_data['assigned_to'] = current_user['id']
     
-    await db.leads.insert_one(lead_data)
+    # tenant_id is automatically added by TenantDB
+    await tdb.leads.insert_one(lead_data)
     
     lead_data['created_at'] = datetime.fromisoformat(lead_data['created_at'])
     lead_data['updated_at'] = datetime.fromisoformat(lead_data['updated_at'])
@@ -260,6 +269,7 @@ async def get_leads(
     current_user: dict = Depends(get_current_user)
 ):
     """Get paginated list of leads with filters"""
+    tdb = get_tdb()
     query = {}
     
     if search:
@@ -313,14 +323,14 @@ async def get_leads(
             start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             query['created_at'] = {'$gte': start_of_month.isoformat()}
     
-    total = await db.leads.count_documents(query)
+    total = await tdb.leads.count_documents(query)
     
     # Handle no_limit for pipeline view
     if no_limit:
         page_size = 10000
     
     skip = (page - 1) * page_size
-    leads_cursor = db.leads.find(query, {'_id': 0}).sort('created_at', -1).skip(skip).limit(page_size)
+    leads_cursor = tdb.leads.find(query, {'_id': 0}).sort('created_at', -1).skip(skip).limit(page_size)
     leads = await leads_cursor.to_list(page_size)
     
     # Convert datetime strings
@@ -344,7 +354,8 @@ async def get_leads(
 @router.get("/{lead_id}", response_model=Lead)
 async def get_lead(lead_id: str, current_user: dict = Depends(get_current_user)):
     """Get a single lead by ID"""
-    lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    tdb = get_tdb()
+    lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     
@@ -359,7 +370,8 @@ async def get_lead(lead_id: str, current_user: dict = Depends(get_current_user))
 @router.put("/{lead_id}", response_model=Lead)
 async def update_lead(lead_id: str, lead_update: LeadUpdate, current_user: dict = Depends(get_current_user)):
     """Update a lead"""
-    existing = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    tdb = get_tdb()
+    existing = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
     if not existing:
         raise HTTPException(status_code=404, detail='Lead not found')
     
@@ -375,9 +387,9 @@ async def update_lead(lead_id: str, lead_update: LeadUpdate, current_user: dict 
     else:
         update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    await db.leads.update_one({'id': lead_id}, {'$set': update_data})
+    await tdb.leads.update_one({'id': lead_id}, {'$set': update_data})
     
-    updated = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    updated = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
     if isinstance(updated.get('created_at'), str):
         updated['created_at'] = datetime.fromisoformat(updated['created_at'].replace('Z', '+00:00'))
     if isinstance(updated.get('updated_at'), str):
@@ -389,14 +401,15 @@ async def update_lead(lead_id: str, lead_update: LeadUpdate, current_user: dict 
 @router.delete("/{lead_id}")
 async def delete_lead(lead_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a lead"""
-    result = await db.leads.delete_one({'id': lead_id})
+    tdb = get_tdb()
+    result = await tdb.leads.delete_one({'id': lead_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail='Lead not found')
     
     # Also delete related data
-    await db.activities.delete_many({'lead_id': lead_id})
-    await db.follow_ups.delete_many({'lead_id': lead_id})
-    await db.comments.delete_many({'lead_id': lead_id})
+    await tdb.activities.delete_many({'lead_id': lead_id})
+    await tdb.follow_ups.delete_many({'lead_id': lead_id})
+    await tdb.comments.delete_many({'lead_id': lead_id})
     
     return {'message': 'Lead deleted successfully'}
 
@@ -404,12 +417,13 @@ async def delete_lead(lead_id: str, current_user: dict = Depends(get_current_use
 @router.post("/{lead_id}/generate-lead-id")
 async def regenerate_lead_id(lead_id: str, current_user: dict = Depends(get_current_user)):
     """Regenerate lead ID for a lead"""
-    lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    tdb = get_tdb()
+    lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     
     new_lead_id = await generate_lead_id(lead['company'], lead['city'])
-    await db.leads.update_one({'id': lead_id}, {'$set': {'lead_id': new_lead_id}})
+    await tdb.leads.update_one({'id': lead_id}, {'$set': {'lead_id': new_lead_id}})
     
     return {'lead_id': new_lead_id}
 
@@ -419,6 +433,7 @@ async def regenerate_lead_id(lead_id: str, current_user: dict = Depends(get_curr
 @router.post("/activities", response_model=Activity)
 async def create_activity(activity: ActivityCreate, current_user: dict = Depends(get_current_user)):
     """Create a new activity for a lead"""
+    tdb = get_tdb()
     activity_data = activity.model_dump()
     activity_data['id'] = str(uuid.uuid4())
     activity_data['created_by'] = current_user['id']
@@ -434,7 +449,7 @@ async def create_activity(activity: ActivityCreate, current_user: dict = Depends
     else:
         activity_data['created_at'] = datetime.now(timezone.utc).isoformat()
     
-    await db.activities.insert_one(activity_data)
+    await tdb.activities.insert_one(activity_data)
     
     activity_data['created_at'] = datetime.fromisoformat(activity_data['created_at'].replace('Z', '+00:00'))
     return Activity(**activity_data)
@@ -443,7 +458,8 @@ async def create_activity(activity: ActivityCreate, current_user: dict = Depends
 @router.get("/{lead_id}/activities", response_model=List[Activity])
 async def get_activities(lead_id: str, current_user: dict = Depends(get_current_user)):
     """Get all activities for a lead"""
-    activities = await db.activities.find({'lead_id': lead_id}, {'_id': 0}).sort('created_at', -1).to_list(1000)
+    tdb = get_tdb()
+    activities = await tdb.activities.find({'lead_id': lead_id}, {'_id': 0}).sort('created_at', -1).to_list(1000)
     
     for activity in activities:
         if isinstance(activity.get('created_at'), str):
@@ -457,6 +473,7 @@ async def get_activities(lead_id: str, current_user: dict = Depends(get_current_
 @router.post("/follow-ups", response_model=FollowUp)
 async def create_follow_up(follow_up: FollowUpCreate, current_user: dict = Depends(get_current_user)):
     """Create a new follow-up"""
+    tdb = get_tdb()
     follow_up_data = follow_up.model_dump()
     follow_up_data['id'] = str(uuid.uuid4())
     follow_up_data['created_by'] = current_user['id']
@@ -464,7 +481,7 @@ async def create_follow_up(follow_up: FollowUpCreate, current_user: dict = Depen
     follow_up_data['scheduled_date'] = follow_up_data['scheduled_date'].isoformat()
     follow_up_data['is_completed'] = False
     
-    await db.follow_ups.insert_one(follow_up_data)
+    await tdb.follow_ups.insert_one(follow_up_data)
     
     follow_up_data['created_at'] = datetime.fromisoformat(follow_up_data['created_at'])
     follow_up_data['scheduled_date'] = datetime.fromisoformat(follow_up_data['scheduled_date'])
@@ -478,13 +495,14 @@ async def get_follow_ups(
     current_user: dict = Depends(get_current_user)
 ):
     """Get follow-ups with optional filters"""
+    tdb = get_tdb()
     query = {}
     if lead_id:
         query['lead_id'] = lead_id
     if assigned_to:
         query['assigned_to'] = assigned_to
     
-    follow_ups = await db.follow_ups.find(query, {'_id': 0}).sort('scheduled_date', 1).to_list(1000)
+    follow_ups = await tdb.follow_ups.find(query, {'_id': 0}).sort('scheduled_date', 1).to_list(1000)
     
     for fu in follow_ups:
         if isinstance(fu.get('created_at'), str):
@@ -498,7 +516,8 @@ async def get_follow_ups(
 @router.put("/follow-ups/{follow_up_id}/complete")
 async def complete_follow_up(follow_up_id: str, current_user: dict = Depends(get_current_user)):
     """Mark a follow-up as completed"""
-    result = await db.follow_ups.update_one(
+    tdb = get_tdb()
+    result = await tdb.follow_ups.update_one(
         {'id': follow_up_id},
         {'$set': {
             'is_completed': True,
@@ -517,12 +536,13 @@ async def complete_follow_up(follow_up_id: str, current_user: dict = Depends(get
 @router.post("/comments", response_model=Comment)
 async def create_comment(comment: CommentCreate, current_user: dict = Depends(get_current_user)):
     """Create a new comment on a lead"""
+    tdb = get_tdb()
     comment_data = comment.model_dump()
     comment_data['id'] = str(uuid.uuid4())
     comment_data['created_by'] = current_user['id']
     comment_data['created_at'] = datetime.now(timezone.utc).isoformat()
     
-    await db.comments.insert_one(comment_data)
+    await tdb.comments.insert_one(comment_data)
     
     comment_data['created_at'] = datetime.fromisoformat(comment_data['created_at'])
     return Comment(**comment_data)
@@ -531,7 +551,8 @@ async def create_comment(comment: CommentCreate, current_user: dict = Depends(ge
 @router.get("/{lead_id}/comments", response_model=List[Comment])
 async def get_comments(lead_id: str, current_user: dict = Depends(get_current_user)):
     """Get all comments for a lead"""
-    comments = await db.comments.find({'lead_id': lead_id}, {'_id': 0}).sort('created_at', -1).to_list(1000)
+    tdb = get_tdb()
+    comments = await tdb.comments.find({'lead_id': lead_id}, {'_id': 0}).sort('created_at', -1).to_list(1000)
     
     for comment in comments:
         if isinstance(comment.get('created_at'), str):
@@ -545,11 +566,12 @@ async def get_comments(lead_id: str, current_user: dict = Depends(get_current_us
 @router.get("/{lead_id}/invoices")
 async def get_lead_invoices(lead_id: str, current_user: dict = Depends(get_current_user)):
     """Get all invoices for a lead"""
-    lead = await db.leads.find_one({'id': lead_id}, {'_id': 0, 'lead_id': 1})
+    tdb = get_tdb()
+    lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0, 'lead_id': 1})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     
-    invoices = await db.invoices.find(
+    invoices = await tdb.invoices.find(
         {'ca_lead_id': lead.get('lead_id')},
         {'_id': 0}
     ).sort('invoice_date', -1).to_list(1000)
@@ -566,7 +588,8 @@ async def upload_lead_logo(
     current_user: dict = Depends(get_current_user)
 ):
     """Upload a logo for a lead"""
-    lead = await db.leads.find_one({'id': lead_id}, {'_id': 0})
+    tdb = get_tdb()
+    lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     
@@ -579,7 +602,7 @@ async def upload_lead_logo(
     logo_base64 = base64.b64encode(content).decode('utf-8')
     logo_data = f"data:{logo.content_type};base64,{logo_base64}"
     
-    await db.leads.update_one(
+    await tdb.leads.update_one(
         {'id': lead_id},
         {'$set': {
             'logo': logo_data,
@@ -593,7 +616,8 @@ async def upload_lead_logo(
 @router.delete("/{lead_id}/logo")
 async def delete_lead_logo(lead_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a lead's logo"""
-    result = await db.leads.update_one(
+    tdb = get_tdb()
+    result = await tdb.leads.update_one(
         {'id': lead_id},
         {'$unset': {'logo': ''}, '$set': {'updated_at': datetime.now(timezone.utc).isoformat()}}
     )
