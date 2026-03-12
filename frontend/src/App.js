@@ -17,6 +17,17 @@ import HomeDashboard from './pages/HomeDashboard';
 
 // CRITICAL: Configure axios to always send credentials (cookies) with all requests
 axios.defaults.withCredentials = true;
+
+// CRITICAL: Always include X-Tenant-ID header on all API requests
+// This interceptor runs BEFORE the one in AuthContext, ensuring tenant is always set
+axios.interceptors.request.use((config) => {
+  // Only add tenant header if not already set
+  if (!config.headers['X-Tenant-ID']) {
+    const tenantId = localStorage.getItem('selectedTenant') || 'nyla-air-water';
+    config.headers['X-Tenant-ID'] = tenantId;
+  }
+  return config;
+});
 import LeadsList from './pages/LeadsList';
 import LeadsKanban from './pages/LeadsKanban';
 import LeadDetail from './pages/LeadDetail';

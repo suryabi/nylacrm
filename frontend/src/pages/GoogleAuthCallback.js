@@ -22,12 +22,20 @@ export default function GoogleAuthCallback() {
       }
 
       try {
+        // Get the tenant that was selected before OAuth redirect
+        const selectedTenant = localStorage.getItem('selectedTenant') || 'nyla-air-water';
+        
         // Exchange code for user session - send redirect_uri to match what was used in auth request
         const redirectUri = window.location.origin + '/auth/callback';
         const response = await axios.post(
           `${API_URL}/auth/google-callback`,
           { code, redirect_uri: redirectUri },
-          { withCredentials: true }
+          { 
+            withCredentials: true,
+            headers: {
+              'X-Tenant-ID': selectedTenant
+            }
+          }
         );
 
         // Success - user logged in, redirect without toast
