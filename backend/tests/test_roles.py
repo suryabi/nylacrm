@@ -13,7 +13,7 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
 TEST_USER_EMAIL = "surya.yadavalli@nylaairwater.earth"
-TEST_USER_PASSWORD = "admin123"
+TEST_USER_PASSWORD = "surya123"
 TENANT_ID = "nyla-air-water"
 
 

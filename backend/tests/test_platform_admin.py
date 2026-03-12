@@ -22,14 +22,14 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
 PLATFORM_ADMIN_CREDS = {
-    "email": "surya.yadavalli@gmail.com",
-    "password": "PlatformAdmin123",
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "surya123",
     "tenant_id": "nyla-air-water"
 }
 
 REGULAR_ADMIN_CREDS = {
     "email": "admin@nylaairwater.earth", 
-    "password": "PlatformAdmin123",  # Using same password we set during test setup
+    "password": "admin123",
     "tenant_id": "nyla-air-water"
 }
 
