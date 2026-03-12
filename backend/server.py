@@ -196,6 +196,71 @@ async def tenant_context_middleware(request: Request, call_next):
     """Middleware to set tenant context for each request"""
     return await tenant_middleware(request, call_next)
 
+# ============= DEBUG ENDPOINTS (Public - for troubleshooting) =============
+
+@api_router.get("/debug/check-user/{email}")
+async def debug_check_user(email: str):
+    """
+    PUBLIC DEBUG: Check if a user exists in the database.
+    Returns user info without requiring authentication.
+    """
+    # Search globally (without tenant filter)
+    user = await db.users.find_one(
+        {'email': {'$regex': f'^{email}$', '$options': 'i'}},
+        {'_id': 0, 'email': 1, 'name': 1, 'tenant_id': 1, 'role': 1, 'is_active': 1}
+    )
+    
+    if not user:
+        # Try partial match
+        partial_users = await db.users.find(
+            {'email': {'$regex': email.split('@')[0], '$options': 'i'}},
+            {'_id': 0, 'email': 1, 'tenant_id': 1}
+        ).to_list(5)
+        
+        return {
+            "found": False,
+            "message": f"No user found with email: {email}",
+            "similar_users": partial_users,
+            "total_users_in_db": await db.users.count_documents({})
+        }
+    
+    return {
+        "found": True,
+        "user": user,
+        "has_tenant_id": bool(user.get('tenant_id'))
+    }
+
+@api_router.post("/debug/fix-user-tenant")
+async def debug_fix_user_tenant(request: Request):
+    """
+    PUBLIC DEBUG: Fix a user's tenant_id.
+    Body: {"email": "user@example.com", "tenant_id": "nyla-air-water", "secret": "fix-tenant-2026"}
+    """
+    body = await request.json()
+    email = body.get('email')
+    tenant_id = body.get('tenant_id', 'nyla-air-water')
+    secret = body.get('secret')
+    
+    if secret != 'fix-tenant-2026':
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    
+    result = await db.users.update_one(
+        {'email': {'$regex': f'^{email}$', '$options': 'i'}},
+        {'$set': {'tenant_id': tenant_id}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail=f"User {email} not found")
+    
+    return {
+        "success": True,
+        "message": f"Updated tenant_id to {tenant_id} for {email}",
+        "matched": result.matched_count,
+        "modified": result.modified_count
+    }
+
+# ============= END DEBUG ENDPOINTS =============
+
 # Include modular routes - these are the refactored endpoints
 # Note: We're including them here but the original routes in this file
 # will take precedence due to FastAPI route ordering
