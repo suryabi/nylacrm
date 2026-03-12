@@ -259,6 +259,89 @@ async def debug_fix_user_tenant(request: Request):
         "modified": result.modified_count
     }
 
+@api_router.get("/debug/migration-status")
+async def debug_migration_status():
+    """
+    PUBLIC DEBUG: Check how many documents need tenant_id migration.
+    """
+    collections_to_check = [
+        'users', 'leads', 'accounts', 'activities', 'meetings', 'tasks',
+        'requests', 'leave_requests', 'travel_requests', 'budget_requests',
+        'contacts', 'contact_categories', 'expense_categories', 'designations',
+        'roles', 'documents', 'notifications', 'daily_status_logs'
+    ]
+    
+    status = {}
+    total_need_migration = 0
+    
+    for coll_name in collections_to_check:
+        try:
+            coll = db[coll_name]
+            total = await coll.count_documents({})
+            without_tenant = await coll.count_documents({'tenant_id': {'$exists': False}})
+            with_tenant = await coll.count_documents({'tenant_id': {'$exists': True}})
+            
+            status[coll_name] = {
+                "total": total,
+                "without_tenant_id": without_tenant,
+                "with_tenant_id": with_tenant,
+                "needs_migration": without_tenant > 0
+            }
+            total_need_migration += without_tenant
+        except Exception as e:
+            status[coll_name] = {"error": str(e)}
+    
+    return {
+        "total_documents_need_migration": total_need_migration,
+        "collections": status
+    }
+
+@api_router.post("/debug/migrate-all-data")
+async def debug_migrate_all_data(request: Request):
+    """
+    PUBLIC DEBUG: Add tenant_id to ALL documents that don't have it.
+    Body: {"tenant_id": "nyla-air-water", "secret": "migrate-all-2026"}
+    """
+    body = await request.json()
+    tenant_id = body.get('tenant_id', 'nyla-air-water')
+    secret = body.get('secret')
+    
+    if secret != 'migrate-all-2026':
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    
+    collections_to_migrate = [
+        'users', 'leads', 'accounts', 'activities', 'meetings', 'tasks',
+        'requests', 'leave_requests', 'travel_requests', 'budget_requests',
+        'contacts', 'contact_categories', 'expense_categories', 'designations',
+        'roles', 'documents', 'notifications', 'daily_status_logs',
+        'company_profiles', 'files', 'invoices', 'proposals'
+    ]
+    
+    results = {}
+    total_migrated = 0
+    
+    for coll_name in collections_to_migrate:
+        try:
+            coll = db[coll_name]
+            result = await coll.update_many(
+                {'tenant_id': {'$exists': False}},
+                {'$set': {'tenant_id': tenant_id}}
+            )
+            results[coll_name] = {
+                "matched": result.matched_count,
+                "modified": result.modified_count
+            }
+            total_migrated += result.modified_count
+        except Exception as e:
+            results[coll_name] = {"error": str(e)}
+    
+    return {
+        "success": True,
+        "tenant_id": tenant_id,
+        "total_documents_migrated": total_migrated,
+        "collections": results
+    }
+
 # ============= END DEBUG ENDPOINTS =============
 
 # Include modular routes - these are the refactored endpoints
