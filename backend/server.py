@@ -314,7 +314,10 @@ async def debug_migrate_all_data(request: Request):
         'requests', 'leave_requests', 'travel_requests', 'budget_requests',
         'contacts', 'contact_categories', 'expense_categories', 'designations',
         'roles', 'documents', 'notifications', 'daily_status_logs',
-        'company_profiles', 'files', 'invoices', 'proposals'
+        'company_profiles', 'files', 'invoices', 'proposals',
+        # COGS and Target collections
+        'cogs_data', 'target_plans_v2', 'sku_targets', 'city_targets', 'sales_targets',
+        'target_plans', 'resource_targets', 'monthly_targets'
     ]
     
     results = {}
