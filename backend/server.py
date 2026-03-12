@@ -537,10 +537,88 @@ async def debug_migrate_legacy_roles(request: Request):
     ]
     
     results = {
-        "created": [],
-        "skipped": [],
-        "errors": []
+        "roles": {"created": [], "skipped": [], "errors": []},
+        "designations": {"created": [], "skipped": [], "errors": []}
     }
+    
+    # Add more roles
+    legacy_roles.extend([
+        {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "name": "Head of Business",
+            "description": "Head of Business - Manager level access",
+            "permissions": manager_access,
+            "is_system_role": True,
+            "is_default": False,
+            "created_at": now,
+            "updated_at": now
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "name": "Business Development Executive",
+            "description": "BDE - Standard sales access",
+            "permissions": sales_access,
+            "is_system_role": True,
+            "is_default": False,
+            "created_at": now,
+            "updated_at": now
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "name": "Production Manager",
+            "description": "Production Manager - Manager level access",
+            "permissions": manager_access,
+            "is_system_role": True,
+            "is_default": False,
+            "created_at": now,
+            "updated_at": now
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "name": "Production Supervisor",
+            "description": "Production Supervisor - Supervisor access",
+            "permissions": sales_access,
+            "is_system_role": True,
+            "is_default": False,
+            "created_at": now,
+            "updated_at": now
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "name": "System Admin",
+            "description": "System Administrator - Full access",
+            "permissions": full_access,
+            "is_system_role": True,
+            "is_default": False,
+            "created_at": now,
+            "updated_at": now
+        }
+    ])
+    
+    # Legacy designations to create
+    legacy_designations = [
+        {"name": "CEO", "department": "Executive", "level": 1},
+        {"name": "Director", "department": "Executive", "level": 2},
+        {"name": "VP Growth", "department": "Executive", "level": 3},
+        {"name": "Vice President", "department": "Executive", "level": 3},
+        {"name": "National Sales Head", "department": "Sales", "level": 4},
+        {"name": "Regional Sales Manager", "department": "Sales", "level": 5},
+        {"name": "Partner - Sales", "department": "Sales", "level": 6},
+        {"name": "Head of Business", "department": "Sales", "level": 6},
+        {"name": "Sales Manager", "department": "Sales", "level": 7},
+        {"name": "Sales Executive", "department": "Sales", "level": 8},
+        {"name": "Business Development Executive", "department": "Sales", "level": 8},
+        {"name": "Sales Representative", "department": "Sales", "level": 9},
+        {"name": "Production Manager", "department": "Production", "level": 5},
+        {"name": "Production Supervisor", "department": "Production", "level": 6},
+        {"name": "System Admin", "department": "IT", "level": 3},
+        {"name": "Admin", "department": "Admin", "level": 4},
+    ]
     
     for role in legacy_roles:
         try:
@@ -551,12 +629,34 @@ async def debug_migrate_legacy_roles(request: Request):
             })
             
             if existing:
-                results["skipped"].append(role["name"])
+                results["roles"]["skipped"].append(role["name"])
             else:
                 await db.roles.insert_one(role)
-                results["created"].append(role["name"])
+                results["roles"]["created"].append(role["name"])
         except Exception as e:
-            results["errors"].append({"role": role["name"], "error": str(e)})
+            results["roles"]["errors"].append({"role": role["name"], "error": str(e)})
+    
+    # Migrate designations
+    for desig in legacy_designations:
+        try:
+            existing = await db.designations.find_one({"tenant_id": tenant_id, "name": desig["name"]})
+            if existing:
+                results["designations"]["skipped"].append(desig["name"])
+            else:
+                desig_doc = {
+                    "id": str(uuid.uuid4()),
+                    "tenant_id": tenant_id,
+                    "name": desig["name"],
+                    "department": desig["department"],
+                    "level": desig["level"],
+                    "is_system": True,
+                    "created_at": now,
+                    "updated_at": now
+                }
+                await db.designations.insert_one(desig_doc)
+                results["designations"]["created"].append(desig["name"])
+        except Exception as e:
+            results["designations"]["errors"].append({"designation": desig["name"], "error": str(e)})
     
     return {
         "success": True,
