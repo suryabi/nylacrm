@@ -304,6 +304,42 @@ async def debug_check_session(request: Request):
     
     return result
 
+@api_router.get("/debug/check-targets")
+async def debug_check_targets():
+    """
+    PUBLIC DEBUG: Check target plans data.
+    """
+    # Get all target plans
+    plans_v2 = await db.target_plans_v2.find({}, {'_id': 0, 'id': 1, 'name': 1, 'tenant_id': 1, 'status': 1}).to_list(20)
+    plans_v1 = await db.target_plans.find({}, {'_id': 0, 'id': 1, 'name': 1, 'tenant_id': 1}).to_list(20)
+    
+    # Check tenant_ids
+    v2_tenants = await db.target_plans_v2.distinct('tenant_id')
+    v1_tenants = await db.target_plans.distinct('tenant_id')
+    
+    return {
+        "target_plans_v2": {
+            "total": await db.target_plans_v2.count_documents({}),
+            "without_tenant_id": await db.target_plans_v2.count_documents({'tenant_id': {'$exists': False}}),
+            "sample_plans": plans_v2,
+            "all_tenant_ids": v2_tenants
+        },
+        "target_plans_v1": {
+            "total": await db.target_plans.count_documents({}),
+            "without_tenant_id": await db.target_plans.count_documents({'tenant_id': {'$exists': False}}),
+            "sample_plans": plans_v1,
+            "all_tenant_ids": v1_tenants
+        },
+        "sku_targets": {
+            "total": await db.sku_targets.count_documents({}),
+            "without_tenant_id": await db.sku_targets.count_documents({'tenant_id': {'$exists': False}})
+        },
+        "city_targets": {
+            "total": await db.city_targets.count_documents({}),
+            "without_tenant_id": await db.city_targets.count_documents({'tenant_id': {'$exists': False}})
+        }
+    }
+
 @api_router.post("/debug/fix-user-tenant")
 async def debug_fix_user_tenant(request: Request):
     """
