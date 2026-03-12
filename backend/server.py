@@ -264,6 +264,46 @@ async def debug_check_cogs(city: str):
         "total_cogs_records": await db.cogs_data.count_documents({})
     }
 
+@api_router.get("/debug/check-session")
+async def debug_check_session(request: Request):
+    """
+    PUBLIC DEBUG: Check current session and user state.
+    """
+    session_token = request.cookies.get('session_token')
+    auth_header = request.headers.get('Authorization')
+    tenant_header = request.headers.get('X-Tenant-ID')
+    
+    result = {
+        "has_session_cookie": bool(session_token),
+        "session_token_prefix": session_token[:8] + "..." if session_token else None,
+        "has_auth_header": bool(auth_header),
+        "tenant_header": tenant_header,
+        "current_tenant": get_current_tenant_id()
+    }
+    
+    if session_token:
+        session = await db.user_sessions.find_one({'session_token': session_token}, {'_id': 0})
+        if session:
+            result["session_found"] = True
+            result["session_user_id"] = session.get('user_id')
+            result["session_tenant_id"] = session.get('tenant_id')
+            result["session_expires_at"] = session.get('expires_at')
+            
+            # Check if user exists
+            user = await db.users.find_one({'id': session['user_id']}, {'_id': 0, 'email': 1, 'name': 1, 'tenant_id': 1})
+            if user:
+                result["user_found"] = True
+                result["user_email"] = user.get('email')
+                result["user_tenant_id"] = user.get('tenant_id')
+            else:
+                result["user_found"] = False
+                result["error"] = f"No user found with id: {session['user_id']}"
+        else:
+            result["session_found"] = False
+            result["error"] = "Session token not found in database"
+    
+    return result
+
 @api_router.post("/debug/fix-user-tenant")
 async def debug_fix_user_tenant(request: Request):
     """
