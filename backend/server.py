@@ -2456,8 +2456,8 @@ async def get_current_user_from_cookie_or_header(request: Request):
     if expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=401, detail='Session expired')
     
-    # Get user
-    user_doc = await get_tdb().users.find_one({'id': session_doc['user_id']}, {'_id': 0, 'password': 0})
+    # Get user - use global db, NOT tenant-filtered, since user lookup should work across tenants
+    user_doc = await db.users.find_one({'id': session_doc['user_id']}, {'_id': 0, 'password': 0})
     if not user_doc:
         raise HTTPException(status_code=401, detail='User not found')
     
