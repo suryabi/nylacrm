@@ -162,6 +162,7 @@ export const TenantConfigProvider = ({ children }) => {
   const [tenantConfig, setTenantConfig] = useState(null);
   const [modules, setModules] = useState({});
   const [branding, setBranding] = useState(DEFAULT_BRANDING);
+  const [rolePermissions, setRolePermissions] = useState({});
   const [loading, setLoading] = useState(true);
 
   const fetchTenantConfig = useCallback(async () => {
@@ -188,11 +189,31 @@ export const TenantConfigProvider = ({ children }) => {
       
       // Apply branding colors to CSS custom properties
       applyBrandingColors(fetchedBranding);
+      
+      // Fetch role permissions for the current user's role
+      try {
+        const rolesResponse = await axios.get(`${API_URL}/api/roles`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const roles = rolesResponse.data.roles || [];
+        // Find the user's role permissions
+        const userRole = roles.find(r => r.name === user?.role);
+        if (userRole && userRole.permissions) {
+          setRolePermissions(userRole.permissions);
+        } else {
+          // Default: allow all if role not found in Role Management
+          setRolePermissions({});
+        }
+      } catch (roleError) {
+        console.log('Could not fetch role permissions, using defaults');
+        setRolePermissions({});
+      }
     } catch (error) {
       console.error('Failed to fetch tenant config:', error);
       // Set defaults on error
       setModules({});
       setBranding(DEFAULT_BRANDING);
+      setRolePermissions({});
     } finally {
       setLoading(false);
     }
@@ -202,7 +223,7 @@ export const TenantConfigProvider = ({ children }) => {
     fetchTenantConfig();
   }, [fetchTenantConfig]);
 
-  // Check if a specific module is enabled
+  // Check if a specific module is enabled for the tenant
   const isModuleEnabled = useCallback((moduleKey) => {
     // If modules not loaded or key doesn't exist, default to enabled
     if (!modules || modules[moduleKey] === undefined) {
@@ -210,6 +231,21 @@ export const TenantConfigProvider = ({ children }) => {
     }
     return modules[moduleKey] !== false;
   }, [modules]);
+
+  // Check if the current user's role has permission to view a module
+  const hasRolePermission = useCallback((moduleKey) => {
+    // If no role permissions loaded, default to allowed (backwards compatible)
+    if (!rolePermissions || Object.keys(rolePermissions).length === 0) {
+      return true;
+    }
+    // Check if the module has view permission
+    const modulePerms = rolePermissions[moduleKey];
+    if (!modulePerms) {
+      // Module not in permissions list, default to allowed
+      return true;
+    }
+    return modulePerms.view === true;
+  }, [rolePermissions]);
 
   // Check if a route is accessible based on module configuration
   const isRouteAccessible = useCallback((route) => {
@@ -251,8 +287,10 @@ export const TenantConfigProvider = ({ children }) => {
       tenantConfig,
       modules,
       branding,
+      rolePermissions,
       loading,
       isModuleEnabled,
+      hasRolePermission,
       isRouteAccessible,
       getDisabledRoutes,
       refreshConfig,

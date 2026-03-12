@@ -146,7 +146,7 @@ export default function DashboardLayout({ children }) {
   const { currentContext, switchContext, canAccessBothContexts } = useAppContext();
   const { theme, toggleTheme } = useTheme();
   const { navigateTo } = useNavigation();
-  const { isModuleEnabled, branding } = useTenantConfig();
+  const { isModuleEnabled, hasRolePermission, branding } = useTenantConfig();
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -193,9 +193,10 @@ export default function DashboardLayout({ children }) {
 
   // Filter dashboard submenu based on role AND module configuration
   const filteredDashboardSubmenu = dashboardSubmenu.filter(item => {
-    const roleAllowed = !item.roles || item.roles.includes(user?.role);
     const moduleEnabled = !item.moduleKey || isModuleEnabled(item.moduleKey);
-    return roleAllowed && moduleEnabled;
+    const roleHasPermission = !item.moduleKey || hasRolePermission(item.moduleKey);
+    const hardcodedRoleAllowed = !item.roles || item.roles.includes(user?.role);
+    return moduleEnabled && (roleHasPermission || hardcodedRoleAllowed);
   });
   
   const isDashboardActive = location.pathname === '/dashboard' || location.pathname === '/sales-revenue' || 
@@ -217,9 +218,15 @@ export default function DashboardLayout({ children }) {
       if (item.isPlatformAdminOnly) {
         return isPlatformAdmin;
       }
-      const roleAllowed = !item.roles || item.roles.includes(user?.role);
+      // Check if module is enabled for tenant
       const moduleEnabled = !item.moduleKey || isModuleEnabled(item.moduleKey);
-      return roleAllowed && moduleEnabled;
+      // Check if user's role has permission (from Role Management)
+      const roleHasPermission = !item.moduleKey || hasRolePermission(item.moduleKey);
+      // Fallback to hardcoded roles if needed
+      const hardcodedRoleAllowed = !item.roles || item.roles.includes(user?.role);
+      
+      // Module must be enabled AND (role has permission OR hardcoded role allowed)
+      return moduleEnabled && (roleHasPermission || hardcodedRoleAllowed);
     })
   })).filter(group => group.items.length > 0);
 
