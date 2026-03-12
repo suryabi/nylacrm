@@ -38,20 +38,35 @@ def extract_tenant_from_request(request: Request) -> str:
     Extract tenant ID from the request.
     Priority:
     1. X-Tenant-ID header (for API calls)
-    2. Subdomain (for web requests)
-    3. Default tenant
+    2. Domain mapping (for known production domains)
+    3. Subdomain (for web requests)
+    4. Default tenant
     """
     # Check header first (useful for API testing and mobile apps)
     tenant_header = request.headers.get('X-Tenant-ID')
     if tenant_header:
         return tenant_header
     
-    # Extract from subdomain
+    # Extract from host
     host = request.headers.get('host', '')
     
     # Handle localhost and preview environments
     if 'localhost' in host or 'preview.emergentagent.com' in host or '127.0.0.1' in host:
         return DEFAULT_TENANT_ID
+    
+    # Domain-to-tenant mapping for production
+    # This handles cases like crm.nylaairwater.earth -> nyla-air-water
+    DOMAIN_TENANT_MAP = {
+        'crm.nylaairwater.earth': 'nyla-air-water',
+        'nylaairwater.earth': 'nyla-air-water',
+        'www.nylaairwater.earth': 'nyla-air-water',
+        # Add more domain mappings as needed
+    }
+    
+    # Check if host matches a known domain
+    host_lower = host.lower().split(':')[0]  # Remove port if present
+    if host_lower in DOMAIN_TENANT_MAP:
+        return DOMAIN_TENANT_MAP[host_lower]
     
     # Extract subdomain (e.g., "acme" from "acme.yourapp.com")
     parts = host.split('.')
