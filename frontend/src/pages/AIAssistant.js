@@ -26,7 +26,7 @@ const SAMPLE_QUESTIONS = [
 ];
 
 export default function AIAssistant() {
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -38,11 +38,11 @@ export default function AIAssistant() {
   // Check availability
   useEffect(() => {
     const checkAvailability = async () => {
-      if (!token) return;
+      if (!user) return;
       
       try {
         const response = await axios.get(`${API_URL}/api/ai/status`, {
-          headers: { Authorization: `Bearer ${token}` }
+          
         });
         setIsAvailable(response.data.available);
         setStatusMessage(response.data.message);
@@ -57,7 +57,7 @@ export default function AIAssistant() {
     };
     
     checkAvailability();
-  }, [token]);
+  }, [user]);
 
   // Scroll to bottom
   useEffect(() => {
@@ -67,7 +67,7 @@ export default function AIAssistant() {
   const loadChatHistory = async () => {
     try {
       const response = await axios.get(`${API_URL}/api/ai/chat/history?limit=50`, {
-        headers: { Authorization: `Bearer ${token}` }
+        
       });
       
       const history = response.data.history || [];
@@ -130,7 +130,7 @@ Ask me anything about your business data!`,
       const response = await axios.post(
         `${API_URL}/api/ai/chat`,
         { message, session_id: sessionId },
-        { headers: { Authorization: `Bearer ${token}` } }
+        {  }
       );
       
       setSessionId(response.data.session_id);
@@ -156,7 +156,7 @@ Ask me anything about your business data!`,
   const clearHistory = async () => {
     try {
       await axios.delete(`${API_URL}/api/ai/chat/history`, {
-        headers: { Authorization: `Bearer ${token}` }
+        
       });
       setMessages([]);
       setSessionId(null);

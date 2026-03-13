@@ -14,7 +14,7 @@ import axios from 'axios';
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function AIChatBubble() {
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [isAvailable, setIsAvailable] = useState(false);
@@ -27,16 +27,14 @@ export default function AIChatBubble() {
   // Check if AI assistant is available for this user
   useEffect(() => {
     const checkAvailability = async () => {
-      if (!token) {
-        console.log('AIChatBubble: No token available');
+      if (!user) {
+        console.log('AIChatBubble: No user logged in');
         return;
       }
       
       try {
-        console.log('AIChatBubble: Checking availability...');
-        const response = await axios.get(`${API_URL}/api/ai/status`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        console.log('AIChatBubble: Checking availability for user:', user.email);
+        const response = await axios.get(`${API_URL}/api/ai/status`);
         console.log('AIChatBubble: Status response:', response.data);
         setIsAvailable(response.data.available);
       } catch (error) {
@@ -46,7 +44,7 @@ export default function AIChatBubble() {
     };
     
     checkAvailability();
-  }, [token]);
+  }, [user]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -62,9 +60,7 @@ export default function AIChatBubble() {
 
   const loadChatHistory = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/ai/chat/history?limit=20`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await axios.get(`${API_URL}/api/ai/chat/history?limit=20`);
       
       const history = response.data.history || [];
       if (history.length > 0) {
@@ -117,8 +113,7 @@ export default function AIChatBubble() {
         { 
           message: inputMessage,
           session_id: sessionId 
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
+        }
       );
       
       setSessionId(response.data.session_id);
@@ -146,9 +141,7 @@ export default function AIChatBubble() {
 
   const clearHistory = async () => {
     try {
-      await axios.delete(`${API_URL}/api/ai/chat/history`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await axios.delete(`${API_URL}/api/ai/chat/history`);
       setMessages([{
         role: 'assistant',
         content: "Chat history cleared. How can I help you today?",
