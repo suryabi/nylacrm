@@ -198,11 +198,11 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex" data-testid="login-page">
-      {/* Left side - Misty Mountains Background */}
+      {/* Left side - Background Image */}
       <div 
         className="hidden lg:flex lg:w-1/2 relative items-center justify-center overflow-hidden"
       >
-        {/* Misty Mountains Background */}
+        {/* Background Image */}
         <div 
           className="absolute inset-0"
           style={{
@@ -211,26 +211,6 @@ export default function Login() {
             backgroundPosition: 'center'
           }}
         />
-        
-        {/* Dark overlay for better text visibility */}
-        <div className="absolute inset-0 bg-black/30" />
-        
-        <div className="relative z-10 text-center px-8">
-          {/* Circular Logo */}
-          <div className="h-32 w-32 rounded-full bg-white p-2 shadow-2xl mb-6 mx-auto overflow-hidden flex items-center justify-center">
-            {branding.logo_url ? (
-              <img src={branding.logo_url} alt={branding.app_name || 'Logo'} className="w-full h-full object-cover rounded-full" />
-            ) : (
-              <img src={NYLA_LOGO} alt="Sales CRM" className="w-full h-full object-cover rounded-full" />
-            )}
-          </div>
-          <h1 className="text-4xl font-light text-white mb-4 drop-shadow-lg">
-            {branding.app_name || 'Sales CRM'}
-          </h1>
-          <p className="text-lg text-white/90 font-light drop-shadow">
-            {branding.tagline || 'Track leads, close deals, grow revenue'}
-          </p>
-        </div>
       </div>
 
       {/* Right side - Login form */}
