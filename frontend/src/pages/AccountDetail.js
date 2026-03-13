@@ -34,6 +34,7 @@ import {
 import LogoUploader from '../components/LogoUploader';
 import ExpenseRequestSection from '../components/ExpenseRequestSection';
 import AppBreadcrumb from '../components/AppBreadcrumb';
+import AccountScoringCard from '../components/AccountScoringCard';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -1617,6 +1618,12 @@ ${googleMapsLink}`;
               )}
             </div>
           </Card>
+
+          {/* Account Scoring Card */}
+          <AccountScoringCard 
+            accountId={account?.id || id} 
+            accountName={account?.account_name} 
+          />
         </div>
       </div>
 

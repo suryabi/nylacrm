@@ -75,6 +75,7 @@ import ContactsList from './pages/ContactsList';
 import TenantSettings from './pages/TenantSettings';
 import PlatformAdmin from './pages/PlatformAdmin';
 import AIAssistant from './pages/AIAssistant';
+import LeadScoringModel from './pages/LeadScoringModel';
 import '@/App.css';
 import { useActivityTracker } from './hooks/useActivityTracker';
 import { NavigationProvider } from './context/NavigationContext';
@@ -212,6 +213,7 @@ function AppRouter() {
           <Route path="/tenant-settings" element={<ProtectedRoute><TenantSettings /></ProtectedRoute>} />
           <Route path="/platform-admin" element={<ProtectedRoute><PlatformAdmin /></ProtectedRoute>} />
           <Route path="/ai-assistant" element={<ProtectedRoute><AIAssistant /></ProtectedRoute>} />
+          <Route path="/lead-scoring-model" element={<ProtectedRoute moduleKey="lead_scoring"><LeadScoringModel /></ProtectedRoute>} />
           
           {/* Production Context Routes */}
           <Route path="/maintenance" element={<ProtectedRoute moduleKey="maintenance"><Maintenance /></ProtectedRoute>} />
