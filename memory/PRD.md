@@ -3,7 +3,29 @@
 ## Original Problem Statement
 Build a comprehensive, mobile-ready Sales CRM application with multi-tenancy support.
 
-## Current Session Updates (Mar 12, 2026)
+## Current Session Updates (Mar 13, 2026)
+
+### Lead Scoring Model Admin Module (NEW)
+- **Tenant-specific scoring model** - Each tenant can define their own scoring categories
+- **5 default categories** seeded: Volume Potential (25pts), Margin Potential (20pts), Brand Prestige (20pts), Guest Influence (20pts), Sustainability Alignment (15pts)
+- **Category & Tier Management** - Admin can create/edit/delete categories and scoring tiers
+- **Weight validation** - Total weight must equal 100, tiers cannot exceed category weight
+- **Account Scoring** - Score individual accounts by selecting tiers for each category
+- **Portfolio Matrix** - 2x2 visualization (Stars, Showcase, Plough Horses, Puzzles) based on Volume vs Commercial Value
+- **Account Score Card** - Integrated into Account Detail page for inline scoring
+
+### Files Created/Modified
+- `/app/backend/routes/scoring.py` - NEW Lead Scoring API endpoints
+- `/app/backend/routes/__init__.py` - Registered scoring router
+- `/app/frontend/src/pages/LeadScoringModel.js` - NEW Admin UI page
+- `/app/frontend/src/components/AccountScoringCard.js` - NEW Account scoring component
+- `/app/frontend/src/pages/AccountDetail.js` - Added AccountScoringCard
+- `/app/frontend/src/layouts/DashboardLayout.js` - Added Lead Scoring Model navigation
+- `/app/frontend/src/App.js` - Added route for /lead-scoring-model
+
+---
+
+## Previous Session Updates (Mar 12, 2026)
 
 ### AI Chat Assistant (NEW)
 - **RAG-based AI Assistant** using Gemini 3 Flash via Emergent LLM Key
@@ -62,7 +84,22 @@ Build a comprehensive, mobile-ready Sales CRM application with multi-tenancy sup
 
 ## API Endpoints
 
-### AI Assistant (NEW)
+### Lead Scoring (NEW)
+- `GET /api/scoring/model` - Get tenant's scoring model
+- `PUT /api/scoring/model` - Update model name/description
+- `POST /api/scoring/categories` - Create category
+- `PUT /api/scoring/categories/{id}` - Update category
+- `DELETE /api/scoring/categories/{id}` - Delete category
+- `POST /api/scoring/categories/{id}/tiers` - Add tier
+- `PUT /api/scoring/categories/{id}/tiers/{tier_id}` - Update tier
+- `DELETE /api/scoring/categories/{id}/tiers/{tier_id}` - Delete tier
+- `POST /api/scoring/accounts/{id}/score` - Score an account
+- `GET /api/scoring/accounts/{id}/score` - Get account score
+- `GET /api/scoring/accounts/scores` - Get all scored accounts
+- `GET /api/scoring/portfolio-matrix` - Get portfolio matrix data
+- `POST /api/scoring/seed-default-model` - Seed default categories
+
+### AI Assistant
 - `POST /api/ai/chat` - Send message, get AI response
 - `GET /api/ai/status` - Check access
 - `GET /api/ai/chat/history` - Get history
@@ -91,16 +128,21 @@ Build a comprehensive, mobile-ready Sales CRM application with multi-tenancy sup
 ### P0 - Critical
 - [x] Pull code from GitHub ✅
 - [x] Implement AI Chat Assistant ✅
+- [x] Lead Scoring Model Admin Module ✅
 - [ ] Deploy to production
 
 ### P1 - High
+- [ ] Redesign Lead Details page (from previous session request)
+- [ ] Cleanup temporary debug endpoints from server.py
 - [ ] Run legacy roles/designations migration in production
 - [ ] Verify branding applies correctly after deploy
 - [ ] Test AI assistant in production
 
 ### P2 - Medium
+- [ ] Refactor server.py into modular route files
 - [ ] Add more data sources to AI assistant
-- [ ] Build out placeholder modules
+- [ ] Build out placeholder modules (Maintenance, Inventory, Quality Control, Assets, Vendors)
+- [ ] Upgrade AI Assistant to True RAG with vector database
 
 ---
 
@@ -108,3 +150,42 @@ Build a comprehensive, mobile-ready Sales CRM application with multi-tenancy sup
 - Gemini 3 Flash (AI Assistant) - Emergent LLM Key
 - Claude Sonnet 4.5 (OCR) - Emergent LLM Key
 - Zoom API, Resend, Google Places, Amazon MQ
+
+---
+
+## Database Schema Notes
+
+### scoring_models Collection (NEW)
+```json
+{
+  "id": "uuid",
+  "tenant_id": "nyla-air-water",
+  "name": "Default Scoring Model",
+  "categories": [
+    {
+      "id": "uuid",
+      "name": "Volume Potential",
+      "weight": 25,
+      "is_numeric": true,
+      "tiers": [
+        {"id": "uuid", "label": ">5000", "score": 25, "min_value": 5000}
+      ]
+    }
+  ],
+  "total_weight": 100,
+  "is_active": true
+}
+```
+
+### accounts Collection (Updated)
+```json
+{
+  "scoring": {
+    "total_score": 100,
+    "quadrant": "Stars",
+    "category_scores": {"cat_id": {"score": 25, "tier_id": "...", "tier_label": "..."}},
+    "scored_at": "2026-03-13T...",
+    "scored_by": "user_id"
+  }
+}
+```
