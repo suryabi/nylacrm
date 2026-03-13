@@ -130,6 +130,54 @@ class TenantSettings(BaseModel):
     fiscal_year_start: str = "04-01"  # April 1st
 
 
+# ============= INDUSTRY PROFILE SYSTEM =============
+
+# Supported industry types
+INDUSTRY_TYPES = {
+    "water_brand": {
+        "name": "Water/Beverage Brand",
+        "description": "Water brands, beverage companies with bottle/SKU tracking",
+        "features": [
+            "lead_bottle_tracking",
+            "bottle_preview", 
+            "cogs_calculator",
+            "sku_management",
+            "sku_performance",
+            "account_bottle_volume"
+        ]
+    },
+    "generic": {
+        "name": "Generic CRM",
+        "description": "Standard CRM features for any business",
+        "features": []  # No industry-specific features
+    }
+}
+
+
+class IndustryConfig(BaseModel):
+    """Industry-specific configuration"""
+    # Water Brand specific
+    bottle_sizes: List[str] = ["330ml", "660ml", "1L"]
+    track_bottle_volume: bool = True
+    default_bottles_per_cover: int = 2  # For volume estimation
+    
+    # Add more industry-specific configs as needed
+    custom_fields: Dict[str, Any] = {}  # Flexible custom fields
+
+
+class TenantIndustry(BaseModel):
+    """Tenant industry profile"""
+    industry_type: str = "generic"  # Key from INDUSTRY_TYPES
+    industry_config: IndustryConfig = Field(default_factory=IndustryConfig)
+    
+    @field_validator('industry_type')
+    @classmethod
+    def validate_industry_type(cls, v):
+        if v not in INDUSTRY_TYPES:
+            raise ValueError(f'Invalid industry type. Must be one of: {list(INDUSTRY_TYPES.keys())}')
+        return v
+
+
 class CompanyAddress(BaseModel):
     """Company address details"""
     building_name: Optional[str] = None
@@ -218,6 +266,9 @@ class Tenant(BaseModel):
     name: str  # Display name
     domain: Optional[str] = None  # Custom domain if any
     
+    # Industry Profile (NEW)
+    industry: TenantIndustry = Field(default_factory=TenantIndustry)
+    
     # Status
     is_active: bool = True
     is_trial: bool = True  # New tenants start with trial
@@ -268,6 +319,7 @@ class TenantUpdate(BaseModel):
     name: Optional[str] = None
     domain: Optional[str] = None
     is_active: Optional[bool] = None
+    industry: Optional[TenantIndustry] = None  # NEW - Industry profile
     branding: Optional[TenantBranding] = None
     modules: Optional[TenantModules] = None
     integrations: Optional[TenantIntegrations] = None
@@ -312,6 +364,14 @@ DEFAULT_TENANT = Tenant(
     id="default-tenant-001",
     tenant_id="nyla-air-water",
     name="Nyla Air Water",
+    industry=TenantIndustry(
+        industry_type="water_brand",
+        industry_config=IndustryConfig(
+            bottle_sizes=["330ml", "660ml", "1L"],
+            track_bottle_volume=True,
+            default_bottles_per_cover=2
+        )
+    ),
     branding=TenantBranding(
         app_name="Nyla Sales CRM",
         tagline="Sales CRM",

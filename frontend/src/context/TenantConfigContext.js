@@ -163,6 +163,7 @@ export const TenantConfigProvider = ({ children }) => {
   const [modules, setModules] = useState({});
   const [branding, setBranding] = useState(DEFAULT_BRANDING);
   const [rolePermissions, setRolePermissions] = useState({});
+  const [industry, setIndustry] = useState({ industry_type: 'generic', industry_features: [], industry_config: {} });
   const [loading, setLoading] = useState(true);
 
   const fetchTenantConfig = useCallback(async () => {
@@ -172,13 +173,22 @@ export const TenantConfigProvider = ({ children }) => {
     }
     
     try {
-      const response = await axios.get(`${API_URL}/api/tenants/current/config`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // Fetch tenant config and industry profile in parallel
+      const [configResponse, industryResponse] = await Promise.all([
+        axios.get(`${API_URL}/api/tenants/current/config`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get(`${API_URL}/api/tenants/current/industry`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(() => ({ data: { industry_type: 'generic', industry_features: [], industry_config: {} } }))
+      ]);
       
-      const config = response.data;
+      const config = configResponse.data;
       setTenantConfig(config);
       setModules(config.modules || {});
+      
+      // Set industry profile
+      setIndustry(industryResponse.data || { industry_type: 'generic', industry_features: [], industry_config: {} });
       
       // Merge fetched branding with defaults
       const fetchedBranding = {
@@ -214,6 +224,7 @@ export const TenantConfigProvider = ({ children }) => {
       setModules({});
       setBranding(DEFAULT_BRANDING);
       setRolePermissions({});
+      setIndustry({ industry_type: 'generic', industry_features: [], industry_config: {} });
     } finally {
       setLoading(false);
     }
@@ -246,6 +257,17 @@ export const TenantConfigProvider = ({ children }) => {
     }
     return modulePerms.view === true;
   }, [rolePermissions]);
+
+  // Check if a feature is available for the current tenant's industry
+  const hasIndustryFeature = useCallback((featureKey) => {
+    // Check if the feature is in the tenant's industry features list
+    return industry.industry_features?.includes(featureKey) || false;
+  }, [industry]);
+
+  // Get industry-specific configuration value
+  const getIndustryConfig = useCallback((configKey, defaultValue = null) => {
+    return industry.industry_config?.[configKey] ?? defaultValue;
+  }, [industry]);
 
   // Check if a route is accessible based on module configuration
   const isRouteAccessible = useCallback((route) => {
@@ -288,9 +310,12 @@ export const TenantConfigProvider = ({ children }) => {
       modules,
       branding,
       rolePermissions,
+      industry,
       loading,
       isModuleEnabled,
       hasRolePermission,
+      hasIndustryFeature,
+      getIndustryConfig,
       isRouteAccessible,
       getDisabledRoutes,
       refreshConfig,

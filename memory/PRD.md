@@ -5,6 +5,22 @@ Build a comprehensive, mobile-ready Sales CRM application with multi-tenancy sup
 
 ## Current Session Updates (Mar 13, 2026)
 
+### Industry/Vertical Tags System (NEW)
+- **Tenant Industry Profiles** - Each tenant can be tagged with an industry type
+- **Industry Types**: `water_brand` (Water/Beverage Brand) and `generic` (Standard CRM)
+- **Industry-Specific Features** - Features are gated by industry type:
+  - `water_brand`: lead_bottle_tracking, bottle_preview, cogs_calculator, sku_management, account_bottle_volume
+  - `generic`: No industry-specific features (standard CRM)
+- **Industry Configuration** - Customizable settings per industry (bottle_sizes, default_bottles_per_cover)
+- **Super Admin Only** - Industry can only be set via Platform Admin
+- **Frontend Helper** - `hasIndustryFeature('feature_key')` in TenantConfigContext
+
+### Files Created/Modified (Industry System)
+- `/app/backend/models/tenant.py` - Added INDUSTRY_TYPES, TenantIndustry, IndustryConfig models
+- `/app/backend/routes/tenant_admin.py` - Added industry endpoints (list types, update industry, get current industry)
+- `/app/frontend/src/context/TenantConfigContext.js` - Added industry state, hasIndustryFeature(), getIndustryConfig()
+- `/app/frontend/src/pages/PlatformAdmin.js` - Added Industry tab for Super Admin
+
 ### Lead Scoring Model Admin Module (NEW)
 - **Tenant-specific scoring model** - Each tenant can define their own scoring categories
 - **5 default categories** seeded: Volume Potential (25pts), Margin Potential (20pts), Brand Prestige (20pts), Guest Influence (20pts), Sustainability Alignment (15pts)
@@ -83,6 +99,12 @@ Build a comprehensive, mobile-ready Sales CRM application with multi-tenancy sup
 ---
 
 ## API Endpoints
+
+### Industry Profile (NEW)
+- `GET /api/tenants/industry-types/list` - Get available industry types
+- `PUT /api/tenants/{tenant_id}/industry?industry_type=...` - Set tenant industry (Super Admin)
+- `PUT /api/tenants/{tenant_id}/industry-config` - Update industry config (Super Admin)
+- `GET /api/tenants/current/industry` - Get current tenant's industry profile and features
 
 ### Lead Scoring (NEW)
 - `GET /api/scoring/model` - Get tenant's scoring model

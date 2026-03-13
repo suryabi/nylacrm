@@ -13,7 +13,7 @@ from models.tenant import (
     Tenant, TenantCreate, TenantUpdate, 
     TenantBranding, TenantModules, TenantIntegrations, TenantSettings,
     CompanyProfile, CompanyAddress, BankDetails, Director, OfficeContact,
-    DEFAULT_TENANT
+    DEFAULT_TENANT, INDUSTRY_TYPES, TenantIndustry, IndustryConfig
 )
 from core.tenant import get_current_tenant_id, add_tenant_filter, with_tenant_id
 
@@ -386,3 +386,147 @@ async def get_tenant_stats(
     }
     
     return stats
+
+
+
+# ============== INDUSTRY PROFILE ENDPOINTS ==============
+
+@router.get("/industry-types/list")
+async def list_industry_types():
+    """
+    Get list of available industry types (public endpoint for reference).
+    Returns industry types with their features.
+    """
+    return {
+        'industry_types': [
+            {
+                'key': key,
+                'name': value['name'],
+                'description': value['description'],
+                'features': value['features']
+            }
+            for key, value in INDUSTRY_TYPES.items()
+        ]
+    }
+
+
+@router.put("/{tenant_id}/industry")
+async def update_tenant_industry(
+    tenant_id: str,
+    industry_type: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Update tenant industry type (Super Admin only).
+    This determines which industry-specific features are available.
+    """
+    if not is_super_admin(current_user):
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    
+    # Validate industry type
+    if industry_type not in INDUSTRY_TYPES:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid industry type. Must be one of: {list(INDUSTRY_TYPES.keys())}"
+        )
+    
+    # Get tenant
+    tenant = await db.tenants.find_one({'tenant_id': tenant_id}, {'_id': 0})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    # Create industry config with defaults
+    industry_config = IndustryConfig()
+    if industry_type == 'water_brand':
+        industry_config = IndustryConfig(
+            bottle_sizes=["330ml", "660ml", "1L"],
+            track_bottle_volume=True,
+            default_bottles_per_cover=2
+        )
+    
+    # Update tenant
+    industry_data = {
+        'industry_type': industry_type,
+        'industry_config': industry_config.model_dump()
+    }
+    
+    await db.tenants.update_one(
+        {'tenant_id': tenant_id},
+        {'$set': {
+            'industry': industry_data,
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    updated = await db.tenants.find_one({'tenant_id': tenant_id}, {'_id': 0})
+    return updated
+
+
+@router.put("/{tenant_id}/industry-config")
+async def update_tenant_industry_config(
+    tenant_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Update tenant industry-specific configuration (Super Admin only).
+    Allows customizing industry-specific settings like bottle sizes.
+    """
+    if not is_super_admin(current_user):
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    
+    # Get tenant
+    tenant = await db.tenants.find_one({'tenant_id': tenant_id}, {'_id': 0})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    data = await request.json()
+    
+    # Merge with existing config
+    current_config = tenant.get('industry', {}).get('industry_config', {})
+    updated_config = {**current_config, **data}
+    
+    await db.tenants.update_one(
+        {'tenant_id': tenant_id},
+        {'$set': {
+            'industry.industry_config': updated_config,
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    updated = await db.tenants.find_one({'tenant_id': tenant_id}, {'_id': 0})
+    return updated
+
+
+@router.get("/current/industry")
+async def get_current_tenant_industry(
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get current tenant's industry profile and available features.
+    Used by frontend to determine which industry-specific features to show.
+    """
+    tenant_id = get_current_tenant_id()
+    
+    await ensure_default_tenant()
+    
+    tenant = await db.tenants.find_one({'tenant_id': tenant_id}, {'_id': 0})
+    if not tenant:
+        # Return default generic industry
+        return {
+            'industry_type': 'generic',
+            'industry_name': INDUSTRY_TYPES['generic']['name'],
+            'industry_features': [],
+            'industry_config': {}
+        }
+    
+    industry = tenant.get('industry', {})
+    industry_type = industry.get('industry_type', 'generic')
+    industry_info = INDUSTRY_TYPES.get(industry_type, INDUSTRY_TYPES['generic'])
+    
+    return {
+        'industry_type': industry_type,
+        'industry_name': industry_info['name'],
+        'industry_features': industry_info['features'],
+        'industry_config': industry.get('industry_config', {})
+    }

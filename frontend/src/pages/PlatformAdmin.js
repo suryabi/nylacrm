@@ -387,6 +387,7 @@ export default function PlatformAdmin() {
                 <Tabs defaultValue="overview" className="space-y-4">
                   <TabsList>
                     <TabsTrigger value="overview">Overview</TabsTrigger>
+                    <TabsTrigger value="industry">Industry</TabsTrigger>
                     <TabsTrigger value="branding">Branding</TabsTrigger>
                     <TabsTrigger value="modules">Modules</TabsTrigger>
                     <TabsTrigger value="sso">SSO</TabsTrigger>
@@ -458,6 +459,123 @@ export default function PlatformAdmin() {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  </TabsContent>
+
+                  {/* Industry Tab */}
+                  <TabsContent value="industry" className="space-y-4">
+                    <div className="p-4 border rounded-lg space-y-4">
+                      <div>
+                        <Label className="text-base font-medium">Industry Profile</Label>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Determines which industry-specific features are available to this tenant
+                        </p>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label>Industry Type</Label>
+                        <Select 
+                          value={tenantDetails.industry?.industry_type || 'generic'} 
+                          onValueChange={async (industryType) => {
+                            try {
+                              setSaving(true);
+                              await axios.put(
+                                `${API_URL}/api/tenants/${tenantDetails.tenant_id}/industry`,
+                                null,
+                                { 
+                                  headers: { Authorization: `Bearer ${token}` },
+                                  params: { industry_type: industryType }
+                                }
+                              );
+                              toast.success(`Industry updated to ${industryType}`);
+                              fetchTenantDetails(tenantDetails.tenant_id);
+                            } catch (error) {
+                              toast.error('Failed to update industry');
+                            } finally {
+                              setSaving(false);
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="generic">
+                              <div className="flex flex-col">
+                                <span>Generic CRM</span>
+                                <span className="text-xs text-muted-foreground">Standard CRM features</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="water_brand">
+                              <div className="flex flex-col">
+                                <span>Water/Beverage Brand</span>
+                                <span className="text-xs text-muted-foreground">Bottle tracking, SKU volumes</span>
+                              </div>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Industry Features List */}
+                      <div className="pt-4 border-t">
+                        <Label className="text-sm">Enabled Industry Features</Label>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {tenantDetails.industry?.industry_type === 'water_brand' ? (
+                            <>
+                              <Badge variant="secondary">lead_bottle_tracking</Badge>
+                              <Badge variant="secondary">bottle_preview</Badge>
+                              <Badge variant="secondary">cogs_calculator</Badge>
+                              <Badge variant="secondary">sku_management</Badge>
+                              <Badge variant="secondary">account_bottle_volume</Badge>
+                            </>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">No industry-specific features</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Industry Config (for water_brand) */}
+                      {tenantDetails.industry?.industry_type === 'water_brand' && (
+                        <div className="pt-4 border-t space-y-3">
+                          <Label className="text-sm">Water Brand Configuration</Label>
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <div className="space-y-1">
+                              <Label className="text-xs text-muted-foreground">Bottle Sizes</Label>
+                              <Input
+                                value={tenantDetails.industry?.industry_config?.bottle_sizes?.join(', ') || '330ml, 660ml, 1L'}
+                                onChange={(e) => setTenantDetails(prev => ({
+                                  ...prev,
+                                  industry: {
+                                    ...prev.industry,
+                                    industry_config: {
+                                      ...prev.industry?.industry_config,
+                                      bottle_sizes: e.target.value.split(',').map(s => s.trim())
+                                    }
+                                  }
+                                }))}
+                                placeholder="330ml, 660ml, 1L"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs text-muted-foreground">Default Bottles Per Cover</Label>
+                              <Input
+                                type="number"
+                                value={tenantDetails.industry?.industry_config?.default_bottles_per_cover || 2}
+                                onChange={(e) => setTenantDetails(prev => ({
+                                  ...prev,
+                                  industry: {
+                                    ...prev.industry,
+                                    industry_config: {
+                                      ...prev.industry?.industry_config,
+                                      default_bottles_per_cover: parseInt(e.target.value) || 2
+                                    }
+                                  }
+                                }))}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </TabsContent>
 
