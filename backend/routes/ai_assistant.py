@@ -44,59 +44,141 @@ class ChatResponse(BaseModel):
 async def get_crm_context(tenant_id: str, query: str) -> Dict[str, Any]:
     """
     Gather relevant CRM data based on the user's query.
-    This is a simple keyword-based RAG approach.
+    Supports filtering by city, status, and other criteria.
     """
     context = {}
     query_lower = query.lower()
     
+    # Common Indian cities for location detection
+    CITIES = [
+        'hyderabad', 'bangalore', 'bengaluru', 'mumbai', 'delhi', 'chennai', 
+        'pune', 'kolkata', 'ahmedabad', 'jaipur', 'lucknow', 'kanpur',
+        'nagpur', 'indore', 'thane', 'bhopal', 'visakhapatnam', 'vizag',
+        'patna', 'vadodara', 'ghaziabad', 'ludhiana', 'agra', 'nashik',
+        'faridabad', 'meerut', 'rajkot', 'varanasi', 'srinagar', 'aurangabad',
+        'dhanbad', 'amritsar', 'navi mumbai', 'allahabad', 'ranchi', 'howrah',
+        'coimbatore', 'jabalpur', 'gwalior', 'vijayawada', 'jodhpur', 'madurai',
+        'raipur', 'kota', 'chandigarh', 'guwahati', 'solapur', 'hubli', 'noida'
+    ]
+    
+    # Lead statuses for filtering
+    STATUSES = [
+        'new', 'contacted', 'qualified', 'proposal', 'negotiation', 
+        'won', 'lost', 'on hold', 'follow up', 'meeting scheduled',
+        'internal review', 'sent', 'shared with customer'
+    ]
+    
+    # Detect city in query
+    detected_city = None
+    for city in CITIES:
+        if city in query_lower:
+            detected_city = city.title()
+            if city == 'bengaluru':
+                detected_city = 'Bangalore'  # Handle alternate name
+            break
+    
+    # Detect status in query
+    detected_status = None
+    for status in STATUSES:
+        if status in query_lower:
+            detected_status = status.title()
+            break
+    
     try:
         # Lead-related queries
         if any(word in query_lower for word in ['lead', 'leads', 'prospect', 'prospects']):
-            # Get lead statistics
-            total_leads = await db.leads.count_documents({'tenant_id': tenant_id})
+            # Build filter based on detected criteria
+            lead_filter = {'tenant_id': tenant_id}
             
-            # Status breakdown
-            pipeline = [
-                {'$match': {'tenant_id': tenant_id}},
+            if detected_city:
+                # Try multiple city fields
+                lead_filter['$or'] = [
+                    {'city': {'$regex': detected_city, '$options': 'i'}},
+                    {'location': {'$regex': detected_city, '$options': 'i'}},
+                    {'address': {'$regex': detected_city, '$options': 'i'}},
+                    {'state': {'$regex': detected_city, '$options': 'i'}}
+                ]
+            
+            if detected_status:
+                lead_filter['status'] = {'$regex': detected_status, '$options': 'i'}
+            
+            # Get filtered leads count
+            filtered_count = await db.leads.count_documents(lead_filter)
+            
+            # Get filtered leads with details
+            filtered_leads = await db.leads.find(
+                lead_filter,
+                {'_id': 0, 'company_name': 1, 'status': 1, 'city': 1, 'location': 1, 
+                 'contact_person': 1, 'phone': 1, 'email': 1, 'assigned_to_name': 1,
+                 'created_at': 1, 'last_contacted_date': 1}
+            ).sort('created_at', -1).limit(20).to_list(20)
+            
+            # Get status breakdown for filtered leads
+            status_pipeline = [
+                {'$match': lead_filter},
                 {'$group': {'_id': '$status', 'count': {'$sum': 1}}},
                 {'$sort': {'count': -1}}
             ]
-            status_breakdown = await db.leads.aggregate(pipeline).to_list(20)
+            status_breakdown = await db.leads.aggregate(status_pipeline).to_list(20)
             
-            # Recent leads
-            recent_leads = await db.leads.find(
-                {'tenant_id': tenant_id},
-                {'_id': 0, 'company_name': 1, 'status': 1, 'created_at': 1, 'assigned_to_name': 1}
-            ).sort('created_at', -1).limit(10).to_list(10)
-            
-            # Leads by owner
-            owner_pipeline = [
+            # Get city breakdown for leads
+            city_pipeline = [
                 {'$match': {'tenant_id': tenant_id}},
+                {'$group': {'_id': '$city', 'count': {'$sum': 1}}},
+                {'$sort': {'count': -1}},
+                {'$limit': 15}
+            ]
+            city_breakdown = await db.leads.aggregate(city_pipeline).to_list(15)
+            
+            # Get owner breakdown for filtered leads
+            owner_pipeline = [
+                {'$match': lead_filter},
                 {'$group': {'_id': '$assigned_to_name', 'count': {'$sum': 1}}},
                 {'$sort': {'count': -1}},
                 {'$limit': 10}
             ]
             leads_by_owner = await db.leads.aggregate(owner_pipeline).to_list(10)
             
+            # Total leads (without filter)
+            total_leads = await db.leads.count_documents({'tenant_id': tenant_id})
+            
             context['leads'] = {
                 'total': total_leads,
+                'filtered_count': filtered_count,
+                'filter_applied': {
+                    'city': detected_city,
+                    'status': detected_status
+                },
                 'by_status': {item['_id']: item['count'] for item in status_breakdown if item['_id']},
-                'recent': recent_leads,
-                'by_owner': {item['_id']: item['count'] for item in leads_by_owner if item['_id']}
+                'by_city': {item['_id']: item['count'] for item in city_breakdown if item['_id']},
+                'by_owner': {item['_id']: item['count'] for item in leads_by_owner if item['_id']},
+                'filtered_leads': filtered_leads
             }
         
         # Account-related queries
         if any(word in query_lower for word in ['account', 'accounts', 'customer', 'customers', 'client']):
-            total_accounts = await db.accounts.count_documents({'tenant_id': tenant_id})
+            account_filter = {'tenant_id': tenant_id}
             
-            recent_accounts = await db.accounts.find(
-                {'tenant_id': tenant_id},
-                {'_id': 0, 'company_name': 1, 'city': 1, 'created_at': 1}
-            ).sort('created_at', -1).limit(10).to_list(10)
+            if detected_city:
+                account_filter['$or'] = [
+                    {'city': {'$regex': detected_city, '$options': 'i'}},
+                    {'location': {'$regex': detected_city, '$options': 'i'}},
+                    {'address': {'$regex': detected_city, '$options': 'i'}}
+                ]
+            
+            total_accounts = await db.accounts.count_documents({'tenant_id': tenant_id})
+            filtered_accounts = await db.accounts.count_documents(account_filter)
+            
+            accounts_list = await db.accounts.find(
+                account_filter,
+                {'_id': 0, 'company_name': 1, 'city': 1, 'created_at': 1, 'contact_person': 1}
+            ).sort('created_at', -1).limit(15).to_list(15)
             
             context['accounts'] = {
                 'total': total_accounts,
-                'recent': recent_accounts
+                'filtered_count': filtered_accounts,
+                'filter_applied': {'city': detected_city},
+                'accounts': accounts_list
             }
         
         # Sales/Revenue queries
@@ -235,23 +317,46 @@ def format_context_for_ai(context: Dict[str, Any]) -> str:
     if 'leads' in context:
         leads = context['leads']
         lines.append(f"LEADS DATA:")
-        lines.append(f"  - Total Leads: {leads.get('total', 0)}")
+        lines.append(f"  - Total Leads in CRM: {leads.get('total', 0)}")
+        
+        # Show filter info if applied
+        filter_info = leads.get('filter_applied', {})
+        if filter_info.get('city') or filter_info.get('status'):
+            filter_parts = []
+            if filter_info.get('city'):
+                filter_parts.append(f"City: {filter_info['city']}")
+            if filter_info.get('status'):
+                filter_parts.append(f"Status: {filter_info['status']}")
+            lines.append(f"  - FILTER APPLIED: {', '.join(filter_parts)}")
+            lines.append(f"  - Filtered Results Count: {leads.get('filtered_count', 0)}")
+        
         if leads.get('by_status'):
             lines.append(f"  - By Status: {leads['by_status']}")
+        if leads.get('by_city'):
+            lines.append(f"  - By City: {leads['by_city']}")
         if leads.get('by_owner'):
             lines.append(f"  - By Owner: {leads['by_owner']}")
-        if leads.get('recent'):
-            lines.append(f"  - Recent Leads (last 10): {len(leads['recent'])} shown")
-            for lead in leads['recent'][:5]:
-                lines.append(f"    * {lead.get('company_name', 'N/A')} - {lead.get('status', 'N/A')}")
+        
+        # Show filtered leads with details
+        if leads.get('filtered_leads'):
+            lines.append(f"  - Matching Leads ({len(leads['filtered_leads'])} shown):")
+            for lead in leads['filtered_leads']:
+                city = lead.get('city') or lead.get('location') or 'N/A'
+                lines.append(f"    * {lead.get('company_name', 'N/A')} | Status: {lead.get('status', 'N/A')} | City: {city} | Contact: {lead.get('contact_person', 'N/A')} | Assigned: {lead.get('assigned_to_name', 'N/A')}")
     
     if 'accounts' in context:
         accounts = context['accounts']
         lines.append(f"\nACCOUNTS DATA:")
         lines.append(f"  - Total Accounts: {accounts.get('total', 0)}")
-        if accounts.get('recent'):
-            lines.append(f"  - Recent Accounts:")
-            for acc in accounts['recent'][:5]:
+        
+        filter_info = accounts.get('filter_applied', {})
+        if filter_info.get('city'):
+            lines.append(f"  - FILTER APPLIED: City: {filter_info['city']}")
+            lines.append(f"  - Filtered Results Count: {accounts.get('filtered_count', 0)}")
+        
+        if accounts.get('accounts'):
+            lines.append(f"  - Accounts List:")
+            for acc in accounts['accounts'][:10]:
                 lines.append(f"    * {acc.get('company_name', 'N/A')} ({acc.get('city', 'N/A')})")
     
     if 'targets' in context:
