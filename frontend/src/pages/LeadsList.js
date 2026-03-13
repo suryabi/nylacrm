@@ -44,7 +44,6 @@ import {
 } from '../components/ui/alert-dialog';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
-import { LeadRankBadge } from '../components/LeadRankingTiles';
 import AppBreadcrumb from '../components/AppBreadcrumb';
 import { useNavigation } from '../context/NavigationContext';
 
@@ -411,7 +410,6 @@ export default function LeadsList() {
                       }} data-testid={`lead-row-${lead.id}`}>
                         <TableCell data-testid={`lead-cell-${lead.id}`}>
                           <div className="flex items-center gap-2">
-                            {lead.rank && <LeadRankBadge rank={lead.rank} size="xs" />}
                             <div><p className="font-medium text-primary">{lead.company || lead.name}</p><p className="text-xs text-muted-foreground font-mono">{lead.lead_id || '-'}</p></div>
                           </div>
                         </TableCell>
