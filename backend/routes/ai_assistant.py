@@ -44,7 +44,7 @@ class ChatResponse(BaseModel):
 async def get_crm_context(tenant_id: str, query: str) -> Dict[str, Any]:
     """
     Gather relevant CRM data based on the user's query.
-    Supports filtering by city, status, and other criteria.
+    Supports filtering by city, status, month, and other criteria.
     """
     context = {}
     query_lower = query.lower()
@@ -58,7 +58,8 @@ async def get_crm_context(tenant_id: str, query: str) -> Dict[str, Any]:
         'faridabad', 'meerut', 'rajkot', 'varanasi', 'srinagar', 'aurangabad',
         'dhanbad', 'amritsar', 'navi mumbai', 'allahabad', 'ranchi', 'howrah',
         'coimbatore', 'jabalpur', 'gwalior', 'vijayawada', 'jodhpur', 'madurai',
-        'raipur', 'kota', 'chandigarh', 'guwahati', 'solapur', 'hubli', 'noida'
+        'raipur', 'kota', 'chandigarh', 'guwahati', 'solapur', 'hubli', 'noida',
+        'goa', 'panaji', 'margao'
     ]
     
     # Lead statuses for filtering
@@ -68,11 +69,39 @@ async def get_crm_context(tenant_id: str, query: str) -> Dict[str, Any]:
         'internal review', 'sent', 'shared with customer'
     ]
     
+    # Months for date filtering
+    MONTHS = {
+        'january': '01', 'february': '02', 'march': '03', 'april': '04',
+        'may': '05', 'june': '06', 'july': '07', 'august': '08',
+        'september': '09', 'october': '10', 'november': '11', 'december': '12',
+        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04',
+        'jun': '06', 'jul': '07', 'aug': '08', 'sep': '09', 'sept': '09',
+        'oct': '10', 'nov': '11', 'dec': '12'
+    }
+    
     # Detect city in query
     detected_city = None
     for city in CITIES:
         if city in query_lower:
             detected_city = city.title()
+            if city == 'bengaluru':
+                detected_city = 'Bangalore'
+            elif city == 'goa':
+                detected_city = 'Goa'
+            break
+    
+    # Detect month in query
+    detected_month = None
+    detected_year = datetime.now().year
+    for month_name, month_num in MONTHS.items():
+        if month_name in query_lower:
+            detected_month = month_num
+            # Check if year is mentioned
+            import re
+            year_match = re.search(r'20\d{2}', query)
+            if year_match:
+                detected_year = int(year_match.group())
+            break
             if city == 'bengaluru':
                 detected_city = 'Bangalore'  # Handle alternate name
             break
@@ -156,7 +185,7 @@ async def get_crm_context(tenant_id: str, query: str) -> Dict[str, Any]:
             }
         
         # Account-related queries
-        if any(word in query_lower for word in ['account', 'accounts', 'customer', 'customers', 'client']):
+        if any(word in query_lower for word in ['account', 'accounts', 'customer', 'customers', 'client', 'outstanding', 'balance', 'receivable']):
             account_filter = {'tenant_id': tenant_id}
             
             if detected_city:
@@ -171,14 +200,80 @@ async def get_crm_context(tenant_id: str, query: str) -> Dict[str, Any]:
             
             accounts_list = await db.accounts.find(
                 account_filter,
-                {'_id': 0, 'company_name': 1, 'city': 1, 'created_at': 1, 'contact_person': 1}
+                {'_id': 0, 'company_name': 1, 'city': 1, 'created_at': 1, 'contact_person': 1, 
+                 'outstanding_balance': 1, 'total_revenue': 1, 'id': 1}
             ).sort('created_at', -1).limit(15).to_list(15)
+            
+            # Calculate total outstanding balance for filtered accounts
+            total_outstanding = sum(float(acc.get('outstanding_balance', 0) or 0) for acc in accounts_list)
+            total_revenue_from_accounts = sum(float(acc.get('total_revenue', 0) or 0) for acc in accounts_list)
             
             context['accounts'] = {
                 'total': total_accounts,
                 'filtered_count': filtered_accounts,
                 'filter_applied': {'city': detected_city},
-                'accounts': accounts_list
+                'accounts': accounts_list,
+                'total_outstanding_balance': total_outstanding,
+                'total_revenue': total_revenue_from_accounts
+            }
+        
+        # Invoice/Financial queries
+        if any(word in query_lower for word in ['invoice', 'invoices', 'outstanding', 'balance', 'payment', 'receivable', 'revenue', 'billing']):
+            invoice_filter = {'tenant_id': tenant_id}
+            
+            if detected_city:
+                # Join with accounts to filter by city
+                pass  # Will aggregate below
+            
+            # Get invoice statistics
+            total_invoices = await db.invoices.count_documents({'tenant_id': tenant_id})
+            
+            # Outstanding balance aggregation
+            outstanding_pipeline = [
+                {'$match': {'tenant_id': tenant_id, 'status': {'$in': ['pending', 'overdue', 'partial']}}},
+                {'$group': {
+                    '_id': None,
+                    'total_outstanding': {'$sum': '$balance_due'},
+                    'count': {'$sum': 1}
+                }}
+            ]
+            outstanding_result = await db.invoices.aggregate(outstanding_pipeline).to_list(1)
+            
+            # Revenue by month
+            revenue_pipeline = [
+                {'$match': {'tenant_id': tenant_id, 'status': {'$in': ['paid', 'partial']}}},
+                {'$group': {
+                    '_id': {'$substr': ['$invoice_date', 0, 7]},  # YYYY-MM
+                    'revenue': {'$sum': '$amount_paid'},
+                    'invoice_count': {'$sum': 1}
+                }},
+                {'$sort': {'_id': -1}},
+                {'$limit': 12}
+            ]
+            revenue_by_month = await db.invoices.aggregate(revenue_pipeline).to_list(12)
+            
+            # Recent invoices
+            recent_invoices = await db.invoices.find(
+                {'tenant_id': tenant_id},
+                {'_id': 0, 'invoice_number': 1, 'account_name': 1, 'total_amount': 1, 
+                 'balance_due': 1, 'status': 1, 'invoice_date': 1, 'due_date': 1}
+            ).sort('invoice_date', -1).limit(10).to_list(10)
+            
+            # Invoice status breakdown
+            status_pipeline = [
+                {'$match': {'tenant_id': tenant_id}},
+                {'$group': {'_id': '$status', 'count': {'$sum': 1}, 'total': {'$sum': '$total_amount'}}},
+                {'$sort': {'total': -1}}
+            ]
+            invoice_by_status = await db.invoices.aggregate(status_pipeline).to_list(10)
+            
+            context['invoices'] = {
+                'total_invoices': total_invoices,
+                'total_outstanding': outstanding_result[0]['total_outstanding'] if outstanding_result else 0,
+                'outstanding_count': outstanding_result[0]['count'] if outstanding_result else 0,
+                'revenue_by_month': {item['_id']: item['revenue'] for item in revenue_by_month if item['_id']},
+                'by_status': {item['_id']: {'count': item['count'], 'total': item['total']} for item in invoice_by_status if item['_id']},
+                'recent_invoices': recent_invoices
             }
         
         # Sales/Revenue queries
@@ -357,7 +452,35 @@ def format_context_for_ai(context: Dict[str, Any]) -> str:
         if accounts.get('accounts'):
             lines.append(f"  - Accounts List:")
             for acc in accounts['accounts'][:10]:
-                lines.append(f"    * {acc.get('company_name', 'N/A')} ({acc.get('city', 'N/A')})")
+                outstanding = acc.get('outstanding_balance', 0) or 0
+                lines.append(f"    * {acc.get('company_name', 'N/A')} ({acc.get('city', 'N/A')}) - Outstanding: ₹{outstanding:,.2f}")
+        
+        if accounts.get('total_outstanding_balance'):
+            lines.append(f"  - Total Outstanding Balance: ₹{accounts['total_outstanding_balance']:,.2f}")
+        if accounts.get('total_revenue'):
+            lines.append(f"  - Total Revenue from filtered accounts: ₹{accounts['total_revenue']:,.2f}")
+    
+    if 'invoices' in context:
+        invoices = context['invoices']
+        lines.append(f"\nINVOICE/FINANCIAL DATA:")
+        lines.append(f"  - Total Invoices: {invoices.get('total_invoices', 0)}")
+        lines.append(f"  - Total Outstanding Balance: ₹{invoices.get('total_outstanding', 0):,.2f}")
+        lines.append(f"  - Outstanding Invoice Count: {invoices.get('outstanding_count', 0)}")
+        
+        if invoices.get('revenue_by_month'):
+            lines.append(f"  - Revenue by Month:")
+            for month, revenue in invoices['revenue_by_month'].items():
+                lines.append(f"    * {month}: ₹{revenue:,.2f}")
+        
+        if invoices.get('by_status'):
+            lines.append(f"  - Invoices by Status:")
+            for status, data in invoices['by_status'].items():
+                lines.append(f"    * {status}: {data['count']} invoices, Total: ₹{data['total']:,.2f}")
+        
+        if invoices.get('recent_invoices'):
+            lines.append(f"  - Recent Invoices:")
+            for inv in invoices['recent_invoices'][:5]:
+                lines.append(f"    * {inv.get('invoice_number', 'N/A')} | {inv.get('account_name', 'N/A')} | ₹{inv.get('total_amount', 0):,.2f} | Due: ₹{inv.get('balance_due', 0):,.2f} | Status: {inv.get('status', 'N/A')}")
     
     if 'targets' in context:
         lines.append(f"\nSALES TARGETS:")
