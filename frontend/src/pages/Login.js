@@ -19,7 +19,7 @@ import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
-const MOUNTAIN_BG = 'https://images.unsplash.com/photo-1761589951732-2795cd6ecdbf?crop=entropy&cs=srgb&fm=jpg&q=85';
+const MOUNTAIN_BG = 'https://customer-assets.emergentagent.com/job_502e229f-6a7a-4839-9c1b-794f252b0a40/artifacts/xww990sj_WhatsApp%20Image%202026-03-13%20at%201.29.28%20AM.jpeg';
 
 export default function Login() {
   const navigate = useNavigate();
