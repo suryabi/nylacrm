@@ -367,7 +367,7 @@ async def debug_check_tenant_branding(tenant_id: str):
 @api_router.post("/debug/clear-lead-rankings")
 async def debug_clear_lead_rankings(request: Request):
     """
-    PUBLIC DEBUG: Remove ranking field (A+, A, B, C, D) from all leads.
+    PUBLIC DEBUG: Remove rank field (A+, A, B, C, D) from all leads.
     Body: {"tenant_id": "nyla-air-water", "secret": "clear-rankings-2026"}
     """
     body = await request.json()
@@ -377,24 +377,24 @@ async def debug_clear_lead_rankings(request: Request):
     if secret != 'clear-rankings-2026':
         raise HTTPException(status_code=403, detail="Invalid secret")
     
-    # Count leads with ranking before clearing
-    leads_with_ranking = await db.leads.count_documents({
+    # Count leads with rank before clearing (field is 'rank' not 'ranking')
+    leads_with_rank = await db.leads.count_documents({
         'tenant_id': tenant_id,
-        'ranking': {'$exists': True, '$ne': None, '$ne': ''}
+        'rank': {'$exists': True, '$ne': None, '$ne': ''}
     })
     
-    # Clear ranking field from all leads
+    # Clear rank field from all leads
     result = await db.leads.update_many(
         {'tenant_id': tenant_id},
-        {'$unset': {'ranking': ''}}
+        {'$unset': {'rank': ''}}
     )
     
     return {
         "success": True,
         "tenant_id": tenant_id,
-        "leads_had_ranking": leads_with_ranking,
+        "leads_had_rank": leads_with_rank,
         "leads_updated": result.modified_count,
-        "message": f"Cleared ranking from {result.modified_count} leads"
+        "message": f"Cleared rank from {result.modified_count} leads"
     }
 
 
