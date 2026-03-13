@@ -27,14 +27,20 @@ export default function AIChatBubble() {
   // Check if AI assistant is available for this user
   useEffect(() => {
     const checkAvailability = async () => {
-      if (!token) return;
+      if (!token) {
+        console.log('AIChatBubble: No token available');
+        return;
+      }
       
       try {
+        console.log('AIChatBubble: Checking availability...');
         const response = await axios.get(`${API_URL}/api/ai/status`, {
           headers: { Authorization: `Bearer ${token}` }
         });
+        console.log('AIChatBubble: Status response:', response.data);
         setIsAvailable(response.data.available);
       } catch (error) {
+        console.error('AIChatBubble: Error checking status:', error.response?.data || error.message);
         setIsAvailable(false);
       }
     };

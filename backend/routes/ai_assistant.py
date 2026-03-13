@@ -21,12 +21,13 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # Only CEO can access the AI assistant
-ALLOWED_ROLES = ['CEO', 'Director', 'System Admin']
+ALLOWED_ROLES = ['CEO', 'Director', 'System Admin', 'ceo', 'director', 'Admin', 'admin']
 
 
 def is_allowed_role(user: dict) -> bool:
     """Check if user has permission to use AI assistant"""
-    return user.get('role') in ALLOWED_ROLES
+    user_role = user.get('role', '').strip()
+    return user_role in ALLOWED_ROLES or user_role.lower() in [r.lower() for r in ALLOWED_ROLES]
 
 
 class ChatMessage(BaseModel):
