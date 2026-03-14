@@ -10,7 +10,7 @@ import { Badge } from './ui/badge';
 import { 
   Droplets, Calculator, Save, Maximize2,
   Loader2, Edit2, ChevronDown, ChevronUp,
-  Sun, Moon, Sunset, Coffee, Play
+  Sun, Moon, Sunset, Coffee, Play, Info
 } from 'lucide-react';
 import {
   Dialog,
@@ -25,7 +25,7 @@ const API = process.env.REACT_APP_BACKEND_URL;
 export default function OpportunityEstimation({ leadId, leadName, existingEstimation, onSave }) {
   const { hasIndustryFeature } = useTenantConfig();
   
-  // All form values stored as STRINGS
+  // Form values as strings
   const [totalCovers, setTotalCovers] = useState(String(existingEstimation?.total_covers ?? 100));
   const [morningEnabled, setMorningEnabled] = useState(existingEstimation?.operating_pattern?.morning?.enabled ?? true);
   const [morningDensity, setMorningDensity] = useState(String(existingEstimation?.operating_pattern?.morning?.density ?? 60));
@@ -41,7 +41,6 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
   const [overrideValue, setOverrideValue] = useState(String(existingEstimation?.override_value ?? ''));
   const [isOverrideMode, setIsOverrideMode] = useState(!!existingEstimation?.override_value);
   
-  // Calculated results
   const [results, setResults] = useState({
     morning: existingEstimation?.calculated_daily ? Math.round(existingEstimation.calculated_daily * 0.26) : 0,
     evening: existingEstimation?.calculated_daily ? Math.round(existingEstimation.calculated_daily * 0.35) : 0,
@@ -54,13 +53,12 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [showFormula, setShowFormula] = useState(false);
 
   if (!hasIndustryFeature('lead_bottle_tracking')) {
     return null;
   }
 
-  // Calculate
-  // Formula: Bottles per mode = Total Covers × (Density % / 100) × (180 / Avg Table Time) × (Adoption Rate / 100)
   const calculate = () => {
     const covers = parseInt(totalCovers) || 0;
     const tableTime = parseInt(avgTableTime) || 45;
@@ -79,10 +77,7 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
     
     slots.forEach(slot => {
       if (slot.enabled) {
-        // Bottles per mode = Total Covers × (Density % / 100) × (180 / Avg Table Time) × (Adoption Rate / 100)
-        const bottles = Math.round(
-          covers * (slot.density / 100) * (180 / tableTime) * (adoption / 100)
-        );
+        const bottles = Math.round(covers * (slot.density / 100) * (180 / tableTime) * (adoption / 100));
         slotResults[slot.key] = bottles;
         daily += bottles;
       } else {
@@ -184,7 +179,7 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
 
       {/* Modal */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Droplets className="h-5 w-5 text-blue-500" />
@@ -193,157 +188,167 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
             </DialogTitle>
           </DialogHeader>
           
-          <div className="space-y-6">
-            
-            {/* RESULTS SECTION - AT THE TOP */}
-            <div className="p-4 bg-gradient-to-r from-blue-50 to-primary/10 dark:from-blue-900/20 dark:to-primary/20 rounded-xl space-y-4">
-              <div className="grid grid-cols-4 gap-2 text-center">
+          <div className="space-y-4">
+            {/* RESULTS SECTION */}
+            <div className="p-4 bg-gradient-to-r from-blue-50 to-primary/10 dark:from-blue-900/20 dark:to-primary/20 rounded-xl">
+              <div className="grid grid-cols-6 gap-2 text-center mb-3">
                 <div className="p-2 bg-white/50 dark:bg-black/20 rounded">
-                  <p className="font-bold text-lg">{results.morning.toLocaleString()}</p>
+                  <p className="font-bold">{results.morning.toLocaleString()}</p>
                   <p className="text-xs text-muted-foreground">Morning</p>
                 </div>
                 <div className="p-2 bg-white/50 dark:bg-black/20 rounded">
-                  <p className="font-bold text-lg">{results.evening.toLocaleString()}</p>
+                  <p className="font-bold">{results.evening.toLocaleString()}</p>
                   <p className="text-xs text-muted-foreground">Evening</p>
                 </div>
                 <div className="p-2 bg-white/50 dark:bg-black/20 rounded">
-                  <p className="font-bold text-lg">{results.night.toLocaleString()}</p>
+                  <p className="font-bold">{results.night.toLocaleString()}</p>
                   <p className="text-xs text-muted-foreground">Night</p>
                 </div>
                 <div className="p-2 bg-white/50 dark:bg-black/20 rounded">
-                  <p className="font-bold text-lg">{results.snacks.toLocaleString()}</p>
+                  <p className="font-bold">{results.snacks.toLocaleString()}</p>
                   <p className="text-xs text-muted-foreground">Snacks</p>
                 </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-4 bg-white/70 dark:bg-black/30 rounded-lg">
-                  <p className="text-sm text-muted-foreground mb-1">Daily Water Opportunity</p>
-                  <p className="text-4xl font-bold text-blue-600">{results.daily.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">Bottles</p>
+                <div className="p-2 bg-white/70 dark:bg-black/30 rounded">
+                  <p className="font-bold text-blue-600">{results.daily.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Daily</p>
                 </div>
-                <div className="text-center p-4 bg-white/70 dark:bg-black/30 rounded-lg">
-                  <p className="text-sm text-muted-foreground mb-1">Monthly Water Opportunity</p>
-                  <p className="text-4xl font-bold text-primary">{results.monthly.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">Bottles</p>
+                <div className="p-2 bg-white/70 dark:bg-black/30 rounded">
+                  <p className="font-bold text-primary">{results.monthly.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Monthly</p>
                 </div>
               </div>
 
-              {/* Formula Explanation */}
-              <div className="p-3 bg-white/50 dark:bg-black/20 rounded-lg text-sm">
-                <p className="font-medium text-muted-foreground mb-2">How is this calculated?</p>
-                <p className="text-muted-foreground mb-2">
-                  <span className="font-medium text-foreground">Per Mode</span> = Covers × Occupancy% × Table Turnovers × Adoption%
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Table Turnovers = 180 mins ÷ Avg Table Time (e.g., 180÷45 = 4 turnovers per session)
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  <span className="font-medium">Daily</span> = Sum of all enabled modes &nbsp;|&nbsp; 
-                  <span className="font-medium">Monthly</span> = Daily × Operating Days
-                </p>
-              </div>
-
-              {/* Override */}
-              <div className="pt-3 border-t border-white/30">
-                <div className="flex items-center justify-between mb-2">
-                  <Label className="text-sm flex items-center gap-2"><Edit2 className="h-4 w-4" /> Override with known value</Label>
+              {/* Override Row */}
+              <div className="flex items-center gap-3 pt-2 border-t border-white/30">
+                <div className="flex items-center gap-2">
                   <Switch checked={isOverrideMode} onCheckedChange={(c) => { setIsOverrideMode(c); if (!c) setOverrideValue(''); }} />
+                  <span className="text-sm"><Edit2 className="h-3 w-3 inline mr-1" />Override</span>
                 </div>
                 {isOverrideMode && (
-                  <div className="flex items-center gap-2">
-                    <Input type="number" placeholder="Monthly bottles" value={overrideValue} onChange={(e) => setOverrideValue(e.target.value)} className="text-lg" />
-                    <span className="text-sm text-muted-foreground">bottles/month</span>
-                  </div>
-                )}
-                {isOverrideMode && overrideValue && (
-                  <div className="mt-3 text-center p-3 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
-                    <p className="text-sm text-amber-700 dark:text-amber-300">Final Value (Override)</p>
-                    <p className="text-2xl font-bold text-amber-600">{(parseInt(overrideValue) || 0).toLocaleString()} bottles/month</p>
-                  </div>
+                  <>
+                    <Input type="number" placeholder="Monthly bottles" value={overrideValue} onChange={(e) => setOverrideValue(e.target.value)} className="w-32 h-8" />
+                    {overrideValue && <span className="text-sm font-medium text-amber-600">= {(parseInt(overrideValue) || 0).toLocaleString()}/month</span>}
+                  </>
                 )}
               </div>
             </div>
 
-            {/* CALCULATE BUTTON - Prominent */}
-            <Button 
-              onClick={calculate} 
-              className="w-full h-14 text-lg bg-blue-600 hover:bg-blue-700 text-white"
-              size="lg"
+            {/* Formula - Collapsible */}
+            <div 
+              className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer hover:text-foreground"
+              onClick={() => setShowFormula(!showFormula)}
             >
-              <Play className="h-5 w-5 mr-2" /> 
-              Calculate Estimation
+              <Info className="h-4 w-4" />
+              <span>How is this calculated?</span>
+              {showFormula ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </div>
+            {showFormula && (
+              <div className="p-3 bg-muted/50 rounded-lg text-sm text-muted-foreground">
+                <p><span className="font-medium text-foreground">Per Mode</span> = Covers × Occupancy% × Table Turnovers × Adoption%</p>
+                <p className="text-xs mt-1">Table Turnovers = 180 mins ÷ Avg Table Time &nbsp;|&nbsp; <span className="font-medium">Daily</span> = Sum of enabled modes &nbsp;|&nbsp; <span className="font-medium">Monthly</span> = Daily × Operating Days</p>
+              </div>
+            )}
+
+            {/* Calculate Button */}
+            <Button onClick={calculate} className="w-full h-12 text-lg bg-blue-600 hover:bg-blue-700 text-white" size="lg">
+              <Play className="h-5 w-5 mr-2" /> Calculate Estimation
             </Button>
 
             {/* Total Covers */}
-            <div className="space-y-2">
+            <div className="space-y-1">
               <Label>Total Covers (Seating Capacity)</Label>
-              <Input
-                type="number"
-                value={totalCovers}
-                onChange={(e) => setTotalCovers(e.target.value)}
-                className="text-lg font-semibold"
-              />
+              <Input type="number" value={totalCovers} onChange={(e) => setTotalCovers(e.target.value)} className="text-lg font-semibold" />
             </div>
 
-            {/* Operating Pattern */}
-            <div className="space-y-3">
-              <Label>Operating Pattern</Label>
-              
-              <div className={`flex items-center gap-3 p-3 rounded-lg border ${morningEnabled ? 'bg-secondary/50' : 'bg-muted/30'}`}>
-                <Switch checked={morningEnabled} onCheckedChange={setMorningEnabled} />
-                <Sun className="h-5 w-5 text-amber-500" />
-                <span className="font-medium flex-1">Morning</span>
-                <Input type="number" value={morningDensity} onChange={(e) => setMorningDensity(e.target.value)} className="w-20 text-center" disabled={!morningEnabled} />
-                <span className="text-xs text-muted-foreground w-20">Occupancy %</span>
+            {/* Two Column Layout: Operating Pattern + Dining Behavior */}
+            <div className="grid grid-cols-2 gap-6">
+              {/* Operating Pattern - Left */}
+              <div className="space-y-2">
+                <Label>Operating Pattern</Label>
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="text-left p-2 font-medium">Mode</th>
+                        <th className="text-center p-2 font-medium">Occupancy %</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className={`border-t ${morningEnabled ? '' : 'opacity-50'}`}>
+                        <td className="p-2">
+                          <div className="flex items-center gap-2">
+                            <Switch checked={morningEnabled} onCheckedChange={setMorningEnabled} />
+                            <Sun className="h-4 w-4 text-amber-500" />
+                            <span>Morning</span>
+                          </div>
+                        </td>
+                        <td className="p-2 text-center">
+                          <Input type="number" value={morningDensity} onChange={(e) => setMorningDensity(e.target.value)} className="w-20 text-center mx-auto h-8" disabled={!morningEnabled} />
+                        </td>
+                      </tr>
+                      <tr className={`border-t ${eveningEnabled ? '' : 'opacity-50'}`}>
+                        <td className="p-2">
+                          <div className="flex items-center gap-2">
+                            <Switch checked={eveningEnabled} onCheckedChange={setEveningEnabled} />
+                            <Sunset className="h-4 w-4 text-orange-500" />
+                            <span>Evening</span>
+                          </div>
+                        </td>
+                        <td className="p-2 text-center">
+                          <Input type="number" value={eveningDensity} onChange={(e) => setEveningDensity(e.target.value)} className="w-20 text-center mx-auto h-8" disabled={!eveningEnabled} />
+                        </td>
+                      </tr>
+                      <tr className={`border-t ${nightEnabled ? '' : 'opacity-50'}`}>
+                        <td className="p-2">
+                          <div className="flex items-center gap-2">
+                            <Switch checked={nightEnabled} onCheckedChange={setNightEnabled} />
+                            <Moon className="h-4 w-4 text-indigo-500" />
+                            <span>Night</span>
+                          </div>
+                        </td>
+                        <td className="p-2 text-center">
+                          <Input type="number" value={nightDensity} onChange={(e) => setNightDensity(e.target.value)} className="w-20 text-center mx-auto h-8" disabled={!nightEnabled} />
+                        </td>
+                      </tr>
+                      <tr className={`border-t ${snacksEnabled ? '' : 'opacity-50'}`}>
+                        <td className="p-2">
+                          <div className="flex items-center gap-2">
+                            <Switch checked={snacksEnabled} onCheckedChange={setSnacksEnabled} />
+                            <Coffee className="h-4 w-4 text-amber-700" />
+                            <span>Snacks</span>
+                          </div>
+                        </td>
+                        <td className="p-2 text-center">
+                          <Input type="number" value={snacksDensity} onChange={(e) => setSnacksDensity(e.target.value)} className="w-20 text-center mx-auto h-8" disabled={!snacksEnabled} />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              
-              <div className={`flex items-center gap-3 p-3 rounded-lg border ${eveningEnabled ? 'bg-secondary/50' : 'bg-muted/30'}`}>
-                <Switch checked={eveningEnabled} onCheckedChange={setEveningEnabled} />
-                <Sunset className="h-5 w-5 text-orange-500" />
-                <span className="font-medium flex-1">Evening</span>
-                <Input type="number" value={eveningDensity} onChange={(e) => setEveningDensity(e.target.value)} className="w-20 text-center" disabled={!eveningEnabled} />
-                <span className="text-xs text-muted-foreground w-20">Occupancy %</span>
-              </div>
-              
-              <div className={`flex items-center gap-3 p-3 rounded-lg border ${nightEnabled ? 'bg-secondary/50' : 'bg-muted/30'}`}>
-                <Switch checked={nightEnabled} onCheckedChange={setNightEnabled} />
-                <Moon className="h-5 w-5 text-indigo-500" />
-                <span className="font-medium flex-1">Night</span>
-                <Input type="number" value={nightDensity} onChange={(e) => setNightDensity(e.target.value)} className="w-20 text-center" disabled={!nightEnabled} />
-                <span className="text-xs text-muted-foreground w-20">Occupancy %</span>
-              </div>
-              
-              <div className={`flex items-center gap-3 p-3 rounded-lg border ${snacksEnabled ? 'bg-secondary/50' : 'bg-muted/30'}`}>
-                <Switch checked={snacksEnabled} onCheckedChange={setSnacksEnabled} />
-                <Coffee className="h-5 w-5 text-amber-700" />
-                <span className="font-medium flex-1">Snacks</span>
-                <Input type="number" value={snacksDensity} onChange={(e) => setSnacksDensity(e.target.value)} className="w-20 text-center" disabled={!snacksEnabled} />
-                <span className="text-xs text-muted-foreground w-20">Occupancy %</span>
-              </div>
-            </div>
 
-            {/* Dining Behavior */}
-            <div className="space-y-3">
-              <Label>Dining Behavior</Label>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Avg Table Time (min)</Label>
-                  <Input type="number" value={avgTableTime} onChange={(e) => setAvgTableTime(e.target.value)} />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Adoption Rate (%)</Label>
-                  <Input type="number" value={adoptionRate} onChange={(e) => setAdoptionRate(e.target.value)} />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Operating Days</Label>
-                  <Input type="number" value={operatingDays} onChange={(e) => setOperatingDays(e.target.value)} />
+              {/* Dining Behavior - Right */}
+              <div className="space-y-2">
+                <Label>Dining Behavior</Label>
+                <div className="border rounded-lg p-4 space-y-4">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Avg Table Time (min)</Label>
+                    <Input type="number" value={avgTableTime} onChange={(e) => setAvgTableTime(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">% of guests opting bottled water</Label>
+                    <Input type="number" value={adoptionRate} onChange={(e) => setAdoptionRate(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Operating Days / Month</Label>
+                    <Input type="number" value={operatingDays} onChange={(e) => setOperatingDays(e.target.value)} />
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Save */}
-            <Button onClick={handleSave} disabled={saving} className="w-full h-12">
+            <Button onClick={handleSave} disabled={saving} className="w-full h-10">
               {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
               Save Estimation
             </Button>
