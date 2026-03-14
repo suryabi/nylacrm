@@ -5,9 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { 
   Target, Star, Lightbulb, Tractor, HelpCircle, 
-  Loader2, Save, RefreshCw, MapPin
+  Loader2, Save, RefreshCw, MapPin, ChevronDown, ChevronUp
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -27,6 +28,7 @@ export default function LeadScoringCard({ leadId, leadCity, leadCompany }) {
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedTiers, setSelectedTiers] = useState({});
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -116,146 +118,178 @@ export default function LeadScoringCard({ leadId, leadCity, leadCompany }) {
 
   return (
     <Card data-testid="lead-scoring-card">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Target className="w-5 h-5" />
-            Lead Score
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            {isEditing ? (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setIsEditing(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleSaveScore}
-                  disabled={saving}
-                >
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
-                  Save
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={fetchData}
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setIsEditing(true)}
-                  data-testid="edit-lead-score-btn"
-                >
-                  {leadScore?.scored ? 'Edit Score' : 'Score Lead'}
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {/* City Indicator */}
-        {leadCity && (
-          <div className="mb-3 flex items-center gap-1 text-xs text-muted-foreground">
-            <MapPin className="w-3 h-3" />
-            Using model for: {model.city === 'default' ? 'Default' : model.city}
-            {model._is_fallback && ' (fallback)'}
-          </div>
-        )}
-
-        {/* Score Summary */}
-        {leadScore?.scored && !isEditing && (
-          <div className="mb-4 p-3 rounded-lg bg-gradient-to-r from-primary/10 to-primary/5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Score</p>
-                <p className="text-3xl font-bold text-primary">{leadScore.total_score}</p>
-              </div>
-              {quadrantInfo && (
-                <div className={`p-3 rounded-lg ${quadrantInfo.bgLight}`}>
-                  <div className="flex items-center gap-2">
-                    <div className={`p-2 rounded ${quadrantInfo.color}`}>
-                      <QuadrantIcon className="w-4 h-4 text-white" />
-                    </div>
-                    <span className={`font-semibold ${quadrantInfo.textColor}`}>
-                      {leadScore.quadrant}
-                    </span>
-                  </div>
-                </div>
+      <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CollapsibleTrigger asChild>
+              <button className="flex items-center gap-2 hover:text-primary transition-colors">
+                <Target className="w-5 h-5" />
+                <CardTitle className="text-lg">Lead Score</CardTitle>
+                {leadScore?.scored && (
+                  <Badge className="ml-2 bg-primary/10 text-primary">
+                    {leadScore.total_score} pts
+                  </Badge>
+                )}
+                {isExpanded ? (
+                  <ChevronUp className="w-4 h-4 ml-1 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 ml-1 text-muted-foreground" />
+                )}
+              </button>
+            </CollapsibleTrigger>
+            <div className="flex items-center gap-2">
+              {isEditing ? (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsEditing(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveScore}
+                    disabled={saving}
+                  >
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                    Save
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={fetchData}
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { setIsEditing(true); setIsExpanded(true); }}
+                    data-testid="edit-lead-score-btn"
+                  >
+                    {leadScore?.scored ? 'Edit Score' : 'Score Lead'}
+                  </Button>
+                </>
               )}
             </div>
           </div>
-        )}
+          
+          {/* Compact summary when collapsed */}
+          {!isExpanded && leadScore?.scored && quadrantInfo && (
+            <div className="mt-2 flex items-center gap-3">
+              <div className={`p-1.5 rounded ${quadrantInfo.color}`}>
+                <QuadrantIcon className="w-3 h-3 text-white" />
+              </div>
+              <span className={`text-sm font-medium ${quadrantInfo.textColor}`}>
+                {leadScore.quadrant}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                • {Object.keys(leadScore.category_scores || {}).length} categories scored
+              </span>
+            </div>
+          )}
+        </CardHeader>
 
-        {/* Scoring Categories */}
-        <div className="space-y-3">
-          {model.categories.sort((a, b) => a.order - b.order).map((category) => {
-            const existingScore = leadScore?.category_scores?.[category.id];
-            const selectedTierId = selectedTiers[category.id];
-            const selectedTier = category.tiers.find(t => t.id === selectedTierId);
-            
-            return (
-              <div key={category.id} className="border rounded-lg p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm">{category.name}</span>
-                    <Badge variant="secondary" className="text-xs">
-                      {category.weight} pts max
-                    </Badge>
+        <CollapsibleContent>
+          <CardContent>
+            {/* City Indicator */}
+            {leadCity && (
+              <div className="mb-3 flex items-center gap-1 text-xs text-muted-foreground">
+                <MapPin className="w-3 h-3" />
+                Using model for: {model?.city === 'default' ? 'Default' : model?.city}
+                {model?._is_fallback && ' (fallback)'}
+              </div>
+            )}
+
+            {/* Score Summary */}
+            {leadScore?.scored && !isEditing && (
+              <div className="mb-4 p-3 rounded-lg bg-gradient-to-r from-primary/10 to-primary/5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Total Score</p>
+                    <p className="text-3xl font-bold text-primary">{leadScore.total_score}</p>
                   </div>
-                  {!isEditing && existingScore && (
-                    <Badge className="bg-primary/10 text-primary">
-                      {existingScore.score} pts
-                    </Badge>
+                  {quadrantInfo && (
+                    <div className={`p-3 rounded-lg ${quadrantInfo.bgLight}`}>
+                      <div className="flex items-center gap-2">
+                        <div className={`p-2 rounded ${quadrantInfo.color}`}>
+                          <QuadrantIcon className="w-4 h-4 text-white" />
+                        </div>
+                        <span className={`font-semibold ${quadrantInfo.textColor}`}>
+                          {leadScore.quadrant}
+                        </span>
+                      </div>
+                    </div>
                   )}
                 </div>
-                
-                {isEditing ? (
-                  <Select
-                    value={selectedTierId || ''}
-                    onValueChange={(val) => handleTierSelect(category.id, val)}
-                  >
-                    <SelectTrigger className="w-full" data-testid={`tier-select-${category.id}`}>
-                      <SelectValue placeholder="Select tier..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {category.tiers.sort((a, b) => b.score - a.score).map((tier) => (
-                        <SelectItem key={tier.id} value={tier.id}>
-                          <div className="flex items-center justify-between w-full">
-                            <span>{tier.label}</span>
-                            <Badge variant="outline" className="ml-2">{tier.score} pts</Badge>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    {existingScore ? existingScore.tier_label : 'Not scored'}
-                  </p>
-                )}
               </div>
-            );
-          })}
-        </div>
+            )}
 
-        {/* Score timestamp */}
-        {leadScore?.scored && leadScore.scored_at && (
-          <p className="mt-3 text-xs text-muted-foreground text-right">
-            Last scored: {new Date(leadScore.scored_at).toLocaleDateString()}
-          </p>
-        )}
-      </CardContent>
+            {/* Scoring Categories */}
+            <div className="space-y-3">
+              {model?.categories?.sort((a, b) => a.order - b.order).map((category) => {
+                const existingScore = leadScore?.category_scores?.[category.id];
+                const selectedTierId = selectedTiers[category.id];
+                const selectedTier = category.tiers.find(t => t.id === selectedTierId);
+                
+                return (
+                  <div key={category.id} className="border rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm">{category.name}</span>
+                        <Badge variant="secondary" className="text-xs">
+                          {category.weight} pts max
+                        </Badge>
+                      </div>
+                      {!isEditing && existingScore && (
+                        <Badge className="bg-primary/10 text-primary">
+                          {existingScore.score} pts
+                        </Badge>
+                      )}
+                    </div>
+                    
+                    {isEditing ? (
+                      <Select
+                        value={selectedTierId || ''}
+                        onValueChange={(val) => handleTierSelect(category.id, val)}
+                      >
+                        <SelectTrigger className="w-full" data-testid={`tier-select-${category.id}`}>
+                          <SelectValue placeholder="Select tier..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {category.tiers.sort((a, b) => b.score - a.score).map((tier) => (
+                            <SelectItem key={tier.id} value={tier.id}>
+                              <div className="flex items-center justify-between w-full">
+                                <span>{tier.label}</span>
+                                <Badge variant="outline" className="ml-2">{tier.score} pts</Badge>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        {existingScore ? existingScore.tier_label : 'Not scored'}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Score timestamp */}
+            {leadScore?.scored && leadScore.scored_at && (
+              <p className="mt-3 text-xs text-muted-foreground text-right">
+                Last scored: {new Date(leadScore.scored_at).toLocaleDateString()}
+              </p>
+            )}
+          </CardContent>
+        </CollapsibleContent>
+      </Collapsible>
     </Card>
   );
 }
