@@ -5,7 +5,23 @@ Build a comprehensive, mobile-ready Sales CRM application with multi-tenancy sup
 
 ## Current Session Updates (Mar 14, 2026)
 
-### City-Based Lead Scoring Model (NEW)
+### Lead Scoring Card UI Restyle (NEW - Mar 14, 2026)
+- **Feature**: Restyled `LeadScoringCard` to match `OpportunityEstimation` card design
+- **Quadrant-based Color Theming**:
+  - Stars: Amber/yellow background (`bg-amber-50`)
+  - Showcase: Purple background (`bg-purple-50`)
+  - Plough Horses: Blue background (`bg-blue-50`)
+  - Puzzles: Slate/gray background (`bg-slate-50`)
+- **UX Improvements**:
+  - Card background color changes based on scored quadrant for visual clarity
+  - Compact 2-column grid layout showing Total Score and Quadrant
+  - Prominent "Save Lead Score" button (full-width, indigo) when in edit mode
+  - Clear "Cancel" button below save to prevent accidental edits
+  - Removed confusing small buttons in header - now uses consistent card-level actions
+- **Files Modified**:
+  - `/app/frontend/src/components/LeadScoringCard.js` - Complete restyle
+
+### City-Based Lead Scoring Model
 - **Feature**: Lead Scoring Model is now city-specific
 - **Admin Page Changes**:
   - City selector dropdown at top (from master locations)

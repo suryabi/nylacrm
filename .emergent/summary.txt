@@ -1,154 +1,154 @@
 <analysis>**original_problem_statement:**
-The user wants to build a comprehensive, mobile-ready Sales CRM application. Initially, this involved implementing multi-tenancy, an AI Sales Assistant, and fixing production data issues.
-
-The project has since evolved to focus on adding highly specific and configurable modules for different tenant types. Recent work includes a flexible Lead Scoring Model and an industry-specific Opportunity Estimation calculator for  tenants. The current request is to expand the Opportunity Estimation module with SKU-based revenue forecasting.
+The user wants to build a comprehensive, mobile-ready Sales CRM application. Initially, this involved implementing multi-tenancy and an AI Sales Assistant. The project has since evolved to focus on adding highly specific and configurable modules.
 
 **PRODUCT REQUIREMENTS:**
-1.  **Lead Scoring Module**: An admin module where each tenant can define their own lead scoring categories, weights, and value tiers.
-2.  **Tenant Industry Profiles**: A system to tag tenants with an  (e.g., , ) to enable or disable specific features, managed by a Super Admin.
-3.  **Opportunity Estimation Module**: For the  industry, a calculator on the Lead Detail page to estimate potential bottle sales based on inputs like seating capacity, operating hours, and customer behavior.
-4.  **SKU-based Revenue Calculation**: An extension of the Opportunity Estimation module to allow users to distribute the estimated bottle volume across different SKUs (e.g., 330ml, 660ml), apply proposed pricing, and calculate a total Estimated Deal Value.
+1.  **City-Based Lead Scoring Module**: An admin module where each tenant can define lead scoring models for specific cities, with a Default model as a fallback. Scoring has been moved from  to .
+2.  **Tenant Industry Profiles**: A system to tag tenants with an  (e.g., ) to enable or disable specific features.
+3.  **Opportunity Estimation Module**: For the  industry, a calculator on the Lead Detail page to estimate potential bottle sales.
+4.  **SKU-based Revenue Calculation**: An extension of the Opportunity Estimation module to distribute estimated bottle volume across SKUs, apply pricing, and calculate a total Estimated Deal Value. This section should be positioned prominently at the top of the Lead Detail page.
+5.  **UI/UX Consistency**: Widgets like the Lead Score card should have a consistent, modern style.
+6.  **Production Stability**: The application must be stable for all user roles, especially in the production environment.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The application is a full-stack Sales CRM (React, FastAPI, MongoDB) with a multi-tenancy architecture. It features two major new modules:
-1.  **Lead Scoring Admin**: A fully functional and tested admin page () that allows tenant admins to configure a weighted scoring system for their accounts. Scored accounts are displayed with their score on the Account Detail page.
-2.  **Industry-Specific Features**: A system is in place to gate features based on a tenant's  tag. This is managed via a new Industry tab in the Platform Admin page.
-3.  **Opportunity Estimation Module**: For  tenants, a compact card on the Lead Detail page shows an estimated bottle opportunity. Clicking it opens a modal with a detailed calculator. The UI/UX of this calculator has been heavily refined based on user feedback to be performant and intuitive.
+The application is a full-stack Sales CRM (React, FastAPI, MongoDB) with a multi-tenancy architecture. Key features include:
+-   A city-based, configurable **Lead Scoring Model** admin page.
+-   A **collapsible Lead Scoring card** on the Lead Detail page.
+-   An industry-specific **Opportunity Estimation module** for  tenants.
+-   A **Proposed SKU Pricing** section on the Lead Detail page that calculates estimated monthly revenue, positioned at the top of the page.
+-   A bug fix for a date-parsing error that caused a blank screen for the Partner - Sales role is in place.
+-   Multiple attempted fixes for a critical production bug where the Opportunity Estimation module fails to appear. The latest fix was applied to  to improve how the application configuration is fetched, making it more resilient to differences between preview and production environments (e.g., cookie vs. token authentication).
 
 **Last working item**:
--   **Last item agent was working:** The user requested to add a Proposed SKU Pricing section to the  modal. This new section should allow users to distribute the total estimated monthly bottle volume across various SKUs by percentage, apply a proposed price to each SKU, and calculate the total estimated revenue.
+-   **Last item agent was working:** The agent was about to restyle the  component to match the visual style of the  card for UI consistency, as requested by the user.
 -   **Status:** NOT STARTED
 -   **Agent Testing Done:** N
--   **Which testing method agent to use?** Frontend testing agent to verify the new UI section, including the percentage distribution logic, automatic bottle allocation, and revenue calculations.
+-   **Which testing method agent to use?** Screenshot tool to verify the new styling of the  on the  page.
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
-There are no pending bugs. All user-reported issues, including significant performance problems with the input controls in the Opportunity Estimation module, have been resolved through iterative refactoring.
+
+-   **Issue 1: Opportunity Estimation module not visible in Production (P0)**
+    -   This is a critical, recurring issue. The user has reported that even after multiple deployments, the Opportunity Estimation feature is not visible for the CEO role in the production environment (), while it works correctly in preview.
+    -   **Attempted fixes:** The agent made several changes to  and  to handle different data structures and authentication methods. The last user debug log showed ****, indicating the core problem is that the tenant configuration is not being fetched or loaded at all in the production environment. The agent's final fix attempted to solve this by making the API call more robust.
+    -   **Next debug checklist:**
+        1.  Modify the  function in  to add comprehensive  logging. Log the entire  object in the  block to see the exact reason the API call is failing in production (e.g., CORS, 401 Unauthorized, network error).
+        2.  Verify in the production browser's developer tools (Network tab) if the  request is being made, what its status code is, and if there are any console errors related to it.
+        3.  Do not assume preview and production environments are the same. The fix must be verified directly against the production issue.
+    -   **Why fix this issue?** It's a core feature for the user's business ( tenants) and is completely blocking its use in production. The user is highly frustrated after spending significant time on this.
+    -   **Status:** USER VERIFICATION PENDING
+    -   **Is recurring issue?** Y
+    -   **Should Test frontend/backend/both after fix?** Frontend (in the production environment).
+    -   **Blocked on other issue:** No.
 
 **In progress Task List**:
-
--   **Task 1: Implement Proposed SKU Pricing Section (P0)**
-    -   **Where to resume:** Modify the  component to add the new UI section for SKU distribution and pricing.
-    -   **What will be achieved:** Users will be able to forecast revenue and total deal value directly within the opportunity estimation workflow, making it a more powerful sales tool.
-    -   **Status:** NOT STARTED
-    -   **Should Test frontend/backend/both after fix?** Frontend primarily. The backend will require a minor update to the  endpoint to save the new SKU data.
-    -   **Blocked on something:** No.
+There are no other in-progress tasks. The P0 issue is the main blocker.
 
 **Upcoming and Future Tasks**
 
 -   **Upcoming Tasks:**
-    -   **P1: Cleanup Temporary Debug Endpoints:** Remove the temporary  endpoints from  that were created for a one-time production data migration.
+    -   **P1: Restyle Lead Score Widget:** Modify  to match the styling of other modern cards on the  page.
+    -   **P2: Cleanup Temporary Debug Endpoints:** Remove the temporary  endpoints from .
 -   **Future Tasks:**
     -   **P1: Complete  Refactoring:** Move all remaining legacy routes from the monolithic  file into modular router files under .
-    -   **P2: Upgrade AI Assistant to True RAG:** Upgrade the existing keyword-based AI assistant to a true vector-based RAG system for more powerful semantic search.
-    -   **P2: Build Out Placeholder Modules:** Implement functionality for the empty modules (Maintenance, Inventory, Quality Control, etc.).
+    -   **P2: Upgrade AI Assistant to True RAG:** Upgrade the existing AI assistant to a true vector-based RAG system.
+    -   **P2: Build Out Placeholder Modules:** Implement functionality for the empty modules (Maintenance, Inventory, etc.).
 
 **Completed work in this session**
--   **FEATURE: Lead Scoring Model Admin Module**
-    -   Implemented a new backend API () and  DB collection.
-    -   Created a frontend admin page () for configuring scoring models.
-    -   Integrated an  component into the  page.
-    -   The feature was successfully tested using the testing agent.
--   **FEATURE: Tenant Industry Profiles**
-    -   Enabled tenant-specific features by adding an  field to the Tenant model.
-    -   Created a new Industry tab in the  page for Super Admins to manage tenant profiles.
-    -   Updated the  to provide an easy-to-use  helper for conditional rendering.
--   **FEATURE: Opportunity Estimation Module ( specific)**
-    -   Built the  component and integrated it into the  page, gated by the new industry feature system.
-    -   Created a backend endpoint to save the estimation data to the lead document.
-    -   **UI/UX Refinements:** Performed multiple iterations to fix slow input controls, improve calculation logic, redesign the layout for better visibility without scrolling, and make the UI more intuitive based on user feedback.
+-   **FEATURE: SKU-based Revenue Calculation:** Implemented and tested the Proposed SKU Pricing section in .
+-   **ENHANCEMENT: Repositioned SKU Pricing Section:** Moved the SKU pricing section to the top of the  page.
+-   **FEATURE: City-Based Lead Scoring Model:** Refactored the entire lead scoring system to be city-specific, including backend API changes () and frontend UI ().
+-   **REFACTOR: Scoring Moved from Accounts to Leads:** Updated the scoring mechanism to target leads, creating a new  component for the  page.
+-   **ENHANCEMENT: Collapsible Lead Score Card:** Made the  component collapsible to save space.
+-   **BUG FIX: Blank Page for Partner - Sales Role:** Fixed a fatal  by implementing safe date parsing in several dashboard widgets (, etc.).
+-   **SUPPORT: Provided Production Data Scripts:** Created Python and JavaScript scripts to help the user populate the lead scoring model in their production database.
+-   **DEBUG: Investigated Production Feature Visibility:** Spent significant effort debugging why the Opportunity Estimation module was not visible in production, leading to multiple patches in .
 
 **Earlier issues found/mentioned but not fixed**
--   None.
+-   None. The main unresolved issue is the P0 production bug.
 
 **Known issue recurrence from previous fork**
--   ** Refactoring:** The need to refactor the monolithic  file was noted in the initial handoff and remains a pending technical debt task.
+-   ** Refactoring:** The need to refactor the monolithic  file remains a pending technical debt task.
 
 **Code Architecture**
-industryindustry_config
+citysafeParseISO
 
 **Key Technical Concepts**
--   **Feature Gating by Tenant Industry:** A system where features are conditionally rendered based on an  tag (e.g., water_brand) on the tenant's profile, managed via a React Context.
--   **Performant Interactive UI:** Refactored a component that suffered from input lag by simplifying state management (from a single complex object to individual primitive states) and changing calculations from  events to  events to ensure a smooth user experience.
--   **Full-Stack Feature Development:** Built two major features (Lead Scoring, Opportunity Estimation) end-to-end, including database schema changes, Pydantic models, FastAPI endpoints, and new React components integrated into existing pages.
+-   **Production vs. Preview Divergence:** The session highlighted a critical difference between the preview and production environments, likely related to authentication (cookie vs. token) and API response structures, causing features to fail in production.
+-   **Resilient React Context:** The  was modified to be more defensive, attempting to load configuration data regardless of the auth method and handling nested data structures.
+-   **Defensive Programming:** A  utility was implemented to prevent UI crashes from invalid date data, a common issue with real-world production databases.
 
 **key DB schema**
--   ****: New collection to store tenant-specific scoring models ().
--   ****: Added  and  fields.
--   ****: Added  and  fields.
--   ****: Added  object to store data from the new module.
+-   ****: Modified to include a  field. The backend handles migrating or correctly querying legacy models without this field.
+-   ****: Now contains fields for  and detailed scoring data.
 
 **changes in tech stack**
 -   None.
 
 **All files of reference**
--   : The primary file to be modified for the next task.
--   : The parent page where the module is rendered.
--   : Will need updates to save the new SKU data.
--   : Contains the Industry management tab.
--   : The data model for tenant profiles.
+-   **Primary Issue File:**  (This is the most likely source of the P0 production bug).
+-   **Affected UI File:**  (This is where the bug is visible).
+-   **Upcoming Task File:**  (For the restyling task).
 
 **Areas that need refactoring**:
--   **:** This monolithic file still contains legacy routes and temporary debug endpoints from a previous session and is a major source of technical debt.
+-   **:** Still a monolithic file with legacy routes.
+-   **:** Has become complex due to repeated patching. It needs a definitive fix and cleanup once the root cause of the production loading issue is confirmed.
 
 **key api endpoints**
--   : CRUD for lead scoring models.
--   : Score an account.
--   : Get the current tenant's industry profile.
--   : Update a tenant's industry.
--   : Save opportunity estimation data to a lead.
+-   : CRUD for city-specific lead scoring models.
+-   : Scores a lead.
+-   : The critical endpoint for fetching tenant configuration. This is likely failing or being blocked in production.
 
 **Critical Info for New Agent**
--   Your immediate task is to build the **Proposed SKU Pricing** section within the  modal.
--   This new section should calculate revenue based on SKU distribution percentages. The total percentage across all SKUs must not exceed 100%.
--   Remember that the  module is only visible for tenants with the  tag set to .
--   Pay close attention to UI performance. The component was previously slow due to calculations on every keystroke. Use  or a dedicated button for any new calculations.
--   After this feature is complete, the next priority should be proposing the cleanup of .
+-   **Your absolute highest priority (P0) is to fix the Opportunity Estimation module not being visible in the user's production environment.** The user is very frustrated. Do not work on anything else until this is resolved.
+-   The last debug effort revealed that  is  in production, meaning the API call to  within  is failing or not completing successfully.
+-   Your next step should be to add robust  logging around the  call inside  to capture and display the exact error in the production console. This will tell you if it's a CORS issue, a 401/403 error, or something else.
+-   Do not assume the preview environment is a reliable test. The bug only appears in production. You must guide the user to test your fixes in their production environment and report back with console logs.
+-   Once the P0 bug is fixed and verified by the user in production, you can proceed with the P1 task: restyling the  component.
 
 **documents and test reports created in this job**
 -   
 -   
+-   
+-   
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  : Request to add a Proposed SKU Pricing section to the Opportunity Estimation module, calculating revenue and total deal value. **(PENDING - Current task)**
-2.  : Change mode labels to Breakfast, Lunch, Snacks, Dinner. **(RESOLVED)**
-3.  : Remove the Calculate button and auto-calculate on blur/toggle instead. Restyle the Save button. **(RESOLVED)**
-4.  : Make the layout more compact to avoid scrolling and update the formula explanation. **(RESOLVED)**
-5.  : Update the label from Density % to Occupancy %. **(RESOLVED)**
-6.  : Add a clear explanation of how the bottle estimation is calculated. **(RESOLVED)**
-7.  : Provide the correct formula for bottle calculation. **(RESOLVED)**
-8.  : Move the results section to the top of the modal and make the Calculate button more prominent. **(RESOLVED)**
-9.  : The input controls are still slow and difficult to use. **(RESOLVED - Agent simplified state management further)**
-10. : The opportunity estimation module is not visible. **(RESOLVED - Agent verified it was working and guided the user)**
+1.  : The lead score widget should have the same styling as the categorization. **(PENDING - P1 Task)**
+2.  :  in the debug output. **(CRITICAL INFO - Pinpoints the root cause of the P0 bug)**
+3.  : Why don't you check both (cookie and token) and fix the issue? **(ADDRESSED)**
+4.  : *Provides console output confirming  is correct in the API response.* **(INFO)**
+5.  : *Provides console output showing .* **(INFO)**
+6.  : After deploying, the opportunity estimation is still not visible. **(PENDING - P0 Bug)**
+7.  : *Specifies the production URL.* **(INFO)**
+8.  : I upgraded vCPU, could that be an issue? **(ADDRESSED - No)**
+9.  : Deployed 3 minutes ago, still not working. I have been spending time since 3 hours and still it didn't work. **(USER FRUSTRATION - P0 Bug is critical)**
+10. : *Provides console output confirming the new code is not deployed.* **(RESOLVED - User later confirmed deployment went through)**
 
 **Project Health Check:**
--   **Broken**: None.
+-   **Broken**: A critical feature, **Opportunity Estimation**, is non-functional in the production environment.
 -   **Mocked**: None.
--   **Refactoring Needed**:  contains temporary debug endpoints and legacy routes that must be removed/refactored.
+-   **Refactoring Needed**:  and .
 
 **3rd Party Integrations**
--   **Gemini (via Emergent LLM Key)**: Used for the AI Sales Assistant.
--   Zoom API (for meetings)
--   Resend (for emails)
--   Open-Meteo (for weather widget)
--   Google Places API (for location data)
--   Google Workspace OAuth (for authentication)
--   Claude Sonnet 4.5 (Uses Emergent LLM Key) - Used for Visiting Card OCR.
--   Amazon MQ (via Stomp.py, for receiving invoice data)
+-   Gemini (via Emergent LLM Key)
+-   Zoom API
+-   Resend
+-   Open-Meteo
+-   Google Places API
+-   Google Workspace OAuth
+-   Claude Sonnet 4.5 (via Emergent LLM Key)
+-   Amazon MQ (via Stomp.py)
 
 **Testing status**
--   **Testing agent used after significant changes**: YES (for the Lead Scoring Model)
+-   **Testing agent used after significant changes**: YES
 -   **Troubleshoot agent used after agent stuck in loop**: NO
 -   **Test files created**: None.
--   **Known regressions**: None.
+-   **Known regressions**: The Opportunity Estimation feature, which was working, is now broken in the production environment due to a data loading issue.
 
 **Credentials to test flow:**
--   **Default Tenant ():**
-    -   **CEO:**  / 
-    -   **Director:**  / 
--   The AI Sales Assistant is only visible to the **CEO** role.
+-   **CEO:**  /  (Use this for testing  features on the  tenant).
+-   **Sales Partner:**  / 
 
 **What agent forgot to execute**
--   The agent has not yet addressed the cleanup of temporary debug/migration endpoints from , which was a carry-over task from the previous session's handoff summary.</analysis>
+-   The planned refactoring of  to remove legacy routes and temporary endpoints has not been started.</analysis>
