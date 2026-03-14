@@ -227,8 +227,8 @@ export default function LeadScoringCard({ leadId, leadCity, leadCompany }) {
           <div className="p-3 bg-slate-50 dark:bg-slate-900/20 rounded-lg text-center">
             <p className="text-sm text-muted-foreground">Not yet scored</p>
             <Button 
-              size="sm" 
-              className="mt-2"
+              size="lg" 
+              className="mt-2 h-11 w-full"
               onClick={handleStartEditing}
               data-testid="score-lead-btn"
             >
@@ -252,9 +252,9 @@ export default function LeadScoringCard({ leadId, leadCity, leadCompany }) {
             {/* Edit/Score Button - When NOT editing */}
             {!isEditing && leadScore?.scored && (
               <Button 
-                size="sm" 
+                size="lg" 
                 variant="outline"
-                className="w-full"
+                className="w-full h-11"
                 onClick={handleStartEditing}
                 data-testid="edit-lead-score-btn"
               >
