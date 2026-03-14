@@ -233,7 +233,7 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
               <div className="p-3 bg-white/50 dark:bg-black/20 rounded-lg text-sm">
                 <p className="font-medium text-muted-foreground mb-2">How is this calculated?</p>
                 <p className="text-muted-foreground mb-2">
-                  <span className="font-medium text-foreground">Per Mode</span> = Covers × Density% × Table Turnovers × Adoption%
+                  <span className="font-medium text-foreground">Per Mode</span> = Covers × Occupancy% × Table Turnovers × Adoption%
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Table Turnovers = 180 mins ÷ Avg Table Time (e.g., 180÷45 = 4 turnovers per session)
@@ -295,7 +295,7 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
                 <Sun className="h-5 w-5 text-amber-500" />
                 <span className="font-medium flex-1">Morning</span>
                 <Input type="number" value={morningDensity} onChange={(e) => setMorningDensity(e.target.value)} className="w-20 text-center" disabled={!morningEnabled} />
-                <span className="text-sm text-muted-foreground">%</span>
+                <span className="text-xs text-muted-foreground w-20">Occupancy %</span>
               </div>
               
               <div className={`flex items-center gap-3 p-3 rounded-lg border ${eveningEnabled ? 'bg-secondary/50' : 'bg-muted/30'}`}>
@@ -303,7 +303,7 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
                 <Sunset className="h-5 w-5 text-orange-500" />
                 <span className="font-medium flex-1">Evening</span>
                 <Input type="number" value={eveningDensity} onChange={(e) => setEveningDensity(e.target.value)} className="w-20 text-center" disabled={!eveningEnabled} />
-                <span className="text-sm text-muted-foreground">%</span>
+                <span className="text-xs text-muted-foreground w-20">Occupancy %</span>
               </div>
               
               <div className={`flex items-center gap-3 p-3 rounded-lg border ${nightEnabled ? 'bg-secondary/50' : 'bg-muted/30'}`}>
@@ -311,7 +311,7 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
                 <Moon className="h-5 w-5 text-indigo-500" />
                 <span className="font-medium flex-1">Night</span>
                 <Input type="number" value={nightDensity} onChange={(e) => setNightDensity(e.target.value)} className="w-20 text-center" disabled={!nightEnabled} />
-                <span className="text-sm text-muted-foreground">%</span>
+                <span className="text-xs text-muted-foreground w-20">Occupancy %</span>
               </div>
               
               <div className={`flex items-center gap-3 p-3 rounded-lg border ${snacksEnabled ? 'bg-secondary/50' : 'bg-muted/30'}`}>
@@ -319,7 +319,7 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
                 <Coffee className="h-5 w-5 text-amber-700" />
                 <span className="font-medium flex-1">Snacks</span>
                 <Input type="number" value={snacksDensity} onChange={(e) => setSnacksDensity(e.target.value)} className="w-20 text-center" disabled={!snacksEnabled} />
-                <span className="text-sm text-muted-foreground">%</span>
+                <span className="text-xs text-muted-foreground w-20">Occupancy %</span>
               </div>
             </div>
 
