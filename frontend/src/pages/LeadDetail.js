@@ -62,8 +62,13 @@ export default function LeadDetail() {
   const { hasIndustryFeature, tenantConfig, industry } = useTenantConfig();
   
   // Check if Opportunity Estimation should be shown
-  // Show for water_brand industry OR for CEO/Director roles as fallback
-  const industryType = tenantConfig?.industry?.industry_type || industry?.industry_type || 'generic';
+  // Check ALL possible locations for industry_type
+  const industryType = 
+    tenantConfig?.industry?.industry_type ||  // From nested config
+    industry?.industry_type ||                 // From context state
+    tenantConfig?.industry_type ||             // Direct on config
+    'generic';
+  
   const isWaterBrand = industryType === 'water_brand';
   const hasBottleFeature = hasIndustryFeature('lead_bottle_tracking');
   const showOpportunityEstimation = isWaterBrand || hasBottleFeature;
@@ -73,7 +78,9 @@ export default function LeadDetail() {
     industryType,
     isWaterBrand,
     hasBottleFeature,
-    showOpportunityEstimation
+    showOpportunityEstimation,
+    tenantConfigIndustry: tenantConfig?.industry,
+    industryState: industry
   });
 
   const [lead, setLead] = useState(null);
