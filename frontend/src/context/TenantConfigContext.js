@@ -284,7 +284,32 @@ export const TenantConfigProvider = ({ children }) => {
       industry?.industry_config?.enabled_features ||  // New format from industry endpoint
       tenantConfig?.industry?.industry_config?.enabled_features ||  // Nested in tenant config
       [];
-    return features.includes(featureKey);
+    
+    // If features array has the key, return true
+    if (features.includes(featureKey)) {
+      return true;
+    }
+    
+    // Fallback: Check industry_type for water_brand specific features
+    const industryType = 
+      industry?.industry_type ||
+      tenantConfig?.industry?.industry_type ||
+      'generic';
+    
+    // Water brand industry features
+    const waterBrandFeatures = [
+      'lead_bottle_tracking',
+      'bottle_preview', 
+      'cogs_calculator',
+      'sku_management',
+      'account_bottle_volume'
+    ];
+    
+    if (industryType === 'water_brand' && waterBrandFeatures.includes(featureKey)) {
+      return true;
+    }
+    
+    return false;
   }, [industry, tenantConfig]);
 
   // Get industry-specific configuration value
