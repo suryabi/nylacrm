@@ -27,14 +27,14 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
   
   // Form values as strings
   const [totalCovers, setTotalCovers] = useState(String(existingEstimation?.total_covers ?? 100));
-  const [morningEnabled, setMorningEnabled] = useState(existingEstimation?.operating_pattern?.morning?.enabled ?? true);
-  const [morningDensity, setMorningDensity] = useState(String(existingEstimation?.operating_pattern?.morning?.density ?? 60));
-  const [eveningEnabled, setEveningEnabled] = useState(existingEstimation?.operating_pattern?.evening?.enabled ?? true);
-  const [eveningDensity, setEveningDensity] = useState(String(existingEstimation?.operating_pattern?.evening?.density ?? 80));
-  const [nightEnabled, setNightEnabled] = useState(existingEstimation?.operating_pattern?.night?.enabled ?? true);
-  const [nightDensity, setNightDensity] = useState(String(existingEstimation?.operating_pattern?.night?.density ?? 90));
+  const [breakfastEnabled, setBreakfastEnabled] = useState(existingEstimation?.operating_pattern?.breakfast?.enabled ?? existingEstimation?.operating_pattern?.morning?.enabled ?? true);
+  const [breakfastDensity, setBreakfastDensity] = useState(String(existingEstimation?.operating_pattern?.breakfast?.density ?? existingEstimation?.operating_pattern?.morning?.density ?? 60));
+  const [lunchEnabled, setLunchEnabled] = useState(existingEstimation?.operating_pattern?.lunch?.enabled ?? existingEstimation?.operating_pattern?.evening?.enabled ?? true);
+  const [lunchDensity, setLunchDensity] = useState(String(existingEstimation?.operating_pattern?.lunch?.density ?? existingEstimation?.operating_pattern?.evening?.density ?? 80));
   const [snacksEnabled, setSnacksEnabled] = useState(existingEstimation?.operating_pattern?.snacks?.enabled ?? false);
   const [snacksDensity, setSnacksDensity] = useState(String(existingEstimation?.operating_pattern?.snacks?.density ?? 40));
+  const [dinnerEnabled, setDinnerEnabled] = useState(existingEstimation?.operating_pattern?.dinner?.enabled ?? existingEstimation?.operating_pattern?.night?.enabled ?? true);
+  const [dinnerDensity, setDinnerDensity] = useState(String(existingEstimation?.operating_pattern?.dinner?.density ?? existingEstimation?.operating_pattern?.night?.density ?? 90));
   const [avgTableTime, setAvgTableTime] = useState(String(existingEstimation?.dining_behavior?.avg_table_time ?? 45));
   const [adoptionRate, setAdoptionRate] = useState(String(existingEstimation?.dining_behavior?.water_adoption_rate ?? 70));
   const [operatingDays, setOperatingDays] = useState(String(existingEstimation?.dining_behavior?.operating_days ?? 30));
@@ -42,10 +42,10 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
   const [isOverrideMode, setIsOverrideMode] = useState(!!existingEstimation?.override_value);
   
   const [results, setResults] = useState({
-    morning: existingEstimation?.calculated_daily ? Math.round(existingEstimation.calculated_daily * 0.26) : 0,
-    evening: existingEstimation?.calculated_daily ? Math.round(existingEstimation.calculated_daily * 0.35) : 0,
-    night: existingEstimation?.calculated_daily ? Math.round(existingEstimation.calculated_daily * 0.39) : 0,
+    breakfast: existingEstimation?.calculated_daily ? Math.round(existingEstimation.calculated_daily * 0.20) : 0,
+    lunch: existingEstimation?.calculated_daily ? Math.round(existingEstimation.calculated_daily * 0.30) : 0,
     snacks: 0,
+    dinner: existingEstimation?.calculated_daily ? Math.round(existingEstimation.calculated_daily * 0.50) : 0,
     daily: existingEstimation?.calculated_daily || 0,
     monthly: existingEstimation?.calculated_monthly || 0
   });
@@ -63,10 +63,10 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
     const days = parseInt(overrides.operatingDays ?? operatingDays) || 30;
     
     const slots = [
-      { key: 'morning', enabled: overrides.morningEnabled ?? morningEnabled, density: parseInt(overrides.morningDensity ?? morningDensity) || 0 },
-      { key: 'evening', enabled: overrides.eveningEnabled ?? eveningEnabled, density: parseInt(overrides.eveningDensity ?? eveningDensity) || 0 },
-      { key: 'night', enabled: overrides.nightEnabled ?? nightEnabled, density: parseInt(overrides.nightDensity ?? nightDensity) || 0 },
+      { key: 'breakfast', enabled: overrides.breakfastEnabled ?? breakfastEnabled, density: parseInt(overrides.breakfastDensity ?? breakfastDensity) || 0 },
+      { key: 'lunch', enabled: overrides.lunchEnabled ?? lunchEnabled, density: parseInt(overrides.lunchDensity ?? lunchDensity) || 0 },
       { key: 'snacks', enabled: overrides.snacksEnabled ?? snacksEnabled, density: parseInt(overrides.snacksDensity ?? snacksDensity) || 0 },
+      { key: 'dinner', enabled: overrides.dinnerEnabled ?? dinnerEnabled, density: parseInt(overrides.dinnerDensity ?? dinnerDensity) || 0 },
     ];
     
     let daily = 0;
@@ -84,7 +84,7 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
     });
     
     setResults({ ...slotResults, daily, monthly: daily * days });
-  }, [totalCovers, avgTableTime, adoptionRate, operatingDays, morningEnabled, morningDensity, eveningEnabled, eveningDensity, nightEnabled, nightDensity, snacksEnabled, snacksDensity]);
+  }, [totalCovers, avgTableTime, adoptionRate, operatingDays, breakfastEnabled, breakfastDensity, lunchEnabled, lunchDensity, snacksEnabled, snacksDensity, dinnerEnabled, dinnerDensity]);
 
   // Handle blur - recalculate
   const handleBlur = () => {
@@ -93,18 +93,18 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
 
   // Handle toggle with auto-calculate
   const handleToggle = (mode, value) => {
-    if (mode === 'morning') {
-      setMorningEnabled(value);
-      calculate({ morningEnabled: value });
-    } else if (mode === 'evening') {
-      setEveningEnabled(value);
-      calculate({ eveningEnabled: value });
-    } else if (mode === 'night') {
-      setNightEnabled(value);
-      calculate({ nightEnabled: value });
+    if (mode === 'breakfast') {
+      setBreakfastEnabled(value);
+      calculate({ breakfastEnabled: value });
+    } else if (mode === 'lunch') {
+      setLunchEnabled(value);
+      calculate({ lunchEnabled: value });
     } else if (mode === 'snacks') {
       setSnacksEnabled(value);
       calculate({ snacksEnabled: value });
+    } else if (mode === 'dinner') {
+      setDinnerEnabled(value);
+      calculate({ dinnerEnabled: value });
     }
   };
 
@@ -123,10 +123,10 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
       const payload = {
         total_covers: parseInt(totalCovers) || 0,
         operating_pattern: {
-          morning: { enabled: morningEnabled, density: parseInt(morningDensity) || 0 },
-          evening: { enabled: eveningEnabled, density: parseInt(eveningDensity) || 0 },
-          night: { enabled: nightEnabled, density: parseInt(nightDensity) || 0 },
+          breakfast: { enabled: breakfastEnabled, density: parseInt(breakfastDensity) || 0 },
+          lunch: { enabled: lunchEnabled, density: parseInt(lunchDensity) || 0 },
           snacks: { enabled: snacksEnabled, density: parseInt(snacksDensity) || 0 },
+          dinner: { enabled: dinnerEnabled, density: parseInt(dinnerDensity) || 0 },
         },
         dining_behavior: {
           avg_table_time: parseInt(avgTableTime) || 45,
@@ -216,20 +216,20 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
             <div className="p-4 bg-gradient-to-r from-blue-50 to-primary/10 dark:from-blue-900/20 dark:to-primary/20 rounded-xl">
               <div className="grid grid-cols-6 gap-2 text-center mb-3">
                 <div className="p-2 bg-white/50 dark:bg-black/20 rounded">
-                  <p className="font-bold">{results.morning.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">Morning</p>
+                  <p className="font-bold">{results.breakfast.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Breakfast</p>
                 </div>
                 <div className="p-2 bg-white/50 dark:bg-black/20 rounded">
-                  <p className="font-bold">{results.evening.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">Evening</p>
-                </div>
-                <div className="p-2 bg-white/50 dark:bg-black/20 rounded">
-                  <p className="font-bold">{results.night.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">Night</p>
+                  <p className="font-bold">{results.lunch.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Lunch</p>
                 </div>
                 <div className="p-2 bg-white/50 dark:bg-black/20 rounded">
                   <p className="font-bold">{results.snacks.toLocaleString()}</p>
                   <p className="text-xs text-muted-foreground">Snacks</p>
+                </div>
+                <div className="p-2 bg-white/50 dark:bg-black/20 rounded">
+                  <p className="font-bold">{results.dinner.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Dinner</p>
                 </div>
                 <div className="p-2 bg-white/70 dark:bg-black/30 rounded">
                   <p className="font-bold text-blue-600">{results.daily.toLocaleString()}</p>
@@ -299,60 +299,41 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
                       </tr>
                     </thead>
                     <tbody>
-                      <tr className={`border-t ${morningEnabled ? '' : 'opacity-50'}`}>
+                      <tr className={`border-t ${breakfastEnabled ? '' : 'opacity-50'}`}>
                         <td className="p-2">
                           <div className="flex items-center gap-2">
-                            <Switch checked={morningEnabled} onCheckedChange={(v) => handleToggle('morning', v)} />
+                            <Switch checked={breakfastEnabled} onCheckedChange={(v) => handleToggle('breakfast', v)} />
                             <Sun className="h-4 w-4 text-amber-500" />
-                            <span>Morning</span>
+                            <span>Breakfast</span>
                           </div>
                         </td>
                         <td className="p-2 text-center">
                           <Input 
                             type="number" 
-                            value={morningDensity} 
-                            onChange={(e) => setMorningDensity(e.target.value)} 
+                            value={breakfastDensity} 
+                            onChange={(e) => setBreakfastDensity(e.target.value)} 
                             onBlur={handleBlur}
                             className="w-20 text-center mx-auto h-8" 
-                            disabled={!morningEnabled} 
+                            disabled={!breakfastEnabled} 
                           />
                         </td>
                       </tr>
-                      <tr className={`border-t ${eveningEnabled ? '' : 'opacity-50'}`}>
+                      <tr className={`border-t ${lunchEnabled ? '' : 'opacity-50'}`}>
                         <td className="p-2">
                           <div className="flex items-center gap-2">
-                            <Switch checked={eveningEnabled} onCheckedChange={(v) => handleToggle('evening', v)} />
-                            <Sunset className="h-4 w-4 text-orange-500" />
-                            <span>Evening</span>
+                            <Switch checked={lunchEnabled} onCheckedChange={(v) => handleToggle('lunch', v)} />
+                            <Sun className="h-4 w-4 text-orange-500" />
+                            <span>Lunch</span>
                           </div>
                         </td>
                         <td className="p-2 text-center">
                           <Input 
                             type="number" 
-                            value={eveningDensity} 
-                            onChange={(e) => setEveningDensity(e.target.value)} 
+                            value={lunchDensity} 
+                            onChange={(e) => setLunchDensity(e.target.value)} 
                             onBlur={handleBlur}
                             className="w-20 text-center mx-auto h-8" 
-                            disabled={!eveningEnabled} 
-                          />
-                        </td>
-                      </tr>
-                      <tr className={`border-t ${nightEnabled ? '' : 'opacity-50'}`}>
-                        <td className="p-2">
-                          <div className="flex items-center gap-2">
-                            <Switch checked={nightEnabled} onCheckedChange={(v) => handleToggle('night', v)} />
-                            <Moon className="h-4 w-4 text-indigo-500" />
-                            <span>Night</span>
-                          </div>
-                        </td>
-                        <td className="p-2 text-center">
-                          <Input 
-                            type="number" 
-                            value={nightDensity} 
-                            onChange={(e) => setNightDensity(e.target.value)} 
-                            onBlur={handleBlur}
-                            className="w-20 text-center mx-auto h-8" 
-                            disabled={!nightEnabled} 
+                            disabled={!lunchEnabled} 
                           />
                         </td>
                       </tr>
@@ -372,6 +353,25 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
                             onBlur={handleBlur}
                             className="w-20 text-center mx-auto h-8" 
                             disabled={!snacksEnabled} 
+                          />
+                        </td>
+                      </tr>
+                      <tr className={`border-t ${dinnerEnabled ? '' : 'opacity-50'}`}>
+                        <td className="p-2">
+                          <div className="flex items-center gap-2">
+                            <Switch checked={dinnerEnabled} onCheckedChange={(v) => handleToggle('dinner', v)} />
+                            <Moon className="h-4 w-4 text-indigo-500" />
+                            <span>Dinner</span>
+                          </div>
+                        </td>
+                        <td className="p-2 text-center">
+                          <Input 
+                            type="number" 
+                            value={dinnerDensity} 
+                            onChange={(e) => setDinnerDensity(e.target.value)} 
+                            onBlur={handleBlur}
+                            className="w-20 text-center mx-auto h-8" 
+                            disabled={!dinnerEnabled} 
                           />
                         </td>
                       </tr>
