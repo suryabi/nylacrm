@@ -861,146 +861,7 @@ ${userEmail}`;
           {/* Timeline Summary - Moved to Top */}
           <TimelineSummaryCompact activities={activities} />
 
-          {/* Contact Information */}
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4">Contact Information</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center gap-3">
-                <Building2 className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="text-sm text-muted-foreground">Company</p>
-                  <p className="font-medium">{lead.company}</p>
-                </div>
-              </div>
-              {lead.contact_person && (
-                <div className="flex items-center gap-3">
-                  <User className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Contact Person</p>
-                    <p className="font-medium">{lead.contact_person}</p>
-                  </div>
-                </div>
-              )}
-              {lead.email && (
-                <div className="flex items-center gap-3">
-                  <Mail className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Email</p>
-                    <p className="font-medium">{lead.email}</p>
-                  </div>
-                </div>
-              )}
-              {lead.phone && (
-                <div className="flex items-center gap-3">
-                  <Phone className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Phone</p>
-                    <p className="font-medium">{lead.phone}</p>
-                  </div>
-                </div>
-              )}
-              {assignedUser && (
-                <div className="flex items-center gap-3 md:col-span-2">
-                  <User className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Assigned To</p>
-                    <p className="font-medium">{assignedUser.name} - {assignedUser.territory}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            {/* Logo Uploader */}
-            <div className="mt-6 pt-4 border-t">
-              <LogoUploader
-                entityType="leads"
-                entityId={lead.id}
-                currentLogo={lead.logo_url ? `${process.env.REACT_APP_BACKEND_URL}${lead.logo_url}` : null}
-                onLogoUpdate={() => fetchData()}
-                label="Company Logo"
-              />
-            </div>
-          </Card>
-
-          {/* Location Information */}
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4">Location</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {lead.city && (
-                <div>
-                  <p className="text-sm text-muted-foreground">City</p>
-                  <p className="font-medium">{lead.city}</p>
-                </div>
-              )}
-              {lead.state && (
-                <div>
-                  <p className="text-sm text-muted-foreground">State</p>
-                  <p className="font-medium">{lead.state}</p>
-                </div>
-              )}
-              {lead.country && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Country</p>
-                  <p className="font-medium">{lead.country}</p>
-                </div>
-              )}
-              {lead.region && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Region</p>
-                  <p className="font-medium">{lead.region}</p>
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* Current Brand Details */}
-          {(lead.current_water_brand || lead.current_volume || lead.current_landing_price || lead.current_selling_price) && (
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold mb-4">Current Brand Details</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {lead.current_water_brand && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Current Water Brand</p>
-                    <p className="font-medium">{lead.current_water_brand}</p>
-                  </div>
-                )}
-                {lead.current_volume && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Current Volume</p>
-                    <p className="font-medium">{lead.current_volume}</p>
-                  </div>
-                )}
-                {lead.current_landing_price && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Current Landing Price</p>
-                    <p className="font-medium">₹{lead.current_landing_price}</p>
-                  </div>
-                )}
-                {lead.current_selling_price && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Current Selling Price</p>
-                    <p className="font-medium">₹{lead.current_selling_price}</p>
-                  </div>
-                )}
-              </div>
-            </Card>
-          )}
-
-          {/* Nyla Interest */}
-          {lead.interested_skus && lead.interested_skus.length > 0 && (
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold mb-4">Interested Nyla SKUs</h2>
-              <div className="flex flex-wrap gap-2">
-                {lead.interested_skus.slice(0, 10).map((sku) => (
-                  <Badge key={sku} className="bg-primary/10 text-primary">
-                    {sku}
-                  </Badge>
-                ))}
-              </div>
-            </Card>
-          )}
-
-          {/* Proposed SKU Pricing */}
+          {/* Proposed SKU Pricing - Moved to Top for Importance */}
           <Card className="p-6" data-testid="proposed-sku-pricing-card">
             {/* Prominent Estimated Monthly Opportunity Display */}
             {proposedSkuPricing.length > 0 && getMonthlyBottles() > 0 && (
@@ -1232,6 +1093,145 @@ ${userEmail}`;
               </div>
             )}
           </Card>
+
+          {/* Contact Information */}
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold mb-4">Contact Information</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center gap-3">
+                <Building2 className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Company</p>
+                  <p className="font-medium">{lead.company}</p>
+                </div>
+              </div>
+              {lead.contact_person && (
+                <div className="flex items-center gap-3">
+                  <User className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Contact Person</p>
+                    <p className="font-medium">{lead.contact_person}</p>
+                  </div>
+                </div>
+              )}
+              {lead.email && (
+                <div className="flex items-center gap-3">
+                  <Mail className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Email</p>
+                    <p className="font-medium">{lead.email}</p>
+                  </div>
+                </div>
+              )}
+              {lead.phone && (
+                <div className="flex items-center gap-3">
+                  <Phone className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Phone</p>
+                    <p className="font-medium">{lead.phone}</p>
+                  </div>
+                </div>
+              )}
+              {assignedUser && (
+                <div className="flex items-center gap-3 md:col-span-2">
+                  <User className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Assigned To</p>
+                    <p className="font-medium">{assignedUser.name} - {assignedUser.territory}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Logo Uploader */}
+            <div className="mt-6 pt-4 border-t">
+              <LogoUploader
+                entityType="leads"
+                entityId={lead.id}
+                currentLogo={lead.logo_url ? `${process.env.REACT_APP_BACKEND_URL}${lead.logo_url}` : null}
+                onLogoUpdate={() => fetchData()}
+                label="Company Logo"
+              />
+            </div>
+          </Card>
+
+          {/* Location Information */}
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold mb-4">Location</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {lead.city && (
+                <div>
+                  <p className="text-sm text-muted-foreground">City</p>
+                  <p className="font-medium">{lead.city}</p>
+                </div>
+              )}
+              {lead.state && (
+                <div>
+                  <p className="text-sm text-muted-foreground">State</p>
+                  <p className="font-medium">{lead.state}</p>
+                </div>
+              )}
+              {lead.country && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Country</p>
+                  <p className="font-medium">{lead.country}</p>
+                </div>
+              )}
+              {lead.region && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Region</p>
+                  <p className="font-medium">{lead.region}</p>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Current Brand Details */}
+          {(lead.current_water_brand || lead.current_volume || lead.current_landing_price || lead.current_selling_price) && (
+            <Card className="p-6">
+              <h2 className="text-lg font-semibold mb-4">Current Brand Details</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {lead.current_water_brand && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Current Water Brand</p>
+                    <p className="font-medium">{lead.current_water_brand}</p>
+                  </div>
+                )}
+                {lead.current_volume && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Current Volume</p>
+                    <p className="font-medium">{lead.current_volume}</p>
+                  </div>
+                )}
+                {lead.current_landing_price && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Current Landing Price</p>
+                    <p className="font-medium">₹{lead.current_landing_price}</p>
+                  </div>
+                )}
+                {lead.current_selling_price && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Current Selling Price</p>
+                    <p className="font-medium">₹{lead.current_selling_price}</p>
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+
+          {/* Nyla Interest */}
+          {lead.interested_skus && lead.interested_skus.length > 0 && (
+            <Card className="p-6">
+              <h2 className="text-lg font-semibold mb-4">Interested Nyla SKUs</h2>
+              <div className="flex flex-wrap gap-2">
+                {lead.interested_skus.slice(0, 10).map((sku) => (
+                  <Badge key={sku} className="bg-primary/10 text-primary">
+                    {sku}
+                  </Badge>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {/* Lead Status - Display Only */}
           <Card className="p-6">
