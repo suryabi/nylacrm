@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { Card } from './ui/card';
@@ -10,7 +10,7 @@ import { Badge } from './ui/badge';
 import { 
   Droplets, Calculator, Save, Maximize2,
   Loader2, Edit2, ChevronDown, ChevronUp,
-  Sun, Moon, Sunset, Coffee, Play, Info
+  Sun, Moon, Sunset, Coffee, Info
 } from 'lucide-react';
 import {
   Dialog,
@@ -55,21 +55,18 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
   const [showModal, setShowModal] = useState(false);
   const [showFormula, setShowFormula] = useState(false);
 
-  if (!hasIndustryFeature('lead_bottle_tracking')) {
-    return null;
-  }
-
-  const calculate = () => {
-    const covers = parseInt(totalCovers) || 0;
-    const tableTime = parseInt(avgTableTime) || 45;
-    const adoption = parseInt(adoptionRate) || 0;
-    const days = parseInt(operatingDays) || 30;
+  // Calculate function - called on blur and toggle
+  const calculate = useCallback((overrides = {}) => {
+    const covers = parseInt(overrides.totalCovers ?? totalCovers) || 0;
+    const tableTime = parseInt(overrides.avgTableTime ?? avgTableTime) || 45;
+    const adoption = parseInt(overrides.adoptionRate ?? adoptionRate) || 0;
+    const days = parseInt(overrides.operatingDays ?? operatingDays) || 30;
     
     const slots = [
-      { key: 'morning', enabled: morningEnabled, density: parseInt(morningDensity) || 0 },
-      { key: 'evening', enabled: eveningEnabled, density: parseInt(eveningDensity) || 0 },
-      { key: 'night', enabled: nightEnabled, density: parseInt(nightDensity) || 0 },
-      { key: 'snacks', enabled: snacksEnabled, density: parseInt(snacksDensity) || 0 },
+      { key: 'morning', enabled: overrides.morningEnabled ?? morningEnabled, density: parseInt(overrides.morningDensity ?? morningDensity) || 0 },
+      { key: 'evening', enabled: overrides.eveningEnabled ?? eveningEnabled, density: parseInt(overrides.eveningDensity ?? eveningDensity) || 0 },
+      { key: 'night', enabled: overrides.nightEnabled ?? nightEnabled, density: parseInt(overrides.nightDensity ?? nightDensity) || 0 },
+      { key: 'snacks', enabled: overrides.snacksEnabled ?? snacksEnabled, density: parseInt(overrides.snacksDensity ?? snacksDensity) || 0 },
     ];
     
     let daily = 0;
@@ -77,6 +74,7 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
     
     slots.forEach(slot => {
       if (slot.enabled) {
+        // Formula: Covers × (Occupancy% / 100) × (180 / TableTime) × (Adoption% / 100)
         const bottles = Math.round(covers * (slot.density / 100) * (180 / tableTime) * (adoption / 100));
         slotResults[slot.key] = bottles;
         daily += bottles;
@@ -86,8 +84,33 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
     });
     
     setResults({ ...slotResults, daily, monthly: daily * days });
-    toast.success('Calculation complete');
+  }, [totalCovers, avgTableTime, adoptionRate, operatingDays, morningEnabled, morningDensity, eveningEnabled, eveningDensity, nightEnabled, nightDensity, snacksEnabled, snacksDensity]);
+
+  // Handle blur - recalculate
+  const handleBlur = () => {
+    calculate();
   };
+
+  // Handle toggle with auto-calculate
+  const handleToggle = (mode, value) => {
+    if (mode === 'morning') {
+      setMorningEnabled(value);
+      calculate({ morningEnabled: value });
+    } else if (mode === 'evening') {
+      setEveningEnabled(value);
+      calculate({ eveningEnabled: value });
+    } else if (mode === 'night') {
+      setNightEnabled(value);
+      calculate({ nightEnabled: value });
+    } else if (mode === 'snacks') {
+      setSnacksEnabled(value);
+      calculate({ snacksEnabled: value });
+    }
+  };
+
+  if (!hasIndustryFeature('lead_bottle_tracking')) {
+    return null;
+  }
 
   const finalMonthly = isOverrideMode && overrideValue ? parseInt(overrideValue) || 0 : results.monthly;
   const finalDaily = isOverrideMode && overrideValue 
@@ -245,19 +268,21 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
             {showFormula && (
               <div className="p-3 bg-muted/50 rounded-lg text-sm text-muted-foreground">
                 <p><span className="font-medium text-foreground">Per Mode</span> = Covers × Occupancy% × Table Turnovers × Adoption%</p>
-                <p className="text-xs mt-1">Table Turnovers = 180 mins ÷ Avg Table Time &nbsp;|&nbsp; <span className="font-medium">Daily</span> = Sum of enabled modes &nbsp;|&nbsp; <span className="font-medium">Monthly</span> = Daily × Operating Days</p>
+                <p className="text-xs mt-1">Table Turnovers = 180 mins ÷ Avg Table Time (each mode is assumed to be 3 hours)</p>
+                <p className="text-xs mt-1"><span className="font-medium">Daily</span> = Sum of enabled modes &nbsp;|&nbsp; <span className="font-medium">Monthly</span> = Daily × Operating Days</p>
               </div>
             )}
-
-            {/* Calculate Button */}
-            <Button onClick={calculate} className="w-full h-12 text-lg bg-blue-600 hover:bg-blue-700 text-white" size="lg">
-              <Play className="h-5 w-5 mr-2" /> Calculate Estimation
-            </Button>
 
             {/* Total Covers */}
             <div className="space-y-1">
               <Label>Total Covers (Seating Capacity)</Label>
-              <Input type="number" value={totalCovers} onChange={(e) => setTotalCovers(e.target.value)} className="text-lg font-semibold" />
+              <Input 
+                type="number" 
+                value={totalCovers} 
+                onChange={(e) => setTotalCovers(e.target.value)} 
+                onBlur={handleBlur}
+                className="text-lg font-semibold" 
+              />
             </div>
 
             {/* Two Column Layout: Operating Pattern + Dining Behavior */}
@@ -277,49 +302,77 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
                       <tr className={`border-t ${morningEnabled ? '' : 'opacity-50'}`}>
                         <td className="p-2">
                           <div className="flex items-center gap-2">
-                            <Switch checked={morningEnabled} onCheckedChange={setMorningEnabled} />
+                            <Switch checked={morningEnabled} onCheckedChange={(v) => handleToggle('morning', v)} />
                             <Sun className="h-4 w-4 text-amber-500" />
                             <span>Morning</span>
                           </div>
                         </td>
                         <td className="p-2 text-center">
-                          <Input type="number" value={morningDensity} onChange={(e) => setMorningDensity(e.target.value)} className="w-20 text-center mx-auto h-8" disabled={!morningEnabled} />
+                          <Input 
+                            type="number" 
+                            value={morningDensity} 
+                            onChange={(e) => setMorningDensity(e.target.value)} 
+                            onBlur={handleBlur}
+                            className="w-20 text-center mx-auto h-8" 
+                            disabled={!morningEnabled} 
+                          />
                         </td>
                       </tr>
                       <tr className={`border-t ${eveningEnabled ? '' : 'opacity-50'}`}>
                         <td className="p-2">
                           <div className="flex items-center gap-2">
-                            <Switch checked={eveningEnabled} onCheckedChange={setEveningEnabled} />
+                            <Switch checked={eveningEnabled} onCheckedChange={(v) => handleToggle('evening', v)} />
                             <Sunset className="h-4 w-4 text-orange-500" />
                             <span>Evening</span>
                           </div>
                         </td>
                         <td className="p-2 text-center">
-                          <Input type="number" value={eveningDensity} onChange={(e) => setEveningDensity(e.target.value)} className="w-20 text-center mx-auto h-8" disabled={!eveningEnabled} />
+                          <Input 
+                            type="number" 
+                            value={eveningDensity} 
+                            onChange={(e) => setEveningDensity(e.target.value)} 
+                            onBlur={handleBlur}
+                            className="w-20 text-center mx-auto h-8" 
+                            disabled={!eveningEnabled} 
+                          />
                         </td>
                       </tr>
                       <tr className={`border-t ${nightEnabled ? '' : 'opacity-50'}`}>
                         <td className="p-2">
                           <div className="flex items-center gap-2">
-                            <Switch checked={nightEnabled} onCheckedChange={setNightEnabled} />
+                            <Switch checked={nightEnabled} onCheckedChange={(v) => handleToggle('night', v)} />
                             <Moon className="h-4 w-4 text-indigo-500" />
                             <span>Night</span>
                           </div>
                         </td>
                         <td className="p-2 text-center">
-                          <Input type="number" value={nightDensity} onChange={(e) => setNightDensity(e.target.value)} className="w-20 text-center mx-auto h-8" disabled={!nightEnabled} />
+                          <Input 
+                            type="number" 
+                            value={nightDensity} 
+                            onChange={(e) => setNightDensity(e.target.value)} 
+                            onBlur={handleBlur}
+                            className="w-20 text-center mx-auto h-8" 
+                            disabled={!nightEnabled} 
+                          />
                         </td>
                       </tr>
                       <tr className={`border-t ${snacksEnabled ? '' : 'opacity-50'}`}>
                         <td className="p-2">
                           <div className="flex items-center gap-2">
-                            <Switch checked={snacksEnabled} onCheckedChange={setSnacksEnabled} />
+                            <Switch checked={snacksEnabled} onCheckedChange={(v) => handleToggle('snacks', v)} />
                             <Coffee className="h-4 w-4 text-amber-700" />
                             <span>Snacks</span>
                           </div>
                         </td>
                         <td className="p-2 text-center">
-                          <Input type="number" value={snacksDensity} onChange={(e) => setSnacksDensity(e.target.value)} className="w-20 text-center mx-auto h-8" disabled={!snacksEnabled} />
+                          <Input 
+                            type="number" 
+                            value={snacksDensity} 
+                            onChange={(e) => setSnacksDensity(e.target.value)} 
+                            onBlur={handleBlur}
+                            className="w-20 text-center mx-auto h-8" 
+                            disabled={!snacksEnabled} 
+                          />
                         </td>
                       </tr>
                     </tbody>
@@ -333,23 +386,43 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
                 <div className="border rounded-lg p-4 space-y-4">
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Avg Table Time (min)</Label>
-                    <Input type="number" value={avgTableTime} onChange={(e) => setAvgTableTime(e.target.value)} />
+                    <Input 
+                      type="number" 
+                      value={avgTableTime} 
+                      onChange={(e) => setAvgTableTime(e.target.value)} 
+                      onBlur={handleBlur}
+                    />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">% of guests opting bottled water</Label>
-                    <Input type="number" value={adoptionRate} onChange={(e) => setAdoptionRate(e.target.value)} />
+                    <Input 
+                      type="number" 
+                      value={adoptionRate} 
+                      onChange={(e) => setAdoptionRate(e.target.value)} 
+                      onBlur={handleBlur}
+                    />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Operating Days / Month</Label>
-                    <Input type="number" value={operatingDays} onChange={(e) => setOperatingDays(e.target.value)} />
+                    <Input 
+                      type="number" 
+                      value={operatingDays} 
+                      onChange={(e) => setOperatingDays(e.target.value)} 
+                      onBlur={handleBlur}
+                    />
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Save */}
-            <Button onClick={handleSave} disabled={saving} className="w-full h-10">
-              {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+            {/* Save - Large blue button */}
+            <Button 
+              onClick={handleSave} 
+              disabled={saving} 
+              className="w-full h-12 text-lg bg-blue-600 hover:bg-blue-700 text-white"
+              size="lg"
+            >
+              {saving ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : <Save className="h-5 w-5 mr-2" />}
               Save Estimation
             </Button>
           </div>
