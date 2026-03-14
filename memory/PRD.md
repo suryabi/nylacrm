@@ -3,9 +3,30 @@
 ## Original Problem Statement
 Build a comprehensive, mobile-ready Sales CRM application with multi-tenancy support.
 
-## Current Session Updates (Mar 13, 2026)
+## Current Session Updates (Mar 14, 2026)
 
-### Industry/Vertical Tags System (NEW)
+### Proposed SKU Pricing Enhancement (NEW)
+- **Feature**: Enhanced SKU Pricing section on Lead Detail page with revenue forecasting
+- **Location**: Lead Detail page, left column, "Proposed SKU Pricing" card
+- **New Columns Added**:
+  - `% Dist.` - Percentage distribution for each SKU (total should = 100%)
+  - `Est. Qty` - Auto-calculated (monthly bottles × percentage / 100)
+  - `Revenue` - Auto-calculated (Est. Qty × Price/Unit)
+- **Estimated Monthly Opportunity Display**:
+  - Prominent green gradient card at top showing total revenue
+  - Shows "Based on X bottles/month" from Opportunity Estimation
+  - Shows "X% allocated" with warning if > 100%
+- **Total Row**: Aggregates percentages, quantities, and revenue
+- **Validation**: Warning shown when no Opportunity Estimation exists
+
+### Files Modified (SKU Pricing Enhancement)
+- `/app/frontend/src/pages/LeadDetail.js` - Added percentage field, calculation functions, enhanced table UI
+
+---
+
+## Previous Session Updates (Mar 13, 2026)
+
+### Industry/Vertical Tags System
 - **Tenant Industry Profiles** - Each tenant can be tagged with an industry type
 - **Industry Types**: `water_brand` (Water/Beverage Brand) and `generic` (Standard CRM)
 - **Industry-Specific Features** - Features are gated by industry type:
@@ -177,10 +198,10 @@ Build a comprehensive, mobile-ready Sales CRM application with multi-tenancy sup
 - [x] Pull code from GitHub ✅
 - [x] Implement AI Chat Assistant ✅
 - [x] Lead Scoring Model Admin Module ✅
+- [x] SKU Pricing with Revenue Forecasting ✅
 - [ ] Deploy to production
 
 ### P1 - High
-- [ ] Redesign Lead Details page (from previous session request)
 - [ ] Cleanup temporary debug endpoints from server.py
 - [ ] Run legacy roles/designations migration in production
 - [ ] Verify branding applies correctly after deploy
