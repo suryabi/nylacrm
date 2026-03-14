@@ -193,10 +193,12 @@ export const TenantConfigProvider = ({ children }) => {
       const configIndustry = config.industry || {};
       
       // Merge industry data from both sources
+      // Priority: config.industry (from tenant config) > industryResponse (from industry endpoint)
+      // because the industry endpoint might return 'generic' as default
       const mergedIndustry = {
-        industry_type: industryData.industry_type || industryData.industry || configIndustry.industry_type || 'generic',
-        industry_features: industryData.industry_features || industryData.enabled_features || [],
-        industry_config: industryData.industry_config || configIndustry.industry_config || {}
+        industry_type: configIndustry.industry_type || industryData.industry_type || industryData.industry || 'generic',
+        industry_features: industryData.industry_features || industryData.enabled_features || configIndustry.industry_features || [],
+        industry_config: configIndustry.industry_config || industryData.industry_config || {}
       };
       
       // If enabled_features is in industry_config, also add it to industry_features for backwards compat
@@ -205,6 +207,8 @@ export const TenantConfigProvider = ({ children }) => {
           ...new Set([...mergedIndustry.industry_features, ...mergedIndustry.industry_config.enabled_features])
         ];
       }
+      
+      console.log('🏭 Industry Config Loaded:', mergedIndustry);
       
       setIndustry(mergedIndustry);
       

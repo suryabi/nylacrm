@@ -59,7 +59,14 @@ export default function LeadDetail() {
   const { user } = useAuth();
   const { statuses, getStatusLabel, getStatusColor } = useLeadStatuses();
   const { updateCurrentLabel } = useNavigation();
-  const { hasIndustryFeature } = useTenantConfig();
+  const { hasIndustryFeature, tenantConfig, industry } = useTenantConfig();
+  
+  // Debug logging for Opportunity Estimation visibility
+  console.log('🔍 LeadDetail Debug:', {
+    hasIndustryFeature: typeof hasIndustryFeature,
+    industryType: tenantConfig?.industry?.industry_type || industry?.industry_type,
+    checkResult: hasIndustryFeature('lead_bottle_tracking')
+  });
   const [lead, setLead] = useState(null);
   const [activities, setActivities] = useState([]);
   const [comments, setComments] = useState([]);
