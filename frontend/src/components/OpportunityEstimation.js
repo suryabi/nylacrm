@@ -182,7 +182,7 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
             </div>
           </div>
 
-          {isOverrideMode && <Badge variant="outline" className="text-xs"><Edit2 className="h-3 w-3 mr-1" /> Manual Override</Badge>}
+          {isOverrideMode && <Badge variant="outline" className="text-xs"><Edit2 className="h-3 w-3 mr-1" /> Manual Entry</Badge>}
 
           {expanded && (
             <div className="pt-3 border-t space-y-3">
@@ -241,11 +241,11 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
                 </div>
               </div>
 
-              {/* Override Row */}
+              {/* Manual Entry Row */}
               <div className="flex items-center gap-3 pt-2 border-t border-white/30">
                 <div className="flex items-center gap-2">
                   <Switch checked={isOverrideMode} onCheckedChange={(c) => { setIsOverrideMode(c); if (!c) setOverrideValue(''); }} />
-                  <span className="text-sm"><Edit2 className="h-3 w-3 inline mr-1" />Override</span>
+                  <span className="text-sm"><Edit2 className="h-3 w-3 inline mr-1" />Manually enter volume</span>
                 </div>
                 {isOverrideMode && (
                   <>
