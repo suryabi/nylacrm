@@ -672,7 +672,7 @@ ${userEmail}`;
 
   // SKU Pricing handlers
   const handleAddProposedSKU = () => {
-    setProposedSkuPricing([...proposedSkuPricing, { sku: '', price_per_unit: 0, return_bottle_credit: 0 }]);
+    setProposedSkuPricing([...proposedSkuPricing, { sku: '', percentage: 0, price_per_unit: 0, return_bottle_credit: 0 }]);
     setIsEditingPricing(true);
   };
 
@@ -698,6 +698,32 @@ ${userEmail}`;
     } finally {
       setSavingPricing(false);
     }
+  };
+
+  // Calculate SKU quantities and revenue based on opportunity estimation
+  const getMonthlyBottles = () => {
+    const estimation = lead?.opportunity_estimation;
+    if (!estimation) return 0;
+    return estimation.final_monthly || estimation.calculated_monthly || 0;
+  };
+
+  const calculateSkuMetrics = (sku) => {
+    const monthlyBottles = getMonthlyBottles();
+    const percentage = sku.percentage || 0;
+    const estimatedQty = Math.round((monthlyBottles * percentage) / 100);
+    const revenue = estimatedQty * (sku.price_per_unit || 0);
+    return { estimatedQty, revenue };
+  };
+
+  const getTotalPercentage = () => {
+    return proposedSkuPricing.reduce((sum, sku) => sum + (sku.percentage || 0), 0);
+  };
+
+  const getEstimatedMonthlyOpportunity = () => {
+    return proposedSkuPricing.reduce((sum, sku) => {
+      const { revenue } = calculateSkuMetrics(sku);
+      return sum + revenue;
+    }, 0);
   };
 
   const handleCancelPricingEdit = () => {
@@ -976,6 +1002,31 @@ ${userEmail}`;
 
           {/* Proposed SKU Pricing */}
           <Card className="p-6" data-testid="proposed-sku-pricing-card">
+            {/* Prominent Estimated Monthly Opportunity Display */}
+            {proposedSkuPricing.length > 0 && getMonthlyBottles() > 0 && (
+              <div className="mb-6 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Estimated Monthly Opportunity</p>
+                    <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400" data-testid="estimated-monthly-opportunity">
+                      ₹{getEstimatedMonthlyOpportunity().toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">Based on</p>
+                    <p className="text-lg font-semibold text-emerald-600">{getMonthlyBottles().toLocaleString()} bottles/month</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {getTotalPercentage()}% allocated
+                      {getTotalPercentage() > 100 && (
+                        <span className="text-red-500 ml-1">(exceeds 100%!)</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Header */}
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <Package className="h-5 w-5" />
@@ -1027,6 +1078,16 @@ ${userEmail}`;
                 )}
               </div>
             </div>
+
+            {/* No monthly bottles warning */}
+            {proposedSkuPricing.length > 0 && getMonthlyBottles() === 0 && (
+              <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                <p className="text-sm text-amber-700 dark:text-amber-300 flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4" />
+                  Complete the Opportunity Estimation to see revenue calculations
+                </p>
+              </div>
+            )}
             
             {proposedSkuPricing.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
@@ -1049,77 +1110,124 @@ ${userEmail}`;
                   <thead className="bg-muted/50">
                     <tr>
                       <th className="text-left px-3 py-2 text-sm font-medium">SKU</th>
-                      <th className="text-left px-3 py-2 text-sm font-medium">Price/Unit (₹)</th>
-                      <th className="text-left px-3 py-2 text-sm font-medium">Bottle Credit (₹)</th>
+                      <th className="text-center px-3 py-2 text-sm font-medium">% Dist.</th>
+                      <th className="text-right px-3 py-2 text-sm font-medium">Est. Qty</th>
+                      <th className="text-right px-3 py-2 text-sm font-medium">Price/Unit</th>
+                      <th className="text-right px-3 py-2 text-sm font-medium">Revenue</th>
+                      <th className="text-right px-3 py-2 text-sm font-medium">Bottle Credit</th>
                       {isEditingPricing && <th className="w-10"></th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {proposedSkuPricing.map((item, index) => (
-                      <tr key={index}>
-                        <td className="px-3 py-2">
-                          {isEditingPricing ? (
-                            <Select
-                              value={item.sku}
-                              onValueChange={(val) => handleProposedSKUChange(index, 'sku', val)}
-                            >
-                              <SelectTrigger className="w-[200px]" data-testid={`proposed-sku-select-${index}`}>
-                                <SelectValue placeholder="Select SKU" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {masterSkus.map((skuItem) => (
-                                  <SelectItem key={skuItem.sku} value={skuItem.sku}>
-                                    {skuItem.sku}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <span className="font-medium">{item.sku}</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2">
-                          {isEditingPricing ? (
-                            <Input
-                              type="number"
-                              value={item.price_per_unit}
-                              onChange={(e) => handleProposedSKUChange(index, 'price_per_unit', e.target.value)}
-                              className="w-24"
-                              data-testid={`proposed-price-input-${index}`}
-                            />
-                          ) : (
-                            <span>₹{item.price_per_unit?.toLocaleString()}</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2">
-                          {isEditingPricing ? (
-                            <Input
-                              type="number"
-                              value={item.return_bottle_credit}
-                              onChange={(e) => handleProposedSKUChange(index, 'return_bottle_credit', e.target.value)}
-                              className="w-24"
-                              data-testid={`proposed-credit-input-${index}`}
-                            />
-                          ) : (
-                            <span>₹{item.return_bottle_credit?.toLocaleString()}</span>
-                          )}
-                        </td>
-                        {isEditingPricing && (
+                    {proposedSkuPricing.map((item, index) => {
+                      const { estimatedQty, revenue } = calculateSkuMetrics(item);
+                      return (
+                        <tr key={index}>
                           <td className="px-3 py-2">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => handleRemoveProposedSKU(index)}
-                              className="h-8 w-8 text-red-500 hover:text-red-700"
-                              data-testid={`remove-proposed-sku-${index}`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {isEditingPricing ? (
+                              <Select
+                                value={item.sku}
+                                onValueChange={(val) => handleProposedSKUChange(index, 'sku', val)}
+                              >
+                                <SelectTrigger className="w-[160px]" data-testid={`proposed-sku-select-${index}`}>
+                                  <SelectValue placeholder="Select SKU" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {masterSkus.map((skuItem) => (
+                                    <SelectItem key={skuItem.sku} value={skuItem.sku}>
+                                      {skuItem.sku}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <span className="font-medium">{item.sku}</span>
+                            )}
                           </td>
-                        )}
-                      </tr>
-                    ))}
+                          <td className="px-3 py-2 text-center">
+                            {isEditingPricing ? (
+                              <Input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={item.percentage || 0}
+                                onChange={(e) => handleProposedSKUChange(index, 'percentage', e.target.value)}
+                                className="w-20 text-center"
+                                data-testid={`proposed-percentage-input-${index}`}
+                              />
+                            ) : (
+                              <span>{item.percentage || 0}%</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <span className="font-medium text-blue-600">{estimatedQty.toLocaleString()}</span>
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {isEditingPricing ? (
+                              <Input
+                                type="number"
+                                value={item.price_per_unit}
+                                onChange={(e) => handleProposedSKUChange(index, 'price_per_unit', e.target.value)}
+                                className="w-24 text-right"
+                                data-testid={`proposed-price-input-${index}`}
+                              />
+                            ) : (
+                              <span>₹{item.price_per_unit?.toLocaleString()}</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <span className="font-semibold text-emerald-600">₹{revenue.toLocaleString('en-IN')}</span>
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {isEditingPricing ? (
+                              <Input
+                                type="number"
+                                value={item.return_bottle_credit}
+                                onChange={(e) => handleProposedSKUChange(index, 'return_bottle_credit', e.target.value)}
+                                className="w-20 text-right"
+                                data-testid={`proposed-credit-input-${index}`}
+                              />
+                            ) : (
+                              <span>₹{item.return_bottle_credit?.toLocaleString()}</span>
+                            )}
+                          </td>
+                          {isEditingPricing && (
+                            <td className="px-3 py-2">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => handleRemoveProposedSKU(index)}
+                                className="h-8 w-8 text-red-500 hover:text-red-700"
+                                data-testid={`remove-proposed-sku-${index}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
                   </tbody>
+                  {/* Footer with totals */}
+                  <tfoot className="bg-muted/30 border-t-2">
+                    <tr>
+                      <td className="px-3 py-2 font-semibold">Total</td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`font-semibold ${getTotalPercentage() > 100 ? 'text-red-500' : getTotalPercentage() === 100 ? 'text-green-600' : ''}`}>
+                          {getTotalPercentage()}%
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold text-blue-600">
+                        {proposedSkuPricing.reduce((sum, sku) => sum + calculateSkuMetrics(sku).estimatedQty, 0).toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2"></td>
+                      <td className="px-3 py-2 text-right font-bold text-emerald-600">
+                        ₹{getEstimatedMonthlyOpportunity().toLocaleString('en-IN')}
+                      </td>
+                      <td className="px-3 py-2"></td>
+                      {isEditingPricing && <td></td>}
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             )}

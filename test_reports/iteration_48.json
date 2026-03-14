@@ -1,0 +1,93 @@
+{
+  "summary": "Tested the Proposed SKU Pricing section modifications on the Lead Detail page. All 10 features are working correctly including percentage-based volume distribution, auto-calculated quantities and revenue, total row validation, and the Estimated Monthly Opportunity display.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/.screenshots/11_sku_pricing_section.png",
+    "/app/.screenshots/15_calculated_revenue.png",
+    "/app/.screenshots/16_percentage_exceeds_warning.png",
+    "/app/.screenshots/18_after_save.png",
+    "/app/.screenshots/20_after_add_first_sku.png"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only test)",
+    "frontend": "100% (10/10 features working)"
+  },
+  "test_credentials": {
+    "admin_user": "admin@nylaairwater.earth / admin123",
+    "tested_lead": "Taj Sarees (ID: 2a3ca2de-8e26-406a-8be0-d9a28adfc0fb) with 75,000 bottles/month"
+  },
+  "seed_data_creation": "Used existing Taj Sarees lead with opportunity estimation of 75,000 bottles/month",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "SKU Pricing feature fully tested on Lead Detail page. Key data-testid selectors: proposed-sku-pricing-card, estimated-monthly-opportunity, edit-pricing-btn, save-pricing-btn, cancel-pricing-btn, add-proposed-sku-btn, proposed-percentage-input-{index}, proposed-price-input-{index}, remove-proposed-sku-{index}. Calculations verified: 60% allocation of 75,000 bottles = 45,000 units × ₹58 = ₹26,10,000 for 330ml SKU; 40% × 75,000 = 30,000 × ₹94 = ₹28,20,000 for 660ml SKU; Total = ₹54,30,000.",
+  "features_tested": {
+    "proposed_sku_pricing_card": {
+      "status": "PASS",
+      "details": "Card displays correctly on Lead Detail page with proper layout and data-testid attribute"
+    },
+    "estimated_monthly_opportunity_display": {
+      "status": "PASS",
+      "details": "Shows prominently at top in green gradient background. Value: ₹54,30,000 with '75,000 bottles/month' and '100% allocated' indicators"
+    },
+    "percentage_distribution_input": {
+      "status": "PASS",
+      "details": "% Dist. input column works correctly in edit mode. Input fields accept numeric values with data-testid='proposed-percentage-input-{index}'"
+    },
+    "estimated_qty_auto_calculation": {
+      "status": "PASS",
+      "details": "Est. Qty auto-calculates as (monthly bottles × percentage / 100). Example: 75,000 × 60% = 45,000"
+    },
+    "revenue_auto_calculation": {
+      "status": "PASS",
+      "details": "Revenue auto-calculates as (Est. Qty × Price/Unit). Example: 45,000 × ₹58 = ₹26,10,000"
+    },
+    "total_row_aggregation": {
+      "status": "PASS",
+      "details": "Total row shows sum of percentages, quantities, and revenue. Total: 100%, 75,000, ₹54,30,000"
+    },
+    "percentage_exceeds_100_warning": {
+      "status": "PASS",
+      "details": "When total percentage > 100%, shows '(exceeds 100%!)' in red text. Total percentage shows in red color class"
+    },
+    "no_opportunity_estimation_warning": {
+      "status": "PASS",
+      "details": "When lead has no opportunity estimation (0 bottles), shows amber warning: 'Complete the Opportunity Estimation to see revenue calculations'"
+    },
+    "save_functionality": {
+      "status": "PASS",
+      "details": "Save button persists SKU pricing including percentage field. Toast 'Proposed SKU pricing saved' appears on success"
+    },
+    "add_remove_sku_buttons": {
+      "status": "PASS",
+      "details": "Add SKU button adds new row with 'Select SKU' dropdown. Remove SKU button (trash icon) removes the row. Both work correctly"
+    }
+  },
+  "calculation_verification": {
+    "monthly_bottles": 75000,
+    "sku_1_330ml": {
+      "percentage": 60,
+      "estimated_qty": 45000,
+      "price_per_unit": 58,
+      "revenue": 2610000
+    },
+    "sku_2_660ml": {
+      "percentage": 40,
+      "estimated_qty": 30000,
+      "price_per_unit": 94,
+      "revenue": 2820000
+    },
+    "total_revenue": 5430000,
+    "all_calculations_correct": true
+  }
+}
