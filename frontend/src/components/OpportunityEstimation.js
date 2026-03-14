@@ -22,18 +22,11 @@ import { useTenantConfig } from '../context/TenantConfigContext';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-const TIME_SLOTS = [
-  { key: 'morning', label: 'Morning', icon: Sun, color: 'text-amber-500', defaultHours: 4 },
-  { key: 'evening', label: 'Evening', icon: Sunset, color: 'text-orange-500', defaultHours: 4 },
-  { key: 'night', label: 'Night', icon: Moon, color: 'text-indigo-500', defaultHours: 4 },
-  { key: 'snacks', label: 'Snacks', icon: Coffee, color: 'text-brown-500', defaultHours: 3 },
-];
-
 export default function OpportunityEstimation({ leadId, leadName, existingEstimation, onSave }) {
   const { hasIndustryFeature, getIndustryConfig } = useTenantConfig();
   const defaultBottlesPerCover = getIndustryConfig('default_bottles_per_cover', 2);
   
-  // All form values stored as STRINGS - no conversion on keystroke
+  // All form values stored as STRINGS
   const [totalCovers, setTotalCovers] = useState(String(existingEstimation?.total_covers ?? 100));
   const [morningEnabled, setMorningEnabled] = useState(existingEstimation?.operating_pattern?.morning?.enabled ?? true);
   const [morningDensity, setMorningDensity] = useState(String(existingEstimation?.operating_pattern?.morning?.density ?? 60));
@@ -49,22 +42,25 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
   const [overrideValue, setOverrideValue] = useState(String(existingEstimation?.override_value ?? ''));
   const [isOverrideMode, setIsOverrideMode] = useState(!!existingEstimation?.override_value);
   
-  // Calculated results - only updated on button click
+  // Calculated results
   const [results, setResults] = useState({
-    morning: 0, evening: 0, night: 0, snacks: 0, daily: 0, monthly: 0
+    morning: existingEstimation?.calculated_daily ? Math.round(existingEstimation.calculated_daily * 0.26) : 0,
+    evening: existingEstimation?.calculated_daily ? Math.round(existingEstimation.calculated_daily * 0.35) : 0,
+    night: existingEstimation?.calculated_daily ? Math.round(existingEstimation.calculated_daily * 0.39) : 0,
+    snacks: 0,
+    daily: existingEstimation?.calculated_daily || 0,
+    monthly: existingEstimation?.calculated_monthly || 0
   });
   
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [calculated, setCalculated] = useState(!!existingEstimation);
 
-  // Check feature availability
   if (!hasIndustryFeature('lead_bottle_tracking')) {
     return null;
   }
 
-  // Calculate - only called on button click
+  // Calculate
   const calculate = () => {
     const covers = parseInt(totalCovers) || 0;
     const tableTime = parseInt(avgTableTime) || 45;
@@ -94,26 +90,18 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
       }
     });
     
-    setResults({
-      ...slotResults,
-      daily,
-      monthly: daily * days
-    });
-    setCalculated(true);
+    setResults({ ...slotResults, daily, monthly: daily * days });
     toast.success('Calculation complete');
   };
 
-  // Get final values
   const finalMonthly = isOverrideMode && overrideValue ? parseInt(overrideValue) || 0 : results.monthly;
   const finalDaily = isOverrideMode && overrideValue 
     ? Math.round((parseInt(overrideValue) || 0) / (parseInt(operatingDays) || 1))
     : results.daily;
 
-  // Save to backend
   const handleSave = async () => {
     try {
       setSaving(true);
-      
       const payload = {
         total_covers: parseInt(totalCovers) || 0,
         operating_pattern: {
@@ -206,7 +194,73 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
           </DialogHeader>
           
           <div className="space-y-6">
-            {/* Total Covers - Simple input */}
+            
+            {/* RESULTS SECTION - AT THE TOP */}
+            <div className="p-4 bg-gradient-to-r from-blue-50 to-primary/10 dark:from-blue-900/20 dark:to-primary/20 rounded-xl space-y-4">
+              <div className="grid grid-cols-4 gap-2 text-center">
+                <div className="p-2 bg-white/50 dark:bg-black/20 rounded">
+                  <p className="font-bold text-lg">{results.morning.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Morning</p>
+                </div>
+                <div className="p-2 bg-white/50 dark:bg-black/20 rounded">
+                  <p className="font-bold text-lg">{results.evening.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Evening</p>
+                </div>
+                <div className="p-2 bg-white/50 dark:bg-black/20 rounded">
+                  <p className="font-bold text-lg">{results.night.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Night</p>
+                </div>
+                <div className="p-2 bg-white/50 dark:bg-black/20 rounded">
+                  <p className="font-bold text-lg">{results.snacks.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Snacks</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center p-4 bg-white/70 dark:bg-black/30 rounded-lg">
+                  <p className="text-sm text-muted-foreground mb-1">Daily Water Opportunity</p>
+                  <p className="text-4xl font-bold text-blue-600">{results.daily.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Bottles</p>
+                </div>
+                <div className="text-center p-4 bg-white/70 dark:bg-black/30 rounded-lg">
+                  <p className="text-sm text-muted-foreground mb-1">Monthly Water Opportunity</p>
+                  <p className="text-4xl font-bold text-primary">{results.monthly.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Bottles</p>
+                </div>
+              </div>
+
+              {/* Override */}
+              <div className="pt-3 border-t border-white/30">
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-sm flex items-center gap-2"><Edit2 className="h-4 w-4" /> Override with known value</Label>
+                  <Switch checked={isOverrideMode} onCheckedChange={(c) => { setIsOverrideMode(c); if (!c) setOverrideValue(''); }} />
+                </div>
+                {isOverrideMode && (
+                  <div className="flex items-center gap-2">
+                    <Input type="number" placeholder="Monthly bottles" value={overrideValue} onChange={(e) => setOverrideValue(e.target.value)} className="text-lg" />
+                    <span className="text-sm text-muted-foreground">bottles/month</span>
+                  </div>
+                )}
+                {isOverrideMode && overrideValue && (
+                  <div className="mt-3 text-center p-3 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                    <p className="text-sm text-amber-700 dark:text-amber-300">Final Value (Override)</p>
+                    <p className="text-2xl font-bold text-amber-600">{(parseInt(overrideValue) || 0).toLocaleString()} bottles/month</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* CALCULATE BUTTON - Prominent */}
+            <Button 
+              onClick={calculate} 
+              className="w-full h-14 text-lg bg-blue-600 hover:bg-blue-700 text-white"
+              size="lg"
+            >
+              <Play className="h-5 w-5 mr-2" /> 
+              Calculate Estimation
+            </Button>
+
+            {/* Total Covers */}
             <div className="space-y-2">
               <Label>Total Covers (Seating Capacity)</Label>
               <Input
@@ -221,7 +275,7 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
             <div className="space-y-3">
               <Label>Operating Pattern</Label>
               
-              <div className="flex items-center gap-3 p-3 rounded-lg border bg-secondary/50">
+              <div className={`flex items-center gap-3 p-3 rounded-lg border ${morningEnabled ? 'bg-secondary/50' : 'bg-muted/30'}`}>
                 <Switch checked={morningEnabled} onCheckedChange={setMorningEnabled} />
                 <Sun className="h-5 w-5 text-amber-500" />
                 <span className="font-medium flex-1">Morning</span>
@@ -229,7 +283,7 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
                 <span className="text-sm text-muted-foreground">%</span>
               </div>
               
-              <div className="flex items-center gap-3 p-3 rounded-lg border bg-secondary/50">
+              <div className={`flex items-center gap-3 p-3 rounded-lg border ${eveningEnabled ? 'bg-secondary/50' : 'bg-muted/30'}`}>
                 <Switch checked={eveningEnabled} onCheckedChange={setEveningEnabled} />
                 <Sunset className="h-5 w-5 text-orange-500" />
                 <span className="font-medium flex-1">Evening</span>
@@ -237,7 +291,7 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
                 <span className="text-sm text-muted-foreground">%</span>
               </div>
               
-              <div className="flex items-center gap-3 p-3 rounded-lg border bg-secondary/50">
+              <div className={`flex items-center gap-3 p-3 rounded-lg border ${nightEnabled ? 'bg-secondary/50' : 'bg-muted/30'}`}>
                 <Switch checked={nightEnabled} onCheckedChange={setNightEnabled} />
                 <Moon className="h-5 w-5 text-indigo-500" />
                 <span className="font-medium flex-1">Night</span>
@@ -273,59 +327,8 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
               </div>
             </div>
 
-            {/* Calculate Button */}
-            <Button onClick={calculate} className="w-full" variant="outline">
-              <Play className="h-4 w-4 mr-2" /> Calculate Estimation
-            </Button>
-
-            {/* Results */}
-            {calculated && (
-              <div className="p-4 bg-gradient-to-r from-blue-50 to-primary/10 dark:from-blue-900/20 dark:to-primary/20 rounded-xl space-y-4">
-                <div className="grid grid-cols-4 gap-2 text-center">
-                  <div className="p-2 bg-white/50 dark:bg-black/20 rounded">
-                    <p className="font-bold">{results.morning}</p>
-                    <p className="text-xs text-muted-foreground">Morning</p>
-                  </div>
-                  <div className="p-2 bg-white/50 dark:bg-black/20 rounded">
-                    <p className="font-bold">{results.evening}</p>
-                    <p className="text-xs text-muted-foreground">Evening</p>
-                  </div>
-                  <div className="p-2 bg-white/50 dark:bg-black/20 rounded">
-                    <p className="font-bold">{results.night}</p>
-                    <p className="text-xs text-muted-foreground">Night</p>
-                  </div>
-                  <div className="p-2 bg-white/50 dark:bg-black/20 rounded">
-                    <p className="font-bold">{results.snacks}</p>
-                    <p className="text-xs text-muted-foreground">Snacks</p>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center p-4 bg-white/50 dark:bg-black/20 rounded-lg">
-                    <p className="text-sm text-muted-foreground">Daily</p>
-                    <p className="text-3xl font-bold text-blue-600">{results.daily.toLocaleString()}</p>
-                  </div>
-                  <div className="text-center p-4 bg-white/50 dark:bg-black/20 rounded-lg">
-                    <p className="text-sm text-muted-foreground">Monthly</p>
-                    <p className="text-3xl font-bold text-primary">{results.monthly.toLocaleString()}</p>
-                  </div>
-                </div>
-
-                {/* Override */}
-                <div className="pt-4 border-t border-white/20">
-                  <div className="flex items-center justify-between mb-2">
-                    <Label className="text-sm flex items-center gap-2"><Edit2 className="h-4 w-4" /> Override</Label>
-                    <Switch checked={isOverrideMode} onCheckedChange={(c) => { setIsOverrideMode(c); if (!c) setOverrideValue(''); }} />
-                  </div>
-                  {isOverrideMode && (
-                    <Input type="number" placeholder="Monthly bottles" value={overrideValue} onChange={(e) => setOverrideValue(e.target.value)} className="text-lg" />
-                  )}
-                </div>
-              </div>
-            )}
-
             {/* Save */}
-            <Button onClick={handleSave} disabled={saving} className="w-full">
+            <Button onClick={handleSave} disabled={saving} className="w-full h-12">
               {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
               Save Estimation
             </Button>
