@@ -174,12 +174,15 @@ export const TenantConfigProvider = ({ children }) => {
     
     try {
       // Fetch tenant config and industry profile in parallel
+      // Use both Authorization header AND credentials for cookie-based auth
       const [configResponse, industryResponse] = await Promise.all([
         axios.get(`${API_URL}/api/tenants/current/config`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          withCredentials: true
         }),
         axios.get(`${API_URL}/api/tenants/current/industry`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          withCredentials: true
         }).catch(() => ({ data: { industry_type: 'generic', industry_features: [], industry_config: {} } }))
       ]);
       
@@ -241,7 +244,8 @@ export const TenantConfigProvider = ({ children }) => {
         setRolePermissions({});
       }
     } catch (error) {
-      console.error('Failed to fetch tenant config:', error);
+      console.error('❌ Failed to fetch tenant config:', error);
+      console.error('❌ Error details:', error.response?.data || error.message);
       // Set defaults on error
       setModules({});
       setBranding(DEFAULT_BRANDING);
