@@ -59,7 +59,7 @@ export default function LeadDetail() {
   const { user } = useAuth();
   const { statuses, getStatusLabel, getStatusColor } = useLeadStatuses();
   const { updateCurrentLabel } = useNavigation();
-  const { hasIndustryFeature, tenantConfig, industry } = useTenantConfig();
+  const { hasIndustryFeature, tenantConfig, industry, loading: configLoading } = useTenantConfig();
   
   // Check if Opportunity Estimation should be shown
   // Check ALL possible locations for industry_type
@@ -75,10 +75,12 @@ export default function LeadDetail() {
   
   // Debug logging
   console.log('🔍 LeadDetail Opportunity Check:', {
+    configLoading,
     industryType,
     isWaterBrand,
     hasBottleFeature,
     showOpportunityEstimation,
+    tenantConfigExists: !!tenantConfig,
     tenantConfigIndustry: tenantConfig?.industry,
     industryState: industry
   });
