@@ -1,14 +1,14 @@
 """
-Lead Scoring Model Routes - Tenant-specific account scoring configuration
-Each tenant can define their own scoring categories and scoring tiers
+Lead Scoring Model Routes - City-specific lead scoring configuration
+Each tenant can define scoring models per city, with a default fallback
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 import uuid
 
-from database import get_tenant_db
+from database import get_tenant_db, db
 from deps import get_current_user
 
 router = APIRouter()
@@ -43,8 +43,9 @@ class ScoringCategory(BaseModel):
 
 
 class ScoringModel(BaseModel):
-    """Complete scoring model for a tenant"""
+    """Complete scoring model for a tenant + city"""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    city: str = "default"  # City name or "default" for fallback model
     name: str = "Default Scoring Model"
     description: Optional[str] = None
     categories: List[ScoringCategory] = []
@@ -90,18 +91,23 @@ class TierUpdate(BaseModel):
     order: Optional[int] = None
 
 
-class AccountScore(BaseModel):
-    """Score breakdown for an account"""
-    account_id: str
+class LeadScore(BaseModel):
+    """Score breakdown for a lead"""
+    lead_id: str
     total_score: int = 0
     category_scores: dict = {}  # {category_id: {score: int, tier_id: str, tier_label: str}}
     quadrant: str = "Puzzles"  # Stars, Showcase, Plough Horses, Puzzles
     scored_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class AccountScoreInput(BaseModel):
-    """Input for scoring an account"""
+class LeadScoreInput(BaseModel):
+    """Input for scoring a lead"""
     category_scores: dict  # {category_id: tier_id}
+
+
+class CopyModelInput(BaseModel):
+    """Input for copying a model to another city"""
+    target_city: str
 
 
 # ============= HELPER FUNCTIONS =============
@@ -130,25 +136,83 @@ def calculate_quadrant(total_score: int, volume_score: int, volume_weight: int, 
         return "Puzzles"
 
 
-async def get_or_create_scoring_model():
-    """Get the active scoring model for current tenant, or create default"""
+async def get_or_create_scoring_model(city: str = "default"):
+    """Get the scoring model for a specific city, or create default"""
     tdb = get_tdb()
-    model = await tdb.scoring_models.find_one({'is_active': True}, {'_id': 0})
     
+    # First try to find model for specific city
+    model = await tdb.scoring_models.find_one({'city': city, 'is_active': True}, {'_id': 0})
+    
+    if model:
+        return model
+    
+    # If city is not "default" and no model found, try to get default model
+    if city != "default":
+        # Try city-specific default first
+        default_model = await tdb.scoring_models.find_one({'city': 'default', 'is_active': True}, {'_id': 0})
+        
+        # Also check for legacy models without city field
+        if not default_model:
+            default_model = await tdb.scoring_models.find_one({'city': {'$exists': False}, 'is_active': True}, {'_id': 0})
+            if default_model:
+                # Upgrade legacy model to have city field
+                await tdb.scoring_models.update_one(
+                    {'id': default_model['id']},
+                    {'$set': {'city': 'default'}}
+                )
+                default_model['city'] = 'default'
+        
+        if default_model:
+            # Return default model info but indicate it's a fallback
+            default_model['_is_fallback'] = True
+            default_model['_fallback_city'] = city
+            return default_model
+    
+    # Check for legacy model without city field (for default requests)
+    legacy_model = await tdb.scoring_models.find_one({'city': {'$exists': False}, 'is_active': True}, {'_id': 0})
+    if legacy_model:
+        # Upgrade legacy model
+        await tdb.scoring_models.update_one(
+            {'id': legacy_model['id']},
+            {'$set': {'city': 'default'}}
+        )
+        legacy_model['city'] = 'default'
+        return legacy_model
+    
+    # Create default model if none exists
+    default_model = {
+        'id': str(uuid.uuid4()),
+        'city': 'default',
+        'name': 'Default Scoring Model',
+        'description': 'Default scoring model - applies to all cities without specific configuration',
+        'categories': [],
+        'total_weight': 0,
+        'is_active': True,
+        'created_at': datetime.now(timezone.utc).isoformat(),
+        'updated_at': datetime.now(timezone.utc).isoformat()
+    }
+    await tdb.scoring_models.insert_one(default_model)
+    return default_model
+
+
+async def get_model_for_lead(lead_city: str):
+    """Get the appropriate scoring model for a lead based on its city"""
+    tdb = get_tdb()
+    
+    # First try city-specific model
+    if lead_city:
+        model = await tdb.scoring_models.find_one({'city': lead_city, 'is_active': True}, {'_id': 0})
+        if model:
+            return model
+    
+    # Fall back to default model
+    model = await tdb.scoring_models.find_one({'city': 'default', 'is_active': True}, {'_id': 0})
+    
+    # Also check for legacy models
     if not model:
-        # Create default model with example categories
-        default_model = {
-            'id': str(uuid.uuid4()),
-            'name': 'Default Scoring Model',
-            'description': 'Account scoring based on volume, margin, prestige, influence, and sustainability',
-            'categories': [],
-            'total_weight': 100,
-            'is_active': True,
-            'created_at': datetime.now(timezone.utc).isoformat(),
-            'updated_at': datetime.now(timezone.utc).isoformat()
-        }
-        await tdb.scoring_models.insert_one(default_model)
-        return default_model
+        model = await tdb.scoring_models.find_one({'city': {'$exists': False}, 'is_active': True}, {'_id': 0})
+        if model:
+            model['city'] = 'default'  # Treat as default
     
     return model
 
@@ -156,14 +220,106 @@ async def get_or_create_scoring_model():
 # ============= SCORING MODEL ROUTES =============
 
 @router.get("/model")
-async def get_scoring_model(current_user: dict = Depends(get_current_user)):
-    """Get the active scoring model for the current tenant"""
-    model = await get_or_create_scoring_model()
+async def get_scoring_model(
+    city: str = Query(default="default", description="City name or 'default' for fallback model"),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get the scoring model for a specific city"""
+    model = await get_or_create_scoring_model(city)
     return model
+
+
+@router.get("/models/cities")
+async def get_cities_with_models(current_user: dict = Depends(get_current_user)):
+    """Get list of cities that have scoring models configured"""
+    tdb = get_tdb()
+    
+    # Get all active models
+    models = await tdb.scoring_models.find({'is_active': True}, {'_id': 0, 'city': 1, 'name': 1, 'total_weight': 1, 'categories': 1}).to_list(100)
+    
+    cities = []
+    for model in models:
+        city = model.get('city', 'default')  # Handle legacy models without city field
+        cities.append({
+            'city': city,
+            'name': model.get('name', 'Unnamed Model'),
+            'total_weight': model.get('total_weight', 0),
+            'category_count': len(model.get('categories', []))
+        })
+    
+    return {'cities': cities}
+
+
+@router.post("/models/copy")
+async def copy_model_to_city(
+    source_city: str,
+    copy_input: CopyModelInput,
+    current_user: dict = Depends(get_current_user)
+):
+    """Copy a scoring model from one city to another"""
+    if current_user.get('role') not in ['CEO', 'Director', 'Admin', 'System Admin']:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tdb = get_tdb()
+    
+    # Get source model
+    source_model = await tdb.scoring_models.find_one({'city': source_city, 'is_active': True}, {'_id': 0})
+    if not source_model:
+        raise HTTPException(status_code=404, detail=f"No scoring model found for city: {source_city}")
+    
+    # Check if target city already has a model
+    existing_target = await tdb.scoring_models.find_one({'city': copy_input.target_city, 'is_active': True})
+    if existing_target:
+        raise HTTPException(status_code=400, detail=f"City '{copy_input.target_city}' already has a scoring model. Delete it first to copy.")
+    
+    # Create new model for target city
+    new_model = {
+        'id': str(uuid.uuid4()),
+        'city': copy_input.target_city,
+        'name': f"Scoring Model - {copy_input.target_city}",
+        'description': f"Copied from {source_city}",
+        'categories': source_model.get('categories', []),
+        'total_weight': source_model.get('total_weight', 0),
+        'is_active': True,
+        'created_at': datetime.now(timezone.utc).isoformat(),
+        'updated_at': datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Generate new IDs for categories and tiers
+    for category in new_model['categories']:
+        category['id'] = str(uuid.uuid4())
+        for tier in category.get('tiers', []):
+            tier['id'] = str(uuid.uuid4())
+    
+    await tdb.scoring_models.insert_one(new_model)
+    
+    return {
+        'message': f"Model copied from '{source_city}' to '{copy_input.target_city}'",
+        'model': await tdb.scoring_models.find_one({'id': new_model['id']}, {'_id': 0})
+    }
+
+
+@router.delete("/models/{city}")
+async def delete_city_model(city: str, current_user: dict = Depends(get_current_user)):
+    """Delete a city-specific scoring model"""
+    if current_user.get('role') not in ['CEO', 'Director', 'Admin', 'System Admin']:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if city == "default":
+        raise HTTPException(status_code=400, detail="Cannot delete the default model")
+    
+    tdb = get_tdb()
+    result = await tdb.scoring_models.delete_one({'city': city})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail=f"No model found for city: {city}")
+    
+    return {'message': f"Model for city '{city}' deleted"}
 
 
 @router.put("/model")
 async def update_scoring_model(
+    city: str = Query(default="default"),
     name: Optional[str] = None,
     description: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
@@ -173,7 +329,23 @@ async def update_scoring_model(
         raise HTTPException(status_code=403, detail="Admin access required")
     
     tdb = get_tdb()
-    model = await get_or_create_scoring_model()
+    model = await get_or_create_scoring_model(city)
+    
+    # If using fallback, create a new model for this city
+    if model.get('_is_fallback'):
+        new_model = {
+            'id': str(uuid.uuid4()),
+            'city': city,
+            'name': name or f"Scoring Model - {city}",
+            'description': description or f"Scoring model for {city}",
+            'categories': [],
+            'total_weight': 0,
+            'is_active': True,
+            'created_at': datetime.now(timezone.utc).isoformat(),
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }
+        await tdb.scoring_models.insert_one(new_model)
+        return await tdb.scoring_models.find_one({'id': new_model['id']}, {'_id': 0})
     
     update_data = {'updated_at': datetime.now(timezone.utc).isoformat()}
     if name:
@@ -188,13 +360,33 @@ async def update_scoring_model(
 # ============= CATEGORY ROUTES =============
 
 @router.post("/categories")
-async def create_category(category: CategoryCreate, current_user: dict = Depends(get_current_user)):
-    """Add a new scoring category"""
+async def create_category(
+    category: CategoryCreate, 
+    city: str = Query(default="default"),
+    current_user: dict = Depends(get_current_user)
+):
+    """Add a new scoring category to a city's model"""
     if current_user.get('role') not in ['CEO', 'Director', 'Admin', 'System Admin']:
         raise HTTPException(status_code=403, detail="Admin access required")
     
     tdb = get_tdb()
-    model = await get_or_create_scoring_model()
+    model = await get_or_create_scoring_model(city)
+    
+    # If using fallback, create a new model for this city first
+    if model.get('_is_fallback'):
+        new_model = {
+            'id': str(uuid.uuid4()),
+            'city': city,
+            'name': f"Scoring Model - {city}",
+            'description': f"Scoring model for {city}",
+            'categories': [],
+            'total_weight': 0,
+            'is_active': True,
+            'created_at': datetime.now(timezone.utc).isoformat(),
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }
+        await tdb.scoring_models.insert_one(new_model)
+        model = new_model
     
     # Calculate current total weight
     current_total = sum(c.get('weight', 0) for c in model.get('categories', []))
@@ -231,7 +423,8 @@ async def create_category(category: CategoryCreate, current_user: dict = Depends
 @router.put("/categories/{category_id}")
 async def update_category(
     category_id: str, 
-    category: CategoryUpdate, 
+    category: CategoryUpdate,
+    city: str = Query(default="default"),
     current_user: dict = Depends(get_current_user)
 ):
     """Update a scoring category"""
@@ -239,7 +432,10 @@ async def update_category(
         raise HTTPException(status_code=403, detail="Admin access required")
     
     tdb = get_tdb()
-    model = await get_or_create_scoring_model()
+    model = await tdb.scoring_models.find_one({'city': city, 'is_active': True}, {'_id': 0})
+    
+    if not model:
+        raise HTTPException(status_code=404, detail=f"No scoring model found for city: {city}")
     
     categories = model.get('categories', [])
     cat_index = next((i for i, c in enumerate(categories) if c['id'] == category_id), None)
@@ -287,13 +483,20 @@ async def update_category(
 
 
 @router.delete("/categories/{category_id}")
-async def delete_category(category_id: str, current_user: dict = Depends(get_current_user)):
+async def delete_category(
+    category_id: str,
+    city: str = Query(default="default"),
+    current_user: dict = Depends(get_current_user)
+):
     """Delete a scoring category"""
     if current_user.get('role') not in ['CEO', 'Director', 'Admin', 'System Admin']:
         raise HTTPException(status_code=403, detail="Admin access required")
     
     tdb = get_tdb()
-    model = await get_or_create_scoring_model()
+    model = await tdb.scoring_models.find_one({'city': city, 'is_active': True}, {'_id': 0})
+    
+    if not model:
+        raise HTTPException(status_code=404, detail=f"No scoring model found for city: {city}")
     
     categories = model.get('categories', [])
     cat_to_remove = next((c for c in categories if c['id'] == category_id), None)
@@ -322,7 +525,8 @@ async def delete_category(category_id: str, current_user: dict = Depends(get_cur
 @router.post("/categories/{category_id}/tiers")
 async def create_tier(
     category_id: str, 
-    tier: TierCreate, 
+    tier: TierCreate,
+    city: str = Query(default="default"),
     current_user: dict = Depends(get_current_user)
 ):
     """Add a new scoring tier to a category"""
@@ -330,7 +534,10 @@ async def create_tier(
         raise HTTPException(status_code=403, detail="Admin access required")
     
     tdb = get_tdb()
-    model = await get_or_create_scoring_model()
+    model = await tdb.scoring_models.find_one({'city': city, 'is_active': True}, {'_id': 0})
+    
+    if not model:
+        raise HTTPException(status_code=404, detail=f"No scoring model found for city: {city}")
     
     categories = model.get('categories', [])
     cat_index = next((i for i, c in enumerate(categories) if c['id'] == category_id), None)
@@ -373,6 +580,7 @@ async def update_tier(
     category_id: str,
     tier_id: str,
     tier: TierUpdate,
+    city: str = Query(default="default"),
     current_user: dict = Depends(get_current_user)
 ):
     """Update a scoring tier"""
@@ -380,7 +588,10 @@ async def update_tier(
         raise HTTPException(status_code=403, detail="Admin access required")
     
     tdb = get_tdb()
-    model = await get_or_create_scoring_model()
+    model = await tdb.scoring_models.find_one({'city': city, 'is_active': True}, {'_id': 0})
+    
+    if not model:
+        raise HTTPException(status_code=404, detail=f"No scoring model found for city: {city}")
     
     categories = model.get('categories', [])
     cat_index = next((i for i, c in enumerate(categories) if c['id'] == category_id), None)
@@ -428,6 +639,7 @@ async def update_tier(
 async def delete_tier(
     category_id: str,
     tier_id: str,
+    city: str = Query(default="default"),
     current_user: dict = Depends(get_current_user)
 ):
     """Delete a scoring tier"""
@@ -435,7 +647,10 @@ async def delete_tier(
         raise HTTPException(status_code=403, detail="Admin access required")
     
     tdb = get_tdb()
-    model = await get_or_create_scoring_model()
+    model = await tdb.scoring_models.find_one({'city': city, 'is_active': True}, {'_id': 0})
+    
+    if not model:
+        raise HTTPException(status_code=404, detail=f"No scoring model found for city: {city}")
     
     categories = model.get('categories', [])
     cat_index = next((i for i, c in enumerate(categories) if c['id'] == category_id), None)
@@ -454,24 +669,30 @@ async def delete_tier(
     return {'message': 'Tier deleted'}
 
 
-# ============= ACCOUNT SCORING ROUTES =============
+# ============= LEAD SCORING ROUTES =============
 
-@router.post("/accounts/{account_id}/score")
-async def score_account(
-    account_id: str,
-    score_input: AccountScoreInput,
+@router.post("/leads/{lead_id}/score")
+async def score_lead(
+    lead_id: str,
+    score_input: LeadScoreInput,
     current_user: dict = Depends(get_current_user)
 ):
-    """Score an account based on selected tiers"""
+    """Score a lead based on selected tiers - uses the lead's city to determine which model to use"""
     tdb = get_tdb()
     
-    # Verify account exists
-    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
-    if not account:
-        raise HTTPException(status_code=404, detail="Account not found")
+    # Verify lead exists
+    lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
     
-    # Get scoring model
-    model = await get_or_create_scoring_model()
+    lead_city = lead.get('city', 'default')
+    
+    # Get scoring model for lead's city
+    model = await get_model_for_lead(lead_city)
+    
+    if not model:
+        raise HTTPException(status_code=400, detail="No scoring model available. Please configure the default scoring model first.")
+    
     categories = model.get('categories', [])
     
     if not categories:
@@ -516,17 +737,18 @@ async def score_account(
     # Calculate quadrant
     quadrant = calculate_quadrant(total_score, volume_score, volume_weight, commercial_score, commercial_weight)
     
-    # Store score on account
+    # Store score on lead
     score_data = {
         'total_score': total_score,
         'category_scores': category_scores,
         'quadrant': quadrant,
+        'model_city': model.get('city', 'default'),
         'scored_at': datetime.now(timezone.utc).isoformat(),
         'scored_by': current_user['id']
     }
     
-    await tdb.accounts.update_one(
-        {'id': account_id},
+    await tdb.leads.update_one(
+        {'id': lead_id},
         {'$set': {
             'scoring': score_data,
             'updated_at': datetime.now(timezone.utc).isoformat()
@@ -534,52 +756,58 @@ async def score_account(
     )
     
     return {
-        'account_id': account_id,
-        'account_name': account.get('account_name'),
+        'lead_id': lead_id,
+        'company': lead.get('company'),
+        'city': lead_city,
         **score_data
     }
 
 
-@router.get("/accounts/{account_id}/score")
-async def get_account_score(account_id: str, current_user: dict = Depends(get_current_user)):
-    """Get the score for a specific account"""
+@router.get("/leads/{lead_id}/score")
+async def get_lead_score(lead_id: str, current_user: dict = Depends(get_current_user)):
+    """Get the score for a specific lead"""
     tdb = get_tdb()
     
-    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
-    if not account:
-        raise HTTPException(status_code=404, detail="Account not found")
+    lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
     
-    scoring = account.get('scoring')
+    scoring = lead.get('scoring')
     if not scoring:
         return {
-            'account_id': account_id,
-            'account_name': account.get('account_name'),
+            'lead_id': lead_id,
+            'company': lead.get('company'),
+            'city': lead.get('city'),
             'scored': False,
-            'message': 'Account has not been scored yet'
+            'message': 'Lead has not been scored yet'
         }
     
     return {
-        'account_id': account_id,
-        'account_name': account.get('account_name'),
+        'lead_id': lead_id,
+        'company': lead.get('company'),
+        'city': lead.get('city'),
         'scored': True,
         **scoring
     }
 
 
-@router.get("/accounts/scores")
-async def get_all_account_scores(
+@router.get("/leads/scores")
+async def get_all_lead_scores(
     quadrant: Optional[str] = None,
+    city: Optional[str] = None,
     min_score: Optional[int] = None,
     max_score: Optional[int] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get scores for all accounts, optionally filtered"""
+    """Get scores for all leads, optionally filtered"""
     tdb = get_tdb()
     
     query = {'scoring': {'$exists': True}}
     
     if quadrant:
         query['scoring.quadrant'] = quadrant
+    if city:
+        query['city'] = city
     if min_score is not None:
         query['scoring.total_score'] = {'$gte': min_score}
     if max_score is not None:
@@ -588,26 +816,34 @@ async def get_all_account_scores(
         else:
             query['scoring.total_score'] = {'$lte': max_score}
     
-    accounts = await tdb.accounts.find(
+    leads = await tdb.leads.find(
         query,
-        {'_id': 0, 'id': 1, 'account_name': 1, 'account_id': 1, 'city': 1, 'scoring': 1}
+        {'_id': 0, 'id': 1, 'company': 1, 'lead_id': 1, 'city': 1, 'scoring': 1}
     ).sort('scoring.total_score', -1).to_list(1000)
     
     return {
-        'accounts': accounts,
-        'total': len(accounts)
+        'leads': leads,
+        'total': len(leads)
     }
 
 
 @router.get("/portfolio-matrix")
-async def get_portfolio_matrix(current_user: dict = Depends(get_current_user)):
-    """Get portfolio matrix data for visualization"""
+async def get_portfolio_matrix(
+    city: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get portfolio matrix data for leads visualization"""
     tdb = get_tdb()
     
-    # Get all scored accounts
-    accounts = await tdb.accounts.find(
-        {'scoring': {'$exists': True}},
-        {'_id': 0, 'id': 1, 'account_name': 1, 'account_id': 1, 'city': 1, 'scoring': 1}
+    # Build query
+    query = {'scoring': {'$exists': True}}
+    if city:
+        query['city'] = city
+    
+    # Get all scored leads
+    leads = await tdb.leads.find(
+        query,
+        {'_id': 0, 'id': 1, 'company': 1, 'lead_id': 1, 'city': 1, 'scoring': 1}
     ).to_list(1000)
     
     # Group by quadrant
@@ -618,14 +854,14 @@ async def get_portfolio_matrix(current_user: dict = Depends(get_current_user)):
         'Puzzles': []
     }
     
-    for account in accounts:
-        quadrant = account.get('scoring', {}).get('quadrant', 'Puzzles')
+    for lead in leads:
+        quadrant = lead.get('scoring', {}).get('quadrant', 'Puzzles')
         matrix[quadrant].append({
-            'id': account['id'],
-            'account_name': account.get('account_name'),
-            'account_id': account.get('account_id'),
-            'city': account.get('city'),
-            'total_score': account.get('scoring', {}).get('total_score', 0)
+            'id': lead['id'],
+            'company': lead.get('company'),
+            'lead_id': lead.get('lead_id'),
+            'city': lead.get('city'),
+            'total_score': lead.get('scoring', {}).get('total_score', 0)
         })
     
     # Sort each quadrant by score
@@ -639,7 +875,7 @@ async def get_portfolio_matrix(current_user: dict = Depends(get_current_user)):
             'showcase': len(matrix['Showcase']),
             'plough_horses': len(matrix['Plough Horses']),
             'puzzles': len(matrix['Puzzles']),
-            'total_scored': len(accounts)
+            'total_scored': len(leads)
         }
     }
 
@@ -647,17 +883,20 @@ async def get_portfolio_matrix(current_user: dict = Depends(get_current_user)):
 # ============= BULK OPERATIONS =============
 
 @router.post("/seed-default-model")
-async def seed_default_model(current_user: dict = Depends(get_current_user)):
-    """Seed the default scoring model with example categories (for initial setup)"""
+async def seed_default_model(
+    city: str = Query(default="default"),
+    current_user: dict = Depends(get_current_user)
+):
+    """Seed a scoring model with example categories (for initial setup)"""
     if current_user.get('role') not in ['CEO', 'Director', 'Admin', 'System Admin']:
         raise HTTPException(status_code=403, detail="Admin access required")
     
     tdb = get_tdb()
     
-    # Check if model already has categories
-    model = await get_or_create_scoring_model()
-    if model.get('categories') and len(model['categories']) > 0:
-        raise HTTPException(status_code=400, detail="Scoring model already has categories. Delete them first to reseed.")
+    # Check if model already has categories for this city
+    model = await tdb.scoring_models.find_one({'city': city, 'is_active': True}, {'_id': 0})
+    if model and model.get('categories') and len(model['categories']) > 0:
+        raise HTTPException(status_code=400, detail=f"Scoring model for '{city}' already has categories. Delete them first to reseed.")
     
     # Default categories based on the user's example
     default_categories = [
@@ -738,13 +977,29 @@ async def seed_default_model(current_user: dict = Depends(get_current_user)):
         },
     ]
     
-    await tdb.scoring_models.update_one(
-        {'id': model['id']},
-        {'$set': {
+    if model:
+        # Update existing model
+        await tdb.scoring_models.update_one(
+            {'id': model['id']},
+            {'$set': {
+                'categories': default_categories,
+                'total_weight': 100,
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        return await tdb.scoring_models.find_one({'id': model['id']}, {'_id': 0})
+    else:
+        # Create new model for this city
+        new_model = {
+            'id': str(uuid.uuid4()),
+            'city': city,
+            'name': f"Scoring Model - {city}" if city != 'default' else 'Default Scoring Model',
+            'description': f"Lead scoring model for {city}" if city != 'default' else 'Default scoring model for all cities',
             'categories': default_categories,
             'total_weight': 100,
+            'is_active': True,
+            'created_at': datetime.now(timezone.utc).isoformat(),
             'updated_at': datetime.now(timezone.utc).isoformat()
-        }}
-    )
-    
-    return await tdb.scoring_models.find_one({'id': model['id']}, {'_id': 0})
+        }
+        await tdb.scoring_models.insert_one(new_model)
+        return await tdb.scoring_models.find_one({'id': new_model['id']}, {'_id': 0})

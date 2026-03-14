@@ -4,10 +4,11 @@ import { toast } from 'sonner';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { 
   Plus, Trash2, Edit2, Save, X, ChevronDown, ChevronUp, 
   Target, Star, Lightbulb, Tractor, HelpCircle, Settings,
-  Loader2, RefreshCw
+  Loader2, RefreshCw, MapPin, Copy
 } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -54,6 +55,13 @@ export default function LeadScoringModel() {
   const [expandedCategories, setExpandedCategories] = useState({});
   const [portfolioData, setPortfolioData] = useState(null);
   const [activeTab, setActiveTab] = useState('config'); // 'config' | 'matrix'
+  
+  // City-based state
+  const [selectedCity, setSelectedCity] = useState('default');
+  const [cities, setCities] = useState([]);
+  const [citiesWithModels, setCitiesWithModels] = useState([]);
+  const [showCopyModal, setShowCopyModal] = useState(false);
+  const [copyTargetCity, setCopyTargetCity] = useState('');
 
   // New category form
   const [newCategory, setNewCategory] = useState({
@@ -73,10 +81,31 @@ export default function LeadScoringModel() {
   });
   const [addingTierTo, setAddingTierTo] = useState(null);
 
+  // Fetch master cities
+  const fetchCities = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API}/api/master-locations/flat`);
+      const cityList = res.data.cities || [];
+      setCities(cityList);
+    } catch (err) {
+      console.error('Error fetching cities:', err);
+    }
+  }, []);
+
+  // Fetch cities that have models configured
+  const fetchCitiesWithModels = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API}/api/scoring/models/cities`);
+      setCitiesWithModels(res.data.cities || []);
+    } catch (err) {
+      console.error('Error fetching cities with models:', err);
+    }
+  }, []);
+
   const fetchModel = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API}/api/scoring/model`);
+      const res = await axios.get(`${API}/api/scoring/model?city=${encodeURIComponent(selectedCity)}`);
       setModel(res.data);
       // Expand all categories by default
       const expanded = {};
@@ -90,16 +119,22 @@ export default function LeadScoringModel() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedCity]);
 
   const fetchPortfolioData = useCallback(async () => {
     try {
-      const res = await axios.get(`${API}/api/scoring/portfolio-matrix`);
+      const cityParam = selectedCity !== 'default' ? `?city=${encodeURIComponent(selectedCity)}` : '';
+      const res = await axios.get(`${API}/api/scoring/portfolio-matrix${cityParam}`);
       setPortfolioData(res.data);
     } catch (err) {
       console.error('Error fetching portfolio data:', err);
     }
-  }, []);
+  }, [selectedCity]);
+
+  useEffect(() => {
+    fetchCities();
+    fetchCitiesWithModels();
+  }, [fetchCities, fetchCitiesWithModels]);
 
   useEffect(() => {
     fetchModel();
@@ -115,11 +150,12 @@ export default function LeadScoringModel() {
 
     try {
       setSaving(true);
-      await axios.post(`${API}/api/scoring/categories`, newCategory);
+      await axios.post(`${API}/api/scoring/categories?city=${encodeURIComponent(selectedCity)}`, newCategory);
       toast.success('Category added');
       setNewCategory({ name: '', description: '', weight: 0, is_numeric: false });
       setShowAddCategory(false);
       fetchModel();
+      fetchCitiesWithModels();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to add category');
     } finally {
@@ -130,7 +166,7 @@ export default function LeadScoringModel() {
   const handleUpdateCategory = async (categoryId, updates) => {
     try {
       setSaving(true);
-      await axios.put(`${API}/api/scoring/categories/${categoryId}`, updates);
+      await axios.put(`${API}/api/scoring/categories/${categoryId}?city=${encodeURIComponent(selectedCity)}`, updates);
       toast.success('Category updated');
       setEditingCategory(null);
       fetchModel();
@@ -148,7 +184,7 @@ export default function LeadScoringModel() {
 
     try {
       setSaving(true);
-      await axios.delete(`${API}/api/scoring/categories/${categoryId}`);
+      await axios.delete(`${API}/api/scoring/categories/${categoryId}?city=${encodeURIComponent(selectedCity)}`);
       toast.success('Category deleted');
       fetchModel();
     } catch (err) {
@@ -167,7 +203,7 @@ export default function LeadScoringModel() {
 
     try {
       setSaving(true);
-      await axios.post(`${API}/api/scoring/categories/${categoryId}/tiers`, newTier);
+      await axios.post(`${API}/api/scoring/categories/${categoryId}/tiers?city=${encodeURIComponent(selectedCity)}`, newTier);
       toast.success('Tier added');
       setNewTier({ label: '', description: '', score: 0, min_value: null, max_value: null });
       setAddingTierTo(null);
@@ -182,7 +218,7 @@ export default function LeadScoringModel() {
   const handleUpdateTier = async (categoryId, tierId, updates) => {
     try {
       setSaving(true);
-      await axios.put(`${API}/api/scoring/categories/${categoryId}/tiers/${tierId}`, updates);
+      await axios.put(`${API}/api/scoring/categories/${categoryId}/tiers/${tierId}?city=${encodeURIComponent(selectedCity)}`, updates);
       toast.success('Tier updated');
       setEditingTier(null);
       fetchModel();
@@ -200,7 +236,7 @@ export default function LeadScoringModel() {
 
     try {
       setSaving(true);
-      await axios.delete(`${API}/api/scoring/categories/${categoryId}/tiers/${tierId}`);
+      await axios.delete(`${API}/api/scoring/categories/${categoryId}/tiers/${tierId}?city=${encodeURIComponent(selectedCity)}`);
       toast.success('Tier deleted');
       fetchModel();
     } catch (err) {
@@ -212,17 +248,65 @@ export default function LeadScoringModel() {
 
   // Seed default model
   const handleSeedDefault = async () => {
-    if (!window.confirm('This will create default scoring categories. Continue?')) {
+    if (!window.confirm(`This will create default scoring categories for "${selectedCity}". Continue?`)) {
       return;
     }
 
     try {
       setSaving(true);
-      await axios.post(`${API}/api/scoring/seed-default-model`);
+      await axios.post(`${API}/api/scoring/seed-default-model?city=${encodeURIComponent(selectedCity)}`);
       toast.success('Default scoring model created');
       fetchModel();
+      fetchCitiesWithModels();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to seed default model');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Copy model to another city
+  const handleCopyModel = async () => {
+    if (!copyTargetCity) {
+      toast.error('Please select a target city');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await axios.post(`${API}/api/scoring/models/copy?source_city=${encodeURIComponent(selectedCity)}`, {
+        target_city: copyTargetCity
+      });
+      toast.success(`Model copied to ${copyTargetCity}`);
+      setShowCopyModal(false);
+      setCopyTargetCity('');
+      fetchCitiesWithModels();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to copy model');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Delete city model
+  const handleDeleteCityModel = async () => {
+    if (selectedCity === 'default') {
+      toast.error('Cannot delete the default model');
+      return;
+    }
+    
+    if (!window.confirm(`Are you sure you want to delete the scoring model for "${selectedCity}"? This cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await axios.delete(`${API}/api/scoring/models/${encodeURIComponent(selectedCity)}`);
+      toast.success(`Model for ${selectedCity} deleted`);
+      setSelectedCity('default');
+      fetchCitiesWithModels();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to delete model');
     } finally {
       setSaving(false);
     }
@@ -236,6 +320,7 @@ export default function LeadScoringModel() {
   };
 
   const remainingWeight = 100 - (model?.total_weight || 0);
+  const isUsingFallback = model?._is_fallback;
 
   if (loading) {
     return (
@@ -255,7 +340,7 @@ export default function LeadScoringModel() {
             Lead Scoring Model
           </h1>
           <p className="text-muted-foreground mt-1">
-            Configure scoring categories and tiers for account evaluation
+            Configure scoring categories and tiers for lead evaluation by city
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -280,6 +365,88 @@ export default function LeadScoringModel() {
           )}
         </div>
       </div>
+
+      {/* City Selector */}
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-5 h-5 text-primary" />
+            <span className="font-medium">City:</span>
+          </div>
+          <Select value={selectedCity} onValueChange={setSelectedCity}>
+            <SelectTrigger className="w-[200px]" data-testid="city-selector">
+              <SelectValue placeholder="Select City" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Default (All Cities)</SelectItem>
+              {cities.map((city) => (
+                <SelectItem key={city.id} value={city.name}>
+                  {city.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          {/* City model actions */}
+          {model?.categories && model.categories.length > 0 && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCopyModal(true)}
+                disabled={saving}
+                data-testid="copy-model-btn"
+              >
+                <Copy className="w-4 h-4 mr-1" />
+                Copy to City
+              </Button>
+              {selectedCity !== 'default' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDeleteCityModel}
+                  disabled={saving}
+                  className="text-red-500 hover:text-red-700"
+                  data-testid="delete-city-model-btn"
+                >
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  Delete City Model
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+        
+        {/* Cities with models indicator */}
+        {citiesWithModels.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="text-xs text-muted-foreground">Configured cities:</span>
+            {citiesWithModels.map((c) => (
+              <span
+                key={c.city}
+                onClick={() => setSelectedCity(c.city)}
+                className={`px-2 py-0.5 text-xs rounded-full cursor-pointer transition-colors ${
+                  c.city === selectedCity
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-secondary hover:bg-secondary/80'
+                }`}
+              >
+                {c.city === 'default' ? 'Default' : c.city} ({c.category_count})
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Fallback indicator */}
+        {isUsingFallback && (
+          <div className="mt-3 p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              No specific model for "{selectedCity}". Using the default model. 
+              Add categories to create a city-specific model.
+            </p>
+          </div>
+        )}
+      </Card>
 
       {/* Tabs */}
       <div className="flex border-b border-border">
@@ -615,9 +782,9 @@ export default function LeadScoringModel() {
           {/* Matrix Visualization */}
           <Card>
             <CardHeader>
-              <CardTitle>Sales Portfolio Matrix</CardTitle>
+              <CardTitle>Lead Portfolio Matrix {selectedCity !== 'default' && `- ${selectedCity}`}</CardTitle>
               <CardDescription>
-                Every account must contribute to either revenue, market scale, or brand influence
+                Every lead must contribute to either revenue, market scale, or brand influence
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -625,25 +792,25 @@ export default function LeadScoringModel() {
                 {/* Showcase - Top Left */}
                 <QuadrantCard
                   quadrant="Showcase"
-                  accounts={portfolioData?.matrix?.Showcase || []}
+                  leads={portfolioData?.matrix?.Showcase || []}
                   position="top-left"
                 />
                 {/* Stars - Top Right */}
                 <QuadrantCard
                   quadrant="Stars"
-                  accounts={portfolioData?.matrix?.Stars || []}
+                  leads={portfolioData?.matrix?.Stars || []}
                   position="top-right"
                 />
                 {/* Puzzles - Bottom Left */}
                 <QuadrantCard
                   quadrant="Puzzles"
-                  accounts={portfolioData?.matrix?.Puzzles || []}
+                  leads={portfolioData?.matrix?.Puzzles || []}
                   position="bottom-left"
                 />
                 {/* Plough Horses - Bottom Right */}
                 <QuadrantCard
                   quadrant="Plough Horses"
-                  accounts={portfolioData?.matrix?.['Plough Horses'] || []}
+                  leads={portfolioData?.matrix?.['Plough Horses'] || []}
                   position="bottom-right"
                 />
               </div>
@@ -696,6 +863,45 @@ export default function LeadScoringModel() {
           onCancel={() => setEditingCategory(null)}
           saving={saving}
         />
+      )}
+
+      {/* Copy Model Modal */}
+      {showCopyModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>Copy Model to Another City</CardTitle>
+              <CardDescription>
+                Copy the scoring model from "{selectedCity}" to another city
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Select value={copyTargetCity} onValueChange={setCopyTargetCity}>
+                <SelectTrigger data-testid="copy-target-city-select">
+                  <SelectValue placeholder="Select target city" />
+                </SelectTrigger>
+                <SelectContent>
+                  {cities
+                    .filter(c => c.name !== selectedCity && !citiesWithModels.some(cm => cm.city === c.name))
+                    .map((city) => (
+                      <SelectItem key={city.id} value={city.name}>
+                        {city.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => { setShowCopyModal(false); setCopyTargetCity(''); }}>
+                  Cancel
+                </Button>
+                <Button onClick={handleCopyModel} disabled={saving || !copyTargetCity}>
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4 mr-1" />}
+                  Copy Model
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );
@@ -805,7 +1011,7 @@ function EditTierForm({ tier, maxScore, onSave, onCancel, saving }) {
 }
 
 // Quadrant Card for Matrix View
-function QuadrantCard({ quadrant, accounts, position }) {
+function QuadrantCard({ quadrant, leads, position }) {
   const info = QUADRANT_INFO[quadrant];
   const Icon = info.icon;
   
@@ -824,22 +1030,22 @@ function QuadrantCard({ quadrant, accounts, position }) {
         </div>
         <span className={`font-semibold ${info.textColor}`}>{quadrant}</span>
         <span className="text-xs text-muted-foreground ml-auto">
-          {accounts.length} accounts
+          {leads.length} leads
         </span>
       </div>
       <p className="text-xs text-muted-foreground mb-2">{info.description}</p>
       <div className="space-y-1 max-h-32 overflow-y-auto">
-        {accounts.slice(0, 5).map((account) => (
-          <div key={account.id} className="text-sm flex justify-between">
-            <span className="truncate">{account.account_name}</span>
-            <span className="text-muted-foreground ml-2">{account.total_score}</span>
+        {leads.slice(0, 5).map((lead) => (
+          <div key={lead.id} className="text-sm flex justify-between">
+            <span className="truncate">{lead.company}</span>
+            <span className="text-muted-foreground ml-2">{lead.total_score}</span>
           </div>
         ))}
-        {accounts.length > 5 && (
-          <p className="text-xs text-muted-foreground">+{accounts.length - 5} more</p>
+        {leads.length > 5 && (
+          <p className="text-xs text-muted-foreground">+{leads.length - 5} more</p>
         )}
-        {accounts.length === 0 && (
-          <p className="text-xs text-muted-foreground italic">No accounts yet</p>
+        {leads.length === 0 && (
+          <p className="text-xs text-muted-foreground italic">No leads yet</p>
         )}
       </div>
     </div>

@@ -1,0 +1,98 @@
+{
+  "summary": "Tested city-based Lead Scoring Model features. Fixed API endpoint bug for city fetching. 9/10 features working correctly. One data issue found with duplicate default models in database.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/api/scoring/models/cities",
+        "issue": "Returns duplicate 'default' models - database has 2 identical default scoring models",
+        "priority": "LOW"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Lead Scoring Model Admin",
+        "issues": ["'Configured cities' badges show 'Default (5)' twice due to duplicate models in database"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/.screenshots/03_lead_scoring_correct.png",
+    "/app/.screenshots/06_city_dropdown_fixed.png",
+    "/app/.screenshots/08_lead_detail_page.png",
+    "/app/.screenshots/09_lead_scoring_card.png",
+    "/app/.screenshots/10_score_interface.png"
+  ],
+  "action_items": [
+    "Remove duplicate default scoring model from database (one of the two 'default' models should be deleted)"
+  ],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/frontend/src/pages/LeadScoringModel.js"
+  ],
+  "success_rate": {
+    "backend": "100% (all scoring APIs working)",
+    "frontend": "90% (9/10 features, 1 data-related display issue)"
+  },
+  "test_credentials": {
+    "admin_user": "admin@nylaairwater.earth / admin123",
+    "tested_lead": "Taj Sarees (ID: 2a3ca2de-8e26-406a-8be0-d9a28adfc0fb, City: Ambala)"
+  },
+  "seed_data_creation": "Used existing default scoring model with 5 categories",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "City-based Lead Scoring tested. Key routes: /lead-scoring-model for admin, Lead Scoring Card on Lead Detail page. City selector dropdown works with master locations API. Bug fixed: changed fetchCities API call from /api/master-data/master-locations/flat to /api/master-locations/flat. Database has duplicate default models causing badge display issue.",
+  "features_tested": {
+    "city_selector_on_admin_page": {
+      "status": "PASS",
+      "details": "City selector dropdown shows with data-testid='city-selector'"
+    },
+    "city_options_include_default_and_master_cities": {
+      "status": "PASS",
+      "details": "Shows 'Default (All Cities)' plus 13 master cities (Bengaluru, Chennai, Gurugram, Hyderabad, Kochi, Kolkata, Margao, Mumbai, New Delhi, Noida, Panaji, Pune, Vasco da Gama)"
+    },
+    "configured_cities_badges": {
+      "status": "PARTIAL",
+      "details": "Badges show but display 'Default (5)' twice due to duplicate models in database"
+    },
+    "copy_to_city_button": {
+      "status": "PASS",
+      "details": "Copy to City button visible with data-testid='copy-model-btn' when model has categories"
+    },
+    "load_default_model_seeds_5_categories": {
+      "status": "PASS",
+      "details": "Default model has 5 categories: Volume Potential (25), Margin Potential (20), Brand Prestige (20), Guest Influence (20), Sustainability Alignment (15)"
+    },
+    "categories_and_tiers_display": {
+      "status": "PASS",
+      "details": "All categories display correctly with weights and tiers. Total weight: 100/100"
+    },
+    "lead_scoring_card_on_lead_detail": {
+      "status": "PASS",
+      "details": "Lead Scoring Card appears on Lead Detail page with data-testid='lead-scoring-card'"
+    },
+    "model_indicator_text": {
+      "status": "PASS",
+      "details": "Shows 'Using model for: Default (fallback)' for leads in cities without city-specific models"
+    },
+    "all_5_categories_in_card": {
+      "status": "PASS",
+      "details": "Card shows all 5 categories with max points: Volume Potential (25), Margin Potential (20), Brand Prestige (20), Guest Influence (20), Sustainability Alignment (15)"
+    },
+    "score_lead_button": {
+      "status": "PASS",
+      "details": "Score Lead button opens scoring interface with 5 tier select dropdowns"
+    }
+  },
+  "bug_fixed": {
+    "file": "/app/frontend/src/pages/LeadScoringModel.js",
+    "line": 87,
+    "issue": "Wrong API endpoint for fetching cities",
+    "old_value": "${API}/api/master-data/master-locations/flat",
+    "new_value": "${API}/api/master-locations/flat"
+  }
+}

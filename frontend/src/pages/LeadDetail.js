@@ -38,6 +38,7 @@ import AppBreadcrumb from '../components/AppBreadcrumb';
 import { useNavigation } from '../context/NavigationContext';
 import OpportunityEstimation from '../components/OpportunityEstimation';
 import { useTenantConfig } from '../context/TenantConfigContext';
+import LeadScoringCard from '../components/LeadScoringCard';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -1322,6 +1323,13 @@ ${userEmail}`;
               onSave={(estimation) => setLead(prev => ({ ...prev, opportunity_estimation: estimation }))}
             />
           )}
+
+          {/* Lead Scoring Card */}
+          <LeadScoringCard
+            leadId={lead.id}
+            leadCity={lead.city}
+            leadCompany={lead.company}
+          />
 
           {/* Log Activity Section - Featured Component */}
           <Card className={`overflow-hidden transition-all duration-300 ${showActivityForm ? 'ring-2 ring-primary/20 shadow-lg' : 'hover:shadow-md'}`}>
