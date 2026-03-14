@@ -229,6 +229,21 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
                 </div>
               </div>
 
+              {/* Formula Explanation */}
+              <div className="p-3 bg-white/50 dark:bg-black/20 rounded-lg text-sm">
+                <p className="font-medium text-muted-foreground mb-2">How is this calculated?</p>
+                <p className="text-muted-foreground mb-2">
+                  <span className="font-medium text-foreground">Per Mode</span> = Covers × Density% × Table Turnovers × Adoption%
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Table Turnovers = 180 mins ÷ Avg Table Time (e.g., 180÷45 = 4 turnovers per session)
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  <span className="font-medium">Daily</span> = Sum of all enabled modes &nbsp;|&nbsp; 
+                  <span className="font-medium">Monthly</span> = Daily × Operating Days
+                </p>
+              </div>
+
               {/* Override */}
               <div className="pt-3 border-t border-white/30">
                 <div className="flex items-center justify-between mb-2">
