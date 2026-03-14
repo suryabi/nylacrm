@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -16,6 +16,18 @@ import {
   Loader2, Clock, CheckCircle, AlertTriangle, ChevronRight, Plus,
   User, AlertCircle, CheckSquare, Square, ChevronDown, ChevronUp, Send, ExternalLink
 } from 'lucide-react';
+
+// Safe date formatter
+const formatSafeDate = (dateString, formatStr = 'MMM d') => {
+  if (!dateString) return 'N/A';
+  try {
+    const date = parseISO(dateString);
+    if (!isValid(date)) return 'N/A';
+    return format(date, formatStr);
+  } catch (e) {
+    return 'N/A';
+  }
+};
 
 // Priority colors
 const PRIORITY_STYLES = {
@@ -180,7 +192,7 @@ export function ActionItemsWidget({
                     <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1.5">
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        Due: {format(parseISO(task.due_date), 'MMM d')}
+                        Due: {formatSafeDate(task.due_date)}
                       </span>
                       <span className="flex items-center gap-1">
                         <User className="h-3 w-3" />
@@ -284,7 +296,7 @@ export function ActionItemsWidget({
                   <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-slate-800 dark:text-white truncate">{lead.company}</p>
-                    <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">Was due: {format(parseISO(lead.next_follow_up), 'MMM d')}</p>
+                    <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">Was due: {formatSafeDate(lead.next_follow_up)}</p>
                   </div>
                   <ChevronRight className="h-4 w-4 text-red-400" />
                 </div>

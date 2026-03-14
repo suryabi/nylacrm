@@ -1,5 +1,5 @@
 import React from 'react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { 
@@ -13,6 +13,18 @@ import {
   DialogTitle,
 } from '../ui/dialog';
 import { toast } from 'sonner';
+
+// Safe date formatter
+const formatSafeDate = (dateString, formatStr = 'EEEE, MMMM d, yyyy') => {
+  if (!dateString) return 'N/A';
+  try {
+    const date = parseISO(dateString);
+    if (!isValid(date)) return 'N/A';
+    return format(date, formatStr);
+  } catch (e) {
+    return 'N/A';
+  }
+};
 
 export function MeetingDetailDialog({ open, onOpenChange, meeting, onEdit, onCancel }) {
   if (!meeting) return null;
@@ -55,7 +67,7 @@ export function MeetingDetailDialog({ open, onOpenChange, meeting, onEdit, onCan
           <div className="flex items-center gap-4 p-3 bg-muted/50 rounded-lg">
             <div className="flex items-center gap-2 flex-1">
               <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium">{format(parseISO(meeting.meeting_date), 'EEEE, MMMM d, yyyy')}</span>
+              <span className="font-medium">{formatSafeDate(meeting.meeting_date)}</span>
             </div>
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-muted-foreground" />

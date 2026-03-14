@@ -1,16 +1,22 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { format, parseISO, isToday, isTomorrow } from 'date-fns';
+import { format, parseISO, isToday, isTomorrow, isValid } from 'date-fns';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { CalendarDays, Building2, ChevronRight, User } from 'lucide-react';
 
 const formatFollowupDate = (dateStr) => {
-  const date = parseISO(dateStr);
-  if (isToday(date)) return { text: 'Today', color: 'text-red-600 bg-red-50 dark:bg-red-900/20' };
-  if (isTomorrow(date)) return { text: 'Tomorrow', color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' };
-  return { text: format(date, 'EEE, MMM d'), color: 'text-slate-600 bg-slate-100 dark:bg-slate-800' };
+  if (!dateStr) return { text: 'N/A', color: 'text-slate-600 bg-slate-100 dark:bg-slate-800' };
+  try {
+    const date = parseISO(dateStr);
+    if (!isValid(date)) return { text: 'N/A', color: 'text-slate-600 bg-slate-100 dark:bg-slate-800' };
+    if (isToday(date)) return { text: 'Today', color: 'text-red-600 bg-red-50 dark:bg-red-900/20' };
+    if (isTomorrow(date)) return { text: 'Tomorrow', color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' };
+    return { text: format(date, 'EEE, MMM d'), color: 'text-slate-600 bg-slate-100 dark:bg-slate-800' };
+  } catch (e) {
+    return { text: 'N/A', color: 'text-slate-600 bg-slate-100 dark:bg-slate-800' };
+  }
 };
 
 export function UpcomingFollowupsWidget({ upcomingLeads }) {

@@ -16,10 +16,22 @@ import {
   BadgeIndianRupee,
   Briefcase
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 import { cn } from '../../lib/utils';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
+
+// Safe date formatter
+const formatSafeDate = (dateValue, formatStr = 'MMM d, yyyy') => {
+  if (!dateValue) return 'N/A';
+  try {
+    const date = new Date(dateValue);
+    if (!isValid(date)) return 'N/A';
+    return format(date, formatStr);
+  } catch (e) {
+    return 'N/A';
+  }
+};
 
 // Format currency with Indian numbering system
 const formatCurrency = (amount, masked = false) => {
@@ -105,7 +117,7 @@ export function EmployeeInsightsWidget() {
               {hasJoiningDate ? (
                 <p className="text-xs text-slate-400 flex items-center gap-1">
                   <Calendar className="h-3 w-3" />
-                  Since {format(new Date(data.joining_date), 'MMM d, yyyy')} • {data.days_since_joining} days
+                  Since {formatSafeDate(data.joining_date)} • {data.days_since_joining} days
                 </p>
               ) : (
                 <p className="text-xs text-slate-400 flex items-center gap-1">

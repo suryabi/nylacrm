@@ -1,5 +1,5 @@
 import React from 'react';
-import { format, parseISO, isToday, isTomorrow } from 'date-fns';
+import { format, parseISO, isToday, isTomorrow, isValid } from 'date-fns';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -12,10 +12,16 @@ import {
 } from '../ui/dropdown-menu';
 
 const formatMeetingDate = (dateStr) => {
-  const date = parseISO(dateStr);
-  if (isToday(date)) return { text: 'Today', highlight: true };
-  if (isTomorrow(date)) return { text: 'Tomorrow', highlight: false };
-  return { text: format(date, 'EEE, MMM d'), highlight: false };
+  if (!dateStr) return { text: 'N/A', highlight: false };
+  try {
+    const date = parseISO(dateStr);
+    if (!isValid(date)) return { text: 'N/A', highlight: false };
+    if (isToday(date)) return { text: 'Today', highlight: true };
+    if (isTomorrow(date)) return { text: 'Tomorrow', highlight: false };
+    return { text: format(date, 'EEE, MMM d'), highlight: false };
+  } catch (e) {
+    return { text: 'N/A', highlight: false };
+  }
 };
 
 export function UpcomingMeetingsWidget({ upcomingMeetings, onNewMeeting, onViewMeeting, onEditMeeting, onCancelMeeting }) {
