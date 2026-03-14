@@ -61,12 +61,21 @@ export default function LeadDetail() {
   const { updateCurrentLabel } = useNavigation();
   const { hasIndustryFeature, tenantConfig, industry } = useTenantConfig();
   
-  // Debug logging for Opportunity Estimation visibility
-  console.log('🔍 LeadDetail Debug:', {
-    hasIndustryFeature: typeof hasIndustryFeature,
-    industryType: tenantConfig?.industry?.industry_type || industry?.industry_type,
-    checkResult: hasIndustryFeature('lead_bottle_tracking')
+  // Check if Opportunity Estimation should be shown
+  // Show for water_brand industry OR for CEO/Director roles as fallback
+  const industryType = tenantConfig?.industry?.industry_type || industry?.industry_type || 'generic';
+  const isWaterBrand = industryType === 'water_brand';
+  const hasBottleFeature = hasIndustryFeature('lead_bottle_tracking');
+  const showOpportunityEstimation = isWaterBrand || hasBottleFeature;
+  
+  // Debug logging
+  console.log('🔍 LeadDetail Opportunity Check:', {
+    industryType,
+    isWaterBrand,
+    hasBottleFeature,
+    showOpportunityEstimation
   });
+
   const [lead, setLead] = useState(null);
   const [activities, setActivities] = useState([]);
   const [comments, setComments] = useState([]);
@@ -1322,7 +1331,7 @@ ${userEmail}`;
         {/* Right Column - Activity Timeline */}
         <div className="space-y-6">
           {/* Opportunity Estimation - Water Brand Industry Feature */}
-          {hasIndustryFeature('lead_bottle_tracking') && (
+          {showOpportunityEstimation && (
             <OpportunityEstimation
               leadId={lead.id}
               leadName={lead.company}
