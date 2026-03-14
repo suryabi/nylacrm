@@ -19,28 +19,36 @@ const QUADRANT_INFO = {
     iconBg: 'bg-amber-400', 
     textColor: 'text-amber-600', 
     cardBg: 'bg-amber-50/80 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800',
-    summaryBg: 'bg-amber-100/60 dark:bg-amber-900/30'
+    summaryBg: 'bg-amber-100/60 dark:bg-amber-900/30',
+    description: 'High Volume + High Margin',
+    examples: 'Luxury Hotels, Premium Restaurants'
   },
   'Showcase': { 
     icon: Lightbulb, 
     iconBg: 'bg-purple-500', 
     textColor: 'text-purple-600', 
     cardBg: 'bg-purple-50/80 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800',
-    summaryBg: 'bg-purple-100/60 dark:bg-purple-900/30'
+    summaryBg: 'bg-purple-100/60 dark:bg-purple-900/30',
+    description: 'Low Volume + High Brand Visibility',
+    examples: 'Chef Restaurants, Influential Dining'
   },
   'Plough Horses': { 
     icon: Tractor, 
     iconBg: 'bg-blue-500', 
     textColor: 'text-blue-600', 
     cardBg: 'bg-blue-50/80 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800',
-    summaryBg: 'bg-blue-100/60 dark:bg-blue-900/30'
+    summaryBg: 'bg-blue-100/60 dark:bg-blue-900/30',
+    description: 'High Volume + Low Margin',
+    examples: 'Beach Clubs, Chains, High Footfall'
   },
   'Puzzles': { 
     icon: HelpCircle, 
     iconBg: 'bg-slate-400', 
     textColor: 'text-slate-600', 
     cardBg: 'bg-slate-50/80 dark:bg-slate-950/30 border-slate-200 dark:border-slate-800',
-    summaryBg: 'bg-slate-100/60 dark:bg-slate-900/30'
+    summaryBg: 'bg-slate-100/60 dark:bg-slate-900/30',
+    description: 'Low Volume + Low Margin',
+    examples: 'Small Cafés, Low-Impact Accounts'
   }
 };
 
@@ -188,20 +196,30 @@ export default function LeadScoringCard({ leadId, leadCity, leadCompany }) {
 
         {/* Score Summary - Always visible */}
         {leadScore?.scored ? (
-          <div className="grid grid-cols-2 gap-3">
-            <div className={`p-3 rounded-lg text-center ${quadrantInfo ? quadrantInfo.summaryBg : 'bg-indigo-50 dark:bg-indigo-900/20'}`}>
-              <p className={`text-2xl font-bold ${quadrantInfo ? quadrantInfo.textColor : 'text-indigo-600'}`}>{leadScore.total_score}</p>
-              <p className="text-xs text-muted-foreground">Total Score</p>
-            </div>
-            {quadrantInfo && (
-              <div className={`p-3 ${quadrantInfo.summaryBg} rounded-lg text-center`}>
-                <div className="flex items-center justify-center gap-2">
-                  <div className={`p-1.5 rounded ${quadrantInfo.iconBg}`}>
-                    <QuadrantIcon className="w-4 h-4 text-white" />
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className={`p-3 rounded-lg text-center ${quadrantInfo ? quadrantInfo.summaryBg : 'bg-indigo-50 dark:bg-indigo-900/20'}`}>
+                <p className={`text-2xl font-bold ${quadrantInfo ? quadrantInfo.textColor : 'text-indigo-600'}`}>{leadScore.total_score}</p>
+                <p className="text-xs text-muted-foreground">Total Score</p>
+              </div>
+              {quadrantInfo && (
+                <div className={`p-3 ${quadrantInfo.summaryBg} rounded-lg text-center`}>
+                  <div className="flex items-center justify-center gap-2">
+                    <div className={`p-1.5 rounded ${quadrantInfo.iconBg}`}>
+                      <QuadrantIcon className="w-4 h-4 text-white" />
+                    </div>
+                    <span className={`font-bold ${quadrantInfo.textColor}`}>{leadScore.quadrant}</span>
                   </div>
-                  <span className={`font-bold ${quadrantInfo.textColor}`}>{leadScore.quadrant}</span>
+                  <p className="text-xs text-muted-foreground mt-1">Quadrant</p>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">Quadrant</p>
+              )}
+            </div>
+            
+            {/* Quadrant Description - Helps user understand the category */}
+            {quadrantInfo && (
+              <div className={`p-3 ${quadrantInfo.summaryBg} rounded-lg border ${quadrantInfo.cardBg.includes('amber') ? 'border-amber-200 dark:border-amber-700' : quadrantInfo.cardBg.includes('purple') ? 'border-purple-200 dark:border-purple-700' : quadrantInfo.cardBg.includes('blue') ? 'border-blue-200 dark:border-blue-700' : 'border-slate-200 dark:border-slate-700'}`}>
+                <p className={`text-sm font-medium ${quadrantInfo.textColor}`}>{quadrantInfo.description}</p>
+                <p className="text-xs text-muted-foreground mt-1">{quadrantInfo.examples}</p>
               </div>
             )}
           </div>
