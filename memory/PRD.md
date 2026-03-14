@@ -5,7 +5,32 @@ Build a comprehensive, mobile-ready Sales CRM application with multi-tenancy sup
 
 ## Current Session Updates (Mar 14, 2026)
 
-### Proposed SKU Pricing Enhancement (NEW)
+### City-Based Lead Scoring Model (NEW)
+- **Feature**: Lead Scoring Model is now city-specific
+- **Admin Page Changes**:
+  - City selector dropdown at top (from master locations)
+  - "Copy to City" button to duplicate models
+  - "Delete City Model" button for non-default models
+  - "Configured cities" badges showing which cities have models
+  - Fallback indicator when using default model
+- **Lead Detail Page Changes**:
+  - New `LeadScoringCard` component on right column
+  - Shows "Using model for: X" indicator
+  - 5 scoring categories with tier selection
+  - "Score Lead" button to open scoring interface
+- **Backend Changes**:
+  - Scoring moved from Accounts to Leads
+  - City-specific model lookup with default fallback
+  - New endpoints: `/api/scoring/models/cities`, `/api/scoring/models/copy`, `/api/scoring/leads/{id}/score`
+  - Legacy model migration (adds `city: default` to old models)
+
+### Files Modified (City-Based Scoring)
+- `/app/backend/routes/scoring.py` - Full rewrite for city-based lead scoring
+- `/app/frontend/src/pages/LeadScoringModel.js` - Added city selector and copy functionality
+- `/app/frontend/src/components/LeadScoringCard.js` - NEW component for lead detail
+- `/app/frontend/src/pages/LeadDetail.js` - Added LeadScoringCard
+
+### Proposed SKU Pricing Enhancement (Mar 14, 2026)
 - **Feature**: Enhanced SKU Pricing section on Lead Detail page with revenue forecasting
 - **Location**: Lead Detail page, left column, "Proposed SKU Pricing" card
 - **New Columns Added**:
