@@ -23,8 +23,7 @@ import { useTenantConfig } from '../context/TenantConfigContext';
 const API = process.env.REACT_APP_BACKEND_URL;
 
 export default function OpportunityEstimation({ leadId, leadName, existingEstimation, onSave }) {
-  const { hasIndustryFeature, getIndustryConfig } = useTenantConfig();
-  const defaultBottlesPerCover = getIndustryConfig('default_bottles_per_cover', 2);
+  const { hasIndustryFeature } = useTenantConfig();
   
   // All form values stored as STRINGS
   const [totalCovers, setTotalCovers] = useState(String(existingEstimation?.total_covers ?? 100));
@@ -61,18 +60,18 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
   }
 
   // Calculate
+  // Formula: Bottles per mode = Total Covers × (Density % / 100) × (180 / Avg Table Time) × (Adoption Rate / 100)
   const calculate = () => {
     const covers = parseInt(totalCovers) || 0;
     const tableTime = parseInt(avgTableTime) || 45;
-    const adoption = (parseInt(adoptionRate) || 0) / 100;
+    const adoption = parseInt(adoptionRate) || 0;
     const days = parseInt(operatingDays) || 30;
-    const turnoversPerHour = tableTime > 0 ? 60 / tableTime : 0;
     
     const slots = [
-      { key: 'morning', enabled: morningEnabled, density: parseInt(morningDensity) || 0, hours: 4 },
-      { key: 'evening', enabled: eveningEnabled, density: parseInt(eveningDensity) || 0, hours: 4 },
-      { key: 'night', enabled: nightEnabled, density: parseInt(nightDensity) || 0, hours: 4 },
-      { key: 'snacks', enabled: snacksEnabled, density: parseInt(snacksDensity) || 0, hours: 3 },
+      { key: 'morning', enabled: morningEnabled, density: parseInt(morningDensity) || 0 },
+      { key: 'evening', enabled: eveningEnabled, density: parseInt(eveningDensity) || 0 },
+      { key: 'night', enabled: nightEnabled, density: parseInt(nightDensity) || 0 },
+      { key: 'snacks', enabled: snacksEnabled, density: parseInt(snacksDensity) || 0 },
     ];
     
     let daily = 0;
@@ -80,9 +79,10 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
     
     slots.forEach(slot => {
       if (slot.enabled) {
-        const activeCoverCount = covers * (slot.density / 100);
-        const turnovers = turnoversPerHour * slot.hours;
-        const bottles = Math.round(activeCoverCount * turnovers * adoption * defaultBottlesPerCover);
+        // Bottles per mode = Total Covers × (Density % / 100) × (180 / Avg Table Time) × (Adoption Rate / 100)
+        const bottles = Math.round(
+          covers * (slot.density / 100) * (180 / tableTime) * (adoption / 100)
+        );
         slotResults[slot.key] = bottles;
         daily += bottles;
       } else {
