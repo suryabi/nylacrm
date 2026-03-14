@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { Card } from './ui/card';
@@ -8,9 +8,9 @@ import { Label } from './ui/label';
 import { Switch } from './ui/switch';
 import { Badge } from './ui/badge';
 import { 
-  Droplets, Calculator, Save, Maximize2, Minimize2, X, 
-  Loader2, RefreshCw, Edit2, ChevronDown, ChevronUp,
-  Sun, Moon, Sunset, Coffee
+  Droplets, Calculator, Save, Maximize2, X, 
+  Loader2, Edit2, ChevronDown, ChevronUp,
+  Sun, Moon, Sunset, Coffee, Play
 } from 'lucide-react';
 import {
   Dialog,
@@ -40,80 +40,114 @@ const DEFAULT_ESTIMATION = {
     snacks: { enabled: false, density: 40 },
   },
   dining_behavior: {
-    avg_table_time: 45, // minutes
-    water_adoption_rate: 70, // percentage
-    operating_days: 30, // days per month
+    avg_table_time: 45,
+    water_adoption_rate: 70,
+    operating_days: 30,
   },
-  override_value: null, // User can override calculated value
+  override_value: null,
+};
+
+// Calculate estimation from inputs
+const calculateFromInputs = (inputs, bottlesPerCover) => {
+  const { total_covers, operating_pattern, dining_behavior } = inputs;
+  const { avg_table_time, water_adoption_rate, operating_days } = dining_behavior;
+  
+  const turnoversPerHour = 60 / avg_table_time;
+  const slotEstimations = {};
+  let dailyTotal = 0;
+  
+  TIME_SLOTS.forEach(slot => {
+    const pattern = operating_pattern[slot.key];
+    if (pattern?.enabled) {
+      const density = (pattern.density || 0) / 100;
+      const activeCoverCount = total_covers * density;
+      const turnovers = turnoversPerHour * slot.defaultHours;
+      const adoptionRate = water_adoption_rate / 100;
+      const bottles = Math.round(activeCoverCount * turnovers * adoptionRate * bottlesPerCover);
+      slotEstimations[slot.key] = bottles;
+      dailyTotal += bottles;
+    } else {
+      slotEstimations[slot.key] = 0;
+    }
+  });
+  
+  const monthlyTotal = dailyTotal * operating_days;
+  
+  return { slotEstimations, dailyTotal, monthlyTotal };
 };
 
 export default function OpportunityEstimation({ leadId, leadName, existingEstimation, onSave }) {
   const { hasIndustryFeature, getIndustryConfig } = useTenantConfig();
-  const [estimation, setEstimation] = useState(existingEstimation || DEFAULT_ESTIMATION);
+  
+  // Saved estimation (what's persisted)
+  const [savedEstimation, setSavedEstimation] = useState(existingEstimation || DEFAULT_ESTIMATION);
+  
+  // Form inputs (local state for editing - doesn't trigger calculation on every keystroke)
+  const [formInputs, setFormInputs] = useState(existingEstimation || DEFAULT_ESTIMATION);
+  
+  // Calculated results (only updated on Apply)
+  const defaultBottlesPerCover = getIndustryConfig('default_bottles_per_cover', 2);
+  const [calculatedResults, setCalculatedResults] = useState(() => 
+    calculateFromInputs(existingEstimation || DEFAULT_ESTIMATION, defaultBottlesPerCover)
+  );
+  
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [isOverrideMode, setIsOverrideMode] = useState(!!existingEstimation?.override_value);
   const [overrideInput, setOverrideInput] = useState(existingEstimation?.override_value || '');
+  const [hasUnappliedChanges, setHasUnappliedChanges] = useState(false);
 
-  // Get industry config
-  const defaultBottlesPerCover = getIndustryConfig('default_bottles_per_cover', 2);
+  // Apply calculation - useCallback must be before conditional return
+  const handleApplyCalculation = useCallback(() => {
+    const results = calculateFromInputs(formInputs, defaultBottlesPerCover);
+    setCalculatedResults(results);
+    setHasUnappliedChanges(false);
+    toast.success('Calculation applied');
+  }, [formInputs, defaultBottlesPerCover]);
 
-  // Calculate estimated bottles
-  const calculateEstimation = useMemo(() => {
-    const { total_covers, operating_pattern, dining_behavior } = estimation;
-    const { avg_table_time, water_adoption_rate, operating_days } = dining_behavior;
-    
-    // Calculate table turnover per time slot (assuming 60 min per slot hour)
-    const turnoversPerHour = 60 / avg_table_time;
-    
-    // Calculate per-slot estimation
-    const slotEstimations = {};
-    let dailyTotal = 0;
-    
-    TIME_SLOTS.forEach(slot => {
-      const pattern = operating_pattern[slot.key];
-      if (pattern?.enabled) {
-        const density = (pattern.density || 0) / 100;
-        const activeCoverCount = total_covers * density;
-        const turnovers = turnoversPerHour * slot.defaultHours;
-        const adoptionRate = water_adoption_rate / 100;
-        
-        // Bottles = active covers * turnovers * adoption rate * bottles per cover
-        const bottles = Math.round(activeCoverCount * turnovers * adoptionRate * defaultBottlesPerCover);
-        slotEstimations[slot.key] = bottles;
-        dailyTotal += bottles;
-      } else {
-        slotEstimations[slot.key] = 0;
-      }
-    });
-    
-    const monthlyTotal = dailyTotal * operating_days;
-    
-    return {
-      slotEstimations,
-      dailyTotal,
-      monthlyTotal
-    };
-  }, [estimation, defaultBottlesPerCover]);
+  // Handle blur - recalculate on tab out
+  const handleInputBlur = useCallback(() => {
+    if (hasUnappliedChanges) {
+      const results = calculateFromInputs(formInputs, defaultBottlesPerCover);
+      setCalculatedResults(results);
+      setHasUnappliedChanges(false);
+    }
+  }, [hasUnappliedChanges, formInputs, defaultBottlesPerCover]);
 
   // Check if this feature is available - must be after all hooks
   if (!hasIndustryFeature('lead_bottle_tracking')) {
     return null;
   }
 
-  // Final value (override or calculated)
+  // Final values (override or calculated)
   const finalMonthlyValue = isOverrideMode && overrideInput 
     ? parseInt(overrideInput) 
-    : calculateEstimation.monthlyTotal;
+    : calculatedResults.monthlyTotal;
 
   const finalDailyValue = isOverrideMode && overrideInput 
-    ? Math.round(parseInt(overrideInput) / estimation.dining_behavior.operating_days)
-    : calculateEstimation.dailyTotal;
+    ? Math.round(parseInt(overrideInput) / formInputs.dining_behavior.operating_days)
+    : calculatedResults.dailyTotal;
+
+  // Update form inputs (doesn't recalculate)
+  const updateFormInput = (path, value) => {
+    setFormInputs(prev => {
+      const newInputs = { ...prev };
+      const keys = path.split('.');
+      let obj = newInputs;
+      for (let i = 0; i < keys.length - 1; i++) {
+        obj[keys[i]] = { ...obj[keys[i]] };
+        obj = obj[keys[i]];
+      }
+      obj[keys[keys.length - 1]] = value;
+      return newInputs;
+    });
+    setHasUnappliedChanges(true);
+  };
 
   // Update operating pattern
   const updatePattern = (slot, field, value) => {
-    setEstimation(prev => ({
+    setFormInputs(prev => ({
       ...prev,
       operating_pattern: {
         ...prev.operating_pattern,
@@ -123,35 +157,45 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
         }
       }
     }));
+    setHasUnappliedChanges(true);
   };
 
   // Update dining behavior
   const updateBehavior = (field, value) => {
-    setEstimation(prev => ({
+    setFormInputs(prev => ({
       ...prev,
       dining_behavior: {
         ...prev.dining_behavior,
         [field]: value
       }
     }));
+    setHasUnappliedChanges(true);
   };
 
-  // Save estimation
+  // Save estimation to backend
   const handleSave = async () => {
     try {
       setSaving(true);
       
+      // Ensure we have latest calculation
+      const finalResults = calculateFromInputs(formInputs, defaultBottlesPerCover);
+      setCalculatedResults(finalResults);
+      
       const payload = {
-        ...estimation,
-        calculated_daily: calculateEstimation.dailyTotal,
-        calculated_monthly: calculateEstimation.monthlyTotal,
+        ...formInputs,
+        calculated_daily: finalResults.dailyTotal,
+        calculated_monthly: finalResults.monthlyTotal,
         override_value: isOverrideMode ? parseInt(overrideInput) || null : null,
-        final_monthly: finalMonthlyValue,
-        final_daily: finalDailyValue,
+        final_monthly: isOverrideMode && overrideInput ? parseInt(overrideInput) : finalResults.monthlyTotal,
+        final_daily: isOverrideMode && overrideInput 
+          ? Math.round(parseInt(overrideInput) / formInputs.dining_behavior.operating_days)
+          : finalResults.dailyTotal,
       };
       
       await axios.put(`${API}/api/leads/${leadId}/opportunity-estimation`, payload);
       
+      setSavedEstimation(formInputs);
+      setHasUnappliedChanges(false);
       toast.success('Opportunity estimation saved');
       if (onSave) onSave(payload);
       setShowModal(false);
@@ -160,6 +204,13 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
     } finally {
       setSaving(false);
     }
+  };
+
+  // Reset form to saved values
+  const handleReset = () => {
+    setFormInputs(savedEstimation);
+    setCalculatedResults(calculateFromInputs(savedEstimation, defaultBottlesPerCover));
+    setHasUnappliedChanges(false);
   };
 
   // Compact view content
@@ -215,19 +266,19 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div>
               <span className="text-muted-foreground">Total Covers:</span>
-              <span className="ml-2 font-medium">{estimation.total_covers}</span>
+              <span className="ml-2 font-medium">{formInputs.total_covers}</span>
             </div>
             <div>
               <span className="text-muted-foreground">Operating Days:</span>
-              <span className="ml-2 font-medium">{estimation.dining_behavior.operating_days}</span>
+              <span className="ml-2 font-medium">{formInputs.dining_behavior.operating_days}</span>
             </div>
             <div>
               <span className="text-muted-foreground">Adoption Rate:</span>
-              <span className="ml-2 font-medium">{estimation.dining_behavior.water_adoption_rate}%</span>
+              <span className="ml-2 font-medium">{formInputs.dining_behavior.water_adoption_rate}%</span>
             </div>
             <div>
               <span className="text-muted-foreground">Avg Table Time:</span>
-              <span className="ml-2 font-medium">{estimation.dining_behavior.avg_table_time} min</span>
+              <span className="ml-2 font-medium">{formInputs.dining_behavior.avg_table_time} min</span>
             </div>
           </div>
           
@@ -235,14 +286,14 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
           <div className="grid grid-cols-4 gap-1 text-xs">
             {TIME_SLOTS.map(slot => {
               const Icon = slot.icon;
-              const pattern = estimation.operating_pattern[slot.key];
+              const pattern = formInputs.operating_pattern[slot.key];
               return (
                 <div 
                   key={slot.key} 
                   className={`p-2 rounded text-center ${pattern?.enabled ? 'bg-secondary' : 'bg-muted/30 opacity-50'}`}
                 >
                   <Icon className={`h-3 w-3 mx-auto mb-1 ${slot.color}`} />
-                  <p className="font-medium">{calculateEstimation.slotEstimations[slot.key]}</p>
+                  <p className="font-medium">{calculatedResults.slotEstimations[slot.key]}</p>
                   <p className="text-muted-foreground">{slot.label}</p>
                 </div>
               );
@@ -271,8 +322,9 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
         <Label className="text-sm font-medium">Total Covers (Seating Capacity)</Label>
         <Input
           type="number"
-          value={estimation.total_covers}
-          onChange={(e) => setEstimation(prev => ({ ...prev, total_covers: parseInt(e.target.value) || 0 }))}
+          value={formInputs.total_covers}
+          onChange={(e) => updateFormInput('total_covers', parseInt(e.target.value) || 0)}
+          onBlur={handleInputBlur}
           className="text-lg font-semibold"
           data-testid="total-covers-input"
         />
@@ -284,7 +336,7 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
         <div className="space-y-2">
           {TIME_SLOTS.map(slot => {
             const Icon = slot.icon;
-            const pattern = estimation.operating_pattern[slot.key];
+            const pattern = formInputs.operating_pattern[slot.key];
             return (
               <div 
                 key={slot.key}
@@ -294,7 +346,21 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
               >
                 <Switch
                   checked={pattern?.enabled || false}
-                  onCheckedChange={(checked) => updatePattern(slot.key, 'enabled', checked)}
+                  onCheckedChange={(checked) => {
+                    updatePattern(slot.key, 'enabled', checked);
+                    // Auto-apply when toggling switches
+                    setTimeout(() => {
+                      const newInputs = {
+                        ...formInputs,
+                        operating_pattern: {
+                          ...formInputs.operating_pattern,
+                          [slot.key]: { ...formInputs.operating_pattern[slot.key], enabled: checked }
+                        }
+                      };
+                      setCalculatedResults(calculateFromInputs(newInputs, defaultBottlesPerCover));
+                      setHasUnappliedChanges(false);
+                    }, 0);
+                  }}
                   data-testid={`toggle-${slot.key}`}
                 />
                 <Icon className={`h-5 w-5 ${slot.color}`} />
@@ -306,6 +372,7 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
                     max={100}
                     value={pattern?.density || 0}
                     onChange={(e) => updatePattern(slot.key, 'density', parseInt(e.target.value) || 0)}
+                    onBlur={handleInputBlur}
                     className="w-20 text-center"
                     disabled={!pattern?.enabled}
                     data-testid={`density-${slot.key}`}
@@ -326,8 +393,9 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
             <Label className="text-xs text-muted-foreground">Avg Table Time (min)</Label>
             <Input
               type="number"
-              value={estimation.dining_behavior.avg_table_time}
+              value={formInputs.dining_behavior.avg_table_time}
               onChange={(e) => updateBehavior('avg_table_time', parseInt(e.target.value) || 30)}
+              onBlur={handleInputBlur}
               data-testid="avg-table-time"
             />
           </div>
@@ -337,8 +405,9 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
               type="number"
               min={0}
               max={100}
-              value={estimation.dining_behavior.water_adoption_rate}
+              value={formInputs.dining_behavior.water_adoption_rate}
               onChange={(e) => updateBehavior('water_adoption_rate', parseInt(e.target.value) || 0)}
+              onBlur={handleInputBlur}
               data-testid="water-adoption-rate"
             />
           </div>
@@ -348,22 +417,54 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
               type="number"
               min={1}
               max={31}
-              value={estimation.dining_behavior.operating_days}
+              value={formInputs.dining_behavior.operating_days}
               onChange={(e) => updateBehavior('operating_days', parseInt(e.target.value) || 30)}
+              onBlur={handleInputBlur}
               data-testid="operating-days"
             />
           </div>
         </div>
       </div>
 
+      {/* Apply Button */}
+      <div className="flex items-center gap-3">
+        <Button
+          type="button"
+          variant={hasUnappliedChanges ? "default" : "outline"}
+          onClick={handleApplyCalculation}
+          className="flex-1"
+          data-testid="apply-calculation-btn"
+        >
+          <Play className="h-4 w-4 mr-2" />
+          {hasUnappliedChanges ? 'Apply Changes' : 'Recalculate'}
+        </Button>
+        {hasUnappliedChanges && (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={handleReset}
+            className="text-muted-foreground"
+          >
+            Reset
+          </Button>
+        )}
+      </div>
+
       {/* Mode-wise Estimation */}
       <div className="space-y-3">
-        <Label className="text-sm font-medium">Mode-wise Estimation</Label>
+        <div className="flex items-center justify-between">
+          <Label className="text-sm font-medium">Mode-wise Estimation</Label>
+          {hasUnappliedChanges && (
+            <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
+              Unapplied changes
+            </Badge>
+          )}
+        </div>
         <div className="grid grid-cols-4 gap-2">
           {TIME_SLOTS.map(slot => {
             const Icon = slot.icon;
-            const pattern = estimation.operating_pattern[slot.key];
-            const bottles = calculateEstimation.slotEstimations[slot.key];
+            const pattern = formInputs.operating_pattern[slot.key];
+            const bottles = calculatedResults.slotEstimations[slot.key];
             return (
               <div 
                 key={slot.key}
@@ -388,14 +489,14 @@ export default function OpportunityEstimation({ leadId, leadName, existingEstima
           <div className="text-center p-4 bg-white/50 dark:bg-black/20 rounded-lg">
             <p className="text-sm text-muted-foreground mb-1">Daily Water Opportunity</p>
             <p className="text-3xl font-bold text-blue-600">
-              {calculateEstimation.dailyTotal.toLocaleString()}
+              {calculatedResults.dailyTotal.toLocaleString()}
             </p>
             <p className="text-xs text-muted-foreground">Bottles</p>
           </div>
           <div className="text-center p-4 bg-white/50 dark:bg-black/20 rounded-lg">
             <p className="text-sm text-muted-foreground mb-1">Monthly Water Opportunity</p>
             <p className="text-3xl font-bold text-primary">
-              {calculateEstimation.monthlyTotal.toLocaleString()}
+              {calculatedResults.monthlyTotal.toLocaleString()}
             </p>
             <p className="text-xs text-muted-foreground">Bottles</p>
           </div>
