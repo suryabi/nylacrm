@@ -626,3 +626,104 @@ async def delete_lead_logo(lead_id: str, current_user: dict = Depends(get_curren
         raise HTTPException(status_code=404, detail='Lead not found')
     
     return {'message': 'Logo deleted successfully'}
+
+
+
+# ============= OPPORTUNITY ESTIMATION (Water Brand Industry Feature) =============
+
+class OpportunityEstimationInput(BaseModel):
+    """Input for opportunity estimation - water brand specific"""
+    total_covers: int = 100
+    operating_pattern: dict = {
+        "morning": {"enabled": True, "density": 60},
+        "evening": {"enabled": True, "density": 80},
+        "night": {"enabled": True, "density": 90},
+        "snacks": {"enabled": False, "density": 40}
+    }
+    dining_behavior: dict = {
+        "avg_table_time": 45,
+        "water_adoption_rate": 70,
+        "operating_days": 30
+    }
+    calculated_daily: Optional[int] = None
+    calculated_monthly: Optional[int] = None
+    override_value: Optional[int] = None
+    final_monthly: Optional[int] = None
+    final_daily: Optional[int] = None
+
+
+@router.put("/{lead_id}/opportunity-estimation")
+async def update_opportunity_estimation(
+    lead_id: str,
+    estimation: OpportunityEstimationInput,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Save opportunity estimation for a lead (water brand industry feature).
+    This estimates the potential bottle volume based on venue characteristics.
+    """
+    tdb = get_tdb()
+    
+    # Verify lead exists
+    lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    # Build estimation data
+    estimation_data = {
+        'total_covers': estimation.total_covers,
+        'operating_pattern': estimation.operating_pattern,
+        'dining_behavior': estimation.dining_behavior,
+        'calculated_daily': estimation.calculated_daily,
+        'calculated_monthly': estimation.calculated_monthly,
+        'override_value': estimation.override_value,
+        'final_monthly': estimation.final_monthly,
+        'final_daily': estimation.final_daily,
+        'estimated_by': current_user['id'],
+        'estimated_at': datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Update lead with estimation
+    await tdb.leads.update_one(
+        {'id': lead_id},
+        {'$set': {
+            'opportunity_estimation': estimation_data,
+            'estimated_value': estimation.final_monthly,  # Also update legacy field
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {
+        'message': 'Opportunity estimation saved',
+        'lead_id': lead_id,
+        'estimation': estimation_data
+    }
+
+
+@router.get("/{lead_id}/opportunity-estimation")
+async def get_opportunity_estimation(
+    lead_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get opportunity estimation for a lead"""
+    tdb = get_tdb()
+    
+    lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0, 'opportunity_estimation': 1, 'company': 1})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    estimation = lead.get('opportunity_estimation')
+    
+    if not estimation:
+        return {
+            'lead_id': lead_id,
+            'has_estimation': False,
+            'message': 'No estimation found for this lead'
+        }
+    
+    return {
+        'lead_id': lead_id,
+        'company': lead.get('company'),
+        'has_estimation': True,
+        'estimation': estimation
+    }

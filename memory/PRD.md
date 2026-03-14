@@ -15,6 +15,28 @@ Build a comprehensive, mobile-ready Sales CRM application with multi-tenancy sup
 - **Super Admin Only** - Industry can only be set via Platform Admin
 - **Frontend Helper** - `hasIndustryFeature('feature_key')` in TenantConfigContext
 
+### Opportunity Estimation Module (NEW - Water Brand Industry)
+- **Purpose**: Estimate potential bottle volume for a lead based on venue characteristics
+- **Location**: Lead Detail page right column (only visible for `water_brand` industry)
+- **Inputs**:
+  - Total Covers (seating capacity)
+  - Operating Pattern (Morning, Evening, Night, Snacks toggles with density %)
+  - Dining Behavior (Avg Table Time, Water Adoption Rate, Operating Days)
+- **Outputs**:
+  - Mode-wise Estimation (bottles per time slot)
+  - Daily Water Opportunity (total bottles/day)
+  - Monthly Water Opportunity (total bottles/month)
+- **Features**:
+  - Compact card view with expand/collapse
+  - Full modal view for detailed editing
+  - Manual override option for known values
+  - Auto-saves to lead with `opportunity_estimation` field
+
+### Files Created/Modified (Opportunity Estimation)
+- `/app/frontend/src/components/OpportunityEstimation.js` - NEW component
+- `/app/backend/routes/leads.py` - Added opportunity estimation endpoints
+- `/app/frontend/src/pages/LeadDetail.js` - Integrated OpportunityEstimation component
+
 ### Files Created/Modified (Industry System)
 - `/app/backend/models/tenant.py` - Added INDUSTRY_TYPES, TenantIndustry, IndustryConfig models
 - `/app/backend/routes/tenant_admin.py` - Added industry endpoints (list types, update industry, get current industry)
@@ -105,6 +127,10 @@ Build a comprehensive, mobile-ready Sales CRM application with multi-tenancy sup
 - `PUT /api/tenants/{tenant_id}/industry?industry_type=...` - Set tenant industry (Super Admin)
 - `PUT /api/tenants/{tenant_id}/industry-config` - Update industry config (Super Admin)
 - `GET /api/tenants/current/industry` - Get current tenant's industry profile and features
+
+### Opportunity Estimation (NEW - Water Brand)
+- `PUT /api/leads/{lead_id}/opportunity-estimation` - Save opportunity estimation to lead
+- `GET /api/leads/{lead_id}/opportunity-estimation` - Get opportunity estimation for a lead
 
 ### Lead Scoring (NEW)
 - `GET /api/scoring/model` - Get tenant's scoring model

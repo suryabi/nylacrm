@@ -36,6 +36,8 @@ import { useLeadStatuses } from '../hooks/useLeadStatuses';
 import CelebrationAnimation from '../components/CelebrationAnimation';
 import AppBreadcrumb from '../components/AppBreadcrumb';
 import { useNavigation } from '../context/NavigationContext';
+import OpportunityEstimation from '../components/OpportunityEstimation';
+import { useTenantConfig } from '../context/TenantConfigContext';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -56,6 +58,7 @@ export default function LeadDetail() {
   const { user } = useAuth();
   const { statuses, getStatusLabel, getStatusColor } = useLeadStatuses();
   const { updateCurrentLabel } = useNavigation();
+  const { hasIndustryFeature } = useTenantConfig();
   const [lead, setLead] = useState(null);
   const [activities, setActivities] = useState([]);
   const [comments, setComments] = useState([]);
@@ -1202,6 +1205,16 @@ ${userEmail}`;
 
         {/* Right Column - Activity Timeline */}
         <div className="space-y-6">
+          {/* Opportunity Estimation - Water Brand Industry Feature */}
+          {hasIndustryFeature('lead_bottle_tracking') && (
+            <OpportunityEstimation
+              leadId={lead.id}
+              leadName={lead.company}
+              existingEstimation={lead.opportunity_estimation}
+              onSave={(estimation) => setLead(prev => ({ ...prev, opportunity_estimation: estimation }))}
+            />
+          )}
+
           {/* Log Activity Section - Featured Component */}
           <Card className={`overflow-hidden transition-all duration-300 ${showActivityForm ? 'ring-2 ring-primary/20 shadow-lg' : 'hover:shadow-md'}`}>
             {/* Header with gradient */}
