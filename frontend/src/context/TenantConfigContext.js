@@ -167,10 +167,14 @@ export const TenantConfigProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   const fetchTenantConfig = useCallback(async () => {
-    if (!user || !token) {
+    // Only require user to be present - token might be in cookies
+    if (!user) {
+      console.log('🔧 TenantConfig: No user, skipping fetch');
       setLoading(false);
       return;
     }
+    
+    console.log('🔧 TenantConfig: Fetching config for user:', user?.email, 'token exists:', !!token);
     
     try {
       // Fetch tenant config and industry profile in parallel
@@ -185,6 +189,8 @@ export const TenantConfigProvider = ({ children }) => {
           withCredentials: true
         }).catch(() => ({ data: { industry_type: 'generic', industry_features: [], industry_config: {} } }))
       ]);
+      
+      console.log('🔧 TenantConfig: Config response received:', !!configResponse.data);
       
       const config = configResponse.data;
       setTenantConfig(config);
