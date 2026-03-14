@@ -187,8 +187,26 @@ export const TenantConfigProvider = ({ children }) => {
       setTenantConfig(config);
       setModules(config.modules || {});
       
-      // Set industry profile
-      setIndustry(industryResponse.data || { industry_type: 'generic', industry_features: [], industry_config: {} });
+      // Set industry profile - handle both nested and flat formats
+      const industryData = industryResponse.data || {};
+      // Also check if industry is nested in the main config
+      const configIndustry = config.industry || {};
+      
+      // Merge industry data from both sources
+      const mergedIndustry = {
+        industry_type: industryData.industry_type || industryData.industry || configIndustry.industry_type || 'generic',
+        industry_features: industryData.industry_features || industryData.enabled_features || [],
+        industry_config: industryData.industry_config || configIndustry.industry_config || {}
+      };
+      
+      // If enabled_features is in industry_config, also add it to industry_features for backwards compat
+      if (mergedIndustry.industry_config?.enabled_features) {
+        mergedIndustry.industry_features = [
+          ...new Set([...mergedIndustry.industry_features, ...mergedIndustry.industry_config.enabled_features])
+        ];
+      }
+      
+      setIndustry(mergedIndustry);
       
       // Merge fetched branding with defaults
       const fetchedBranding = {
@@ -260,9 +278,14 @@ export const TenantConfigProvider = ({ children }) => {
 
   // Check if a feature is available for the current tenant's industry
   const hasIndustryFeature = useCallback((featureKey) => {
-    // Check if the feature is in the tenant's industry features list
-    return industry.industry_features?.includes(featureKey) || false;
-  }, [industry]);
+    // Check multiple possible locations for features (handles different API response formats)
+    const features = 
+      industry?.industry_features ||  // Old format
+      industry?.industry_config?.enabled_features ||  // New format from industry endpoint
+      tenantConfig?.industry?.industry_config?.enabled_features ||  // Nested in tenant config
+      [];
+    return features.includes(featureKey);
+  }, [industry, tenantConfig]);
 
   // Get industry-specific configuration value
   const getIndustryConfig = useCallback((configKey, defaultValue = null) => {
