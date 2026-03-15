@@ -29,7 +29,7 @@ import { useNavigate } from 'react-router-dom';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-export default function LeadGroupCard({ leadId, leadCompany }) {
+export default function LeadGroupCard({ leadId, leadCompany, brandingColor }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
@@ -289,7 +289,8 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
           <p className="text-xs text-muted-foreground mb-3">Link leads owned by the same person or franchise locations</p>
           <Button
             size="lg"
-            className="h-11 w-full bg-teal-600 hover:bg-teal-700"
+            className="h-11 w-full text-white hover:opacity-90"
+            style={{ backgroundColor: brandingColor || '#0d9488' }}
             onClick={() => setShowLinkDialog(true)}
           >
             <Link2 className="h-4 w-4 mr-2" /> Link Related Leads
@@ -363,7 +364,8 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
               <p className="text-sm text-muted-foreground">No linked leads</p>
               <Button 
                 size="lg" 
-                className="mt-2 h-11 w-full bg-teal-600 hover:bg-teal-700"
+                className="mt-2 h-11 w-full text-white hover:opacity-90"
+                style={{ backgroundColor: brandingColor || '#0d9488' }}
                 onClick={() => setShowLinkDialog(true)}
                 data-testid="link-related-leads-btn"
               >

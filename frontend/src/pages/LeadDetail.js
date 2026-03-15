@@ -60,7 +60,7 @@ export default function LeadDetail() {
   const { user } = useAuth();
   const { statuses, getStatusLabel, getStatusColor } = useLeadStatuses();
   const { updateCurrentLabel } = useNavigation();
-  const { hasIndustryFeature, tenantConfig, industry, loading: configLoading } = useTenantConfig();
+  const { hasIndustryFeature, tenantConfig, industry, branding, loading: configLoading } = useTenantConfig();
   
   // Check if Opportunity Estimation should be shown
   // Check ALL possible locations for industry_type
@@ -982,9 +982,9 @@ ${userEmail}`;
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-7 gap-6">
         {/* Left Column - Lead Info */}
-        <div className="lg:col-span-3 space-y-6">
+        <div className="lg:col-span-5 space-y-6">
           {/* Timeline Summary - Moved to Top */}
           <TimelineSummaryCompact activities={activities} />
 
@@ -1427,12 +1427,16 @@ ${userEmail}`;
           <LeadGroupCard
             leadId={lead.id}
             leadCompany={lead.company}
+            brandingColor={branding?.primary_color}
           />
 
           {/* Log Activity Section - Featured Component */}
           <Card className={`overflow-hidden transition-all duration-300 ${showActivityForm ? 'ring-2 ring-primary/20 shadow-lg' : 'hover:shadow-md'}`}>
-            {/* Header with gradient */}
-            <div className={`p-4 ${showActivityForm ? 'bg-gradient-to-r from-primary/10 via-primary/5 to-transparent' : 'bg-gradient-to-r from-emerald-500 to-teal-500'}`}>
+            {/* Header with gradient - uses tenant branding */}
+            <div 
+              className={`p-4 ${showActivityForm ? 'bg-gradient-to-r from-primary/10 via-primary/5 to-transparent' : ''}`}
+              style={!showActivityForm ? { background: `linear-gradient(to right, ${branding?.primary_color || '#0d9488'}, ${branding?.primary_color || '#0d9488'}dd)` } : {}}
+            >
               <Button
                 onClick={() => setShowActivityForm(!showActivityForm)}
                 variant={showActivityForm ? 'outline' : 'ghost'}
