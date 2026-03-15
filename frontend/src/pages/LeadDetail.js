@@ -613,7 +613,7 @@ ${userEmail}`;
     setUploadingLogo(true);
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('logo', file);
       
       await axios.post(`${API_URL}/leads/${id}/logo`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },

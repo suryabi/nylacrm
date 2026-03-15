@@ -764,6 +764,8 @@ async def upload_lead_logo(
     current_user: dict = Depends(get_current_user)
 ):
     """Upload a logo for a lead"""
+    import os
+    
     tdb = get_tdb()
     lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
     if not lead:
@@ -774,32 +776,55 @@ async def upload_lead_logo(
     if len(content) > 5 * 1024 * 1024:  # 5MB limit
         raise HTTPException(status_code=400, detail='File too large (max 5MB)')
     
-    # Convert to base64
-    logo_base64 = base64.b64encode(content).decode('utf-8')
-    logo_data = f"data:{logo.content_type};base64,{logo_base64}"
+    # Create logos directory if not exists
+    logos_dir = '/app/backend/static/logos/leads'
+    os.makedirs(logos_dir, exist_ok=True)
     
+    # Get file extension
+    ext = logo.filename.split('.')[-1] if '.' in logo.filename else 'png'
+    file_name = f"{lead_id}.{ext}"
+    file_path = os.path.join(logos_dir, file_name)
+    
+    # Save file
+    with open(file_path, 'wb') as f:
+        f.write(content)
+    
+    # Update lead with logo URL
+    logo_url = f"/api/static/logos/leads/{file_name}"
     await tdb.leads.update_one(
         {'id': lead_id},
         {'$set': {
-            'logo': logo_data,
+            'logo_url': logo_url,
             'updated_at': datetime.now(timezone.utc).isoformat()
         }}
     )
     
-    return {'message': 'Logo uploaded successfully', 'logo': logo_data}
+    return {'message': 'Logo uploaded successfully', 'logo_url': logo_url}
 
 
 @router.delete("/{lead_id}/logo")
 async def delete_lead_logo(lead_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a lead's logo"""
-    tdb = get_tdb()
-    result = await tdb.leads.update_one(
-        {'id': lead_id},
-        {'$unset': {'logo': ''}, '$set': {'updated_at': datetime.now(timezone.utc).isoformat()}}
-    )
+    import os
     
-    if result.modified_count == 0:
+    tdb = get_tdb()
+    lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
+    if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
+    
+    # Remove file if exists
+    logo_url = lead.get('logo_url', '')
+    if logo_url:
+        file_name = logo_url.split('/')[-1]
+        file_path = f'/app/backend/static/logos/leads/{file_name}'
+        if os.path.exists(file_path):
+            os.remove(file_path)
+    
+    # Update lead to remove logo
+    await tdb.leads.update_one(
+        {'id': lead_id},
+        {'$unset': {'logo_url': '', 'logo': ''}, '$set': {'updated_at': datetime.now(timezone.utc).isoformat()}}
+    )
     
     return {'message': 'Logo deleted successfully'}
 
