@@ -28,14 +28,6 @@ const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
 const SKUS = ['660 ml / Silver / Nyla', '660 ml / Gold / Nyla', '330 ml / Silver / Nyla', '330 ml / Gold / Nyla', '660 ml / Sparkling', '300 ml / Sparkling', '24 Brand / 660 ml'];
 
-const CUSTOMER_TIERS = [
-  'Tier 1',
-  'Tier 2',
-  'Tier 3',
-  'Tier 4',
-  'Tier 5'
-];
-
 const LEAD_SOURCES = [
   'Website',
   'LinkedIn',
@@ -83,7 +75,6 @@ export default function AddEditLead() {
     email: '',
     phone: '',
     category: '',
-    tier: '',
     city: '',
     state: '',
     country: 'India',
@@ -97,8 +88,7 @@ export default function AddEditLead() {
     current_volume: '',
     current_selling_price: '',
     interested_skus: [],
-    notes: '',
-    estimated_value: ''
+    notes: ''
   });
   
   // Set initial region when user or masterTerritories change
@@ -142,7 +132,6 @@ export default function AddEditLead() {
         email: lead.email || '',
         phone: lead.phone || '',
         category: lead.category || '',
-        tier: lead.tier || '',
         city: lead.city || '',
         state: lead.state || '',
         country: lead.country || 'India',
@@ -156,8 +145,7 @@ export default function AddEditLead() {
         current_volume: lead.current_volume || '',
         current_selling_price: lead.current_selling_price || '',
         interested_skus: lead.interested_skus || [],
-        notes: lead.notes || '',
-        estimated_value: lead.estimated_value || ''
+        notes: lead.notes || ''
       });
     } catch (error) {
       toast.error('Failed to load lead');
@@ -205,10 +193,8 @@ export default function AddEditLead() {
         phone: formData.phone || null,
         source: formData.source || null,
         category: formData.category || null,
-        tier: formData.tier || null,
         current_water_brand: formData.current_water_brand || null,
         current_volume: formData.current_volume || null,
-        estimated_value: formData.estimated_value ? parseFloat(formData.estimated_value) : null,
         current_landing_price: formData.current_landing_price ? parseFloat(formData.current_landing_price) : null,
         current_selling_price: formData.current_selling_price ? parseFloat(formData.current_selling_price) : null,
         name: formData.contact_person || formData.company
@@ -305,19 +291,6 @@ export default function AddEditLead() {
                 <SelectContent>
                   {businessCategories.map(cat => (
                     <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tier">Customer Tier *</Label>
-              <Select value={formData.tier} onValueChange={(v) => updateField('tier', v)} required>
-                <SelectTrigger data-testid="lead-tier-select">
-                  <SelectValue placeholder="Select tier" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CUSTOMER_TIERS.map(tier => (
-                    <SelectItem key={tier} value={tier}>{tier}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -559,18 +532,6 @@ export default function AddEditLead() {
                   );
                 })}
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="estimated_value">Estimated Deal Value (₹) <span className="text-muted-foreground text-xs font-normal">(Optional)</span></Label>
-              <Input
-                id="estimated_value"
-                type="number"
-                placeholder="Enter estimated value (optional)"
-                value={formData.estimated_value}
-                onChange={(e) => updateField('estimated_value', e.target.value)}
-                data-testid="lead-value-input"
-                className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              />
             </div>
           </div>
         </Card>
