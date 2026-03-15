@@ -1561,7 +1561,7 @@ ${userEmail}`;
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                         </svg>
-                        <span className="text-xs font-semibold uppercase tracking-wide">Copy to Linked Leads</span>
+                        <span className="text-xs font-semibold uppercase tracking-wide">Apply to Linked Leads</span>
                       </div>
                       <div className="space-y-2">
                         {linkedLeads.map(linked => (
@@ -1595,9 +1595,27 @@ ${userEmail}`;
                         ))}
                       </div>
                       {selectedLinkedLeads.length > 0 && (
-                        <p className="text-xs text-violet-600">
-                          Activity will be copied to {selectedLinkedLeads.length} linked lead{selectedLinkedLeads.length > 1 ? 's' : ''}
-                        </p>
+                        <div className="pt-2 border-t border-violet-200 space-y-2">
+                          <p className="text-xs text-violet-600 font-medium">
+                            For {selectedLinkedLeads.length} selected lead{selectedLinkedLeads.length > 1 ? 's' : ''}:
+                          </p>
+                          <div className="flex flex-col gap-1 text-xs text-violet-700">
+                            <span className="flex items-center gap-1">
+                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                              Activity will be copied
+                            </span>
+                            {activityStatus && activityStatus !== 'keep_current' && (
+                              <span className="flex items-center gap-1">
+                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                                Status will be updated to "{activityStatus.replace(/_/g, ' ')}"
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       )}
                     </div>
                   )}

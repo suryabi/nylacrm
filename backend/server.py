@@ -1408,6 +1408,7 @@ class ActivityCreate(BaseModel):
     new_status: Optional[str] = None
     next_followup_date: Optional[str] = None
     created_at: Optional[str] = None  # Admin override for activity date
+    copy_to_lead_ids: Optional[List[str]] = None  # Copy activity to linked leads
 
 class FollowUp(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -5860,6 +5861,7 @@ async def create_activity(activity_input: ActivityCreate, current_user: dict = D
     new_status = activity_data.pop('new_status', None)
     next_followup_date = activity_data.pop('next_followup_date', None)
     custom_created_at = activity_data.pop('created_at', None)
+    copy_to_lead_ids = activity_data.pop('copy_to_lead_ids', None) or []
     
     # Build the final description - combine activity text with status info
     description_parts = [activity_data['description']]
@@ -5883,6 +5885,7 @@ async def create_activity(activity_input: ActivityCreate, current_user: dict = D
     activity_data['description'] = ' '.join(description_parts)
     
     activity_obj = Activity(**activity_data)
+    original_activity_id = activity_obj.id
     
     # Override created_at if admin provided a custom date
     if custom_created_at:
@@ -5906,6 +5909,52 @@ async def create_activity(activity_input: ActivityCreate, current_user: dict = D
         lead_updates['next_followup_date'] = next_followup_date
     
     await get_tdb().leads.update_one({'id': activity_data['lead_id']}, {'$set': lead_updates})
+    
+    # Copy activity and status to linked leads if requested
+    copied_count = 0
+    if copy_to_lead_ids:
+        source_lead_id = activity_data['lead_id']
+        for target_lead_id in copy_to_lead_ids:
+            # Get the target lead
+            target_lead = await get_tdb().leads.find_one({'id': target_lead_id}, {'_id': 0})
+            if target_lead:
+                # Create copied activity with custom description for the target lead
+                target_current_status = target_lead.get('status')
+                target_description_parts = [activity_input.description]  # Use original description
+                
+                if new_status and target_current_status and target_current_status != new_status:
+                    old_label = target_current_status.replace('_', ' ').title()
+                    new_label = new_status.replace('_', ' ').title()
+                    target_description_parts.append(f"[Status: {old_label} → {new_label}]")
+                elif target_current_status:
+                    status_label = target_current_status.replace('_', ' ').title()
+                    target_description_parts.append(f"[Status: {status_label}]")
+                
+                copied_activity = {
+                    'id': str(uuid.uuid4()),
+                    'lead_id': target_lead_id,
+                    'activity_type': activity_data['activity_type'],
+                    'description': ' '.join(target_description_parts),
+                    'interaction_method': activity_data.get('interaction_method'),
+                    'created_by': current_user['id'],
+                    'created_at': doc['created_at'],
+                    'is_shared_copy': True,
+                    'original_activity_id': original_activity_id,
+                    'source_lead_id': source_lead_id
+                }
+                await get_tdb().activities.insert_one(copied_activity)
+                
+                # Update target lead status if new_status was provided
+                target_lead_updates = {
+                    'updated_at': datetime.now(timezone.utc).isoformat(),
+                    'last_contacted_date': doc['created_at'],
+                    'last_contact_method': activity_data.get('activity_type', '')
+                }
+                if new_status and target_current_status != new_status:
+                    target_lead_updates['status'] = new_status
+                
+                await get_tdb().leads.update_one({'id': target_lead_id}, {'$set': target_lead_updates})
+                copied_count += 1
     
     return activity_obj
 
