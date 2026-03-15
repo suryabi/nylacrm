@@ -912,9 +912,9 @@ ${userEmail}`;
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Left Column - Lead Info */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-3 space-y-6">
           {/* Timeline Summary - Moved to Top */}
           <TimelineSummaryCompact activities={activities} />
 
@@ -1369,7 +1369,7 @@ ${userEmail}`;
         </div>
 
         {/* Right Column - Activity Timeline */}
-        <div className="space-y-6">
+        <div className="lg:col-span-2 space-y-6">
           {/* Opportunity Estimation - Water Brand Industry Feature */}
           {showOpportunityEstimation && (
             <OpportunityEstimation
@@ -1500,10 +1500,10 @@ ${userEmail}`;
                           <SelectTrigger className="bg-white h-10" data-testid="activity-status-select">
                             <SelectValue placeholder="Keep current" />
                           </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="keep_current">Keep current status</SelectItem>
+                          <SelectContent className="max-h-[300px]">
+                            <SelectItem value="keep_current" className="py-1.5">Keep current status</SelectItem>
                             {statuses.map(status => (
-                              <SelectItem key={status.id} value={status.id}>{status.label}</SelectItem>
+                              <SelectItem key={status.id} value={status.id} className="py-1.5">{status.label}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>

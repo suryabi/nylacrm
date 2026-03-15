@@ -6441,7 +6441,8 @@ async def auto_populate_from_activities(
     target_user_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Auto-populate daily status from logged lead activities, grouped by interaction method"""
+    """Auto-populate daily status from logged lead activities, grouped by interaction method.
+    Activities shared to linked leads are grouped together to avoid duplication."""
     
     try:
         # Determine which user's activities to fetch
@@ -6478,6 +6479,7 @@ async def auto_populate_from_activities(
         start_datetime = datetime.fromisoformat(f'{status_date}T00:00:00').replace(tzinfo=timezone.utc).isoformat()
         end_datetime = datetime.fromisoformat(f'{status_date}T23:59:59').replace(tzinfo=timezone.utc).isoformat()
         
+        # Get original activities (not copies)
         activities = await get_tdb().activities.find(
             {
                 'created_by': fetch_user_id,
@@ -6490,12 +6492,36 @@ async def auto_populate_from_activities(
         if not activities:
             return {'formatted_text': '', 'activity_count': 0}
         
-        # Get lead names for all activities
-        lead_ids = list(set([a['lead_id'] for a in activities]))
+        # Get all activity IDs to find their copies (linked leads)
+        activity_ids = [a['id'] for a in activities]
+        
+        # Find all copies of these activities to get the linked lead IDs
+        copied_activities = await get_tdb().activities.find(
+            {
+                'original_activity_id': {'$in': activity_ids},
+                'is_shared_copy': True
+            },
+            {'_id': 0, 'original_activity_id': 1, 'lead_id': 1}
+        ).to_list(500)
+        
+        # Build a map of original activity ID -> list of linked lead IDs
+        activity_linked_leads = {}
+        for copied in copied_activities:
+            orig_id = copied['original_activity_id']
+            if orig_id not in activity_linked_leads:
+                activity_linked_leads[orig_id] = []
+            activity_linked_leads[orig_id].append(copied['lead_id'])
+        
+        # Get lead names for all activities (including linked leads)
+        all_lead_ids = list(set([a['lead_id'] for a in activities]))
+        for linked_ids in activity_linked_leads.values():
+            all_lead_ids.extend(linked_ids)
+        all_lead_ids = list(set(all_lead_ids))
+        
         leads = await get_tdb().leads.find(
-            {'id': {'$in': lead_ids}},
+            {'id': {'$in': all_lead_ids}},
             {'_id': 0, 'id': 1, 'company': 1, 'name': 1}
-        ).to_list(100)
+        ).to_list(200)
         
         lead_map = {l['id']: l.get('company') or l.get('name') for l in leads}
         
@@ -6517,7 +6543,16 @@ async def auto_populate_from_activities(
             description = ' '.join(description.split())  # Normalize multiple spaces
             interaction_method = (activity.get('interaction_method') or activity.get('activity_type') or '').lower()
             
-            activity_text = f"{lead_name} - {description}" if description else lead_name
+            # Check if this activity was shared to linked leads
+            linked_lead_ids = activity_linked_leads.get(activity['id'], [])
+            if linked_lead_ids:
+                # Group all lead names together
+                linked_names = [lead_map.get(lid, 'Unknown') for lid in linked_lead_ids]
+                all_names = [lead_name] + linked_names
+                lead_display = ', '.join(all_names)
+                activity_text = f"{lead_display} (Linked Group) - {description}" if description else f"{lead_display} (Linked Group)"
+            else:
+                activity_text = f"{lead_name} - {description}" if description else lead_name
             
             if interaction_method == 'customer_visit':
                 grouped_activities['customer_visit'].append(activity_text)
