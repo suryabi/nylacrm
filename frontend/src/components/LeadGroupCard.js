@@ -96,6 +96,10 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
       if (isSelected) {
         return prev.filter(l => l.id !== leadToToggle.id);
       } else {
+        // For "child" link type (select parent), only allow single selection
+        if (linkType === 'child') {
+          return [leadToToggle];
+        }
         return [...prev, leadToToggle];
       }
     });
@@ -408,7 +412,13 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
             {/* Link Type Selection */}
             <div className="space-y-2">
               <Label>Relationship Type</Label>
-              <Select value={linkType} onValueChange={setLinkType}>
+              <Select value={linkType} onValueChange={(value) => {
+                setLinkType(value);
+                // Clear selections when switching to single-select mode (child)
+                if (value === 'child' && selectedLeadsToLink.length > 1) {
+                  setSelectedLeadsToLink([]);
+                }
+              }}>
                 <SelectTrigger data-testid="link-type-select">
                   <SelectValue />
                 </SelectTrigger>
@@ -417,7 +427,7 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
                     <div className="flex items-center gap-2">
                       <Users className="h-4 w-4 text-violet-500" />
                       <div>
-                        <span className="font-medium">Peer Link</span>
+                        <span className="font-medium">Select Peers</span>
                         <span className="text-xs text-muted-foreground ml-2">Same owner, different outlets</span>
                       </div>
                     </div>
@@ -426,8 +436,8 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
                     <div className="flex items-center gap-2">
                       <GitBranch className="h-4 w-4 text-blue-500" />
                       <div>
-                        <span className="font-medium">Set as Parent</span>
-                        <span className="text-xs text-muted-foreground ml-2">Selected become branches of this</span>
+                        <span className="font-medium">{leadCompany}</span>
+                        <span className="text-xs text-muted-foreground ml-2">Select branches for this outlet</span>
                       </div>
                     </div>
                   </SelectItem>
@@ -435,13 +445,19 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
                     <div className="flex items-center gap-2">
                       <Building2 className="h-4 w-4 text-green-500" />
                       <div>
-                        <span className="font-medium">Set as Branch</span>
-                        <span className="text-xs text-muted-foreground ml-2">This becomes a branch of selected</span>
+                        <span className="font-medium">{leadCompany}</span>
+                        <span className="text-xs text-muted-foreground ml-2">Select parent for this outlet</span>
                       </div>
                     </div>
                   </SelectItem>
                 </SelectContent>
               </Select>
+              {linkType === 'child' && (
+                <p className="text-xs text-amber-600 flex items-center gap-1">
+                  <span className="inline-block w-1 h-1 rounded-full bg-amber-500"></span>
+                  Only one parent can be selected
+                </p>
+              )}
             </div>
 
             {/* Search */}
