@@ -259,11 +259,11 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
           <p className="text-sm text-muted-foreground mb-3">No linked leads yet</p>
           <p className="text-xs text-muted-foreground mb-3">Link leads owned by the same person or franchise locations</p>
           <Button
-            size="sm"
-            variant="outline"
+            size="lg"
+            className="h-11 w-full"
             onClick={() => setShowLinkDialog(true)}
           >
-            <Plus className="h-4 w-4 mr-1" /> Link a Lead
+            <Plus className="h-4 w-4 mr-2" /> Link a Lead
           </Button>
         </div>
       )}
@@ -271,12 +271,12 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
       {/* Add Link Button when there are existing links */}
       {totalLinked > 0 && (
         <Button
-          size="sm"
+          size="lg"
+          className="w-full h-11"
           variant="outline"
-          className="w-full"
           onClick={() => setShowLinkDialog(true)}
         >
-          <Plus className="h-4 w-4 mr-1" /> Link More Leads
+          <Plus className="h-4 w-4 mr-2" /> Link More Leads
         </Button>
       )}
     </div>
