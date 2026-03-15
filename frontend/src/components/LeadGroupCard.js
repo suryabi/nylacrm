@@ -419,34 +419,34 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
                   setSelectedLeadsToLink([]);
                 }
               }}>
-                <SelectTrigger data-testid="link-type-select">
+                <SelectTrigger data-testid="link-type-select" className="h-auto py-2">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="peer">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-violet-500" />
-                      <div>
-                        <span className="font-medium">Select Peers</span>
-                        <span className="text-xs text-muted-foreground ml-2">Same owner, different outlets</span>
+                    <div className="flex items-start gap-3 py-1">
+                      <Users className="h-5 w-5 text-violet-500 mt-0.5" />
+                      <div className="text-left">
+                        <p className="font-medium">Select Peers</p>
+                        <p className="text-xs text-muted-foreground">Link outlets owned by the same person but operating independently</p>
                       </div>
                     </div>
                   </SelectItem>
                   <SelectItem value="parent">
-                    <div className="flex items-center gap-2">
-                      <GitBranch className="h-4 w-4 text-blue-500" />
-                      <div>
-                        <span className="font-medium">{leadCompany}</span>
-                        <span className="text-xs text-muted-foreground ml-2">Select branches for this outlet</span>
+                    <div className="flex items-start gap-3 py-1">
+                      <GitBranch className="h-5 w-5 text-blue-500 mt-0.5" />
+                      <div className="text-left">
+                        <p className="font-medium">Select Branches</p>
+                        <p className="text-xs text-muted-foreground">Add branch locations that operate under {leadCompany}</p>
                       </div>
                     </div>
                   </SelectItem>
                   <SelectItem value="child">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-green-500" />
-                      <div>
-                        <span className="font-medium">{leadCompany}</span>
-                        <span className="text-xs text-muted-foreground ml-2">Select parent for this outlet</span>
+                    <div className="flex items-start gap-3 py-1">
+                      <Building2 className="h-5 w-5 text-green-500 mt-0.5" />
+                      <div className="text-left">
+                        <p className="font-medium">Select Parent</p>
+                        <p className="text-xs text-muted-foreground">Set the corporate or main outlet that {leadCompany} operates under</p>
                       </div>
                     </div>
                   </SelectItem>
@@ -454,7 +454,7 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
               </Select>
               {linkType === 'child' && (
                 <p className="text-xs text-amber-600 flex items-center gap-1">
-                  <span className="inline-block w-1 h-1 rounded-full bg-amber-500"></span>
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                   Only one parent can be selected
                 </p>
               )}
