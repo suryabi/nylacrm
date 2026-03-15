@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { Card } from './ui/card';
@@ -46,6 +46,9 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
   
   // Pop-out modal state
   const [showModal, setShowModal] = useState(false);
+  
+  // Auto-search debounce ref
+  const searchTimeoutRef = useRef(null);
 
   const fetchGroupData = useCallback(async () => {
     try {
@@ -65,8 +68,30 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
     }
   }, [leadId, fetchGroupData]);
 
+  // Auto-search effect: trigger after 4+ characters and 2 seconds idle
+  useEffect(() => {
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    // Only auto-search if 4+ characters
+    if (searchQuery.length >= 4) {
+      searchTimeoutRef.current = setTimeout(() => {
+        handleSearch();
+      }, 2000); // 2 seconds idle
+    }
+    
+    // Cleanup on unmount or query change
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery]);
+
   const handleSearch = async () => {
-    if (!searchQuery.trim() || searchQuery.length < 2) return;
+    if (!searchQuery.trim() || searchQuery.length < 4) return;
     
     setSearching(true);
     try {
@@ -304,7 +329,7 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Link2 className="h-5 w-5 text-violet-500" />
-              <span className="font-semibold">Lead Group</span>
+              <span className="font-semibold">Related Leads</span>
               {totalLinked > 0 && (
                 <Badge variant="secondary" className="text-xs">
                   {totalLinked} linked
@@ -381,7 +406,7 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Link2 className="h-5 w-5 text-violet-500" />
-              Lead Group - {leadCompany}
+              Related Leads - {leadCompany}
               {totalLinked > 0 && (
                 <Badge variant="secondary">{totalLinked} linked</Badge>
               )}
@@ -465,16 +490,19 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
               <Label>Search Leads</Label>
               <div className="flex gap-2">
                 <Input
-                  placeholder="Search by company name..."
+                  placeholder="Type 4+ letters to auto-search..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  onKeyDown={(e) => e.key === 'Enter' && searchQuery.length >= 4 && handleSearch()}
                   data-testid="lead-search-input"
                 />
-                <Button onClick={handleSearch} disabled={searching || searchQuery.length < 2}>
+                <Button onClick={handleSearch} disabled={searching || searchQuery.length < 4}>
                   {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 </Button>
               </div>
+              {searchQuery.length > 0 && searchQuery.length < 4 && (
+                <p className="text-xs text-muted-foreground">Type {4 - searchQuery.length} more character{4 - searchQuery.length > 1 ? 's' : ''} to search</p>
+              )}
             </div>
 
             {/* Selected Leads */}
