@@ -437,7 +437,7 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
                       <GitBranch className="h-5 w-5 text-blue-500 mt-0.5" />
                       <div className="text-left">
                         <p className="font-medium">Select Branches</p>
-                        <p className="text-xs text-muted-foreground">Add branch locations that operate under {leadCompany}</p>
+                        <p className="text-xs text-muted-foreground">Add branch locations that operate under this outlet</p>
                       </div>
                     </div>
                   </SelectItem>
@@ -446,7 +446,7 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
                       <Building2 className="h-5 w-5 text-green-500 mt-0.5" />
                       <div className="text-left">
                         <p className="font-medium">Select Parent</p>
-                        <p className="text-xs text-muted-foreground">Set the corporate or main outlet that {leadCompany} operates under</p>
+                        <p className="text-xs text-muted-foreground">Set the corporate or main outlet this location operates under</p>
                       </div>
                     </div>
                   </SelectItem>
