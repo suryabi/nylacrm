@@ -3,7 +3,27 @@
 ## Original Problem Statement
 Build a comprehensive, mobile-ready Sales CRM application with multi-tenancy support.
 
-## Current Session Updates (Mar 15, 2026)
+## Current Session Updates (Dec 2025)
+
+### Debug Endpoints Cleanup (Dec 2025)
+- **Task**: Removed all temporary `/api/debug/*` endpoints from `backend/server.py`
+- **Endpoints Removed**:
+  - `/api/debug/check-user/{email}` - User lookup
+  - `/api/debug/check-cogs/{city}` - COGS data inspection
+  - `/api/debug/check-session` - Session state checker
+  - `/api/debug/check-targets` - Target plans inspection
+  - `/api/debug/check-tenant-branding/{tenant_id}` - Tenant branding checker
+  - `/api/debug/clear-lead-rankings` - Lead rank clearer
+  - `/api/debug/migrate-legacy-roles` - Role migration
+  - `/api/debug/fix-user-tenant` - User tenant fixer
+  - `/api/debug/migration-status` - Migration status checker
+  - `/api/debug/migrate-all-data` - Bulk migration
+- **Reason**: Security cleanup - these public debug endpoints exposed internal data
+- **Verification**: All endpoints now return 404 Not Found
+
+---
+
+## Previous Session Updates (Mar 15, 2026)
 
 ### Lead Group Feature (NEW - Mar 15, 2026)
 - **Feature**: Link related leads together (same owner, franchise locations, corporate-branches)
