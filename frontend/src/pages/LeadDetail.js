@@ -1500,11 +1500,14 @@ ${userEmail}`;
                           <SelectTrigger className="bg-white h-10" data-testid="activity-status-select">
                             <SelectValue placeholder="Keep current" />
                           </SelectTrigger>
-                          <SelectContent className="max-h-[300px]">
-                            <SelectItem value="keep_current" className="py-1.5">Keep current status</SelectItem>
-                            {statuses.map(status => (
-                              <SelectItem key={status.id} value={status.id} className="py-1.5">{status.label}</SelectItem>
-                            ))}
+                          <SelectContent className="max-h-60">
+                            <SelectItem value="keep_current">Keep current status</SelectItem>
+                            {statuses
+                              .filter(s => s.is_active !== false && s.id && s.label)
+                              .map(status => (
+                                <SelectItem key={status.id} value={status.id}>{status.label}</SelectItem>
+                              ))
+                            }
                           </SelectContent>
                         </Select>
                       </div>
