@@ -6546,11 +6546,11 @@ async def auto_populate_from_activities(
             # Check if this activity was shared to linked leads
             linked_lead_ids = activity_linked_leads.get(activity['id'], [])
             if linked_lead_ids:
-                # Group all lead names together
+                # Group all lead names together (comma-separated)
                 linked_names = [lead_map.get(lid, 'Unknown') for lid in linked_lead_ids]
                 all_names = [lead_name] + linked_names
                 lead_display = ', '.join(all_names)
-                activity_text = f"{lead_display} (Linked Group) - {description}" if description else f"{lead_display} (Linked Group)"
+                activity_text = f"{lead_display} - {description}" if description else lead_display
             else:
                 activity_text = f"{lead_name} - {description}" if description else lead_name
             
