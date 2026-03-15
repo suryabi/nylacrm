@@ -289,7 +289,7 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
           <p className="text-xs text-muted-foreground mb-3">Link leads owned by the same person or franchise locations</p>
           <Button
             size="lg"
-            className="h-11 w-full bg-violet-600 hover:bg-violet-700"
+            className="h-11 w-full bg-teal-600 hover:bg-teal-700"
             onClick={() => setShowLinkDialog(true)}
           >
             <Link2 className="h-4 w-4 mr-2" /> Link Related Leads
@@ -363,7 +363,7 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
               <p className="text-sm text-muted-foreground">No linked leads</p>
               <Button 
                 size="lg" 
-                className="mt-2 h-11 w-full bg-violet-600 hover:bg-violet-700"
+                className="mt-2 h-11 w-full bg-teal-600 hover:bg-teal-700"
                 onClick={() => setShowLinkDialog(true)}
                 data-testid="link-related-leads-btn"
               >

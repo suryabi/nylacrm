@@ -10,7 +10,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
-import { ArrowLeft, Mail, Phone, Building2, User, MessageSquare, Send, Loader2, ArrowRightCircle, Plus, Trash2, Save, Package, Upload, Download, FileText, CheckCircle, XCircle, Clock, AlertCircle, ImageIcon, Share2, Maximize2, Minimize2, X, Eye, FileIcon } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Building2, User, MessageSquare, Send, Loader2, ArrowRightCircle, Plus, Trash2, Save, Package, Upload, Download, FileText, CheckCircle, XCircle, Clock, AlertCircle, ImageIcon, Share2, Maximize2, Minimize2, X, Eye, FileIcon, Camera } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Select,
@@ -120,6 +120,10 @@ export default function LeadDetail() {
   const [linkedLeads, setLinkedLeads] = useState([]);
   const [selectedLinkedLeads, setSelectedLinkedLeads] = useState([]);
   const [loadingLinkedLeads, setLoadingLinkedLeads] = useState(false);
+  
+  // Logo upload state
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = React.useRef(null);
   
   // Proposal state
   const [proposal, setProposal] = useState(null);
@@ -589,6 +593,46 @@ ${userEmail}`;
     }
   };
 
+  // Handle logo upload
+  const handleLogoUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file');
+      return;
+    }
+    
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be less than 5MB');
+      return;
+    }
+    
+    setUploadingLogo(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      await axios.post(`${API_URL}/leads/${id}/logo`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        withCredentials: true
+      });
+      
+      toast.success('Logo updated successfully');
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to upload logo');
+    } finally {
+      setUploadingLogo(false);
+      // Reset file input
+      if (logoInputRef.current) {
+        logoInputRef.current.value = '';
+      }
+    }
+  };
+
   const handleAddActivity = async (e) => {
     e.preventDefault();
     if (!activityDescription.trim()) {
@@ -812,19 +856,45 @@ ${userEmail}`;
           <ArrowLeft className="h-5 w-5" />
         </Button>
         
-        {/* Logo Display */}
-        <div className="shrink-0">
-          {lead.logo_url ? (
-            <div className="w-14 h-14 rounded-lg border-2 border-primary/20 overflow-hidden bg-white shadow-sm">
-              <img 
-                src={`${process.env.REACT_APP_BACKEND_URL}${lead.logo_url}`}
-                alt={`${lead.company} logo`}
-                className="w-full h-full object-contain"
-              />
-            </div>
-          ) : (
-            <div className="w-14 h-14 rounded-lg border-2 border-dashed border-muted-foreground/30 flex items-center justify-center bg-muted/20">
-              <Building2 className="h-5 w-5 text-muted-foreground/50" />
+        {/* Logo Display - Clickable to Upload */}
+        <div className="shrink-0 relative group">
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleLogoUpload}
+            className="hidden"
+            id="logo-upload-input"
+          />
+          <label 
+            htmlFor="logo-upload-input" 
+            className="cursor-pointer block"
+            title="Click to upload/change logo"
+          >
+            {lead.logo_url ? (
+              <div className="w-14 h-14 rounded-lg border-2 border-primary/20 overflow-hidden bg-white shadow-sm relative group-hover:border-primary/50 transition-all">
+                <img 
+                  src={`${process.env.REACT_APP_BACKEND_URL}${lead.logo_url}`}
+                  alt={`${lead.company} logo`}
+                  className="w-full h-full object-contain"
+                />
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <Camera className="h-5 w-5 text-white" />
+                </div>
+              </div>
+            ) : (
+              <div className="w-14 h-14 rounded-lg border-2 border-dashed border-muted-foreground/30 flex items-center justify-center bg-muted/20 group-hover:border-primary/50 group-hover:bg-primary/5 transition-all">
+                {uploadingLogo ? (
+                  <Loader2 className="h-5 w-5 text-muted-foreground/50 animate-spin" />
+                ) : (
+                  <Camera className="h-5 w-5 text-muted-foreground/50 group-hover:text-primary/70" />
+                )}
+              </div>
+            )}
+          </label>
+          {uploadingLogo && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-lg">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
             </div>
           )}
         </div>
@@ -1199,17 +1269,6 @@ ${userEmail}`;
                 </div>
               )}
             </div>
-            
-            {/* Logo Uploader */}
-            <div className="mt-6 pt-4 border-t">
-              <LogoUploader
-                entityType="leads"
-                entityId={lead.id}
-                currentLogo={lead.logo_url ? `${process.env.REACT_APP_BACKEND_URL}${lead.logo_url}` : null}
-                onLogoUpdate={() => fetchData()}
-                label="Company Logo"
-              />
-            </div>
           </Card>
 
           {/* Location Information */}
@@ -1289,29 +1348,6 @@ ${userEmail}`;
               </div>
             </Card>
           )}
-
-          {/* Lead Status - Display Only */}
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4">Lead Status</h2>
-            <div className="flex items-center gap-4 mb-4">
-              <Badge className={`${getStatusColor(lead.status)} text-sm px-3 py-1`}>
-                {getStatusLabel(lead.status)}
-              </Badge>
-            </div>
-            
-            {lead.next_followup_date && (
-              <div className="mt-4 pt-4 border-t">
-                <p className="text-sm text-muted-foreground">Next Follow-up</p>
-                <p className="font-medium">
-                  {format(new Date(lead.next_followup_date), 'MMM d, yyyy')}
-                </p>
-              </div>
-            )}
-            
-            <p className="text-xs text-muted-foreground mt-4">
-              Update status and follow-up date when logging activities
-            </p>
-          </Card>
 
           {/* Invoice Summary */}
           <InvoiceSummaryCard invoiceData={invoiceData} />
