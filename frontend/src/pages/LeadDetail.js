@@ -39,6 +39,7 @@ import { useNavigation } from '../context/NavigationContext';
 import OpportunityEstimation from '../components/OpportunityEstimation';
 import { useTenantConfig } from '../context/TenantConfigContext';
 import LeadScoringCard from '../components/LeadScoringCard';
+import LeadGroupCard from '../components/LeadGroupCard';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -115,6 +116,11 @@ export default function LeadDetail() {
   const [convertingToAccount, setConvertingToAccount] = useState(false);
   const [generatingLeadId, setGeneratingLeadId] = useState(false);
   
+  // Lead Group state for copying activities
+  const [linkedLeads, setLinkedLeads] = useState([]);
+  const [selectedLinkedLeads, setSelectedLinkedLeads] = useState([]);
+  const [loadingLinkedLeads, setLoadingLinkedLeads] = useState(false);
+  
   // Proposal state
   const [proposal, setProposal] = useState(null);
   const [proposalLoading, setProposalLoading] = useState(false);
@@ -149,7 +155,25 @@ export default function LeadDetail() {
     fetchData();
     fetchMasterSkus();
     fetchProposal();
+    fetchLinkedLeads();
   }, [id]);
+
+  const fetchLinkedLeads = async () => {
+    setLoadingLinkedLeads(true);
+    try {
+      const res = await axios.get(`${API_URL}/leads/${id}/group`, { withCredentials: true });
+      const allLinked = [
+        ...(res.data.parent_lead ? [res.data.parent_lead] : []),
+        ...(res.data.child_leads || []),
+        ...(res.data.peer_leads || [])
+      ];
+      setLinkedLeads(allLinked);
+    } catch (error) {
+      console.log('Could not load linked leads');
+    } finally {
+      setLoadingLinkedLeads(false);
+    }
+  };
 
   const fetchMasterSkus = async () => {
     try {
@@ -598,7 +622,12 @@ ${userEmail}`;
         activityPayload.created_at = new Date(activityDate + 'T12:00:00Z').toISOString();
       }
       
-      // Single API call handles everything: activity logging + status update + follow-up
+      // Include linked leads to copy activity to
+      if (selectedLinkedLeads.length > 0) {
+        activityPayload.copy_to_lead_ids = selectedLinkedLeads;
+      }
+      
+      // Single API call handles everything: activity logging + status update + follow-up + copy to linked leads
       await activitiesAPI.create(activityPayload);
       
       // Check if we should trigger celebration
@@ -612,11 +641,13 @@ ${userEmail}`;
         }
       }
       
-      toast.success('Activity logged successfully');
+      const copiedMsg = selectedLinkedLeads.length > 0 ? ` (copied to ${selectedLinkedLeads.length} linked leads)` : '';
+      toast.success(`Activity logged successfully${copiedMsg}`);
       setActivityDescription('');
       setActivityStatus('');
       setActivityFollowUpDate('');
       setActivityDate('');
+      setSelectedLinkedLeads([]);
       setShowActivityForm(false);
       fetchData();
     } catch (error) {
@@ -1356,6 +1387,12 @@ ${userEmail}`;
             leadCompany={lead.company}
           />
 
+          {/* Lead Group Card - Link related leads */}
+          <LeadGroupCard
+            leadId={lead.id}
+            leadCompany={lead.company}
+          />
+
           {/* Log Activity Section - Featured Component */}
           <Card className={`overflow-hidden transition-all duration-300 ${showActivityForm ? 'ring-2 ring-primary/20 shadow-lg' : 'hover:shadow-md'}`}>
             {/* Header with gradient */}
@@ -1516,6 +1553,54 @@ ${userEmail}`;
                       </div>
                     </div>
                   </div>
+                  
+                  {/* Copy to Linked Leads - Only show if there are linked leads */}
+                  {linkedLeads.length > 0 && (
+                    <div className="bg-gradient-to-r from-violet-50 to-purple-50 rounded-xl p-4 space-y-3 border border-violet-100">
+                      <div className="flex items-center gap-2 text-violet-700">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                        </svg>
+                        <span className="text-xs font-semibold uppercase tracking-wide">Copy to Linked Leads</span>
+                      </div>
+                      <div className="space-y-2">
+                        {linkedLeads.map(linked => (
+                          <label 
+                            key={linked.id} 
+                            className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all ${
+                              selectedLinkedLeads.includes(linked.id) 
+                                ? 'bg-violet-100 border border-violet-300' 
+                                : 'bg-white/50 border border-transparent hover:bg-white'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedLinkedLeads.includes(linked.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedLinkedLeads([...selectedLinkedLeads, linked.id]);
+                                } else {
+                                  setSelectedLinkedLeads(selectedLinkedLeads.filter(id => id !== linked.id));
+                                }
+                              }}
+                              className="w-4 h-4 rounded border-violet-300 text-violet-600 focus:ring-violet-500"
+                            />
+                            <div className="flex-1">
+                              <span className="font-medium text-sm">{linked.company}</span>
+                              {linked.city && (
+                                <span className="text-xs text-muted-foreground ml-2">({linked.city})</span>
+                              )}
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                      {selectedLinkedLeads.length > 0 && (
+                        <p className="text-xs text-violet-600">
+                          Activity will be copied to {selectedLinkedLeads.length} linked lead{selectedLinkedLeads.length > 1 ? 's' : ''}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   
                   {/* Submit Button - Prominent */}
                   <Button 

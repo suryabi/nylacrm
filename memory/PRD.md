@@ -3,9 +3,32 @@
 ## Original Problem Statement
 Build a comprehensive, mobile-ready Sales CRM application with multi-tenancy support.
 
-## Current Session Updates (Mar 14, 2026)
+## Current Session Updates (Mar 15, 2026)
 
-### Lead Scoring Card UI Restyle (NEW - Mar 14, 2026)
+### Lead Group Feature (NEW - Mar 15, 2026)
+- **Feature**: Link related leads together (same owner, franchise locations, corporate-branches)
+- **Two Relationship Types**:
+  - **Parent-Child**: Corporate → Branches hierarchy
+  - **Peer Links**: Bi-directional links for same owner outlets
+- **Link Management UI**:
+  - `LeadGroupCard` component on Lead Detail page
+  - Shows linked count with colored badges (parent=blue, child=green, peer=violet)
+  - Link dialog with relationship type selector and lead search
+  - Click linked lead to navigate to their detail page
+- **Copy Activity to Linked Leads**:
+  - When logging activity, checkbox list appears if lead has linked leads
+  - Select which linked leads should receive a copy of the activity
+  - Toast confirms how many leads received the copy
+- **Daily Status Deduplication**:
+  - Copied activities marked with `is_shared_copy: true`
+  - Daily status auto-populate excludes copied activities to prevent duplicates
+- **Files Created/Modified**:
+  - `/app/frontend/src/components/LeadGroupCard.js` - NEW
+  - `/app/frontend/src/pages/LeadDetail.js` - Added LeadGroupCard, copy-to-linked UI
+  - `/app/backend/routes/leads.py` - Added lead group endpoints and activity copy logic
+  - `/app/backend/server.py` - Updated daily status to exclude copied activities
+
+### Lead Scoring Card UI Restyle (Mar 14-15, 2026)
 - **Feature**: Restyled `LeadScoringCard` to match `OpportunityEstimation` card design
 - **Quadrant-based Color Theming**:
   - Stars: Amber/yellow background (`bg-amber-50`)

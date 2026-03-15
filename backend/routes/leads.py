@@ -148,6 +148,23 @@ class ActivityCreate(BaseModel):
     description: str
     interaction_method: Optional[str] = None
     created_at: Optional[str] = None  # Admin can set custom date
+    copy_to_lead_ids: Optional[List[str]] = None  # Copy activity to these linked leads
+
+
+# ============= LEAD GROUP MODELS =============
+
+class LeadLinkRequest(BaseModel):
+    """Request to link two leads"""
+    target_lead_id: str
+    link_type: str = "peer"  # "peer" (bi-directional) or "parent" (this lead becomes parent) or "child" (this lead becomes child)
+
+
+class LeadGroupInfo(BaseModel):
+    """Lead group information"""
+    parent_lead_id: Optional[str] = None
+    parent_lead_name: Optional[str] = None
+    child_leads: Optional[List[dict]] = []  # [{id, company, city}]
+    peer_leads: Optional[List[dict]] = []   # [{id, company, city}]
 
 
 class FollowUp(BaseModel):
@@ -382,7 +399,7 @@ async def update_lead(lead_id: str, lead_update: LeadUpdate, current_user: dict 
         try:
             custom_date = datetime.fromisoformat(update_data['updated_at'].replace('Z', '+00:00'))
             update_data['updated_at'] = custom_date.isoformat()
-        except:
+        except (ValueError, AttributeError):
             update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     else:
         update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
@@ -428,15 +445,153 @@ async def regenerate_lead_id(lead_id: str, current_user: dict = Depends(get_curr
     return {'lead_id': new_lead_id}
 
 
+# ============= LEAD GROUP ROUTES =============
+
+@router.get("/{lead_id}/group")
+async def get_lead_group(lead_id: str, current_user: dict = Depends(get_current_user)):
+    """Get all linked leads for a lead (parent, children, peers)"""
+    tdb = get_tdb()
+    
+    lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+    
+    lead_group = lead.get('lead_group', {})
+    result = {
+        'parent_lead': None,
+        'child_leads': [],
+        'peer_leads': []
+    }
+    
+    # Get parent lead if exists
+    parent_id = lead_group.get('parent_lead_id')
+    if parent_id:
+        parent = await tdb.leads.find_one({'id': parent_id}, {'_id': 0, 'id': 1, 'company': 1, 'city': 1, 'status': 1})
+        if parent:
+            result['parent_lead'] = parent
+    
+    # Get child leads (leads that have this lead as parent)
+    child_leads = await tdb.leads.find(
+        {'lead_group.parent_lead_id': lead_id},
+        {'_id': 0, 'id': 1, 'company': 1, 'city': 1, 'status': 1}
+    ).to_list(100)
+    result['child_leads'] = child_leads
+    
+    # Get peer leads (bi-directional links)
+    peer_ids = lead_group.get('peer_lead_ids', [])
+    if peer_ids:
+        peer_leads = await tdb.leads.find(
+            {'id': {'$in': peer_ids}},
+            {'_id': 0, 'id': 1, 'company': 1, 'city': 1, 'status': 1}
+        ).to_list(100)
+        result['peer_leads'] = peer_leads
+    
+    return result
+
+
+@router.post("/{lead_id}/link")
+async def link_leads(lead_id: str, link_request: LeadLinkRequest, current_user: dict = Depends(get_current_user)):
+    """Link two leads together"""
+    tdb = get_tdb()
+    
+    # Validate both leads exist
+    lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
+    target_lead = await tdb.leads.find_one({'id': link_request.target_lead_id}, {'_id': 0})
+    
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+    if not target_lead:
+        raise HTTPException(status_code=404, detail='Target lead not found')
+    if lead_id == link_request.target_lead_id:
+        raise HTTPException(status_code=400, detail='Cannot link a lead to itself')
+    
+    link_type = link_request.link_type
+    
+    if link_type == "parent":
+        # This lead becomes the parent of target lead
+        # Set target lead's parent to this lead
+        await tdb.leads.update_one(
+            {'id': link_request.target_lead_id},
+            {'$set': {'lead_group.parent_lead_id': lead_id}}
+        )
+        return {'message': f'{lead["company"]} is now parent of {target_lead["company"]}'}
+    
+    elif link_type == "child":
+        # This lead becomes a child of target lead
+        # Set this lead's parent to target lead
+        await tdb.leads.update_one(
+            {'id': lead_id},
+            {'$set': {'lead_group.parent_lead_id': link_request.target_lead_id}}
+        )
+        return {'message': f'{lead["company"]} is now a branch of {target_lead["company"]}'}
+    
+    else:  # peer (bi-directional)
+        # Add each lead to the other's peer list
+        await tdb.leads.update_one(
+            {'id': lead_id},
+            {'$addToSet': {'lead_group.peer_lead_ids': link_request.target_lead_id}}
+        )
+        await tdb.leads.update_one(
+            {'id': link_request.target_lead_id},
+            {'$addToSet': {'lead_group.peer_lead_ids': lead_id}}
+        )
+        return {'message': f'{lead["company"]} and {target_lead["company"]} are now linked as peers'}
+
+
+@router.delete("/{lead_id}/unlink/{target_lead_id}")
+async def unlink_leads(lead_id: str, target_lead_id: str, current_user: dict = Depends(get_current_user)):
+    """Remove link between two leads"""
+    tdb = get_tdb()
+    
+    lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+    
+    lead_group = lead.get('lead_group', {})
+    
+    # Check if target is the parent
+    if lead_group.get('parent_lead_id') == target_lead_id:
+        await tdb.leads.update_one(
+            {'id': lead_id},
+            {'$unset': {'lead_group.parent_lead_id': ''}}
+        )
+        return {'message': 'Parent link removed'}
+    
+    # Check if target is a child (this lead is their parent)
+    child = await tdb.leads.find_one({'id': target_lead_id, 'lead_group.parent_lead_id': lead_id})
+    if child:
+        await tdb.leads.update_one(
+            {'id': target_lead_id},
+            {'$unset': {'lead_group.parent_lead_id': ''}}
+        )
+        return {'message': 'Child link removed'}
+    
+    # Remove from peer lists (both directions)
+    await tdb.leads.update_one(
+        {'id': lead_id},
+        {'$pull': {'lead_group.peer_lead_ids': target_lead_id}}
+    )
+    await tdb.leads.update_one(
+        {'id': target_lead_id},
+        {'$pull': {'lead_group.peer_lead_ids': lead_id}}
+    )
+    
+    return {'message': 'Peer link removed'}
+
+
 # ============= ACTIVITY ROUTES =============
 
 @router.post("/activities", response_model=Activity)
 async def create_activity(activity: ActivityCreate, current_user: dict = Depends(get_current_user)):
-    """Create a new activity for a lead"""
+    """Create a new activity for a lead, optionally copying to linked leads"""
     tdb = get_tdb()
     activity_data = activity.model_dump()
-    activity_data['id'] = str(uuid.uuid4())
+    original_activity_id = str(uuid.uuid4())
+    activity_data['id'] = original_activity_id
     activity_data['created_by'] = current_user['id']
+    
+    # Extract copy_to_lead_ids before processing
+    copy_to_lead_ids = activity_data.pop('copy_to_lead_ids', None) or []
     
     # Use custom created_at if provided (admin feature), otherwise use current time
     if activity_data.get('created_at'):
@@ -444,14 +599,35 @@ async def create_activity(activity: ActivityCreate, current_user: dict = Depends
         try:
             custom_date = datetime.fromisoformat(activity_data['created_at'].replace('Z', '+00:00'))
             activity_data['created_at'] = custom_date.isoformat()
-        except:
+        except (ValueError, AttributeError):
             activity_data['created_at'] = datetime.now(timezone.utc).isoformat()
     else:
         activity_data['created_at'] = datetime.now(timezone.utc).isoformat()
     
+    # Insert the original activity
     await tdb.activities.insert_one(activity_data)
     
+    # Copy to linked leads if requested
+    copied_count = 0
+    if copy_to_lead_ids:
+        source_lead_id = activity_data['lead_id']
+        for target_lead_id in copy_to_lead_ids:
+            # Verify the target lead exists
+            target_lead = await tdb.leads.find_one({'id': target_lead_id}, {'_id': 0, 'id': 1})
+            if target_lead:
+                copied_activity = {
+                    **activity_data,
+                    'id': str(uuid.uuid4()),
+                    'lead_id': target_lead_id,
+                    'is_shared_copy': True,
+                    'original_activity_id': original_activity_id,
+                    'source_lead_id': source_lead_id
+                }
+                await tdb.activities.insert_one(copied_activity)
+                copied_count += 1
+    
     activity_data['created_at'] = datetime.fromisoformat(activity_data['created_at'].replace('Z', '+00:00'))
+    activity_data['copied_to_count'] = copied_count
     return Activity(**activity_data)
 
 

@@ -6425,13 +6425,15 @@ async def auto_populate_from_activities(
                 raise HTTPException(status_code=403, detail='Not authorized to fetch activities for this user')
         
         # Get all activities created by target user on this date
+        # EXCLUDE shared copies to avoid duplicate counting - only original activities
         start_datetime = datetime.fromisoformat(f'{status_date}T00:00:00').replace(tzinfo=timezone.utc).isoformat()
         end_datetime = datetime.fromisoformat(f'{status_date}T23:59:59').replace(tzinfo=timezone.utc).isoformat()
         
         activities = await get_tdb().activities.find(
             {
                 'created_by': fetch_user_id,
-                'created_at': {'$gte': start_datetime, '$lte': end_datetime}
+                'created_at': {'$gte': start_datetime, '$lte': end_datetime},
+                'is_shared_copy': {'$ne': True}  # Exclude copied activities to avoid duplicates
             },
             {'_id': 0}
         ).to_list(100)
