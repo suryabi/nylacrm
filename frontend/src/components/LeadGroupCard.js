@@ -6,6 +6,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { Checkbox } from './ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -22,7 +23,7 @@ import {
 } from './ui/select';
 import { 
   Link2, Building2, ChevronDown, ChevronUp, Plus, X, 
-  Loader2, GitBranch, Users, Search, ExternalLink
+  Loader2, GitBranch, Users, Search, ExternalLink, Maximize2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -41,6 +42,10 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [linking, setLinking] = useState(false);
+  const [selectedLeadsToLink, setSelectedLeadsToLink] = useState([]);
+  
+  // Pop-out modal state
+  const [showModal, setShowModal] = useState(false);
 
   const fetchGroupData = useCallback(async () => {
     try {
@@ -66,7 +71,7 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
     setSearching(true);
     try {
       const res = await axios.get(`${API}/api/leads`, {
-        params: { search: searchQuery, page_size: 10 }
+        params: { search: searchQuery, page_size: 15 }
       });
       // Filter out current lead and already linked leads
       const linkedIds = [
@@ -77,7 +82,7 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
       ].filter(Boolean);
       
       const filtered = (res.data.data || res.data).filter(l => !linkedIds.includes(l.id));
-      setSearchResults(filtered.slice(0, 5));
+      setSearchResults(filtered.slice(0, 10));
     } catch (err) {
       toast.error('Failed to search leads');
     } finally {
@@ -85,20 +90,47 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
     }
   };
 
-  const handleLink = async (targetLeadId, targetCompany) => {
+  const toggleLeadSelection = (leadToToggle) => {
+    setSelectedLeadsToLink(prev => {
+      const isSelected = prev.some(l => l.id === leadToToggle.id);
+      if (isSelected) {
+        return prev.filter(l => l.id !== leadToToggle.id);
+      } else {
+        return [...prev, leadToToggle];
+      }
+    });
+  };
+
+  const handleLinkSelected = async () => {
+    if (selectedLeadsToLink.length === 0) return;
+    
     setLinking(true);
+    let successCount = 0;
+    
     try {
-      await axios.post(`${API}/api/leads/${leadId}/link`, {
-        target_lead_id: targetLeadId,
-        link_type: linkType
-      });
-      toast.success(`Linked with ${targetCompany}`);
+      for (const targetLead of selectedLeadsToLink) {
+        try {
+          await axios.post(`${API}/api/leads/${leadId}/link`, {
+            target_lead_id: targetLead.id,
+            link_type: linkType
+          });
+          successCount++;
+        } catch (err) {
+          console.error(`Failed to link ${targetLead.company}:`, err);
+        }
+      }
+      
+      if (successCount > 0) {
+        toast.success(`Linked ${successCount} lead${successCount > 1 ? 's' : ''} successfully`);
+      }
+      
       setShowLinkDialog(false);
       setSearchQuery('');
       setSearchResults([]);
+      setSelectedLeadsToLink([]);
       fetchGroupData();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to link leads');
+      toast.error('Failed to link leads');
     } finally {
       setLinking(false);
     }
@@ -117,6 +149,138 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
   };
 
   const totalLinked = (groupData.parent_lead ? 1 : 0) + groupData.child_leads.length + groupData.peer_leads.length;
+
+  // Linked leads list component - used in both card and modal
+  const LinkedLeadsList = ({ inModal = false }) => (
+    <div className={`space-y-4 ${inModal ? '' : 'pt-3 border-t'}`}>
+      {/* Parent Lead */}
+      {groupData.parent_lead && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-sm font-medium text-blue-600">
+            <GitBranch className="h-4 w-4" />
+            Corporate / Parent
+          </div>
+          <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+            <div 
+              className="flex items-center gap-2 cursor-pointer hover:text-blue-600"
+              onClick={() => navigate(`/leads/${groupData.parent_lead.id}`)}
+            >
+              <Building2 className="h-4 w-4" />
+              <span className="font-medium">{groupData.parent_lead.company}</span>
+              {groupData.parent_lead.city && (
+                <span className="text-xs text-muted-foreground">({groupData.parent_lead.city})</span>
+              )}
+              <ExternalLink className="h-3 w-3" />
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50"
+              onClick={() => handleUnlink(groupData.parent_lead.id, groupData.parent_lead.company)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Child Leads (Branches) */}
+      {groupData.child_leads.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-sm font-medium text-green-600">
+            <Building2 className="h-4 w-4" />
+            Branches / Locations ({groupData.child_leads.length})
+          </div>
+          <div className="space-y-2">
+            {groupData.child_leads.map(child => (
+              <div key={child.id} className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <div 
+                  className="flex items-center gap-2 cursor-pointer hover:text-green-600"
+                  onClick={() => navigate(`/leads/${child.id}`)}
+                >
+                  <span className="font-medium">{child.company}</span>
+                  {child.city && (
+                    <span className="text-xs text-muted-foreground">({child.city})</span>
+                  )}
+                  <ExternalLink className="h-3 w-3" />
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50"
+                  onClick={() => handleUnlink(child.id, child.company)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Peer Leads */}
+      {groupData.peer_leads.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-sm font-medium text-violet-600">
+            <Users className="h-4 w-4" />
+            Linked Peers ({groupData.peer_leads.length})
+          </div>
+          <div className="space-y-2">
+            {groupData.peer_leads.map(peer => (
+              <div key={peer.id} className="flex items-center justify-between p-3 bg-violet-50 dark:bg-violet-900/20 rounded-lg">
+                <div 
+                  className="flex items-center gap-2 cursor-pointer hover:text-violet-600"
+                  onClick={() => navigate(`/leads/${peer.id}`)}
+                >
+                  <span className="font-medium">{peer.company}</span>
+                  {peer.city && (
+                    <span className="text-xs text-muted-foreground">({peer.city})</span>
+                  )}
+                  <ExternalLink className="h-3 w-3" />
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50"
+                  onClick={() => handleUnlink(peer.id, peer.company)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* No links when expanded */}
+      {totalLinked === 0 && (
+        <div className="text-center py-6">
+          <Link2 className="h-10 w-10 mx-auto text-muted-foreground/30 mb-2" />
+          <p className="text-sm text-muted-foreground mb-3">No linked leads yet</p>
+          <p className="text-xs text-muted-foreground mb-3">Link leads owned by the same person or franchise locations</p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowLinkDialog(true)}
+          >
+            <Plus className="h-4 w-4 mr-1" /> Link a Lead
+          </Button>
+        </div>
+      )}
+
+      {/* Add Link Button when there are existing links */}
+      {totalLinked > 0 && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full"
+          onClick={() => setShowLinkDialog(true)}
+        >
+          <Plus className="h-4 w-4 mr-1" /> Link More Leads
+        </Button>
+      )}
+    </div>
+  );
 
   if (loading) {
     return (
@@ -149,9 +313,18 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
                 size="icon"
                 className="h-7 w-7"
                 onClick={() => setShowLinkDialog(true)}
-                title="Link Lead"
+                title="Link Leads"
               >
                 <Plus className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setShowModal(true)}
+                title="Expand"
+              >
+                <Maximize2 className="h-4 w-4" />
               </Button>
               <Button
                 variant="ghost"
@@ -194,146 +367,40 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
           )}
 
           {/* Expanded Content */}
-          {expanded && (
-            <div className="pt-3 border-t space-y-4">
-              {/* Parent Lead */}
-              {groupData.parent_lead && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-medium text-blue-600">
-                    <GitBranch className="h-4 w-4" />
-                    Corporate / Parent
-                  </div>
-                  <div className="flex items-center justify-between p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <div 
-                      className="flex items-center gap-2 cursor-pointer hover:text-blue-600"
-                      onClick={() => navigate(`/leads/${groupData.parent_lead.id}`)}
-                    >
-                      <Building2 className="h-4 w-4" />
-                      <span className="font-medium">{groupData.parent_lead.company}</span>
-                      {groupData.parent_lead.city && (
-                        <span className="text-xs text-muted-foreground">({groupData.parent_lead.city})</span>
-                      )}
-                      <ExternalLink className="h-3 w-3" />
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 text-red-500 hover:text-red-700"
-                      onClick={() => handleUnlink(groupData.parent_lead.id, groupData.parent_lead.company)}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {/* Child Leads (Branches) */}
-              {groupData.child_leads.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-medium text-green-600">
-                    <Building2 className="h-4 w-4" />
-                    Branches / Locations ({groupData.child_leads.length})
-                  </div>
-                  <div className="space-y-1">
-                    {groupData.child_leads.map(child => (
-                      <div key={child.id} className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                        <div 
-                          className="flex items-center gap-2 cursor-pointer hover:text-green-600"
-                          onClick={() => navigate(`/leads/${child.id}`)}
-                        >
-                          <span className="font-medium">{child.company}</span>
-                          {child.city && (
-                            <span className="text-xs text-muted-foreground">({child.city})</span>
-                          )}
-                          <ExternalLink className="h-3 w-3" />
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-red-500 hover:text-red-700"
-                          onClick={() => handleUnlink(child.id, child.company)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Peer Leads */}
-              {groupData.peer_leads.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-medium text-violet-600">
-                    <Users className="h-4 w-4" />
-                    Linked Peers ({groupData.peer_leads.length})
-                  </div>
-                  <div className="space-y-1">
-                    {groupData.peer_leads.map(peer => (
-                      <div key={peer.id} className="flex items-center justify-between p-2 bg-violet-50 dark:bg-violet-900/20 rounded-lg">
-                        <div 
-                          className="flex items-center gap-2 cursor-pointer hover:text-violet-600"
-                          onClick={() => navigate(`/leads/${peer.id}`)}
-                        >
-                          <span className="font-medium">{peer.company}</span>
-                          {peer.city && (
-                            <span className="text-xs text-muted-foreground">({peer.city})</span>
-                          )}
-                          <ExternalLink className="h-3 w-3" />
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-red-500 hover:text-red-700"
-                          onClick={() => handleUnlink(peer.id, peer.company)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* No links when expanded */}
-              {totalLinked === 0 && (
-                <div className="text-center py-4">
-                  <Link2 className="h-8 w-8 mx-auto text-muted-foreground/30 mb-2" />
-                  <p className="text-sm text-muted-foreground">No linked leads yet</p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="mt-2"
-                    onClick={() => setShowLinkDialog(true)}
-                  >
-                    <Plus className="h-4 w-4 mr-1" /> Link a Lead
-                  </Button>
-                </div>
-              )}
-
-              {/* Add Link Button when there are existing links */}
-              {totalLinked > 0 && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => setShowLinkDialog(true)}
-                >
-                  <Plus className="h-4 w-4 mr-1" /> Link Another Lead
-                </Button>
-              )}
-            </div>
-          )}
+          {expanded && <LinkedLeadsList />}
         </div>
       </Card>
 
-      {/* Link Dialog */}
-      <Dialog open={showLinkDialog} onOpenChange={setShowLinkDialog}>
-        <DialogContent className="max-w-md">
+      {/* Pop-out Modal */}
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Link2 className="h-5 w-5 text-violet-500" />
-              Link Lead to {leadCompany}
+              Lead Group - {leadCompany}
+              {totalLinked > 0 && (
+                <Badge variant="secondary">{totalLinked} linked</Badge>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <LinkedLeadsList inModal={true} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Link Dialog with Multi-Select */}
+      <Dialog open={showLinkDialog} onOpenChange={(open) => {
+        setShowLinkDialog(open);
+        if (!open) {
+          setSelectedLeadsToLink([]);
+          setSearchResults([]);
+          setSearchQuery('');
+        }
+      }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link2 className="h-5 w-5 text-violet-500" />
+              Link Leads to {leadCompany}
             </DialogTitle>
           </DialogHeader>
 
@@ -360,7 +427,7 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
                       <GitBranch className="h-4 w-4 text-blue-500" />
                       <div>
                         <span className="font-medium">Set as Parent</span>
-                        <span className="text-xs text-muted-foreground ml-2">Selected lead becomes a branch of this</span>
+                        <span className="text-xs text-muted-foreground ml-2">Selected become branches of this</span>
                       </div>
                     </div>
                   </SelectItem>
@@ -369,7 +436,7 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
                       <Building2 className="h-4 w-4 text-green-500" />
                       <div>
                         <span className="font-medium">Set as Branch</span>
-                        <span className="text-xs text-muted-foreground ml-2">This lead becomes a branch of selected</span>
+                        <span className="text-xs text-muted-foreground ml-2">This becomes a branch of selected</span>
                       </div>
                     </div>
                   </SelectItem>
@@ -379,7 +446,7 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
 
             {/* Search */}
             <div className="space-y-2">
-              <Label>Search Lead</Label>
+              <Label>Search Leads</Label>
               <div className="flex gap-2">
                 <Input
                   placeholder="Search by company name..."
@@ -394,28 +461,57 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
               </div>
             </div>
 
-            {/* Search Results */}
+            {/* Selected Leads */}
+            {selectedLeadsToLink.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs text-violet-600 font-semibold">
+                  Selected ({selectedLeadsToLink.length})
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {selectedLeadsToLink.map(lead => (
+                    <Badge 
+                      key={lead.id} 
+                      className="bg-violet-100 text-violet-700 cursor-pointer hover:bg-violet-200"
+                      onClick={() => toggleLeadSelection(lead)}
+                    >
+                      {lead.company}
+                      <X className="h-3 w-3 ml-1" />
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Search Results with Multi-Select */}
             {searchResults.length > 0 && (
               <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Select a lead to link:</Label>
-                <div className="max-h-48 overflow-y-auto space-y-1">
-                  {searchResults.map(result => (
-                    <div
-                      key={result.id}
-                      className="flex items-center justify-between p-2 border rounded-lg hover:bg-muted/50 cursor-pointer"
-                      onClick={() => handleLink(result.id, result.company)}
-                    >
-                      <div>
-                        <span className="font-medium">{result.company}</span>
-                        {result.city && (
-                          <span className="text-xs text-muted-foreground ml-2">({result.city})</span>
-                        )}
+                <Label className="text-xs text-muted-foreground">Select leads to link:</Label>
+                <div className="max-h-60 overflow-y-auto space-y-1 border rounded-lg p-2">
+                  {searchResults.map(result => {
+                    const isSelected = selectedLeadsToLink.some(l => l.id === result.id);
+                    return (
+                      <div
+                        key={result.id}
+                        className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all ${
+                          isSelected 
+                            ? 'bg-violet-100 border border-violet-300' 
+                            : 'hover:bg-muted/50 border border-transparent'
+                        }`}
+                        onClick={() => toggleLeadSelection(result)}
+                      >
+                        <Checkbox 
+                          checked={isSelected}
+                          className="pointer-events-none"
+                        />
+                        <div className="flex-1">
+                          <span className="font-medium">{result.company}</span>
+                          {result.city && (
+                            <span className="text-xs text-muted-foreground ml-2">({result.city})</span>
+                          )}
+                        </div>
                       </div>
-                      <Button size="sm" disabled={linking}>
-                        {linking ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Link'}
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -427,9 +523,20 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
             )}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex gap-2 mt-4">
             <Button variant="outline" onClick={() => setShowLinkDialog(false)}>
               Cancel
+            </Button>
+            <Button 
+              onClick={handleLinkSelected} 
+              disabled={linking || selectedLeadsToLink.length === 0}
+              className="bg-violet-600 hover:bg-violet-700"
+            >
+              {linking ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Linking...</>
+              ) : (
+                <><Link2 className="h-4 w-4 mr-2" /> Link {selectedLeadsToLink.length > 0 ? `(${selectedLeadsToLink.length})` : ''}</>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
