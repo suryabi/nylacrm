@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from './ui/select';
 import { 
-  Link2, Building2, ChevronDown, ChevronUp, Plus, X, 
+  Link2, Building2, ChevronDown, ChevronUp, X, 
   Loader2, GitBranch, Users, Search, ExternalLink, Maximize2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -289,10 +289,10 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
           <p className="text-xs text-muted-foreground mb-3">Link leads owned by the same person or franchise locations</p>
           <Button
             size="lg"
-            className="h-11 w-full"
+            className="h-11 w-full bg-violet-600 hover:bg-violet-700"
             onClick={() => setShowLinkDialog(true)}
           >
-            <Plus className="h-4 w-4 mr-2" /> Link a Lead
+            <Link2 className="h-4 w-4 mr-2" /> Link Related Leads
           </Button>
         </div>
       )}
@@ -305,7 +305,7 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
           variant="outline"
           onClick={() => setShowLinkDialog(true)}
         >
-          <Plus className="h-4 w-4 mr-2" /> Link More Leads
+          <Link2 className="h-4 w-4 mr-2" /> Link More Leads
         </Button>
       )}
     </div>
@@ -341,15 +341,6 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
-                onClick={() => setShowLinkDialog(true)}
-                title="Link Leads"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
                 onClick={() => setShowModal(true)}
                 title="Expand"
               >
@@ -366,7 +357,22 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
             </div>
           </div>
 
-          {/* Summary when collapsed */}
+          {/* No links state - Show prominent button like Lead Score card */}
+          {totalLinked === 0 && (
+            <div className="p-3 bg-slate-50 dark:bg-slate-900/20 rounded-lg text-center">
+              <p className="text-sm text-muted-foreground">No linked leads</p>
+              <Button 
+                size="lg" 
+                className="mt-2 h-11 w-full bg-violet-600 hover:bg-violet-700"
+                onClick={() => setShowLinkDialog(true)}
+                data-testid="link-related-leads-btn"
+              >
+                <Link2 className="h-4 w-4 mr-2" /> Link Related Leads
+              </Button>
+            </div>
+          )}
+
+          {/* Summary when collapsed and has links */}
           {!expanded && totalLinked > 0 && (
             <div className="flex flex-wrap gap-2">
               {groupData.parent_lead && (
@@ -388,11 +394,6 @@ export default function LeadGroupCard({ leadId, leadCompany }) {
                 </Badge>
               )}
             </div>
-          )}
-
-          {/* No links state */}
-          {totalLinked === 0 && !expanded && (
-            <p className="text-sm text-muted-foreground">No linked leads</p>
           )}
 
           {/* Expanded Content */}
