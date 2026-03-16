@@ -21,7 +21,7 @@ import {
   FilterGrid, 
   FilterSearch 
 } from '../components/ui/filter-bar';
-import { Plus, Search, Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid, List, Filter, Users, Loader2, Check, MapPin, Calendar, Target, UserCircle, RotateCcw, Star, TrendingUp, DollarSign, BarChart3 } from 'lucide-react';
+import { Plus, Search, Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid, List, Filter, Users, Loader2, Check, MapPin, Calendar, Target, UserCircle, RotateCcw, Star, TrendingUp, DollarSign, BarChart3, Flame, Snowflake, ThermometerSun, Sparkles, Award, Layers, HelpCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Table,
@@ -293,6 +293,54 @@ export default function LeadsList() {
       }
     };
     return styles[quadrant] || styles['unscored'];
+  };
+
+  // Get quadrant icon for lead list
+  const getQuadrantIcon = (lead) => {
+    const quadrant = lead?.scoring?.quadrant;
+    if (!quadrant) return null;
+    
+    const iconProps = { className: 'h-4 w-4 flex-shrink-0' };
+    switch (quadrant) {
+      case 'Stars':
+        return <Star {...iconProps} className="h-4 w-4 flex-shrink-0 text-amber-500 fill-amber-500" title="Stars - High Volume, High Value" />;
+      case 'Showcase':
+        return <Award {...iconProps} className="h-4 w-4 flex-shrink-0 text-purple-500" title="Showcase - Low Volume, High Value" />;
+      case 'Plough Horses':
+        return <Layers {...iconProps} className="h-4 w-4 flex-shrink-0 text-blue-500" title="Plough Horses - High Volume, Low Value" />;
+      case 'Puzzles':
+        return <HelpCircle {...iconProps} className="h-4 w-4 flex-shrink-0 text-slate-500" title="Puzzles - Low Volume, Low Value" />;
+      default:
+        return null;
+    }
+  };
+
+  // Get temperature icon and styling
+  const getTemperatureIcon = (temperature) => {
+    if (!temperature) return null;
+    
+    switch (temperature) {
+      case 'hot':
+        return (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-red-100 text-red-600" title="Hot Lead">
+            <Flame className="h-3.5 w-3.5 fill-red-500" />
+          </span>
+        );
+      case 'warm':
+        return (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600" title="Warm Lead">
+            <ThermometerSun className="h-3.5 w-3.5" />
+          </span>
+        );
+      case 'cold':
+        return (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600" title="Cold Lead">
+            <Snowflake className="h-3.5 w-3.5" />
+          </span>
+        );
+      default:
+        return null;
+    }
   };
 
   const handleCompleteFollowup = async (e, lead) => {
@@ -610,7 +658,14 @@ export default function LeadsList() {
                       }} data-testid={`lead-row-${lead.id}`}>
                         <TableCell data-testid={`lead-cell-${lead.id}`}>
                           <div className="flex items-center gap-2">
-                            <div><p className="font-medium text-primary">{lead.company || lead.name}</p><p className="text-xs text-muted-foreground font-mono">{lead.lead_id || '-'}</p></div>
+                            {getQuadrantIcon(lead)}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-primary truncate">{lead.company || lead.name}</p>
+                                {getTemperatureIcon(lead.temperature)}
+                              </div>
+                              <p className="text-xs text-muted-foreground font-mono">{lead.lead_id || '-'}</p>
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell>{lead.city}</TableCell>

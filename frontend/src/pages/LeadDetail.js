@@ -10,7 +10,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
-import { ArrowLeft, Mail, Phone, Building2, User, MessageSquare, Send, Loader2, ArrowRightCircle, Plus, Trash2, Save, Package, Upload, Download, FileText, CheckCircle, XCircle, Clock, AlertCircle, ImageIcon, Share2, Maximize2, Minimize2, X, Eye, FileIcon, Camera } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Building2, User, MessageSquare, Send, Loader2, ArrowRightCircle, Plus, Trash2, Save, Package, Upload, Download, FileText, CheckCircle, XCircle, Clock, AlertCircle, ImageIcon, Share2, Maximize2, Minimize2, X, Eye, FileIcon, Camera, Flame, Snowflake, ThermometerSun } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Select,
@@ -557,6 +557,16 @@ ${userEmail}`;
     }
   };
 
+  const handleTemperatureChange = async (newTemperature) => {
+    try {
+      await leadsAPI.update(id, { temperature: newTemperature });
+      setLead(prev => ({ ...prev, temperature: newTemperature }));
+      toast.success(`Lead marked as ${newTemperature}`);
+    } catch (error) {
+      toast.error('Failed to update temperature');
+    }
+  };
+
   const handleFollowUpChange = async (newDate) => {
     try {
       await leadsAPI.update(id, { next_followup_date: newDate });
@@ -909,6 +919,49 @@ ${userEmail}`;
             >
               {getStatusLabel(lead.status)}
             </Badge>
+            {/* Temperature Selector - Hot/Warm/Cold */}
+            <Select 
+              value={lead.temperature || 'none'} 
+              onValueChange={(value) => handleTemperatureChange(value === 'none' ? null : value)}
+            >
+              <SelectTrigger 
+                className={`w-auto h-8 gap-2 border-0 ${
+                  lead.temperature === 'hot' ? 'bg-red-100 text-red-700' :
+                  lead.temperature === 'warm' ? 'bg-orange-100 text-orange-700' :
+                  lead.temperature === 'cold' ? 'bg-blue-100 text-blue-700' :
+                  'bg-gray-100 text-gray-600'
+                }`}
+                data-testid="lead-temperature-select"
+              >
+                {lead.temperature === 'hot' && <Flame className="h-4 w-4 fill-red-500" />}
+                {lead.temperature === 'warm' && <ThermometerSun className="h-4 w-4" />}
+                {lead.temperature === 'cold' && <Snowflake className="h-4 w-4" />}
+                {!lead.temperature && <ThermometerSun className="h-4 w-4 opacity-50" />}
+                <SelectValue placeholder="Set temp" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">
+                  <span className="flex items-center gap-2 text-gray-500">
+                    <span className="w-4 h-4" /> Not Set
+                  </span>
+                </SelectItem>
+                <SelectItem value="hot">
+                  <span className="flex items-center gap-2 text-red-600">
+                    <Flame className="h-4 w-4 fill-red-500" /> Hot
+                  </span>
+                </SelectItem>
+                <SelectItem value="warm">
+                  <span className="flex items-center gap-2 text-orange-600">
+                    <ThermometerSun className="h-4 w-4" /> Warm
+                  </span>
+                </SelectItem>
+                <SelectItem value="cold">
+                  <span className="flex items-center gap-2 text-blue-600">
+                    <Snowflake className="h-4 w-4" /> Cold
+                  </span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
             {lead.category && (
               <Badge variant="outline" className="text-sm capitalize">
                 {lead.category}
