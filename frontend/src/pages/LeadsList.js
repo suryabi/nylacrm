@@ -148,7 +148,7 @@ export default function LeadsList() {
     fetchUsers();
   }, []);
   
-  useEffect(() => { fetchLeads(); }, [currentPage, itemsPerPage, debouncedSearch, statusFilter, cityFilter, stateFilter, territoryFilter, assignedToFilter, timeFilter, selectedQuadrants]);
+  useEffect(() => { fetchLeads(); }, [currentPage, itemsPerPage, debouncedSearch, statusFilter, cityFilter, stateFilter, territoryFilter, assignedToFilter, timeFilter, selectedQuadrants, sortField, sortDirection]);
 
   const fetchQuadrantMetrics = async () => {
     try {
@@ -187,6 +187,8 @@ export default function LeadsList() {
         assigned_to: assignedToFilter.length > 0 ? assignedToFilter.join(',') : undefined, 
         time_filter: timeFilter !== 'lifetime' ? timeFilter : undefined,
         quadrant: selectedQuadrants.length > 0 ? selectedQuadrants.join(',') : undefined,
+        sort_by: sortField,
+        sort_order: sortDirection,
       };
       const response = await leadsAPI.getAll(params);
       const { data, total, total_pages } = response.data;
@@ -357,15 +359,8 @@ export default function LeadsList() {
     }
   };
 
-  let sortedLeads = [...leads].sort((a, b) => {
-    let aVal = a[sortField], bVal = b[sortField];
-    if (['created_at', 'updated_at', 'next_followup_date', 'last_contacted_date'].includes(sortField)) {
-      aVal = aVal ? new Date(aVal).getTime() : 0; bVal = bVal ? new Date(bVal).getTime() : 0;
-    } else if (typeof aVal === 'string') { aVal = (aVal || '').toLowerCase(); bVal = (bVal || '').toLowerCase(); }
-    return sortDirection === 'asc' ? (aVal > bVal ? 1 : -1) : (aVal < bVal ? 1 : -1);
-  });
-
-  const displayLeads = sortedLeads;
+  // Use leads directly since sorting is now server-side
+  const displayLeads = leads;
   const hasActiveFilters = searchQuery || statusFilter.length > 0 || territoryFilter !== 'all' || stateFilter !== 'all' || cityFilter !== 'all' || assignedToFilter.length > 0 || timeFilter !== 'lifetime' || selectedQuadrants.length > 0;
 
   return (
@@ -644,7 +639,7 @@ export default function LeadsList() {
                       <TableHead><button onClick={() => handleSort('assigned_to')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-assigned">Assigned To{getSortIcon('assigned_to')}</button></TableHead>
                       <TableHead><button onClick={() => handleSort('last_contacted_date')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-last-contacted">Last Contacted{getSortIcon('last_contacted_date')}</button></TableHead>
                       <TableHead><button onClick={() => handleSort('next_followup_date')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-followup">Next Follow-up{getSortIcon('next_followup_date')}</button></TableHead>
-                      <TableHead>Est. Revenue</TableHead>
+                      <TableHead><button onClick={() => handleSort('estimated_revenue')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-revenue">Est. Revenue{getSortIcon('estimated_revenue')}</button></TableHead>
                       <TableHead><button onClick={() => handleSort('status')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-status">Status{getSortIcon('status')}</button></TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>

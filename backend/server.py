@@ -3582,6 +3582,8 @@ async def get_leads(
     assigned_to: Optional[str] = None,
     time_filter: Optional[str] = None,
     quadrant: Optional[str] = None,
+    sort_by: Optional[str] = 'created_at',
+    sort_order: Optional[str] = 'desc',
     no_limit: Optional[bool] = False,
     current_user: dict = Depends(get_current_user)
 ):
@@ -3594,6 +3596,8 @@ async def get_leads(
     - search: Search in company name, contact person, lead_id
     - assigned_to: Filter by assigned user ID
     - time_filter: Filter by time period (this_week, last_week, this_month, last_month, etc.)
+    - sort_by: Field to sort by (default: created_at)
+    - sort_order: asc or desc (default: desc)
     - no_limit: If true, returns all matching leads without pagination (for Pipeline/Kanban view)
     """
     # Validate and cap page_size to prevent abuse (unless no_limit is set)
@@ -3742,8 +3746,17 @@ async def get_leads(
     total = await get_tdb().leads.count_documents(query)
     total_pages = (total + page_size - 1) // page_size  # Ceiling division
     
-    # Fetch paginated leads
-    leads = await get_tdb().leads.find(query, {'_id': 0}).sort('created_at', -1).skip(skip).limit(page_size).to_list(page_size)
+    # Fetch paginated leads with sorting
+    sort_direction = -1 if sort_order == 'desc' else 1
+    
+    # Map frontend sort fields to database fields
+    sort_field_map = {
+        'estimated_revenue': 'opportunity_estimation.estimated_monthly_revenue',
+        'opportunity_estimation.estimated_monthly_revenue': 'opportunity_estimation.estimated_monthly_revenue',
+    }
+    db_sort_field = sort_field_map.get(sort_by, sort_by)
+    
+    leads = await get_tdb().leads.find(query, {'_id': 0}).sort(db_sort_field, sort_direction).skip(skip).limit(page_size).to_list(page_size)
     
     # Get last activity for each lead
     lead_ids = [lead['id'] for lead in leads]
@@ -3789,7 +3802,7 @@ async def get_leads(
                 lead['last_contacted_date'] = None
                 lead['last_contact_method'] = None
         
-        # Calculate estimated_monthly_revenue on the fly if not stored
+        # Calculate estimated_monthly_revenue on the fly if not stored, and save to DB
         opportunity_estimation = lead.get('opportunity_estimation') or {}
         if not opportunity_estimation.get('estimated_monthly_revenue'):
             monthly_bottles = opportunity_estimation.get('final_monthly') or opportunity_estimation.get('calculated_monthly') or 0
@@ -3807,6 +3820,12 @@ async def get_leads(
                     if not lead.get('opportunity_estimation'):
                         lead['opportunity_estimation'] = {}
                     lead['opportunity_estimation']['estimated_monthly_revenue'] = estimated_revenue
+                    
+                    # Save to DB for future use in dashboards and metrics
+                    await get_tdb().leads.update_one(
+                        {'id': lead['id']},
+                        {'$set': {'opportunity_estimation.estimated_monthly_revenue': estimated_revenue}}
+                    )
     
     return PaginatedLeadsResponse(
         data=leads,

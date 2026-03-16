@@ -10,7 +10,7 @@ const getAuthHeaders = () => {
 // Leads API with server-side pagination
 export const leadsAPI = {
   getAll: (params = {}) => {
-    const { page = 1, pageSize = 25, status, city, state, country, region, search, territory, assigned_to, time_filter, quadrant } = params;
+    const { page = 1, pageSize = 25, status, city, state, country, region, search, territory, assigned_to, time_filter, quadrant, sort_by, sort_order } = params;
     const queryParams = new URLSearchParams();
     queryParams.append('page', page);
     queryParams.append('page_size', pageSize);
@@ -24,6 +24,8 @@ export const leadsAPI = {
     if (time_filter) queryParams.append('time_filter', time_filter);
     if (search) queryParams.append('search', search);
     if (quadrant) queryParams.append('quadrant', quadrant);
+    if (sort_by) queryParams.append('sort_by', sort_by);
+    if (sort_order) queryParams.append('sort_order', sort_order);
     return axios.get(`${API_URL}/leads?${queryParams.toString()}`, { headers: getAuthHeaders() });
   },
   getById: (id) => axios.get(`${API_URL}/leads/${id}`, { headers: getAuthHeaders() }),
