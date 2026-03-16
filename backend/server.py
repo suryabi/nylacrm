@@ -689,6 +689,7 @@ class LeadUpdate(BaseModel):
     notes: Optional[str] = None
     estimated_value: Optional[float] = None
     next_followup_date: Optional[str] = None
+    temperature: Optional[str] = None  # Hot, Warm, Cold lead temperature
     # Account conversion flag
     converted_to_account: Optional[bool] = False
     account_id: Optional[str] = None

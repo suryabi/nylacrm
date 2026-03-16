@@ -709,11 +709,11 @@ export default function LeadsList() {
                       }} data-testid={`lead-row-${lead.id}`}>
                         <TableCell className="w-[400px] min-w-[400px] max-w-[400px]" data-testid={`lead-cell-${lead.id}`}>
                           <div className="flex items-center gap-2">
+                            {getTemperatureIcon(lead.temperature)}
                             {getQuadrantGrade(lead)}
                             <div className="flex-1 min-w-0 max-w-[340px]">
                               <div className="flex items-center gap-2">
                                 <p className="font-medium text-primary truncate max-w-[300px]" title={lead.company || lead.name}>{lead.company || lead.name}</p>
-                                {getTemperatureIcon(lead.temperature)}
                               </div>
                               <p className="text-xs text-muted-foreground font-mono truncate">{lead.lead_id || '-'}</p>
                             </div>

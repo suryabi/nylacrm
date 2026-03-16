@@ -919,17 +919,24 @@ ${userEmail}`;
             >
               {getStatusLabel(lead.status)}
             </Badge>
-            {/* Temperature Selector - Hot/Warm/Cold */}
+            {lead.category && (
+              <Badge variant="outline" className="text-sm capitalize">
+                {lead.category}
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-4 mt-2">
+            {/* Temperature Selector - Hot/Warm/Cold - Moved to second row */}
             <Select 
               value={lead.temperature || 'none'} 
               onValueChange={(value) => handleTemperatureChange(value === 'none' ? null : value)}
             >
               <SelectTrigger 
-                className={`w-auto h-8 gap-2 border-0 ${
-                  lead.temperature === 'hot' ? 'bg-red-100 text-red-700' :
-                  lead.temperature === 'warm' ? 'bg-orange-100 text-orange-700' :
-                  lead.temperature === 'cold' ? 'bg-blue-100 text-blue-700' :
-                  'bg-gray-100 text-gray-600'
+                className={`w-auto h-9 gap-2 px-3 rounded-full border ${
+                  lead.temperature === 'hot' ? 'bg-red-100 text-red-700 border-red-300' :
+                  lead.temperature === 'warm' ? 'bg-orange-100 text-orange-700 border-orange-300' :
+                  lead.temperature === 'cold' ? 'bg-blue-100 text-blue-700 border-blue-300' :
+                  'bg-gray-50 text-gray-600 border-gray-200'
                 }`}
                 data-testid="lead-temperature-select"
               >
@@ -937,7 +944,7 @@ ${userEmail}`;
                 {lead.temperature === 'warm' && <ThermometerSun className="h-4 w-4" />}
                 {lead.temperature === 'cold' && <Snowflake className="h-4 w-4" />}
                 {!lead.temperature && <ThermometerSun className="h-4 w-4 opacity-50" />}
-                <SelectValue placeholder="Set temp" />
+                <SelectValue placeholder="Set Temperature" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">
@@ -962,13 +969,6 @@ ${userEmail}`;
                 </SelectItem>
               </SelectContent>
             </Select>
-            {lead.category && (
-              <Badge variant="outline" className="text-sm capitalize">
-                {lead.category}
-              </Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-4 mt-1">
             {lead.lead_id ? (
               <p className="text-sm font-mono text-muted-foreground" data-testid="lead-unique-id">
                 ID: {lead.lead_id}
