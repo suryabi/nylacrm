@@ -1071,7 +1071,7 @@ ${userEmail}`;
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <Package className="h-5 w-5" />
-                Proposed SKU Pricing
+                Interested / Proposed SKUs
               </h2>
               <div className="flex items-center gap-2">
                 {isEditingPricing ? (
@@ -1384,20 +1384,6 @@ ${userEmail}`;
                     <p className="font-medium">₹{lead.current_selling_price}</p>
                   </div>
                 )}
-              </div>
-            </Card>
-          )}
-
-          {/* Nyla Interest */}
-          {lead.interested_skus && lead.interested_skus.length > 0 && (
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold mb-4">Interested Nyla SKUs</h2>
-              <div className="flex flex-wrap gap-2">
-                {lead.interested_skus.slice(0, 10).map((sku) => (
-                  <Badge key={sku} className="bg-primary/10 text-primary">
-                    {sku}
-                  </Badge>
-                ))}
               </div>
             </Card>
           )}

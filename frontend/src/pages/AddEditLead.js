@@ -510,33 +510,6 @@ export default function AddEditLead() {
         </Card>
 
         <Card className="p-6">
-          <h2 className="text-lg font-semibold mb-4">Nyla Details</h2>
-          <div className="space-y-4">
-            <div className="space-y-3">
-              <Label>Which SKUs is the customer interested in?</Label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {SKUS.map((sku) => {
-                  const isChecked = (formData.interested_skus || []).includes(sku);
-                  return (
-                    <div key={sku} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`sku-${sku}`}
-                        checked={isChecked}
-                        onCheckedChange={() => toggleSKU(sku)}
-                        data-testid={`sku-checkbox-${sku}`}
-                      />
-                      <label htmlFor={`sku-${sku}`} className="text-sm font-medium cursor-pointer">
-                        {sku}
-                      </label>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-6">
           <h2 className="text-lg font-semibold mb-4">Notes</h2>
           <Textarea
             value={formData.notes}
