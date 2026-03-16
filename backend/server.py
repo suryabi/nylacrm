@@ -3788,6 +3788,25 @@ async def get_leads(
             else:
                 lead['last_contacted_date'] = None
                 lead['last_contact_method'] = None
+        
+        # Calculate estimated_monthly_revenue on the fly if not stored
+        opportunity_estimation = lead.get('opportunity_estimation') or {}
+        if not opportunity_estimation.get('estimated_monthly_revenue'):
+            monthly_bottles = opportunity_estimation.get('final_monthly') or opportunity_estimation.get('calculated_monthly') or 0
+            proposed_sku_pricing = lead.get('proposed_sku_pricing') or []
+            
+            if monthly_bottles and proposed_sku_pricing:
+                estimated_revenue = 0
+                for sku in proposed_sku_pricing:
+                    percentage = sku.get('percentage', 0)
+                    price_per_unit = sku.get('price_per_unit', 0)
+                    estimated_qty = round((monthly_bottles * percentage) / 100) if percentage else 0
+                    estimated_revenue += estimated_qty * price_per_unit
+                
+                if estimated_revenue > 0:
+                    if not lead.get('opportunity_estimation'):
+                        lead['opportunity_estimation'] = {}
+                    lead['opportunity_estimation']['estimated_monthly_revenue'] = estimated_revenue
     
     return PaginatedLeadsResponse(
         data=leads,
