@@ -310,7 +310,8 @@ async def get_leads(
         query['state'] = state
     
     if assigned_to:
-        query['assigned_to'] = assigned_to
+        assigned_to_list = assigned_to.split(',')
+        query['assigned_to'] = {'$in': assigned_to_list}
     
     if territory:
         query['region'] = territory
@@ -695,7 +696,8 @@ async def get_follow_ups(
     if lead_id:
         query['lead_id'] = lead_id
     if assigned_to:
-        query['assigned_to'] = assigned_to
+        assigned_to_list = assigned_to.split(',')
+        query['assigned_to'] = {'$in': assigned_to_list}
     
     follow_ups = await tdb.follow_ups.find(query, {'_id': 0}).sort('scheduled_date', 1).to_list(1000)
     
