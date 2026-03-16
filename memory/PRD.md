@@ -5,27 +5,41 @@ Build a comprehensive, mobile-ready Sales CRM application with multi-tenancy sup
 
 ## Current Session Updates (Dec 2025)
 
-### Debug Endpoints Cleanup (Dec 2025)
-- **Task**: Removed all temporary `/api/debug/*` endpoints from `backend/server.py`
-- **Endpoints Removed**:
-  - `/api/debug/check-user/{email}` - User lookup
-  - `/api/debug/check-cogs/{city}` - COGS data inspection
-  - `/api/debug/check-session` - Session state checker
-  - `/api/debug/check-targets` - Target plans inspection
-  - `/api/debug/check-tenant-branding/{tenant_id}` - Tenant branding checker
-  - `/api/debug/clear-lead-rankings` - Lead rank clearer
-  - `/api/debug/migrate-legacy-roles` - Role migration
-  - `/api/debug/fix-user-tenant` - User tenant fixer
-  - `/api/debug/migration-status` - Migration status checker
-  - `/api/debug/migrate-all-data` - Bulk migration
-- **Reason**: Security cleanup - these public debug endpoints exposed internal data
-- **Verification**: All endpoints now return 404 Not Found
+### Lead Scoring Quadrant Metric Bar (Dec 2025) - NEW
+- **Feature**: Added a metric bar at the top of the Leads listing page with selectable quadrant tiles
+- **Quadrant Tiles**: Stars (amber), Showcase (purple), Plough Horses (blue), Puzzles (slate), Unscored (gray)
+- **Each Tile Shows**:
+  - Number of leads in that category
+  - Total opportunity volume (bottles/month)
+  - Total estimated value (₹)
+- **Behavior**:
+  - No default selection on page load
+  - Multi-select: users can click multiple tiles to filter
+  - Works together with existing dropdown filters (status, territory, city, etc.)
+  - Clear Selection button to reset quadrant filter
+- **Backend Changes**:
+  - New endpoint: `GET /api/scoring/quadrant-metrics`
+  - Updated: `GET /api/leads` now accepts `quadrant` parameter (comma-separated, supports "unscored")
+- **Files Modified**:
+  - `/app/backend/routes/scoring.py` - Added quadrant-metrics endpoint
+  - `/app/backend/routes/leads.py` - Added quadrant filter parameter
+  - `/app/frontend/src/pages/LeadsList.js` - Added metric bar UI and state management
+
+### Lead Scoring Model in Role Permissions (Dec 2025)
+- **Feature**: Added "Lead Scoring Model" to the role permissions system
+- **Location**: Under "Tools" category in Role Management
+- **Files Modified**:
+  - `/app/backend/models/role.py` - Added to DEFAULT_MODULE_PERMISSIONS, MODULE_CATEGORIES, MODULE_LABELS, MANAGER_PERMISSIONS
+
+### Bug Fixes (Dec 2025)
+- Fixed `DESIGNATIONS is not defined` error in TeamManagement.js user edit form
+- Debug endpoints cleanup completed - all `/api/debug/*` endpoints removed
 
 ---
 
 ## Previous Session Updates (Mar 15, 2026)
 
-### Lead Group Feature (NEW - Mar 15, 2026)
+### Lead Group Feature (Related Leads)
 - **Feature**: Link related leads together (same owner, franchise locations, corporate-branches)
 - **Two Relationship Types**:
   - **Parent-Child**: Corporate → Branches hierarchy
@@ -48,7 +62,7 @@ Build a comprehensive, mobile-ready Sales CRM application with multi-tenancy sup
   - `/app/backend/routes/leads.py` - Added lead group endpoints and activity copy logic
   - `/app/backend/server.py` - Updated daily status to exclude copied activities
 
-### Lead Scoring Card UI Restyle (Mar 14-15, 2026)
+### Lead Scoring Card UI Restyle
 - **Feature**: Restyled `LeadScoringCard` to match `OpportunityEstimation` card design
 - **Quadrant-based Color Theming**:
   - Stars: Amber/yellow background (`bg-amber-50`)
@@ -60,9 +74,8 @@ Build a comprehensive, mobile-ready Sales CRM application with multi-tenancy sup
   - Compact 2-column grid layout showing Total Score and Quadrant
   - Prominent "Save Lead Score" button (full-width, indigo) when in edit mode
   - Clear "Cancel" button below save to prevent accidental edits
-  - Removed confusing small buttons in header - now uses consistent card-level actions
 - **Files Modified**:
-  - `/app/frontend/src/components/LeadScoringCard.js` - Complete restyle
+  - `/app/frontend/src/components/LeadScoringCard.js`
 
 ### City-Based Lead Scoring Model
 - **Feature**: Lead Scoring Model is now city-specific
@@ -81,264 +94,103 @@ Build a comprehensive, mobile-ready Sales CRM application with multi-tenancy sup
   - Scoring moved from Accounts to Leads
   - City-specific model lookup with default fallback
   - New endpoints: `/api/scoring/models/cities`, `/api/scoring/models/copy`, `/api/scoring/leads/{id}/score`
-  - Legacy model migration (adds `city: default` to old models)
-
-### Files Modified (City-Based Scoring)
-- `/app/backend/routes/scoring.py` - Full rewrite for city-based lead scoring
-- `/app/frontend/src/pages/LeadScoringModel.js` - Added city selector and copy functionality
-- `/app/frontend/src/components/LeadScoringCard.js` - NEW component for lead detail
-- `/app/frontend/src/pages/LeadDetail.js` - Added LeadScoringCard
-
-### Proposed SKU Pricing Enhancement (Mar 14, 2026)
-- **Feature**: Enhanced SKU Pricing section on Lead Detail page with revenue forecasting
-- **Location**: Lead Detail page, left column, "Proposed SKU Pricing" card
-- **New Columns Added**:
-  - `% Dist.` - Percentage distribution for each SKU (total should = 100%)
-  - `Est. Qty` - Auto-calculated (monthly bottles × percentage / 100)
-  - `Revenue` - Auto-calculated (Est. Qty × Price/Unit)
-- **Estimated Monthly Opportunity Display**:
-  - Prominent green gradient card at top showing total revenue
-  - Shows "Based on X bottles/month" from Opportunity Estimation
-  - Shows "X% allocated" with warning if > 100%
-- **Total Row**: Aggregates percentages, quantities, and revenue
-- **Validation**: Warning shown when no Opportunity Estimation exists
-
-### Files Modified (SKU Pricing Enhancement)
-- `/app/frontend/src/pages/LeadDetail.js` - Added percentage field, calculation functions, enhanced table UI
 
 ---
 
-## Previous Session Updates (Mar 13, 2026)
+## Core Features Implemented
 
-### Industry/Vertical Tags System
-- **Tenant Industry Profiles** - Each tenant can be tagged with an industry type
-- **Industry Types**: `water_brand` (Water/Beverage Brand) and `generic` (Standard CRM)
-- **Industry-Specific Features** - Features are gated by industry type:
-  - `water_brand`: lead_bottle_tracking, bottle_preview, cogs_calculator, sku_management, account_bottle_volume
-  - `generic`: No industry-specific features (standard CRM)
-- **Industry Configuration** - Customizable settings per industry (bottle_sizes, default_bottles_per_cover)
-- **Super Admin Only** - Industry can only be set via Platform Admin
-- **Frontend Helper** - `hasIndustryFeature('feature_key')` in TenantConfigContext
+### Multi-Tenancy
+- Tenant-aware database wrapper
+- Automatic tenant filtering on all queries
+- Tenant branding (colors, logo)
+- Tenant-specific configurations
 
-### Opportunity Estimation Module (NEW - Water Brand Industry)
-- **Purpose**: Estimate potential bottle volume for a lead based on venue characteristics
-- **Location**: Lead Detail page right column (only visible for `water_brand` industry)
-- **Inputs**:
-  - Total Covers (seating capacity)
-  - Operating Pattern (Morning, Evening, Night, Snacks toggles with density %)
-  - Dining Behavior (Avg Table Time, Water Adoption Rate, Operating Days)
-- **Outputs**:
-  - Mode-wise Estimation (bottles per time slot)
-  - Daily Water Opportunity (total bottles/day)
-  - Monthly Water Opportunity (total bottles/month)
-- **Features**:
-  - Compact card view with expand/collapse
-  - Full modal view for detailed editing
-  - Manual override option for known values
-  - Auto-saves to lead with `opportunity_estimation` field
+### Lead Management
+- Full CRUD operations
+- Lead scoring with quadrant classification
+- Opportunity estimation calculator
+- Proposed SKU pricing
+- Related leads linking
+- Logo upload
 
-### Files Created/Modified (Opportunity Estimation)
-- `/app/frontend/src/components/OpportunityEstimation.js` - NEW component
-- `/app/backend/routes/leads.py` - Added opportunity estimation endpoints
-- `/app/frontend/src/pages/LeadDetail.js` - Integrated OpportunityEstimation component
+### User Management
+- Role-based access control
+- Custom role permissions
+- Team management
+- Designations
 
-### Files Created/Modified (Industry System)
-- `/app/backend/models/tenant.py` - Added INDUSTRY_TYPES, TenantIndustry, IndustryConfig models
-- `/app/backend/routes/tenant_admin.py` - Added industry endpoints (list types, update industry, get current industry)
-- `/app/frontend/src/context/TenantConfigContext.js` - Added industry state, hasIndustryFeature(), getIndustryConfig()
-- `/app/frontend/src/pages/PlatformAdmin.js` - Added Industry tab for Super Admin
-
-### Lead Scoring Model Admin Module (NEW)
-- **Tenant-specific scoring model** - Each tenant can define their own scoring categories
-- **5 default categories** seeded: Volume Potential (25pts), Margin Potential (20pts), Brand Prestige (20pts), Guest Influence (20pts), Sustainability Alignment (15pts)
-- **Category & Tier Management** - Admin can create/edit/delete categories and scoring tiers
-- **Weight validation** - Total weight must equal 100, tiers cannot exceed category weight
-- **Account Scoring** - Score individual accounts by selecting tiers for each category
-- **Portfolio Matrix** - 2x2 visualization (Stars, Showcase, Plough Horses, Puzzles) based on Volume vs Commercial Value
-- **Account Score Card** - Integrated into Account Detail page for inline scoring
-
-### Files Created/Modified
-- `/app/backend/routes/scoring.py` - NEW Lead Scoring API endpoints
-- `/app/backend/routes/__init__.py` - Registered scoring router
-- `/app/frontend/src/pages/LeadScoringModel.js` - NEW Admin UI page
-- `/app/frontend/src/components/AccountScoringCard.js` - NEW Account scoring component
-- `/app/frontend/src/pages/AccountDetail.js` - Added AccountScoringCard
-- `/app/frontend/src/layouts/DashboardLayout.js` - Added Lead Scoring Model navigation
-- `/app/frontend/src/App.js` - Added route for /lead-scoring-model
+### Reporting
+- Daily status reports
+- Activity deduplication for linked leads
+- Sales overview
 
 ---
 
-## Previous Session Updates (Mar 12, 2026)
+## Code Architecture
 
-### AI Chat Assistant (NEW)
-- **RAG-based AI Assistant** using Gemini 3 Flash via Emergent LLM Key
-- Floating chat bubble + dedicated page
-- CEO/Director/System Admin only access
-- Queries leads, accounts, team, activities, targets data
-- Multi-turn conversation with session persistence
-
-### Multi-Tenancy Fixes
-- Domain mapping for production (`crm.nylaairwater.earth` → `nyla-air-water`)
-- Fixed authentication to use global user lookup
-- Legacy roles/designations migration endpoint created
-
-### Files Created/Modified
-- `/app/backend/routes/ai_assistant.py` - NEW AI chat endpoints
-- `/app/frontend/src/components/AIChatBubble.js` - NEW floating bubble
-- `/app/frontend/src/pages/AIAssistant.js` - NEW dedicated page
-- `/app/backend/core/tenant.py` - Domain-to-tenant mapping
-- `/app/backend/server.py` - Debug endpoints, auth fix
-- `/app/frontend/src/layouts/DashboardLayout.js` - Added AI bubble
-- `/app/frontend/src/App.js` - AI assistant route
-
----
-
-## Core Architecture
-
-### Backend Structure
 ```
-/app/backend/
-├── routes/
-│   ├── ai_assistant.py      # NEW - RAG AI chat
-│   ├── auth.py
-│   ├── leads.py
-│   ├── accounts.py
-│   ├── roles.py
-│   ├── designations.py
-│   ├── tenant_admin.py
-│   └── ...
-├── core/
-│   └── tenant.py            # Domain mapping added
-└── server.py                # Debug endpoints
-```
-
-### Frontend Structure
-```
-/app/frontend/src/
-├── components/
-│   └── AIChatBubble.js      # NEW
-├── pages/
-│   └── AIAssistant.js       # NEW
-└── layouts/
-    └── DashboardLayout.js   # Modified
+/app/
+├── backend/
+│   ├── models/
+│   │   ├── leads.py       # Lead and LeadLink models
+│   │   └── role.py        # Role and permissions models
+│   ├── routes/
+│   │   ├── activities.py  # Activity CRUD
+│   │   ├── daily_status.py # Daily status reports
+│   │   ├── leads.py       # Lead CRUD, linking, logo
+│   │   ├── roles.py       # Role management
+│   │   └── scoring.py     # Lead scoring models and metrics
+│   └── server.py          # Main FastAPI app
+└── frontend/
+    └── src/
+        ├── components/
+        │   ├── LeadGroupCard.js    # Related leads UI
+        │   └── LeadScoringCard.js  # Lead scoring UI
+        └── pages/
+            ├── LeadDetail.js       # Lead detail page
+            ├── LeadsList.js        # Leads listing with metric bar
+            └── TeamManagement.js   # User management
 ```
 
 ---
 
-## API Endpoints
+## Key API Endpoints
 
-### Industry Profile (NEW)
-- `GET /api/tenants/industry-types/list` - Get available industry types
-- `PUT /api/tenants/{tenant_id}/industry?industry_type=...` - Set tenant industry (Super Admin)
-- `PUT /api/tenants/{tenant_id}/industry-config` - Update industry config (Super Admin)
-- `GET /api/tenants/current/industry` - Get current tenant's industry profile and features
+### Lead Scoring
+- `GET /api/scoring/quadrant-metrics` - Get quadrant metrics
+- `GET /api/scoring/model` - Get scoring model for city
+- `POST /api/scoring/leads/{id}/score` - Score a lead
+- `GET /api/scoring/leads/{id}/score` - Get lead's score
 
-### Opportunity Estimation (NEW - Water Brand)
-- `PUT /api/leads/{lead_id}/opportunity-estimation` - Save opportunity estimation to lead
-- `GET /api/leads/{lead_id}/opportunity-estimation` - Get opportunity estimation for a lead
-
-### Lead Scoring (NEW)
-- `GET /api/scoring/model` - Get tenant's scoring model
-- `PUT /api/scoring/model` - Update model name/description
-- `POST /api/scoring/categories` - Create category
-- `PUT /api/scoring/categories/{id}` - Update category
-- `DELETE /api/scoring/categories/{id}` - Delete category
-- `POST /api/scoring/categories/{id}/tiers` - Add tier
-- `PUT /api/scoring/categories/{id}/tiers/{tier_id}` - Update tier
-- `DELETE /api/scoring/categories/{id}/tiers/{tier_id}` - Delete tier
-- `POST /api/scoring/accounts/{id}/score` - Score an account
-- `GET /api/scoring/accounts/{id}/score` - Get account score
-- `GET /api/scoring/accounts/scores` - Get all scored accounts
-- `GET /api/scoring/portfolio-matrix` - Get portfolio matrix data
-- `POST /api/scoring/seed-default-model` - Seed default categories
-
-### AI Assistant
-- `POST /api/ai/chat` - Send message, get AI response
-- `GET /api/ai/status` - Check access
-- `GET /api/ai/chat/history` - Get history
-- `DELETE /api/ai/chat/history` - Clear history
-
-### Debug Endpoints
-- `GET /api/debug/check-user/{email}`
-- `POST /api/debug/fix-user-tenant`
-- `GET /api/debug/migration-status`
-- `POST /api/debug/migrate-all-data`
-- `POST /api/debug/migrate-legacy-roles`
-- `GET /api/debug/check-targets`
-- `GET /api/debug/check-session`
-- `GET /api/debug/check-tenant-branding/{tenant_id}`
-
----
-
-## Test Credentials
-- CEO: `surya.yadavalli@nylaairwater.earth` / `surya123`
-- Director: `admin@nylaairwater.earth` / `admin123`
-
----
-
-## Pending Tasks
-
-### P0 - Critical
-- [x] Pull code from GitHub ✅
-- [x] Implement AI Chat Assistant ✅
-- [x] Lead Scoring Model Admin Module ✅
-- [x] SKU Pricing with Revenue Forecasting ✅
-- [ ] Deploy to production
-
-### P1 - High
-- [ ] Cleanup temporary debug endpoints from server.py
-- [ ] Run legacy roles/designations migration in production
-- [ ] Verify branding applies correctly after deploy
-- [ ] Test AI assistant in production
-
-### P2 - Medium
-- [ ] Refactor server.py into modular route files
-- [ ] Add more data sources to AI assistant
-- [ ] Build out placeholder modules (Maintenance, Inventory, Quality Control, Assets, Vendors)
-- [ ] Upgrade AI Assistant to True RAG with vector database
+### Leads
+- `GET /api/leads` - List leads (with quadrant filter)
+- `POST /api/leads/{id}/link` - Link leads
+- `DELETE /api/leads/{id}/unlink/{target_id}` - Unlink leads
+- `GET /api/leads/{id}/group` - Get lead's related leads
+- `POST /api/leads/{id}/logo` - Upload lead logo
 
 ---
 
 ## 3rd Party Integrations
-- Gemini 3 Flash (AI Assistant) - Emergent LLM Key
-- Claude Sonnet 4.5 (OCR) - Emergent LLM Key
-- Zoom API, Resend, Google Places, Amazon MQ
+- Gemini (via Emergent LLM Key)
+- Claude Sonnet 4.5 (via Emergent LLM Key)
+- Zoom API
+- Resend (email)
+- Open-Meteo (weather)
+- Google Places API
+- Google Workspace OAuth
+- Amazon MQ (via Stomp.py)
 
 ---
 
-## Database Schema Notes
+## Upcoming Tasks
+1. **P1: Complete server.py Refactoring** - Move legacy routes to modular files
+2. **P2: Upgrade AI Assistant to True RAG**
+3. **P2: Build Out Placeholder Modules** (Maintenance, Inventory, etc.)
+4. **Refactoring**: Break down LeadDetail.js into smaller components
 
-### scoring_models Collection (NEW)
-```json
-{
-  "id": "uuid",
-  "tenant_id": "nyla-air-water",
-  "name": "Default Scoring Model",
-  "categories": [
-    {
-      "id": "uuid",
-      "name": "Volume Potential",
-      "weight": 25,
-      "is_numeric": true,
-      "tiers": [
-        {"id": "uuid", "label": ">5000", "score": 25, "min_value": 5000}
-      ]
-    }
-  ],
-  "total_weight": 100,
-  "is_active": true
-}
-```
+---
 
-### accounts Collection (Updated)
-```json
-{
-  "scoring": {
-    "total_score": 100,
-    "quadrant": "Stars",
-    "category_scores": {"cat_id": {"score": 25, "tier_id": "...", "tier_label": "..."}},
-    "scored_at": "2026-03-13T...",
-    "scored_by": "user_id"
-  }
-}
-```
+## Test Credentials
+- **CEO:** `surya.yadavalli@nylaairwater.earth` / `surya123` (Tenant: `nyla-air-water`)
+- **Sales Partner:** `priya.menon@pipeline-master.com` / `priya123`

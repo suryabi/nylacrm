@@ -282,6 +282,7 @@ async def get_leads(
     tier: Optional[str] = None,
     rank: Optional[str] = None,
     source: Optional[str] = None,
+    quadrant: Optional[str] = None,  # Lead scoring quadrant filter (comma-separated)
     no_limit: bool = False,
     current_user: dict = Depends(get_current_user)
 ):
@@ -325,6 +326,24 @@ async def get_leads(
     
     if source:
         query['source'] = source
+    
+    # Lead scoring quadrant filter
+    if quadrant:
+        quadrants = quadrant.split(',')
+        # Check if 'unscored' is in the filter
+        if 'unscored' in quadrants:
+            quadrants.remove('unscored')
+            if quadrants:
+                # Both scored quadrants and unscored
+                query['$or'] = [
+                    {'scoring.quadrant': {'$in': quadrants}},
+                    {'scoring.quadrant': {'$exists': False}}
+                ]
+            else:
+                # Only unscored
+                query['scoring.quadrant'] = {'$exists': False}
+        else:
+            query['scoring.quadrant'] = {'$in': quadrants}
     
     # Time filter
     if time_filter:

@@ -21,7 +21,7 @@ import {
   FilterGrid, 
   FilterSearch 
 } from '../components/ui/filter-bar';
-import { Plus, Search, Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid, List, Filter, Users, Loader2, Check, MapPin, Calendar, Target, UserCircle, RotateCcw } from 'lucide-react';
+import { Plus, Search, Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid, List, Filter, Users, Loader2, Check, MapPin, Calendar, Target, UserCircle, RotateCcw, Star, TrendingUp, DollarSign, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Table,
@@ -62,6 +62,11 @@ export default function LeadsList() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const { statuses, getStatusLabel, getStatusColor } = useLeadStatuses();
+  
+  // Lead Scoring Quadrant Metrics
+  const [quadrantMetrics, setQuadrantMetrics] = useState({ quadrants: [], unscored: { count: 0 }, total_leads: 0 });
+  const [selectedQuadrants, setSelectedQuadrants] = useState([]);
+  const [metricsLoading, setMetricsLoading] = useState(true);
   
   // Check if we have URL params from dashboard navigation
   const urlParams = new URLSearchParams(window.location.search);
@@ -133,12 +138,32 @@ export default function LeadsList() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // Fetch quadrant metrics on mount
+  useEffect(() => {
+    fetchQuadrantMetrics();
+  }, []);
+
   // Fetch users on mount
   useEffect(() => {
     fetchUsers();
   }, []);
   
-  useEffect(() => { fetchLeads(); }, [currentPage, itemsPerPage, debouncedSearch, statusFilter, cityFilter, stateFilter, territoryFilter, assignedToFilter, timeFilter]);
+  useEffect(() => { fetchLeads(); }, [currentPage, itemsPerPage, debouncedSearch, statusFilter, cityFilter, stateFilter, territoryFilter, assignedToFilter, timeFilter, selectedQuadrants]);
+
+  const fetchQuadrantMetrics = async () => {
+    try {
+      setMetricsLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(process.env.REACT_APP_BACKEND_URL + '/api/scoring/quadrant-metrics', {
+        headers: { Authorization: `Bearer ${token}` }, withCredentials: true
+      });
+      setQuadrantMetrics(response.data);
+    } catch (error) {
+      console.error('Failed to load quadrant metrics:', error);
+    } finally {
+      setMetricsLoading(false);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -161,6 +186,7 @@ export default function LeadsList() {
         territory: territoryFilter !== 'all' ? territoryFilter : undefined,
         assigned_to: assignedToFilter.length > 0 ? assignedToFilter.join(',') : undefined, 
         time_filter: timeFilter !== 'lifetime' ? timeFilter : undefined,
+        quadrant: selectedQuadrants.length > 0 ? selectedQuadrants.join(',') : undefined,
       };
       const response = await leadsAPI.getAll(params);
       const { data, total, total_pages } = response.data;
@@ -192,6 +218,7 @@ export default function LeadsList() {
   const handleResetFilters = () => {
     setSearchQuery(''); setStatusFilter([]); setTerritoryFilter('all'); setStateFilter('all');
     setCityFilter('all'); setAssignedToFilter([]); setTimeFilter('lifetime'); setCurrentPage(1);
+    setSelectedQuadrants([]); // Clear quadrant selection
     // Clear sessionStorage
     sessionStorage.removeItem('leads_filter_search');
     sessionStorage.removeItem('leads_filter_status');
@@ -202,6 +229,70 @@ export default function LeadsList() {
     sessionStorage.removeItem('leads_filter_time');
     sessionStorage.removeItem('leads_filter_page');
     window.history.replaceState({}, '', '/leads');
+  };
+
+  // Toggle quadrant selection
+  const toggleQuadrant = (quadrant) => {
+    setSelectedQuadrants(prev => {
+      if (prev.includes(quadrant)) {
+        return prev.filter(q => q !== quadrant);
+      } else {
+        return [...prev, quadrant];
+      }
+    });
+    setCurrentPage(1);
+  };
+
+  // Format currency for display
+  const formatCurrency = (value) => {
+    if (value >= 10000000) return `${(value / 10000000).toFixed(1)}Cr`;
+    if (value >= 100000) return `${(value / 100000).toFixed(1)}L`;
+    if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+    return value.toFixed(0);
+  };
+
+  // Format volume for display
+  const formatVolume = (value) => {
+    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+    return value.toString();
+  };
+
+  // Get quadrant styling
+  const getQuadrantStyle = (quadrant, isSelected) => {
+    const styles = {
+      'Stars': { 
+        bg: isSelected ? 'bg-amber-100 ring-2 ring-amber-400' : 'bg-amber-50 hover:bg-amber-100',
+        text: 'text-amber-700',
+        icon: 'text-amber-500',
+        border: 'border-amber-200'
+      },
+      'Showcase': { 
+        bg: isSelected ? 'bg-purple-100 ring-2 ring-purple-400' : 'bg-purple-50 hover:bg-purple-100',
+        text: 'text-purple-700',
+        icon: 'text-purple-500',
+        border: 'border-purple-200'
+      },
+      'Plough Horses': { 
+        bg: isSelected ? 'bg-blue-100 ring-2 ring-blue-400' : 'bg-blue-50 hover:bg-blue-100',
+        text: 'text-blue-700',
+        icon: 'text-blue-500',
+        border: 'border-blue-200'
+      },
+      'Puzzles': { 
+        bg: isSelected ? 'bg-slate-200 ring-2 ring-slate-400' : 'bg-slate-100 hover:bg-slate-200',
+        text: 'text-slate-700',
+        icon: 'text-slate-500',
+        border: 'border-slate-300'
+      },
+      'unscored': { 
+        bg: isSelected ? 'bg-gray-200 ring-2 ring-gray-400' : 'bg-gray-50 hover:bg-gray-100',
+        text: 'text-gray-600',
+        icon: 'text-gray-400',
+        border: 'border-gray-200'
+      }
+    };
+    return styles[quadrant] || styles['unscored'];
   };
 
   const handleCompleteFollowup = async (e, lead) => {
@@ -227,7 +318,7 @@ export default function LeadsList() {
   });
 
   const displayLeads = sortedLeads;
-  const hasActiveFilters = searchQuery || statusFilter.length > 0 || territoryFilter !== 'all' || stateFilter !== 'all' || cityFilter !== 'all' || assignedToFilter.length > 0 || timeFilter !== 'lifetime';
+  const hasActiveFilters = searchQuery || statusFilter.length > 0 || territoryFilter !== 'all' || stateFilter !== 'all' || cityFilter !== 'all' || assignedToFilter.length > 0 || timeFilter !== 'lifetime' || selectedQuadrants.length > 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="leads-list-page">
@@ -262,6 +353,115 @@ export default function LeadsList() {
             </div>
           </div>
         </header>
+
+        {/* Lead Scoring Quadrant Metrics Bar */}
+        <Card className="mb-6 p-4 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="quadrant-metrics-bar">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-indigo-500" />
+              <span className="font-semibold text-slate-700 dark:text-slate-200">Lead Scoring Categories</span>
+              {selectedQuadrants.length > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  {selectedQuadrants.length} selected
+                </Badge>
+              )}
+            </div>
+            {selectedQuadrants.length > 0 && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => { setSelectedQuadrants([]); setCurrentPage(1); }}
+                className="text-xs h-7"
+              >
+                <RotateCcw className="h-3 w-3 mr-1" /> Clear Selection
+              </Button>
+            )}
+          </div>
+          
+          {metricsLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {/* Quadrant Tiles */}
+              {quadrantMetrics.quadrants.map((q) => {
+                const isSelected = selectedQuadrants.includes(q.quadrant);
+                const style = getQuadrantStyle(q.quadrant, isSelected);
+                return (
+                  <div
+                    key={q.quadrant}
+                    onClick={() => toggleQuadrant(q.quadrant)}
+                    className={`p-3 rounded-xl cursor-pointer transition-all ${style.bg} ${style.border} border ${isSelected ? 'shadow-md' : 'hover:shadow-sm'}`}
+                    data-testid={`quadrant-tile-${q.quadrant.toLowerCase().replace(' ', '-')}`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`font-semibold text-sm ${style.text}`}>{q.quadrant}</span>
+                      <Star className={`h-4 w-4 ${style.icon}`} />
+                    </div>
+                    <div className={`text-2xl font-bold ${style.text}`}>{q.count}</div>
+                    <p className="text-xs text-muted-foreground mb-2">leads</p>
+                    
+                    {/* Opportunity metrics */}
+                    <div className="space-y-1 pt-2 border-t border-current/10">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground flex items-center gap-1">
+                          <TrendingUp className="h-3 w-3" /> Volume
+                        </span>
+                        <span className={`font-medium ${style.text}`}>
+                          {q.total_opportunity_volume > 0 ? formatVolume(q.total_opportunity_volume) : '-'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground flex items-center gap-1">
+                          <DollarSign className="h-3 w-3" /> Value
+                        </span>
+                        <span className={`font-medium ${style.text}`}>
+                          {q.total_estimated_value > 0 ? `₹${formatCurrency(q.total_estimated_value)}` : '-'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              
+              {/* Unscored Tile */}
+              {quadrantMetrics.unscored && quadrantMetrics.unscored.count > 0 && (
+                <div
+                  onClick={() => toggleQuadrant('unscored')}
+                  className={`p-3 rounded-xl cursor-pointer transition-all ${getQuadrantStyle('unscored', selectedQuadrants.includes('unscored')).bg} ${getQuadrantStyle('unscored', selectedQuadrants.includes('unscored')).border} border ${selectedQuadrants.includes('unscored') ? 'shadow-md' : 'hover:shadow-sm'}`}
+                  data-testid="quadrant-tile-unscored"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-sm text-gray-600">Unscored</span>
+                    <Target className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <div className="text-2xl font-bold text-gray-600">{quadrantMetrics.unscored.count}</div>
+                  <p className="text-xs text-muted-foreground mb-2">leads</p>
+                  
+                  <div className="space-y-1 pt-2 border-t border-gray-200">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        <TrendingUp className="h-3 w-3" /> Volume
+                      </span>
+                      <span className="font-medium text-gray-600">
+                        {quadrantMetrics.unscored.total_opportunity_volume > 0 ? formatVolume(quadrantMetrics.unscored.total_opportunity_volume) : '-'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        <DollarSign className="h-3 w-3" /> Value
+                      </span>
+                      <span className="font-medium text-gray-600">
+                        {quadrantMetrics.unscored.total_estimated_value > 0 ? `₹${formatCurrency(quadrantMetrics.unscored.total_estimated_value)}` : '-'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
 
         {/* Contemporary Filters */}
         <FilterContainer 
