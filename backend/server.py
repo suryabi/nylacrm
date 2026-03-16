@@ -3878,6 +3878,27 @@ async def update_lead(
     
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
+    # Calculate estimated_monthly_revenue if proposed_sku_pricing is being updated
+    if 'proposed_sku_pricing' in update_data:
+        monthly_bottles = 0
+        opportunity_estimation = lead.get('opportunity_estimation') or {}
+        if opportunity_estimation:
+            monthly_bottles = opportunity_estimation.get('final_monthly') or opportunity_estimation.get('calculated_monthly') or 0
+        
+        estimated_revenue = 0
+        for sku in (update_data['proposed_sku_pricing'] or []):
+            percentage = sku.get('percentage', 0)
+            price_per_unit = sku.get('price_per_unit', 0)
+            estimated_qty = round((monthly_bottles * percentage) / 100) if percentage else 0
+            estimated_revenue += estimated_qty * price_per_unit
+        
+        # Store calculated revenue in opportunity_estimation
+        if opportunity_estimation:
+            opportunity_estimation['estimated_monthly_revenue'] = estimated_revenue
+            update_data['opportunity_estimation'] = opportunity_estimation
+        else:
+            update_data['opportunity_estimation'] = {'estimated_monthly_revenue': estimated_revenue}
+    
     # Track status change (skip if activity was already logged via activity endpoint)
     if 'status' in update_data and update_data['status'] != lead.get('status') and not skip_activity_log:
         activity = Activity(

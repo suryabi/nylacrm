@@ -644,7 +644,7 @@ export default function LeadsList() {
                       <TableHead><button onClick={() => handleSort('assigned_to')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-assigned">Assigned To{getSortIcon('assigned_to')}</button></TableHead>
                       <TableHead><button onClick={() => handleSort('last_contacted_date')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-last-contacted">Last Contacted{getSortIcon('last_contacted_date')}</button></TableHead>
                       <TableHead><button onClick={() => handleSort('next_followup_date')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-followup">Next Follow-up{getSortIcon('next_followup_date')}</button></TableHead>
-                      <TableHead>Monthly Vol.</TableHead>
+                      <TableHead>Est. Revenue</TableHead>
                       <TableHead><button onClick={() => handleSort('status')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-status">Status{getSortIcon('status')}</button></TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -693,8 +693,12 @@ export default function LeadsList() {
                           })() : '-'}
                         </TableCell>
                         <TableCell>
-                          {lead.opportunity_estimation?.final_monthly ? (
-                            <span className="font-medium text-emerald-600" title={`${lead.opportunity_estimation.final_monthly} bottles/month`}>
+                          {lead.opportunity_estimation?.estimated_monthly_revenue ? (
+                            <span className="font-medium text-emerald-600">
+                              ₹{formatCurrency(lead.opportunity_estimation.estimated_monthly_revenue)}
+                            </span>
+                          ) : lead.opportunity_estimation?.final_monthly ? (
+                            <span className="text-xs text-muted-foreground" title="Add SKU pricing to calculate revenue">
                               {formatVolume(lead.opportunity_estimation.final_monthly)} btls
                             </span>
                           ) : (

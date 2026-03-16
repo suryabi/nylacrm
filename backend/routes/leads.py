@@ -911,6 +911,20 @@ async def update_opportunity_estimation(
         'estimated_at': datetime.now(timezone.utc).isoformat()
     }
     
+    # Calculate estimated_monthly_revenue based on proposed_sku_pricing
+    proposed_sku_pricing = lead.get('proposed_sku_pricing') or []
+    estimated_revenue = 0
+    monthly_bottles = estimation.final_monthly or estimation.calculated_monthly or 0
+    
+    for sku in proposed_sku_pricing:
+        percentage = sku.get('percentage', 0)
+        price_per_unit = sku.get('price_per_unit', 0)
+        estimated_qty = round((monthly_bottles * percentage) / 100) if percentage else 0
+        estimated_revenue += estimated_qty * price_per_unit
+    
+    estimation_data['estimated_monthly_revenue'] = estimated_revenue
+    estimation_data['monthly_bottles'] = monthly_bottles
+    
     # Update lead with estimation
     await tdb.leads.update_one(
         {'id': lead_id},
