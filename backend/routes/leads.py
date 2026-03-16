@@ -282,6 +282,7 @@ async def get_leads(
     tier: Optional[str] = None,
     rank: Optional[str] = None,
     source: Optional[str] = None,
+    quadrant: Optional[str] = None,  # Lead scoring quadrant filter (comma-separated)
     no_limit: bool = False,
     current_user: dict = Depends(get_current_user)
 ):
@@ -309,7 +310,8 @@ async def get_leads(
         query['state'] = state
     
     if assigned_to:
-        query['assigned_to'] = assigned_to
+        assigned_to_list = assigned_to.split(',')
+        query['assigned_to'] = {'$in': assigned_to_list}
     
     if territory:
         query['region'] = territory
@@ -326,6 +328,27 @@ async def get_leads(
     if source:
         query['source'] = source
     
+    # Lead scoring quadrant filter
+    if quadrant:
+        quadrants = quadrant.split(',')
+        import logging
+        logging.warning(f"QUADRANT FILTER: received={quadrant}, parsed={quadrants}")
+        # Check if 'unscored' is in the filter
+        if 'unscored' in quadrants:
+            quadrants.remove('unscored')
+            if quadrants:
+                # Both scored quadrants and unscored
+                query['$or'] = [
+                    {'scoring.quadrant': {'$in': quadrants}},
+                    {'scoring.quadrant': {'$exists': False}}
+                ]
+            else:
+                # Only unscored
+                query['scoring.quadrant'] = {'$exists': False}
+        else:
+            query['scoring.quadrant'] = {'$in': quadrants}
+        logging.warning(f"QUADRANT FILTER: query after={query}")
+    
     # Time filter
     if time_filter:
         now = datetime.now(timezone.utc)
@@ -340,7 +363,10 @@ async def get_leads(
             start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             query['created_at'] = {'$gte': start_of_month.isoformat()}
     
+    import logging
+    logging.warning(f"FINAL QUERY: {query}")
     total = await tdb.leads.count_documents(query)
+    logging.warning(f"TOTAL RESULTS: {total}")
     
     # Handle no_limit for pipeline view
     if no_limit:
@@ -676,7 +702,8 @@ async def get_follow_ups(
     if lead_id:
         query['lead_id'] = lead_id
     if assigned_to:
-        query['assigned_to'] = assigned_to
+        assigned_to_list = assigned_to.split(',')
+        query['assigned_to'] = {'$in': assigned_to_list}
     
     follow_ups = await tdb.follow_ups.find(query, {'_id': 0}).sort('scheduled_date', 1).to_list(1000)
     
@@ -883,6 +910,20 @@ async def update_opportunity_estimation(
         'estimated_by': current_user['id'],
         'estimated_at': datetime.now(timezone.utc).isoformat()
     }
+    
+    # Calculate estimated_monthly_revenue based on proposed_sku_pricing
+    proposed_sku_pricing = lead.get('proposed_sku_pricing') or []
+    estimated_revenue = 0
+    monthly_bottles = estimation.final_monthly or estimation.calculated_monthly or 0
+    
+    for sku in proposed_sku_pricing:
+        percentage = sku.get('percentage', 0)
+        price_per_unit = sku.get('price_per_unit', 0)
+        estimated_qty = round((monthly_bottles * percentage) / 100) if percentage else 0
+        estimated_revenue += estimated_qty * price_per_unit
+    
+    estimation_data['estimated_monthly_revenue'] = estimated_revenue
+    estimation_data['monthly_bottles'] = monthly_bottles
     
     # Update lead with estimation
     await tdb.leads.update_one(

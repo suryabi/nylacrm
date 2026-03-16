@@ -880,6 +880,154 @@ async def get_portfolio_matrix(
     }
 
 
+@router.get("/quadrant-metrics")
+async def get_quadrant_metrics(
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    city: Optional[str] = None,
+    state: Optional[str] = None,
+    territory: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    time_filter: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get metrics for each lead scoring quadrant.
+    Returns count, total opportunity volume, and total estimated value per quadrant.
+    Also returns metrics for unscored leads.
+    Supports filtering to show metrics for filtered lead set.
+    """
+    tdb = get_tdb()
+    
+    # Build base filter query
+    base_query = {}
+    
+    if search:
+        base_query['$or'] = [
+            {'company': {'$regex': search, '$options': 'i'}},
+            {'contact_person': {'$regex': search, '$options': 'i'}},
+            {'lead_id': {'$regex': search, '$options': 'i'}}
+        ]
+    
+    if status:
+        statuses = status.split(',')
+        base_query['status'] = {'$in': statuses}
+    
+    if city:
+        base_query['city'] = city
+    
+    if state:
+        base_query['state'] = state
+    
+    if territory:
+        base_query['region'] = territory
+    
+    if assigned_to:
+        assigned_to_list = assigned_to.split(',')
+        base_query['assigned_to'] = {'$in': assigned_to_list}
+    
+    if time_filter:
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+        if time_filter == 'this_week':
+            start = now - timedelta(days=now.weekday())
+            base_query['created_at'] = {'$gte': start.isoformat()}
+        elif time_filter == 'last_week':
+            start = now - timedelta(days=now.weekday() + 7)
+            end = now - timedelta(days=now.weekday())
+            base_query['created_at'] = {'$gte': start.isoformat(), '$lt': end.isoformat()}
+        elif time_filter == 'this_month':
+            start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            base_query['created_at'] = {'$gte': start.isoformat()}
+        elif time_filter == 'last_month':
+            first_of_month = now.replace(day=1)
+            end = first_of_month
+            start = (first_of_month - timedelta(days=1)).replace(day=1)
+            base_query['created_at'] = {'$gte': start.isoformat(), '$lt': end.isoformat()}
+    
+    # Define quadrant order and colors for consistent UI
+    quadrant_config = {
+        'Stars': {'color': 'amber', 'description': 'High Volume, High Value', 'order': 1, 'grade': 'A'},
+        'Showcase': {'color': 'purple', 'description': 'Low Volume, High Value', 'order': 2, 'grade': 'B'},
+        'Plough Horses': {'color': 'blue', 'description': 'High Volume, Low Value', 'order': 3, 'grade': 'C'},
+        'Puzzles': {'color': 'slate', 'description': 'Low Volume, Low Value', 'order': 4, 'grade': 'D'}
+    }
+    
+    # Build pipeline with base filter
+    match_stage = {'$match': base_query} if base_query else {'$match': {}}
+    
+    # Aggregate metrics by quadrant
+    pipeline = [
+        match_stage,
+        {
+            '$facet': {
+                # Scored leads grouped by quadrant
+                'scored': [
+                    {'$match': {'scoring.quadrant': {'$exists': True}}},
+                    {'$group': {
+                        '_id': '$scoring.quadrant',
+                        'count': {'$sum': 1},
+                        'total_opportunity_volume': {'$sum': {'$ifNull': ['$opportunity_estimation.monthly_bottles', 0]}},
+                        'total_estimated_value': {'$sum': {'$ifNull': ['$opportunity_estimation.estimated_monthly_revenue', 0]}}
+                    }}
+                ],
+                # Unscored leads
+                'unscored': [
+                    {'$match': {'scoring.quadrant': {'$exists': False}}},
+                    {'$group': {
+                        '_id': None,
+                        'count': {'$sum': 1},
+                        'total_opportunity_volume': {'$sum': {'$ifNull': ['$opportunity_estimation.monthly_bottles', 0]}},
+                        'total_estimated_value': {'$sum': {'$ifNull': ['$opportunity_estimation.estimated_monthly_revenue', 0]}}
+                    }}
+                ],
+                # Total leads count
+                'total': [
+                    {'$count': 'count'}
+                ]
+            }
+        }
+    ]
+    
+    result = await tdb.leads.aggregate(pipeline).to_list(1)
+    
+    if not result:
+        return {'quadrants': [], 'unscored': {'count': 0, 'total_opportunity_volume': 0, 'total_estimated_value': 0}, 'total_leads': 0}
+    
+    data = result[0]
+    scored_data = {item['_id']: item for item in data.get('scored', [])}
+    unscored_data = data.get('unscored', [{}])[0] if data.get('unscored') else {}
+    total_leads = data.get('total', [{}])[0].get('count', 0) if data.get('total') else 0
+    
+    # Build quadrant metrics
+    quadrants = []
+    for quadrant, config in quadrant_config.items():
+        metrics = scored_data.get(quadrant, {})
+        quadrants.append({
+            'quadrant': quadrant,
+            'grade': config['grade'],
+            'color': config['color'],
+            'description': config['description'],
+            'order': config['order'],
+            'count': metrics.get('count', 0),
+            'total_opportunity_volume': metrics.get('total_opportunity_volume', 0),
+            'total_estimated_value': round(metrics.get('total_estimated_value', 0), 2)
+        })
+    
+    # Sort by order
+    quadrants.sort(key=lambda x: x['order'])
+    
+    return {
+        'quadrants': quadrants,
+        'unscored': {
+            'count': unscored_data.get('count', 0) if unscored_data else 0,
+            'total_opportunity_volume': unscored_data.get('total_opportunity_volume', 0) if unscored_data else 0,
+            'total_estimated_value': round(unscored_data.get('total_estimated_value', 0), 2) if unscored_data else 0
+        },
+        'total_leads': total_leads
+    }
+
+
 # ============= BULK OPERATIONS =============
 
 @router.post("/seed-default-model")

@@ -37,6 +37,7 @@ DEFAULT_MODULE_PERMISSIONS = {
     "transport_calculator": {"view": True, "create": False, "edit": False, "delete": False},
     "sku_management": {"view": False, "create": False, "edit": False, "delete": False},
     "bottle_preview": {"view": True, "create": False, "edit": False, "delete": False},
+    "lead_scoring_model": {"view": False, "create": False, "edit": False, "delete": False},
     
     # Documents
     "company_documents": {"view": True, "create": True, "edit": True, "delete": False},
@@ -78,6 +79,7 @@ MANAGER_PERMISSIONS = {
     **DEFAULT_MODULE_PERMISSIONS,
     "team": {"view": True, "create": True, "edit": True, "delete": False},
     "sku_management": {"view": True, "create": True, "edit": True, "delete": False},
+    "lead_scoring_model": {"view": True, "create": True, "edit": True, "delete": False},
     "master_locations": {"view": True, "create": True, "edit": True, "delete": False},
     "lead_statuses": {"view": True, "create": True, "edit": True, "delete": False},
     "business_categories": {"view": True, "create": True, "edit": True, "delete": False},
@@ -202,7 +204,7 @@ MODULE_CATEGORIES = {
     "Core": ["home", "dashboard", "leads", "pipeline", "accounts", "contacts", "sales_portal"],
     "Reports": ["report_sales_overview", "report_revenue", "report_sku_performance", "report_resource_performance", "report_account_performance"],
     "Operations": ["lead_discovery", "target_planning", "daily_status", "status_summary"],
-    "Tools": ["cogs_calculator", "transport_calculator", "sku_management", "bottle_preview"],
+    "Tools": ["cogs_calculator", "transport_calculator", "sku_management", "bottle_preview", "lead_scoring_model"],
     "Documents": ["company_documents", "files_documents"],
     "Requests": ["leaves", "travel_requests", "budget_requests"],
     "Organization": ["company_profile", "team", "master_locations", "lead_statuses", "business_categories", "contact_categories", "expense_categories"],
@@ -231,6 +233,7 @@ MODULE_LABELS = {
     "transport_calculator": "Transport Calculator",
     "sku_management": "SKU Management",
     "bottle_preview": "Bottle Preview",
+    "lead_scoring_model": "Lead Scoring Model",
     "company_documents": "Company Documents",
     "files_documents": "Files & Documents",
     "leaves": "Leaves",

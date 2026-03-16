@@ -59,6 +59,15 @@ class Lead(BaseModel):
     last_contacted_date: Optional[str] = None
     last_contact_method: Optional[str] = None
     
+    # Opportunity Estimation
+    opportunity_estimation: Optional[dict] = None
+    
+    # Lead Scoring
+    scoring: Optional[dict] = None
+    
+    # Temperature (hot/warm/cold)
+    temperature: Optional[str] = None
+    
     # Invoice fields
     total_gross_invoice_value: Optional[float] = None
     total_net_invoice_value: Optional[float] = None

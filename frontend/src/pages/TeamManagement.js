@@ -1065,7 +1065,7 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
               <SelectValue placeholder="Select designation" />
             </SelectTrigger>
             <SelectContent>
-              {DESIGNATIONS.map(des => (
+              {designations.map(des => (
                 <SelectItem key={des} value={des}>{des}</SelectItem>
               ))}
             </SelectContent>

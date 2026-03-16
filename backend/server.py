@@ -196,626 +196,6 @@ async def tenant_context_middleware(request: Request, call_next):
     """Middleware to set tenant context for each request"""
     return await tenant_middleware(request, call_next)
 
-# ============= DEBUG ENDPOINTS (Public - for troubleshooting) =============
-
-@api_router.get("/debug/check-user/{email}")
-async def debug_check_user(email: str):
-    """
-    PUBLIC DEBUG: Check if a user exists in the database.
-    Returns user info without requiring authentication.
-    """
-    # Search globally (without tenant filter)
-    user = await db.users.find_one(
-        {'email': {'$regex': f'^{email}$', '$options': 'i'}},
-        {'_id': 0, 'email': 1, 'name': 1, 'tenant_id': 1, 'role': 1, 'is_active': 1}
-    )
-    
-    if not user:
-        # Try partial match
-        partial_users = await db.users.find(
-            {'email': {'$regex': email.split('@')[0], '$options': 'i'}},
-            {'_id': 0, 'email': 1, 'tenant_id': 1}
-        ).to_list(5)
-        
-        return {
-            "found": False,
-            "message": f"No user found with email: {email}",
-            "similar_users": partial_users,
-            "total_users_in_db": await db.users.count_documents({})
-        }
-    
-    return {
-        "found": True,
-        "user": user,
-        "has_tenant_id": bool(user.get('tenant_id'))
-    }
-
-@api_router.get("/debug/check-cogs/{city}")
-async def debug_check_cogs(city: str):
-    """
-    PUBLIC DEBUG: Check COGS data for a city - both with and without tenant filter.
-    """
-    # Check with tenant filter (what the app sees)
-    tenant_id = get_current_tenant_id()
-    with_tenant = await db.cogs_data.find(
-        {'city': city, 'tenant_id': tenant_id},
-        {'_id': 0, 'sku_name': 1, 'primary_packaging': 1, 'tenant_id': 1}
-    ).to_list(10)
-    
-    # Check without tenant filter (all data)
-    without_tenant = await db.cogs_data.find(
-        {'city': city},
-        {'_id': 0, 'sku_name': 1, 'primary_packaging': 1, 'tenant_id': 1}
-    ).to_list(10)
-    
-    # Check all cities in cogs_data
-    all_cities = await db.cogs_data.distinct('city')
-    
-    # Check all tenant_ids in cogs_data
-    all_tenants = await db.cogs_data.distinct('tenant_id')
-    
-    return {
-        "city_requested": city,
-        "current_tenant": tenant_id,
-        "with_tenant_filter": with_tenant,
-        "without_tenant_filter": without_tenant,
-        "all_cities_in_db": all_cities,
-        "all_tenant_ids_in_cogs": all_tenants,
-        "total_cogs_records": await db.cogs_data.count_documents({})
-    }
-
-@api_router.get("/debug/check-session")
-async def debug_check_session(request: Request):
-    """
-    PUBLIC DEBUG: Check current session and user state.
-    """
-    session_token = request.cookies.get('session_token')
-    auth_header = request.headers.get('Authorization')
-    tenant_header = request.headers.get('X-Tenant-ID')
-    
-    result = {
-        "has_session_cookie": bool(session_token),
-        "session_token_prefix": session_token[:8] + "..." if session_token else None,
-        "has_auth_header": bool(auth_header),
-        "tenant_header": tenant_header,
-        "current_tenant": get_current_tenant_id()
-    }
-    
-    if session_token:
-        session = await db.user_sessions.find_one({'session_token': session_token}, {'_id': 0})
-        if session:
-            result["session_found"] = True
-            result["session_user_id"] = session.get('user_id')
-            result["session_tenant_id"] = session.get('tenant_id')
-            result["session_expires_at"] = session.get('expires_at')
-            
-            # Check if user exists
-            user = await db.users.find_one({'id': session['user_id']}, {'_id': 0, 'email': 1, 'name': 1, 'tenant_id': 1})
-            if user:
-                result["user_found"] = True
-                result["user_email"] = user.get('email')
-                result["user_tenant_id"] = user.get('tenant_id')
-            else:
-                result["user_found"] = False
-                result["error"] = f"No user found with id: {session['user_id']}"
-        else:
-            result["session_found"] = False
-            result["error"] = "Session token not found in database"
-    
-    return result
-
-@api_router.get("/debug/check-targets")
-async def debug_check_targets():
-    """
-    PUBLIC DEBUG: Check target plans data.
-    """
-    # Get all target plans
-    plans_v2 = await db.target_plans_v2.find({}, {'_id': 0, 'id': 1, 'name': 1, 'tenant_id': 1, 'status': 1}).to_list(20)
-    plans_v1 = await db.target_plans.find({}, {'_id': 0, 'id': 1, 'name': 1, 'tenant_id': 1}).to_list(20)
-    
-    # Check tenant_ids
-    v2_tenants = await db.target_plans_v2.distinct('tenant_id')
-    v1_tenants = await db.target_plans.distinct('tenant_id')
-    
-    return {
-        "target_plans_v2": {
-            "total": await db.target_plans_v2.count_documents({}),
-            "without_tenant_id": await db.target_plans_v2.count_documents({'tenant_id': {'$exists': False}}),
-            "sample_plans": plans_v2,
-            "all_tenant_ids": v2_tenants
-        },
-        "target_plans_v1": {
-            "total": await db.target_plans.count_documents({}),
-            "without_tenant_id": await db.target_plans.count_documents({'tenant_id': {'$exists': False}}),
-            "sample_plans": plans_v1,
-            "all_tenant_ids": v1_tenants
-        },
-        "sku_targets": {
-            "total": await db.sku_targets.count_documents({}),
-            "without_tenant_id": await db.sku_targets.count_documents({'tenant_id': {'$exists': False}})
-        },
-        "city_targets": {
-            "total": await db.city_targets.count_documents({}),
-            "without_tenant_id": await db.city_targets.count_documents({'tenant_id': {'$exists': False}})
-        }
-    }
-
-@api_router.get("/debug/check-tenant-branding/{tenant_id}")
-async def debug_check_tenant_branding(tenant_id: str):
-    """
-    PUBLIC DEBUG: Check tenant branding configuration.
-    """
-    tenant = await db.tenants.find_one({'tenant_id': tenant_id}, {'_id': 0})
-    
-    if not tenant:
-        return {
-            "found": False,
-            "message": f"No tenant found with id: {tenant_id}",
-            "all_tenants": await db.tenants.distinct('tenant_id')
-        }
-    
-    return {
-        "found": True,
-        "tenant_id": tenant.get('tenant_id'),
-        "name": tenant.get('name'),
-        "branding": tenant.get('branding'),
-        "modules": tenant.get('modules'),
-        "updated_at": tenant.get('updated_at')
-    }
-
-
-@api_router.post("/debug/clear-lead-rankings")
-async def debug_clear_lead_rankings(request: Request):
-    """
-    PUBLIC DEBUG: Remove rank field (A+, A, B, C, D) from all leads.
-    Body: {"tenant_id": "nyla-air-water", "secret": "clear-rankings-2026"}
-    """
-    body = await request.json()
-    tenant_id = body.get('tenant_id', 'nyla-air-water')
-    secret = body.get('secret')
-    
-    if secret != 'clear-rankings-2026':
-        raise HTTPException(status_code=403, detail="Invalid secret")
-    
-    # Count leads with rank before clearing (field is 'rank' not 'ranking')
-    leads_with_rank = await db.leads.count_documents({
-        'tenant_id': tenant_id,
-        'rank': {'$exists': True, '$ne': None, '$ne': ''}
-    })
-    
-    # Clear rank field from all leads
-    result = await db.leads.update_many(
-        {'tenant_id': tenant_id},
-        {'$unset': {'rank': ''}}
-    )
-    
-    return {
-        "success": True,
-        "tenant_id": tenant_id,
-        "leads_had_rank": leads_with_rank,
-        "leads_updated": result.modified_count,
-        "message": f"Cleared rank from {result.modified_count} leads"
-    }
-
-
-@api_router.post("/debug/migrate-legacy-roles")
-async def debug_migrate_legacy_roles(request: Request):
-    """
-    PUBLIC DEBUG: Migrate legacy hardcoded roles to the new Role Management system.
-    Creates CEO, Director, VP Growth, Partner - Sales, Sales Executive, etc.
-    Body: {"tenant_id": "nyla-air-water", "secret": "migrate-roles-2026"}
-    """
-    body = await request.json()
-    tenant_id = body.get('tenant_id', 'nyla-air-water')
-    secret = body.get('secret')
-    
-    if secret != 'migrate-roles-2026':
-        raise HTTPException(status_code=403, detail="Invalid secret")
-    
-    now = datetime.now(timezone.utc).isoformat()
-    
-    # Full access permissions for executives
-    full_access = {
-        key: {"view": True, "create": True, "edit": True, "delete": True}
-        for key in [
-            "home", "dashboard", "leads", "pipeline", "accounts", "contacts", "sales_portal",
-            "report_sales_overview", "report_revenue", "report_sku_performance", 
-            "report_resource_performance", "report_account_performance",
-            "lead_discovery", "target_planning", "daily_status", "status_summary",
-            "cogs_calculator", "transport_calculator", "sku_management", "bottle_preview",
-            "company_documents", "files_documents", "leaves", "travel_requests", "budget_requests",
-            "company_profile", "team", "master_locations", "lead_statuses", 
-            "business_categories", "contact_categories", "expense_categories",
-            "tenant_settings", "maintenance", "inventory", "quality_control", "assets", "vendors"
-        ]
-    }
-    
-    # Manager level permissions
-    manager_access = {
-        key: {"view": True, "create": True, "edit": True, "delete": False}
-        for key in full_access.keys()
-    }
-    manager_access["tenant_settings"] = {"view": False, "create": False, "edit": False, "delete": False}
-    
-    # Sales level permissions
-    sales_access = {
-        "home": {"view": True, "create": False, "edit": False, "delete": False},
-        "dashboard": {"view": True, "create": False, "edit": False, "delete": False},
-        "leads": {"view": True, "create": True, "edit": True, "delete": False},
-        "pipeline": {"view": True, "create": False, "edit": True, "delete": False},
-        "accounts": {"view": True, "create": True, "edit": True, "delete": False},
-        "contacts": {"view": True, "create": True, "edit": True, "delete": False},
-        "sales_portal": {"view": True, "create": False, "edit": False, "delete": False},
-        "report_sales_overview": {"view": True, "create": False, "edit": False, "delete": False},
-        "report_revenue": {"view": True, "create": False, "edit": False, "delete": False},
-        "report_sku_performance": {"view": True, "create": False, "edit": False, "delete": False},
-        "report_resource_performance": {"view": True, "create": False, "edit": False, "delete": False},
-        "report_account_performance": {"view": True, "create": False, "edit": False, "delete": False},
-        "lead_discovery": {"view": True, "create": True, "edit": False, "delete": False},
-        "target_planning": {"view": True, "create": False, "edit": False, "delete": False},
-        "daily_status": {"view": True, "create": True, "edit": True, "delete": False},
-        "status_summary": {"view": True, "create": False, "edit": False, "delete": False},
-        "cogs_calculator": {"view": True, "create": False, "edit": False, "delete": False},
-        "transport_calculator": {"view": True, "create": False, "edit": False, "delete": False},
-        "sku_management": {"view": False, "create": False, "edit": False, "delete": False},
-        "bottle_preview": {"view": True, "create": False, "edit": False, "delete": False},
-        "company_documents": {"view": True, "create": False, "edit": False, "delete": False},
-        "files_documents": {"view": True, "create": True, "edit": True, "delete": False},
-        "leaves": {"view": True, "create": True, "edit": True, "delete": False},
-        "travel_requests": {"view": True, "create": True, "edit": True, "delete": False},
-        "budget_requests": {"view": True, "create": True, "edit": True, "delete": False},
-        "company_profile": {"view": True, "create": False, "edit": False, "delete": False},
-        "team": {"view": False, "create": False, "edit": False, "delete": False},
-        "master_locations": {"view": False, "create": False, "edit": False, "delete": False},
-        "lead_statuses": {"view": False, "create": False, "edit": False, "delete": False},
-        "business_categories": {"view": False, "create": False, "edit": False, "delete": False},
-        "contact_categories": {"view": False, "create": False, "edit": False, "delete": False},
-        "expense_categories": {"view": False, "create": False, "edit": False, "delete": False},
-        "tenant_settings": {"view": False, "create": False, "edit": False, "delete": False},
-        "maintenance": {"view": False, "create": False, "edit": False, "delete": False},
-        "inventory": {"view": False, "create": False, "edit": False, "delete": False},
-        "quality_control": {"view": False, "create": False, "edit": False, "delete": False},
-        "assets": {"view": False, "create": False, "edit": False, "delete": False},
-        "vendors": {"view": False, "create": False, "edit": False, "delete": False},
-    }
-    
-    # Legacy roles to create
-    legacy_roles = [
-        {
-            "id": str(uuid.uuid4()),
-            "tenant_id": tenant_id,
-            "name": "CEO",
-            "description": "Chief Executive Officer - Full system access",
-            "permissions": full_access,
-            "is_system_role": True,
-            "is_default": False,
-            "created_at": now,
-            "updated_at": now
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "tenant_id": tenant_id,
-            "name": "Director",
-            "description": "Director - Full system access",
-            "permissions": full_access,
-            "is_system_role": True,
-            "is_default": False,
-            "created_at": now,
-            "updated_at": now
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "tenant_id": tenant_id,
-            "name": "VP Growth",
-            "description": "Vice President Growth - Full system access",
-            "permissions": full_access,
-            "is_system_role": True,
-            "is_default": False,
-            "created_at": now,
-            "updated_at": now
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "tenant_id": tenant_id,
-            "name": "National Sales Head",
-            "description": "National Sales Head - Full sales access",
-            "permissions": full_access,
-            "is_system_role": True,
-            "is_default": False,
-            "created_at": now,
-            "updated_at": now
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "tenant_id": tenant_id,
-            "name": "Regional Sales Manager",
-            "description": "Regional Sales Manager - Manager level access",
-            "permissions": manager_access,
-            "is_system_role": True,
-            "is_default": False,
-            "created_at": now,
-            "updated_at": now
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "tenant_id": tenant_id,
-            "name": "Partner - Sales",
-            "description": "Sales Partner - Standard sales access",
-            "permissions": sales_access,
-            "is_system_role": True,
-            "is_default": False,
-            "created_at": now,
-            "updated_at": now
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "tenant_id": tenant_id,
-            "name": "Sales Executive",
-            "description": "Sales Executive - Standard sales access",
-            "permissions": sales_access,
-            "is_system_role": True,
-            "is_default": True,
-            "created_at": now,
-            "updated_at": now
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "tenant_id": tenant_id,
-            "name": "Sales Representative",
-            "description": "Sales Representative - Basic sales access",
-            "permissions": sales_access,
-            "is_system_role": True,
-            "is_default": False,
-            "created_at": now,
-            "updated_at": now
-        }
-    ]
-    
-    results = {
-        "roles": {"created": [], "skipped": [], "errors": []},
-        "designations": {"created": [], "skipped": [], "errors": []}
-    }
-    
-    # Add more roles
-    legacy_roles.extend([
-        {
-            "id": str(uuid.uuid4()),
-            "tenant_id": tenant_id,
-            "name": "Head of Business",
-            "description": "Head of Business - Manager level access",
-            "permissions": manager_access,
-            "is_system_role": True,
-            "is_default": False,
-            "created_at": now,
-            "updated_at": now
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "tenant_id": tenant_id,
-            "name": "Business Development Executive",
-            "description": "BDE - Standard sales access",
-            "permissions": sales_access,
-            "is_system_role": True,
-            "is_default": False,
-            "created_at": now,
-            "updated_at": now
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "tenant_id": tenant_id,
-            "name": "Production Manager",
-            "description": "Production Manager - Manager level access",
-            "permissions": manager_access,
-            "is_system_role": True,
-            "is_default": False,
-            "created_at": now,
-            "updated_at": now
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "tenant_id": tenant_id,
-            "name": "Production Supervisor",
-            "description": "Production Supervisor - Supervisor access",
-            "permissions": sales_access,
-            "is_system_role": True,
-            "is_default": False,
-            "created_at": now,
-            "updated_at": now
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "tenant_id": tenant_id,
-            "name": "System Admin",
-            "description": "System Administrator - Full access",
-            "permissions": full_access,
-            "is_system_role": True,
-            "is_default": False,
-            "created_at": now,
-            "updated_at": now
-        }
-    ])
-    
-    # Legacy designations to create
-    legacy_designations = [
-        {"name": "CEO", "department": "Executive", "level": 1},
-        {"name": "Director", "department": "Executive", "level": 2},
-        {"name": "VP Growth", "department": "Executive", "level": 3},
-        {"name": "Vice President", "department": "Executive", "level": 3},
-        {"name": "National Sales Head", "department": "Sales", "level": 4},
-        {"name": "Regional Sales Manager", "department": "Sales", "level": 5},
-        {"name": "Partner - Sales", "department": "Sales", "level": 6},
-        {"name": "Head of Business", "department": "Sales", "level": 6},
-        {"name": "Sales Manager", "department": "Sales", "level": 7},
-        {"name": "Sales Executive", "department": "Sales", "level": 8},
-        {"name": "Business Development Executive", "department": "Sales", "level": 8},
-        {"name": "Sales Representative", "department": "Sales", "level": 9},
-        {"name": "Production Manager", "department": "Production", "level": 5},
-        {"name": "Production Supervisor", "department": "Production", "level": 6},
-        {"name": "System Admin", "department": "IT", "level": 3},
-        {"name": "Admin", "department": "Admin", "level": 4},
-    ]
-    
-    for role in legacy_roles:
-        try:
-            # Check if role already exists
-            existing = await db.roles.find_one({
-                "tenant_id": tenant_id,
-                "name": role["name"]
-            })
-            
-            if existing:
-                results["roles"]["skipped"].append(role["name"])
-            else:
-                await db.roles.insert_one(role)
-                results["roles"]["created"].append(role["name"])
-        except Exception as e:
-            results["roles"]["errors"].append({"role": role["name"], "error": str(e)})
-    
-    # Migrate designations
-    for desig in legacy_designations:
-        try:
-            existing = await db.designations.find_one({"tenant_id": tenant_id, "name": desig["name"]})
-            if existing:
-                results["designations"]["skipped"].append(desig["name"])
-            else:
-                desig_doc = {
-                    "id": str(uuid.uuid4()),
-                    "tenant_id": tenant_id,
-                    "name": desig["name"],
-                    "department": desig["department"],
-                    "level": desig["level"],
-                    "is_system": True,
-                    "created_at": now,
-                    "updated_at": now
-                }
-                await db.designations.insert_one(desig_doc)
-                results["designations"]["created"].append(desig["name"])
-        except Exception as e:
-            results["designations"]["errors"].append({"designation": desig["name"], "error": str(e)})
-    
-    return {
-        "success": True,
-        "tenant_id": tenant_id,
-        "results": results
-    }
-
-@api_router.post("/debug/fix-user-tenant")
-async def debug_fix_user_tenant(request: Request):
-    """
-    PUBLIC DEBUG: Fix a user's tenant_id.
-    Body: {"email": "user@example.com", "tenant_id": "nyla-air-water", "secret": "fix-tenant-2026"}
-    """
-    body = await request.json()
-    email = body.get('email')
-    tenant_id = body.get('tenant_id', 'nyla-air-water')
-    secret = body.get('secret')
-    
-    if secret != 'fix-tenant-2026':
-        raise HTTPException(status_code=403, detail="Invalid secret")
-    
-    result = await db.users.update_one(
-        {'email': {'$regex': f'^{email}$', '$options': 'i'}},
-        {'$set': {'tenant_id': tenant_id}}
-    )
-    
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail=f"User {email} not found")
-    
-    return {
-        "success": True,
-        "message": f"Updated tenant_id to {tenant_id} for {email}",
-        "matched": result.matched_count,
-        "modified": result.modified_count
-    }
-
-@api_router.get("/debug/migration-status")
-async def debug_migration_status():
-    """
-    PUBLIC DEBUG: Check how many documents need tenant_id migration.
-    """
-    collections_to_check = [
-        'users', 'leads', 'accounts', 'activities', 'meetings', 'tasks',
-        'requests', 'leave_requests', 'travel_requests', 'budget_requests',
-        'contacts', 'contact_categories', 'expense_categories', 'designations',
-        'roles', 'documents', 'notifications', 'daily_status_logs'
-    ]
-    
-    status = {}
-    total_need_migration = 0
-    
-    for coll_name in collections_to_check:
-        try:
-            coll = db[coll_name]
-            total = await coll.count_documents({})
-            without_tenant = await coll.count_documents({'tenant_id': {'$exists': False}})
-            with_tenant = await coll.count_documents({'tenant_id': {'$exists': True}})
-            
-            status[coll_name] = {
-                "total": total,
-                "without_tenant_id": without_tenant,
-                "with_tenant_id": with_tenant,
-                "needs_migration": without_tenant > 0
-            }
-            total_need_migration += without_tenant
-        except Exception as e:
-            status[coll_name] = {"error": str(e)}
-    
-    return {
-        "total_documents_need_migration": total_need_migration,
-        "collections": status
-    }
-
-@api_router.post("/debug/migrate-all-data")
-async def debug_migrate_all_data(request: Request):
-    """
-    PUBLIC DEBUG: Add tenant_id to ALL documents that don't have it.
-    Body: {"tenant_id": "nyla-air-water", "secret": "migrate-all-2026"}
-    """
-    body = await request.json()
-    tenant_id = body.get('tenant_id', 'nyla-air-water')
-    secret = body.get('secret')
-    
-    if secret != 'migrate-all-2026':
-        raise HTTPException(status_code=403, detail="Invalid secret")
-    
-    collections_to_migrate = [
-        'users', 'leads', 'accounts', 'activities', 'meetings', 'tasks',
-        'requests', 'leave_requests', 'travel_requests', 'budget_requests',
-        'contacts', 'contact_categories', 'expense_categories', 'designations',
-        'roles', 'documents', 'notifications', 'daily_status_logs',
-        'company_profiles', 'files', 'invoices', 'proposals',
-        # COGS and Target collections
-        'cogs_data', 'target_plans_v2', 'sku_targets', 'city_targets', 'sales_targets',
-        'target_plans', 'resource_targets', 'monthly_targets'
-    ]
-    
-    results = {}
-    total_migrated = 0
-    
-    for coll_name in collections_to_migrate:
-        try:
-            coll = db[coll_name]
-            result = await coll.update_many(
-                {'tenant_id': {'$exists': False}},
-                {'$set': {'tenant_id': tenant_id}}
-            )
-            results[coll_name] = {
-                "matched": result.matched_count,
-                "modified": result.modified_count
-            }
-            total_migrated += result.modified_count
-        except Exception as e:
-            results[coll_name] = {"error": str(e)}
-    
-    return {
-        "success": True,
-        "tenant_id": tenant_id,
-        "total_documents_migrated": total_migrated,
-        "collections": results
-    }
-
-# ============= END DEBUG ENDPOINTS =============
-
 # Include modular routes - these are the refactored endpoints
 # Note: We're including them here but the original routes in this file
 # will take precedence due to FastAPI route ordering
@@ -4201,6 +3581,9 @@ async def get_leads(
     search: Optional[str] = None,
     assigned_to: Optional[str] = None,
     time_filter: Optional[str] = None,
+    quadrant: Optional[str] = None,
+    sort_by: Optional[str] = 'created_at',
+    sort_order: Optional[str] = 'desc',
     no_limit: Optional[bool] = False,
     current_user: dict = Depends(get_current_user)
 ):
@@ -4213,6 +3596,8 @@ async def get_leads(
     - search: Search in company name, contact person, lead_id
     - assigned_to: Filter by assigned user ID
     - time_filter: Filter by time period (this_week, last_week, this_month, last_month, etc.)
+    - sort_by: Field to sort by (default: created_at)
+    - sort_order: asc or desc (default: desc)
     - no_limit: If true, returns all matching leads without pagination (for Pipeline/Kanban view)
     """
     # Validate and cap page_size to prevent abuse (unless no_limit is set)
@@ -4315,19 +3700,63 @@ async def get_leads(
                 query['created_at'] = {'$gte': start_date_str}
     
     # Add search filter
+    search_filter = None
     if search:
-        query['$or'] = [
+        search_filter = {'$or': [
             {'company': {'$regex': search, '$options': 'i'}},
             {'contact_person': {'$regex': search, '$options': 'i'}},
             {'lead_id': {'$regex': search, '$options': 'i'}}
-        ]
+        ]}
+    
+    # Add lead scoring quadrant filter
+    quadrant_filter = None
+    if quadrant:
+        quadrants = quadrant.split(',')
+        # Check if 'unscored' is in the filter
+        if 'unscored' in quadrants:
+            quadrants.remove('unscored')
+            if quadrants:
+                # Both scored quadrants and unscored
+                quadrant_filter = {'$or': [
+                    {'scoring.quadrant': {'$in': quadrants}},
+                    {'scoring.quadrant': {'$exists': False}},
+                    {'scoring': {'$exists': False}}
+                ]}
+            else:
+                # Only unscored
+                quadrant_filter = {'$or': [
+                    {'scoring.quadrant': {'$exists': False}},
+                    {'scoring': {'$exists': False}}
+                ]}
+        else:
+            quadrant_filter = {'scoring.quadrant': {'$in': quadrants}}
+    
+    # Combine search and quadrant filters properly with $and
+    if search_filter and quadrant_filter:
+        query['$and'] = [search_filter, quadrant_filter]
+    elif search_filter:
+        query['$or'] = search_filter['$or']
+    elif quadrant_filter:
+        if '$or' in quadrant_filter:
+            query['$or'] = quadrant_filter['$or']
+        else:
+            query.update(quadrant_filter)
     
     # Get total count for pagination
     total = await get_tdb().leads.count_documents(query)
     total_pages = (total + page_size - 1) // page_size  # Ceiling division
     
-    # Fetch paginated leads
-    leads = await get_tdb().leads.find(query, {'_id': 0}).sort('created_at', -1).skip(skip).limit(page_size).to_list(page_size)
+    # Fetch paginated leads with sorting
+    sort_direction = -1 if sort_order == 'desc' else 1
+    
+    # Map frontend sort fields to database fields
+    sort_field_map = {
+        'estimated_revenue': 'opportunity_estimation.estimated_monthly_revenue',
+        'opportunity_estimation.estimated_monthly_revenue': 'opportunity_estimation.estimated_monthly_revenue',
+    }
+    db_sort_field = sort_field_map.get(sort_by, sort_by)
+    
+    leads = await get_tdb().leads.find(query, {'_id': 0}).sort(db_sort_field, sort_direction).skip(skip).limit(page_size).to_list(page_size)
     
     # Get last activity for each lead
     lead_ids = [lead['id'] for lead in leads]
@@ -4372,6 +3801,31 @@ async def get_leads(
             else:
                 lead['last_contacted_date'] = None
                 lead['last_contact_method'] = None
+        
+        # Calculate estimated_monthly_revenue on the fly if not stored, and save to DB
+        opportunity_estimation = lead.get('opportunity_estimation') or {}
+        if not opportunity_estimation.get('estimated_monthly_revenue'):
+            monthly_bottles = opportunity_estimation.get('final_monthly') or opportunity_estimation.get('calculated_monthly') or 0
+            proposed_sku_pricing = lead.get('proposed_sku_pricing') or []
+            
+            if monthly_bottles and proposed_sku_pricing:
+                estimated_revenue = 0
+                for sku in proposed_sku_pricing:
+                    percentage = sku.get('percentage', 0)
+                    price_per_unit = sku.get('price_per_unit', 0)
+                    estimated_qty = round((monthly_bottles * percentage) / 100) if percentage else 0
+                    estimated_revenue += estimated_qty * price_per_unit
+                
+                if estimated_revenue > 0:
+                    if not lead.get('opportunity_estimation'):
+                        lead['opportunity_estimation'] = {}
+                    lead['opportunity_estimation']['estimated_monthly_revenue'] = estimated_revenue
+                    
+                    # Save to DB for future use in dashboards and metrics
+                    await get_tdb().leads.update_one(
+                        {'id': lead['id']},
+                        {'$set': {'opportunity_estimation.estimated_monthly_revenue': estimated_revenue}}
+                    )
     
     return PaginatedLeadsResponse(
         data=leads,
@@ -4461,6 +3915,27 @@ async def update_lead(
                     )
     
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+    
+    # Calculate estimated_monthly_revenue if proposed_sku_pricing is being updated
+    if 'proposed_sku_pricing' in update_data:
+        monthly_bottles = 0
+        opportunity_estimation = lead.get('opportunity_estimation') or {}
+        if opportunity_estimation:
+            monthly_bottles = opportunity_estimation.get('final_monthly') or opportunity_estimation.get('calculated_monthly') or 0
+        
+        estimated_revenue = 0
+        for sku in (update_data['proposed_sku_pricing'] or []):
+            percentage = sku.get('percentage', 0)
+            price_per_unit = sku.get('price_per_unit', 0)
+            estimated_qty = round((monthly_bottles * percentage) / 100) if percentage else 0
+            estimated_revenue += estimated_qty * price_per_unit
+        
+        # Store calculated revenue in opportunity_estimation
+        if opportunity_estimation:
+            opportunity_estimation['estimated_monthly_revenue'] = estimated_revenue
+            update_data['opportunity_estimation'] = opportunity_estimation
+        else:
+            update_data['opportunity_estimation'] = {'estimated_monthly_revenue': estimated_revenue}
     
     # Track status change (skip if activity was already logged via activity endpoint)
     if 'status' in update_data and update_data['status'] != lead.get('status') and not skip_activity_log:

@@ -21,7 +21,7 @@ import {
   FilterGrid, 
   FilterSearch 
 } from '../components/ui/filter-bar';
-import { Plus, Search, Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid, List, Filter, Users, Loader2, Check, MapPin, Calendar, Target, UserCircle, RotateCcw } from 'lucide-react';
+import { Plus, Search, Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid, List, Filter, Users, Loader2, Check, MapPin, Calendar, Target, UserCircle, RotateCcw, Star, TrendingUp, DollarSign, BarChart3, Flame, Snowflake, ThermometerSun, Sparkles, Award, Layers, HelpCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Table,
@@ -62,6 +62,11 @@ export default function LeadsList() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const { statuses, getStatusLabel, getStatusColor } = useLeadStatuses();
+  
+  // Lead Scoring Quadrant Metrics
+  const [quadrantMetrics, setQuadrantMetrics] = useState({ quadrants: [], unscored: { count: 0 }, total_leads: 0 });
+  const [selectedQuadrants, setSelectedQuadrants] = useState([]);
+  const [metricsLoading, setMetricsLoading] = useState(true);
   
   // Check if we have URL params from dashboard navigation
   const urlParams = new URLSearchParams(window.location.search);
@@ -133,12 +138,44 @@ export default function LeadsList() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  // Fetch quadrant metrics when filters change
+  useEffect(() => {
+    fetchQuadrantMetrics();
+  }, [debouncedSearch, statusFilter, cityFilter, stateFilter, territoryFilter, assignedToFilter, timeFilter]);
+
   // Fetch users on mount
   useEffect(() => {
     fetchUsers();
   }, []);
   
-  useEffect(() => { fetchLeads(); }, [currentPage, itemsPerPage, debouncedSearch, statusFilter, cityFilter, stateFilter, territoryFilter, assignedToFilter, timeFilter]);
+  useEffect(() => { fetchLeads(); }, [currentPage, itemsPerPage, debouncedSearch, statusFilter, cityFilter, stateFilter, territoryFilter, assignedToFilter, timeFilter, selectedQuadrants, sortField, sortDirection]);
+
+  const fetchQuadrantMetrics = async () => {
+    try {
+      setMetricsLoading(true);
+      const token = localStorage.getItem('token');
+      
+      // Build query params based on active filters
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.append('search', debouncedSearch);
+      if (statusFilter.length > 0) params.append('status', statusFilter.join(','));
+      if (cityFilter !== 'all') params.append('city', cityFilter);
+      if (stateFilter !== 'all') params.append('state', stateFilter);
+      if (territoryFilter !== 'all') params.append('territory', territoryFilter);
+      if (assignedToFilter.length > 0) params.append('assigned_to', assignedToFilter.join(','));
+      if (timeFilter !== 'lifetime') params.append('time_filter', timeFilter);
+      
+      const url = `${process.env.REACT_APP_BACKEND_URL}/api/scoring/quadrant-metrics${params.toString() ? '?' + params.toString() : ''}`;
+      const response = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` }, withCredentials: true
+      });
+      setQuadrantMetrics(response.data);
+    } catch (error) {
+      console.error('Failed to load quadrant metrics:', error);
+    } finally {
+      setMetricsLoading(false);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -161,6 +198,9 @@ export default function LeadsList() {
         territory: territoryFilter !== 'all' ? territoryFilter : undefined,
         assigned_to: assignedToFilter.length > 0 ? assignedToFilter.join(',') : undefined, 
         time_filter: timeFilter !== 'lifetime' ? timeFilter : undefined,
+        quadrant: selectedQuadrants.length > 0 ? selectedQuadrants.join(',') : undefined,
+        sort_by: sortField,
+        sort_order: sortDirection,
       };
       const response = await leadsAPI.getAll(params);
       const { data, total, total_pages } = response.data;
@@ -192,6 +232,7 @@ export default function LeadsList() {
   const handleResetFilters = () => {
     setSearchQuery(''); setStatusFilter([]); setTerritoryFilter('all'); setStateFilter('all');
     setCityFilter('all'); setAssignedToFilter([]); setTimeFilter('lifetime'); setCurrentPage(1);
+    setSelectedQuadrants([]); // Clear quadrant selection
     // Clear sessionStorage
     sessionStorage.removeItem('leads_filter_search');
     sessionStorage.removeItem('leads_filter_status');
@@ -202,6 +243,128 @@ export default function LeadsList() {
     sessionStorage.removeItem('leads_filter_time');
     sessionStorage.removeItem('leads_filter_page');
     window.history.replaceState({}, '', '/leads');
+  };
+
+  // Toggle quadrant selection
+  const toggleQuadrant = (quadrant) => {
+    setSelectedQuadrants(prev => {
+      if (prev.includes(quadrant)) {
+        return prev.filter(q => q !== quadrant);
+      } else {
+        return [...prev, quadrant];
+      }
+    });
+    setCurrentPage(1);
+  };
+
+  // Format currency for display
+  const formatCurrency = (value) => {
+    if (value >= 10000000) return `${(value / 10000000).toFixed(1)}Cr`;
+    if (value >= 100000) return `${(value / 100000).toFixed(1)}L`;
+    if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+    return value.toFixed(0);
+  };
+
+  // Format volume for display
+  const formatVolume = (value) => {
+    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+    return value.toString();
+  };
+
+  // Get quadrant styling
+  const getQuadrantStyle = (quadrant, isSelected) => {
+    const styles = {
+      'Stars': { 
+        bg: isSelected ? 'bg-amber-100 ring-2 ring-amber-400' : 'bg-amber-50 hover:bg-amber-100',
+        text: 'text-amber-700',
+        icon: 'text-amber-500',
+        border: 'border-amber-200',
+        grade: 'A'
+      },
+      'Showcase': { 
+        bg: isSelected ? 'bg-purple-100 ring-2 ring-purple-400' : 'bg-purple-50 hover:bg-purple-100',
+        text: 'text-purple-700',
+        icon: 'text-purple-500',
+        border: 'border-purple-200',
+        grade: 'B'
+      },
+      'Plough Horses': { 
+        bg: isSelected ? 'bg-blue-100 ring-2 ring-blue-400' : 'bg-blue-50 hover:bg-blue-100',
+        text: 'text-blue-700',
+        icon: 'text-blue-500',
+        border: 'border-blue-200',
+        grade: 'C'
+      },
+      'Puzzles': { 
+        bg: isSelected ? 'bg-slate-200 ring-2 ring-slate-400' : 'bg-slate-100 hover:bg-slate-200',
+        text: 'text-slate-700',
+        icon: 'text-slate-500',
+        border: 'border-slate-300',
+        grade: 'D'
+      },
+      'unscored': { 
+        bg: isSelected ? 'bg-gray-200 ring-2 ring-gray-400' : 'bg-gray-50 hover:bg-gray-100',
+        text: 'text-gray-600',
+        icon: 'text-gray-400',
+        border: 'border-gray-200',
+        grade: '-'
+      }
+    };
+    return styles[quadrant] || styles['unscored'];
+  };
+
+  // Get quadrant grade (A, B, C, D) for lead list
+  const getQuadrantGrade = (lead) => {
+    const quadrant = lead?.scoring?.quadrant;
+    if (!quadrant) return null;
+    
+    const gradeMap = {
+      'Stars': { grade: 'A', bg: 'bg-amber-500', text: 'text-white', title: 'A - Stars (High Volume, High Value)' },
+      'Showcase': { grade: 'B', bg: 'bg-purple-500', text: 'text-white', title: 'B - Showcase (Low Volume, High Value)' },
+      'Plough Horses': { grade: 'C', bg: 'bg-blue-500', text: 'text-white', title: 'C - Plough Horses (High Volume, Low Value)' },
+      'Puzzles': { grade: 'D', bg: 'bg-slate-500', text: 'text-white', title: 'D - Puzzles (Low Volume, Low Value)' }
+    };
+    
+    const config = gradeMap[quadrant];
+    if (!config) return null;
+    
+    return (
+      <span 
+        className={`inline-flex items-center justify-center w-6 h-6 rounded-md font-bold text-sm ${config.bg} ${config.text}`}
+        title={config.title}
+      >
+        {config.grade}
+      </span>
+    );
+  };
+
+  // Get temperature icon and styling
+  const getTemperatureIcon = (temperature) => {
+    if (!temperature) return null;
+    
+    switch (temperature) {
+      case 'hot':
+        return (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-red-100 text-red-600" title="Hot Lead">
+            <Flame className="h-3.5 w-3.5 fill-red-500" />
+          </span>
+        );
+      case 'warm':
+        return (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600" title="Warm Lead">
+            <ThermometerSun className="h-3.5 w-3.5" />
+          </span>
+        );
+      case 'cold':
+        return (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600" title="Cold Lead">
+            <Snowflake className="h-3.5 w-3.5" />
+          </span>
+        );
+      default:
+        return null;
+    }
   };
 
   const handleCompleteFollowup = async (e, lead) => {
@@ -218,16 +381,9 @@ export default function LeadsList() {
     }
   };
 
-  let sortedLeads = [...leads].sort((a, b) => {
-    let aVal = a[sortField], bVal = b[sortField];
-    if (['created_at', 'updated_at', 'next_followup_date', 'last_contacted_date'].includes(sortField)) {
-      aVal = aVal ? new Date(aVal).getTime() : 0; bVal = bVal ? new Date(bVal).getTime() : 0;
-    } else if (typeof aVal === 'string') { aVal = (aVal || '').toLowerCase(); bVal = (bVal || '').toLowerCase(); }
-    return sortDirection === 'asc' ? (aVal > bVal ? 1 : -1) : (aVal < bVal ? 1 : -1);
-  });
-
-  const displayLeads = sortedLeads;
-  const hasActiveFilters = searchQuery || statusFilter.length > 0 || territoryFilter !== 'all' || stateFilter !== 'all' || cityFilter !== 'all' || assignedToFilter.length > 0 || timeFilter !== 'lifetime';
+  // Use leads directly since sorting is now server-side
+  const displayLeads = leads;
+  const hasActiveFilters = searchQuery || statusFilter.length > 0 || territoryFilter !== 'all' || stateFilter !== 'all' || cityFilter !== 'all' || assignedToFilter.length > 0 || timeFilter !== 'lifetime' || selectedQuadrants.length > 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="leads-list-page">
@@ -262,6 +418,119 @@ export default function LeadsList() {
             </div>
           </div>
         </header>
+
+        {/* Lead Scoring Quadrant Metrics Bar */}
+        <Card className="mb-6 p-4 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="quadrant-metrics-bar">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-indigo-500" />
+              <span className="font-semibold text-slate-700 dark:text-slate-200">Lead Scoring Categories</span>
+              {selectedQuadrants.length > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  {selectedQuadrants.length} selected
+                </Badge>
+              )}
+            </div>
+            {selectedQuadrants.length > 0 && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => { setSelectedQuadrants([]); setCurrentPage(1); }}
+                className="text-xs h-7"
+              >
+                <RotateCcw className="h-3 w-3 mr-1" /> Clear Selection
+              </Button>
+            )}
+          </div>
+          
+          {metricsLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {/* Quadrant Tiles */}
+              {quadrantMetrics.quadrants.map((q) => {
+                const isSelected = selectedQuadrants.includes(q.quadrant);
+                const style = getQuadrantStyle(q.quadrant, isSelected);
+                return (
+                  <div
+                    key={q.quadrant}
+                    onClick={() => toggleQuadrant(q.quadrant)}
+                    className={`p-4 rounded-xl cursor-pointer transition-all ${style.bg} ${style.border} border ${isSelected ? 'shadow-md' : 'hover:shadow-sm'}`}
+                    data-testid={`quadrant-tile-${q.quadrant.toLowerCase().replace(' ', '-')}`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg font-bold text-lg ${
+                          q.quadrant === 'Stars' ? 'bg-amber-500 text-white' :
+                          q.quadrant === 'Showcase' ? 'bg-purple-500 text-white' :
+                          q.quadrant === 'Plough Horses' ? 'bg-blue-500 text-white' :
+                          'bg-slate-500 text-white'
+                        }`}>
+                          {style.grade}
+                        </span>
+                        <span className={`font-semibold text-sm ${style.text}`}>{q.quadrant}</span>
+                      </div>
+                      <div className={`text-2xl font-bold ${style.text}`}>{q.count}</div>
+                    </div>
+                    
+                    {/* Prominent Value and Volume */}
+                    <div className="grid grid-cols-2 gap-3 pt-3 border-t border-current/10">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Volume</p>
+                        <p className={`text-lg font-bold ${style.text}`}>
+                          {q.total_opportunity_volume > 0 ? formatVolume(q.total_opportunity_volume) : '-'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Value</p>
+                        <p className={`text-lg font-bold ${style.text}`}>
+                          {q.total_estimated_value > 0 ? `₹${formatCurrency(q.total_estimated_value)}` : '-'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              
+              {/* Unscored Tile */}
+              {quadrantMetrics.unscored && quadrantMetrics.unscored.count > 0 && (
+                <div
+                  onClick={() => toggleQuadrant('unscored')}
+                  className={`p-4 rounded-xl cursor-pointer transition-all ${getQuadrantStyle('unscored', selectedQuadrants.includes('unscored')).bg} ${getQuadrantStyle('unscored', selectedQuadrants.includes('unscored')).border} border ${selectedQuadrants.includes('unscored') ? 'shadow-md' : 'hover:shadow-sm'}`}
+                  data-testid="quadrant-tile-unscored"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg font-bold text-lg bg-gray-400 text-white">
+                        -
+                      </span>
+                      <span className="font-semibold text-sm text-gray-600">Unscored</span>
+                    </div>
+                    <div className="text-2xl font-bold text-gray-600">{quadrantMetrics.unscored.count}</div>
+                  </div>
+                  
+                  {/* Prominent Value and Volume */}
+                  <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-200">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Volume</p>
+                      <p className="text-lg font-bold text-gray-600">
+                        {quadrantMetrics.unscored.total_opportunity_volume > 0 ? formatVolume(quadrantMetrics.unscored.total_opportunity_volume) : '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Value</p>
+                      <p className="text-lg font-bold text-gray-600">
+                        {quadrantMetrics.unscored.total_estimated_value > 0 ? `₹${formatCurrency(quadrantMetrics.unscored.total_estimated_value)}` : '-'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
 
         {/* Contemporary Filters */}
         <FilterContainer 
@@ -396,7 +665,7 @@ export default function LeadsList() {
                       <TableHead><button onClick={() => handleSort('assigned_to')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-assigned">Assigned To{getSortIcon('assigned_to')}</button></TableHead>
                       <TableHead><button onClick={() => handleSort('last_contacted_date')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-last-contacted">Last Contacted{getSortIcon('last_contacted_date')}</button></TableHead>
                       <TableHead><button onClick={() => handleSort('next_followup_date')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-followup">Next Follow-up{getSortIcon('next_followup_date')}</button></TableHead>
-                      <TableHead>Contact Method</TableHead>
+                      <TableHead><button onClick={() => handleSort('estimated_revenue')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-revenue">Est. Revenue{getSortIcon('estimated_revenue')}</button></TableHead>
                       <TableHead><button onClick={() => handleSort('status')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-status">Status{getSortIcon('status')}</button></TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -410,7 +679,14 @@ export default function LeadsList() {
                       }} data-testid={`lead-row-${lead.id}`}>
                         <TableCell data-testid={`lead-cell-${lead.id}`}>
                           <div className="flex items-center gap-2">
-                            <div><p className="font-medium text-primary">{lead.company || lead.name}</p><p className="text-xs text-muted-foreground font-mono">{lead.lead_id || '-'}</p></div>
+                            {getQuadrantGrade(lead)}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-primary truncate">{lead.company || lead.name}</p>
+                                {getTemperatureIcon(lead.temperature)}
+                              </div>
+                              <p className="text-xs text-muted-foreground font-mono">{lead.lead_id || '-'}</p>
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell>{lead.city}</TableCell>
@@ -437,7 +713,15 @@ export default function LeadsList() {
                             );
                           })() : '-'}
                         </TableCell>
-                        <TableCell>{lead.last_contact_method ? <span className="text-xs text-muted-foreground">{lead.last_contact_method.replace('_', ' ')}</span> : '-'}</TableCell>
+                        <TableCell>
+                          {lead.opportunity_estimation?.estimated_monthly_revenue ? (
+                            <span className="font-semibold text-primary">
+                              ₹{lead.opportunity_estimation.estimated_monthly_revenue.toLocaleString('en-IN')}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
                         <TableCell><Badge className={getStatusColor(lead.status)}>{getStatusLabel(lead.status)}</Badge></TableCell>
                         <TableCell className="text-right">
                           <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setLeadToDelete(lead); setDeleteDialogOpen(true); }} data-testid={`delete-lead-${lead.id}`}>
