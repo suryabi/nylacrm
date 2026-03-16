@@ -882,25 +882,83 @@ async def get_portfolio_matrix(
 
 @router.get("/quadrant-metrics")
 async def get_quadrant_metrics(
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    city: Optional[str] = None,
+    state: Optional[str] = None,
+    territory: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    time_filter: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """
     Get metrics for each lead scoring quadrant.
     Returns count, total opportunity volume, and total estimated value per quadrant.
     Also returns metrics for unscored leads.
+    Supports filtering to show metrics for filtered lead set.
     """
     tdb = get_tdb()
     
+    # Build base filter query
+    base_query = {}
+    
+    if search:
+        base_query['$or'] = [
+            {'company': {'$regex': search, '$options': 'i'}},
+            {'contact_person': {'$regex': search, '$options': 'i'}},
+            {'lead_id': {'$regex': search, '$options': 'i'}}
+        ]
+    
+    if status:
+        statuses = status.split(',')
+        base_query['status'] = {'$in': statuses}
+    
+    if city:
+        base_query['city'] = city
+    
+    if state:
+        base_query['state'] = state
+    
+    if territory:
+        base_query['region'] = territory
+    
+    if assigned_to:
+        assigned_to_list = assigned_to.split(',')
+        base_query['assigned_to'] = {'$in': assigned_to_list}
+    
+    if time_filter:
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+        if time_filter == 'this_week':
+            start = now - timedelta(days=now.weekday())
+            base_query['created_at'] = {'$gte': start.isoformat()}
+        elif time_filter == 'last_week':
+            start = now - timedelta(days=now.weekday() + 7)
+            end = now - timedelta(days=now.weekday())
+            base_query['created_at'] = {'$gte': start.isoformat(), '$lt': end.isoformat()}
+        elif time_filter == 'this_month':
+            start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            base_query['created_at'] = {'$gte': start.isoformat()}
+        elif time_filter == 'last_month':
+            first_of_month = now.replace(day=1)
+            end = first_of_month
+            start = (first_of_month - timedelta(days=1)).replace(day=1)
+            base_query['created_at'] = {'$gte': start.isoformat(), '$lt': end.isoformat()}
+    
     # Define quadrant order and colors for consistent UI
     quadrant_config = {
-        'Stars': {'color': 'amber', 'description': 'High Volume, High Value', 'order': 1},
-        'Showcase': {'color': 'purple', 'description': 'Low Volume, High Value', 'order': 2},
-        'Plough Horses': {'color': 'blue', 'description': 'High Volume, Low Value', 'order': 3},
-        'Puzzles': {'color': 'slate', 'description': 'Low Volume, Low Value', 'order': 4}
+        'Stars': {'color': 'amber', 'description': 'High Volume, High Value', 'order': 1, 'grade': 'A'},
+        'Showcase': {'color': 'purple', 'description': 'Low Volume, High Value', 'order': 2, 'grade': 'B'},
+        'Plough Horses': {'color': 'blue', 'description': 'High Volume, Low Value', 'order': 3, 'grade': 'C'},
+        'Puzzles': {'color': 'slate', 'description': 'Low Volume, Low Value', 'order': 4, 'grade': 'D'}
     }
+    
+    # Build pipeline with base filter
+    match_stage = {'$match': base_query} if base_query else {'$match': {}}
     
     # Aggregate metrics by quadrant
     pipeline = [
+        match_stage,
         {
             '$facet': {
                 # Scored leads grouped by quadrant
@@ -947,6 +1005,7 @@ async def get_quadrant_metrics(
         metrics = scored_data.get(quadrant, {})
         quadrants.append({
             'quadrant': quadrant,
+            'grade': config['grade'],
             'color': config['color'],
             'description': config['description'],
             'order': config['order'],

@@ -138,10 +138,10 @@ export default function LeadsList() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Fetch quadrant metrics on mount
+  // Fetch quadrant metrics when filters change
   useEffect(() => {
     fetchQuadrantMetrics();
-  }, []);
+  }, [debouncedSearch, statusFilter, cityFilter, stateFilter, territoryFilter, assignedToFilter, timeFilter]);
 
   // Fetch users on mount
   useEffect(() => {
@@ -154,7 +154,19 @@ export default function LeadsList() {
     try {
       setMetricsLoading(true);
       const token = localStorage.getItem('token');
-      const response = await axios.get(process.env.REACT_APP_BACKEND_URL + '/api/scoring/quadrant-metrics', {
+      
+      // Build query params based on active filters
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.append('search', debouncedSearch);
+      if (statusFilter.length > 0) params.append('status', statusFilter.join(','));
+      if (cityFilter !== 'all') params.append('city', cityFilter);
+      if (stateFilter !== 'all') params.append('state', stateFilter);
+      if (territoryFilter !== 'all') params.append('territory', territoryFilter);
+      if (assignedToFilter.length > 0) params.append('assigned_to', assignedToFilter.join(','));
+      if (timeFilter !== 'lifetime') params.append('time_filter', timeFilter);
+      
+      const url = `${process.env.REACT_APP_BACKEND_URL}/api/scoring/quadrant-metrics${params.toString() ? '?' + params.toString() : ''}`;
+      const response = await axios.get(url, {
         headers: { Authorization: `Bearer ${token}` }, withCredentials: true
       });
       setQuadrantMetrics(response.data);
@@ -267,54 +279,64 @@ export default function LeadsList() {
         bg: isSelected ? 'bg-amber-100 ring-2 ring-amber-400' : 'bg-amber-50 hover:bg-amber-100',
         text: 'text-amber-700',
         icon: 'text-amber-500',
-        border: 'border-amber-200'
+        border: 'border-amber-200',
+        grade: 'A'
       },
       'Showcase': { 
         bg: isSelected ? 'bg-purple-100 ring-2 ring-purple-400' : 'bg-purple-50 hover:bg-purple-100',
         text: 'text-purple-700',
         icon: 'text-purple-500',
-        border: 'border-purple-200'
+        border: 'border-purple-200',
+        grade: 'B'
       },
       'Plough Horses': { 
         bg: isSelected ? 'bg-blue-100 ring-2 ring-blue-400' : 'bg-blue-50 hover:bg-blue-100',
         text: 'text-blue-700',
         icon: 'text-blue-500',
-        border: 'border-blue-200'
+        border: 'border-blue-200',
+        grade: 'C'
       },
       'Puzzles': { 
         bg: isSelected ? 'bg-slate-200 ring-2 ring-slate-400' : 'bg-slate-100 hover:bg-slate-200',
         text: 'text-slate-700',
         icon: 'text-slate-500',
-        border: 'border-slate-300'
+        border: 'border-slate-300',
+        grade: 'D'
       },
       'unscored': { 
         bg: isSelected ? 'bg-gray-200 ring-2 ring-gray-400' : 'bg-gray-50 hover:bg-gray-100',
         text: 'text-gray-600',
         icon: 'text-gray-400',
-        border: 'border-gray-200'
+        border: 'border-gray-200',
+        grade: '-'
       }
     };
     return styles[quadrant] || styles['unscored'];
   };
 
-  // Get quadrant icon for lead list
-  const getQuadrantIcon = (lead) => {
+  // Get quadrant grade (A, B, C, D) for lead list
+  const getQuadrantGrade = (lead) => {
     const quadrant = lead?.scoring?.quadrant;
     if (!quadrant) return null;
     
-    const iconProps = { className: 'h-4 w-4 flex-shrink-0' };
-    switch (quadrant) {
-      case 'Stars':
-        return <Star {...iconProps} className="h-4 w-4 flex-shrink-0 text-amber-500 fill-amber-500" title="Stars - High Volume, High Value" />;
-      case 'Showcase':
-        return <Award {...iconProps} className="h-4 w-4 flex-shrink-0 text-purple-500" title="Showcase - Low Volume, High Value" />;
-      case 'Plough Horses':
-        return <Layers {...iconProps} className="h-4 w-4 flex-shrink-0 text-blue-500" title="Plough Horses - High Volume, Low Value" />;
-      case 'Puzzles':
-        return <HelpCircle {...iconProps} className="h-4 w-4 flex-shrink-0 text-slate-500" title="Puzzles - Low Volume, Low Value" />;
-      default:
-        return null;
-    }
+    const gradeMap = {
+      'Stars': { grade: 'A', bg: 'bg-amber-500', text: 'text-white', title: 'A - Stars (High Volume, High Value)' },
+      'Showcase': { grade: 'B', bg: 'bg-purple-500', text: 'text-white', title: 'B - Showcase (Low Volume, High Value)' },
+      'Plough Horses': { grade: 'C', bg: 'bg-blue-500', text: 'text-white', title: 'C - Plough Horses (High Volume, Low Value)' },
+      'Puzzles': { grade: 'D', bg: 'bg-slate-500', text: 'text-white', title: 'D - Puzzles (Low Volume, Low Value)' }
+    };
+    
+    const config = gradeMap[quadrant];
+    if (!config) return null;
+    
+    return (
+      <span 
+        className={`inline-flex items-center justify-center w-6 h-6 rounded-md font-bold text-sm ${config.bg} ${config.text}`}
+        title={config.title}
+      >
+        {config.grade}
+      </span>
+    );
   };
 
   // Get temperature icon and styling
@@ -435,33 +457,37 @@ export default function LeadsList() {
                   <div
                     key={q.quadrant}
                     onClick={() => toggleQuadrant(q.quadrant)}
-                    className={`p-3 rounded-xl cursor-pointer transition-all ${style.bg} ${style.border} border ${isSelected ? 'shadow-md' : 'hover:shadow-sm'}`}
+                    className={`p-4 rounded-xl cursor-pointer transition-all ${style.bg} ${style.border} border ${isSelected ? 'shadow-md' : 'hover:shadow-sm'}`}
                     data-testid={`quadrant-tile-${q.quadrant.toLowerCase().replace(' ', '-')}`}
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className={`font-semibold text-sm ${style.text}`}>{q.quadrant}</span>
-                      <Star className={`h-4 w-4 ${style.icon}`} />
-                    </div>
-                    <div className={`text-2xl font-bold ${style.text}`}>{q.count}</div>
-                    <p className="text-xs text-muted-foreground mb-2">leads</p>
-                    
-                    {/* Opportunity metrics */}
-                    <div className="space-y-1 pt-2 border-t border-current/10">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground flex items-center gap-1">
-                          <TrendingUp className="h-3 w-3" /> Volume
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg font-bold text-lg ${
+                          q.quadrant === 'Stars' ? 'bg-amber-500 text-white' :
+                          q.quadrant === 'Showcase' ? 'bg-purple-500 text-white' :
+                          q.quadrant === 'Plough Horses' ? 'bg-blue-500 text-white' :
+                          'bg-slate-500 text-white'
+                        }`}>
+                          {style.grade}
                         </span>
-                        <span className={`font-medium ${style.text}`}>
-                          {q.total_opportunity_volume > 0 ? formatVolume(q.total_opportunity_volume) : '-'}
-                        </span>
+                        <span className={`font-semibold text-sm ${style.text}`}>{q.quadrant}</span>
                       </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground flex items-center gap-1">
-                          <DollarSign className="h-3 w-3" /> Value
-                        </span>
-                        <span className={`font-medium ${style.text}`}>
+                      <div className={`text-2xl font-bold ${style.text}`}>{q.count}</div>
+                    </div>
+                    
+                    {/* Prominent Value and Volume */}
+                    <div className="grid grid-cols-2 gap-3 pt-3 border-t border-current/10">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Volume</p>
+                        <p className={`text-lg font-bold ${style.text}`}>
+                          {q.total_opportunity_volume > 0 ? formatVolume(q.total_opportunity_volume) : '-'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Value</p>
+                        <p className={`text-lg font-bold ${style.text}`}>
                           {q.total_estimated_value > 0 ? `₹${formatCurrency(q.total_estimated_value)}` : '-'}
-                        </span>
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -472,32 +498,32 @@ export default function LeadsList() {
               {quadrantMetrics.unscored && quadrantMetrics.unscored.count > 0 && (
                 <div
                   onClick={() => toggleQuadrant('unscored')}
-                  className={`p-3 rounded-xl cursor-pointer transition-all ${getQuadrantStyle('unscored', selectedQuadrants.includes('unscored')).bg} ${getQuadrantStyle('unscored', selectedQuadrants.includes('unscored')).border} border ${selectedQuadrants.includes('unscored') ? 'shadow-md' : 'hover:shadow-sm'}`}
+                  className={`p-4 rounded-xl cursor-pointer transition-all ${getQuadrantStyle('unscored', selectedQuadrants.includes('unscored')).bg} ${getQuadrantStyle('unscored', selectedQuadrants.includes('unscored')).border} border ${selectedQuadrants.includes('unscored') ? 'shadow-md' : 'hover:shadow-sm'}`}
                   data-testid="quadrant-tile-unscored"
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold text-sm text-gray-600">Unscored</span>
-                    <Target className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <div className="text-2xl font-bold text-gray-600">{quadrantMetrics.unscored.count}</div>
-                  <p className="text-xs text-muted-foreground mb-2">leads</p>
-                  
-                  <div className="space-y-1 pt-2 border-t border-gray-200">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <TrendingUp className="h-3 w-3" /> Volume
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg font-bold text-lg bg-gray-400 text-white">
+                        -
                       </span>
-                      <span className="font-medium text-gray-600">
-                        {quadrantMetrics.unscored.total_opportunity_volume > 0 ? formatVolume(quadrantMetrics.unscored.total_opportunity_volume) : '-'}
-                      </span>
+                      <span className="font-semibold text-sm text-gray-600">Unscored</span>
                     </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <DollarSign className="h-3 w-3" /> Value
-                      </span>
-                      <span className="font-medium text-gray-600">
+                    <div className="text-2xl font-bold text-gray-600">{quadrantMetrics.unscored.count}</div>
+                  </div>
+                  
+                  {/* Prominent Value and Volume */}
+                  <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-200">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Volume</p>
+                      <p className="text-lg font-bold text-gray-600">
+                        {quadrantMetrics.unscored.total_opportunity_volume > 0 ? formatVolume(quadrantMetrics.unscored.total_opportunity_volume) : '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Value</p>
+                      <p className="text-lg font-bold text-gray-600">
                         {quadrantMetrics.unscored.total_estimated_value > 0 ? `₹${formatCurrency(quadrantMetrics.unscored.total_estimated_value)}` : '-'}
-                      </span>
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -653,7 +679,7 @@ export default function LeadsList() {
                       }} data-testid={`lead-row-${lead.id}`}>
                         <TableCell data-testid={`lead-cell-${lead.id}`}>
                           <div className="flex items-center gap-2">
-                            {getQuadrantIcon(lead)}
+                            {getQuadrantGrade(lead)}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <p className="font-medium text-primary truncate">{lead.company || lead.name}</p>
