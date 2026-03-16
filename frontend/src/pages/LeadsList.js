@@ -694,12 +694,8 @@ export default function LeadsList() {
                         </TableCell>
                         <TableCell>
                           {lead.opportunity_estimation?.estimated_monthly_revenue ? (
-                            <span className="font-medium text-emerald-600">
-                              ₹{formatCurrency(lead.opportunity_estimation.estimated_monthly_revenue)}
-                            </span>
-                          ) : lead.opportunity_estimation?.final_monthly ? (
-                            <span className="text-xs text-muted-foreground" title="Add SKU pricing to calculate revenue">
-                              {formatVolume(lead.opportunity_estimation.final_monthly)} btls
+                            <span className="font-semibold text-primary">
+                              ₹{lead.opportunity_estimation.estimated_monthly_revenue.toLocaleString('en-IN')}
                             </span>
                           ) : (
                             <span className="text-xs text-muted-foreground">-</span>
