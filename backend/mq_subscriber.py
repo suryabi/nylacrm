@@ -24,12 +24,18 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # ActiveMQ Configuration
-ACTIVEMQ_HOST = os.environ.get('ACTIVEMQ_HOST', 'b-78bace1a-6f6b-45c7-b01b-cf77d91313c6-1.mq.us-west-2.amazonaws.com')
-ACTIVEMQ_PORT = int(os.environ.get('ACTIVEMQ_PORT', 61614))
-ACTIVEMQ_USER = os.environ.get('ACTIVEMQ_USER', 'nyla-mq')
-ACTIVEMQ_PASSWORD = os.environ.get('ACTIVEMQ_PASSWORD', 'nylaXX0109##')
+ACTIVEMQ_HOST = os.environ.get('ACTIVEMQ_HOST', '')
+ACTIVEMQ_PORT = int(os.environ.get('ACTIVEMQ_PORT', '61614') or '61614')
+ACTIVEMQ_USER = os.environ.get('ACTIVEMQ_USER', '')
+ACTIVEMQ_PASSWORD = os.environ.get('ACTIVEMQ_PASSWORD', '')
 ACTIVEMQ_QUEUE = os.environ.get('ACTIVEMQ_QUEUE', '/queue/order-invoice')
-ACTIVEMQ_ENABLED = os.environ.get('ACTIVEMQ_ENABLED', 'true').lower() == 'true'
+# Only enable if explicitly set to 'true' AND credentials are configured
+ACTIVEMQ_ENABLED = (
+    os.environ.get('ACTIVEMQ_ENABLED', 'false').lower() == 'true' and
+    ACTIVEMQ_HOST and 
+    ACTIVEMQ_USER and 
+    ACTIVEMQ_PASSWORD
+)
 
 # MongoDB connection
 mongo_url = os.environ.get('MONGO_URL')
@@ -329,7 +335,11 @@ mq_subscriber = ActiveMQSubscriber()
 def start_mq_subscriber():
     """Start the ActiveMQ subscriber in a background thread"""
     if not ACTIVEMQ_ENABLED:
-        logger.info("ActiveMQ subscriber is disabled (ACTIVEMQ_ENABLED=false)")
+        logger.info("ActiveMQ subscriber is disabled (ACTIVEMQ_ENABLED=false or missing credentials)")
+        return None
+    
+    if not ACTIVEMQ_HOST or not ACTIVEMQ_USER or not ACTIVEMQ_PASSWORD:
+        logger.info("ActiveMQ subscriber skipped - missing required configuration (ACTIVEMQ_HOST, ACTIVEMQ_USER, ACTIVEMQ_PASSWORD)")
         return None
         
     def run():
