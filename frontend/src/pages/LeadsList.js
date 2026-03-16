@@ -644,7 +644,7 @@ export default function LeadsList() {
                       <TableHead><button onClick={() => handleSort('assigned_to')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-assigned">Assigned To{getSortIcon('assigned_to')}</button></TableHead>
                       <TableHead><button onClick={() => handleSort('last_contacted_date')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-last-contacted">Last Contacted{getSortIcon('last_contacted_date')}</button></TableHead>
                       <TableHead><button onClick={() => handleSort('next_followup_date')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-followup">Next Follow-up{getSortIcon('next_followup_date')}</button></TableHead>
-                      <TableHead>Contact Method</TableHead>
+                      <TableHead>Est. Monthly Opp.</TableHead>
                       <TableHead><button onClick={() => handleSort('status')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-status">Status{getSortIcon('status')}</button></TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -692,7 +692,15 @@ export default function LeadsList() {
                             );
                           })() : '-'}
                         </TableCell>
-                        <TableCell>{lead.last_contact_method ? <span className="text-xs text-muted-foreground">{lead.last_contact_method.replace('_', ' ')}</span> : '-'}</TableCell>
+                        <TableCell>
+                          {lead.opportunity_estimation?.estimated_monthly_revenue ? (
+                            <span className="font-medium text-emerald-600">
+                              ₹{formatCurrency(lead.opportunity_estimation.estimated_monthly_revenue)}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
                         <TableCell><Badge className={getStatusColor(lead.status)}>{getStatusLabel(lead.status)}</Badge></TableCell>
                         <TableCell className="text-right">
                           <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setLeadToDelete(lead); setDeleteDialogOpen(true); }} data-testid={`delete-lead-${lead.id}`}>
