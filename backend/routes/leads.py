@@ -331,6 +331,8 @@ async def get_leads(
     # Lead scoring quadrant filter
     if quadrant:
         quadrants = quadrant.split(',')
+        import logging
+        logging.warning(f"QUADRANT FILTER: received={quadrant}, parsed={quadrants}")
         # Check if 'unscored' is in the filter
         if 'unscored' in quadrants:
             quadrants.remove('unscored')
@@ -345,6 +347,7 @@ async def get_leads(
                 query['scoring.quadrant'] = {'$exists': False}
         else:
             query['scoring.quadrant'] = {'$in': quadrants}
+        logging.warning(f"QUADRANT FILTER: query after={query}")
     
     # Time filter
     if time_filter:
@@ -360,7 +363,10 @@ async def get_leads(
             start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             query['created_at'] = {'$gte': start_of_month.isoformat()}
     
+    import logging
+    logging.warning(f"FINAL QUERY: {query}")
     total = await tdb.leads.count_documents(query)
+    logging.warning(f"TOTAL RESULTS: {total}")
     
     # Handle no_limit for pipeline view
     if no_limit:

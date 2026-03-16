@@ -3581,6 +3581,7 @@ async def get_leads(
     search: Optional[str] = None,
     assigned_to: Optional[str] = None,
     time_filter: Optional[str] = None,
+    quadrant: Optional[str] = None,
     no_limit: Optional[bool] = False,
     current_user: dict = Depends(get_current_user)
 ):
@@ -3695,12 +3696,47 @@ async def get_leads(
                 query['created_at'] = {'$gte': start_date_str}
     
     # Add search filter
+    search_filter = None
     if search:
-        query['$or'] = [
+        search_filter = {'$or': [
             {'company': {'$regex': search, '$options': 'i'}},
             {'contact_person': {'$regex': search, '$options': 'i'}},
             {'lead_id': {'$regex': search, '$options': 'i'}}
-        ]
+        ]}
+    
+    # Add lead scoring quadrant filter
+    quadrant_filter = None
+    if quadrant:
+        quadrants = quadrant.split(',')
+        # Check if 'unscored' is in the filter
+        if 'unscored' in quadrants:
+            quadrants.remove('unscored')
+            if quadrants:
+                # Both scored quadrants and unscored
+                quadrant_filter = {'$or': [
+                    {'scoring.quadrant': {'$in': quadrants}},
+                    {'scoring.quadrant': {'$exists': False}},
+                    {'scoring': {'$exists': False}}
+                ]}
+            else:
+                # Only unscored
+                quadrant_filter = {'$or': [
+                    {'scoring.quadrant': {'$exists': False}},
+                    {'scoring': {'$exists': False}}
+                ]}
+        else:
+            quadrant_filter = {'scoring.quadrant': {'$in': quadrants}}
+    
+    # Combine search and quadrant filters properly with $and
+    if search_filter and quadrant_filter:
+        query['$and'] = [search_filter, quadrant_filter]
+    elif search_filter:
+        query['$or'] = search_filter['$or']
+    elif quadrant_filter:
+        if '$or' in quadrant_filter:
+            query['$or'] = quadrant_filter['$or']
+        else:
+            query.update(quadrant_filter)
     
     # Get total count for pagination
     total = await get_tdb().leads.count_documents(query)
