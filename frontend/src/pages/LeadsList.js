@@ -690,7 +690,7 @@ export default function LeadsList() {
                 <Table>
                   <TableHeader>
                     <TableRow className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
-                      <TableHead className="w-[200px] min-w-[200px] max-w-[200px]"><button onClick={() => handleSort('company')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-company">Lead{getSortIcon('company')}</button></TableHead>
+                      <TableHead className="w-[400px] min-w-[400px] max-w-[400px]"><button onClick={() => handleSort('company')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-company">Lead{getSortIcon('company')}</button></TableHead>
                       <TableHead><button onClick={() => handleSort('city')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-location">Location{getSortIcon('city')}</button></TableHead>
                       <TableHead className="w-[80px]"><button onClick={() => handleSort('assigned_to')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-assigned">Owner{getSortIcon('assigned_to')}</button></TableHead>
                       <TableHead><button onClick={() => handleSort('last_contacted_date')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-last-contacted">Last Contacted{getSortIcon('last_contacted_date')}</button></TableHead>
@@ -707,12 +707,12 @@ export default function LeadsList() {
                         saveFilters({ searchQuery, statusFilter, territoryFilter, stateFilter, cityFilter, assignedToFilter, timeFilter });
                         navigateTo(`/leads/${lead.id}`, { label: lead.company || lead.name || 'Lead Details' });
                       }} data-testid={`lead-row-${lead.id}`}>
-                        <TableCell className="w-[200px] min-w-[200px] max-w-[200px]" data-testid={`lead-cell-${lead.id}`}>
+                        <TableCell className="w-[400px] min-w-[400px] max-w-[400px]" data-testid={`lead-cell-${lead.id}`}>
                           <div className="flex items-center gap-2">
                             {getQuadrantGrade(lead)}
-                            <div className="flex-1 min-w-0 max-w-[140px]">
+                            <div className="flex-1 min-w-0 max-w-[340px]">
                               <div className="flex items-center gap-2">
-                                <p className="font-medium text-primary truncate max-w-[120px]" title={lead.company || lead.name}>{lead.company || lead.name}</p>
+                                <p className="font-medium text-primary truncate max-w-[300px]" title={lead.company || lead.name}>{lead.company || lead.name}</p>
                                 {getTemperatureIcon(lead.temperature)}
                               </div>
                               <p className="text-xs text-muted-foreground font-mono truncate">{lead.lead_id || '-'}</p>
