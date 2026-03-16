@@ -339,6 +339,36 @@ export default function LeadsList() {
     );
   };
 
+  // Get user initials with color-coded avatar
+  const getUserInitials = (userId) => {
+    const user = users.find(u => u.id === userId);
+    if (!user) return null;
+    
+    const name = user.name || '';
+    const nameParts = name.trim().split(' ').filter(Boolean);
+    const initials = nameParts.length >= 2 
+      ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
+      : name.slice(0, 2).toUpperCase();
+    
+    // Generate consistent color based on user id/name
+    const colors = [
+      'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 
+      'bg-pink-500', 'bg-teal-500', 'bg-indigo-500', 'bg-red-500',
+      'bg-cyan-500', 'bg-amber-500', 'bg-emerald-500', 'bg-violet-500'
+    ];
+    const colorIndex = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length;
+    const bgColor = colors[colorIndex];
+    
+    return (
+      <div 
+        className={`w-8 h-8 rounded-full ${bgColor} flex items-center justify-center text-white text-xs font-semibold cursor-pointer`}
+        title={user.name}
+      >
+        {initials}
+      </div>
+    );
+  };
+
   // Get temperature icon and styling
   const getTemperatureIcon = (temperature) => {
     if (!temperature) return null;
@@ -660,9 +690,9 @@ export default function LeadsList() {
                 <Table>
                   <TableHeader>
                     <TableRow className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
-                      <TableHead><button onClick={() => handleSort('company')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-company">Lead{getSortIcon('company')}</button></TableHead>
+                      <TableHead className="w-[200px] min-w-[200px] max-w-[200px]"><button onClick={() => handleSort('company')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-company">Lead{getSortIcon('company')}</button></TableHead>
                       <TableHead><button onClick={() => handleSort('city')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-location">Location{getSortIcon('city')}</button></TableHead>
-                      <TableHead><button onClick={() => handleSort('assigned_to')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-assigned">Assigned To{getSortIcon('assigned_to')}</button></TableHead>
+                      <TableHead className="w-[80px]"><button onClick={() => handleSort('assigned_to')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-assigned">Owner{getSortIcon('assigned_to')}</button></TableHead>
                       <TableHead><button onClick={() => handleSort('last_contacted_date')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-last-contacted">Last Contacted{getSortIcon('last_contacted_date')}</button></TableHead>
                       <TableHead><button onClick={() => handleSort('next_followup_date')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-followup">Next Follow-up{getSortIcon('next_followup_date')}</button></TableHead>
                       <TableHead><button onClick={() => handleSort('estimated_revenue')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-revenue">Est. Revenue{getSortIcon('estimated_revenue')}</button></TableHead>
@@ -677,20 +707,22 @@ export default function LeadsList() {
                         saveFilters({ searchQuery, statusFilter, territoryFilter, stateFilter, cityFilter, assignedToFilter, timeFilter });
                         navigateTo(`/leads/${lead.id}`, { label: lead.company || lead.name || 'Lead Details' });
                       }} data-testid={`lead-row-${lead.id}`}>
-                        <TableCell data-testid={`lead-cell-${lead.id}`}>
+                        <TableCell className="w-[200px] min-w-[200px] max-w-[200px]" data-testid={`lead-cell-${lead.id}`}>
                           <div className="flex items-center gap-2">
                             {getQuadrantGrade(lead)}
-                            <div className="flex-1 min-w-0">
+                            <div className="flex-1 min-w-0 max-w-[140px]">
                               <div className="flex items-center gap-2">
-                                <p className="font-medium text-primary truncate">{lead.company || lead.name}</p>
+                                <p className="font-medium text-primary truncate max-w-[120px]" title={lead.company || lead.name}>{lead.company || lead.name}</p>
                                 {getTemperatureIcon(lead.temperature)}
                               </div>
-                              <p className="text-xs text-muted-foreground font-mono">{lead.lead_id || '-'}</p>
+                              <p className="text-xs text-muted-foreground font-mono truncate">{lead.lead_id || '-'}</p>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>{lead.city}</TableCell>
-                        <TableCell>{lead.assigned_to ? users.find(u => u.id === lead.assigned_to)?.name || 'Unknown' : '-'}</TableCell>
+                        <TableCell className="w-[80px]">
+                          {lead.assigned_to ? getUserInitials(lead.assigned_to) : <span className="text-muted-foreground">-</span>}
+                        </TableCell>
                         <TableCell>{lead.last_contacted_date ? format(new Date(lead.last_contacted_date), 'MMM d, yyyy') : '-'}</TableCell>
                         <TableCell>
                           {lead.next_followup_date ? (() => {
