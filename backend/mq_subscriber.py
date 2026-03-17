@@ -110,20 +110,35 @@ class InvoiceListener(stomp.ConnectionListener):
         logger.info("="*60)
     
     def on_heartbeat_timeout(self):
-        logger.warning("⚠️ ACTIVEMQ HEARTBEAT TIMEOUT - Connection may be lost")
+        logger.warning("⚠️ ACTIVEMQ HEARTBEAT TIMEOUT - Will attempt to maintain connection")
+        # Don't trigger reconnect here - let the library handle it
+        # The on_disconnected will be called if connection is truly lost
+    
+    def on_heartbeat(self):
+        """Called when heartbeat is received - connection is healthy"""
+        # Just update the connected status silently
+        connection_stats['connected'] = True
         
     def on_disconnected(self):
+        # Only log and reconnect if we were previously running
+        if not self.subscriber or not self.subscriber.running:
+            return
+            
         connection_stats['connected'] = False
         connection_stats['last_disconnected_at'] = datetime.now(timezone.utc).isoformat()
         connection_stats['reconnect_count'] += 1
         logger.warning("="*60)
         logger.warning("❌ ACTIVEMQ DISCONNECTED")
         logger.warning(f"   Time: {connection_stats['last_disconnected_at']}")
-        logger.warning(f"   Reconnect attempts: {connection_stats['reconnect_count']}")
+        logger.warning(f"   Total reconnect attempts: {connection_stats['reconnect_count']}")
         logger.warning("="*60)
-        # Trigger reconnect
+        
+        # Wait a bit before reconnecting to avoid rapid reconnect loops
+        time.sleep(5)
+        
+        # Trigger reconnect in background
         if self.subscriber and self.subscriber.running:
-            logger.info("🔄 Scheduling reconnect...")
+            logger.info("🔄 Scheduling reconnect in 5 seconds...")
             threading.Thread(target=self.subscriber.reconnect, daemon=True).start()
         
     def on_error(self, frame):
@@ -338,9 +353,10 @@ class ActiveMQSubscriber:
         self.running = False
         self.db_client = None
         self.reconnect_attempts = 0
-        self.max_reconnect_attempts = 10
-        self.reconnect_delay = 5  # seconds
+        self.max_reconnect_attempts = -1  # Infinite reconnect attempts
+        self.reconnect_delay = 10  # 10 seconds between reconnect attempts
         self.status_thread = None
+        self._reconnecting = False  # Flag to prevent multiple simultaneous reconnects
         
     def connect(self):
         """Establish connection to ActiveMQ"""
@@ -396,15 +412,19 @@ class ActiveMQSubscriber:
     def _establish_connection(self):
         """Create and establish STOMP connection"""
         try:
-            # Create STOMP connection with SSL and longer heartbeats
+            # Create STOMP connection with SSL
+            # Heartbeats: (send, receive) in milliseconds
+            # 0,0 = disable heartbeats (let the broker handle keepalive)
+            # Using longer heartbeats to be more lenient with network latency
             self.connection = stomp.Connection(
                 [(ACTIVEMQ_HOST, ACTIVEMQ_PORT)],
-                heartbeats=(30000, 30000),  # 30 second heartbeats
-                reconnect_sleep_initial=5,
-                reconnect_sleep_increase=2,
-                reconnect_sleep_max=60,
+                heartbeats=(60000, 60000),  # 60 second heartbeats (more lenient)
+                reconnect_sleep_initial=2,
+                reconnect_sleep_increase=1.5,
+                reconnect_sleep_max=30,
                 reconnect_attempts_max=-1,  # Infinite reconnect attempts
-                timeout=15  # 15 second connection timeout
+                timeout=30,  # 30 second connection timeout
+                keepalive=True  # Enable TCP keepalive
             )
             
             # Configure SSL
@@ -425,36 +445,33 @@ class ActiveMQSubscriber:
             client_id = f"nyla-crm-{uuid.uuid4().hex[:8]}"
             logger.info(f"🔌 Connecting to ActiveMQ at {ACTIVEMQ_HOST}:{ACTIVEMQ_PORT}")
             logger.info(f"   Client ID: {client_id}")
-            logger.info(f"   Timeout: 15 seconds")
+            logger.info(f"   Heartbeat: 60 seconds")
             
-            # Connect with wait=False to not block, then wait manually with timeout
+            # Connect with wait=True to ensure connection is established
             self.connection.connect(
                 ACTIVEMQ_USER,
                 ACTIVEMQ_PASSWORD,
-                wait=False,  # Don't block - we'll check connection status
-                headers={'client-id': client_id}
+                wait=True,  # Wait for connection to be established
+                headers={
+                    'client-id': client_id,
+                    'heart-beat': '60000,60000'  # Explicitly set heartbeat in headers
+                }
             )
             
-            # Wait up to 15 seconds for connection
-            wait_time = 0
-            while not self.connection.is_connected() and wait_time < 15:
-                time.sleep(1)
-                wait_time += 1
-                logger.info(f"   Waiting for connection... {wait_time}s")
-            
-            if not self.connection.is_connected():
-                raise Exception("Connection timeout after 15 seconds")
-            
-            # Subscribe to queue
+            # Subscribe to queue with durable subscription
             self.connection.subscribe(
                 destination=ACTIVEMQ_QUEUE,
                 id='invoice-sub-1',
-                ack='auto'
+                ack='auto',
+                headers={
+                    'activemq.prefetchSize': '1'  # Process one message at a time
+                }
             )
         
             self.running = True
             self.reconnect_attempts = 0
             logger.info(f"✅ Subscribed to queue: {ACTIVEMQ_QUEUE}")
+            logger.info(f"✅ Connection established - listening for messages...")
         except Exception as e:
             logger.error(f"❌ Failed to establish connection: {e}")
             import traceback
@@ -463,20 +480,31 @@ class ActiveMQSubscriber:
     
     def reconnect(self):
         """Attempt to reconnect to ActiveMQ"""
-        if self.reconnect_attempts >= self.max_reconnect_attempts:
+        # Prevent multiple simultaneous reconnect attempts
+        if self._reconnecting:
+            logger.info("🔄 Reconnect already in progress, skipping...")
+            return
+            
+        # Check max attempts only if not set to infinite (-1)
+        if self.max_reconnect_attempts != -1 and self.reconnect_attempts >= self.max_reconnect_attempts:
             logger.error(f"Max reconnect attempts ({self.max_reconnect_attempts}) reached")
             return
         
+        self._reconnecting = True
         self.reconnect_attempts += 1
-        logger.info(f"Attempting reconnect ({self.reconnect_attempts}/{self.max_reconnect_attempts})...")
+        logger.info(f"🔄 Attempting reconnect (attempt #{self.reconnect_attempts}, max: {'unlimited' if self.max_reconnect_attempts == -1 else self.max_reconnect_attempts})...")
         
         try:
+            logger.info(f"⏳ Waiting {self.reconnect_delay} seconds before reconnecting...")
             time.sleep(self.reconnect_delay)
             self._establish_connection()
-            logger.info("Reconnected successfully!")
+            self._reconnecting = False
+            logger.info("✅ Reconnected successfully!")
         except Exception as e:
-            logger.error(f"Reconnect failed: {e}")
-            # Schedule another reconnect attempt
+            self._reconnecting = False
+            logger.error(f"❌ Reconnect attempt #{self.reconnect_attempts} failed: {e}")
+            # Schedule another reconnect attempt after a delay
+            logger.info(f"🔄 Scheduling next reconnect attempt...")
             threading.Thread(target=self.reconnect, daemon=True).start()
     
     def _run_event_loop(self):
