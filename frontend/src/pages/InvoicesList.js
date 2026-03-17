@@ -109,12 +109,16 @@ export default function InvoicesList() {
     cities, 
     getStateNamesByTerritoryName, 
     getCityNamesByStateName,
-    territoryNames,
   } = useMasterLocations();
   
-  // Filtered states and cities based on selection
-  const [filteredStates, setFilteredStates] = useState([]);
-  const [filteredCities, setFilteredCities] = useState([]);
+  // Compute filtered states and cities (no useEffect needed)
+  const filteredStates = territory && territory !== 'all' 
+    ? getStateNamesByTerritoryName(territory) 
+    : states.map(s => s.name);
+    
+  const filteredCities = state && state !== 'all' 
+    ? getCityNamesByStateName(state) 
+    : cities.map(c => c.name);
   
   // Check if user can delete invoices
   const canDelete = user && ['ceo', 'system admin', 'admin', 'director'].some(
@@ -160,26 +164,6 @@ export default function InvoicesList() {
   useEffect(() => {
     fetchInvoices();
   }, [fetchInvoices]);
-
-  // Update filtered states when territory changes
-  useEffect(() => {
-    if (territory && territory !== 'all') {
-      const stateList = getStateNamesByTerritoryName(territory);
-      setFilteredStates(stateList);
-    } else {
-      setFilteredStates(states.map(s => s.name));
-    }
-  }, [territory, getStateNamesByTerritoryName, states]);
-
-  // Update filtered cities when state changes
-  useEffect(() => {
-    if (state && state !== 'all') {
-      const cityList = getCityNamesByStateName(state);
-      setFilteredCities(cityList);
-    } else {
-      setFilteredCities(cities.map(c => c.name));
-    }
-  }, [state, getCityNamesByStateName, cities]);
   
   // Reset child filters when parent changes
   const handleTerritoryChange = (val) => {
