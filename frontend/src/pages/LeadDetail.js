@@ -856,17 +856,17 @@ ${userEmail}`;
   const assignedUser = users.find(u => u.id === lead.assigned_to);
 
   return (
-    <div className="space-y-6" data-testid="lead-detail-page">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-0" data-testid="lead-detail-page">
       {/* Breadcrumb */}
       <AppBreadcrumb />
       
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/leads')} data-testid="back-button">
-          <ArrowLeft className="h-5 w-5" />
+      {/* Header - Mobile Optimized */}
+      <div className="flex items-start gap-2 sm:gap-4">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/leads')} data-testid="back-button" className="h-8 w-8 sm:h-10 sm:w-10 shrink-0">
+          <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
         </Button>
         
-        {/* Logo Display - Clickable to Upload */}
+        {/* Logo Display - Smaller on mobile */}
         <div className="shrink-0 relative group">
           <input
             ref={logoInputRef}
@@ -882,57 +882,59 @@ ${userEmail}`;
             title="Click to upload/change logo"
           >
             {lead.logo_url ? (
-              <div className="w-14 h-14 rounded-lg border-2 border-primary/20 overflow-hidden bg-white shadow-sm relative group-hover:border-primary/50 transition-all">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-lg border-2 border-primary/20 overflow-hidden bg-white shadow-sm relative group-hover:border-primary/50 transition-all">
                 <img 
                   src={`${process.env.REACT_APP_BACKEND_URL}${lead.logo_url}`}
                   alt={`${lead.company} logo`}
                   className="w-full h-full object-contain"
                 />
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <Camera className="h-5 w-5 text-white" />
+                  <Camera className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                 </div>
               </div>
             ) : (
-              <div className="w-14 h-14 rounded-lg border-2 border-dashed border-muted-foreground/30 flex items-center justify-center bg-muted/20 group-hover:border-primary/50 group-hover:bg-primary/5 transition-all">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-lg border-2 border-dashed border-muted-foreground/30 flex items-center justify-center bg-muted/20 group-hover:border-primary/50 group-hover:bg-primary/5 transition-all">
                 {uploadingLogo ? (
-                  <Loader2 className="h-5 w-5 text-muted-foreground/50 animate-spin" />
+                  <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground/50 animate-spin" />
                 ) : (
-                  <Camera className="h-5 w-5 text-muted-foreground/50 group-hover:text-primary/70" />
+                  <Camera className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground/50 group-hover:text-primary/70" />
                 )}
               </div>
             )}
           </label>
           {uploadingLogo && (
             <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-lg">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin text-primary" />
             </div>
           )}
         </div>
         
-        <div className="flex-1">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-3xl font-semibold">{lead.company}</h1>
-            {/* Current Status Badge - Prominent */}
+        <div className="flex-1 min-w-0">
+          {/* Company name and badges */}
+          <div className="flex items-start sm:items-center gap-2 flex-wrap">
+            <h1 className="text-lg sm:text-2xl lg:text-3xl font-semibold truncate">{lead.company}</h1>
             <Badge 
-              className={`${getStatusColor(lead.status)} text-sm px-3 py-1 font-medium`}
+              className={`${getStatusColor(lead.status)} text-[10px] sm:text-sm px-2 sm:px-3 py-0.5 sm:py-1 font-medium shrink-0`}
               data-testid="lead-status-badge-header"
             >
               {getStatusLabel(lead.status)}
             </Badge>
             {lead.category && (
-              <Badge variant="outline" className="text-sm capitalize">
+              <Badge variant="outline" className="text-[10px] sm:text-sm capitalize hidden sm:inline-flex">
                 {lead.category}
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-4 mt-2">
-            {/* Temperature Selector - Hot/Warm/Cold - Moved to second row */}
+          
+          {/* Second row - Temperature, ID, Follow-up */}
+          <div className="flex items-center gap-2 sm:gap-4 mt-1.5 sm:mt-2 flex-wrap">
+            {/* Temperature Selector - Compact on mobile */}
             <Select 
               value={lead.temperature || 'none'} 
               onValueChange={(value) => handleTemperatureChange(value === 'none' ? null : value)}
             >
               <SelectTrigger 
-                className={`w-auto h-9 gap-2 px-3 rounded-full border ${
+                className={`w-auto h-7 sm:h-9 gap-1 sm:gap-2 px-2 sm:px-3 rounded-full border text-xs sm:text-sm ${
                   lead.temperature === 'hot' ? 'bg-red-100 text-red-700 border-red-300' :
                   lead.temperature === 'warm' ? 'bg-orange-100 text-orange-700 border-orange-300' :
                   lead.temperature === 'cold' ? 'bg-blue-100 text-blue-700 border-blue-300' :
@@ -940,11 +942,11 @@ ${userEmail}`;
                 }`}
                 data-testid="lead-temperature-select"
               >
-                {lead.temperature === 'hot' && <Flame className="h-4 w-4 fill-red-500" />}
-                {lead.temperature === 'warm' && <ThermometerSun className="h-4 w-4" />}
-                {lead.temperature === 'cold' && <Snowflake className="h-4 w-4" />}
-                {!lead.temperature && <ThermometerSun className="h-4 w-4 opacity-50" />}
-                <SelectValue placeholder="Set Temperature" />
+                {lead.temperature === 'hot' && <Flame className="h-3 w-3 sm:h-4 sm:w-4 fill-red-500" />}
+                {lead.temperature === 'warm' && <ThermometerSun className="h-3 w-3 sm:h-4 sm:w-4" />}
+                {lead.temperature === 'cold' && <Snowflake className="h-3 w-3 sm:h-4 sm:w-4" />}
+                {!lead.temperature && <ThermometerSun className="h-3 w-3 sm:h-4 sm:w-4 opacity-50" />}
+                <SelectValue placeholder="Temp" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">
@@ -969,53 +971,57 @@ ${userEmail}`;
                 </SelectItem>
               </SelectContent>
             </Select>
+            
+            {/* Lead ID */}
             {lead.lead_id ? (
-              <p className="text-sm font-mono text-muted-foreground" data-testid="lead-unique-id">
-                ID: {lead.lead_id}
+              <p className="text-[10px] sm:text-sm font-mono text-muted-foreground" data-testid="lead-unique-id">
+                <span className="hidden sm:inline">ID: </span>{lead.lead_id}
               </p>
             ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-amber-600">No Lead ID</span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleGenerateLeadId}
-                  disabled={generatingLeadId}
-                  className="h-7 text-xs border-amber-500 text-amber-700 hover:bg-amber-50"
-                  data-testid="generate-lead-id-btn"
-                >
-                  {generatingLeadId ? (
-                    <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Generating...</>
-                  ) : (
-                    <><Plus className="h-3 w-3 mr-1" /> Generate ID</>
-                  )}
-                </Button>
-              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleGenerateLeadId}
+                disabled={generatingLeadId}
+                className="h-6 sm:h-7 text-[10px] sm:text-xs border-amber-500 text-amber-700 hover:bg-amber-50 px-2"
+                data-testid="generate-lead-id-btn"
+              >
+                {generatingLeadId ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <>+ ID</>
+                )}
+              </Button>
             )}
+            
+            {/* Follow-up date - Hidden on very small screens */}
             {lead.next_followup_date && (
-              <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <Clock className="h-4 w-4" />
-                <span>Follow-up: {format(new Date(lead.next_followup_date), 'MMM d, yyyy')}</span>
+              <div className="hidden sm:flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground">
+                <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span>Follow-up: {format(new Date(lead.next_followup_date), 'MMM d')}</span>
               </div>
             )}
           </div>
           {lead.contact_person && (
-            <p className="text-muted-foreground mt-1">Contact: {lead.contact_person}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1 truncate">Contact: {lead.contact_person}</p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        
+        {/* Action Buttons - Stack on mobile */}
+        <div className="flex items-center gap-2 shrink-0">
           {canConvert && (
             <Button
               onClick={handleConvertToAccount}
               disabled={convertingToAccount}
               variant="default"
-              className="bg-emerald-600 hover:bg-emerald-700"
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
               data-testid="convert-to-account-btn"
             >
               {convertingToAccount ? (
-                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Converting...</>
+                <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
               ) : (
-                <><ArrowRightCircle className="h-4 w-4 mr-2" /> Convert to Account</>
+                <><ArrowRightCircle className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" /><span className="hidden sm:inline">Convert</span></>
               )}
             </Button>
           )}
@@ -1023,40 +1029,43 @@ ${userEmail}`;
             <Button
               onClick={() => navigate(`/accounts/${lead.account_id}`)}
               variant="outline"
-              className="border-emerald-500 text-emerald-700"
+              size="sm"
+              className="border-emerald-500 text-emerald-700 text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
               data-testid="view-account-btn"
             >
-              <Building2 className="h-4 w-4 mr-2" /> View Account
+              <Building2 className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" /><span className="hidden sm:inline">Account</span>
             </Button>
           )}
-          <Button onClick={() => navigate(`/leads/${id}/edit`)} data-testid="edit-lead-button">
-            Edit Lead
+          <Button onClick={() => navigate(`/leads/${id}/edit`)} data-testid="edit-lead-button" size="sm" className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3">
+            <span className="hidden sm:inline">Edit Lead</span>
+            <span className="sm:hidden">Edit</span>
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-7 gap-6">
+      {/* Main Content Grid - Stack on mobile */}
+      <div className="grid grid-cols-1 lg:grid-cols-7 gap-4 sm:gap-6">
         {/* Left Column - Lead Info */}
-        <div className="lg:col-span-5 space-y-6">
+        <div className="lg:col-span-5 space-y-4 sm:space-y-6">
           {/* Timeline Summary - Moved to Top */}
           <TimelineSummaryCompact activities={activities} />
 
           {/* Proposed SKU Pricing - Moved to Top for Importance */}
-          <Card className="p-6" data-testid="proposed-sku-pricing-card">
+          <Card className="p-3 sm:p-6" data-testid="proposed-sku-pricing-card">
             {/* Prominent Estimated Monthly Opportunity Display */}
             {proposedSkuPricing.length > 0 && getMonthlyBottles() > 0 && (
-              <div className="mb-6 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
-                <div className="flex items-center justify-between">
+              <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
                   <div>
-                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Estimated Monthly Opportunity</p>
-                    <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400" data-testid="estimated-monthly-opportunity">
+                    <p className="text-xs sm:text-sm font-medium text-emerald-700 dark:text-emerald-300">Est. Monthly Opportunity</p>
+                    <p className="text-xl sm:text-3xl font-bold text-emerald-600 dark:text-emerald-400" data-testid="estimated-monthly-opportunity">
                       ₹{getEstimatedMonthlyOpportunity().toLocaleString('en-IN')}
                     </p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">Based on</p>
-                    <p className="text-lg font-semibold text-emerald-600">{getMonthlyBottles().toLocaleString()} bottles/month</p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                  <div className="sm:text-right">
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">Based on</p>
+                    <p className="text-sm sm:text-lg font-semibold text-emerald-600">{getMonthlyBottles().toLocaleString()} bottles/mo</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">
                       {getTotalPercentage()}% allocated
                       {getTotalPercentage() > 100 && (
                         <span className="text-red-500 ml-1">(exceeds 100%!)</span>
@@ -1068,10 +1077,11 @@ ${userEmail}`;
             )}
 
             {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                Interested / Proposed SKUs
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <h2 className="text-sm sm:text-lg font-semibold flex items-center gap-2">
+                <Package className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span className="hidden sm:inline">Interested / Proposed SKUs</span>
+                <span className="sm:hidden">SKUs</span>
               </h2>
               <div className="flex items-center gap-2">
                 {isEditingPricing ? (

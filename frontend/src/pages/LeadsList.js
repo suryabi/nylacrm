@@ -68,6 +68,10 @@ export default function LeadsList() {
   const [selectedQuadrants, setSelectedQuadrants] = useState([]);
   const [metricsLoading, setMetricsLoading] = useState(true);
   
+  // Mobile view state
+  const [showFilters, setShowFilters] = useState(false);
+  const [viewMode, setViewMode] = useState('table'); // 'table' or 'cards'
+  
   // Check if we have URL params from dashboard navigation
   const urlParams = new URLSearchParams(window.location.search);
   const hasUrlFilters = urlParams.toString().length > 0;
@@ -419,44 +423,46 @@ export default function LeadsList() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="leads-list-page">
       <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-30 dark:opacity-10 pointer-events-none" />
       
-      <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto">
+      <div className="relative p-3 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
         {/* Breadcrumb */}
         <AppBreadcrumb />
         
         {/* Header */}
-        <header className="mb-6">
-          <div className="flex flex-col sm:flex-row justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/30">
-                <Users className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+        <header className="mb-4 sm:mb-6">
+          <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/30">
+                <Users className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800 dark:text-white">Leads</h1>
-                <p className="text-muted-foreground">
-                  {totalLeads} {totalLeads === 1 ? 'lead' : 'leads'} found
-                  {timeFilter !== 'this_week' && <span className="ml-2 text-primary font-medium">({TIME_FILTERS.find(f => f.value === timeFilter)?.label})</span>}
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-slate-800 dark:text-white">Leads</h1>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  {totalLeads} {totalLeads === 1 ? 'lead' : 'leads'}
+                  {timeFilter !== 'this_week' && <span className="ml-1 sm:ml-2 text-primary font-medium">({TIME_FILTERS.find(f => f.value === timeFilter)?.label})</span>}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => navigate('/leads/kanban')} data-testid="kanban-view-button" className="gap-2 border-slate-200 dark:border-slate-700">
-                <LayoutGrid className="h-4 w-4" /> Kanban View
+              <Button variant="outline" size="sm" onClick={() => navigate('/leads/kanban')} data-testid="kanban-view-button" className="gap-1 sm:gap-2 border-slate-200 dark:border-slate-700 text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3">
+                <LayoutGrid className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> 
+                <span className="hidden sm:inline">Kanban</span>
               </Button>
-              <Button onClick={() => navigate('/leads/new')} data-testid="add-lead-button" className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-lg shadow-blue-200/50 dark:shadow-blue-900/30">
-                <Plus className="h-4 w-4 mr-2" /> Add Lead
+              <Button onClick={() => navigate('/leads/new')} data-testid="add-lead-button" className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-lg shadow-blue-200/50 dark:shadow-blue-900/30 text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3">
+                <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" /> 
+                <span className="hidden sm:inline">Add Lead</span>
               </Button>
             </div>
           </div>
         </header>
 
         {/* Lead Scoring Quadrant Metrics Bar */}
-        <Card className="mb-6 p-4 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="quadrant-metrics-bar">
-          <div className="flex items-center justify-between mb-3">
+        <Card className="mb-4 sm:mb-6 p-3 sm:p-4 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="quadrant-metrics-bar">
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
             <div className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-indigo-500" />
-              <span className="font-semibold text-slate-700 dark:text-slate-200">Lead Scoring Categories</span>
+              <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-500" />
+              <span className="font-semibold text-sm sm:text-base text-slate-700 dark:text-slate-200">Lead Scoring</span>
               {selectedQuadrants.length > 0 && (
-                <Badge variant="secondary" className="text-xs">
+                <Badge variant="secondary" className="text-[10px] sm:text-xs">
                   {selectedQuadrants.length} selected
                 </Badge>
               )}
@@ -466,9 +472,9 @@ export default function LeadsList() {
                 variant="ghost" 
                 size="sm" 
                 onClick={() => { setSelectedQuadrants([]); setCurrentPage(1); }}
-                className="text-xs h-7"
+                className="text-[10px] sm:text-xs h-6 sm:h-7 px-2"
               >
-                <RotateCcw className="h-3 w-3 mr-1" /> Clear Selection
+                <RotateCcw className="h-3 w-3 mr-1" /> Clear
               </Button>
             )}
           </div>
@@ -478,7 +484,7 @@ export default function LeadsList() {
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
               {/* Quadrant Tiles */}
               {quadrantMetrics.quadrants.map((q) => {
                 const isSelected = selectedQuadrants.includes(q.quadrant);
@@ -487,12 +493,12 @@ export default function LeadsList() {
                   <div
                     key={q.quadrant}
                     onClick={() => toggleQuadrant(q.quadrant)}
-                    className={`p-4 rounded-xl cursor-pointer transition-all ${style.bg} ${style.border} border ${isSelected ? 'shadow-md' : 'hover:shadow-sm'}`}
+                    className={`p-2.5 sm:p-4 rounded-xl cursor-pointer transition-all ${style.bg} ${style.border} border ${isSelected ? 'shadow-md' : 'hover:shadow-sm'}`}
                     data-testid={`quadrant-tile-${q.quadrant.toLowerCase().replace(' ', '-')}`}
                   >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg font-bold text-lg ${
+                    <div className="flex items-center justify-between mb-2 sm:mb-3">
+                      <div className="flex items-center gap-1.5 sm:gap-2">
+                        <span className={`inline-flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-lg font-bold text-sm sm:text-lg ${
                           q.quadrant === 'Stars' ? 'bg-amber-500 text-white' :
                           q.quadrant === 'Showcase' ? 'bg-purple-500 text-white' :
                           q.quadrant === 'Plough Horses' ? 'bg-blue-500 text-white' :
@@ -500,13 +506,13 @@ export default function LeadsList() {
                         }`}>
                           {style.grade}
                         </span>
-                        <span className={`font-semibold text-sm ${style.text}`}>{q.quadrant}</span>
+                        <span className={`font-semibold text-[10px] sm:text-sm ${style.text} hidden sm:block`}>{q.quadrant}</span>
                       </div>
-                      <div className={`text-2xl font-bold ${style.text}`}>{q.count}</div>
+                      <div className={`text-lg sm:text-2xl font-bold ${style.text}`}>{q.count}</div>
                     </div>
                     
-                    {/* Prominent Value and Volume */}
-                    <div className="grid grid-cols-2 gap-3 pt-3 border-t border-current/10">
+                    {/* Prominent Value and Volume - Hidden on mobile for compact view */}
+                    <div className="hidden sm:grid grid-cols-2 gap-3 pt-3 border-t border-current/10">
                       <div>
                         <p className="text-xs text-muted-foreground mb-1">Volume</p>
                         <p className={`text-lg font-bold ${style.text}`}>
@@ -520,6 +526,12 @@ export default function LeadsList() {
                         </p>
                       </div>
                     </div>
+                    {/* Mobile: Show compact value */}
+                    <div className="sm:hidden pt-1.5 border-t border-current/10">
+                      <p className={`text-xs font-semibold ${style.text}`}>
+                        {q.total_estimated_value > 0 ? `₹${formatCurrency(q.total_estimated_value)}` : '-'}
+                      </p>
+                    </div>
                   </div>
                 );
               })}
@@ -528,21 +540,21 @@ export default function LeadsList() {
               {quadrantMetrics.unscored && quadrantMetrics.unscored.count > 0 && (
                 <div
                   onClick={() => toggleQuadrant('unscored')}
-                  className={`p-4 rounded-xl cursor-pointer transition-all ${getQuadrantStyle('unscored', selectedQuadrants.includes('unscored')).bg} ${getQuadrantStyle('unscored', selectedQuadrants.includes('unscored')).border} border ${selectedQuadrants.includes('unscored') ? 'shadow-md' : 'hover:shadow-sm'}`}
+                  className={`p-2.5 sm:p-4 rounded-xl cursor-pointer transition-all ${getQuadrantStyle('unscored', selectedQuadrants.includes('unscored')).bg} ${getQuadrantStyle('unscored', selectedQuadrants.includes('unscored')).border} border ${selectedQuadrants.includes('unscored') ? 'shadow-md' : 'hover:shadow-sm'}`}
                   data-testid="quadrant-tile-unscored"
                 >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg font-bold text-lg bg-gray-400 text-white">
+                  <div className="flex items-center justify-between mb-2 sm:mb-3">
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className="inline-flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-lg font-bold text-sm sm:text-lg bg-gray-400 text-white">
                         -
                       </span>
-                      <span className="font-semibold text-sm text-gray-600">Unscored</span>
+                      <span className="font-semibold text-[10px] sm:text-sm text-gray-600 hidden sm:block">Unscored</span>
                     </div>
-                    <div className="text-2xl font-bold text-gray-600">{quadrantMetrics.unscored.count}</div>
+                    <div className="text-lg sm:text-2xl font-bold text-gray-600">{quadrantMetrics.unscored.count}</div>
                   </div>
                   
-                  {/* Prominent Value and Volume */}
-                  <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-200">
+                  {/* Prominent Value and Volume - Hidden on mobile */}
+                  <div className="hidden sm:grid grid-cols-2 gap-3 pt-3 border-t border-gray-200">
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Volume</p>
                       <p className="text-lg font-bold text-gray-600">
@@ -556,28 +568,158 @@ export default function LeadsList() {
                       </p>
                     </div>
                   </div>
+                  {/* Mobile: Show compact value */}
+                  <div className="sm:hidden pt-1.5 border-t border-gray-200">
+                    <p className="text-xs font-semibold text-gray-600">
+                      {quadrantMetrics.unscored.total_estimated_value > 0 ? `₹${formatCurrency(quadrantMetrics.unscored.total_estimated_value)}` : '-'}
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
           )}
         </Card>
 
-        {/* Contemporary Filters */}
-        <FilterContainer 
-          title="Filters" 
-          activeFiltersCount={[
-            searchQuery, 
-            statusFilter.length > 0, 
-            territoryFilter !== 'all', 
-            stateFilter !== 'all', 
-            cityFilter !== 'all', 
-            assignedToFilter.length > 0, 
-            timeFilter !== 'lifetime'
-          ].filter(Boolean).length}
-          onReset={handleResetFilters}
-          className="mb-6"
-        >
-          <FilterGrid columns={7}>
+        {/* Contemporary Filters - Collapsible on Mobile */}
+        <div className="mb-4 sm:mb-6">
+          {/* Mobile Filter Toggle */}
+          <div className="flex items-center justify-between mb-3 sm:hidden">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center gap-2"
+            >
+              <Filter className="h-4 w-4" />
+              Filters
+              {[searchQuery, statusFilter.length > 0, territoryFilter !== 'all', stateFilter !== 'all', cityFilter !== 'all', assignedToFilter.length > 0, timeFilter !== 'lifetime'].filter(Boolean).length > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
+                  {[searchQuery, statusFilter.length > 0, territoryFilter !== 'all', stateFilter !== 'all', cityFilter !== 'all', assignedToFilter.length > 0, timeFilter !== 'lifetime'].filter(Boolean).length}
+                </Badge>
+              )}
+            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={viewMode === 'cards' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('cards')}
+                className="h-8 w-8 p-0"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'table' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('table')}
+                className="h-8 w-8 p-0"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Mobile Search - Always visible */}
+          <div className="sm:hidden mb-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input 
+                type="text" 
+                value={searchQuery} 
+                onChange={e => setSearchQuery(e.target.value)} 
+                placeholder="Search leads..." 
+                className="pl-10 h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700" 
+                data-testid="leads-search-input-mobile" 
+              />
+            </div>
+          </div>
+
+          {/* Mobile Filters - Collapsible */}
+          {showFilters && (
+            <div className="sm:hidden bg-white dark:bg-slate-900 rounded-xl p-4 mb-4 border border-slate-200 dark:border-slate-700 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Time Period</label>
+                  <Select value={timeFilter} onValueChange={setTimeFilter}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="All Time" /></SelectTrigger>
+                    <SelectContent>
+                      {TIME_FILTERS.map(filter => (
+                        <SelectItem key={filter.value} value={filter.value}>{filter.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Territory</label>
+                  <Select value={territoryFilter} onValueChange={(v) => { setTerritoryFilter(v); setStateFilter('all'); setCityFilter('all'); }}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="All" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      {territories.map(t => <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">State</label>
+                  <Select value={stateFilter} onValueChange={(v) => { setStateFilter(v); setCityFilter('all'); }}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="All" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      {territoryFilter !== 'all' && getStateNamesByTerritoryName(territoryFilter).map(state => (
+                        <SelectItem key={state} value={state}>{state}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">City</label>
+                  <Select value={cityFilter} onValueChange={setCityFilter}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="All" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      {stateFilter !== 'all' && getCityNamesByStateName(stateFilter).map(city => (
+                        <SelectItem key={city} value={city}>{city}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Status</label>
+                <MultiSelect
+                  options={statuses.map(s => ({ value: s.id, label: s.label }))}
+                  selected={statusFilter}
+                  onChange={setStatusFilter}
+                  placeholder="All Statuses"
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" size="sm" onClick={handleResetFilters} className="flex-1">
+                  <RotateCcw className="h-3 w-3 mr-1" /> Reset
+                </Button>
+                <Button size="sm" onClick={() => setShowFilters(false)} className="flex-1">
+                  Apply
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Desktop Filters */}
+          <div className="hidden sm:block">
+            <FilterContainer 
+              title="Filters" 
+              activeFiltersCount={[
+                searchQuery, 
+                statusFilter.length > 0, 
+                territoryFilter !== 'all', 
+                stateFilter !== 'all', 
+                cityFilter !== 'all', 
+                assignedToFilter.length > 0, 
+                timeFilter !== 'lifetime'
+              ].filter(Boolean).length}
+              onReset={handleResetFilters}
+            >
+              <FilterGrid columns={7}>
             <FilterItem label="Time Period" icon={Calendar}>
               <Select value={timeFilter} onValueChange={setTimeFilter}>
                 <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" data-testid="leads-time-filter">
@@ -666,65 +808,119 @@ export default function LeadsList() {
                 />
               </div>
             </FilterItem>
-          </FilterGrid>
-        </FilterContainer>
+            </FilterGrid>
+            </FilterContainer>
+          </div>
+        </div>
 
-        {/* Leads Table */}
+        {/* Leads Table/Cards */}
         <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-16">
-              <div className="relative"><div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" /><Loader2 className="h-10 w-10 animate-spin text-primary relative z-10" /></div>
+            <div className="flex flex-col items-center justify-center py-12 sm:py-16">
+              <div className="relative"><div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" /><Loader2 className="h-8 w-8 sm:h-10 sm:w-10 animate-spin text-primary relative z-10" /></div>
               <p className="text-muted-foreground text-sm mt-4 animate-pulse">Loading leads...</p>
             </div>
           ) : displayLeads.length === 0 ? (
-            <div className="text-center py-16">
-              <Users className="h-16 w-16 mx-auto mb-4 text-slate-200 dark:text-slate-700" />
-              <p className="text-lg font-medium text-slate-600 dark:text-slate-400" data-testid="no-leads-message">
-                {hasActiveFilters ? 'No leads found matching your filters.' : 'No leads yet. Add your first lead to get started!'}
+            <div className="text-center py-12 sm:py-16 px-4">
+              <Users className="h-12 w-12 sm:h-16 sm:w-16 mx-auto mb-4 text-slate-200 dark:text-slate-700" />
+              <p className="text-base sm:text-lg font-medium text-slate-600 dark:text-slate-400" data-testid="no-leads-message">
+                {hasActiveFilters ? 'No leads found matching your filters.' : 'No leads yet. Add your first lead!'}
               </p>
-              {hasActiveFilters && <Button onClick={handleResetFilters} variant="outline" className="mt-4">Clear All Filters</Button>}
+              {hasActiveFilters && <Button onClick={handleResetFilters} variant="outline" className="mt-4" size="sm">Clear Filters</Button>}
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              {/* Mobile Card View */}
+              <div className={`${viewMode === 'cards' ? 'block' : 'hidden'} sm:hidden p-3 space-y-3`}>
+                {displayLeads.map((lead) => (
+                  <div
+                    key={lead.id}
+                    onClick={() => {
+                      saveFilters({ searchQuery, statusFilter, territoryFilter, stateFilter, cityFilter, assignedToFilter, timeFilter });
+                      navigateTo(`/leads/${lead.id}`, { label: lead.company || lead.name || 'Lead Details' });
+                    }}
+                    className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 border border-slate-100 dark:border-slate-700 active:bg-slate-100 dark:active:bg-slate-700/50 transition-colors"
+                    data-testid={`lead-card-${lead.id}`}
+                  >
+                    {/* Card Header */}
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        {getTemperatureIcon(lead.temperature)}
+                        {getQuadrantGrade(lead)}
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-sm text-primary truncate">{lead.company || lead.name}</p>
+                          <p className="text-[10px] text-muted-foreground font-mono">{lead.lead_id || '-'}</p>
+                        </div>
+                      </div>
+                      <Badge className={`${getStatusColor(lead.status)} text-[10px] shrink-0`}>{getStatusLabel(lead.status)}</Badge>
+                    </div>
+                    
+                    {/* Card Body */}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{lead.city || '-'}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <UserCircle className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{lead.assigned_to ? (users.find(u => u.id === lead.assigned_to)?.name?.split(' ')[0] || '-') : '-'}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <Calendar className="h-3 w-3 shrink-0" />
+                        <span>{lead.next_followup_date ? format(new Date(lead.next_followup_date), 'MMM d') : '-'}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <DollarSign className="h-3 w-3 shrink-0 text-emerald-500" />
+                        <span className="font-medium text-emerald-600">
+                          {lead.opportunity_estimation?.estimated_monthly_revenue 
+                            ? `₹${(lead.opportunity_estimation.estimated_monthly_revenue / 1000).toFixed(0)}K` 
+                            : '-'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Table View (also shown on mobile when table mode selected) */}
+              <div className={`${viewMode === 'table' ? 'block' : 'hidden sm:block'} overflow-x-auto`}>
                 <Table>
                   <TableHeader>
                     <TableRow className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
-                      <TableHead className="w-[400px] min-w-[400px] max-w-[400px]"><button onClick={() => handleSort('company')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-company">Lead{getSortIcon('company')}</button></TableHead>
-                      <TableHead><button onClick={() => handleSort('city')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-location">Location{getSortIcon('city')}</button></TableHead>
-                      <TableHead className="w-[80px]"><button onClick={() => handleSort('assigned_to')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-assigned">Owner{getSortIcon('assigned_to')}</button></TableHead>
-                      <TableHead><button onClick={() => handleSort('last_contacted_date')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-last-contacted">Last Contacted{getSortIcon('last_contacted_date')}</button></TableHead>
-                      <TableHead><button onClick={() => handleSort('next_followup_date')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-followup">Next Follow-up{getSortIcon('next_followup_date')}</button></TableHead>
-                      <TableHead><button onClick={() => handleSort('estimated_revenue')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-revenue">Est. Revenue{getSortIcon('estimated_revenue')}</button></TableHead>
-                      <TableHead><button onClick={() => handleSort('status')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-status">Status{getSortIcon('status')}</button></TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="w-[400px] min-w-[200px] sm:min-w-[400px] sm:max-w-[400px]"><button onClick={() => handleSort('company')} className="flex items-center hover:text-foreground font-semibold text-xs sm:text-sm" data-testid="sort-company">Lead{getSortIcon('company')}</button></TableHead>
+                      <TableHead className="hidden sm:table-cell"><button onClick={() => handleSort('city')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-location">Location{getSortIcon('city')}</button></TableHead>
+                      <TableHead className="w-[60px] sm:w-[80px]"><button onClick={() => handleSort('assigned_to')} className="flex items-center hover:text-foreground font-semibold text-xs sm:text-sm" data-testid="sort-assigned">Owner{getSortIcon('assigned_to')}</button></TableHead>
+                      <TableHead className="hidden md:table-cell"><button onClick={() => handleSort('last_contacted_date')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-last-contacted">Last Contacted{getSortIcon('last_contacted_date')}</button></TableHead>
+                      <TableHead className="hidden sm:table-cell"><button onClick={() => handleSort('next_followup_date')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-followup">Follow-up{getSortIcon('next_followup_date')}</button></TableHead>
+                      <TableHead className="hidden lg:table-cell"><button onClick={() => handleSort('estimated_revenue')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-revenue">Est. Revenue{getSortIcon('estimated_revenue')}</button></TableHead>
+                      <TableHead><button onClick={() => handleSort('status')} className="flex items-center hover:text-foreground font-semibold text-xs sm:text-sm" data-testid="sort-status">Status{getSortIcon('status')}</button></TableHead>
+                      <TableHead className="text-right hidden sm:table-cell">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {displayLeads.map((lead) => (
                       <TableRow key={lead.id} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/30 border-b border-slate-50 dark:border-slate-800/50 transition-colors" onClick={() => {
-                        // Save current filters before navigating
                         saveFilters({ searchQuery, statusFilter, territoryFilter, stateFilter, cityFilter, assignedToFilter, timeFilter });
                         navigateTo(`/leads/${lead.id}`, { label: lead.company || lead.name || 'Lead Details' });
                       }} data-testid={`lead-row-${lead.id}`}>
-                        <TableCell className="w-[400px] min-w-[400px] max-w-[400px]" data-testid={`lead-cell-${lead.id}`}>
-                          <div className="flex items-center gap-2">
+                        <TableCell className="w-[200px] sm:w-[400px] sm:min-w-[400px] sm:max-w-[400px] py-2 sm:py-4" data-testid={`lead-cell-${lead.id}`}>
+                          <div className="flex items-center gap-1.5 sm:gap-2">
                             {getTemperatureIcon(lead.temperature)}
                             {getQuadrantGrade(lead)}
-                            <div className="flex-1 min-w-0 max-w-[340px]">
+                            <div className="flex-1 min-w-0 max-w-[120px] sm:max-w-[340px]">
                               <div className="flex items-center gap-2">
-                                <p className="font-medium text-primary truncate max-w-[300px]" title={lead.company || lead.name}>{lead.company || lead.name}</p>
+                                <p className="font-medium text-primary truncate text-xs sm:text-sm" title={lead.company || lead.name}>{lead.company || lead.name}</p>
                               </div>
-                              <p className="text-xs text-muted-foreground font-mono truncate">{lead.lead_id || '-'}</p>
+                              <p className="text-[10px] sm:text-xs text-muted-foreground font-mono truncate">{lead.lead_id || '-'}</p>
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell>{lead.city}</TableCell>
-                        <TableCell className="w-[80px]">
+                        <TableCell className="hidden sm:table-cell">{lead.city}</TableCell>
+                        <TableCell className="w-[60px] sm:w-[80px]">
                           {lead.assigned_to ? getUserInitials(lead.assigned_to) : <span className="text-muted-foreground">-</span>}
                         </TableCell>
-                        <TableCell>{lead.last_contacted_date ? format(new Date(lead.last_contacted_date), 'MMM d, yyyy') : '-'}</TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">{lead.last_contacted_date ? format(new Date(lead.last_contacted_date), 'MMM d, yyyy') : '-'}</TableCell>
+                        <TableCell className="hidden sm:table-cell">
                           {lead.next_followup_date ? (() => {
                             const followupDate = new Date(lead.next_followup_date);
                             const today = new Date();
@@ -738,24 +934,24 @@ export default function LeadsList() {
                                   title="Mark follow-up as complete"
                                   data-testid={`complete-followup-${lead.id}`}
                                 />
-                                <span className={`${isUrgent ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 px-2 py-1 rounded font-semibold' : ''}`}>
-                                  {format(followupDate, 'MMM d, yyyy')}
+                                <span className={`text-xs sm:text-sm ${isUrgent ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 px-2 py-1 rounded font-semibold' : ''}`}>
+                                  {format(followupDate, 'MMM d')}
                                 </span>
                               </div>
                             );
                           })() : '-'}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden lg:table-cell">
                           {lead.opportunity_estimation?.estimated_monthly_revenue ? (
-                            <span className="font-semibold text-primary">
+                            <span className="font-semibold text-primary text-sm">
                               ₹{lead.opportunity_estimation.estimated_monthly_revenue.toLocaleString('en-IN')}
                             </span>
                           ) : (
                             <span className="text-xs text-muted-foreground">-</span>
                           )}
                         </TableCell>
-                        <TableCell><Badge className={getStatusColor(lead.status)}>{getStatusLabel(lead.status)}</Badge></TableCell>
-                        <TableCell className="text-right">
+                        <TableCell><Badge className={`${getStatusColor(lead.status)} text-[10px] sm:text-xs`}>{getStatusLabel(lead.status)}</Badge></TableCell>
+                        <TableCell className="text-right hidden sm:table-cell">
                           <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setLeadToDelete(lead); setDeleteDialogOpen(true); }} data-testid={`delete-lead-${lead.id}`}>
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
@@ -766,29 +962,45 @@ export default function LeadsList() {
                 </Table>
               </div>
 
-              {/* Pagination */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Rows per page:</span>
-                  <Select value={itemsPerPage.toString()} onValueChange={(v) => { setItemsPerPage(parseInt(v)); setCurrentPage(1); }}>
-                    <SelectTrigger className="w-20 h-8"><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem><SelectItem value="100">100</SelectItem></SelectContent>
-                  </Select>
+              {/* Pagination - Mobile Optimized */}
+              <div className="flex flex-col gap-3 p-3 sm:p-4 border-t border-slate-100 dark:border-slate-800">
+                {/* Mobile: Simple prev/next with count */}
+                <div className="flex items-center justify-between sm:hidden">
+                  <Button variant="outline" size="sm" onClick={() => { setCurrentPage(currentPage - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={currentPage === 1} className="h-9 px-3">
+                    <ChevronLeft className="h-4 w-4 mr-1" /> Prev
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <Button variant="outline" size="sm" onClick={() => { setCurrentPage(currentPage + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={currentPage === totalPages || totalPages === 0} className="h-9 px-3">
+                    Next <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
                 </div>
-                <span className="text-sm text-muted-foreground">Showing {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, totalLeads)} of {totalLeads}</span>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => { setCurrentPage(currentPage - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                      let pageNum;
-                      if (totalPages <= 5) pageNum = i + 1;
-                      else if (currentPage <= 3) pageNum = i + 1;
-                      else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
-                      else pageNum = currentPage - 2 + i;
-                      return <Button key={pageNum} variant={currentPage === pageNum ? 'default' : 'outline'} size="sm" onClick={() => { setCurrentPage(pageNum); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="w-10">{pageNum}</Button>;
-                    })}
+                
+                {/* Desktop: Full pagination */}
+                <div className="hidden sm:flex sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Rows per page:</span>
+                    <Select value={itemsPerPage.toString()} onValueChange={(v) => { setItemsPerPage(parseInt(v)); setCurrentPage(1); }}>
+                      <SelectTrigger className="w-20 h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem><SelectItem value="100">100</SelectItem></SelectContent>
+                    </Select>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => { setCurrentPage(currentPage + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={currentPage === totalPages || totalPages === 0}><ChevronRight className="h-4 w-4" /></Button>
+                  <span className="text-sm text-muted-foreground">Showing {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, totalLeads)} of {totalLeads}</span>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => { setCurrentPage(currentPage - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum;
+                        if (totalPages <= 5) pageNum = i + 1;
+                        else if (currentPage <= 3) pageNum = i + 1;
+                        else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                        else pageNum = currentPage - 2 + i;
+                        return <Button key={pageNum} variant={currentPage === pageNum ? 'default' : 'outline'} size="sm" onClick={() => { setCurrentPage(pageNum); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="w-10">{pageNum}</Button>;
+                      })}
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => { setCurrentPage(currentPage + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={currentPage === totalPages || totalPages === 0}><ChevronRight className="h-4 w-4" /></Button>
+                  </div>
                 </div>
               </div>
             </>
