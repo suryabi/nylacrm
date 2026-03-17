@@ -43,7 +43,7 @@ export function TodaySummaryWidget({ todaySummary }) {
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
       {stats.map((stat, index) => {
         const Icon = stat.icon;
         return (
@@ -54,18 +54,18 @@ export function TodaySummaryWidget({ todaySummary }) {
             {/* Decorative gradient line */}
             <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.gradient}`} />
             
-            <div className="p-5">
+            <div className="p-3 sm:p-5">
               <div className="flex items-start justify-between">
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <div className="space-y-1 sm:space-y-2">
+                  <p className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider line-clamp-1">
                     {stat.label}
                   </p>
-                  <p className={`text-3xl font-bold ${stat.textColor} tabular-nums`}>
+                  <p className={`text-2xl sm:text-3xl font-bold ${stat.textColor} tabular-nums`}>
                     {stat.value}
                   </p>
                 </div>
-                <div className={`p-2.5 rounded-xl ${stat.iconBg} group-hover:scale-110 transition-transform duration-300`}>
-                  <Icon className={`h-5 w-5 ${stat.textColor}`} />
+                <div className={`p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl ${stat.iconBg} group-hover:scale-110 transition-transform duration-300`}>
+                  <Icon className={`h-4 w-4 sm:h-5 sm:w-5 ${stat.textColor}`} />
                 </div>
               </div>
             </div>

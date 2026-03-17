@@ -54,20 +54,20 @@ export function PipelineSummaryWidget({ pipeline }) {
 
   return (
     <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
-      <div className="p-5">
-        <div className="flex items-center justify-between mb-4">
+      <div className="p-4 sm:p-5">
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
           <h2 className="text-sm font-semibold text-slate-800 dark:text-white flex items-center gap-2">
             <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/50 dark:to-teal-900/30">
               <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             </div>
-            My Pipeline
+            <span className="hidden sm:inline">My</span> Pipeline
           </h2>
           <span className="text-xs text-muted-foreground">{total} leads</span>
         </div>
         
         {/* Visual Pipeline Bar */}
         {total > 0 && (
-          <div className="h-3 rounded-full bg-slate-100 dark:bg-slate-800 flex overflow-hidden mb-4">
+          <div className="h-2.5 sm:h-3 rounded-full bg-slate-100 dark:bg-slate-800 flex overflow-hidden mb-3 sm:mb-4">
             {pipeline?.filter(item => item.count > 0).map((item, idx) => (
               <div
                 key={item.status}
@@ -81,23 +81,23 @@ export function PipelineSummaryWidget({ pipeline }) {
         )}
         
         {/* Status List - Show all statuses with counts */}
-        <div className="space-y-2">
+        <div className="space-y-1.5 sm:space-y-2 max-h-[200px] sm:max-h-none overflow-y-auto">
           {pipeline?.length > 0 ? (
             pipeline.map(item => (
               <div 
                 key={item.status} 
-                className="flex items-center justify-between text-sm group cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 -mx-2 px-2 py-1 rounded-lg transition-colors"
+                className="flex items-center justify-between text-xs sm:text-sm group cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 -mx-2 px-2 py-1 rounded-lg transition-colors"
                 onClick={() => handleStatusClick(item.status)}
               >
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${getStatusColor(item.status, item.color)}`} />
-                  <span className="text-muted-foreground group-hover:text-foreground transition-colors">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${getStatusColor(item.status, item.color)}`} />
+                  <span className="text-muted-foreground group-hover:text-foreground transition-colors truncate">
                     {item.label || item.status.replace(/_/g, ' ')}
                   </span>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 flex-shrink-0 ml-2">
                   <span className="font-medium text-slate-700 dark:text-slate-300">{item.count}</span>
-                  <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <ChevronRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block" />
                 </div>
               </div>
             ))

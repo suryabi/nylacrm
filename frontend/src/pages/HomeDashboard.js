@@ -367,30 +367,30 @@ export default function HomeDashboard() {
   const showSalesROIPanel = user?.department?.toLowerCase()?.includes('sales');
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex" data-testid="home-dashboard">
-      {/* Main Content Area - 75% when ROI panel visible, 100% otherwise */}
-      <div className={showSalesROIPanel ? "w-3/4" : "w-full"}>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex flex-col lg:flex-row" data-testid="home-dashboard">
+      {/* Main Content Area - Full width on mobile, 75% when ROI panel visible on desktop */}
+      <div className={`w-full ${showSalesROIPanel ? "lg:w-3/4" : "lg:w-full"}`}>
         {/* Subtle background pattern */}
         <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-30 dark:opacity-10 pointer-events-none" />
         
-        <div className="relative p-6 lg:p-8 max-w-[1400px] mx-auto">
+        <div className="relative p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto">
           {/* Header Section */}
-          <header className="mb-8">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <header className="mb-6 sm:mb-8">
+            <div className="flex flex-col gap-4 sm:gap-6">
               {/* Welcome Section */}
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <h1 className="text-3xl lg:text-4xl font-bold tracking-tight bg-gradient-to-r from-slate-900 via-slate-700 to-slate-900 dark:from-white dark:via-slate-200 dark:to-white bg-clip-text text-transparent">
+              <div className="space-y-1 text-center sm:text-left">
+                <div className="flex items-center justify-center sm:justify-start gap-2">
+                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight bg-gradient-to-r from-slate-900 via-slate-700 to-slate-900 dark:from-white dark:via-slate-200 dark:to-white bg-clip-text text-transparent">
                     Good {getGreeting()}, {user?.name?.split(' ')[0]}
                   </h1>
-                  <Sparkles className="h-6 w-6 text-amber-500 animate-pulse" />
+                  <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-amber-500 animate-pulse" />
                 </div>
-                <p className="text-muted-foreground text-lg">
+                <p className="text-muted-foreground text-base sm:text-lg">
                   {format(new Date(), 'EEEE, MMMM d, yyyy')}
                 </p>
               </div>
               
-              {/* Weather & Time Widget */}
+              {/* Weather & Time Widget - Full width on mobile */}
               <WeatherTimeWidget
                 weather={weather}
                 weatherLoading={weatherLoading}
@@ -410,14 +410,14 @@ export default function HomeDashboard() {
           */}
 
           {/* Stats Summary - Bento Grid Row 1 */}
-          <section className="mb-8">
+          <section className="mb-6 sm:mb-8">
             <TodaySummaryWidget todaySummary={today_summary} />
           </section>
 
           {/* Main Content - Bento Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Left Column - Primary Content (8 cols) */}
-            <div className="lg:col-span-8 space-y-6">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-12">
+            {/* Left Column - Primary Content (full width on mobile, 8 cols on desktop) */}
+            <div className="lg:col-span-8 space-y-4 sm:space-y-6 order-2 lg:order-1">
               {/* Action Items - Large Card */}
               <ActionItemsWidget
                 actionItems={action_items}
@@ -437,8 +437,8 @@ export default function HomeDashboard() {
               <UpcomingFollowupsWidget upcomingLeads={upcoming_leads} />
             </div>
 
-            {/* Right Column - Secondary Content (4 cols) */}
-            <div className="lg:col-span-4 space-y-6">
+            {/* Right Column - Secondary Content (full width on mobile, 4 cols on desktop) */}
+            <div className="lg:col-span-4 space-y-4 sm:space-y-6 order-1 lg:order-2">
               {/* Meetings - Featured Card */}
               <UpcomingMeetingsWidget
                 upcomingMeetings={upcoming_meetings}
@@ -460,9 +460,9 @@ export default function HomeDashboard() {
         </div>
       </div>
       
-      {/* Sales ROI Panel - Fixed Right Side (25% width) */}
+      {/* Sales ROI Panel - Fixed Right Side (hidden on mobile, 25% width on desktop) */}
       {showSalesROIPanel && (
-        <div className="w-1/4 min-h-screen sticky top-0">
+        <div className="hidden lg:block lg:w-1/4 min-h-screen sticky top-0">
           <SalesROIPanel />
         </div>
       )}

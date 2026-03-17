@@ -112,50 +112,51 @@ export function ActionItemsWidget({
   return (
     <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
       {/* Header */}
-      <div className="p-5 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 dark:border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-900/50 dark:to-purple-900/30">
-            <CheckSquare className="h-5 w-5 text-violet-600 dark:text-violet-400" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-800 dark:text-white">Action Items</h2>
-            <p className="text-xs text-muted-foreground">{pendingCount} items need attention</p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          {/* Filter Tabs */}
-          <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
-            <button
-              onClick={() => setTaskFilter('assigned')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                taskFilter === 'assigned'
-                  ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-              }`}
-            >
-              Assigned to Me
-            </button>
-            <button
-              onClick={() => setTaskFilter('created')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                taskFilter === 'created'
-                  ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-              }`}
-            >
-              Created by Me
-            </button>
+      <div className="p-4 sm:p-5 pb-3 sm:pb-4 flex flex-col gap-3 sm:gap-4 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-900/50 dark:to-purple-900/30">
+              <CheckSquare className="h-4 w-4 sm:h-5 sm:w-5 text-violet-600 dark:text-violet-400" />
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-semibold text-slate-800 dark:text-white">Action Items</h2>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">{pendingCount} items need attention</p>
+            </div>
           </div>
           
           <Button 
-            size="default" 
+            size="sm" 
             onClick={onNewTask} 
             data-testid="new-task-btn"
-            className="h-9 px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-md shadow-emerald-200/50 dark:shadow-emerald-900/30 border-0"
+            className="h-8 sm:h-9 px-2 sm:px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-md shadow-emerald-200/50 dark:shadow-emerald-900/30 border-0"
           >
-            <Plus className="h-4 w-4 mr-1.5" /> New Task
+            <Plus className="h-4 w-4 sm:mr-1.5" /> 
+            <span className="hidden sm:inline">New Task</span>
           </Button>
+        </div>
+        
+        {/* Filter Tabs - Full width on mobile */}
+        <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg w-full sm:w-auto">
+          <button
+            onClick={() => setTaskFilter('assigned')}
+            className={`flex-1 sm:flex-none px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+              taskFilter === 'assigned'
+                ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}
+          >
+            Assigned to Me
+          </button>
+          <button
+            onClick={() => setTaskFilter('created')}
+            className={`flex-1 sm:flex-none px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+              taskFilter === 'created'
+                ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}
+          >
+            Created by Me
+          </button>
         </div>
       </div>
       
