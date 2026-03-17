@@ -44,42 +44,37 @@ async def list_invoices(
     try:
         tdb = get_tdb()
         
-        # Build query
-        query = {}
+        logger.info(f"[INVOICES] Listing invoices with filters: search={search}, territory={territory}, state={state}, city={city}, status={status}, time_filter={time_filter}")
+        
+        # Build query conditions
+        conditions = []
         
         # Search filter
         if search:
-            query['$or'] = [
-                {'invoice_no': {'$regex': search, '$options': 'i'}},
-                {'account_name': {'$regex': search, '$options': 'i'}},
-            ]
+            conditions.append({
+                '$or': [
+                    {'invoice_no': {'$regex': search, '$options': 'i'}},
+                    {'account_name': {'$regex': search, '$options': 'i'}},
+                ]
+            })
         
-        # Account filters
-        if account_id:
-            query['$or'] = query.get('$or', [])
-            query['$or'].extend([
-                {'account_id': account_id},
-                {'account_uuid': account_id}
-            ])
-        
+        # Account name filter
         if account_name:
-            query['account_name'] = {'$regex': account_name, '$options': 'i'}
+            conditions.append({'account_name': {'$regex': account_name, '$options': 'i'}})
         
         # Status filter
-        if status:
-            query['status'] = status
+        if status and status != 'all':
+            conditions.append({'status': status})
         
         # Date range filters
         if date_from:
-            query['invoice_date'] = query.get('invoice_date', {})
-            query['invoice_date']['$gte'] = date_from
+            conditions.append({'invoice_date': {'$gte': date_from}})
         
         if date_to:
-            query['invoice_date'] = query.get('invoice_date', {})
-            query['invoice_date']['$lte'] = date_to
+            conditions.append({'invoice_date': {'$lte': date_to}})
         
         # Time filter (predefined ranges)
-        if time_filter:
+        if time_filter and time_filter != 'lifetime':
             from datetime import timedelta
             now = datetime.now(timezone.utc)
             
@@ -91,20 +86,16 @@ async def list_invoices(
                 'last_3_months': (now - timedelta(days=90), now),
                 'last_6_months': (now - timedelta(days=180), now),
                 'this_quarter': (now.replace(month=((now.month - 1) // 3) * 3 + 1, day=1), now),
-                'lifetime': (None, None),
             }
             
-            if time_filter in date_ranges and time_filter != 'lifetime':
+            if time_filter in date_ranges:
                 start, end = date_ranges[time_filter]
                 if start:
-                    query['invoice_date'] = query.get('invoice_date', {})
-                    query['invoice_date']['$gte'] = start.strftime('%Y-%m-%d')
+                    conditions.append({'invoice_date': {'$gte': start.strftime('%Y-%m-%d')}})
                 if end:
-                    query['invoice_date'] = query.get('invoice_date', {})
-                    query['invoice_date']['$lte'] = end.strftime('%Y-%m-%d')
+                    conditions.append({'invoice_date': {'$lte': end.strftime('%Y-%m-%d')}})
         
         # Get account IDs filtered by territory/state/city
-        account_filter_ids = None
         if territory or state or city:
             account_query = {}
             if territory:
@@ -114,25 +105,39 @@ async def list_invoices(
             if city:
                 account_query['city'] = city
             
+            logger.info(f"[INVOICES] Filtering accounts by: {account_query}")
             accounts = await tdb.accounts.find(account_query, {'_id': 0, 'id': 1, 'account_id': 1}).to_list(10000)
-            account_filter_ids = [a.get('account_id') or a.get('id') for a in accounts]
+            logger.info(f"[INVOICES] Found {len(accounts)} matching accounts")
             
-            if account_filter_ids:
-                query['$or'] = query.get('$or', [])
-                query['$or'].extend([
-                    {'account_id': {'$in': account_filter_ids}},
-                    {'account_uuid': {'$in': [a.get('id') for a in accounts if a.get('id')]}}
-                ])
+            if accounts:
+                account_ids_list = [a.get('account_id') for a in accounts if a.get('account_id')]
+                account_uuids_list = [a.get('id') for a in accounts if a.get('id')]
+                
+                account_filter = {'$or': []}
+                if account_ids_list:
+                    account_filter['$or'].append({'account_id': {'$in': account_ids_list}})
+                    account_filter['$or'].append({'account_id_from_mq': {'$in': account_ids_list}})
+                if account_uuids_list:
+                    account_filter['$or'].append({'account_uuid': {'$in': account_uuids_list}})
+                
+                if account_filter['$or']:
+                    conditions.append(account_filter)
             else:
                 # No accounts match the filter, return empty
+                logger.info(f"[INVOICES] No accounts match territory/state/city filter, returning empty")
                 return {
                     'invoices': [],
                     'total': 0,
                     'page': page,
                     'limit': limit,
                     'pages': 0,
-                    'summary': {'total_gross': 0, 'total_net': 0, 'total_outstanding': 0}
+                    'summary': {'total_gross': 0, 'total_net': 0, 'total_credit': 0}
                 }
+        
+        # Build final query
+        query = {'$and': conditions} if conditions else {}
+        
+        logger.info(f"[INVOICES] Final query: {query}")
         
         # Sort configuration
         sort_direction = -1 if sort_order == 'desc' else 1
@@ -140,10 +145,11 @@ async def list_invoices(
         
         # Get total count
         total = await tdb.invoices.count_documents(query)
+        logger.info(f"[INVOICES] Total count: {total}")
         
         # Calculate pagination
         skip = (page - 1) * limit
-        pages = (total + limit - 1) // limit
+        pages = (total + limit - 1) // limit if total > 0 else 0
         
         # Fetch invoices
         cursor = tdb.invoices.find(query, {'_id': 0})

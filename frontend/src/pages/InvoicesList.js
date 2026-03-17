@@ -303,7 +303,7 @@ export default function InvoicesList() {
             <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
             <span className="font-semibold text-sm sm:text-base text-slate-700 dark:text-slate-200">Invoice Summary</span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3 sm:p-4 rounded-xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800">
               <div className="flex items-center gap-2 mb-1">
                 <FileText className="h-4 w-4 text-blue-500" />
@@ -318,7 +318,14 @@ export default function InvoicesList() {
               </div>
               <p className="text-xl sm:text-2xl font-bold text-green-700 dark:text-green-300">{formatCurrency(summary.total_gross)}</p>
             </div>
-            <div className="p-3 sm:p-4 rounded-xl bg-purple-50 dark:bg-purple-900/30 border border-purple-100 dark:border-purple-800 col-span-2 sm:col-span-1">
+            <div className="p-3 sm:p-4 rounded-xl bg-amber-50 dark:bg-amber-900/30 border border-amber-100 dark:border-amber-800">
+              <div className="flex items-center gap-2 mb-1">
+                <DollarSign className="h-4 w-4 text-amber-500" />
+                <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Credit Notes</span>
+              </div>
+              <p className="text-xl sm:text-2xl font-bold text-amber-700 dark:text-amber-300">{formatCurrency(summary.total_credit || 0)}</p>
+            </div>
+            <div className="p-3 sm:p-4 rounded-xl bg-purple-50 dark:bg-purple-900/30 border border-purple-100 dark:border-purple-800">
               <div className="flex items-center gap-2 mb-1">
                 <DollarSign className="h-4 w-4 text-purple-500" />
                 <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">Net Value</span>
@@ -580,9 +587,14 @@ export default function InvoicesList() {
                         Gross {getSortIcon('gross_invoice_value')}
                       </div>
                     </TableHead>
-                    <TableHead className="text-right">
+                    <TableHead className="text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors" onClick={() => handleSort('credit_note_value')}>
                       <div className="flex items-center justify-end font-semibold">
-                        Net
+                        Credit Note {getSortIcon('credit_note_value')}
+                      </div>
+                    </TableHead>
+                    <TableHead className="text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors" onClick={() => handleSort('net_invoice_value')}>
+                      <div className="flex items-center justify-end font-semibold">
+                        Net {getSortIcon('net_invoice_value')}
                       </div>
                     </TableHead>
                     <TableHead>
@@ -623,10 +635,13 @@ export default function InvoicesList() {
                           {invoice.account_name || invoice.account_id || '-'}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right font-semibold text-slate-800 dark:text-slate-200">
+                      <TableCell className="text-right font-semibold text-green-700 dark:text-green-300">
                         {formatCurrency(invoice.gross_invoice_value)}
                       </TableCell>
-                      <TableCell className="text-right text-slate-600 dark:text-slate-400">
+                      <TableCell className="text-right text-amber-600 dark:text-amber-400">
+                        {formatCurrency(invoice.credit_note_value || 0)}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-purple-700 dark:text-purple-300">
                         {formatCurrency(invoice.net_invoice_value)}
                       </TableCell>
                       <TableCell>
@@ -728,10 +743,14 @@ export default function InvoicesList() {
                     <span className="text-sm font-medium truncate">{invoice.account_name || invoice.account_id || '-'}</span>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-2 mb-3">
+                  <div className="grid grid-cols-3 gap-2 mb-3">
                     <div className="bg-green-50 dark:bg-green-900/30 rounded-lg p-2">
                       <p className="text-xs text-green-600 dark:text-green-400">Gross</p>
                       <p className="text-sm font-bold text-green-700 dark:text-green-300">{formatCurrency(invoice.gross_invoice_value)}</p>
+                    </div>
+                    <div className="bg-amber-50 dark:bg-amber-900/30 rounded-lg p-2">
+                      <p className="text-xs text-amber-600 dark:text-amber-400">Credit Note</p>
+                      <p className="text-sm font-bold text-amber-700 dark:text-amber-300">{formatCurrency(invoice.credit_note_value || 0)}</p>
                     </div>
                     <div className="bg-purple-50 dark:bg-purple-900/30 rounded-lg p-2">
                       <p className="text-xs text-purple-600 dark:text-purple-400">Net</p>
