@@ -4950,6 +4950,43 @@ async def update_account(account_id: str, update_data: AccountUpdate, current_us
     
     return updated
 
+# Admin endpoint to fix invoices missing tenant_id
+@api_router.post("/admin/fix-invoice-tenant-ids")
+async def fix_invoice_tenant_ids(current_user: dict = Depends(get_current_user)):
+    """
+    Fix invoices that are missing tenant_id field.
+    This is needed for invoices created by MQ subscriber before the tenant fix.
+    Admin only endpoint.
+    """
+    # Check if user has admin privileges
+    user_role = current_user.get('role', '').lower()
+    if user_role not in ['ceo', 'director', 'admin', 'vice president']:
+        raise HTTPException(status_code=403, detail='Admin access required')
+    
+    # Use raw db to find invoices without tenant_id
+    invoices_without_tenant = await db.invoices.count_documents({'tenant_id': {'$exists': False}})
+    
+    if invoices_without_tenant == 0:
+        return {
+            'success': True,
+            'message': 'All invoices already have tenant_id',
+            'updated_count': 0
+        }
+    
+    # Update all invoices without tenant_id
+    result = await db.invoices.update_many(
+        {'tenant_id': {'$exists': False}},
+        {'$set': {'tenant_id': 'nyla-air-water'}}
+    )
+    
+    logger.info(f"[ADMIN] Fixed {result.modified_count} invoices with missing tenant_id")
+    
+    return {
+        'success': True,
+        'message': f'Updated {result.modified_count} invoices with tenant_id',
+        'updated_count': result.modified_count
+    }
+
 @api_router.get("/accounts/{account_id}/invoices")
 async def get_account_invoices(account_id: str, current_user: dict = Depends(get_current_user)):
     """Get invoices for an account"""
