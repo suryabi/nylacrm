@@ -231,6 +231,7 @@ class InvoiceListener(stomp.ConnectionListener):
                 logger.info(f"   Storing as UNMATCHED invoice for later reconciliation...")
                 # Store as unmatched invoice for later reconciliation
                 invoice_data['status'] = 'unmatched'
+                invoice_data['tenant_id'] = 'nyla-air-water'  # Add tenant_id for multi-tenant support
                 result = await self.db.invoices.insert_one(invoice_data)
                 logger.info(f"   Stored unmatched invoice with _id: {result.inserted_id}")
                 connection_stats['messages_processed'] += 1
@@ -240,22 +241,25 @@ class InvoiceListener(stomp.ConnectionListener):
             logger.info(f"   Account ID: {account.get('account_id')}")
             logger.info(f"   Account Name: {account.get('account_name')}")
             logger.info(f"   Account UUID: {account.get('id')}")
+            logger.info(f"   Tenant ID: {account.get('tenant_id')}")
             
-            # Store invoice in invoices collection
+            # Store invoice in invoices collection - inherit tenant_id from account
             invoice_data['account_uuid'] = account['id']
             invoice_data['account_id'] = account.get('account_id')
             invoice_data['assigned_to'] = account.get('assigned_to')
+            invoice_data['tenant_id'] = account.get('tenant_id', 'nyla-air-water')  # Inherit tenant from account
             invoice_data['status'] = 'matched'
             
             logger.info(f"💾 STEP 3: Storing invoice in database...")
             result = await self.db.invoices.insert_one(invoice_data)
             logger.info(f"   Invoice stored with _id: {result.inserted_id}")
             
-            # Calculate totals for the account
+            # Calculate totals for the account - filter by tenant_id too
             logger.info(f"📊 STEP 4: Calculating account invoice totals...")
             all_invoices = await self.db.invoices.find({
                 'account_uuid': account['id'],
-                'status': 'matched'
+                'status': 'matched',
+                'tenant_id': account.get('tenant_id', 'nyla-air-water')
             }).to_list(1000)
             
             total_gross = sum(inv.get('gross_invoice_value', 0) for inv in all_invoices)
