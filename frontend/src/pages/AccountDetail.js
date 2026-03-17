@@ -446,6 +446,7 @@ ${googleMapsLink}`;
       }
       
       // Fetch invoices and contract
+      console.log('[ACCOUNT_DETAIL] Fetching invoices for id:', id);
       fetchInvoices(id);
       fetchContract(data.account_id || id);
     } catch (error) {
@@ -457,11 +458,14 @@ ${googleMapsLink}`;
   };
 
   const fetchInvoices = async (accountId) => {
+    console.log('[INVOICE_FETCH] Starting fetch for account:', accountId);
     setLoadingInvoices(true);
     try {
       const response = await accountsAPI.getInvoices(accountId);
+      console.log('[INVOICE_FETCH] Response:', response.data);
       setInvoiceData(response.data);
     } catch (error) {
+      console.error('[INVOICE_FETCH] Error fetching invoices:', error);
       console.log('No invoice data available');
     } finally {
       setLoadingInvoices(false);
