@@ -166,8 +166,6 @@ export default function InvoicesList() {
     if (territory && territory !== 'all') {
       const stateList = getStateNamesByTerritoryName(territory);
       setFilteredStates(stateList);
-      setState('all');
-      setCity('all');
     } else {
       setFilteredStates(states.map(s => s.name));
     }
@@ -178,11 +176,22 @@ export default function InvoicesList() {
     if (state && state !== 'all') {
       const cityList = getCityNamesByStateName(state);
       setFilteredCities(cityList);
-      setCity('all');
     } else {
       setFilteredCities(cities.map(c => c.name));
     }
   }, [state, getCityNamesByStateName, cities]);
+  
+  // Reset child filters when parent changes
+  const handleTerritoryChange = (val) => {
+    setTerritory(val);
+    setState('all');
+    setCity('all');
+  };
+  
+  const handleStateChange = (val) => {
+    setState(val);
+    setCity('all');
+  };
 
   // Handle select all
   const handleSelectAll = (checked) => {
@@ -382,7 +391,7 @@ export default function InvoicesList() {
           </FilterSearch>
           
           <FilterItem>
-            <Select value={territory} onValueChange={setTerritory}>
+            <Select value={territory} onValueChange={handleTerritoryChange}>
               <SelectTrigger data-testid="territory-filter">
                 <SelectValue placeholder="Territory" />
               </SelectTrigger>
@@ -396,7 +405,7 @@ export default function InvoicesList() {
           </FilterItem>
           
           <FilterItem>
-            <Select value={state} onValueChange={setState} disabled={territory === 'all'}>
+            <Select value={state} onValueChange={handleStateChange} disabled={territory === 'all'}>
               <SelectTrigger data-testid="state-filter">
                 <SelectValue placeholder="State" />
               </SelectTrigger>
