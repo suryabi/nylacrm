@@ -4960,7 +4960,7 @@ async def get_account_invoices(account_id: str, current_user: dict = Depends(get
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
     
-    # Find invoices by account_id (primary), account_uuid, ca_lead_id, or lead_id
+    # Find invoices by account_id (primary), account_uuid, account_id_from_mq, ca_lead_id, or lead_id
     account_uuid = account.get('id')
     acc_id = account.get('account_id')
     lead_id = account.get('lead_id')
@@ -4972,6 +4972,7 @@ async def get_account_invoices(account_id: str, current_user: dict = Depends(get
         query['$or'].append({'account_uuid': account_uuid})  # Legacy match
     if acc_id:
         query['$or'].append({'account_id': acc_id})
+        query['$or'].append({'account_id_from_mq': acc_id})  # MQ invoices use this field
     if lead_id:
         query['$or'].append({'ca_lead_id': lead_id})
         query['$or'].append({'lead_id': lead_id})
