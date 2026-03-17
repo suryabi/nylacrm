@@ -103,7 +103,18 @@ export default function InvoicesList() {
   const [sortOrder, setSortOrder] = useState('desc');
   
   // Master locations for filters
-  const { territories, states, cities, fetchStates, fetchCities } = useMasterLocations();
+  const { 
+    territories, 
+    states, 
+    cities, 
+    getStateNamesByTerritoryName, 
+    getCityNamesByStateName,
+    territoryNames,
+  } = useMasterLocations();
+  
+  // Filtered states and cities based on selection
+  const [filteredStates, setFilteredStates] = useState([]);
+  const [filteredCities, setFilteredCities] = useState([]);
   
   // Check if user can delete invoices
   const canDelete = user && ['ceo', 'system admin', 'admin', 'director'].some(
@@ -150,22 +161,28 @@ export default function InvoicesList() {
     fetchInvoices();
   }, [fetchInvoices]);
 
-  // Load states when territory changes
+  // Update filtered states when territory changes
   useEffect(() => {
     if (territory && territory !== 'all') {
-      fetchStates(territory);
+      const stateList = getStateNamesByTerritoryName(territory);
+      setFilteredStates(stateList);
       setState('all');
       setCity('all');
+    } else {
+      setFilteredStates(states.map(s => s.name));
     }
-  }, [territory, fetchStates]);
+  }, [territory, getStateNamesByTerritoryName, states]);
 
-  // Load cities when state changes
+  // Update filtered cities when state changes
   useEffect(() => {
     if (state && state !== 'all') {
-      fetchCities(state);
+      const cityList = getCityNamesByStateName(state);
+      setFilteredCities(cityList);
       setCity('all');
+    } else {
+      setFilteredCities(cities.map(c => c.name));
     }
-  }, [state, fetchCities]);
+  }, [state, getCityNamesByStateName, cities]);
 
   // Handle select all
   const handleSelectAll = (checked) => {
@@ -372,7 +389,7 @@ export default function InvoicesList() {
               <SelectContent>
                 <SelectItem value="all">All Territories</SelectItem>
                 {territories.map(t => (
-                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                  <SelectItem key={t.id || t.name} value={t.name}>{t.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -385,7 +402,7 @@ export default function InvoicesList() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All States</SelectItem>
-                {states.map(s => (
+                {filteredStates.map(s => (
                   <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
               </SelectContent>
@@ -399,7 +416,7 @@ export default function InvoicesList() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Cities</SelectItem>
-                {cities.map(c => (
+                {filteredCities.map(c => (
                   <SelectItem key={c} value={c}>{c}</SelectItem>
                 ))}
               </SelectContent>
