@@ -27,6 +27,7 @@ from .roles import router as roles_router
 from .designations import router as designations_router
 from .ai_assistant import router as ai_assistant_router
 from .scoring import router as scoring_router
+from .invoices import router as invoices_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -53,5 +54,8 @@ routes_router.include_router(ai_assistant_router, prefix="/ai", tags=["AI Assist
 
 # Lead Scoring Model
 routes_router.include_router(scoring_router, prefix="/scoring", tags=["Lead Scoring"])
+
+# Invoices Management
+routes_router.include_router(invoices_router, prefix="/invoices", tags=["Invoices"])
 
 __all__ = ['routes_router']

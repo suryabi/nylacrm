@@ -86,6 +86,25 @@ export const accountsAPI = {
   createInvoice: (id, data) => axios.post(`${API_URL}/accounts/${id}/invoices`, data, { headers: getAuthHeaders() }),
 };
 
+// Invoices API
+export const invoicesAPI = {
+  getAll: (params = {}) => {
+    const queryParams = new URLSearchParams();
+    Object.keys(params).forEach(key => {
+      if (params[key] && params[key] !== 'all') {
+        queryParams.append(key, params[key]);
+      }
+    });
+    return axios.get(`${API_URL}/invoices?${queryParams.toString()}`, { headers: getAuthHeaders() });
+  },
+  delete: (id) => axios.delete(`${API_URL}/invoices/${id}`, { headers: getAuthHeaders() }),
+  bulkDelete: (ids) => axios.delete(`${API_URL}/invoices`, { 
+    data: ids, 
+    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }
+  }),
+  getSummary: (params = {}) => axios.get(`${API_URL}/invoices/summary`, { headers: getAuthHeaders(), params }),
+};
+
 // Master SKUs API with full CRUD
 export const skusAPI = {
   getMasterList: (includeInactive = false) => 
