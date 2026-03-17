@@ -4953,12 +4953,17 @@ async def update_account(account_id: str, update_data: AccountUpdate, current_us
 @api_router.get("/accounts/{account_id}/invoices")
 async def get_account_invoices(account_id: str, current_user: dict = Depends(get_current_user)):
     """Get invoices for an account"""
+    logger.info(f"[INVOICE_FETCH] Fetching invoices for account_id: {account_id}")
+    
     account = await get_tdb().accounts.find_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
         {'_id': 0, 'id': 1, 'lead_id': 1, 'account_name': 1, 'account_id': 1}
     )
     if not account:
+        logger.warning(f"[INVOICE_FETCH] Account not found: {account_id}")
         raise HTTPException(status_code=404, detail='Account not found')
+    
+    logger.info(f"[INVOICE_FETCH] Account found: uuid={account.get('id')}, account_id={account.get('account_id')}")
     
     # Find invoices by account_id (primary), account_uuid, account_id_from_mq, ca_lead_id, or lead_id
     account_uuid = account.get('id')
@@ -4979,10 +4984,14 @@ async def get_account_invoices(account_id: str, current_user: dict = Depends(get
     if account_name:
         query['$or'].append({'customer_name': {'$regex': account_name, '$options': 'i'}})
     
+    logger.info(f"[INVOICE_FETCH] Query: {query}")
+    
     if not query['$or']:
+        logger.warning(f"[INVOICE_FETCH] Empty query for account: {account_id}")
         return {'invoices': [], 'total_amount': 0, 'paid_amount': 0, 'outstanding': 0}
     
     invoices = await get_tdb().invoices.find(query, {'_id': 0}).sort('invoice_date', -1).to_list(100)
+    logger.info(f"[INVOICE_FETCH] Found {len(invoices)} invoices for account: {account_id}")
     
     # Calculate totals - support both old and new field names
     total_amount = sum(inv.get('grand_total', inv.get('gross_invoice_value', inv.get('total_amount', 0))) or 0 for inv in invoices)
