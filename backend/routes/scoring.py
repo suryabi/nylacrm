@@ -960,6 +960,17 @@ async def get_quadrant_metrics(
     pipeline = [
         match_stage,
         {
+            '$addFields': {
+                # Calculate monthly bottles from either final_monthly or calculated_monthly
+                'monthly_bottles_calc': {
+                    '$ifNull': [
+                        '$opportunity_estimation.final_monthly',
+                        {'$ifNull': ['$opportunity_estimation.calculated_monthly', 0]}
+                    ]
+                }
+            }
+        },
+        {
             '$facet': {
                 # Scored leads grouped by quadrant
                 'scored': [
@@ -967,7 +978,7 @@ async def get_quadrant_metrics(
                     {'$group': {
                         '_id': '$scoring.quadrant',
                         'count': {'$sum': 1},
-                        'total_opportunity_volume': {'$sum': {'$ifNull': ['$opportunity_estimation.monthly_bottles', 0]}},
+                        'total_opportunity_volume': {'$sum': '$monthly_bottles_calc'},
                         'total_estimated_value': {'$sum': {'$ifNull': ['$opportunity_estimation.estimated_monthly_revenue', 0]}}
                     }}
                 ],
@@ -977,7 +988,7 @@ async def get_quadrant_metrics(
                     {'$group': {
                         '_id': None,
                         'count': {'$sum': 1},
-                        'total_opportunity_volume': {'$sum': {'$ifNull': ['$opportunity_estimation.monthly_bottles', 0]}},
+                        'total_opportunity_volume': {'$sum': '$monthly_bottles_calc'},
                         'total_estimated_value': {'$sum': {'$ifNull': ['$opportunity_estimation.estimated_monthly_revenue', 0]}}
                     }}
                 ],

@@ -514,23 +514,32 @@ export default function LeadsList() {
                     {/* Prominent Value and Volume - Hidden on mobile for compact view */}
                     <div className="hidden sm:grid grid-cols-2 gap-3 pt-3 border-t border-current/10">
                       <div>
-                        <p className="text-xs text-muted-foreground mb-1">Volume</p>
+                        <p className="text-xs text-muted-foreground mb-1">Monthly Bottles</p>
                         <p className={`text-lg font-bold ${style.text}`}>
                           {q.total_opportunity_volume > 0 ? formatVolume(q.total_opportunity_volume) : '-'}
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground mb-1">Value</p>
+                        <p className="text-xs text-muted-foreground mb-1">Est. Value</p>
                         <p className={`text-lg font-bold ${style.text}`}>
                           {q.total_estimated_value > 0 ? `₹${formatCurrency(q.total_estimated_value)}` : '-'}
                         </p>
                       </div>
                     </div>
-                    {/* Mobile: Show compact value */}
-                    <div className="sm:hidden pt-1.5 border-t border-current/10">
-                      <p className={`text-xs font-semibold ${style.text}`}>
-                        {q.total_estimated_value > 0 ? `₹${formatCurrency(q.total_estimated_value)}` : '-'}
-                      </p>
+                    {/* Mobile: Show compact volume and value */}
+                    <div className="sm:hidden pt-1.5 border-t border-current/10 grid grid-cols-2 gap-2">
+                      <div>
+                        <p className={`text-[10px] font-semibold ${style.text}`}>
+                          {q.total_opportunity_volume > 0 ? formatVolume(q.total_opportunity_volume) : '-'}
+                        </p>
+                        <p className="text-[8px] text-muted-foreground">bottles</p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-[10px] font-semibold ${style.text}`}>
+                          {q.total_estimated_value > 0 ? `₹${formatCurrency(q.total_estimated_value)}` : '-'}
+                        </p>
+                        <p className="text-[8px] text-muted-foreground">value</p>
+                      </div>
                     </div>
                   </div>
                 );
@@ -556,23 +565,32 @@ export default function LeadsList() {
                   {/* Prominent Value and Volume - Hidden on mobile */}
                   <div className="hidden sm:grid grid-cols-2 gap-3 pt-3 border-t border-gray-200">
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">Volume</p>
+                      <p className="text-xs text-muted-foreground mb-1">Monthly Bottles</p>
                       <p className="text-lg font-bold text-gray-600">
                         {quadrantMetrics.unscored.total_opportunity_volume > 0 ? formatVolume(quadrantMetrics.unscored.total_opportunity_volume) : '-'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">Value</p>
+                      <p className="text-xs text-muted-foreground mb-1">Est. Value</p>
                       <p className="text-lg font-bold text-gray-600">
                         {quadrantMetrics.unscored.total_estimated_value > 0 ? `₹${formatCurrency(quadrantMetrics.unscored.total_estimated_value)}` : '-'}
                       </p>
                     </div>
                   </div>
-                  {/* Mobile: Show compact value */}
-                  <div className="sm:hidden pt-1.5 border-t border-gray-200">
-                    <p className="text-xs font-semibold text-gray-600">
-                      {quadrantMetrics.unscored.total_estimated_value > 0 ? `₹${formatCurrency(quadrantMetrics.unscored.total_estimated_value)}` : '-'}
-                    </p>
+                  {/* Mobile: Show compact volume and value */}
+                  <div className="sm:hidden pt-1.5 border-t border-gray-200 grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-[10px] font-semibold text-gray-600">
+                        {quadrantMetrics.unscored.total_opportunity_volume > 0 ? formatVolume(quadrantMetrics.unscored.total_opportunity_volume) : '-'}
+                      </p>
+                      <p className="text-[8px] text-muted-foreground">bottles</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-semibold text-gray-600">
+                        {quadrantMetrics.unscored.total_estimated_value > 0 ? `₹${formatCurrency(quadrantMetrics.unscored.total_estimated_value)}` : '-'}
+                      </p>
+                      <p className="text-[8px] text-muted-foreground">value</p>
+                    </div>
                   </div>
                 </div>
               )}
