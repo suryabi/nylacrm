@@ -389,50 +389,71 @@ class ActiveMQSubscriber:
     
     def _establish_connection(self):
         """Create and establish STOMP connection"""
-        # Create STOMP connection with SSL and longer heartbeats
-        self.connection = stomp.Connection(
-            [(ACTIVEMQ_HOST, ACTIVEMQ_PORT)],
-            heartbeats=(30000, 30000),  # 30 second heartbeats
-            reconnect_sleep_initial=5,
-            reconnect_sleep_increase=2,
-            reconnect_sleep_max=60,
-            reconnect_attempts_max=-1  # Infinite reconnect attempts
-        )
+        try:
+            # Create STOMP connection with SSL and longer heartbeats
+            self.connection = stomp.Connection(
+                [(ACTIVEMQ_HOST, ACTIVEMQ_PORT)],
+                heartbeats=(30000, 30000),  # 30 second heartbeats
+                reconnect_sleep_initial=5,
+                reconnect_sleep_increase=2,
+                reconnect_sleep_max=60,
+                reconnect_attempts_max=-1,  # Infinite reconnect attempts
+                timeout=15  # 15 second connection timeout
+            )
+            
+            # Configure SSL
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            
+            self.connection.set_ssl(
+                for_hosts=[(ACTIVEMQ_HOST, ACTIVEMQ_PORT)],
+                ssl_version=ssl.PROTOCOL_TLS
+            )
+            
+            # Set listener
+            self.connection.set_listener('invoice_listener', self.listener)
+            
+            # Connect with credentials - use unique client-id for this instance
+            import uuid
+            client_id = f"nyla-crm-{uuid.uuid4().hex[:8]}"
+            logger.info(f"🔌 Connecting to ActiveMQ at {ACTIVEMQ_HOST}:{ACTIVEMQ_PORT}")
+            logger.info(f"   Client ID: {client_id}")
+            logger.info(f"   Timeout: 15 seconds")
+            
+            # Connect with wait=False to not block, then wait manually with timeout
+            self.connection.connect(
+                ACTIVEMQ_USER,
+                ACTIVEMQ_PASSWORD,
+                wait=False,  # Don't block - we'll check connection status
+                headers={'client-id': client_id}
+            )
+            
+            # Wait up to 15 seconds for connection
+            wait_time = 0
+            while not self.connection.is_connected() and wait_time < 15:
+                time.sleep(1)
+                wait_time += 1
+                logger.info(f"   Waiting for connection... {wait_time}s")
+            
+            if not self.connection.is_connected():
+                raise Exception("Connection timeout after 15 seconds")
+            
+            # Subscribe to queue
+            self.connection.subscribe(
+                destination=ACTIVEMQ_QUEUE,
+                id='invoice-sub-1',
+                ack='auto'
+            )
         
-        # Configure SSL
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-        
-        self.connection.set_ssl(
-            for_hosts=[(ACTIVEMQ_HOST, ACTIVEMQ_PORT)],
-            ssl_version=ssl.PROTOCOL_TLS
-        )
-        
-        # Set listener
-        self.connection.set_listener('invoice_listener', self.listener)
-        
-        # Connect with credentials - use unique client-id for this instance
-        import uuid
-        client_id = f"nyla-crm-preview-{uuid.uuid4().hex[:8]}"
-        logger.info(f"Connecting to ActiveMQ at {ACTIVEMQ_HOST}:{ACTIVEMQ_PORT}")
-        self.connection.connect(
-            ACTIVEMQ_USER,
-            ACTIVEMQ_PASSWORD,
-            wait=True,
-            headers={'client-id': client_id}
-        )
-        
-        # Subscribe to queue
-        self.connection.subscribe(
-            destination=ACTIVEMQ_QUEUE,
-            id='invoice-sub-1',
-            ack='auto'
-        )
-        
-        self.running = True
-        self.reconnect_attempts = 0
-        logger.info(f"Subscribed to queue: {ACTIVEMQ_QUEUE}")
+            self.running = True
+            self.reconnect_attempts = 0
+            logger.info(f"✅ Subscribed to queue: {ACTIVEMQ_QUEUE}")
+        except Exception as e:
+            logger.error(f"❌ Failed to establish connection: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            raise
     
     def reconnect(self):
         """Attempt to reconnect to ActiveMQ"""
@@ -480,24 +501,35 @@ mq_subscriber = ActiveMQSubscriber()
 
 
 def start_mq_subscriber():
-    """Start the ActiveMQ subscriber in a background thread"""
+    """Start the ActiveMQ subscriber in a background thread - NON-BLOCKING"""
     if not ACTIVEMQ_ENABLED:
-        logger.info("ActiveMQ subscriber is disabled (ACTIVEMQ_ENABLED=false or missing credentials)")
+        logger.info("ℹ️ ActiveMQ subscriber is disabled (ACTIVEMQ_ENABLED=false or missing credentials)")
         return None
     
     if not ACTIVEMQ_HOST or not ACTIVEMQ_USER or not ACTIVEMQ_PASSWORD:
-        logger.info("ActiveMQ subscriber skipped - missing required configuration (ACTIVEMQ_HOST, ACTIVEMQ_USER, ACTIVEMQ_PASSWORD)")
+        logger.info("ℹ️ ActiveMQ subscriber skipped - missing required configuration")
         return None
+    
+    logger.info("="*60)
+    logger.info("🚀 STARTING ACTIVEMQ SUBSCRIBER (background thread)")
+    logger.info(f"   Host: {ACTIVEMQ_HOST}:{ACTIVEMQ_PORT}")
+    logger.info(f"   Queue: {ACTIVEMQ_QUEUE}")
+    logger.info("="*60)
         
     def run():
         try:
             mq_subscriber.connect()
-            logger.info("ActiveMQ subscriber started successfully")
+            logger.info("✅ ActiveMQ subscriber started successfully")
         except Exception as e:
-            logger.error(f"Failed to start ActiveMQ subscriber: {e}")
+            logger.error(f"❌ Failed to start ActiveMQ subscriber: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
     
-    thread = threading.Thread(target=run, daemon=True)
+    thread = threading.Thread(target=run, daemon=True, name="activemq-subscriber")
     thread.start()
+    
+    # Don't wait for the thread - return immediately so server can start
+    logger.info("🔄 ActiveMQ connection running in background - server startup continues...")
     return thread
 
 
