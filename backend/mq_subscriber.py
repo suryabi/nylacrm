@@ -34,7 +34,9 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # ActiveMQ Configuration
-ACTIVEMQ_HOST = os.environ.get('ACTIVEMQ_HOST', '')
+_activemq_host_raw = os.environ.get('ACTIVEMQ_HOST', '')
+# Strip protocol prefix if present (stomp://, stomp+ssl://, ssl://)
+ACTIVEMQ_HOST = _activemq_host_raw.replace('stomp+ssl://', '').replace('stomp://', '').replace('ssl://', '').split(':')[0] if _activemq_host_raw else ''
 ACTIVEMQ_PORT = int(os.environ.get('ACTIVEMQ_PORT', '61614') or '61614')
 ACTIVEMQ_USER = os.environ.get('ACTIVEMQ_USER', '')
 ACTIVEMQ_PASSWORD = os.environ.get('ACTIVEMQ_PASSWORD', '')
@@ -46,6 +48,10 @@ ACTIVEMQ_ENABLED = bool(
     ACTIVEMQ_USER and 
     ACTIVEMQ_PASSWORD
 )
+
+# Log the sanitized host for debugging
+if ACTIVEMQ_HOST:
+    logger.info(f"ActiveMQ configured - Host: {ACTIVEMQ_HOST}:{ACTIVEMQ_PORT}")
 
 # MongoDB connection
 mongo_url = os.environ.get('MONGO_URL')
