@@ -4589,6 +4589,27 @@ async def process_invoice_webhook(payload: InvoiceWebhookPayload):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.get("/activemq/status")
+async def get_activemq_status_endpoint():
+    """
+    Get ActiveMQ connection status and statistics.
+    Useful for monitoring in production. No auth required for health checks.
+    """
+    try:
+        from mq_subscriber import get_activemq_status
+        status = get_activemq_status()
+        return status
+    except ImportError:
+        return {
+            'enabled': False,
+            'error': 'ActiveMQ module not available'
+        }
+    except Exception as e:
+        return {
+            'enabled': False,
+            'error': str(e)
+        }
+
 # ============= ACCOUNTS ROUTES =============
 
 async def generate_account_id(account_name: str, city: str) -> str:

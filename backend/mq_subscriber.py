@@ -1,6 +1,12 @@
 """
 ActiveMQ Subscriber for Invoice Messages
-Subscribes to Amazon MQ and updates leads with invoice data
+Subscribes to Amazon MQ and updates accounts with invoice data
+
+LOGGING LEVELS:
+- INFO: Connection status, message received, processing steps
+- DEBUG: Detailed message content, query results
+- WARNING: Unmatched invoices, connection issues
+- ERROR: Failures and exceptions
 """
 import stomp
 import ssl
@@ -15,9 +21,13 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Setup detailed logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger('activemq_subscriber')
+logger.setLevel(logging.INFO)
 
 # Load environment variables
 ROOT_DIR = Path(__file__).parent
@@ -30,7 +40,7 @@ ACTIVEMQ_USER = os.environ.get('ACTIVEMQ_USER', '')
 ACTIVEMQ_PASSWORD = os.environ.get('ACTIVEMQ_PASSWORD', '')
 ACTIVEMQ_QUEUE = os.environ.get('ACTIVEMQ_QUEUE', '/queue/order-invoice')
 # Only enable if explicitly set to 'true' AND credentials are configured
-ACTIVEMQ_ENABLED = (
+ACTIVEMQ_ENABLED = bool(
     os.environ.get('ACTIVEMQ_ENABLED', 'false').lower() == 'true' and
     ACTIVEMQ_HOST and 
     ACTIVEMQ_USER and 
@@ -40,6 +50,35 @@ ACTIVEMQ_ENABLED = (
 # MongoDB connection
 mongo_url = os.environ.get('MONGO_URL')
 db_name = os.environ.get('DB_NAME')
+
+# Connection status tracking
+connection_stats = {
+    'connected': False,
+    'last_connected_at': None,
+    'last_disconnected_at': None,
+    'messages_received': 0,
+    'messages_processed': 0,
+    'messages_failed': 0,
+    'last_message_at': None,
+    'reconnect_count': 0
+}
+
+def get_activemq_status():
+    """Get current ActiveMQ connection status - can be called from API"""
+    return {
+        'enabled': ACTIVEMQ_ENABLED,
+        'host': ACTIVEMQ_HOST,
+        'port': ACTIVEMQ_PORT,
+        'queue': ACTIVEMQ_QUEUE,
+        'connected': connection_stats['connected'],
+        'last_connected_at': connection_stats['last_connected_at'],
+        'last_disconnected_at': connection_stats['last_disconnected_at'],
+        'messages_received': connection_stats['messages_received'],
+        'messages_processed': connection_stats['messages_processed'],
+        'messages_failed': connection_stats['messages_failed'],
+        'last_message_at': connection_stats['last_message_at'],
+        'reconnect_count': connection_stats['reconnect_count']
+    }
 
 
 class InvoiceListener(stomp.ConnectionListener):
@@ -55,86 +94,141 @@ class InvoiceListener(stomp.ConnectionListener):
         self.subscriber = subscriber
         
     def on_connected(self, frame):
-        logger.info("Connected to ActiveMQ broker")
+        connection_stats['connected'] = True
+        connection_stats['last_connected_at'] = datetime.now(timezone.utc).isoformat()
+        logger.info("="*60)
+        logger.info("✅ ACTIVEMQ CONNECTED")
+        logger.info(f"   Host: {ACTIVEMQ_HOST}:{ACTIVEMQ_PORT}")
+        logger.info(f"   Queue: {ACTIVEMQ_QUEUE}")
+        logger.info(f"   Time: {connection_stats['last_connected_at']}")
+        logger.info("="*60)
     
     def on_heartbeat_timeout(self):
-        logger.warning("Heartbeat timeout detected")
+        logger.warning("⚠️ ACTIVEMQ HEARTBEAT TIMEOUT - Connection may be lost")
         
     def on_disconnected(self):
-        logger.warning("Disconnected from ActiveMQ broker")
+        connection_stats['connected'] = False
+        connection_stats['last_disconnected_at'] = datetime.now(timezone.utc).isoformat()
+        connection_stats['reconnect_count'] += 1
+        logger.warning("="*60)
+        logger.warning("❌ ACTIVEMQ DISCONNECTED")
+        logger.warning(f"   Time: {connection_stats['last_disconnected_at']}")
+        logger.warning(f"   Reconnect attempts: {connection_stats['reconnect_count']}")
+        logger.warning("="*60)
         # Trigger reconnect
         if self.subscriber and self.subscriber.running:
-            logger.info("Scheduling reconnect...")
+            logger.info("🔄 Scheduling reconnect...")
             threading.Thread(target=self.subscriber.reconnect, daemon=True).start()
         
     def on_error(self, frame):
-        logger.error(f"ActiveMQ Error: {frame.body}")
+        logger.error(f"❌ ACTIVEMQ ERROR: {frame.body}")
         
     def on_message(self, frame):
         """Process incoming invoice message"""
+        connection_stats['messages_received'] += 1
+        connection_stats['last_message_at'] = datetime.now(timezone.utc).isoformat()
+        
+        logger.info("="*60)
+        logger.info("📨 MESSAGE RECEIVED")
+        logger.info(f"   Message #{connection_stats['messages_received']}")
+        logger.info(f"   Time: {connection_stats['last_message_at']}")
+        logger.info("-"*60)
+        
         try:
-            logger.info(f"Received message: {frame.body}")
+            # Log raw message
+            raw_body = frame.body.decode('utf-8') if isinstance(frame.body, bytes) else frame.body
+            logger.info(f"📄 RAW MESSAGE CONTENT:")
+            logger.info(f"{raw_body}")
+            logger.info("-"*60)
             
             # Parse JSON message
-            if isinstance(frame.body, bytes):
-                message_data = json.loads(frame.body.decode('utf-8'))
-            else:
-                message_data = json.loads(frame.body)
+            message_data = json.loads(raw_body)
             
             # Extract invoice data - handle both field naming conventions
             invoice_data = {
                 'invoice_no': message_data.get('invoiceNo'),
-                'invoice_date': message_data.get('invoiceDate') or message_data.get('invoiceData'),  # Support both field names
+                'invoice_date': message_data.get('invoiceDate') or message_data.get('invoiceData'),
                 'gross_invoice_value': float(message_data.get('grossInvoiceValue', 0) or 0),
                 'net_invoice_value': float(message_data.get('netInvoiceValue', 0) or 0),
                 'credit_note_value': float(message_data.get('creditNoteValue', 0) or 0),
                 'outstanding': float(message_data.get('outstanding', 0) or 0),
                 'c_lead_id': message_data.get('C_LEAD_ID'),
-                'ca_lead_id': message_data.get('CA_LEAD_ID'),  # This is our lead_id to match
+                'ca_lead_id': message_data.get('CA_LEAD_ID'),
                 'items': message_data.get('items', []),
                 'received_at': datetime.now(timezone.utc).isoformat()
             }
             
-            logger.info(f"Parsed invoice data: invoice_no={invoice_data['invoice_no']}, ca_lead_id={invoice_data['ca_lead_id']}")
+            logger.info("📋 PARSED INVOICE DATA:")
+            logger.info(f"   Invoice No: {invoice_data['invoice_no']}")
+            logger.info(f"   Invoice Date: {invoice_data['invoice_date']}")
+            logger.info(f"   CA_LEAD_ID: {invoice_data['ca_lead_id']}")
+            logger.info(f"   C_LEAD_ID: {invoice_data['c_lead_id']}")
+            logger.info(f"   Gross Value: ₹{invoice_data['gross_invoice_value']:,.2f}")
+            logger.info(f"   Net Value: ₹{invoice_data['net_invoice_value']:,.2f}")
+            logger.info(f"   Credit Note: ₹{invoice_data['credit_note_value']:,.2f}")
+            logger.info(f"   Outstanding: ₹{invoice_data['outstanding']:,.2f}")
+            logger.info(f"   Items Count: {len(invoice_data['items'])}")
+            logger.info("-"*60)
             
             # Process in async context
+            logger.info("🔄 PROCESSING: Sending to async handler...")
             asyncio.run_coroutine_threadsafe(
                 self._process_invoice(invoice_data),
                 self.loop
             )
             
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse message JSON: {e}")
+            connection_stats['messages_failed'] += 1
+            logger.error(f"❌ FAILED TO PARSE JSON: {e}")
+            logger.error(f"   Raw content: {frame.body}")
         except Exception as e:
-            logger.error(f"Error processing message: {e}")
+            connection_stats['messages_failed'] += 1
+            logger.error(f"❌ ERROR PROCESSING MESSAGE: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
     
     async def _process_invoice(self, invoice_data):
         """Update account with invoice data"""
         try:
             lead_id = invoice_data.get('ca_lead_id')
             
+            logger.info(f"🔍 STEP 1: Looking up account with lead_id: {lead_id}")
+            
             if not lead_id:
-                logger.warning("No CA_LEAD_ID in invoice message")
+                logger.warning("⚠️ NO CA_LEAD_ID in invoice message - cannot match to account")
+                connection_stats['messages_failed'] += 1
                 return
             
             # Find account by lead_id (accounts store the original lead_id)
             account = await self.db.accounts.find_one({'lead_id': lead_id})
             
             if not account:
-                logger.warning(f"Account not found for lead_id: {lead_id}")
+                logger.warning(f"⚠️ STEP 2: Account NOT FOUND for lead_id: {lead_id}")
+                logger.info(f"   Storing as UNMATCHED invoice for later reconciliation...")
                 # Store as unmatched invoice for later reconciliation
                 invoice_data['status'] = 'unmatched'
-                await self.db.invoices.insert_one(invoice_data)
+                result = await self.db.invoices.insert_one(invoice_data)
+                logger.info(f"   Stored unmatched invoice with _id: {result.inserted_id}")
+                connection_stats['messages_processed'] += 1
                 return
+            
+            logger.info(f"✅ STEP 2: Account FOUND")
+            logger.info(f"   Account ID: {account.get('account_id')}")
+            logger.info(f"   Account Name: {account.get('account_name')}")
+            logger.info(f"   Account UUID: {account.get('id')}")
             
             # Store invoice in invoices collection
             invoice_data['account_uuid'] = account['id']
             invoice_data['account_id'] = account.get('account_id')
             invoice_data['assigned_to'] = account.get('assigned_to')
             invoice_data['status'] = 'matched'
-            await self.db.invoices.insert_one(invoice_data)
+            
+            logger.info(f"💾 STEP 3: Storing invoice in database...")
+            result = await self.db.invoices.insert_one(invoice_data)
+            logger.info(f"   Invoice stored with _id: {result.inserted_id}")
             
             # Calculate totals for the account
+            logger.info(f"📊 STEP 4: Calculating account invoice totals...")
             all_invoices = await self.db.invoices.find({
                 'account_uuid': account['id'],
                 'status': 'matched'
@@ -146,7 +240,14 @@ class InvoiceListener(stomp.ConnectionListener):
             total_outstanding = sum(inv.get('outstanding', 0) for inv in all_invoices)
             invoice_count = len(all_invoices)
             
+            logger.info(f"   Total Invoices: {invoice_count}")
+            logger.info(f"   Total Gross: ₹{total_gross:,.2f}")
+            logger.info(f"   Total Net: ₹{total_net:,.2f}")
+            logger.info(f"   Total Credit Notes: ₹{total_credit:,.2f}")
+            logger.info(f"   Total Outstanding: ₹{total_outstanding:,.2f}")
+            
             # Update account with invoice summary
+            logger.info(f"📝 STEP 5: Updating account with invoice summary...")
             await self.db.accounts.update_one(
                 {'id': account['id']},
                 {
@@ -163,15 +264,29 @@ class InvoiceListener(stomp.ConnectionListener):
                 }
             )
             
-            logger.info(f"Updated account {account.get('account_id')} with invoice {invoice_data.get('invoice_no')}")
+            logger.info(f"✅ STEP 6: Account updated successfully!")
+            logger.info(f"   Account: {account.get('account_id')} - {account.get('account_name')}")
+            logger.info(f"   Invoice: {invoice_data.get('invoice_no')}")
             
             # Update resource (assigned_to) invoice totals for reporting
             assigned_to = account.get('assigned_to')
             if assigned_to:
+                logger.info(f"📊 STEP 7: Updating resource invoice totals for: {assigned_to}")
                 await self._update_resource_invoice_totals(assigned_to, invoice_data.get('gross_invoice_value', 0))
             
+            connection_stats['messages_processed'] += 1
+            logger.info("="*60)
+            logger.info(f"✅ MESSAGE PROCESSING COMPLETE")
+            logger.info(f"   Total Received: {connection_stats['messages_received']}")
+            logger.info(f"   Total Processed: {connection_stats['messages_processed']}")
+            logger.info(f"   Total Failed: {connection_stats['messages_failed']}")
+            logger.info("="*60)
+            
         except Exception as e:
-            logger.error(f"Error updating account with invoice: {e}")
+            connection_stats['messages_failed'] += 1
+            logger.error(f"❌ ERROR UPDATING ACCOUNT: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
     
     async def _update_resource_invoice_totals(self, resource_id: str, gross_value: float):
         """Update resource invoice totals for allocation reporting"""
@@ -209,7 +324,7 @@ class InvoiceListener(stomp.ConnectionListener):
 
 
 class ActiveMQSubscriber:
-    """ActiveMQ Subscriber service with auto-reconnect"""
+    """ActiveMQ Subscriber service with auto-reconnect and status logging"""
     
     def __init__(self):
         self.connection = None
@@ -219,6 +334,7 @@ class ActiveMQSubscriber:
         self.reconnect_attempts = 0
         self.max_reconnect_attempts = 10
         self.reconnect_delay = 5  # seconds
+        self.status_thread = None
         
     def connect(self):
         """Establish connection to ActiveMQ"""
@@ -236,9 +352,40 @@ class ActiveMQSubscriber:
             
             self._establish_connection()
             
+            # Start status logging thread (every 30 seconds)
+            self.status_thread = threading.Thread(target=self._log_status_periodically, daemon=True)
+            self.status_thread.start()
+            
         except Exception as e:
-            logger.error(f"Failed to connect to ActiveMQ: {e}")
+            logger.error(f"❌ Failed to connect to ActiveMQ: {e}")
             raise
+    
+    def _log_status_periodically(self):
+        """Log connection status every 30 seconds"""
+        while self.running:
+            try:
+                is_connected = self.connection and self.connection.is_connected() if self.connection else False
+                connection_stats['connected'] = is_connected
+                
+                logger.info("-"*60)
+                logger.info("📊 ACTIVEMQ STATUS CHECK (every 30 seconds)")
+                logger.info(f"   Connected: {'✅ YES' if is_connected else '❌ NO'}")
+                logger.info(f"   Host: {ACTIVEMQ_HOST}:{ACTIVEMQ_PORT}")
+                logger.info(f"   Queue: {ACTIVEMQ_QUEUE}")
+                logger.info(f"   Last Connected: {connection_stats['last_connected_at'] or 'Never'}")
+                logger.info(f"   Last Disconnected: {connection_stats['last_disconnected_at'] or 'Never'}")
+                logger.info(f"   Messages Received: {connection_stats['messages_received']}")
+                logger.info(f"   Messages Processed: {connection_stats['messages_processed']}")
+                logger.info(f"   Messages Failed: {connection_stats['messages_failed']}")
+                logger.info(f"   Last Message At: {connection_stats['last_message_at'] or 'Never'}")
+                logger.info(f"   Reconnect Count: {connection_stats['reconnect_count']}")
+                logger.info("-"*60)
+                
+            except Exception as e:
+                logger.error(f"Error in status logging: {e}")
+            
+            # Sleep for 30 seconds
+            time.sleep(30)
     
     def _establish_connection(self):
         """Create and establish STOMP connection"""
