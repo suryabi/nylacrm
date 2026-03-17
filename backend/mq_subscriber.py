@@ -211,20 +211,20 @@ class InvoiceListener(stomp.ConnectionListener):
     async def _process_invoice(self, invoice_data):
         """Update account with invoice data"""
         try:
-            lead_id = invoice_data.get('ca_lead_id')
+            account_id = invoice_data.get('ca_lead_id')  # CA_LEAD_ID contains the account_id
             
-            logger.info(f"🔍 STEP 1: Looking up account with lead_id: {lead_id}")
+            logger.info(f"🔍 STEP 1: Looking up account with account_id: {account_id}")
             
-            if not lead_id:
+            if not account_id:
                 logger.warning("⚠️ NO CA_LEAD_ID in invoice message - cannot match to account")
                 connection_stats['messages_failed'] += 1
                 return
             
-            # Find account by lead_id (accounts store the original lead_id)
-            account = await self.db.accounts.find_one({'lead_id': lead_id})
+            # Find account by account_id (CA_LEAD_ID in MQ message = account_id in DB)
+            account = await self.db.accounts.find_one({'account_id': account_id})
             
             if not account:
-                logger.warning(f"⚠️ STEP 2: Account NOT FOUND for lead_id: {lead_id}")
+                logger.warning(f"⚠️ STEP 2: Account NOT FOUND for account_id: {account_id}")
                 logger.info(f"   Storing as UNMATCHED invoice for later reconciliation...")
                 # Store as unmatched invoice for later reconciliation
                 invoice_data['status'] = 'unmatched'
@@ -594,13 +594,13 @@ async def process_invoice_manually(invoice_data: dict, db) -> dict:
             'received_at': datetime.now(timezone.utc).isoformat()
         }
         
-        lead_id = processed.get('ca_lead_id')
+        account_id = processed.get('ca_lead_id')  # CA_LEAD_ID contains the account_id
         
-        if not lead_id:
+        if not account_id:
             return {'success': False, 'error': 'No CA_LEAD_ID in invoice message'}
         
-        # Find account by lead_id (accounts store the original lead_id)
-        account = await db.accounts.find_one({'lead_id': lead_id})
+        # Find account by account_id (CA_LEAD_ID in MQ message = account_id in DB)
+        account = await db.accounts.find_one({'account_id': account_id})
         
         if not account:
             # Store as unmatched invoice
@@ -608,7 +608,7 @@ async def process_invoice_manually(invoice_data: dict, db) -> dict:
             await db.invoices.insert_one(processed)
             return {
                 'success': False, 
-                'error': f'Account not found for lead_id: {lead_id}',
+                'error': f'Account not found for account_id: {account_id}',
                 'invoice_stored': True,
                 'status': 'unmatched'
             }
@@ -680,7 +680,6 @@ async def process_invoice_manually(invoice_data: dict, db) -> dict:
         
         return {
             'success': True,
-            'lead_id': lead_id,
             'account_id': account.get('account_id'),
             'account_name': account.get('account_name'),
             'assigned_to': assigned_to,
