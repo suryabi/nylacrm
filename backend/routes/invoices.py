@@ -182,14 +182,27 @@ async def list_invoices(
                     inv['account_state'] = acc.get('state')
                     inv['account_territory'] = acc.get('territory')
         
-        # Calculate summary
-        all_invoices_cursor = tdb.invoices.find(query, {'_id': 0, 'gross_invoice_value': 1, 'net_invoice_value': 1, 'outstanding': 1})
+        # Normalize invoice fields (handle both old and new formats)
+        for inv in invoices:
+            # Normalize invoice number field
+            if not inv.get('invoice_no') and inv.get('invoice_number'):
+                inv['invoice_no'] = inv.get('invoice_number')
+            # Normalize gross/net values (old format uses grand_total, new uses gross_invoice_value)
+            if not inv.get('gross_invoice_value') and inv.get('grand_total'):
+                inv['gross_invoice_value'] = inv.get('grand_total')
+            if not inv.get('net_invoice_value'):
+                # Calculate net as gross minus credit note
+                gross = inv.get('gross_invoice_value') or inv.get('grand_total') or 0
+                credit = inv.get('credit_note_value') or 0
+                inv['net_invoice_value'] = gross - credit
+        
+        # Calculate summary - handle both old and new field names
+        all_invoices_cursor = tdb.invoices.find(query, {'_id': 0, 'gross_invoice_value': 1, 'grand_total': 1, 'net_invoice_value': 1, 'credit_note_value': 1, 'outstanding': 1})
         all_invoices_for_summary = await all_invoices_cursor.to_list(10000)
         
         summary = {
-            'total_gross': sum(inv.get('gross_invoice_value', 0) or 0 for inv in all_invoices_for_summary),
-            'total_net': sum(inv.get('net_invoice_value', 0) or 0 for inv in all_invoices_for_summary),
-            'total_outstanding': sum(inv.get('outstanding', 0) or 0 for inv in all_invoices_for_summary),
+            'total_gross': sum((inv.get('gross_invoice_value') or inv.get('grand_total') or 0) for inv in all_invoices_for_summary),
+            'total_net': sum((inv.get('net_invoice_value') or (inv.get('gross_invoice_value') or inv.get('grand_total') or 0) - (inv.get('credit_note_value') or 0)) for inv in all_invoices_for_summary),
             'total_credit': sum(inv.get('credit_note_value', 0) or 0 for inv in all_invoices_for_summary),
         }
         

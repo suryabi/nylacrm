@@ -625,7 +625,7 @@ export default function InvoicesList() {
                         </TableCell>
                       )}
                       <TableCell className="font-medium text-green-600 dark:text-green-400">
-                        {invoice.invoice_no}
+                        {invoice.invoice_no || invoice.invoice_number || '-'}
                       </TableCell>
                       <TableCell className="text-slate-600 dark:text-slate-400">
                         {invoice.invoice_date ? format(new Date(invoice.invoice_date), 'dd MMM yyyy') : '-'}
@@ -724,15 +724,15 @@ export default function InvoicesList() {
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <p className="font-bold text-green-600 dark:text-green-400">{invoice.invoice_no}</p>
+                      <p className="font-bold text-green-600 dark:text-green-400">{invoice.invoice_no || invoice.invoice_number || '-'}</p>
                       <p className="text-sm text-slate-500">
                         {invoice.invoice_date ? format(new Date(invoice.invoice_date), 'dd MMM yyyy') : '-'}
                       </p>
                     </div>
                     {canDelete && (
                       <Checkbox
-                        checked={selectedInvoices.includes(invoice.id || invoice.invoice_no)}
-                        onCheckedChange={(checked) => handleSelectInvoice(invoice.id || invoice.invoice_no, checked)}
+                        checked={selectedInvoices.includes(invoice.id || invoice.invoice_no || invoice.invoice_number)}
+                        onCheckedChange={(checked) => handleSelectInvoice(invoice.id || invoice.invoice_no || invoice.invoice_number, checked)}
                         onClick={(e) => e.stopPropagation()}
                       />
                     )}
