@@ -173,8 +173,9 @@ class InvoiceListener(stomp.ConnectionListener):
                 'net_invoice_value': float(message_data.get('netInvoiceValue', 0) or 0),
                 'credit_note_value': float(message_data.get('creditNoteValue', 0) or 0),
                 'outstanding': float(message_data.get('outstanding', 0) or 0),
-                'c_lead_id': message_data.get('C_LEAD_ID'),
-                'ca_lead_id': message_data.get('CA_LEAD_ID'),
+                'account_id_from_mq': message_data.get('ACCOUNT_ID'),  # New field
+                'c_lead_id': message_data.get('C_LEAD_ID'),  # Legacy field
+                'ca_lead_id': message_data.get('CA_LEAD_ID'),  # Legacy field
                 'items': message_data.get('items', []),
                 'received_at': datetime.now(timezone.utc).isoformat()
             }
@@ -182,7 +183,8 @@ class InvoiceListener(stomp.ConnectionListener):
             logger.info("📋 PARSED INVOICE DATA:")
             logger.info(f"   Invoice No: {invoice_data['invoice_no']}")
             logger.info(f"   Invoice Date: {invoice_data['invoice_date']}")
-            logger.info(f"   CA_LEAD_ID: {invoice_data['ca_lead_id']}")
+            logger.info(f"   ACCOUNT_ID: {invoice_data['account_id_from_mq']}")
+            logger.info(f"   CA_LEAD_ID (legacy): {invoice_data['ca_lead_id']}")
             logger.info(f"   C_LEAD_ID: {invoice_data['c_lead_id']}")
             logger.info(f"   Gross Value: ₹{invoice_data['gross_invoice_value']:,.2f}")
             logger.info(f"   Net Value: ₹{invoice_data['net_invoice_value']:,.2f}")
@@ -211,16 +213,17 @@ class InvoiceListener(stomp.ConnectionListener):
     async def _process_invoice(self, invoice_data):
         """Update account with invoice data"""
         try:
-            account_id = invoice_data.get('ca_lead_id')  # CA_LEAD_ID contains the account_id
+            # Use ACCOUNT_ID as primary, fallback to CA_LEAD_ID for legacy messages
+            account_id = invoice_data.get('account_id_from_mq') or invoice_data.get('ca_lead_id')
             
             logger.info(f"🔍 STEP 1: Looking up account with account_id: {account_id}")
             
             if not account_id:
-                logger.warning("⚠️ NO CA_LEAD_ID in invoice message - cannot match to account")
+                logger.warning("⚠️ NO ACCOUNT_ID or CA_LEAD_ID in invoice message - cannot match to account")
                 connection_stats['messages_failed'] += 1
                 return
             
-            # Find account by account_id (CA_LEAD_ID in MQ message = account_id in DB)
+            # Find account by account_id
             account = await self.db.accounts.find_one({'account_id': account_id})
             
             if not account:
@@ -588,18 +591,20 @@ async def process_invoice_manually(invoice_data: dict, db) -> dict:
             'net_invoice_value': float(invoice_data.get('netInvoiceValue', 0) or 0),
             'credit_note_value': float(invoice_data.get('creditNoteValue', 0) or 0),
             'outstanding': float(invoice_data.get('outstanding', 0) or 0),
-            'c_lead_id': invoice_data.get('C_LEAD_ID'),
-            'ca_lead_id': invoice_data.get('CA_LEAD_ID'),
+            'account_id_from_mq': invoice_data.get('ACCOUNT_ID'),  # New field
+            'c_lead_id': invoice_data.get('C_LEAD_ID'),  # Legacy field
+            'ca_lead_id': invoice_data.get('CA_LEAD_ID'),  # Legacy field
             'items': invoice_data.get('items', []),
             'received_at': datetime.now(timezone.utc).isoformat()
         }
         
-        account_id = processed.get('ca_lead_id')  # CA_LEAD_ID contains the account_id
+        # Use ACCOUNT_ID as primary, fallback to CA_LEAD_ID for legacy messages
+        account_id = processed.get('account_id_from_mq') or processed.get('ca_lead_id')
         
         if not account_id:
-            return {'success': False, 'error': 'No CA_LEAD_ID in invoice message'}
+            return {'success': False, 'error': 'No ACCOUNT_ID or CA_LEAD_ID in invoice message'}
         
-        # Find account by account_id (CA_LEAD_ID in MQ message = account_id in DB)
+        # Find account by account_id
         account = await db.accounts.find_one({'account_id': account_id})
         
         if not account:
