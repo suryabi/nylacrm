@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, File, UploadFile, Request, Response, Form
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, File, UploadFile, Request, Response, Form, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
@@ -4988,9 +4988,15 @@ async def fix_invoice_tenant_ids(current_user: dict = Depends(get_current_user))
     }
 
 @api_router.get("/accounts/{account_id}/invoices")
-async def get_account_invoices(account_id: str, current_user: dict = Depends(get_current_user)):
-    """Get invoices for an account"""
-    logger.info(f"[INVOICE_FETCH] Fetching invoices for account_id: {account_id}")
+async def get_account_invoices(
+    account_id: str, 
+    current_user: dict = Depends(get_current_user),
+    page: int = Query(1, ge=1),
+    limit: int = Query(5, ge=1, le=100),
+    time_filter: str = Query("this_month", description="Time filter: this_week, last_week, this_month, last_month, last_3_months, last_6_months, this_quarter, lifetime")
+):
+    """Get invoices for an account with pagination and time filter"""
+    logger.info(f"[INVOICE_FETCH] Fetching invoices for account_id: {account_id}, page={page}, limit={limit}, time_filter={time_filter}")
     
     account = await get_tdb().accounts.find_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
@@ -5021,20 +5027,52 @@ async def get_account_invoices(account_id: str, current_user: dict = Depends(get
     if account_name:
         query['$or'].append({'customer_name': {'$regex': account_name, '$options': 'i'}})
     
+    # Apply time filter
+    if time_filter and time_filter != 'lifetime':
+        from datetime import timedelta
+        now = datetime.now(timezone.utc)
+        
+        date_ranges = {
+            'this_week': (now - timedelta(days=now.weekday()), now),
+            'last_week': (now - timedelta(days=now.weekday() + 7), now - timedelta(days=now.weekday())),
+            'this_month': (now.replace(day=1), now),
+            'last_month': ((now.replace(day=1) - timedelta(days=1)).replace(day=1), now.replace(day=1) - timedelta(days=1)),
+            'last_3_months': (now - timedelta(days=90), now),
+            'last_6_months': (now - timedelta(days=180), now),
+            'this_quarter': (now.replace(month=((now.month - 1) // 3) * 3 + 1, day=1), now),
+        }
+        
+        if time_filter in date_ranges:
+            start, end = date_ranges[time_filter]
+            if start and end:
+                query['invoice_date'] = {
+                    '$gte': start.strftime('%Y-%m-%d'),
+                    '$lte': end.strftime('%Y-%m-%d')
+                }
+    
     logger.info(f"[INVOICE_FETCH] Query: {query}")
     
     if not query['$or']:
         logger.warning(f"[INVOICE_FETCH] Empty query for account: {account_id}")
-        return {'invoices': [], 'total_amount': 0, 'paid_amount': 0, 'outstanding': 0}
+        return {'invoices': [], 'total_amount': 0, 'paid_amount': 0, 'outstanding': 0, 'total': 0, 'page': page, 'limit': limit, 'pages': 0}
     
-    invoices = await get_tdb().invoices.find(query, {'_id': 0}).sort('invoice_date', -1).to_list(100)
-    logger.info(f"[INVOICE_FETCH] Found {len(invoices)} invoices for account: {account_id}")
+    # Get total count for pagination
+    total_count = await get_tdb().invoices.count_documents(query)
+    total_pages = (total_count + limit - 1) // limit if total_count > 0 else 0
+    skip = (page - 1) * limit
+    
+    # Fetch paginated invoices
+    invoices = await get_tdb().invoices.find(query, {'_id': 0}).sort('invoice_date', -1).skip(skip).limit(limit).to_list(limit)
+    logger.info(f"[INVOICE_FETCH] Found {len(invoices)} invoices for account: {account_id} (page {page}/{total_pages}, total {total_count})")
+    
+    # Get ALL invoices for totals calculation (without pagination)
+    all_invoices = await get_tdb().invoices.find(query, {'_id': 0, 'gross_invoice_value': 1, 'net_invoice_value': 1, 'credit_note_value': 1, 'outstanding': 1, 'grand_total': 1, 'total_amount': 1, 'paid_amount': 1}).to_list(10000)
     
     # Calculate totals - support both old and new field names
-    total_amount = sum(inv.get('grand_total', inv.get('gross_invoice_value', inv.get('total_amount', 0))) or 0 for inv in invoices)
-    net_amount = sum(inv.get('net_invoice_value', inv.get('paid_amount', 0)) or 0 for inv in invoices)
-    credit_amount = sum(inv.get('credit_note_value', 0) or 0 for inv in invoices)
-    outstanding = sum(inv.get('outstanding', 0) or 0 for inv in invoices)
+    total_amount = sum(inv.get('grand_total', inv.get('gross_invoice_value', inv.get('total_amount', 0))) or 0 for inv in all_invoices)
+    net_amount = sum(inv.get('net_invoice_value', inv.get('paid_amount', 0)) or 0 for inv in all_invoices)
+    credit_amount = sum(inv.get('credit_note_value', 0) or 0 for inv in all_invoices)
+    outstanding = sum(inv.get('outstanding', 0) or 0 for inv in all_invoices)
     
     # Transform invoices to consistent format for frontend
     formatted_invoices = []
@@ -5063,7 +5101,11 @@ async def get_account_invoices(account_id: str, current_user: dict = Depends(get
         'net_amount': net_amount,
         'credit_amount': credit_amount,
         'paid_amount': net_amount,  # For backwards compatibility
-        'outstanding': outstanding if outstanding > 0 else (total_amount - net_amount)
+        'outstanding': outstanding if outstanding > 0 else (total_amount - net_amount),
+        'total': total_count,
+        'page': page,
+        'limit': limit,
+        'pages': total_pages
     }
 
 class InvoiceLineItemCreate(BaseModel):

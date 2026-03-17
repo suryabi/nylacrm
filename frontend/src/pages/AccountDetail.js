@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import { 
   ArrowLeft, Building2, Phone, MapPin, Save, Loader2, Plus, Trash2, FileText,
   DollarSign, CreditCard, Calendar, AlertTriangle, TrendingUp, Truck, Search, Copy, ExternalLink,
-  Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck, ChevronDown, ChevronRight, Package
+  Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck, ChevronDown, ChevronRight, ChevronLeft, Package
 } from 'lucide-react';
 import { format } from 'date-fns';
 import {
@@ -221,6 +221,13 @@ export default function AccountDetail() {
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
   const [invoiceLineItems, setInvoiceLineItems] = useState([{ sku_name: '', bottles: 0, price_per_bottle: 0 }]);
   const [invoiceNotes, setInvoiceNotes] = useState('');
+  
+  // Invoice pagination and filter state
+  const [invoicePage, setInvoicePage] = useState(1);
+  const [invoiceLimit, setInvoiceLimit] = useState(5);
+  const [invoiceTimeFilter, setInvoiceTimeFilter] = useState('this_month');
+  const [invoiceTotalPages, setInvoiceTotalPages] = useState(0);
+  const [invoiceTotalCount, setInvoiceTotalCount] = useState(0);
 
   useEffect(() => {
     fetchAccount();
@@ -457,13 +464,15 @@ ${googleMapsLink}`;
     }
   };
 
-  const fetchInvoices = async (accountId) => {
-    console.log('[INVOICE_FETCH] Starting fetch for account:', accountId);
+  const fetchInvoices = async (accountId, page = invoicePage, limit = invoiceLimit, timeFilter = invoiceTimeFilter) => {
+    console.log('[INVOICE_FETCH] Starting fetch for account:', accountId, 'page:', page, 'limit:', limit, 'timeFilter:', timeFilter);
     setLoadingInvoices(true);
     try {
-      const response = await accountsAPI.getInvoices(accountId);
+      const response = await accountsAPI.getInvoices(accountId, { page, limit, time_filter: timeFilter });
       console.log('[INVOICE_FETCH] Response:', response.data);
       setInvoiceData(response.data);
+      setInvoiceTotalPages(response.data.pages || 0);
+      setInvoiceTotalCount(response.data.total || 0);
     } catch (error) {
       console.error('[INVOICE_FETCH] Error fetching invoices:', error);
       console.log('No invoice data available');
@@ -471,6 +480,13 @@ ${googleMapsLink}`;
       setLoadingInvoices(false);
     }
   };
+  
+  // Refetch invoices when pagination or filter changes
+  useEffect(() => {
+    if (id) {
+      fetchInvoices(id, invoicePage, invoiceLimit, invoiceTimeFilter);
+    }
+  }, [invoicePage, invoiceLimit, invoiceTimeFilter]);
 
   // Invoice creation functions
   const handleAddInvoiceLineItem = () => {
@@ -1083,15 +1099,32 @@ ${googleMapsLink}`;
 
           {/* Invoices */}
           <Card className="p-6">
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <FileText className="h-5 w-5 text-primary" />
                 Invoice Summary
-              </h2>
-              <div className="flex items-center gap-2">
-                {invoiceData && invoiceData.invoices?.length > 0 && (
-                  <Badge variant="outline">{invoiceData.invoices.length} Invoices</Badge>
+                {invoiceTotalCount > 0 && (
+                  <Badge variant="outline" className="ml-2">{invoiceTotalCount} Total</Badge>
                 )}
+              </h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Time Filter */}
+                <Select value={invoiceTimeFilter} onValueChange={(val) => { setInvoiceTimeFilter(val); setInvoicePage(1); }}>
+                  <SelectTrigger className="w-[140px] h-8 text-sm" data-testid="invoice-time-filter">
+                    <SelectValue placeholder="Time Period" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="this_week">This Week</SelectItem>
+                    <SelectItem value="last_week">Last Week</SelectItem>
+                    <SelectItem value="this_month">This Month</SelectItem>
+                    <SelectItem value="last_month">Last Month</SelectItem>
+                    <SelectItem value="last_3_months">Last 3 Months</SelectItem>
+                    <SelectItem value="last_6_months">Last 6 Months</SelectItem>
+                    <SelectItem value="this_quarter">This Quarter</SelectItem>
+                    <SelectItem value="lifetime">Lifetime</SelectItem>
+                  </SelectContent>
+                </Select>
+                
                 <Button 
                   size="sm" 
                   onClick={() => setShowCreateInvoice(true)}
@@ -1126,6 +1159,52 @@ ${googleMapsLink}`;
                     <InvoiceCard key={idx} invoice={inv} />
                   ))}
                 </div>
+                
+                {/* Pagination Controls */}
+                {invoiceTotalPages > 0 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5 pt-4 border-t">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <span>Show</span>
+                      <Select value={invoiceLimit.toString()} onValueChange={(val) => { setInvoiceLimit(parseInt(val)); setInvoicePage(1); }}>
+                        <SelectTrigger className="w-[70px] h-8" data-testid="invoice-page-size">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="5">5</SelectItem>
+                          <SelectItem value="10">10</SelectItem>
+                          <SelectItem value="15">15</SelectItem>
+                          <SelectItem value="20">20</SelectItem>
+                          <SelectItem value="25">25</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <span>per page</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        Page {invoicePage} of {invoiceTotalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setInvoicePage(prev => Math.max(1, prev - 1))}
+                        disabled={invoicePage <= 1}
+                        data-testid="invoice-prev-page"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setInvoicePage(prev => Math.min(invoiceTotalPages, prev + 1))}
+                        disabled={invoicePage >= invoiceTotalPages}
+                        data-testid="invoice-next-page"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <p className="text-center py-8 text-muted-foreground">No invoices found for this account</p>
