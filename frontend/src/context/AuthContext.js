@@ -161,6 +161,8 @@ export const AuthProvider = ({ children }) => {
     // Store tenant_id with user
     localStorage.setItem('selectedTenant', tenant);
     setUser({ ...userData, tenant_id: tenant });
+    // IMPORTANT: Set loading to false after successful login
+    setLoading(false);
     // Set session start time
     const now = Date.now();
     setSessionStartTime(now);

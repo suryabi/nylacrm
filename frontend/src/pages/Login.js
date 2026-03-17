@@ -89,13 +89,12 @@ export default function Login() {
     fetchTenants();
   }, []);
   
-  // Redirect to home if user is already authenticated
+  // Redirect to home if user is already authenticated (not during login process)
   useEffect(() => {
-    if (user && !authLoading) {
-      // Force navigation with replace to prevent back button issues
-      window.location.replace('/home');
+    if (user && !authLoading && !loading) {
+      navigate('/home', { replace: true });
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, loading, navigate]);
   
   // Check for inactivity logout message
   useEffect(() => {
@@ -131,9 +130,10 @@ export default function Login() {
       const userData = await login(email, password, selectedTenant);
       
       if (userData) {
-        // The useEffect will handle redirect when user state updates
-        // Force redirect as backup
-        window.location.replace('/home');
+        // Small delay to ensure state is synced before redirect
+        await new Promise(resolve => setTimeout(resolve, 100));
+        // Use navigate with replace to prevent back button issues
+        navigate('/home', { replace: true });
       } else {
         toast.error('Login failed - no user data received');
         setLoading(false);
