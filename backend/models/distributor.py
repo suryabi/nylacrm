@@ -181,3 +181,63 @@ class DistributorLocation(BaseModel):
     status: str = "active"
     created_at: str
     updated_at: str
+
+
+# ============ Distributor Margin Matrix ============
+
+class MarginType(str, Enum):
+    PERCENTAGE = "percentage"
+    FIXED_PER_BOTTLE = "fixed_per_bottle"
+    FIXED_PER_CASE = "fixed_per_case"
+
+
+class MarginMatrixCreate(BaseModel):
+    distributor_id: str
+    state: str
+    city: str
+    sku_id: str
+    sku_name: Optional[str] = None
+    margin_type: str  # percentage, fixed_per_bottle, fixed_per_case
+    margin_value: float
+    min_quantity: Optional[int] = None
+    max_quantity: Optional[int] = None
+    effective_from: Optional[str] = None
+    effective_to: Optional[str] = None
+    remarks: Optional[str] = None
+    status: Optional[str] = "active"
+
+
+class MarginMatrixUpdate(BaseModel):
+    state: Optional[str] = None
+    city: Optional[str] = None
+    sku_id: Optional[str] = None
+    sku_name: Optional[str] = None
+    margin_type: Optional[str] = None
+    margin_value: Optional[float] = None
+    min_quantity: Optional[int] = None
+    max_quantity: Optional[int] = None
+    effective_from: Optional[str] = None
+    effective_to: Optional[str] = None
+    remarks: Optional[str] = None
+    status: Optional[str] = None
+
+
+class MarginMatrix(BaseModel):
+    id: str
+    tenant_id: str
+    distributor_id: str
+    state: str
+    city: str
+    sku_id: str
+    sku_name: Optional[str] = None
+    margin_type: str
+    margin_value: float
+    min_quantity: Optional[int] = None
+    max_quantity: Optional[int] = None
+    effective_from: Optional[str] = None
+    effective_to: Optional[str] = None
+    remarks: Optional[str] = None
+    status: str = "active"
+    created_at: str
+    updated_at: str
+

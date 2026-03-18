@@ -14,7 +14,8 @@ from core.tenant import get_current_tenant_id
 from models.distributor import (
     DistributorCreate, DistributorUpdate, Distributor,
     OperatingCoverageCreate, OperatingCoverageUpdate,
-    DistributorLocationCreate, DistributorLocationUpdate
+    DistributorLocationCreate, DistributorLocationUpdate,
+    MarginMatrixCreate, MarginMatrixUpdate
 )
 
 router = APIRouter()
@@ -626,3 +627,366 @@ async def get_distributor_locations_dropdown(
     ).sort("location_name", 1).to_list(100)
     
     return {"locations": locations}
+
+
+# ============ Margin Matrix CRUD ============
+
+MARGIN_TYPES = {
+    "percentage": "Percentage on Account Invoice Value",
+    "fixed_per_bottle": "Fixed Amount per Bottle",
+    "fixed_per_case": "Fixed Amount per Case/Crate"
+}
+
+
+@router.get("/{distributor_id}/margins")
+async def list_margin_matrix(
+    distributor_id: str,
+    city: Optional[str] = None,
+    sku_id: Optional[str] = None,
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """List margin matrix entries for a distributor"""
+    tenant_id = get_current_tenant_id()
+    
+    query = {"tenant_id": tenant_id, "distributor_id": distributor_id}
+    
+    if city and city != 'all':
+        query["city"] = city
+    if sku_id and sku_id != 'all':
+        query["sku_id"] = sku_id
+    if status and status != 'all':
+        query["status"] = status
+    
+    margins = await db.distributor_margin_matrix.find(
+        query,
+        {"_id": 0}
+    ).sort([("city", 1), ("sku_name", 1)]).to_list(1000)
+    
+    # Get summary stats
+    total = len(margins)
+    active = len([m for m in margins if m.get('status') == 'active'])
+    by_type = {}
+    for m in margins:
+        mt = m.get('margin_type', 'unknown')
+        by_type[mt] = by_type.get(mt, 0) + 1
+    
+    return {
+        "margins": margins,
+        "total": total,
+        "active": active,
+        "by_type": by_type
+    }
+
+
+@router.get("/{distributor_id}/margins/{margin_id}")
+async def get_margin_entry(
+    distributor_id: str,
+    margin_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a specific margin matrix entry"""
+    tenant_id = get_current_tenant_id()
+    
+    margin = await db.distributor_margin_matrix.find_one(
+        {"id": margin_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0}
+    )
+    
+    if not margin:
+        raise HTTPException(status_code=404, detail="Margin entry not found")
+    
+    return margin
+
+
+@router.post("/{distributor_id}/margins")
+async def create_margin_entry(
+    distributor_id: str,
+    data: MarginMatrixCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new margin matrix entry"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Check if distributor exists
+    distributor = await db.distributors.find_one({"id": distributor_id, "tenant_id": tenant_id})
+    if not distributor:
+        raise HTTPException(status_code=404, detail="Distributor not found")
+    
+    # Check if city is in operating coverage
+    coverage = await db.distributor_operating_coverage.find_one({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "city": data.city,
+        "status": "active"
+    })
+    if not coverage:
+        raise HTTPException(
+            status_code=400,
+            detail=f"City '{data.city}' is not in distributor's operating coverage"
+        )
+    
+    # Validate margin type
+    if data.margin_type not in MARGIN_TYPES:
+        raise HTTPException(status_code=400, detail=f"Invalid margin type. Must be one of: {list(MARGIN_TYPES.keys())}")
+    
+    # Check for duplicate active entry for same city+SKU+date range
+    existing = await db.distributor_margin_matrix.find_one({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "city": data.city,
+        "sku_id": data.sku_id,
+        "status": "active"
+    })
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Active margin entry already exists for {data.city} + SKU. Edit the existing entry or deactivate it first."
+        )
+    
+    # Get SKU name if not provided
+    sku_name = data.sku_name
+    if not sku_name and data.sku_id:
+        sku = await db.skus.find_one({"id": data.sku_id}, {"_id": 0, "name": 1})
+        if sku:
+            sku_name = sku.get('name')
+    
+    margin_doc = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "state": data.state,
+        "city": data.city,
+        "sku_id": data.sku_id,
+        "sku_name": sku_name,
+        "margin_type": data.margin_type,
+        "margin_value": data.margin_value,
+        "min_quantity": data.min_quantity,
+        "max_quantity": data.max_quantity,
+        "effective_from": data.effective_from or now,
+        "effective_to": data.effective_to,
+        "remarks": data.remarks,
+        "status": data.status or "active",
+        "created_at": now,
+        "updated_at": now,
+        "created_by": current_user.get('id')
+    }
+    
+    await db.distributor_margin_matrix.insert_one(margin_doc)
+    margin_doc.pop('_id', None)
+    
+    logger.info(f"Margin entry created for distributor {distributor_id}, city {data.city}, SKU {sku_name} by {current_user['email']}")
+    
+    return margin_doc
+
+
+@router.post("/{distributor_id}/margins/bulk")
+async def create_bulk_margin_entries(
+    distributor_id: str,
+    data: List[MarginMatrixCreate],
+    current_user: dict = Depends(get_current_user)
+):
+    """Create multiple margin matrix entries"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Check if distributor exists
+    distributor = await db.distributors.find_one({"id": distributor_id, "tenant_id": tenant_id})
+    if not distributor:
+        raise HTTPException(status_code=404, detail="Distributor not found")
+    
+    added = []
+    skipped = []
+    
+    for item in data:
+        # Check if city is in operating coverage
+        coverage = await db.distributor_operating_coverage.find_one({
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "city": item.city,
+            "status": "active"
+        })
+        if not coverage:
+            skipped.append({"city": item.city, "sku_id": item.sku_id, "reason": "City not in coverage"})
+            continue
+        
+        # Check for duplicate
+        existing = await db.distributor_margin_matrix.find_one({
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "city": item.city,
+            "sku_id": item.sku_id,
+            "status": "active"
+        })
+        if existing:
+            skipped.append({"city": item.city, "sku_id": item.sku_id, "reason": "Already exists"})
+            continue
+        
+        # Get SKU name
+        sku_name = item.sku_name
+        if not sku_name and item.sku_id:
+            sku = await db.skus.find_one({"id": item.sku_id}, {"_id": 0, "name": 1})
+            if sku:
+                sku_name = sku.get('name')
+        
+        margin_doc = {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "state": item.state,
+            "city": item.city,
+            "sku_id": item.sku_id,
+            "sku_name": sku_name,
+            "margin_type": item.margin_type,
+            "margin_value": item.margin_value,
+            "min_quantity": item.min_quantity,
+            "max_quantity": item.max_quantity,
+            "effective_from": item.effective_from or now,
+            "effective_to": item.effective_to,
+            "remarks": item.remarks,
+            "status": item.status or "active",
+            "created_at": now,
+            "updated_at": now,
+            "created_by": current_user.get('id')
+        }
+        
+        await db.distributor_margin_matrix.insert_one(margin_doc)
+        margin_doc.pop('_id', None)
+        added.append(margin_doc)
+    
+    return {
+        "added": added,
+        "added_count": len(added),
+        "skipped": skipped,
+        "skipped_count": len(skipped)
+    }
+
+
+@router.put("/{distributor_id}/margins/{margin_id}")
+async def update_margin_entry(
+    distributor_id: str,
+    margin_id: str,
+    data: MarginMatrixUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a margin matrix entry"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    margin = await db.distributor_margin_matrix.find_one({
+        "id": margin_id,
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id
+    })
+    
+    if not margin:
+        raise HTTPException(status_code=404, detail="Margin entry not found")
+    
+    update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    
+    for field in ['state', 'city', 'sku_id', 'sku_name', 'margin_type', 'margin_value',
+                  'min_quantity', 'max_quantity', 'effective_from', 'effective_to',
+                  'remarks', 'status']:
+        value = getattr(data, field, None)
+        if value is not None:
+            update_data[field] = value
+    
+    # Validate margin type if being updated
+    if data.margin_type and data.margin_type not in MARGIN_TYPES:
+        raise HTTPException(status_code=400, detail=f"Invalid margin type. Must be one of: {list(MARGIN_TYPES.keys())}")
+    
+    await db.distributor_margin_matrix.update_one(
+        {"id": margin_id, "tenant_id": tenant_id},
+        {"$set": update_data}
+    )
+    
+    updated = await db.distributor_margin_matrix.find_one(
+        {"id": margin_id, "tenant_id": tenant_id},
+        {"_id": 0}
+    )
+    
+    logger.info(f"Margin entry {margin_id} updated by {current_user['email']}")
+    
+    return updated
+
+
+@router.delete("/{distributor_id}/margins/{margin_id}")
+async def delete_margin_entry(
+    distributor_id: str,
+    margin_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a margin matrix entry"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    margin = await db.distributor_margin_matrix.find_one({
+        "id": margin_id,
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id
+    })
+    
+    if not margin:
+        raise HTTPException(status_code=404, detail="Margin entry not found")
+    
+    await db.distributor_margin_matrix.delete_one({
+        "id": margin_id,
+        "tenant_id": tenant_id
+    })
+    
+    logger.info(f"Margin entry {margin_id} deleted by {current_user['email']}")
+    
+    return {"message": "Margin entry deleted successfully"}
+
+
+@router.get("/{distributor_id}/margins/cities/list")
+async def get_margin_cities(
+    distributor_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get list of cities with margin entries for this distributor"""
+    tenant_id = get_current_tenant_id()
+    
+    margins = await db.distributor_margin_matrix.find(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0, "city": 1}
+    ).to_list(1000)
+    
+    cities = list(set([m['city'] for m in margins]))
+    cities.sort()
+    
+    return {"cities": cities}
+
+
+@router.get("/{distributor_id}/margins/skus/list")
+async def get_margin_skus(
+    distributor_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get list of SKUs with margin entries for this distributor"""
+    tenant_id = get_current_tenant_id()
+    
+    margins = await db.distributor_margin_matrix.find(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0, "sku_id": 1, "sku_name": 1}
+    ).to_list(1000)
+    
+    # Deduplicate by sku_id
+    skus = {}
+    for m in margins:
+        if m['sku_id'] not in skus:
+            skus[m['sku_id']] = {"id": m['sku_id'], "name": m.get('sku_name', m['sku_id'])}
+    
+    return {"skus": list(skus.values())}
+

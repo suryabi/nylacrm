@@ -17,7 +17,7 @@ import { toast } from 'sonner';
 import {
   ArrowLeft, Building2, MapPin, Phone, Mail, Edit2, Trash2,
   RefreshCw, Plus, Package, Truck, CreditCard, Calendar,
-  User, FileText, Check, X, Save
+  User, FileText, Check, X, Save, Percent, DollarSign
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -39,6 +39,24 @@ const STATUS_OPTIONS = [
   { value: 'suspended', label: 'Suspended', color: 'bg-red-100 text-red-800' },
   { value: 'pending', label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
 ];
+
+const MARGIN_TYPES = [
+  { value: 'percentage', label: 'Percentage (%)', icon: Percent, description: 'Percentage on account invoice value' },
+  { value: 'fixed_per_bottle', label: 'Fixed per Bottle (₹)', icon: DollarSign, description: 'Fixed amount per bottle' },
+  { value: 'fixed_per_case', label: 'Fixed per Case (₹)', icon: DollarSign, description: 'Fixed amount per case/crate' },
+];
+
+function getMarginTypeLabel(type) {
+  const found = MARGIN_TYPES.find(m => m.value === type);
+  return found ? found.label : type;
+}
+
+function formatMarginValue(type, value) {
+  if (type === 'percentage') {
+    return `${value}%`;
+  }
+  return `₹${value}`;
+}
 
 function getStatusBadge(status) {
   const statusConfig = STATUS_OPTIONS.find(s => s.value === status) || STATUS_OPTIONS[1];
@@ -86,6 +104,29 @@ export default function DistributorDetail() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   
+  // Margin Matrix state
+  const [margins, setMargins] = useState([]);
+  const [marginsLoading, setMarginsLoading] = useState(false);
+  const [showMarginDialog, setShowMarginDialog] = useState(false);
+  const [marginCityFilter, setMarginCityFilter] = useState('all');
+  const [marginSkuFilter, setMarginSkuFilter] = useState('all');
+  const [skus, setSkus] = useState([]);
+  const [newMargin, setNewMargin] = useState({
+    state: '',
+    city: '',
+    sku_id: '',
+    sku_name: '',
+    margin_type: 'percentage',
+    margin_value: 0,
+    min_quantity: '',
+    max_quantity: '',
+    effective_from: '',
+    effective_to: '',
+    remarks: ''
+  });
+  const [addingMargin, setAddingMargin] = useState(false);
+  const [editingMargin, setEditingMargin] = useState(null);
+  
   const canManage = user && ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head'].includes(user.role);
 
   const fetchDistributor = useCallback(async () => {
@@ -109,6 +150,46 @@ export default function DistributorDetail() {
   useEffect(() => {
     fetchDistributor();
   }, [fetchDistributor]);
+
+  // Fetch margins when tab changes to margins
+  const fetchMargins = useCallback(async () => {
+    try {
+      setMarginsLoading(true);
+      const params = new URLSearchParams();
+      if (marginCityFilter !== 'all') params.append('city', marginCityFilter);
+      if (marginSkuFilter !== 'all') params.append('sku_id', marginSkuFilter);
+      
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/margins?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setMargins(response.data.margins || []);
+    } catch (error) {
+      console.error('Failed to fetch margins:', error);
+    } finally {
+      setMarginsLoading(false);
+    }
+  }, [id, token, marginCityFilter, marginSkuFilter]);
+
+  // Fetch SKUs for margin creation
+  const fetchSkus = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/master-skus`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setSkus(response.data.skus || response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch SKUs:', error);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (activeTab === 'margins') {
+      fetchMargins();
+      fetchSkus();
+    }
+  }, [activeTab, fetchMargins, fetchSkus]);
 
   const handleSave = async () => {
     try {
@@ -242,6 +323,109 @@ export default function DistributorDetail() {
     }
   };
 
+  // ============ Margin Matrix Handlers ============
+  
+  const handleAddMargin = async () => {
+    if (!newMargin.city || !newMargin.sku_id || !newMargin.margin_type || newMargin.margin_value <= 0) {
+      toast.error('Please fill in all required fields (City, SKU, Margin Type, and Value)');
+      return;
+    }
+    
+    try {
+      setAddingMargin(true);
+      
+      // Get state from selected city's coverage
+      const coverage = distributor.operating_coverage?.find(c => c.city === newMargin.city);
+      const marginData = {
+        distributor_id: id,
+        state: coverage?.state || '',
+        city: newMargin.city,
+        sku_id: newMargin.sku_id,
+        sku_name: newMargin.sku_name || skus.find(s => s.id === newMargin.sku_id)?.name,
+        margin_type: newMargin.margin_type,
+        margin_value: parseFloat(newMargin.margin_value),
+        min_quantity: newMargin.min_quantity ? parseInt(newMargin.min_quantity) : null,
+        max_quantity: newMargin.max_quantity ? parseInt(newMargin.max_quantity) : null,
+        effective_from: newMargin.effective_from || null,
+        effective_to: newMargin.effective_to || null,
+        remarks: newMargin.remarks || null,
+        status: 'active'
+      };
+      
+      await axios.post(`${API_URL}/api/distributors/${id}/margins`, marginData, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      
+      toast.success('Margin entry added successfully');
+      setShowMarginDialog(false);
+      setNewMargin({
+        state: '',
+        city: '',
+        sku_id: '',
+        sku_name: '',
+        margin_type: 'percentage',
+        margin_value: 0,
+        min_quantity: '',
+        max_quantity: '',
+        effective_from: '',
+        effective_to: '',
+        remarks: ''
+      });
+      fetchMargins();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to add margin entry');
+    } finally {
+      setAddingMargin(false);
+    }
+  };
+
+  const handleUpdateMargin = async () => {
+    if (!editingMargin) return;
+    
+    try {
+      setAddingMargin(true);
+      await axios.put(`${API_URL}/api/distributors/${id}/margins/${editingMargin.id}`, {
+        margin_type: editingMargin.margin_type,
+        margin_value: parseFloat(editingMargin.margin_value),
+        min_quantity: editingMargin.min_quantity ? parseInt(editingMargin.min_quantity) : null,
+        max_quantity: editingMargin.max_quantity ? parseInt(editingMargin.max_quantity) : null,
+        effective_from: editingMargin.effective_from || null,
+        effective_to: editingMargin.effective_to || null,
+        remarks: editingMargin.remarks || null,
+        status: editingMargin.status
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      
+      toast.success('Margin entry updated');
+      setEditingMargin(null);
+      fetchMargins();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to update margin');
+    } finally {
+      setAddingMargin(false);
+    }
+  };
+
+  const handleDeleteMargin = async (marginId) => {
+    try {
+      setDeleting(true);
+      await axios.delete(`${API_URL}/api/distributors/${id}/margins/${marginId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Margin entry deleted');
+      setDeleteTarget(null);
+      fetchMargins();
+    } catch (error) {
+      toast.error('Failed to delete margin entry');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   // Get available cities for the selected state that are not already covered
   const getAvailableCities = () => {
     if (!selectedState) return [];
@@ -328,6 +512,9 @@ export default function DistributorDetail() {
           </TabsTrigger>
           <TabsTrigger value="locations">
             Locations ({distributor.locations?.length || 0})
+          </TabsTrigger>
+          <TabsTrigger value="margins">
+            Margin Matrix ({margins.length})
           </TabsTrigger>
         </TabsList>
 
@@ -927,6 +1114,377 @@ export default function DistributorDetail() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Margin Matrix Tab */}
+        <TabsContent value="margins">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Margin Matrix</CardTitle>
+                <CardDescription>City and SKU level commercial margins for this distributor</CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Filters */}
+                <Select value={marginCityFilter} onValueChange={setMarginCityFilter}>
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue placeholder="All Cities" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Cities</SelectItem>
+                    {getCoveredCities().map(city => (
+                      <SelectItem key={city} value={city}>{city}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+                {canManage && (
+                  <Dialog open={showMarginDialog} onOpenChange={setShowMarginDialog}>
+                    <DialogTrigger asChild>
+                      <Button data-testid="add-margin-btn">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Margin
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-lg">
+                      <DialogHeader>
+                        <DialogTitle>Add Margin Entry</DialogTitle>
+                        <DialogDescription>
+                          Define margin for a specific city and SKU combination
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>City *</Label>
+                            <Select
+                              value={newMargin.city}
+                              onValueChange={(v) => setNewMargin(prev => ({ ...prev, city: v }))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select city" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {getCoveredCities().map(city => (
+                                  <SelectItem key={city} value={city}>{city}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>SKU *</Label>
+                            <Select
+                              value={newMargin.sku_id}
+                              onValueChange={(v) => {
+                                const sku = skus.find(s => s.id === v);
+                                setNewMargin(prev => ({ 
+                                  ...prev, 
+                                  sku_id: v, 
+                                  sku_name: sku?.name || sku?.sku_name || ''
+                                }));
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select SKU" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {skus.map(sku => (
+                                  <SelectItem key={sku.id} value={sku.id}>
+                                    {sku.name || sku.sku_name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label>Margin Type *</Label>
+                          <Select
+                            value={newMargin.margin_type}
+                            onValueChange={(v) => setNewMargin(prev => ({ ...prev, margin_type: v }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {MARGIN_TYPES.map(mt => (
+                                <SelectItem key={mt.value} value={mt.value}>
+                                  <div className="flex items-center gap-2">
+                                    <mt.icon className="h-4 w-4" />
+                                    {mt.label}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            {MARGIN_TYPES.find(m => m.value === newMargin.margin_type)?.description}
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label>Margin Value *</Label>
+                          <div className="relative">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder={newMargin.margin_type === 'percentage' ? 'e.g., 5 for 5%' : 'e.g., 10 for ₹10'}
+                              value={newMargin.margin_value}
+                              onChange={(e) => setNewMargin(prev => ({ ...prev, margin_value: e.target.value }))}
+                              className="pr-8"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                              {newMargin.margin_type === 'percentage' ? '%' : '₹'}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Min Quantity (optional)</Label>
+                            <Input
+                              type="number"
+                              placeholder="Min qty"
+                              value={newMargin.min_quantity}
+                              onChange={(e) => setNewMargin(prev => ({ ...prev, min_quantity: e.target.value }))}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Max Quantity (optional)</Label>
+                            <Input
+                              type="number"
+                              placeholder="Max qty"
+                              value={newMargin.max_quantity}
+                              onChange={(e) => setNewMargin(prev => ({ ...prev, max_quantity: e.target.value }))}
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Effective From</Label>
+                            <Input
+                              type="date"
+                              value={newMargin.effective_from}
+                              onChange={(e) => setNewMargin(prev => ({ ...prev, effective_from: e.target.value }))}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Effective To</Label>
+                            <Input
+                              type="date"
+                              value={newMargin.effective_to}
+                              onChange={(e) => setNewMargin(prev => ({ ...prev, effective_to: e.target.value }))}
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label>Remarks</Label>
+                          <Input
+                            placeholder="Optional notes"
+                            value={newMargin.remarks}
+                            onChange={(e) => setNewMargin(prev => ({ ...prev, remarks: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowMarginDialog(false)}>Cancel</Button>
+                        <Button onClick={handleAddMargin} disabled={addingMargin}>
+                          {addingMargin ? 'Adding...' : 'Add Margin'}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {marginsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : margins.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Percent className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No margin entries defined</p>
+                  <p className="text-sm">Add city and SKU level margins for this distributor</p>
+                  {(distributor.operating_coverage?.length || 0) === 0 && (
+                    <p className="text-sm text-amber-600 mt-2">Note: Add operating coverage first before adding margins</p>
+                  )}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="text-left p-3 font-medium">City</th>
+                        <th className="text-left p-3 font-medium">SKU</th>
+                        <th className="text-left p-3 font-medium">Margin Type</th>
+                        <th className="text-right p-3 font-medium">Value</th>
+                        <th className="text-center p-3 font-medium">Qty Range</th>
+                        <th className="text-center p-3 font-medium">Effective Period</th>
+                        <th className="text-center p-3 font-medium">Status</th>
+                        <th className="text-right p-3 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {margins.map((margin) => (
+                        <tr key={margin.id} className="border-b hover:bg-muted/30">
+                          <td className="p-3">
+                            <div className="flex items-center gap-1">
+                              <MapPin className="h-3 w-3 text-muted-foreground" />
+                              {margin.city}
+                            </div>
+                          </td>
+                          <td className="p-3 font-medium">
+                            {margin.sku_name || margin.sku_id}
+                          </td>
+                          <td className="p-3">
+                            <Badge variant="outline">{getMarginTypeLabel(margin.margin_type)}</Badge>
+                          </td>
+                          <td className="p-3 text-right font-semibold text-green-600">
+                            {formatMarginValue(margin.margin_type, margin.margin_value)}
+                          </td>
+                          <td className="p-3 text-center text-sm text-muted-foreground">
+                            {margin.min_quantity || margin.max_quantity ? (
+                              <span>{margin.min_quantity || '-'} - {margin.max_quantity || '-'}</span>
+                            ) : '-'}
+                          </td>
+                          <td className="p-3 text-center text-sm text-muted-foreground">
+                            {margin.effective_from || margin.effective_to ? (
+                              <span>
+                                {margin.effective_from ? new Date(margin.effective_from).toLocaleDateString() : '-'} 
+                                {' to '}
+                                {margin.effective_to ? new Date(margin.effective_to).toLocaleDateString() : 'ongoing'}
+                              </span>
+                            ) : 'Always'}
+                          </td>
+                          <td className="p-3 text-center">
+                            {getStatusBadge(margin.status)}
+                          </td>
+                          <td className="p-3 text-right">
+                            {canManage && (
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setEditingMargin(margin)}
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive"
+                                  onClick={() => setDeleteTarget({ type: 'margin', id: margin.id, name: `${margin.city} - ${margin.sku_name}` })}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          
+          {/* Edit Margin Dialog */}
+          <Dialog open={!!editingMargin} onOpenChange={(open) => !open && setEditingMargin(null)}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Edit Margin Entry</DialogTitle>
+                <DialogDescription>
+                  {editingMargin?.city} - {editingMargin?.sku_name}
+                </DialogDescription>
+              </DialogHeader>
+              {editingMargin && (
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Margin Type</Label>
+                    <Select
+                      value={editingMargin.margin_type}
+                      onValueChange={(v) => setEditingMargin(prev => ({ ...prev, margin_type: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MARGIN_TYPES.map(mt => (
+                          <SelectItem key={mt.value} value={mt.value}>{mt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Margin Value</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={editingMargin.margin_value}
+                      onChange={(e) => setEditingMargin(prev => ({ ...prev, margin_value: e.target.value }))}
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Min Quantity</Label>
+                      <Input
+                        type="number"
+                        value={editingMargin.min_quantity || ''}
+                        onChange={(e) => setEditingMargin(prev => ({ ...prev, min_quantity: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Max Quantity</Label>
+                      <Input
+                        type="number"
+                        value={editingMargin.max_quantity || ''}
+                        onChange={(e) => setEditingMargin(prev => ({ ...prev, max_quantity: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Status</Label>
+                    <Select
+                      value={editingMargin.status}
+                      onValueChange={(v) => setEditingMargin(prev => ({ ...prev, status: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Remarks</Label>
+                    <Input
+                      value={editingMargin.remarks || ''}
+                      onChange={(e) => setEditingMargin(prev => ({ ...prev, remarks: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditingMargin(null)}>Cancel</Button>
+                <Button onClick={handleUpdateMargin} disabled={addingMargin}>
+                  {addingMargin ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </TabsContent>
       </Tabs>
 
       {/* Delete Confirmation Dialog */}
@@ -949,6 +1507,8 @@ export default function DistributorDetail() {
                   handleDeleteCoverage(deleteTarget.id);
                 } else if (deleteTarget?.type === 'location') {
                   handleDeleteLocation(deleteTarget.id);
+                } else if (deleteTarget?.type === 'margin') {
+                  handleDeleteMargin(deleteTarget.id);
                 }
               }}
             >

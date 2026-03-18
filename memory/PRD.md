@@ -45,7 +45,7 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 - Role and Designation are now independent fields (no auto-population)
 - CEO can delete system designations and roles
 
-#### 5. Distribution Module - Phase 1 ✅ NEW
+#### 5. Distribution Module - Phase 1 ✅
 **Distributor Master**
 - Full CRUD operations for distributors
 - Fields: name, legal entity, GSTIN, PAN, addresses, contacts, payment terms, credit limits
@@ -61,11 +61,23 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 - Location validation against operating coverage
 - Default location flag support
 
+#### 6. Distribution Module - Phase 2 (Margin Matrix) ✅ NEW
+**Distributor Margin Matrix**
+- City + SKU level commercial margins
+- Three margin types supported:
+  - Percentage (% on account invoice value)
+  - Fixed per Bottle (₹ per bottle)
+  - Fixed per Case (₹ per case/crate)
+- Optional min/max quantity conditions
+- Effective date range support
+- Full CRUD with edit/delete capabilities
+- City filter for viewing margins
+
 **Frontend Pages**
 - `/distributors` - List page with summary cards, search, filters, pagination
-- `/distributors/:id` - Detail page with tabs (Overview, Coverage, Locations)
+- `/distributors/:id` - Detail page with tabs (Overview, Coverage, Locations, **Margin Matrix**)
 - Create/Edit distributor dialogs
-- Add Coverage and Add Location dialogs
+- Add Coverage, Add Location, and **Add Margin** dialogs
 
 **Backend APIs**
 - `GET /api/distributors` - List with filters, pagination
@@ -77,13 +89,14 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 - `GET/POST/DELETE /api/distributors/{id}/coverage` - Coverage management
 - `POST /api/distributors/{id}/coverage/bulk` - Bulk add coverage
 - `GET/POST/PUT/DELETE /api/distributors/{id}/locations` - Location management
+- `GET/POST/PUT/DELETE /api/distributors/{id}/margins` - **Margin matrix management**
+- `POST /api/distributors/{id}/margins/bulk` - **Bulk add margins**
 
 ## Distribution Module - Remaining Phases
 
-### Phase 2: Commercial Setup (Upcoming)
-- Distributor Margin Matrix (city + SKU level margins)
-  - Margin types: Percentage, Fixed per bottle, Fixed per case
-- Account-Distributor Assignment
+### Phase 2: Commercial Setup (Partially Complete)
+- ✅ Distributor Margin Matrix (city + SKU level margins)
+- ⏳ Account-Distributor Assignment (next up)
   - Map accounts to distributors and warehouse locations
   - Primary/backup distributor flags
   - Special commercial override support
