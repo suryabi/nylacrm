@@ -17,7 +17,7 @@ import { toast } from 'sonner';
 import {
   ArrowLeft, Building2, MapPin, Phone, Mail, Edit2, Trash2,
   RefreshCw, Plus, Package, Truck, CreditCard, Calendar,
-  User, FileText, Check, X, Save, Percent, DollarSign
+  User, FileText, Check, X, Save, Percent, DollarSign, Copy
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -104,28 +104,17 @@ export default function DistributorDetail() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   
-  // Margin Matrix state
+  // Margin Matrix state - Grid based
   const [margins, setMargins] = useState([]);
   const [marginsLoading, setMarginsLoading] = useState(false);
-  const [showMarginDialog, setShowMarginDialog] = useState(false);
-  const [marginCityFilter, setMarginCityFilter] = useState('all');
-  const [marginSkuFilter, setMarginSkuFilter] = useState('all');
+  const [selectedMarginCity, setSelectedMarginCity] = useState('');
   const [skus, setSkus] = useState([]);
-  const [newMargin, setNewMargin] = useState({
-    state: '',
-    city: '',
-    sku_id: '',
-    sku_name: '',
-    margin_type: 'percentage',
-    margin_value: 0,
-    min_quantity: '',
-    max_quantity: '',
-    effective_from: '',
-    effective_to: '',
-    remarks: ''
-  });
-  const [addingMargin, setAddingMargin] = useState(false);
-  const [editingMargin, setEditingMargin] = useState(null);
+  const [marginGrid, setMarginGrid] = useState({}); // { sku_id: { margin_type, margin_value, ... } }
+  const [hasMarginChanges, setHasMarginChanges] = useState(false);
+  const [savingMargins, setSavingMargins] = useState(false);
+  const [showCopyDialog, setShowCopyDialog] = useState(false);
+  const [copyTargetCity, setCopyTargetCity] = useState('');
+  const [copying, setCopying] = useState(false);
   
   const canManage = user && ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head'].includes(user.role);
 
@@ -156,20 +145,34 @@ export default function DistributorDetail() {
     try {
       setMarginsLoading(true);
       const params = new URLSearchParams();
-      if (marginCityFilter !== 'all') params.append('city', marginCityFilter);
-      if (marginSkuFilter !== 'all') params.append('sku_id', marginSkuFilter);
+      if (selectedMarginCity) params.append('city', selectedMarginCity);
       
       const response = await axios.get(`${API_URL}/api/distributors/${id}/margins?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
         withCredentials: true
       });
       setMargins(response.data.margins || []);
+      
+      // Build grid from margins
+      const grid = {};
+      (response.data.margins || []).forEach(m => {
+        grid[m.sku_id] = {
+          id: m.id,
+          margin_type: m.margin_type,
+          margin_value: m.margin_value,
+          min_quantity: m.min_quantity,
+          max_quantity: m.max_quantity,
+          status: m.status
+        };
+      });
+      setMarginGrid(grid);
+      setHasMarginChanges(false);
     } catch (error) {
       console.error('Failed to fetch margins:', error);
     } finally {
       setMarginsLoading(false);
     }
-  }, [id, token, marginCityFilter, marginSkuFilter]);
+  }, [id, token, selectedMarginCity]);
 
   // Fetch SKUs for margin creation
   const fetchSkus = useCallback(async () => {
@@ -184,12 +187,27 @@ export default function DistributorDetail() {
     }
   }, [token]);
 
+  // Set default city when coverage loads
+  useEffect(() => {
+    if (activeTab === 'margins' && distributor?.operating_coverage?.length > 0 && !selectedMarginCity) {
+      const firstActiveCity = distributor.operating_coverage.find(c => c.status === 'active');
+      if (firstActiveCity) {
+        setSelectedMarginCity(firstActiveCity.city);
+      }
+    }
+  }, [activeTab, distributor, selectedMarginCity]);
+
   useEffect(() => {
     if (activeTab === 'margins') {
-      fetchMargins();
       fetchSkus();
     }
-  }, [activeTab, fetchMargins, fetchSkus]);
+  }, [activeTab, fetchSkus]);
+
+  useEffect(() => {
+    if (activeTab === 'margins' && selectedMarginCity) {
+      fetchMargins();
+    }
+  }, [activeTab, selectedMarginCity, fetchMargins]);
 
   const handleSave = async () => {
     try {
@@ -325,87 +343,157 @@ export default function DistributorDetail() {
 
   // ============ Margin Matrix Handlers ============
   
-  const handleAddMargin = async () => {
-    if (!newMargin.city || !newMargin.sku_id || !newMargin.margin_type || newMargin.margin_value <= 0) {
-      toast.error('Please fill in all required fields (City, SKU, Margin Type, and Value)');
+  // ============ Margin Matrix Grid Handlers ============
+  
+  const updateMarginGridValue = (skuId, field, value) => {
+    setMarginGrid(prev => ({
+      ...prev,
+      [skuId]: {
+        ...(prev[skuId] || { margin_type: 'percentage', margin_value: 0 }),
+        [field]: value
+      }
+    }));
+    setHasMarginChanges(true);
+  };
+
+  const saveAllMargins = async () => {
+    if (!selectedMarginCity) {
+      toast.error('Please select a city first');
       return;
     }
     
     try {
-      setAddingMargin(true);
+      setSavingMargins(true);
+      const coverage = distributor.operating_coverage?.find(c => c.city === selectedMarginCity);
       
-      // Get state from selected city's coverage
-      const coverage = distributor.operating_coverage?.find(c => c.city === newMargin.city);
-      const marginData = {
-        distributor_id: id,
-        state: coverage?.state || '',
-        city: newMargin.city,
-        sku_id: newMargin.sku_id,
-        sku_name: newMargin.sku_name || skus.find(s => s.id === newMargin.sku_id)?.name,
-        margin_type: newMargin.margin_type,
-        margin_value: parseFloat(newMargin.margin_value),
-        min_quantity: newMargin.min_quantity ? parseInt(newMargin.min_quantity) : null,
-        max_quantity: newMargin.max_quantity ? parseInt(newMargin.max_quantity) : null,
-        effective_from: newMargin.effective_from || null,
-        effective_to: newMargin.effective_to || null,
-        remarks: newMargin.remarks || null,
-        status: 'active'
-      };
+      // Process each SKU in the grid that has values
+      let savedCount = 0;
+      let errorCount = 0;
       
-      await axios.post(`${API_URL}/api/distributors/${id}/margins`, marginData, {
-        headers: { Authorization: `Bearer ${token}` },
-        withCredentials: true
-      });
+      for (const sku of skus) {
+        const gridEntry = marginGrid[sku.id];
+        if (!gridEntry || !gridEntry.margin_value || gridEntry.margin_value <= 0) continue;
+        
+        const marginData = {
+          distributor_id: id,
+          state: coverage?.state || '',
+          city: selectedMarginCity,
+          sku_id: sku.id,
+          sku_name: sku.name || sku.sku_name,
+          margin_type: gridEntry.margin_type || 'percentage',
+          margin_value: parseFloat(gridEntry.margin_value),
+          min_quantity: gridEntry.min_quantity ? parseInt(gridEntry.min_quantity) : null,
+          max_quantity: gridEntry.max_quantity ? parseInt(gridEntry.max_quantity) : null,
+          status: 'active'
+        };
+        
+        try {
+          if (gridEntry.id) {
+            // Update existing
+            await axios.put(`${API_URL}/api/distributors/${id}/margins/${gridEntry.id}`, marginData, {
+              headers: { Authorization: `Bearer ${token}` },
+              withCredentials: true
+            });
+          } else {
+            // Create new
+            await axios.post(`${API_URL}/api/distributors/${id}/margins`, marginData, {
+              headers: { Authorization: `Bearer ${token}` },
+              withCredentials: true
+            });
+          }
+          savedCount++;
+        } catch (error) {
+          // If entry exists, try to update
+          if (error.response?.status === 400 && error.response?.data?.detail?.includes('already exists')) {
+            // Find existing and update
+            const existing = margins.find(m => m.sku_id === sku.id);
+            if (existing) {
+              try {
+                await axios.put(`${API_URL}/api/distributors/${id}/margins/${existing.id}`, marginData, {
+                  headers: { Authorization: `Bearer ${token}` },
+                  withCredentials: true
+                });
+                savedCount++;
+              } catch (e) {
+                errorCount++;
+              }
+            }
+          } else {
+            errorCount++;
+          }
+        }
+      }
       
-      toast.success('Margin entry added successfully');
-      setShowMarginDialog(false);
-      setNewMargin({
-        state: '',
-        city: '',
-        sku_id: '',
-        sku_name: '',
-        margin_type: 'percentage',
-        margin_value: 0,
-        min_quantity: '',
-        max_quantity: '',
-        effective_from: '',
-        effective_to: '',
-        remarks: ''
-      });
+      if (savedCount > 0) {
+        toast.success(`Saved ${savedCount} margin entries`);
+      }
+      if (errorCount > 0) {
+        toast.error(`Failed to save ${errorCount} entries`);
+      }
+      
+      setHasMarginChanges(false);
       fetchMargins();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to add margin entry');
+      toast.error('Failed to save margins');
     } finally {
-      setAddingMargin(false);
+      setSavingMargins(false);
     }
   };
 
-  const handleUpdateMargin = async () => {
-    if (!editingMargin) return;
+  const copyMarginsToCity = async () => {
+    if (!selectedMarginCity || !copyTargetCity) {
+      toast.error('Please select both source and target cities');
+      return;
+    }
+    
+    if (selectedMarginCity === copyTargetCity) {
+      toast.error('Source and target cities cannot be the same');
+      return;
+    }
     
     try {
-      setAddingMargin(true);
-      await axios.put(`${API_URL}/api/distributors/${id}/margins/${editingMargin.id}`, {
-        margin_type: editingMargin.margin_type,
-        margin_value: parseFloat(editingMargin.margin_value),
-        min_quantity: editingMargin.min_quantity ? parseInt(editingMargin.min_quantity) : null,
-        max_quantity: editingMargin.max_quantity ? parseInt(editingMargin.max_quantity) : null,
-        effective_from: editingMargin.effective_from || null,
-        effective_to: editingMargin.effective_to || null,
-        remarks: editingMargin.remarks || null,
-        status: editingMargin.status
-      }, {
-        headers: { Authorization: `Bearer ${token}` },
-        withCredentials: true
-      });
+      setCopying(true);
+      const coverage = distributor.operating_coverage?.find(c => c.city === copyTargetCity);
       
-      toast.success('Margin entry updated');
-      setEditingMargin(null);
-      fetchMargins();
+      // Get all margins from current city
+      const marginsToCreate = margins.map(m => ({
+        distributor_id: id,
+        state: coverage?.state || '',
+        city: copyTargetCity,
+        sku_id: m.sku_id,
+        sku_name: m.sku_name,
+        margin_type: m.margin_type,
+        margin_value: m.margin_value,
+        min_quantity: m.min_quantity,
+        max_quantity: m.max_quantity,
+        status: 'active'
+      }));
+      
+      const response = await axios.post(
+        `${API_URL}/api/distributors/${id}/margins/bulk`,
+        marginsToCreate,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
+        }
+      );
+      
+      const added = response.data.added_count || 0;
+      const skipped = response.data.skipped_count || 0;
+      
+      if (added > 0) {
+        toast.success(`Copied ${added} margin entries to ${copyTargetCity}`);
+      }
+      if (skipped > 0) {
+        toast.info(`${skipped} entries already existed in ${copyTargetCity}`);
+      }
+      
+      setShowCopyDialog(false);
+      setCopyTargetCity('');
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to update margin');
+      toast.error(error.response?.data?.detail || 'Failed to copy margins');
     } finally {
-      setAddingMargin(false);
+      setCopying(false);
     }
   };
 
@@ -1115,375 +1203,221 @@ export default function DistributorDetail() {
           </Card>
         </TabsContent>
 
-        {/* Margin Matrix Tab */}
+        {/* Margin Matrix Tab - Grid Based */}
         <TabsContent value="margins">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">Margin Matrix</CardTitle>
-                <CardDescription>City and SKU level commercial margins for this distributor</CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                {/* Filters */}
-                <Select value={marginCityFilter} onValueChange={setMarginCityFilter}>
-                  <SelectTrigger className="w-[150px]">
-                    <SelectValue placeholder="All Cities" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Cities</SelectItem>
-                    {getCoveredCities().map(city => (
-                      <SelectItem key={city} value={city}>{city}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                
-                {canManage && (
-                  <Dialog open={showMarginDialog} onOpenChange={setShowMarginDialog}>
-                    <DialogTrigger asChild>
-                      <Button data-testid="add-margin-btn">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Margin
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-lg">
-                      <DialogHeader>
-                        <DialogTitle>Add Margin Entry</DialogTitle>
-                        <DialogDescription>
-                          Define margin for a specific city and SKU combination
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label>City *</Label>
-                            <Select
-                              value={newMargin.city}
-                              onValueChange={(v) => setNewMargin(prev => ({ ...prev, city: v }))}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select city" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {getCoveredCities().map(city => (
-                                  <SelectItem key={city} value={city}>{city}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>SKU *</Label>
-                            <Select
-                              value={newMargin.sku_id}
-                              onValueChange={(v) => {
-                                const sku = skus.find(s => s.id === v);
-                                setNewMargin(prev => ({ 
-                                  ...prev, 
-                                  sku_id: v, 
-                                  sku_name: sku?.name || sku?.sku_name || ''
-                                }));
-                              }}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select SKU" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {skus.map(sku => (
-                                  <SelectItem key={sku.id} value={sku.id}>
-                                    {sku.name || sku.sku_name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label>Margin Type *</Label>
-                          <Select
-                            value={newMargin.margin_type}
-                            onValueChange={(v) => setNewMargin(prev => ({ ...prev, margin_type: v }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <CardTitle className="text-lg">Margin Matrix</CardTitle>
+                  <CardDescription>Edit margins for each SKU by city. Changes are saved when you click "Save All".</CardDescription>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* City Selector */}
+                  <Select value={selectedMarginCity} onValueChange={setSelectedMarginCity}>
+                    <SelectTrigger className="w-[180px]" data-testid="margin-city-select">
+                      <SelectValue placeholder="Select City" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getCoveredCities().map(city => (
+                        <SelectItem key={city} value={city}>{city}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  
+                  {canManage && selectedMarginCity && margins.length > 0 && (
+                    <Dialog open={showCopyDialog} onOpenChange={setShowCopyDialog}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" data-testid="copy-margins-btn">
+                          <FileText className="h-4 w-4 mr-2" />
+                          Copy to City
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Copy Margins to Another City</DialogTitle>
+                          <DialogDescription>
+                            Copy all {margins.length} margin entries from <strong>{selectedMarginCity}</strong> to another city.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="py-4">
+                          <Label>Target City</Label>
+                          <Select value={copyTargetCity} onValueChange={setCopyTargetCity}>
+                            <SelectTrigger className="mt-2">
+                              <SelectValue placeholder="Select target city" />
                             </SelectTrigger>
                             <SelectContent>
-                              {MARGIN_TYPES.map(mt => (
-                                <SelectItem key={mt.value} value={mt.value}>
-                                  <div className="flex items-center gap-2">
-                                    <mt.icon className="h-4 w-4" />
-                                    {mt.label}
-                                  </div>
-                                </SelectItem>
-                              ))}
+                              {getCoveredCities()
+                                .filter(city => city !== selectedMarginCity)
+                                .map(city => (
+                                  <SelectItem key={city} value={city}>{city}</SelectItem>
+                                ))}
                             </SelectContent>
                           </Select>
-                          <p className="text-xs text-muted-foreground">
-                            {MARGIN_TYPES.find(m => m.value === newMargin.margin_type)?.description}
+                          <p className="text-sm text-muted-foreground mt-2">
+                            Existing margins in the target city will not be overwritten.
                           </p>
                         </div>
-                        
-                        <div className="space-y-2">
-                          <Label>Margin Value *</Label>
-                          <div className="relative">
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              placeholder={newMargin.margin_type === 'percentage' ? 'e.g., 5 for 5%' : 'e.g., 10 for ₹10'}
-                              value={newMargin.margin_value}
-                              onChange={(e) => setNewMargin(prev => ({ ...prev, margin_value: e.target.value }))}
-                              className="pr-8"
-                            />
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                              {newMargin.margin_type === 'percentage' ? '%' : '₹'}
-                            </span>
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label>Min Quantity (optional)</Label>
-                            <Input
-                              type="number"
-                              placeholder="Min qty"
-                              value={newMargin.min_quantity}
-                              onChange={(e) => setNewMargin(prev => ({ ...prev, min_quantity: e.target.value }))}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Max Quantity (optional)</Label>
-                            <Input
-                              type="number"
-                              placeholder="Max qty"
-                              value={newMargin.max_quantity}
-                              onChange={(e) => setNewMargin(prev => ({ ...prev, max_quantity: e.target.value }))}
-                            />
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label>Effective From</Label>
-                            <Input
-                              type="date"
-                              value={newMargin.effective_from}
-                              onChange={(e) => setNewMargin(prev => ({ ...prev, effective_from: e.target.value }))}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Effective To</Label>
-                            <Input
-                              type="date"
-                              value={newMargin.effective_to}
-                              onChange={(e) => setNewMargin(prev => ({ ...prev, effective_to: e.target.value }))}
-                            />
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label>Remarks</Label>
-                          <Input
-                            placeholder="Optional notes"
-                            value={newMargin.remarks}
-                            onChange={(e) => setNewMargin(prev => ({ ...prev, remarks: e.target.value }))}
-                          />
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowMarginDialog(false)}>Cancel</Button>
-                        <Button onClick={handleAddMargin} disabled={addingMargin}>
-                          {addingMargin ? 'Adding...' : 'Add Margin'}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                )}
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setShowCopyDialog(false)}>Cancel</Button>
+                          <Button onClick={copyMarginsToCity} disabled={copying || !copyTargetCity}>
+                            {copying ? 'Copying...' : `Copy to ${copyTargetCity || '...'}`}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  )}
+                  
+                  {canManage && hasMarginChanges && (
+                    <Button onClick={saveAllMargins} disabled={savingMargins} data-testid="save-margins-btn">
+                      <Save className="h-4 w-4 mr-2" />
+                      {savingMargins ? 'Saving...' : 'Save All'}
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent>
-              {marginsLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : margins.length === 0 ? (
+              {!selectedMarginCity ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  <Percent className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No margin entries defined</p>
-                  <p className="text-sm">Add city and SKU level margins for this distributor</p>
+                  <MapPin className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>Select a city to view and edit margins</p>
                   {(distributor.operating_coverage?.length || 0) === 0 && (
                     <p className="text-sm text-amber-600 mt-2">Note: Add operating coverage first before adding margins</p>
                   )}
                 </div>
+              ) : marginsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : skus.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No SKUs found in the system</p>
+                </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full">
+                  <table className="w-full border-collapse">
                     <thead>
                       <tr className="border-b bg-muted/50">
-                        <th className="text-left p-3 font-medium">City</th>
-                        <th className="text-left p-3 font-medium">SKU</th>
-                        <th className="text-left p-3 font-medium">Margin Type</th>
-                        <th className="text-right p-3 font-medium">Value</th>
-                        <th className="text-center p-3 font-medium">Qty Range</th>
-                        <th className="text-center p-3 font-medium">Effective Period</th>
-                        <th className="text-center p-3 font-medium">Status</th>
-                        <th className="text-right p-3 font-medium">Actions</th>
+                        <th className="text-left p-3 font-medium sticky left-0 bg-muted/50 min-w-[200px]">SKU</th>
+                        <th className="text-center p-3 font-medium min-w-[150px]">Margin Type</th>
+                        <th className="text-center p-3 font-medium min-w-[120px]">Value</th>
+                        <th className="text-center p-3 font-medium min-w-[100px]">Min Qty</th>
+                        <th className="text-center p-3 font-medium min-w-[100px]">Max Qty</th>
+                        <th className="text-center p-3 font-medium min-w-[80px]">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {margins.map((margin) => (
-                        <tr key={margin.id} className="border-b hover:bg-muted/30">
-                          <td className="p-3">
-                            <div className="flex items-center gap-1">
-                              <MapPin className="h-3 w-3 text-muted-foreground" />
-                              {margin.city}
-                            </div>
-                          </td>
-                          <td className="p-3 font-medium">
-                            {margin.sku_name || margin.sku_id}
-                          </td>
-                          <td className="p-3">
-                            <Badge variant="outline">{getMarginTypeLabel(margin.margin_type)}</Badge>
-                          </td>
-                          <td className="p-3 text-right font-semibold text-green-600">
-                            {formatMarginValue(margin.margin_type, margin.margin_value)}
-                          </td>
-                          <td className="p-3 text-center text-sm text-muted-foreground">
-                            {margin.min_quantity || margin.max_quantity ? (
-                              <span>{margin.min_quantity || '-'} - {margin.max_quantity || '-'}</span>
-                            ) : '-'}
-                          </td>
-                          <td className="p-3 text-center text-sm text-muted-foreground">
-                            {margin.effective_from || margin.effective_to ? (
-                              <span>
-                                {margin.effective_from ? new Date(margin.effective_from).toLocaleDateString() : '-'} 
-                                {' to '}
-                                {margin.effective_to ? new Date(margin.effective_to).toLocaleDateString() : 'ongoing'}
-                              </span>
-                            ) : 'Always'}
-                          </td>
-                          <td className="p-3 text-center">
-                            {getStatusBadge(margin.status)}
-                          </td>
-                          <td className="p-3 text-right">
-                            {canManage && (
-                              <div className="flex items-center justify-end gap-1">
+                      {skus.map((sku, index) => {
+                        const gridEntry = marginGrid[sku.id] || {};
+                        const hasValue = gridEntry.margin_value && gridEntry.margin_value > 0;
+                        return (
+                          <tr 
+                            key={sku.id} 
+                            className={`border-b hover:bg-muted/20 ${hasValue ? 'bg-green-50/50' : ''}`}
+                            data-testid={`margin-row-${index}`}
+                          >
+                            <td className="p-2 font-medium sticky left-0 bg-background">
+                              <div className="flex items-center gap-2">
+                                {hasValue && <Check className="h-4 w-4 text-green-600" />}
+                                <span className="text-sm">{sku.name || sku.sku_name}</span>
+                              </div>
+                            </td>
+                            <td className="p-2">
+                              <Select
+                                value={gridEntry.margin_type || 'percentage'}
+                                onValueChange={(v) => updateMarginGridValue(sku.id, 'margin_type', v)}
+                                disabled={!canManage}
+                              >
+                                <SelectTrigger className="h-9 text-sm">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {MARGIN_TYPES.map(mt => (
+                                    <SelectItem key={mt.value} value={mt.value}>
+                                      {mt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </td>
+                            <td className="p-2">
+                              <div className="relative">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="0"
+                                  className="h-9 text-sm pr-8 text-right"
+                                  value={gridEntry.margin_value || ''}
+                                  onChange={(e) => updateMarginGridValue(sku.id, 'margin_value', e.target.value)}
+                                  disabled={!canManage}
+                                />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                                  {(gridEntry.margin_type || 'percentage') === 'percentage' ? '%' : '₹'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="p-2">
+                              <Input
+                                type="number"
+                                min="0"
+                                placeholder="-"
+                                className="h-9 text-sm text-center"
+                                value={gridEntry.min_quantity || ''}
+                                onChange={(e) => updateMarginGridValue(sku.id, 'min_quantity', e.target.value)}
+                                disabled={!canManage}
+                              />
+                            </td>
+                            <td className="p-2">
+                              <Input
+                                type="number"
+                                min="0"
+                                placeholder="-"
+                                className="h-9 text-sm text-center"
+                                value={gridEntry.max_quantity || ''}
+                                onChange={(e) => updateMarginGridValue(sku.id, 'max_quantity', e.target.value)}
+                                disabled={!canManage}
+                              />
+                            </td>
+                            <td className="p-2 text-center">
+                              {gridEntry.id && canManage && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => setEditingMargin(margin)}
-                                >
-                                  <Edit2 className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-destructive"
-                                  onClick={() => setDeleteTarget({ type: 'margin', id: margin.id, name: `${margin.city} - ${margin.sku_name}` })}
+                                  className="text-destructive h-8 w-8 p-0"
+                                  onClick={() => setDeleteTarget({ 
+                                    type: 'margin', 
+                                    id: gridEntry.id, 
+                                    name: `${selectedMarginCity} - ${sku.name || sku.sku_name}` 
+                                  })}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
+                  
+                  {/* Summary */}
+                  <div className="mt-4 p-3 bg-muted/30 rounded-lg flex items-center justify-between">
+                    <div className="text-sm text-muted-foreground">
+                      <strong>{margins.length}</strong> SKUs with margins configured for <strong>{selectedMarginCity}</strong>
+                    </div>
+                    {hasMarginChanges && (
+                      <Badge variant="outline" className="text-amber-600 border-amber-600">
+                        Unsaved changes
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               )}
             </CardContent>
           </Card>
-          
-          {/* Edit Margin Dialog */}
-          <Dialog open={!!editingMargin} onOpenChange={(open) => !open && setEditingMargin(null)}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Edit Margin Entry</DialogTitle>
-                <DialogDescription>
-                  {editingMargin?.city} - {editingMargin?.sku_name}
-                </DialogDescription>
-              </DialogHeader>
-              {editingMargin && (
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label>Margin Type</Label>
-                    <Select
-                      value={editingMargin.margin_type}
-                      onValueChange={(v) => setEditingMargin(prev => ({ ...prev, margin_type: v }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {MARGIN_TYPES.map(mt => (
-                          <SelectItem key={mt.value} value={mt.value}>{mt.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Margin Value</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={editingMargin.margin_value}
-                      onChange={(e) => setEditingMargin(prev => ({ ...prev, margin_value: e.target.value }))}
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Min Quantity</Label>
-                      <Input
-                        type="number"
-                        value={editingMargin.min_quantity || ''}
-                        onChange={(e) => setEditingMargin(prev => ({ ...prev, min_quantity: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Max Quantity</Label>
-                      <Input
-                        type="number"
-                        value={editingMargin.max_quantity || ''}
-                        onChange={(e) => setEditingMargin(prev => ({ ...prev, max_quantity: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Status</Label>
-                    <Select
-                      value={editingMargin.status}
-                      onValueChange={(v) => setEditingMargin(prev => ({ ...prev, status: v }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="inactive">Inactive</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Remarks</Label>
-                    <Input
-                      value={editingMargin.remarks || ''}
-                      onChange={(e) => setEditingMargin(prev => ({ ...prev, remarks: e.target.value }))}
-                    />
-                  </div>
-                </div>
-              )}
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setEditingMargin(null)}>Cancel</Button>
-                <Button onClick={handleUpdateMargin} disabled={addingMargin}>
-                  {addingMargin ? 'Saving...' : 'Save Changes'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
         </TabsContent>
       </Tabs>
 
