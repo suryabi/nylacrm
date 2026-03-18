@@ -1,0 +1,121 @@
+{
+  "summary": "Tested Account-Distributor Assignment UI functionality. All 14 features requested were tested. Core functionality works: login, navigation to Distributors, distributor detail page, Account Assignments tab, assignment dialog with account search, city/location selection, primary/backup checkboxes, special margin override, create assignment, delete assignment. Found 2 minor display issues in toast/confirmation messages.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "DistributorDetail - Account Assignment toast",
+        "issue": "Success toast shows 'Account undefined assigned successfully' instead of showing the account name. The account name (company or name field) may be undefined for some accounts returned by search API.",
+        "selector": "toast message after assignment creation",
+        "priority": "LOW"
+      },
+      {
+        "component": "DistributorDetail - Delete confirmation dialog",
+        "issue": "Delete confirmation dialog shows 'This will remove \"\" from this distributor' instead of showing the account name (deleteTarget?.name is empty)",
+        "selector": "AlertDialogDescription",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/.screenshots/01_login_page.png",
+    "/app/.screenshots/03_distributors_list.png",
+    "/app/.screenshots/04_distributor_detail.png",
+    "/app/.screenshots/05_assignments_tab.png",
+    "/app/.screenshots/06_assign_dialog.png",
+    "/app/.screenshots/07_account_search_results.png",
+    "/app/.screenshots/09_city_options.png",
+    "/app/.screenshots/10_location_options.png",
+    "/app/.screenshots/11_override_enabled.png",
+    "/app/.screenshots/13_after_save.png",
+    "/app/.screenshots/14_assignments_with_data.png",
+    "/app/.screenshots/15_delete_confirmation.png",
+    "/app/.screenshots/16_after_delete.png",
+    "/app/.screenshots/17_override_fields.png"
+  ],
+  "action_items": [
+    "MINOR: Fix toast message in handleCreateAssignment to properly display account name - the selectedAccount.company || selectedAccount.name may be undefined for some accounts",
+    "MINOR: Fix deleteTarget?.name to ensure account_name is passed when setting delete target"
+  ],
+  "critical_code_review_comments": [
+    "Line 630 DistributorDetail.js: toast.success uses selectedAccount.company || selectedAccount.name but this evaluates to undefined for accounts without these fields populated",
+    "Line 1913 DistributorDetail.js: setDeleteTarget passes assignment.account_name but this may be empty if account_name wasn't stored properly during assignment creation"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend only testing)",
+    "frontend": "92% (13/14 features working, 2 minor display bugs)"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "role": "CEO"
+  },
+  "seed_data_creation": "Created and deleted test assignment during testing. No permanent test data left.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Account-Distributor Assignment UI is functional. Test distributor (DIST-0002) has 6 cities coverage (Gurugram, Margao, New Delhi, Noida, Panaji, Vasco da Gama) and 1 location (Test at Margao). The account search API returns accounts with id, company, name, city, state, account_id fields - some accounts may have empty company/name fields causing 'undefined' in toast messages.",
+  "features_tested": {
+    "login_with_prefilled_credentials": {
+      "status": "PASS",
+      "details": "Login page has pre-filled email (surya.yadavalli@nylaairwater.earth) and password. Sign In button works."
+    },
+    "navigate_to_distributors_page": {
+      "status": "PASS",
+      "details": "Distributors page accessible at /distributors, shows 2 distributors (Test DIST-0002, ABC Distribution Co DIST-0001)"
+    },
+    "click_distributor_to_view_detail": {
+      "status": "PASS",
+      "details": "Navigated to /distributors/99fb55dc-532c-4e85-b618-6b8a5e552c04 - shows Test distributor detail with tabs"
+    },
+    "account_assignments_tab_visible_clickable": {
+      "status": "PASS",
+      "details": "Tab with data-testid='assignments-tab' visible and shows count (0). Clicking switches to assignments view."
+    },
+    "assign_account_button_opens_dialog": {
+      "status": "PASS",
+      "details": "Button with data-testid='assign-account-btn' opens dialog with title 'Assign Account to Distributor'"
+    },
+    "account_search_functionality": {
+      "status": "PASS",
+      "details": "Search input (data-testid='account-search-input') works with debounce. Typing 'test' returns 1 result. Results show with data-testid='account-result-{id}'"
+    },
+    "select_account_from_search": {
+      "status": "PASS",
+      "details": "Clicking search result selects account, shows selected state with X button to clear"
+    },
+    "select_servicing_city_dropdown": {
+      "status": "PASS",
+      "details": "Dropdown (data-testid='servicing-city-select') shows 6 cities from distributor's operating coverage"
+    },
+    "select_distributor_location": {
+      "status": "PASS",
+      "details": "Dropdown (data-testid='location-select') shows 'No specific location' and 'Test (Margao)' options"
+    },
+    "toggle_primary_backup_checkboxes": {
+      "status": "PASS",
+      "details": "Primary/Backup checkboxes work mutually exclusive - checking one unchecks the other"
+    },
+    "enable_special_margin_override": {
+      "status": "PASS",
+      "details": "Checking 'Special Margin Override' reveals Override Type dropdown and Override Value input fields"
+    },
+    "create_assignment_successfully": {
+      "status": "PASS",
+      "details": "Assignment created successfully. Tab count updates to (1). Assignment appears in table with correct columns."
+    },
+    "new_assignment_appears_in_table": {
+      "status": "PASS",
+      "details": "Table (data-testid='assignments-table') shows assignment with Account, Servicing City, Location, Type, Override, Status, Actions columns"
+    },
+    "delete_assignment_using_trash_icon": {
+      "status": "PASS",
+      "details": "Trash icon (data-testid='delete-assignment-{id}') opens confirmation dialog. Confirming deletes assignment and shows 'Assignment removed' toast."
+    }
+  }
+}

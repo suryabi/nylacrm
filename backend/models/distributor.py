@@ -241,3 +241,67 @@ class MarginMatrix(BaseModel):
     created_at: str
     updated_at: str
 
+
+
+# ============ Account-Distributor Assignment ============
+
+class AccountDistributorCreate(BaseModel):
+    account_id: str
+    account_name: Optional[str] = None
+    distributor_id: str
+    distributor_name: Optional[str] = None
+    servicing_state: str
+    servicing_city: str
+    distributor_location_id: Optional[str] = None
+    distributor_location_name: Optional[str] = None
+    is_primary: Optional[bool] = True
+    is_backup: Optional[bool] = False
+    has_special_override: Optional[bool] = False
+    override_type: Optional[str] = None  # percentage, fixed_per_bottle, fixed_per_case
+    override_value: Optional[float] = None
+    effective_from: Optional[str] = None
+    effective_to: Optional[str] = None
+    remarks: Optional[str] = None
+    status: Optional[str] = "active"
+
+
+class AccountDistributorUpdate(BaseModel):
+    distributor_id: Optional[str] = None
+    distributor_name: Optional[str] = None
+    servicing_state: Optional[str] = None
+    servicing_city: Optional[str] = None
+    distributor_location_id: Optional[str] = None
+    distributor_location_name: Optional[str] = None
+    is_primary: Optional[bool] = None
+    is_backup: Optional[bool] = None
+    has_special_override: Optional[bool] = None
+    override_type: Optional[str] = None
+    override_value: Optional[float] = None
+    effective_from: Optional[str] = None
+    effective_to: Optional[str] = None
+    remarks: Optional[str] = None
+    status: Optional[str] = None
+
+
+class AccountDistributor(BaseModel):
+    id: str
+    tenant_id: str
+    account_id: str
+    account_name: Optional[str] = None
+    distributor_id: str
+    distributor_name: Optional[str] = None
+    servicing_state: str
+    servicing_city: str
+    distributor_location_id: Optional[str] = None
+    distributor_location_name: Optional[str] = None
+    is_primary: bool = True
+    is_backup: bool = False
+    has_special_override: bool = False
+    override_type: Optional[str] = None
+    override_value: Optional[float] = None
+    effective_from: Optional[str] = None
+    effective_to: Optional[str] = None
+    remarks: Optional[str] = None
+    status: str = "active"
+    created_at: str
+    updated_at: str

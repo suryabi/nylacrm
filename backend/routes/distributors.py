@@ -15,7 +15,8 @@ from models.distributor import (
     DistributorCreate, DistributorUpdate, Distributor,
     OperatingCoverageCreate, OperatingCoverageUpdate,
     DistributorLocationCreate, DistributorLocationUpdate,
-    MarginMatrixCreate, MarginMatrixUpdate
+    MarginMatrixCreate, MarginMatrixUpdate,
+    AccountDistributorCreate, AccountDistributorUpdate
 )
 
 router = APIRouter()
@@ -989,4 +990,367 @@ async def get_margin_skus(
             skus[m['sku_id']] = {"id": m['sku_id'], "name": m.get('sku_name', m['sku_id'])}
     
     return {"skus": list(skus.values())}
+
+
+
+# ============ Account-Distributor Assignment CRUD ============
+
+@router.get("/assignments/all")
+async def list_all_account_assignments(
+    distributor_id: Optional[str] = None,
+    account_id: Optional[str] = None,
+    city: Optional[str] = None,
+    status: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    current_user: dict = Depends(get_current_user)
+):
+    """List all account-distributor assignments"""
+    tenant_id = get_current_tenant_id()
+    
+    query = {"tenant_id": tenant_id}
+    
+    if distributor_id:
+        query["distributor_id"] = distributor_id
+    if account_id:
+        query["account_id"] = account_id
+    if city and city != 'all':
+        query["servicing_city"] = city
+    if status and status != 'all':
+        query["status"] = status
+    
+    total = await db.account_distributor_assignments.count_documents(query)
+    
+    assignments = await db.account_distributor_assignments.find(
+        query,
+        {"_id": 0}
+    ).sort([("servicing_city", 1), ("account_name", 1)]).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    
+    return {
+        "assignments": assignments,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size
+    }
+
+
+@router.get("/{distributor_id}/assignments")
+async def list_distributor_account_assignments(
+    distributor_id: str,
+    city: Optional[str] = None,
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """List account assignments for a specific distributor"""
+    tenant_id = get_current_tenant_id()
+    
+    query = {"tenant_id": tenant_id, "distributor_id": distributor_id}
+    
+    if city and city != 'all':
+        query["servicing_city"] = city
+    if status and status != 'all':
+        query["status"] = status
+    
+    assignments = await db.account_distributor_assignments.find(
+        query,
+        {"_id": 0}
+    ).sort([("servicing_city", 1), ("account_name", 1)]).to_list(1000)
+    
+    # Group by city
+    by_city = {}
+    for a in assignments:
+        city_name = a.get('servicing_city', 'Unknown')
+        if city_name not in by_city:
+            by_city[city_name] = []
+        by_city[city_name].append(a)
+    
+    return {
+        "assignments": assignments,
+        "by_city": by_city,
+        "total": len(assignments)
+    }
+
+
+@router.get("/{distributor_id}/assignments/{assignment_id}")
+async def get_assignment(
+    distributor_id: str,
+    assignment_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a specific account-distributor assignment"""
+    tenant_id = get_current_tenant_id()
+    
+    assignment = await db.account_distributor_assignments.find_one(
+        {"id": assignment_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0}
+    )
+    
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    
+    return assignment
+
+
+@router.post("/{distributor_id}/assignments")
+async def create_account_assignment(
+    distributor_id: str,
+    data: AccountDistributorCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new account-distributor assignment"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Validate distributor exists
+    distributor = await db.distributors.find_one({"id": distributor_id, "tenant_id": tenant_id})
+    if not distributor:
+        raise HTTPException(status_code=404, detail="Distributor not found")
+    
+    # Validate account exists
+    account = await db.accounts.find_one({"id": data.account_id, "tenant_id": tenant_id})
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    
+    # Validate city is in distributor's operating coverage
+    coverage = await db.distributor_operating_coverage.find_one({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "city": data.servicing_city,
+        "status": "active"
+    })
+    if not coverage:
+        raise HTTPException(
+            status_code=400,
+            detail=f"City '{data.servicing_city}' is not in distributor's operating coverage"
+        )
+    
+    # Validate distributor location if provided
+    if data.distributor_location_id:
+        location = await db.distributor_locations.find_one({
+            "id": data.distributor_location_id,
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "status": "active"
+        })
+        if not location:
+            raise HTTPException(status_code=400, detail="Invalid distributor location")
+    
+    # Check for existing primary assignment for same account + city
+    if data.is_primary:
+        existing_primary = await db.account_distributor_assignments.find_one({
+            "tenant_id": tenant_id,
+            "account_id": data.account_id,
+            "servicing_city": data.servicing_city,
+            "is_primary": True,
+            "status": "active"
+        })
+        if existing_primary and existing_primary.get('distributor_id') != distributor_id:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Account already has a primary distributor for {data.servicing_city}. Remove or change existing assignment first."
+            )
+    
+    # Get names for denormalization
+    account_name = data.account_name or account.get('company') or account.get('name')
+    distributor_name = data.distributor_name or distributor.get('distributor_name')
+    location_name = data.distributor_location_name
+    if data.distributor_location_id and not location_name:
+        loc = await db.distributor_locations.find_one({"id": data.distributor_location_id}, {"_id": 0, "location_name": 1})
+        location_name = loc.get('location_name') if loc else None
+    
+    assignment_doc = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "account_id": data.account_id,
+        "account_name": account_name,
+        "distributor_id": distributor_id,
+        "distributor_name": distributor_name,
+        "servicing_state": data.servicing_state,
+        "servicing_city": data.servicing_city,
+        "distributor_location_id": data.distributor_location_id,
+        "distributor_location_name": location_name,
+        "is_primary": data.is_primary if data.is_primary is not None else True,
+        "is_backup": data.is_backup if data.is_backup is not None else False,
+        "has_special_override": data.has_special_override or False,
+        "override_type": data.override_type,
+        "override_value": data.override_value,
+        "effective_from": data.effective_from or now,
+        "effective_to": data.effective_to,
+        "remarks": data.remarks,
+        "status": data.status or "active",
+        "created_at": now,
+        "updated_at": now,
+        "created_by": current_user.get('id')
+    }
+    
+    await db.account_distributor_assignments.insert_one(assignment_doc)
+    assignment_doc.pop('_id', None)
+    
+    logger.info(f"Account '{account_name}' assigned to distributor '{distributor_name}' in {data.servicing_city} by {current_user['email']}")
+    
+    return assignment_doc
+
+
+@router.put("/{distributor_id}/assignments/{assignment_id}")
+async def update_account_assignment(
+    distributor_id: str,
+    assignment_id: str,
+    data: AccountDistributorUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update an account-distributor assignment"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    assignment = await db.account_distributor_assignments.find_one({
+        "id": assignment_id,
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id
+    })
+    
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    
+    update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    
+    # Validate distributor location if being updated
+    if data.distributor_location_id:
+        location = await db.distributor_locations.find_one({
+            "id": data.distributor_location_id,
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "status": "active"
+        })
+        if not location:
+            raise HTTPException(status_code=400, detail="Invalid distributor location")
+        update_data["distributor_location_name"] = location.get('location_name')
+    
+    for field in ['distributor_id', 'distributor_name', 'servicing_state', 'servicing_city',
+                  'distributor_location_id', 'distributor_location_name', 'is_primary', 'is_backup',
+                  'has_special_override', 'override_type', 'override_value',
+                  'effective_from', 'effective_to', 'remarks', 'status']:
+        value = getattr(data, field, None)
+        if value is not None:
+            update_data[field] = value
+    
+    await db.account_distributor_assignments.update_one(
+        {"id": assignment_id, "tenant_id": tenant_id},
+        {"$set": update_data}
+    )
+    
+    updated = await db.account_distributor_assignments.find_one(
+        {"id": assignment_id, "tenant_id": tenant_id},
+        {"_id": 0}
+    )
+    
+    logger.info(f"Assignment {assignment_id} updated by {current_user['email']}")
+    
+    return updated
+
+
+@router.delete("/{distributor_id}/assignments/{assignment_id}")
+async def delete_account_assignment(
+    distributor_id: str,
+    assignment_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete an account-distributor assignment"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    assignment = await db.account_distributor_assignments.find_one({
+        "id": assignment_id,
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id
+    })
+    
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    
+    await db.account_distributor_assignments.delete_one({
+        "id": assignment_id,
+        "tenant_id": tenant_id
+    })
+    
+    logger.info(f"Assignment for account '{assignment.get('account_name')}' deleted by {current_user['email']}")
+    
+    return {"message": "Assignment deleted successfully"}
+
+
+@router.get("/{distributor_id}/assignments/cities/list")
+async def get_assignment_cities(
+    distributor_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get list of cities with account assignments for this distributor"""
+    tenant_id = get_current_tenant_id()
+    
+    assignments = await db.account_distributor_assignments.find(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0, "servicing_city": 1}
+    ).to_list(1000)
+    
+    cities = list(set([a['servicing_city'] for a in assignments]))
+    cities.sort()
+    
+    return {"cities": cities}
+
+
+# Get account's distributor assignments (for account detail page)
+@router.get("/account/{account_id}/distributors")
+async def get_account_distributors(
+    account_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get distributor assignments for a specific account"""
+    tenant_id = get_current_tenant_id()
+    
+    assignments = await db.account_distributor_assignments.find(
+        {"tenant_id": tenant_id, "account_id": account_id},
+        {"_id": 0}
+    ).sort([("is_primary", -1), ("servicing_city", 1)]).to_list(100)
+    
+    return {
+        "assignments": assignments,
+        "total": len(assignments)
+    }
+
+
+# Search accounts for assignment
+@router.get("/accounts/search")
+async def search_accounts_for_assignment(
+    q: str = Query(..., min_length=2),
+    city: Optional[str] = None,
+    limit: int = Query(20, le=50),
+    current_user: dict = Depends(get_current_user)
+):
+    """Search accounts for distributor assignment"""
+    tenant_id = get_current_tenant_id()
+    
+    query = {
+        "tenant_id": tenant_id,
+        "$or": [
+            {"company": {"$regex": q, "$options": "i"}},
+            {"name": {"$regex": q, "$options": "i"}},
+            {"account_id": {"$regex": q, "$options": "i"}}
+        ]
+    }
+    
+    if city:
+        query["city"] = city
+    
+    accounts = await db.accounts.find(
+        query,
+        {"_id": 0, "id": 1, "company": 1, "name": 1, "city": 1, "state": 1, "account_id": 1}
+    ).limit(limit).to_list(limit)
+    
+    return {"accounts": accounts}
 
