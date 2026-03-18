@@ -627,7 +627,8 @@ export default function DistributorDetail() {
         withCredentials: true
       });
       
-      toast.success(`Account '${selectedAccount.company || selectedAccount.name}' assigned successfully`);
+      const accountDisplayName = selectedAccount.company || selectedAccount.name || selectedAccount.account_id || 'Account';
+      toast.success(`Account '${accountDisplayName}' assigned successfully`);
       setShowAssignDialog(false);
       setSelectedAccount(null);
       setAccountSearch('');
@@ -1913,7 +1914,7 @@ export default function DistributorDetail() {
                                 onClick={() => setDeleteTarget({
                                   type: 'assignment',
                                   id: assignment.id,
-                                  name: assignment.account_name
+                                  name: assignment.account_name || `Account in ${assignment.servicing_city}`
                                 })}
                                 data-testid={`delete-assignment-${assignment.id}`}
                               >

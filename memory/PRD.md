@@ -94,12 +94,17 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Distribution Module - Remaining Phases
 
-### Phase 2: Commercial Setup (Partially Complete)
+### Phase 2: Commercial Setup ✅ COMPLETE
 - ✅ Distributor Margin Matrix (city + SKU level margins)
-- ⏳ Account-Distributor Assignment (next up)
+- ✅ Account-Distributor Assignment
   - Map accounts to distributors and warehouse locations
+  - Account search with autocomplete
+  - Servicing city selection (from distributor's coverage)
+  - Distributor location (warehouse) selection
   - Primary/backup distributor flags
-  - Special commercial override support
+  - Special margin override support (percentage, fixed per bottle, fixed per case)
+  - Full table view with assignments grouped by city
+  - Delete functionality with confirmation dialog
 
 ### Phase 3: Operations & Transactions
 - Primary Shipment to Distributor (stock transfer)
@@ -114,13 +119,18 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Pending Tasks
 
+### P0 - Next Up
+1. **Distribution Module Phase 3** - Distributor Stock Receipt / Primary Shipment
+
 ### P1 - High Priority
-1. **Distribution Module Phase 2** - Margin Matrix, Account-Distributor Assignment
-2. **Server.py Refactoring** - Move remaining routes to modular files
+1. **Distribution Module Phase 4** - Distributor-to-Account Delivery
+2. **Distribution Module Phase 5** - Distributor Settlement calculation
+3. **Server.py Refactoring** - Move remaining routes to modular files
 
 ### P2 - Medium Priority
 1. **AI Assistant RAG Upgrade** - Upgrade to true vector-based RAG system
 2. **Build Out Placeholder Modules** - Maintenance, Inventory modules
+3. **Refactor DistributorDetail.js** - Break into smaller tab components
 
 ## Key API Endpoints
 - `GET /api/leads` - List leads with filters (territory→region mapping fixed)
@@ -130,6 +140,10 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 - `GET/POST/PUT/DELETE /api/distributors` - Distributor CRUD
 - `GET/POST/DELETE /api/distributors/{id}/coverage` - Coverage management
 - `GET/POST/PUT/DELETE /api/distributors/{id}/locations` - Location management
+- `GET/POST/PUT/DELETE /api/distributors/{id}/margins` - Margin matrix management
+- `POST /api/distributors/{id}/margins/bulk` - Bulk add margins
+- `GET/POST/PUT/DELETE /api/distributors/{id}/assignments` - Account-Distributor assignments
+- `GET /api/distributors/accounts/search` - Search accounts for assignment
 
 ## Test Credentials
 - **CEO**: `surya.yadavalli@nylaairwater.earth` / `test123`
