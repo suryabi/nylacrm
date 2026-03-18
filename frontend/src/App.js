@@ -77,6 +77,9 @@ import TenantSettings from './pages/TenantSettings';
 import PlatformAdmin from './pages/PlatformAdmin';
 import AIAssistant from './pages/AIAssistant';
 import LeadScoringModel from './pages/LeadScoringModel';
+// Distribution Module
+import DistributorList from './pages/DistributorList';
+import DistributorDetail from './pages/DistributorDetail';
 import '@/App.css';
 import { useActivityTracker } from './hooks/useActivityTracker';
 import { NavigationProvider } from './context/NavigationContext';
@@ -223,6 +226,11 @@ function AppRouter() {
           <Route path="/quality-control" element={<ProtectedRoute moduleKey="quality_control"><QualityControl /></ProtectedRoute>} />
           <Route path="/assets" element={<ProtectedRoute moduleKey="assets"><Assets /></ProtectedRoute>} />
           <Route path="/vendors" element={<ProtectedRoute moduleKey="vendors"><Vendors /></ProtectedRoute>} />
+          
+          {/* Distribution Module Routes */}
+          <Route path="/distributors" element={<ProtectedRoute moduleKey="distributors"><DistributorList /></ProtectedRoute>} />
+          <Route path="/distributors/:id" element={<ProtectedRoute moduleKey="distributors"><DistributorDetail /></ProtectedRoute>} />
+          <Route path="/distributors/:id/edit" element={<ProtectedRoute moduleKey="distributors"><DistributorDetail /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </>
