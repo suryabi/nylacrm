@@ -202,8 +202,9 @@ async def delete_role(role_id: str, current_user: dict = Depends(get_current_use
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
     
-    if role.get('is_system_role'):
-        raise HTTPException(status_code=400, detail="System roles cannot be deleted")
+    # CEO can delete system roles, others cannot
+    if role.get('is_system_role') and current_user.get('role') != 'CEO':
+        raise HTTPException(status_code=400, detail="Only CEO can delete system roles")
     
     # Check if any users have this role
     users_with_role = await db.users.count_documents({

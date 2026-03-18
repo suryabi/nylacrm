@@ -924,6 +924,7 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
   const [allUsers, setAllUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [designations, setDesignations] = useState(DEFAULT_DESIGNATIONS);
+  const [roles, setRoles] = useState([]);
   // Normalize department value to match DEPARTMENTS array
   const getNormalizedDept = (dept) => {
     if (!dept) return 'Sales';
@@ -989,9 +990,21 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
         console.log('Using default designations');
       }
     };
+    const fetchRoles = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const rolesResponse = await axios.get(`${API_URL}/roles`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setRoles(rolesResponse.data.roles || []);
+      } catch (error) {
+        console.log('Failed to fetch roles');
+      }
+    };
     fetchManagers();
     fetchCurrentUser();
     fetchDesignations();
+    fetchRoles();
   }, []);
 
   // Check if current user can edit HR data
@@ -1026,11 +1039,10 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
   };
 
   const handleDesignationChange = (designation) => {
-    const role = ROLE_MAPPING[designation] || 'sales_rep';
+    // Role and designation are now independent - don't auto-populate role
     setFormData(prev => ({ 
       ...prev, 
-      designation: designation,
-      role: role 
+      designation: designation
     }));
   };
 
@@ -1191,13 +1203,17 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
           </Select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="edit-role_display">Role (Auto-set based on Designation)</Label>
-          <Input
-            id="edit-role_display"
-            value={formData.role.replace('_', ' ').toUpperCase()}
-            disabled
-            className="bg-muted"
-          />
+          <Label htmlFor="edit-role">Role *</Label>
+          <Select value={formData.role} onValueChange={(v) => setFormData(prev => ({ ...prev, role: v }))} required>
+            <SelectTrigger data-testid="edit-team-role-select">
+              <SelectValue placeholder="Select role" />
+            </SelectTrigger>
+            <SelectContent>
+              {roles.map(role => (
+                <SelectItem key={role.id} value={role.name}>{role.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-2">
           <Label htmlFor="edit-is_active">Status</Label>

@@ -199,8 +199,9 @@ async def delete_designation(
     if not designation:
         raise HTTPException(status_code=404, detail="Designation not found")
     
-    if designation.get('is_system'):
-        raise HTTPException(status_code=400, detail="System designations cannot be deleted")
+    # CEO can delete system designations, others cannot
+    if designation.get('is_system') and current_user.get('role') != 'CEO':
+        raise HTTPException(status_code=400, detail="Only CEO can delete system designations")
     
     # Check if any users have this designation
     users_with_designation = await db.users.count_documents({

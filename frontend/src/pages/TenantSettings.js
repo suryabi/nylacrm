@@ -1403,7 +1403,7 @@ export default function TenantSettings() {
 
 // Designation Management Component
 function DesignationManagement() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [designations, setDesignations] = useState([]);
@@ -1414,6 +1414,9 @@ function DesignationManagement() {
   const [editName, setEditName] = useState('');
   const [editDepartment, setEditDepartment] = useState('');
   const [editLevel, setEditLevel] = useState(10);
+  
+  // CEO can delete system designations
+  const isCEO = user?.role === 'CEO';
   
   const [newDesignation, setNewDesignation] = useState({
     name: '',
@@ -1670,7 +1673,7 @@ function DesignationManagement() {
                         >
                           <Edit2 className="w-4 h-4" />
                         </Button>
-                        {!designation.is_system && (
+                        {(!designation.is_system || isCEO) && (
                           <Button 
                             size="sm" 
                             variant="ghost" 

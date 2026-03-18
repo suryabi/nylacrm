@@ -21,7 +21,7 @@ import axios from 'axios';
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function RoleManagement() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [roles, setRoles] = useState([]);
@@ -32,6 +32,9 @@ export default function RoleManagement() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState({});
+  
+  // CEO can delete system roles
+  const isCEO = user?.role === 'CEO';
   
   const [newRole, setNewRole] = useState({
     name: '',
@@ -311,7 +314,7 @@ export default function RoleManagement() {
                         Set Default
                       </Button>
                     )}
-                    {!selectedRole.is_system_role && (
+                    {(!selectedRole.is_system_role || isCEO) && (
                       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
                         <DialogTrigger asChild>
                           <Button variant="outline" size="sm" className="text-destructive">
@@ -323,6 +326,11 @@ export default function RoleManagement() {
                             <DialogTitle>Delete Role</DialogTitle>
                             <DialogDescription>
                               Are you sure you want to delete "{selectedRole.name}"? This cannot be undone.
+                              {selectedRole.is_system_role && (
+                                <span className="block mt-2 text-amber-600 font-medium">
+                                  Warning: This is a system role. Deleting it may affect system functionality.
+                                </span>
+                              )}
                             </DialogDescription>
                           </DialogHeader>
                           <DialogFooter>
