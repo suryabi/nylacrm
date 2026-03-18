@@ -3683,7 +3683,8 @@ async def get_leads(
     if state and state != 'all':
         query['state'] = state
     if territory and territory != 'all':
-        query['territory'] = territory
+        # Note: Leads store territory in 'region' field, not 'territory'
+        query['region'] = territory
     if country and country != 'all':
         query['country'] = country
     if region and region != 'all':

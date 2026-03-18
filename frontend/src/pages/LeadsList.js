@@ -108,7 +108,7 @@ export default function LeadsList() {
   const [leadToDelete, setLeadToDelete] = useState(null);
   const [timeFilter, setTimeFilter] = useState(() => getInitialFilter('time', 'lifetime', 'time_filter'));
   
-  const { territories, getStateNamesByTerritoryName, getCityNamesByStateName } = useMasterLocations();
+  const { territories, stateNames, cityNames, getStateNamesByTerritoryName, getCityNamesByStateName } = useMasterLocations();
   
   const [currentPage, setCurrentPage] = useState(() => {
     const saved = localStorage.getItem('leads_filter_page');
@@ -680,9 +680,12 @@ export default function LeadsList() {
                   <label className="text-xs text-muted-foreground mb-1 block">State</label>
                   <Select value={stateFilter} onValueChange={(v) => { setStateFilter(v); setCityFilter('all'); }}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="All" /></SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60">
                       <SelectItem value="all">All</SelectItem>
-                      {territoryFilter !== 'all' && getStateNamesByTerritoryName(territoryFilter).map(state => (
+                      {(territoryFilter !== 'all' 
+                        ? getStateNamesByTerritoryName(territoryFilter) 
+                        : stateNames
+                      ).map(state => (
                         <SelectItem key={state} value={state}>{state}</SelectItem>
                       ))}
                     </SelectContent>
@@ -692,9 +695,12 @@ export default function LeadsList() {
                   <label className="text-xs text-muted-foreground mb-1 block">City</label>
                   <Select value={cityFilter} onValueChange={setCityFilter}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="All" /></SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-60">
                       <SelectItem value="all">All</SelectItem>
-                      {stateFilter !== 'all' && getCityNamesByStateName(stateFilter).map(city => (
+                      {(stateFilter !== 'all' 
+                        ? getCityNamesByStateName(stateFilter) 
+                        : cityNames
+                      ).map(city => (
                         <SelectItem key={city} value={city}>{city}</SelectItem>
                       ))}
                     </SelectContent>
@@ -768,9 +774,12 @@ export default function LeadsList() {
                 <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" data-testid="leads-state-filter">
                   <SelectValue placeholder="All States" />
                 </SelectTrigger>
-                <SelectContent className="rounded-xl">
+                <SelectContent className="rounded-xl max-h-80">
                   <SelectItem value="all" className="rounded-lg">All States</SelectItem>
-                  {territoryFilter !== 'all' && getStateNamesByTerritoryName(territoryFilter).map(state => (
+                  {(territoryFilter !== 'all' 
+                    ? getStateNamesByTerritoryName(territoryFilter) 
+                    : stateNames
+                  ).map(state => (
                     <SelectItem key={state} value={state} className="rounded-lg">{state}</SelectItem>
                   ))}
                 </SelectContent>
@@ -782,9 +791,12 @@ export default function LeadsList() {
                 <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" data-testid="leads-city-filter">
                   <SelectValue placeholder="All Cities" />
                 </SelectTrigger>
-                <SelectContent className="rounded-xl">
+                <SelectContent className="rounded-xl max-h-80">
                   <SelectItem value="all" className="rounded-lg">All Cities</SelectItem>
-                  {stateFilter !== 'all' && getCityNamesByStateName(stateFilter).map(city => (
+                  {(stateFilter !== 'all' 
+                    ? getCityNamesByStateName(stateFilter) 
+                    : cityNames
+                  ).map(city => (
                     <SelectItem key={city} value={city} className="rounded-lg">{city}</SelectItem>
                   ))}
                 </SelectContent>
