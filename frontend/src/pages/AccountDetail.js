@@ -225,7 +225,7 @@ export default function AccountDetail() {
   // Invoice pagination and filter state
   const [invoicePage, setInvoicePage] = useState(1);
   const [invoiceLimit, setInvoiceLimit] = useState(5);
-  const [invoiceTimeFilter, setInvoiceTimeFilter] = useState('this_month');
+  const [invoiceTimeFilter, setInvoiceTimeFilter] = useState('lifetime');
   const [invoiceTotalPages, setInvoiceTotalPages] = useState(0);
   const [invoiceTotalCount, setInvoiceTotalCount] = useState(0);
 
@@ -1207,7 +1207,20 @@ ${googleMapsLink}`;
                 )}
               </>
             ) : (
-              <p className="text-center py-8 text-muted-foreground">No invoices found for this account</p>
+              <div className="text-center py-8">
+                <FileText className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-muted-foreground mb-2">No invoices found for {invoiceTimeFilter === 'lifetime' ? 'this account' : invoiceTimeFilter.replace('_', ' ')}</p>
+                {invoiceTimeFilter !== 'lifetime' && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setInvoiceTimeFilter('lifetime')}
+                    className="mt-2"
+                  >
+                    View All Time
+                  </Button>
+                )}
+              </div>
             )}
           </Card>
 
