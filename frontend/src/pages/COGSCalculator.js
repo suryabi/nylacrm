@@ -5,9 +5,10 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
-import { Download, Save, Copy } from 'lucide-react';
+import { Download, Save, Copy, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useMasterLocations } from '../hooks/useMasterLocations';
+import { Checkbox } from '../components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -16,6 +17,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 
 const API = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -28,8 +39,11 @@ export default function COGSCalculator() {
   const userRole = user?.role || '';
   const canSeeCostDetails = ['ceo', 'director'].includes(userRole.toLowerCase());
   
+  // Check if user can delete (CEO, System Admin only)
+  const canDelete = ['ceo', 'system admin'].includes(userRole.toLowerCase());
+  
   // Debug log
-  console.log('COGS Calculator - User Role:', userRole, '| Can see cost details:', canSeeCostDetails);
+  console.log('COGS Calculator - User Role:', userRole, '| Can see cost details:', canSeeCostDetails, '| Can delete:', canDelete);
   
   const [selectedCity, setSelectedCity] = React.useState('');
   const [cogsData, setCogsData] = React.useState([]);
@@ -38,6 +52,72 @@ export default function COGSCalculator() {
   const [hasChanges, setHasChanges] = React.useState(false);
   const [showCopyDialog, setShowCopyDialog] = React.useState(false);
   const [copying, setCopying] = React.useState(false);
+  
+  // Delete state
+  const [selectedRows, setSelectedRows] = React.useState([]);
+  const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
+
+  // Toggle row selection for deletion
+  const toggleRowSelection = (rowId) => {
+    setSelectedRows(prev => 
+      prev.includes(rowId) 
+        ? prev.filter(id => id !== rowId)
+        : [...prev, rowId]
+    );
+  };
+
+  // Toggle all rows selection
+  const toggleAllSelection = () => {
+    if (selectedRows.length === cogsData.length) {
+      setSelectedRows([]);
+    } else {
+      setSelectedRows(cogsData.map(row => row.id));
+    }
+  };
+
+  // Delete selected COGS entries
+  const deleteSelectedCOGS = async () => {
+    if (selectedRows.length === 0) {
+      toast.error('No rows selected for deletion');
+      return;
+    }
+    
+    setDeleting(true);
+    try {
+      const token = localStorage.getItem('token');
+      let deletedCount = 0;
+      let failedCount = 0;
+      
+      for (const rowId of selectedRows) {
+        try {
+          await axios.delete(`${API}/cogs/${rowId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+            withCredentials: true
+          });
+          deletedCount++;
+        } catch (error) {
+          console.error(`Failed to delete COGS entry ${rowId}:`, error);
+          failedCount++;
+        }
+      }
+      
+      if (deletedCount > 0) {
+        toast.success(`Deleted ${deletedCount} COGS ${deletedCount === 1 ? 'entry' : 'entries'}`);
+      }
+      if (failedCount > 0) {
+        toast.error(`Failed to delete ${failedCount} ${failedCount === 1 ? 'entry' : 'entries'}`);
+      }
+      
+      setSelectedRows([]);
+      setShowDeleteDialog(false);
+      loadCOGSData(); // Reload data
+    } catch (error) {
+      toast.error('Failed to delete COGS entries');
+    } finally {
+      setDeleting(false);
+    }
+  };
   
   // Transient state for "Actual Landing Price" - NOT saved to database
   // Used for on-the-fly gross margin calculation
@@ -57,6 +137,7 @@ export default function COGSCalculator() {
   React.useEffect(() => {
     setActualLandingPrices({});
     setOriginalGrossMargins({});
+    setSelectedRows([]);  // Clear selection when city changes
   }, [selectedCity]);
 
   React.useEffect(() => {
@@ -67,6 +148,7 @@ export default function COGSCalculator() {
 
   const loadCOGSData = async () => {
     try {
+      setLoading(true);
       const token = localStorage.getItem('token');
       const res = await axios.get(`${API}/cogs/${selectedCity}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -74,6 +156,7 @@ export default function COGSCalculator() {
       });
       const data = res.data.cogs_data || [];
       setCogsData(data);
+      setSelectedRows([]);  // Clear selection after reload
       
       // Store original gross margin values for each row
       const originalMargins = {};
@@ -333,6 +416,17 @@ export default function COGSCalculator() {
           <p className="text-muted-foreground">Calculate cost and minimum landing price</p>
         </div>
         <div className="flex gap-3">
+          {canDelete && selectedRows.length > 0 && (
+            <Button 
+              onClick={() => setShowDeleteDialog(true)} 
+              variant="destructive" 
+              className="rounded-full"
+              data-testid="cogs-delete-selected-btn"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Selected ({selectedRows.length})
+            </Button>
+          )}
           <Button
             onClick={saveAll}
             disabled={!hasChanges || saving}
@@ -379,6 +473,15 @@ export default function COGSCalculator() {
             <table className="w-full text-sm">
               <thead className="bg-secondary">
                 <tr className="border-b">
+                  {canDelete && (
+                    <th className="p-3 font-semibold bg-secondary w-10">
+                      <Checkbox
+                        checked={selectedRows.length === cogsData.length && cogsData.length > 0}
+                        onCheckedChange={toggleAllSelection}
+                        data-testid="cogs-select-all-checkbox"
+                      />
+                    </th>
+                  )}
                   <th className="text-left p-3 font-semibold sticky left-0 bg-secondary">SKU</th>
                   {canSeeCostDetails && (
                     <>
@@ -401,7 +504,16 @@ export default function COGSCalculator() {
               </thead>
               <tbody>
                 {cogsData.map((row, index) => (
-                  <tr key={row.id} className="border-b hover:bg-secondary/20">
+                  <tr key={row.id} className={`border-b hover:bg-secondary/20 ${selectedRows.includes(row.id) ? 'bg-red-50' : ''}`}>
+                    {canDelete && (
+                      <td className="p-3">
+                        <Checkbox
+                          checked={selectedRows.includes(row.id)}
+                          onCheckedChange={() => toggleRowSelection(row.id)}
+                          data-testid={`cogs-row-checkbox-${index}`}
+                        />
+                      </td>
+                    )}
                     <td className="p-3 font-medium sticky left-0 bg-background">{row.sku_name}</td>
                     {canSeeCostDetails && (
                       <>
@@ -581,6 +693,36 @@ export default function COGSCalculator() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete COGS Entries</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedRows.length} COGS {selectedRows.length === 1 ? 'entry' : 'entries'}?
+              <br /><br />
+              This action cannot be undone. The following SKUs will be deleted:
+              <ul className="mt-2 max-h-40 overflow-y-auto text-sm">
+                {cogsData.filter(row => selectedRows.includes(row.id)).map(row => (
+                  <li key={row.id} className="text-red-600">• {row.sku_name}</li>
+                ))}
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={deleteSelectedCOGS} 
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700"
+              data-testid="cogs-confirm-delete-btn"
+            >
+              {deleting ? 'Deleting...' : `Delete ${selectedRows.length} ${selectedRows.length === 1 ? 'Entry' : 'Entries'}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -1,155 +1,157 @@
 <analysis>**original_problem_statement:**
-The user wants to build a comprehensive, mobile-ready Sales CRM application. Initially, this involved implementing multi-tenancy and an AI Sales Assistant. The project has since evolved to focus on adding highly specific and configurable modules.
+The user wants to build a comprehensive, mobile-ready Sales CRM application. The initial focus of this session was to sync code from another development session (), but it quickly evolved to address numerous UI/UX enhancements, mobile responsiveness issues, and critical backend stability problems related to an ActiveMQ integration.
 
-**PRODUCT REQUIREMENTS:**
-1.  **City-Based Lead Scoring Module**: An admin module where each tenant can define lead scoring models for specific cities.
-2.  **Tenant Industry Profiles**: A system to tag tenants with an  to enable/disable features.
-3.  **Opportunity Estimation Module**: A calculator on the Lead Detail page for specific industries.
-4.  **SKU-based Revenue Calculation**: An extension of the Opportunity Estimation module to calculate an Estimated Deal Value.
-5.  **Linked Leads (Related Leads) Module**: A system to link related leads (e.g., same owner, parent/branch) and copy activities/status updates between them, with de-duplication in reports.
-6.  **UI/UX Enhancements**:
-    *   Maintain a consistent and modern UI for all components.
-    *   Buttons should use dynamic branding colors from tenant settings.
-    *   Improve usability with features like auto-searching, clear descriptions, and prominent action buttons.
-    *   Streamline forms by removing redundant fields (, ).
-    *   Provide an intuitive logo upload mechanism.
-7.  **Production Stability**: The application must be stable for all user roles.
+During this session, the user requested and the agent implemented:
+1.  **Critical Bug Fixes:**
+    *   Resolved an infinite reconnect loop in the ActiveMQ subscriber.
+    *   Fixed the invoice processing logic to match messages against the correct account identifier ().
+    *   Solved a major tenant-isolation bug where invoices created by ActiveMQ were missing a  and thus were invisible in the UI.
+    *   Fixed a severe login bug that caused users to be redirected back to the login page after a successful login, requiring a force refresh.
+2.  **New Invoices Module:**
+    *   Create a new, full-featured module for viewing all invoices.
+    *   The UI should match the design of the existing  page.
+    *   Include advanced filters (Time Period, Territory, State, City, Account Name, Status), sorting, and pagination.
+    *   Display Gross, Credit Note, and Net values.
+    *   Provide a delete option for CEO and System Admin roles.
+3.  **Feature Enhancements:**
+    *   Add pagination and time filters to the invoices section on the  page.
+    *   Improve the empty-state UI for the invoices list.
+    *   Add a delete functionality for COGS (Cost of Goods Sold) entries on the  page, restricted to CEO and System Admin roles.
+4.  **UI/UX Fixes:**
+    *   Resolved multiple React errors on the new Invoices page, including Objects are not valid as a React child and Maximum update depth exceeded.
+    *   Handled inconsistent data fields ( vs. ) to ensure data is always displayed correctly.
 
 **User's preferred language**: English
 
 **what currently exists?**
-The application is a full-stack Sales CRM (React, FastAPI, MongoDB) with a multi-tenancy architecture.
--   Key modules include a city-based **Lead Scoring Model**, an **Opportunity Estimation** module, and a **Proposed SKU Pricing** calculator.
--   The Lead Detail page features a **collapsible Lead Scoring card** with quadrant-based styling and descriptions.
--   A new **Related Leads** feature allows for creating parent-child and peer-to-peer relationships between leads. This includes UI for management, a pop-out modal with multi-select linking, and debounced auto-search functionality.
--   The Log Activity form now allows copying activities and applying status updates to linked leads. The daily status report logic has been updated to group these copied activities to avoid duplication.
--   Significant UI/UX improvements have been implemented, including:
-    -   Removal of redundant Customer Tier and Estimated Deal Value fields from the lead edit form.
-    -   Action buttons (Log Activity, Link Related Leads) now dynamically use the tenant's primary branding color.
-    -   The logo upload functionality is now handled via a clickable camera icon in the lead header.
-    -   The right-side panel on the Lead Detail page has been resized for better layout.
--   Critical bugs have been fixed, including a UI layout issue in the status dropdown and a 500 server error on the logo upload endpoint.
+The application is a full-stack Sales CRM. Several critical bugs have been resolved in this session, most importantly the ActiveMQ subscriber stability, invoice matching logic, tenant isolation for invoices, and a login redirect loop. A new, full-featured Invoices module has been created from scratch, with a UI matching the  page, complete with advanced filters, pagination, and role-based delete functionality. The invoices section on the  page has also been enhanced with pagination and time filters. A new feature allowing admins to delete COGS entries has been added to the COGS Calculator page.
 
 **Last working item**:
--   **Last item agent was working:** The agent was in the process of cleaning up temporary  endpoints from  as requested by the user.
+-   **Last item agent was working:** Implementing a feature to allow CEO and System Admin roles to delete COGS entries from the  page. The agent added a backend  endpoint and updated the frontend to include checkboxes and a Delete Selected button visible only to authorized users.
 -   **Status:** IN PROGRESS
 -   **Agent Testing Done:** N
--   **Which testing method agent to use?** Manual testing by using  to verify the endpoints return a 404 error after removal.
+-   **Which testing method agent to use?** Frontend testing agent. The test should cover:
+    1.  Logging in as a CEO/Admin ().
+    2.  Navigating to the COGS Calculator page.
+    3.  Verifying the checkboxes and Delete Selected button are visible.
+    4.  Selecting one or more COGS entries and clicking delete.
+    5.  Confirming the entries are removed from the UI and the database.
+    6.  Logging in as a non-admin role (e.g., Sales Rep) and verifying the delete controls are *not* visible.
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
-
--   **Issue 1: Cleanup Temporary Debug Endpoints (P2)**
-    -   This is the task the agent was working on. It's a low-priority technical debt cleanup.
-    -   **Attempted fixes:** The agent located the debug endpoints in .
-    -   **Next debug checklist:**
-        1.  Delete the lines defining the  routes in .
-        2.  Restart the backend service.
-        3.  Verify with  that the endpoints are no longer accessible.
-    -   **Why fix this issue?** To remove unnecessary and potentially insecure code from the application.
-    -   **Status:** IN PROGRESS
-    -   **Is recurring issue?** N
-    -   **Should Test frontend/backend/both after fix?** Backend
-    -   **Blocked on other issue:** None
+-   **Issue 1: Test COGS Deletion Functionality (P0)**
+    -   **Description:** The newly implemented feature to delete COGS entries has not been tested.
+    -   **Status:** TESTING PENDING
+-   **Issue 2: Lead list filters (Territory, State, City) are not working (P1)**
+    -   **Description:** This is a critical bug from the previous session that was not addressed. The dropdown filters on the  page do not apply, preventing users from segmenting their data.
+    -   **Status:** NOT STARTED
 
 **In progress Task List**:
--   There are no other in-progress tasks.
+-   None.
 
 **Upcoming and Future Tasks**
-
 -   **Upcoming Tasks:**
-    -   **P1: Complete  Refactoring:** Move all remaining legacy routes from the monolithic  file into modular router files under .
+    -   **P1: Complete  Refactoring:** Move all remaining legacy routes and business logic from the monolithic  file into modular router files under . The creation of  was a good step in this direction.
 -   **Future Tasks:**
-    -   **P2: Upgrade AI Assistant to True RAG:** Upgrade the existing AI assistant to a true vector-based RAG system.
+    -   **P1: Upgrade AI Assistant to True RAG:** Upgrade the existing AI assistant to a true vector-based RAG system.
     -   **P2: Build Out Placeholder Modules:** Implement functionality for the empty modules (Maintenance, Inventory, etc.).
 
 **Completed work in this session**
--   **FEATURE: Related Leads Module:**
-    -   Implemented backend models () and API endpoints for creating and managing lead relationships.
-    -   Created a Related Leads card on  with a pop-out modal, multi-select linking, and debounced auto-search.
-    -   Updated the Log Activity form to allow copying activities and status updates to linked leads.
-    -   Modified the daily status report to group copied activities and prevent duplicates.
--   **UI/UX REFINEMENTS:**
-    -   Restyled the  with quadrant-based background colors and improved save button UX.
-    -   Added descriptive text for lead scoring quadrants.
-    -   Removed redundant  and  fields from the lead edit form.
-    -   Resized buttons and side panel on  for better usability.
-    -   Renamed Lead Group to Related Leads throughout the UI.
-    -   Updated action buttons to use dynamic tenant branding colors.
-    -   Moved the logo upload function to a clickable icon in the header, removing the old uploader component.
--   **BUG FIXES:**
-    -   Fixed a UI rendering issue in the status dropdown that caused large gaps.
-    -   Resolved a 500 error on the logo upload endpoint by removing a duplicate route in .
+-   **CRITICAL FIX: ActiveMQ Subscriber Stability:**
+    -   Fixed an infinite reconnect loop by correcting the  logic in .
+    -   Fixed invoice matching to use  from the MQ message.
+    -   **Resolved tenant-isolation bug** by adding  to invoices created via MQ, making them visible in the UI.
+-   **CRITICAL FIX: Login Redirect Loop:**
+    -   Fixed a race condition in  and  that caused users to be redirected back to the login page after a successful login.
+-   **FEATURE: New Invoices Module:**
+    -   Created  with endpoints for listing (with filters), deleting, and summarizing invoices.
+    -   Created  with a redesigned UI matching , including summary cards, advanced filters, pagination, and role-based delete functionality.
+    -   Added Credit Note value to the invoice list and summaries.
+-   **FEATURE: COGS Deletion:**
+    -   Added a  endpoint to .
+    -   Updated  to allow admins to select and delete COGS entries.
+-   **ENHANCEMENT: Account Detail Invoices:**
+    -   Added pagination and a time-period filter to the invoices section on .
+    -   Improved the empty-state message when no invoices are found for a given time filter.
+-   **BUG FIX: Invoice Page Errors:**
+    -   Fixed React errors (Objects are not valid as a React child and Maximum update depth exceeded) on the  page related to filter state management.
+    -   Normalized data display to handle both  and  fields.
+-   **ADMIN TOOL: Data Migration Endpoint:**
+    -   Created a temporary admin endpoint () to backfill the  for existing invoices in production.
 
 **Earlier issues found/mentioned but not fixed**
--   None.
+-   The critical bug where the **lead list filters (Territory, State, City) are not working** was mentioned in the initial handoff but was not addressed in this session.
 
 **Known issue recurrence from previous fork**
--   ** Refactoring:** The need to refactor the monolithic  file remains a pending technical debt task.
+-   The technical debt of the monolithic  file persists, though some progress was made by creating .
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
--   **Dynamic Component Styling:** Using CSS custom properties () passed down through React Context to make UI elements like buttons adapt to tenant-specific branding.
--   **Debouncing in React:** Using  and  to implement a delay for the auto-search functionality in the Link Leads dialog, improving performance.
--   **Complex State Management:** Managing state for modals, multi-select lists, and conditional UI within the  and  components.
--   **FastAPI Route Conflict Resolution:** Identified and resolved a route conflict between  and a modular router file () for the same endpoint.
+-   **Multi-Tenant Isolation:** The root cause of invisible invoices was the backend automatically adding a  to API queries, while the background MQ worker was not adding this field upon data insertion. The fix involved making the background worker tenant-aware.
+-   **React State & Effect Management:** Debugged and fixed complex React bugs, including an infinite re-render loop (Maximum update depth exceeded) by replacing -driven state changes with derived/computed state for dependent filters.
+-   **Modular API Routing:** Began refactoring the monolithic  by creating a dedicated  router and fixing circular dependencies using a shared  file.
+-   **Race Condition Debugging:** Solved the login redirect bug by identifying and fixing a race condition between  in  and the navigation call in the  component.
+-   **Defensive Data Handling:** Updated UI components and backend logic to handle multiple possible field names for the same data (e.g.,  vs. ), making the application more robust to data inconsistencies.
 
 **key DB schema**
--   ****: Added  (an array of  sub-documents),  (ObjectId), and  (string for base64 data).
--   ****: Added  (ObjectId) to track copied activities for de-duplication purposes.
+-   ****: This collection was the source of a major bug. Invoices created by the MQ subscriber were missing the  field. The fix ensures all new invoices have this field. A migration script/API was created to fix existing records.
+-   ****: Now supports deletion of entries.
 
 **changes in tech stack**
 -   None.
 
 **All files of reference**
--    (For debug endpoint removal and refactoring)
--    (Central UI component for recent features)
--    (UI for the Related Leads feature)
--    (For activity grouping logic)
+-    (ActiveMQ and tenant fixes)
+-    (New module, UI redesign, bug fixes)
+-    (New API router for invoices)
+-    (New delete functionality)
+-    (Multiple endpoint additions and modifications)
+-    (Login bug fix)
+-    (Login bug fix)
+-    (Invoice section enhancements)
+-    (Remains broken, needs fixing)
 
 **Areas that need refactoring**:
--   **:** Still contains many legacy routes and needs to be fully modularized. This is a recurring technical debt item.
--   **:** This component has become very large and handles a significant amount of logic and state. It should be broken down into smaller, more focused sub-components.
+-   **:** Still contains a large number of routes that should be migrated to modular files under .
 
 **key api endpoints**
--   : Creates links between leads.
--   : Removes a link.
--   : Fetches a lead's related leads.
--   : Modified to handle copying activities and status updates to linked leads.
--   : Now correctly handles multipart/form-data file uploads.
--   : Modified to group copied activities.
--   : To be removed.
+-   : **NEW** endpoint to list/filter all invoices with pagination.
+-   : **NEW** endpoint to delete an invoice (Admin/CEO only).
+-   : **NEW** temporary admin endpoint to run a data migration on existing invoices.
+-   : **NEW** endpoint to bulk-delete COGS entries (Admin/CEO only).
+-   : **MODIFIED** to support pagination and time filters.
 
 **Critical Info for New Agent**
--   The P0 production bug from the previous session is considered resolved by the user. Do not work on it.
--   Your immediate next task is to complete the removal of the  endpoints from .
--   The user has a strong focus on UI/UX. Be prepared for detailed feedback on styling, layout, and wording.
--   The  component is the main hub for recent features. It is complex, so exercise caution when making changes. The long-term goal should be to refactor it.
--   The  refactoring is a high-priority technical debt item to be addressed after any immediate user requests.
+-   **Your immediate priority (P0) is to test the new COGS deletion feature.** The code is implemented but completely untested.
+-   **Your next priority is the P1 bug: the broken lead list filters (Territory, State, City).** This is a critical issue from the original problem statement that still has not been addressed.
+-   **Tenant Isolation is a core concept.** The previous agent fixed a critical bug where the ActiveMQ worker wasn't setting the  on new invoices. Be mindful of this when creating new background processes or data insertion logic. The user needs to run the migration script on production for the fix to apply to old data.
+-   The UI for the new  page was buggy. The previous agent fixed an infinite re-render loop by using computed state instead of . Remember this pattern if similar issues arise.
 
 **documents and test reports created in this job**
--    was updated to reflect new features.
+-   None.
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  : Cleanup /api/debug/* endpoints **(IN PROGRESS)**
-2.  : Reports a 500 error on logo upload **(RESOLVED)**
-3.  : The logo activity button should dynamically change as per branding, panel width should be reduced **(RESOLVED)**
-4.  : Button colors should match theme, remove lead status section, make logo clickable for upload **(RESOLVED)**
-5.  : Keep the same wizard style as Lead score for Related Leads, remove '+' button **(RESOLVED)**
-6.  : Change label to Related Leads, add auto-search with debounce **(RESOLVED)**
-7.  : Give description for each relationship option, do not show the outlet name in dropdown **(RESOLVED)**
-8.  : Relationship options are confusing, change them and enforce single-select for parent **(RESOLVED)**
-9.  : link more leads button height should be bigger **(RESOLVED)**
-10. : I need a way to link leads and copy activities, with de-duplication in reports. **(RESOLVED)**
+1.  : Invoices page is not appealing and has issues. Asks to redesign it like , remove Outstanding, and fix filters. **(Completed)**
+2.  : Add credit note value to the invoices list. **(Completed)**
+3.  : The invoice ID is not showing up in the list. **(Completed)**
+4.  : The invoice screen is empty when there are no invoices for the selected time period. **(Completed)**
+5.  : Add an option for CEO/Admin to delete COGS entries. **(IN PROGRESS - Last working item)**
+6.  : Provides credentials for login. **(Resolved)**
+7.  : Asks for MongoDB connection URL for preview environment. **(Answered)**
+8.  : Asks for a sample invoice record for a specific customer. **(Provided)**
+9.  : Asks for a browser script to delete all invoice data from production. **(Provided)**
+10. : Reports a severe bug where login redirects back to the login page. **(Completed)**
 
 **Project Health Check:**
--   **Broken**: None. The critical production bug has been resolved.
+-   **Broken**: Lead list filtering () is non-functional.
 -   **Mocked**: None.
--   **Refactoring Needed**: , .
+-   **Refactoring Needed**: .
 
 **3rd Party Integrations**
+-   **Amazon MQ (ActiveMQ)**: Uses . Connection stability and data processing logic were significantly improved.
 -   Gemini (via Emergent LLM Key)
 -   Zoom API
 -   Resend
@@ -157,17 +159,16 @@ The application is a full-stack Sales CRM (React, FastAPI, MongoDB) with a multi
 -   Google Places API
 -   Google Workspace OAuth
 -   Claude Sonnet 4.5 (via Emergent LLM Key)
--   Amazon MQ (via Stomp.py)
 
 **Testing status**
 -   **Testing agent used after significant changes**: NO
 -   **Troubleshoot agent used after agent stuck in loop**: NO
 -   **Test files created**: None.
--   **Known regressions**: None in this session.
+-   **Known regressions**: The filtering functionality on the  page is broken (pre-existing, not a new regression).
 
 **Credentials to test flow:**
--   **CEO:**  /  (Tenant: )
--   **Sales Partner:**  / 
+-   **Admin/CEO:**  / 
+-   **Organization:** 
 
 **What agent forgot to execute**
--   The agent started the task of removing the  endpoints but did not fully complete the deletion and verification before the session ended. This is the current .</analysis>
+-   The agent never fixed the original P1 bug concerning the **broken lead list filters** (). The session was dominated by fixing critical ActiveMQ/login bugs and implementing new user requests for the Invoices module.</analysis>

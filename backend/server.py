@@ -1940,6 +1940,60 @@ async def copy_costs_to_all_cities(request: CopyCostsRequest, current_user: dict
         'cities_updated': cities_updated
     }
 
+@api_router.delete("/cogs/{sku_id}")
+async def delete_cogs_entry(sku_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Delete a COGS entry by ID.
+    Only CEO and System Admin can delete COGS entries.
+    """
+    user_role = current_user.get('role', '').lower()
+    if user_role not in ['ceo', 'system admin']:
+        raise HTTPException(status_code=403, detail="Only CEO and System Admin can delete COGS entries")
+    
+    # Find the entry first
+    entry = await get_tdb().cogs_data.find_one({'id': sku_id}, {'_id': 0})
+    if not entry:
+        raise HTTPException(status_code=404, detail="COGS entry not found")
+    
+    # Delete the entry
+    result = await get_tdb().cogs_data.delete_one({'id': sku_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="COGS entry not found")
+    
+    logger.info(f"[COGS] Deleted COGS entry {sku_id} ({entry.get('sku_name')}) by {current_user.get('email')}")
+    
+    return {
+        'success': True,
+        'message': f'COGS entry for {entry.get("sku_name")} deleted successfully'
+    }
+
+@api_router.delete("/cogs/city/{city}")
+async def delete_all_cogs_for_city(city: str, current_user: dict = Depends(get_current_user)):
+    """
+    Delete all COGS entries for a city.
+    Only CEO and System Admin can delete COGS entries.
+    """
+    user_role = current_user.get('role', '').lower()
+    if user_role not in ['ceo', 'system admin']:
+        raise HTTPException(status_code=403, detail="Only CEO and System Admin can delete COGS entries")
+    
+    # Count entries first
+    count = await get_tdb().cogs_data.count_documents({'city': city})
+    
+    if count == 0:
+        raise HTTPException(status_code=404, detail=f"No COGS entries found for city: {city}")
+    
+    # Delete all entries for this city
+    result = await get_tdb().cogs_data.delete_many({'city': city})
+    
+    logger.info(f"[COGS] Deleted {result.deleted_count} COGS entries for city {city} by {current_user.get('email')}")
+    
+    return {
+        'success': True,
+        'message': f'Deleted {result.deleted_count} COGS entries for {city}'
+    }
+
 @api_router.post("/cogs/cleanup-invalid-skus")
 async def cleanup_invalid_skus(current_user: dict = Depends(get_current_user)):
     """
