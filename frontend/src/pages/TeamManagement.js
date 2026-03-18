@@ -923,6 +923,7 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
   const [loading, setLoading] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [designations, setDesignations] = useState(DEFAULT_DESIGNATIONS);
   // Normalize department value to match DEPARTMENTS array
   const getNormalizedDept = (dept) => {
     if (!dept) return 'Sales';
@@ -974,8 +975,23 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
         console.error('Failed to load current user');
       }
     };
+    const fetchDesignations = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const designationsResponse = await axios.get(`${API_URL}/designations`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (designationsResponse.data.designations?.length > 0) {
+          setDesignations(designationsResponse.data.designations.map(d => d.name));
+        }
+      } catch (error) {
+        // Use default designations if endpoint doesn't exist
+        console.log('Using default designations');
+      }
+    };
     fetchManagers();
     fetchCurrentUser();
+    fetchDesignations();
   }, []);
 
   // Check if current user can edit HR data
