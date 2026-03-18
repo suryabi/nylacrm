@@ -106,11 +106,16 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
   - Full table view with assignments grouped by city
   - Delete functionality with confirmation dialog
 
-### Phase 3: Operations & Transactions
-- Primary Shipment to Distributor (stock transfer)
-- Distributor-to-Account Delivery recording
-- Stock balance tracking at distributor locations
-- Validations (coverage, assignment, stock levels)
+### Phase 3: Operations & Transactions ✅ COMPLETE
+- ✅ Primary Shipment to Distributor (stock transfer)
+  - Create shipment with items (SKU, quantity, price, discount, tax)
+  - Status workflow: Draft → Confirmed → In Transit → Delivered
+  - Auto-calculation of amounts (gross, discount, tax, net)
+  - Transport details (vehicle, driver info)
+  - Auto-update distributor stock on delivery
+- ⏳ Distributor-to-Account Delivery recording (next up)
+- ⏳ Stock balance tracking at distributor locations
+- ⏳ Validations (coverage, assignment, stock levels)
 
 ### Phase 4: Settlement & Reports
 - Distributor Settlement calculation engine
@@ -120,12 +125,11 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 ## Pending Tasks
 
 ### P0 - Next Up
-1. **Distribution Module Phase 3** - Distributor Stock Receipt / Primary Shipment
+1. **Distribution Module Phase 3 (Part 2)** - Distributor-to-Account Delivery
 
 ### P1 - High Priority
-1. **Distribution Module Phase 4** - Distributor-to-Account Delivery
-2. **Distribution Module Phase 5** - Distributor Settlement calculation
-3. **Server.py Refactoring** - Move remaining routes to modular files
+1. **Distribution Module Phase 4** - Distributor Settlement calculation
+2. **Server.py Refactoring** - Move remaining routes to modular files
 
 ### P2 - Medium Priority
 1. **AI Assistant RAG Upgrade** - Upgrade to true vector-based RAG system
@@ -144,6 +148,14 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 - `POST /api/distributors/{id}/margins/bulk` - Bulk add margins
 - `GET/POST/PUT/DELETE /api/distributors/{id}/assignments` - Account-Distributor assignments
 - `GET /api/distributors/accounts/search` - Search accounts for assignment
+- `GET /api/distributors/shipments/all` - List all shipments with filters
+- `GET /api/distributors/shipments/summary` - Shipments summary stats
+- `GET/POST/PUT/DELETE /api/distributors/{id}/shipments` - Shipment CRUD
+- `POST /api/distributors/{id}/shipments/{shipment_id}/confirm` - Confirm shipment
+- `POST /api/distributors/{id}/shipments/{shipment_id}/dispatch` - Mark dispatched
+- `POST /api/distributors/{id}/shipments/{shipment_id}/deliver` - Mark delivered
+- `POST /api/distributors/{id}/shipments/{shipment_id}/cancel` - Cancel shipment
+- `GET /api/distributors/{id}/stock` - Get distributor stock levels
 
 ## Test Credentials
 - **CEO**: `surya.yadavalli@nylaairwater.earth` / `test123`
