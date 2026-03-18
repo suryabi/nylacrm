@@ -136,6 +136,25 @@ export default function DistributorDetail() {
   const [copyTargetCity, setCopyTargetCity] = useState('');
   const [copying, setCopying] = useState(false);
   
+  // Shipment state
+  const [shipments, setShipments] = useState([]);
+  const [shipmentsLoading, setShipmentsLoading] = useState(false);
+  const [showShipmentDialog, setShowShipmentDialog] = useState(false);
+  const [shipmentForm, setShipmentForm] = useState({
+    distributor_location_id: '',
+    shipment_date: new Date().toISOString().split('T')[0],
+    expected_delivery_date: '',
+    reference_number: '',
+    vehicle_number: '',
+    driver_name: '',
+    driver_contact: '',
+    remarks: ''
+  });
+  const [shipmentItems, setShipmentItems] = useState([]);
+  const [savingShipment, setSavingShipment] = useState(false);
+  const [selectedShipment, setSelectedShipment] = useState(null);
+  const [showShipmentDetail, setShowShipmentDetail] = useState(false);
+  
   const canManage = user && ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head'].includes(user.role);
 
   const fetchDistributor = useCallback(async () => {
@@ -250,6 +269,28 @@ export default function DistributorDetail() {
       fetchAssignments();
     }
   }, [activeTab, fetchAssignments]);
+
+  // Fetch shipments
+  const fetchShipments = useCallback(async () => {
+    try {
+      setShipmentsLoading(true);
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/shipments`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setShipments(response.data.shipments || []);
+    } catch (error) {
+      console.error('Failed to fetch shipments:', error);
+    } finally {
+      setShipmentsLoading(false);
+    }
+  }, [id, token]);
+
+  useEffect(() => {
+    if (activeTab === 'shipments') {
+      fetchShipments();
+    }
+  }, [activeTab, fetchShipments]);
 
   // Search accounts
   const searchAccounts = useCallback(async (query) => {
@@ -668,6 +709,196 @@ export default function DistributorDetail() {
     }
   };
 
+  // ============ Shipment Handlers ============
+  
+  const handleCreateShipment = async () => {
+    if (!shipmentForm.distributor_location_id) {
+      toast.error('Please select a distributor location');
+      return;
+    }
+    if (!shipmentForm.shipment_date) {
+      toast.error('Please enter shipment date');
+      return;
+    }
+    if (shipmentItems.length === 0) {
+      toast.error('Please add at least one item');
+      return;
+    }
+    
+    try {
+      setSavingShipment(true);
+      
+      const shipmentData = {
+        distributor_id: id,
+        distributor_location_id: shipmentForm.distributor_location_id,
+        shipment_date: shipmentForm.shipment_date,
+        expected_delivery_date: shipmentForm.expected_delivery_date || null,
+        reference_number: shipmentForm.reference_number || null,
+        vehicle_number: shipmentForm.vehicle_number || null,
+        driver_name: shipmentForm.driver_name || null,
+        driver_contact: shipmentForm.driver_contact || null,
+        remarks: shipmentForm.remarks || null,
+        items: shipmentItems.map(item => ({
+          sku_id: item.sku_id,
+          sku_name: item.sku_name,
+          quantity: parseInt(item.quantity),
+          unit_price: parseFloat(item.unit_price),
+          discount_percent: parseFloat(item.discount_percent) || 0,
+          tax_percent: parseFloat(item.tax_percent) || 0
+        }))
+      };
+      
+      const response = await axios.post(`${API_URL}/api/distributors/${id}/shipments`, shipmentData, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      
+      toast.success(`Shipment ${response.data.shipment_number} created successfully`);
+      setShowShipmentDialog(false);
+      resetShipmentForm();
+      fetchShipments();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to create shipment');
+    } finally {
+      setSavingShipment(false);
+    }
+  };
+
+  const resetShipmentForm = () => {
+    setShipmentForm({
+      distributor_location_id: '',
+      shipment_date: new Date().toISOString().split('T')[0],
+      expected_delivery_date: '',
+      reference_number: '',
+      vehicle_number: '',
+      driver_name: '',
+      driver_contact: '',
+      remarks: ''
+    });
+    setShipmentItems([]);
+  };
+
+  const addShipmentItem = () => {
+    setShipmentItems(prev => [...prev, {
+      id: Date.now(),
+      sku_id: '',
+      sku_name: '',
+      quantity: 1,
+      unit_price: 0,
+      discount_percent: 0,
+      tax_percent: 18
+    }]);
+  };
+
+  const updateShipmentItem = (itemId, field, value) => {
+    setShipmentItems(prev => prev.map(item => 
+      item.id === itemId ? { ...item, [field]: value } : item
+    ));
+  };
+
+  const removeShipmentItem = (itemId) => {
+    setShipmentItems(prev => prev.filter(item => item.id !== itemId));
+  };
+
+  const handleConfirmShipment = async (shipmentId) => {
+    try {
+      await axios.post(`${API_URL}/api/distributors/${id}/shipments/${shipmentId}/confirm`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Shipment confirmed');
+      fetchShipments();
+      setShowShipmentDetail(false);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to confirm shipment');
+    }
+  };
+
+  const handleDispatchShipment = async (shipmentId) => {
+    try {
+      await axios.post(`${API_URL}/api/distributors/${id}/shipments/${shipmentId}/dispatch`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Shipment dispatched');
+      fetchShipments();
+      setShowShipmentDetail(false);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to dispatch shipment');
+    }
+  };
+
+  const handleDeliverShipment = async (shipmentId) => {
+    try {
+      await axios.post(`${API_URL}/api/distributors/${id}/shipments/${shipmentId}/deliver`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Shipment marked as delivered');
+      fetchShipments();
+      setShowShipmentDetail(false);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to mark shipment as delivered');
+    }
+  };
+
+  const handleCancelShipment = async (shipmentId) => {
+    try {
+      await axios.post(`${API_URL}/api/distributors/${id}/shipments/${shipmentId}/cancel`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Shipment cancelled');
+      setDeleteTarget(null);
+      fetchShipments();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to cancel shipment');
+    }
+  };
+
+  const handleDeleteShipment = async (shipmentId) => {
+    try {
+      setDeleting(true);
+      await axios.delete(`${API_URL}/api/distributors/${id}/shipments/${shipmentId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Shipment deleted');
+      setDeleteTarget(null);
+      fetchShipments();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete shipment');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const viewShipmentDetail = async (shipmentId) => {
+    try {
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/shipments/${shipmentId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setSelectedShipment(response.data);
+      setShowShipmentDetail(true);
+    } catch (error) {
+      toast.error('Failed to load shipment details');
+    }
+  };
+
+  const getShipmentStatusBadge = (status) => {
+    const statusConfig = {
+      draft: { label: 'Draft', color: 'bg-gray-100 text-gray-800' },
+      confirmed: { label: 'Confirmed', color: 'bg-blue-100 text-blue-800' },
+      in_transit: { label: 'In Transit', color: 'bg-yellow-100 text-yellow-800' },
+      delivered: { label: 'Delivered', color: 'bg-green-100 text-green-800' },
+      partially_delivered: { label: 'Partial', color: 'bg-orange-100 text-orange-800' },
+      cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800' }
+    };
+    const config = statusConfig[status] || statusConfig.draft;
+    return <Badge className={config.color}>{config.label}</Badge>;
+  };
+
   // Get available cities for the selected state that are not already covered
   const getAvailableCities = () => {
     if (!selectedState) return [];
@@ -760,6 +991,9 @@ export default function DistributorDetail() {
           </TabsTrigger>
           <TabsTrigger value="assignments" data-testid="assignments-tab">
             Account Assignments ({assignments.length})
+          </TabsTrigger>
+          <TabsTrigger value="shipments" data-testid="shipments-tab">
+            Shipments ({shipments.length})
           </TabsTrigger>
         </TabsList>
 
@@ -1931,7 +2165,468 @@ export default function DistributorDetail() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Shipments Tab */}
+        <TabsContent value="shipments">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Primary Shipments</CardTitle>
+                <CardDescription>Stock shipments to this distributor's locations</CardDescription>
+              </div>
+              {canManage && (
+                <Dialog open={showShipmentDialog} onOpenChange={(open) => {
+                  setShowShipmentDialog(open);
+                  if (!open) resetShipmentForm();
+                }}>
+                  <DialogTrigger asChild>
+                    <Button data-testid="create-shipment-btn">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Shipment
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Create Primary Shipment</DialogTitle>
+                      <DialogDescription>
+                        Record stock being sent to {distributor.distributor_name}
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      {/* Location & Date */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Destination Location *</Label>
+                          <Select
+                            value={shipmentForm.distributor_location_id}
+                            onValueChange={(v) => setShipmentForm(prev => ({ ...prev, distributor_location_id: v }))}
+                          >
+                            <SelectTrigger data-testid="shipment-location-select">
+                              <SelectValue placeholder="Select warehouse/location" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(distributor.locations || [])
+                                .filter(loc => loc.status === 'active')
+                                .map(loc => (
+                                  <SelectItem key={loc.id} value={loc.id}>
+                                    {loc.location_name} ({loc.city})
+                                    {loc.is_default && ' ★'}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Shipment Date *</Label>
+                          <Input
+                            type="date"
+                            value={shipmentForm.shipment_date}
+                            onChange={(e) => setShipmentForm(prev => ({ ...prev, shipment_date: e.target.value }))}
+                            data-testid="shipment-date-input"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Expected Delivery Date</Label>
+                          <Input
+                            type="date"
+                            value={shipmentForm.expected_delivery_date}
+                            onChange={(e) => setShipmentForm(prev => ({ ...prev, expected_delivery_date: e.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Reference/PO Number</Label>
+                          <Input
+                            placeholder="e.g., PO-2026-001"
+                            value={shipmentForm.reference_number}
+                            onChange={(e) => setShipmentForm(prev => ({ ...prev, reference_number: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Transport Details */}
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label>Vehicle Number</Label>
+                          <Input
+                            placeholder="KA-01-AB-1234"
+                            value={shipmentForm.vehicle_number}
+                            onChange={(e) => setShipmentForm(prev => ({ ...prev, vehicle_number: e.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Driver Name</Label>
+                          <Input
+                            placeholder="Driver name"
+                            value={shipmentForm.driver_name}
+                            onChange={(e) => setShipmentForm(prev => ({ ...prev, driver_name: e.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Driver Contact</Label>
+                          <Input
+                            placeholder="+91 9876543210"
+                            value={shipmentForm.driver_contact}
+                            onChange={(e) => setShipmentForm(prev => ({ ...prev, driver_contact: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Shipment Items */}
+                      <div className="space-y-3 border-t pt-4">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-base font-semibold">Shipment Items</Label>
+                          <Button variant="outline" size="sm" onClick={addShipmentItem} data-testid="add-item-btn">
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add Item
+                          </Button>
+                        </div>
+                        
+                        {shipmentItems.length === 0 ? (
+                          <div className="text-center py-6 text-muted-foreground border rounded-md">
+                            <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                            <p className="text-sm">No items added. Click "Add Item" to start.</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {shipmentItems.map((item, index) => (
+                              <div key={item.id} className="grid grid-cols-12 gap-2 items-end p-3 border rounded-md bg-muted/30" data-testid={`shipment-item-${index}`}>
+                                <div className="col-span-4 space-y-1">
+                                  <Label className="text-xs">SKU</Label>
+                                  <Select
+                                    value={item.sku_id}
+                                    onValueChange={(v) => {
+                                      const selectedSku = skus.find(s => s.id === v);
+                                      updateShipmentItem(item.id, 'sku_id', v);
+                                      if (selectedSku) {
+                                        updateShipmentItem(item.id, 'sku_name', selectedSku.name || selectedSku.sku_name);
+                                      }
+                                    }}
+                                  >
+                                    <SelectTrigger className="h-9">
+                                      <SelectValue placeholder="Select SKU" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {skus.map(sku => (
+                                        <SelectItem key={sku.id} value={sku.id}>
+                                          {sku.name || sku.sku_name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="col-span-2 space-y-1">
+                                  <Label className="text-xs">Quantity</Label>
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    className="h-9"
+                                    value={item.quantity}
+                                    onChange={(e) => updateShipmentItem(item.id, 'quantity', e.target.value)}
+                                  />
+                                </div>
+                                <div className="col-span-2 space-y-1">
+                                  <Label className="text-xs">Unit Price (₹)</Label>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    className="h-9"
+                                    value={item.unit_price}
+                                    onChange={(e) => updateShipmentItem(item.id, 'unit_price', e.target.value)}
+                                  />
+                                </div>
+                                <div className="col-span-1 space-y-1">
+                                  <Label className="text-xs">Disc %</Label>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    className="h-9"
+                                    value={item.discount_percent}
+                                    onChange={(e) => updateShipmentItem(item.id, 'discount_percent', e.target.value)}
+                                  />
+                                </div>
+                                <div className="col-span-1 space-y-1">
+                                  <Label className="text-xs">Tax %</Label>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    className="h-9"
+                                    value={item.tax_percent}
+                                    onChange={(e) => updateShipmentItem(item.id, 'tax_percent', e.target.value)}
+                                  />
+                                </div>
+                                <div className="col-span-1 space-y-1">
+                                  <Label className="text-xs">Amount</Label>
+                                  <div className="h-9 flex items-center text-sm font-medium">
+                                    ₹{((item.quantity * item.unit_price * (1 - (item.discount_percent || 0) / 100)) * (1 + (item.tax_percent || 0) / 100)).toFixed(2)}
+                                  </div>
+                                </div>
+                                <div className="col-span-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-9 w-9 p-0 text-destructive"
+                                    onClick={() => removeShipmentItem(item.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                            
+                            {/* Total */}
+                            <div className="flex justify-end pt-2 border-t">
+                              <div className="text-right">
+                                <span className="text-muted-foreground mr-4">Total Amount:</span>
+                                <span className="text-lg font-bold">
+                                  ₹{shipmentItems.reduce((sum, item) => {
+                                    const gross = item.quantity * item.unit_price;
+                                    const afterDiscount = gross * (1 - (item.discount_percent || 0) / 100);
+                                    const withTax = afterDiscount * (1 + (item.tax_percent || 0) / 100);
+                                    return sum + withTax;
+                                  }, 0).toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Remarks */}
+                      <div className="space-y-2">
+                        <Label>Remarks</Label>
+                        <Textarea
+                          placeholder="Any additional notes..."
+                          value={shipmentForm.remarks}
+                          onChange={(e) => setShipmentForm(prev => ({ ...prev, remarks: e.target.value }))}
+                          rows={2}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setShowShipmentDialog(false)}>Cancel</Button>
+                      <Button
+                        onClick={handleCreateShipment}
+                        disabled={savingShipment || !shipmentForm.distributor_location_id || shipmentItems.length === 0}
+                        data-testid="save-shipment-btn"
+                      >
+                        {savingShipment ? 'Creating...' : 'Create Shipment'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </CardHeader>
+            <CardContent>
+              {shipmentsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : shipments.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Truck className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No shipments recorded</p>
+                  <p className="text-sm">Create a shipment to record stock sent to this distributor</p>
+                  {(distributor.locations?.length || 0) === 0 && (
+                    <p className="text-sm text-amber-600 mt-2">Note: Add a location first before creating shipments</p>
+                  )}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full" data-testid="shipments-table">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="text-left p-3 font-medium">Shipment #</th>
+                        <th className="text-left p-3 font-medium">Date</th>
+                        <th className="text-left p-3 font-medium">Location</th>
+                        <th className="text-right p-3 font-medium">Qty</th>
+                        <th className="text-right p-3 font-medium">Amount</th>
+                        <th className="text-center p-3 font-medium">Status</th>
+                        <th className="text-right p-3 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shipments.map((shipment) => (
+                        <tr key={shipment.id} className="border-b hover:bg-muted/30" data-testid={`shipment-row-${shipment.id}`}>
+                          <td className="p-3">
+                            <button 
+                              className="font-medium text-primary hover:underline"
+                              onClick={() => viewShipmentDetail(shipment.id)}
+                            >
+                              {shipment.shipment_number}
+                            </button>
+                            {shipment.reference_number && (
+                              <p className="text-xs text-muted-foreground">{shipment.reference_number}</p>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-4 w-4 text-muted-foreground" />
+                              {new Date(shipment.shipment_date).toLocaleDateString()}
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-1">
+                              <MapPin className="h-4 w-4 text-muted-foreground" />
+                              {shipment.distributor_location_name}
+                            </div>
+                          </td>
+                          <td className="p-3 text-right font-medium">{shipment.total_quantity}</td>
+                          <td className="p-3 text-right font-medium">₹{shipment.total_net_amount?.toLocaleString()}</td>
+                          <td className="p-3 text-center">
+                            {getShipmentStatusBadge(shipment.status)}
+                          </td>
+                          <td className="p-3 text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => viewShipmentDetail(shipment.id)}
+                                data-testid={`view-shipment-${shipment.id}`}
+                              >
+                                <FileText className="h-4 w-4" />
+                              </Button>
+                              {canManage && shipment.status === 'draft' && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive"
+                                  onClick={() => setDeleteTarget({
+                                    type: 'shipment',
+                                    id: shipment.id,
+                                    name: shipment.shipment_number
+                                  })}
+                                  data-testid={`delete-shipment-${shipment.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* Shipment Detail Dialog */}
+      <Dialog open={showShipmentDetail} onOpenChange={setShowShipmentDetail}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              Shipment {selectedShipment?.shipment_number}
+              {selectedShipment && getShipmentStatusBadge(selectedShipment.status)}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedShipment && (
+            <div className="space-y-4">
+              {/* Shipment Info */}
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Location:</span>
+                  <span className="ml-2 font-medium">{selectedShipment.distributor_location_name}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Shipment Date:</span>
+                  <span className="ml-2 font-medium">{new Date(selectedShipment.shipment_date).toLocaleDateString()}</span>
+                </div>
+                {selectedShipment.reference_number && (
+                  <div>
+                    <span className="text-muted-foreground">Reference:</span>
+                    <span className="ml-2 font-medium">{selectedShipment.reference_number}</span>
+                  </div>
+                )}
+                {selectedShipment.vehicle_number && (
+                  <div>
+                    <span className="text-muted-foreground">Vehicle:</span>
+                    <span className="ml-2 font-medium">{selectedShipment.vehicle_number}</span>
+                  </div>
+                )}
+                {selectedShipment.driver_name && (
+                  <div>
+                    <span className="text-muted-foreground">Driver:</span>
+                    <span className="ml-2 font-medium">{selectedShipment.driver_name} {selectedShipment.driver_contact}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Items */}
+              <div className="border rounded-md">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="text-left p-2 font-medium">SKU</th>
+                      <th className="text-right p-2 font-medium">Qty</th>
+                      <th className="text-right p-2 font-medium">Price</th>
+                      <th className="text-right p-2 font-medium">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(selectedShipment.items || []).map((item, idx) => (
+                      <tr key={idx} className="border-b">
+                        <td className="p-2">{item.sku_name || item.sku_id}</td>
+                        <td className="p-2 text-right">{item.quantity}</td>
+                        <td className="p-2 text-right">₹{item.unit_price}</td>
+                        <td className="p-2 text-right">₹{item.net_amount?.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-muted/30">
+                      <td colSpan="3" className="p-2 text-right font-medium">Total:</td>
+                      <td className="p-2 text-right font-bold">₹{selectedShipment.total_net_amount?.toLocaleString()}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {/* Actions */}
+              {canManage && (
+                <div className="flex justify-end gap-2 pt-4 border-t">
+                  {selectedShipment.status === 'draft' && (
+                    <>
+                      <Button variant="outline" onClick={() => handleCancelShipment(selectedShipment.id)}>
+                        Cancel Shipment
+                      </Button>
+                      <Button onClick={() => handleConfirmShipment(selectedShipment.id)}>
+                        <Check className="h-4 w-4 mr-2" />
+                        Confirm
+                      </Button>
+                    </>
+                  )}
+                  {selectedShipment.status === 'confirmed' && (
+                    <>
+                      <Button variant="outline" onClick={() => handleCancelShipment(selectedShipment.id)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={() => handleDispatchShipment(selectedShipment.id)}>
+                        <Truck className="h-4 w-4 mr-2" />
+                        Mark Dispatched
+                      </Button>
+                    </>
+                  )}
+                  {['confirmed', 'in_transit', 'partially_delivered'].includes(selectedShipment.status) && (
+                    <Button onClick={() => handleDeliverShipment(selectedShipment.id)} className="bg-green-600 hover:bg-green-700">
+                      <Check className="h-4 w-4 mr-2" />
+                      Mark Delivered
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
@@ -1957,6 +2652,8 @@ export default function DistributorDetail() {
                   handleDeleteMargin(deleteTarget.id);
                 } else if (deleteTarget?.type === 'assignment') {
                   handleDeleteAssignment(deleteTarget.id);
+                } else if (deleteTarget?.type === 'shipment') {
+                  handleDeleteShipment(deleteTarget.id);
                 }
               }}
             >

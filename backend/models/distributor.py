@@ -305,3 +305,114 @@ class AccountDistributor(BaseModel):
     status: str = "active"
     created_at: str
     updated_at: str
+
+
+# ============ Primary Shipment / Stock Receipt ============
+
+class ShipmentStatus(str, Enum):
+    DRAFT = "draft"
+    CONFIRMED = "confirmed"
+    IN_TRANSIT = "in_transit"
+    DELIVERED = "delivered"
+    PARTIALLY_DELIVERED = "partially_delivered"
+    CANCELLED = "cancelled"
+
+
+class ShipmentItemCreate(BaseModel):
+    sku_id: str
+    sku_name: Optional[str] = None
+    sku_code: Optional[str] = None
+    quantity: int
+    unit_price: float
+    discount_percent: Optional[float] = 0
+    tax_percent: Optional[float] = 0
+    remarks: Optional[str] = None
+
+
+class ShipmentItemUpdate(BaseModel):
+    sku_id: Optional[str] = None
+    sku_name: Optional[str] = None
+    sku_code: Optional[str] = None
+    quantity: Optional[int] = None
+    unit_price: Optional[float] = None
+    discount_percent: Optional[float] = None
+    tax_percent: Optional[float] = None
+    remarks: Optional[str] = None
+
+
+class ShipmentItem(BaseModel):
+    id: str
+    shipment_id: str
+    sku_id: str
+    sku_name: Optional[str] = None
+    sku_code: Optional[str] = None
+    quantity: int
+    unit_price: float
+    discount_percent: float = 0
+    tax_percent: float = 0
+    gross_amount: float  # quantity * unit_price
+    discount_amount: float  # gross_amount * discount_percent / 100
+    taxable_amount: float  # gross_amount - discount_amount
+    tax_amount: float  # taxable_amount * tax_percent / 100
+    net_amount: float  # taxable_amount + tax_amount
+    remarks: Optional[str] = None
+
+
+class PrimaryShipmentCreate(BaseModel):
+    distributor_id: str
+    distributor_location_id: str
+    shipment_date: str  # ISO date string
+    expected_delivery_date: Optional[str] = None
+    reference_number: Optional[str] = None  # External reference like PO number
+    vehicle_number: Optional[str] = None
+    driver_name: Optional[str] = None
+    driver_contact: Optional[str] = None
+    shipping_address: Optional[str] = None
+    remarks: Optional[str] = None
+    items: List[ShipmentItemCreate]
+
+
+class PrimaryShipmentUpdate(BaseModel):
+    shipment_date: Optional[str] = None
+    expected_delivery_date: Optional[str] = None
+    reference_number: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    driver_name: Optional[str] = None
+    driver_contact: Optional[str] = None
+    shipping_address: Optional[str] = None
+    remarks: Optional[str] = None
+    status: Optional[str] = None
+
+
+class PrimaryShipment(BaseModel):
+    id: str
+    tenant_id: str
+    shipment_number: str  # Auto-generated like SHP-2026-0001
+    distributor_id: str
+    distributor_name: Optional[str] = None
+    distributor_code: Optional[str] = None
+    distributor_location_id: str
+    distributor_location_name: Optional[str] = None
+    shipment_date: str
+    expected_delivery_date: Optional[str] = None
+    actual_delivery_date: Optional[str] = None
+    reference_number: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    driver_name: Optional[str] = None
+    driver_contact: Optional[str] = None
+    shipping_address: Optional[str] = None
+    status: str = "draft"
+    total_quantity: int = 0
+    total_gross_amount: float = 0
+    total_discount_amount: float = 0
+    total_tax_amount: float = 0
+    total_net_amount: float = 0
+    remarks: Optional[str] = None
+    items: Optional[List[ShipmentItem]] = None
+    created_at: str
+    updated_at: str
+    created_by: Optional[str] = None
+    confirmed_at: Optional[str] = None
+    confirmed_by: Optional[str] = None
+    delivered_at: Optional[str] = None
+    delivered_by: Optional[str] = None
