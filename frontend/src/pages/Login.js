@@ -33,8 +33,14 @@ export default function Login() {
   // Check for remembered email
   const rememberedEmail = localStorage.getItem('rememberedEmail') || '';
   const rememberedTenant = localStorage.getItem('selectedTenant') || 'nyla-air-water';
-  const [email, setEmail] = useState(rememberedEmail || '');
-  const [password, setPassword] = useState('');
+  
+  // Auto-populate test credentials in preview/test environment
+  const isTestEnv = API_URL?.includes('preview.emergentagent.com') || API_URL?.includes('localhost');
+  const defaultEmail = isTestEnv ? 'surya.yadavalli@nylaairwater.earth' : '';
+  const defaultPassword = isTestEnv ? 'test123' : '';
+  
+  const [email, setEmail] = useState(rememberedEmail || defaultEmail);
+  const [password, setPassword] = useState(defaultPassword);
   const [rememberMe, setRememberMe] = useState(!!rememberedEmail);
   const [loading, setLoading] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
