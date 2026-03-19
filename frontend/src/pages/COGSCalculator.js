@@ -409,55 +409,62 @@ export default function COGSCalculator() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between">
+    <div className="space-y-4 md:space-y-6">
+      {/* Header - Responsive */}
+      <div className="flex flex-col sm:flex-row sm:justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-light mb-2">COGS Calculator</h1>
-          <p className="text-muted-foreground">Calculate cost and minimum landing price</p>
+          <h1 className="text-2xl sm:text-4xl font-light mb-1 sm:mb-2">COGS Calculator</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Calculate cost and minimum landing price</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2 sm:gap-3">
           {canDelete && selectedRows.length > 0 && (
             <Button 
               onClick={() => setShowDeleteDialog(true)} 
               variant="destructive" 
-              className="rounded-full"
+              className="rounded-full text-xs sm:text-sm"
+              size="sm"
               data-testid="cogs-delete-selected-btn"
             >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete Selected ({selectedRows.length})
+              <Trash2 className="h-4 w-4 mr-1 sm:mr-2" />
+              Delete ({selectedRows.length})
             </Button>
           )}
           <Button
             onClick={saveAll}
             disabled={!hasChanges || saving}
-            className="rounded-full"
+            className="rounded-full text-xs sm:text-sm"
+            size="sm"
           >
-            <Save className="h-4 w-4 mr-2" />
-            {saving ? 'Saving...' : hasChanges ? 'Save All Changes' : 'All Saved'}
+            <Save className="h-4 w-4 mr-1 sm:mr-2" />
+            {saving ? 'Saving...' : hasChanges ? 'Save All' : 'Saved'}
           </Button>
           {canSeeCostDetails && (
             <Button 
               onClick={() => setShowCopyDialog(true)} 
               variant="outline" 
-              className="rounded-full"
+              className="rounded-full text-xs sm:text-sm hidden sm:flex"
+              size="sm"
               disabled={!selectedCity || cogsData.length === 0}
             >
-              <Copy className="h-4 w-4 mr-2" />Copy Costs to All Cities
+              <Copy className="h-4 w-4 mr-1 sm:mr-2" />
+              <span className="hidden md:inline">Copy Costs to All Cities</span>
+              <span className="md:hidden">Copy All</span>
             </Button>
           )}
-          <Button onClick={exportToExcel} variant="outline" className="rounded-full">
-            <Download className="h-4 w-4 mr-2" />Download Excel
+          <Button onClick={exportToExcel} variant="outline" className="rounded-full text-xs sm:text-sm" size="sm">
+            <Download className="h-4 w-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Download</span>
           </Button>
         </div>
       </div>
 
-      <Card className="p-6 border rounded-2xl">
-        <div className="mb-6">
-          <Label>Select City</Label>
+      <Card className="p-4 sm:p-6 border rounded-xl sm:rounded-2xl">
+        <div className="mb-4 sm:mb-6">
+          <Label className="text-sm sm:text-base">Select City</Label>
           <select
             value={selectedCity}
             onChange={e => setSelectedCity(e.target.value)}
-            className="w-full max-w-xs h-12 px-4 rounded-xl border bg-background"
+            className="w-full sm:max-w-xs h-10 sm:h-12 px-3 sm:px-4 rounded-lg sm:rounded-xl border bg-background text-sm sm:text-base"
           >
             <option value="">Choose a city...</option>
             {cities.map(city => (
@@ -469,100 +476,86 @@ export default function COGSCalculator() {
         {loading ? (
           <div className="text-center py-12">Loading...</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-secondary">
-                <tr className="border-b">
-                  {canDelete && (
-                    <th className="p-3 font-semibold bg-secondary w-10">
-                      <Checkbox
-                        checked={selectedRows.length === cogsData.length && cogsData.length > 0}
-                        onCheckedChange={toggleAllSelection}
-                        data-testid="cogs-select-all-checkbox"
-                      />
-                    </th>
-                  )}
-                  <th className="text-left p-3 font-semibold sticky left-0 bg-secondary">SKU</th>
-                  {canSeeCostDetails && (
-                    <>
-                      <th className="text-right p-3 font-semibold bg-primary/5">Primary Pkg (₹)</th>
-                      <th className="text-right p-3 font-semibold bg-primary/5">Secondary Pkg (₹)</th>
-                      <th className="text-right p-3 font-semibold bg-primary/5">Mfg Cost (₹)</th>
-                    </>
-                  )}
-                  <th className="text-right p-3 font-semibold bg-primary/5">Gross Margin (%)</th>
-                  <th className="text-right p-3 font-semibold bg-primary/5">Logistics (₹)</th>
-                  <th className="text-right p-3 font-semibold bg-amber-50">Dist. Cost (%)</th>
-                  <th className="text-right p-3 font-semibold bg-green-50">Total COGS (₹)</th>
-                  <th className="text-right p-3 font-semibold bg-green-50">Gross Margin (₹)</th>
-                  <th className="text-right p-3 font-semibold bg-green-50">Ex-Factory (₹)</th>
-                  <th className="text-right p-3 font-semibold bg-blue-50">Base Cost (₹)</th>
-                  <th className="text-right p-3 font-semibold bg-emerald-100">Min Landing (₹)</th>
-                  <th className="text-right p-3 font-semibold bg-purple-100">Actual Landing (₹)</th>
-                  <th className="text-left p-3 font-semibold">Last Edited</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cogsData.map((row, index) => (
-                  <tr key={row.id} className={`border-b hover:bg-secondary/20 ${selectedRows.includes(row.id) ? 'bg-red-50' : ''}`}>
-                    {canDelete && (
-                      <td className="p-3">
+          <>
+            {/* Mobile Card View */}
+            <div className="block lg:hidden space-y-4">
+              {cogsData.map((row, index) => (
+                <div 
+                  key={row.id} 
+                  className={`border rounded-xl p-4 space-y-3 ${selectedRows.includes(row.id) ? 'bg-red-50 border-red-200' : 'bg-background'}`}
+                >
+                  {/* SKU Header */}
+                  <div className="flex items-center justify-between border-b pb-2">
+                    <div className="flex items-center gap-3">
+                      {canDelete && (
                         <Checkbox
                           checked={selectedRows.includes(row.id)}
                           onCheckedChange={() => toggleRowSelection(row.id)}
-                          data-testid={`cogs-row-checkbox-${index}`}
                         />
-                      </td>
-                    )}
-                    <td className="p-3 font-medium sticky left-0 bg-background">{row.sku_name}</td>
-                    {canSeeCostDetails && (
-                      <>
-                        <td className="p-2">
-                          <input
-                            type="text"
-                            value={row.primary_packaging_cost || ''}
-                            onChange={e => {
-                              const val = e.target.value;
-                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                                updateField(index, 'primary_packaging_cost', val);
-                              }
-                            }}
-                            className="w-24 h-9 text-right px-2 border rounded bg-background"
-                            placeholder="0.00"
-                          />
-                        </td>
-                        <td className="p-2">
-                          <input
-                            type="text"
-                            value={row.secondary_packaging_cost || ''}
-                            onChange={e => {
-                              const val = e.target.value;
-                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                                updateField(index, 'secondary_packaging_cost', val);
-                              }
-                            }}
-                            className="w-24 h-9 text-right px-2 border rounded bg-background"
-                            placeholder="0.00"
-                          />
-                        </td>
-                        <td className="p-2">
-                          <input
-                            type="text"
-                            value={row.manufacturing_variable_cost || ''}
-                            onChange={e => {
-                              const val = e.target.value;
-                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                                updateField(index, 'manufacturing_variable_cost', val);
-                              }
-                            }}
-                            className="w-24 h-9 text-right px-2 border rounded bg-background"
-                            placeholder="0.00"
-                          />
-                        </td>
-                      </>
-                    )}
-                    <td className="p-2">
-                      <input
+                      )}
+                      <span className="font-semibold text-sm">{row.sku_name}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {row.editor_name && <span>{row.editor_name}</span>}
+                    </div>
+                  </div>
+
+                  {/* Cost Inputs - Only for authorized users */}
+                  {canSeeCostDetails && (
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Primary Pkg</Label>
+                        <Input
+                          type="text"
+                          value={row.primary_packaging_cost || ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                              updateField(index, 'primary_packaging_cost', val);
+                            }
+                          }}
+                          className="h-9 text-right text-sm"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Secondary Pkg</Label>
+                        <Input
+                          type="text"
+                          value={row.secondary_packaging_cost || ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                              updateField(index, 'secondary_packaging_cost', val);
+                            }
+                          }}
+                          className="h-9 text-right text-sm"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Mfg Cost</Label>
+                        <Input
+                          type="text"
+                          value={row.manufacturing_variable_cost || ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                              updateField(index, 'manufacturing_variable_cost', val);
+                            }
+                          }}
+                          className="h-9 text-right text-sm"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Margin & Logistics */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Gross Margin %</Label>
+                      <Input
                         type="text"
                         value={row.gross_margin || ''}
                         onChange={e => {
@@ -571,12 +564,13 @@ export default function COGSCalculator() {
                             updateField(index, 'gross_margin', val);
                           }
                         }}
-                        className="w-24 h-9 text-right px-2 border rounded bg-background"
+                        className="h-9 text-right text-sm"
                         placeholder="%"
                       />
-                    </td>
-                    <td className="p-2">
-                      <input
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Logistics ₹</Label>
+                      <Input
                         type="text"
                         value={row.outbound_logistics_cost || ''}
                         onChange={e => {
@@ -585,12 +579,13 @@ export default function COGSCalculator() {
                             updateField(index, 'outbound_logistics_cost', val);
                           }
                         }}
-                        className="w-24 h-9 text-right px-2 border rounded bg-background"
+                        className="h-9 text-right text-sm"
                         placeholder="0.00"
                       />
-                    </td>
-                    <td className="p-2 bg-amber-50/50">
-                      <input
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Dist. Cost %</Label>
+                      <Input
                         type="text"
                         value={row.distribution_cost || ''}
                         onChange={e => {
@@ -599,66 +594,240 @@ export default function COGSCalculator() {
                             updateField(index, 'distribution_cost', val);
                           }
                         }}
-                        className="w-20 h-9 text-right px-2 border rounded bg-background"
+                        className="h-9 text-right text-sm bg-amber-50"
                         placeholder="%"
                       />
-                    </td>
-                    <td className="p-3 text-right font-bold text-primary bg-green-50">{row.total_cogs?.toFixed(2)}</td>
-                    <td className="p-3 text-right font-bold text-primary bg-green-50">
-                      {((row.total_cogs || 0) * (row.gross_margin || 0) / 100).toFixed(2)}
-                    </td>
-                    <td className="p-3 text-right font-bold text-primary bg-green-50">{row.ex_factory_price?.toFixed(2)}</td>
-                    <td className="p-3 text-right font-semibold text-blue-600 bg-blue-50">{row.base_cost?.toFixed(2) || '0.00'}</td>
-                    <td className="p-3 text-right font-bold text-emerald-700 bg-emerald-100">{row.minimum_landing_price?.toFixed(2)}</td>
-                    <td className="p-2 bg-purple-50/50">
-                      <input
-                        type="text"
-                        value={actualLandingPrices[row.id] || ''}
-                        onChange={e => {
-                          const val = e.target.value;
-                          if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                            updateActualLandingPrice(index, val);
-                          }
-                        }}
-                        className="w-24 h-9 text-right px-2 border rounded bg-background"
-                        placeholder="Enter price"
-                        data-testid={`actual-landing-price-${index}`}
-                      />
-                    </td>
-                    <td className="p-3 text-xs text-muted-foreground">
-                      {row.editor_name || '-'}
-                      {row.last_edited_at && (
-                        <div className="text-xs">{new Date(row.last_edited_at).toLocaleDateString()}</div>
-                      )}
-                    </td>
+                    </div>
+                  </div>
+
+                  {/* Calculated Values */}
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t">
+                    <div className="bg-green-50 rounded-lg p-2">
+                      <div className="text-xs text-muted-foreground">Total COGS</div>
+                      <div className="font-bold text-primary">₹{row.total_cogs?.toFixed(2)}</div>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-2">
+                      <div className="text-xs text-muted-foreground">Ex-Factory</div>
+                      <div className="font-bold text-primary">₹{row.ex_factory_price?.toFixed(2)}</div>
+                    </div>
+                    <div className="bg-blue-50 rounded-lg p-2">
+                      <div className="text-xs text-muted-foreground">Base Cost</div>
+                      <div className="font-semibold text-blue-600">₹{row.base_cost?.toFixed(2) || '0.00'}</div>
+                    </div>
+                    <div className="bg-emerald-100 rounded-lg p-2">
+                      <div className="text-xs text-muted-foreground">Min Landing</div>
+                      <div className="font-bold text-emerald-700">₹{row.minimum_landing_price?.toFixed(2)}</div>
+                    </div>
+                  </div>
+
+                  {/* Actual Landing Price */}
+                  <div className="pt-2 border-t">
+                    <Label className="text-xs text-muted-foreground">Actual Landing Price (What-If)</Label>
+                    <Input
+                      type="text"
+                      value={actualLandingPrices[row.id] || ''}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                          updateActualLandingPrice(index, val);
+                        }
+                      }}
+                      className="h-10 text-right bg-purple-50"
+                      placeholder="Enter price to calculate margin"
+                      data-testid={`actual-landing-price-mobile-${index}`}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-secondary">
+                  <tr className="border-b">
+                    {canDelete && (
+                      <th className="p-3 font-semibold bg-secondary w-10">
+                        <Checkbox
+                          checked={selectedRows.length === cogsData.length && cogsData.length > 0}
+                          onCheckedChange={toggleAllSelection}
+                          data-testid="cogs-select-all-checkbox"
+                        />
+                      </th>
+                    )}
+                    <th className="text-left p-3 font-semibold sticky left-0 bg-secondary">SKU</th>
+                    {canSeeCostDetails && (
+                      <>
+                        <th className="text-right p-3 font-semibold bg-primary/5">Primary Pkg (₹)</th>
+                        <th className="text-right p-3 font-semibold bg-primary/5">Secondary Pkg (₹)</th>
+                        <th className="text-right p-3 font-semibold bg-primary/5">Mfg Cost (₹)</th>
+                      </>
+                    )}
+                    <th className="text-right p-3 font-semibold bg-primary/5">Gross Margin (%)</th>
+                    <th className="text-right p-3 font-semibold bg-primary/5">Logistics (₹)</th>
+                    <th className="text-right p-3 font-semibold bg-amber-50">Dist. Cost (%)</th>
+                    <th className="text-right p-3 font-semibold bg-green-50">Total COGS (₹)</th>
+                    <th className="text-right p-3 font-semibold bg-green-50">Gross Margin (₹)</th>
+                    <th className="text-right p-3 font-semibold bg-green-50">Ex-Factory (₹)</th>
+                    <th className="text-right p-3 font-semibold bg-blue-50">Base Cost (₹)</th>
+                    <th className="text-right p-3 font-semibold bg-emerald-100">Min Landing (₹)</th>
+                    <th className="text-right p-3 font-semibold bg-purple-100">Actual Landing (₹)</th>
+                    <th className="text-left p-3 font-semibold">Last Edited</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {cogsData.map((row, index) => (
+                    <tr key={row.id} className={`border-b hover:bg-secondary/20 ${selectedRows.includes(row.id) ? 'bg-red-50' : ''}`}>
+                      {canDelete && (
+                        <td className="p-3">
+                          <Checkbox
+                            checked={selectedRows.includes(row.id)}
+                            onCheckedChange={() => toggleRowSelection(row.id)}
+                            data-testid={`cogs-row-checkbox-${index}`}
+                          />
+                        </td>
+                      )}
+                      <td className="p-3 font-medium sticky left-0 bg-background">{row.sku_name}</td>
+                      {canSeeCostDetails && (
+                        <>
+                          <td className="p-2">
+                            <input
+                              type="text"
+                              value={row.primary_packaging_cost || ''}
+                              onChange={e => {
+                                const val = e.target.value;
+                                if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                  updateField(index, 'primary_packaging_cost', val);
+                                }
+                              }}
+                              className="w-24 h-9 text-right px-2 border rounded bg-background"
+                              placeholder="0.00"
+                            />
+                          </td>
+                          <td className="p-2">
+                            <input
+                              type="text"
+                              value={row.secondary_packaging_cost || ''}
+                              onChange={e => {
+                                const val = e.target.value;
+                                if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                  updateField(index, 'secondary_packaging_cost', val);
+                                }
+                              }}
+                              className="w-24 h-9 text-right px-2 border rounded bg-background"
+                              placeholder="0.00"
+                            />
+                          </td>
+                          <td className="p-2">
+                            <input
+                              type="text"
+                              value={row.manufacturing_variable_cost || ''}
+                              onChange={e => {
+                                const val = e.target.value;
+                                if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                  updateField(index, 'manufacturing_variable_cost', val);
+                                }
+                              }}
+                              className="w-24 h-9 text-right px-2 border rounded bg-background"
+                              placeholder="0.00"
+                            />
+                          </td>
+                        </>
+                      )}
+                      <td className="p-2">
+                        <input
+                          type="text"
+                          value={row.gross_margin || ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                              updateField(index, 'gross_margin', val);
+                            }
+                          }}
+                          className="w-24 h-9 text-right px-2 border rounded bg-background"
+                          placeholder="%"
+                        />
+                      </td>
+                      <td className="p-2">
+                        <input
+                          type="text"
+                          value={row.outbound_logistics_cost || ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                              updateField(index, 'outbound_logistics_cost', val);
+                            }
+                          }}
+                          className="w-24 h-9 text-right px-2 border rounded bg-background"
+                          placeholder="0.00"
+                        />
+                      </td>
+                      <td className="p-2 bg-amber-50/50">
+                        <input
+                          type="text"
+                          value={row.distribution_cost || ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                              updateField(index, 'distribution_cost', val);
+                            }
+                          }}
+                          className="w-20 h-9 text-right px-2 border rounded bg-background"
+                          placeholder="%"
+                        />
+                      </td>
+                      <td className="p-3 text-right font-bold text-primary bg-green-50">{row.total_cogs?.toFixed(2)}</td>
+                      <td className="p-3 text-right font-bold text-primary bg-green-50">
+                        {((row.total_cogs || 0) * (row.gross_margin || 0) / 100).toFixed(2)}
+                      </td>
+                      <td className="p-3 text-right font-bold text-primary bg-green-50">{row.ex_factory_price?.toFixed(2)}</td>
+                      <td className="p-3 text-right font-semibold text-blue-600 bg-blue-50">{row.base_cost?.toFixed(2) || '0.00'}</td>
+                      <td className="p-3 text-right font-bold text-emerald-700 bg-emerald-100">{row.minimum_landing_price?.toFixed(2)}</td>
+                      <td className="p-2 bg-purple-50/50">
+                        <input
+                          type="text"
+                          value={actualLandingPrices[row.id] || ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                              updateActualLandingPrice(index, val);
+                            }
+                          }}
+                          className="w-24 h-9 text-right px-2 border rounded bg-background"
+                          placeholder="Enter price"
+                          data-testid={`actual-landing-price-${index}`}
+                        />
+                      </td>
+                      <td className="p-3 text-xs text-muted-foreground">
+                        {row.editor_name || '-'}
+                        {row.last_edited_at && (
+                          <div className="text-xs">{new Date(row.last_edited_at).toLocaleDateString()}</div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </Card>
 
-      <Card className="p-6 bg-primary/5 border-primary/20 rounded-2xl">
-        <h3 className="font-semibold mb-3">Formulas:</h3>
-        <ul className="text-sm text-muted-foreground space-y-1">
+      {/* Formulas Card - Responsive */}
+      <Card className="p-4 sm:p-6 bg-primary/5 border-primary/20 rounded-xl sm:rounded-2xl">
+        <h3 className="font-semibold mb-2 sm:mb-3 text-sm sm:text-base">Formulas:</h3>
+        <ul className="text-xs sm:text-sm text-muted-foreground space-y-1">
           {canSeeCostDetails && (
             <>
-              <li>• <strong>Total COGS</strong> = Primary Packaging + Secondary Packaging + Manufacturing Cost</li>
+              <li>• <strong>Total COGS</strong> = Primary Pkg + Secondary Pkg + Mfg Cost</li>
               <li>• <strong>Gross Margin (₹)</strong> = Total COGS × Gross Margin %</li>
               <li>• <strong>Ex-Factory Price</strong> = Total COGS + Gross Margin (₹)</li>
-              <li>• <strong>Base Cost</strong> = Primary Pkg + Secondary Pkg + Mfg Cost + Gross Margin (₹) + Logistics</li>
+              <li>• <strong>Base Cost</strong> = Total COGS + Gross Margin (₹) + Logistics</li>
             </>
           )}
-          <li>• <strong>Minimum Landing Price</strong> = Base Cost ÷ (1 - Distribution Cost %)</li>
-          <li className="text-xs text-muted-foreground/80 mt-2 pl-4">
-            → After paying Distribution Cost %, the remaining amount equals Base Cost
-          </li>
-          <li className="mt-3 pt-3 border-t border-primary/20">
-            • <strong>Actual Landing Price</strong> (What-If): Enter a price to reverse-calculate the required Gross Margin %
-          </li>
-          <li className="text-xs text-muted-foreground/80 pl-4">
-            → This is a transient field for analysis only and is not saved to the database
+          <li>• <strong>Min Landing Price</strong> = Base Cost ÷ (1 - Dist. Cost %)</li>
+          <li className="pt-2 mt-2 border-t border-primary/20">
+            • <strong>Actual Landing</strong>: Enter a price to reverse-calculate Gross Margin %
           </li>
         </ul>
       </Card>
