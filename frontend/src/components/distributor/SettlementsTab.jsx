@@ -10,6 +10,7 @@ import { Plus, Trash2, DollarSign, RefreshCw, FileText } from 'lucide-react';
 
 export default function SettlementsTab({
   canManage,
+  canDelete,
   settlements,
   settlementsLoading,
   // Dialog state
@@ -240,17 +241,22 @@ export default function SettlementsTab({
                         >
                           <FileText className="h-4 w-4" />
                         </Button>
-                        {canManage && settlement.status === 'draft' && (
+                        {/* Show delete for draft (canManage) or any status (canDelete for CEO/Admin) */}
+                        {(canDelete || (canManage && settlement.status === 'draft')) && (
                           <Button
                             variant="ghost"
                             size="sm"
                             className="text-destructive"
-                            onClick={() => setDeleteTarget({
-                              type: 'settlement',
-                              id: settlement.id,
-                              name: settlement.settlement_number
-                            })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteTarget({
+                                type: 'settlement',
+                                id: settlement.id,
+                                name: settlement.settlement_number
+                              });
+                            }}
                             data-testid={`delete-settlement-${settlement.id}`}
+                            title={canDelete ? "Delete (Admin)" : "Delete draft"}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

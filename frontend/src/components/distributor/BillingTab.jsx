@@ -2,10 +2,11 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { Plus, RefreshCw, FileText, Receipt, Eye, Settings } from 'lucide-react';
+import { Plus, RefreshCw, FileText, Receipt, Eye, Settings, Trash2 } from 'lucide-react';
 
 export default function BillingTab({
   canManage,
+  canDelete,
   // Summary
   billingSummary,
   // Reconciliations
@@ -22,7 +23,8 @@ export default function BillingTab({
   viewNoteDetail,
   getNoteStatusBadge,
   // Navigate to margins tab
-  setActiveTab
+  setActiveTab,
+  setDeleteTarget
 }) {
   return (
     <div className="space-y-6">
@@ -144,9 +146,31 @@ export default function BillingTab({
                       </td>
                       <td className="p-3 text-center">{getReconciliationStatusBadge(rec.status)}</td>
                       <td className="p-3 text-right">
-                        <Button variant="ghost" size="sm">
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); viewReconciliationDetail(rec.id); }}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          {/* Show delete for draft (canManage) or any status (canDelete for CEO/Admin) */}
+                          {(canDelete || (canManage && rec.status === 'draft')) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteTarget({
+                                  type: 'reconciliation',
+                                  id: rec.id,
+                                  name: rec.reconciliation_number
+                                });
+                              }}
+                              data-testid={`delete-reconciliation-${rec.id}`}
+                              title={canDelete ? "Delete (Admin)" : "Delete draft"}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -207,9 +231,31 @@ export default function BillingTab({
                       <td className="p-3 text-center">{getNoteStatusBadge(note.status)}</td>
                       <td className="p-3">{note.created_at?.split('T')[0]}</td>
                       <td className="p-3 text-right">
-                        <Button variant="ghost" size="sm">
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); viewNoteDetail(note.id); }}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          {/* Delete only for CEO/Admin */}
+                          {canDelete && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteTarget({
+                                  type: 'note',
+                                  id: note.id,
+                                  name: note.note_number
+                                });
+                              }}
+                              data-testid={`delete-note-${note.id}`}
+                              title="Delete (Admin)"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

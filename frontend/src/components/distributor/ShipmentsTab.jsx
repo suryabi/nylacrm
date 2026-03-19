@@ -12,6 +12,7 @@ import { MapPin, Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText } f
 export default function ShipmentsTab({
   distributor,
   canManage,
+  canDelete,
   shipments,
   shipmentsLoading,
   skus,
@@ -362,17 +363,22 @@ export default function ShipmentsTab({
                         >
                           <FileText className="h-4 w-4" />
                         </Button>
-                        {canManage && shipment.status === 'draft' && (
+                        {/* Show delete for draft (canManage) or any status (canDelete for CEO/Admin) */}
+                        {(canDelete || (canManage && shipment.status === 'draft')) && (
                           <Button
                             variant="ghost"
                             size="sm"
                             className="text-destructive"
-                            onClick={() => setDeleteTarget({
-                              type: 'shipment',
-                              id: shipment.id,
-                              name: shipment.shipment_number
-                            })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteTarget({
+                                type: 'shipment',
+                                id: shipment.id,
+                                name: shipment.shipment_number
+                              });
+                            }}
                             data-testid={`delete-shipment-${shipment.id}`}
+                            title={canDelete ? "Delete (Admin)" : "Delete draft"}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

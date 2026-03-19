@@ -4668,6 +4668,53 @@ async def record_note_payment(
     }
 
 
+@router.delete("/{distributor_id}/notes/{note_id}")
+async def delete_debit_credit_note(
+    distributor_id: str,
+    note_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a debit/credit note - CEO/Admin only"""
+    tenant_id = get_current_tenant_id()
+    
+    # Check role - only CEO and Admin can delete notes
+    user_role = current_user.get('role', '')
+    if user_role not in ['CEO', 'Admin', 'System Admin']:
+        raise HTTPException(
+            status_code=403, 
+            detail="Only CEO and Admin can delete debit/credit notes"
+        )
+    
+    # Find the note
+    note = await db.distributor_debit_credit_notes.find_one({
+        "id": note_id,
+        "distributor_id": distributor_id,
+        "tenant_id": tenant_id
+    })
+    
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    
+    # Delete the note
+    await db.distributor_debit_credit_notes.delete_one({
+        "id": note_id,
+        "tenant_id": tenant_id
+    })
+    
+    # If note was linked to a reconciliation, update the reconciliation status back to draft
+    if note.get('reconciliation_id'):
+        await db.distributor_reconciliations.update_one(
+            {"id": note.get('reconciliation_id'), "tenant_id": tenant_id},
+            {"$set": {
+                "status": "draft",
+                "settlement_type": None,
+                "updated_at": datetime.now(timezone.utc)
+            }}
+        )
+    
+    return {"message": "Note deleted successfully", "note_number": note.get('note_number')}
+
+
 # ============ Real-time Reconciliation Status ============
 
 @router.get("/{distributor_id}/billing/summary")

@@ -225,6 +225,7 @@ export default function DistributorDetail() {
   const [paymentReference, setPaymentReference] = useState('');
   
   const canManage = user && ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head'].includes(user.role);
+  const canDelete = user && ['CEO', 'Admin', 'System Admin'].includes(user.role);
   const canApprove = user && ['CEO', 'Director', 'Vice President'].includes(user.role);
 
   const fetchDistributor = useCallback(async () => {
@@ -1726,14 +1727,37 @@ export default function DistributorDetail() {
 
   const handleDeleteReconciliation = async (reconciliationId) => {
     try {
+      setDeleting(true);
       await axios.delete(`${API_URL}/api/distributors/${id}/reconciliations/${reconciliationId}`, {
         headers: { Authorization: `Bearer ${token}` },
         withCredentials: true
       });
       toast.success('Reconciliation deleted');
+      setDeleteTarget(null);
       fetchReconciliations();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to delete reconciliation');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteNote = async (noteId) => {
+    try {
+      setDeleting(true);
+      await axios.delete(`${API_URL}/api/distributors/${id}/notes/${noteId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Note deleted');
+      setDeleteTarget(null);
+      fetchDebitCreditNotes();
+      fetchReconciliations();
+      fetchBillingSummary();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete note');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -2018,6 +2042,7 @@ export default function DistributorDetail() {
           <ShipmentsTab
             distributor={distributor}
             canManage={canManage}
+            canDelete={canDelete}
             shipments={shipments}
             shipmentsLoading={shipmentsLoading}
             skus={skus}
@@ -2044,6 +2069,7 @@ export default function DistributorDetail() {
           <DeliveriesTab
             distributor={distributor}
             canManage={canManage}
+            canDelete={canDelete}
             deliveries={deliveries}
             deliveriesLoading={deliveriesLoading}
             skus={skus}
@@ -2073,6 +2099,7 @@ export default function DistributorDetail() {
         <TabsContent value="settlements">
           <SettlementsTab
             canManage={canManage}
+            canDelete={canDelete}
             settlements={settlements}
             settlementsLoading={settlementsLoading}
             showSettlementDialog={showSettlementDialog}
@@ -2094,6 +2121,7 @@ export default function DistributorDetail() {
         <TabsContent value="billing" className="space-y-6">
           <BillingTab
             canManage={canManage}
+            canDelete={canDelete}
             billingSummary={billingSummary}
             reconciliations={reconciliations}
             reconciliationsLoading={reconciliationsLoading}
@@ -2107,6 +2135,7 @@ export default function DistributorDetail() {
             viewNoteDetail={viewNoteDetail}
             getNoteStatusBadge={getNoteStatusBadge}
             setActiveTab={setActiveTab}
+            setDeleteTarget={setDeleteTarget}
           />
         </TabsContent>
       </Tabs>
@@ -2516,6 +2545,8 @@ export default function DistributorDetail() {
                   handleDeleteSettlement(deleteTarget.id);
                 } else if (deleteTarget?.type === 'reconciliation') {
                   handleDeleteReconciliation(deleteTarget.id);
+                } else if (deleteTarget?.type === 'note') {
+                  handleDeleteNote(deleteTarget.id);
                 }
               }}
             >

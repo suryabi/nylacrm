@@ -12,6 +12,7 @@ import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2,
 export default function DeliveriesTab({
   distributor,
   canManage,
+  canDelete,
   deliveries,
   deliveriesLoading,
   skus,
@@ -492,17 +493,22 @@ export default function DeliveriesTab({
                         >
                           <FileText className="h-4 w-4" />
                         </Button>
-                        {canManage && delivery.status === 'draft' && (
+                        {/* Show delete for draft (canManage) or any status (canDelete for CEO/Admin) */}
+                        {(canDelete || (canManage && delivery.status === 'draft')) && (
                           <Button
                             variant="ghost"
                             size="sm"
                             className="text-destructive"
-                            onClick={() => setDeleteTarget({
-                              type: 'delivery',
-                              id: delivery.id,
-                              name: delivery.delivery_number
-                            })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteTarget({
+                                type: 'delivery',
+                                id: delivery.id,
+                                name: delivery.delivery_number
+                              });
+                            }}
                             data-testid={`delete-delivery-${delivery.id}`}
+                            title={canDelete ? "Delete (Admin)" : "Delete draft"}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
