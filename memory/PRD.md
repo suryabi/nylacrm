@@ -110,6 +110,31 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 **Testing**: Verified with testing_agent_v3_fork (iteration_57.json) - 100% pass rate (14/14 backend, 100% frontend)
 
+### ENHANCEMENT: Merged Base Price into Margin Matrix ✅
+**User Request**: Merge Base Price Configuration into Margin Matrix. Add active_from and active_to date fields for time-based validity.
+
+**Changes Made**:
+1. **Margin Matrix Model Updated**:
+   - Added `base_price` field - the base price for the SKU
+   - Added `transfer_price` field - calculated as base_price × (1 - margin_value/100)
+   - Renamed `effective_from/to` to `active_from/active_to` for clarity
+   
+2. **Backend Logic**:
+   - Create/Update margin entry now calculates transfer_price automatically
+   - Reconciliation now uses Margin Matrix instead of separate Billing Config
+   - Reconciliation filters by active dates: entry is valid if (active_from <= period_end) AND (active_to >= period_start)
+   
+3. **Frontend UI**:
+   - Margin Matrix grid updated with columns: Base Price, Transfer Price, Active From, Active To
+   - Transfer Price shown as calculated value (green text)
+   - Date pickers for Active From/To
+   - Billing tab replaced "Base Price Configuration" section with note directing to Margins tab
+
+**Formula**: Transfer Price = Base Price × (1 - Margin%/100)
+- Example: ₹100 × (1 - 2.5/100) = ₹97.5
+
+**Testing**: Verified with testing_agent_v3_fork (iteration_58.json) - 100% pass rate (11/11 backend, 100% frontend)
+
 ## Distribution Module - Complete Implementation
 
 ### Phase 1: Distributor Master ✅
