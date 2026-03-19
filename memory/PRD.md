@@ -65,6 +65,51 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 **Testing**: Verified with testing_agent_v3_fork (iteration_56.json) - 100% pass rate
 
+### NEW FEATURE: Distributor Billing & Reconciliation Module ✅
+**User Request**: Build a billing and reconciliation module where stock is sent to distributor at provisional transfer price, and later reconciled based on actual selling prices to customers.
+
+**Business Logic Implemented**:
+1. **Base Price Configuration**: Configure base price and margin % per SKU per distributor
+   - Transfer Price = Base Price × (1 - Margin%/100)
+   - Example: ₹100 base × 97.5% = ₹97.5 transfer price
+   
+2. **Provisional Billing**: When stock is shipped, distributor pays transfer price
+   
+3. **Reconciliation**: Periodic comparison of provisional vs actual amounts
+   - Provisional Amount = quantity × transfer_price
+   - Actual Gross = quantity × customer_selling_price
+   - Entitled Margin = actual_gross × margin_percent
+   - Actual Net = actual_gross - entitled_margin
+   - Difference = actual_net - provisional_amount
+   
+4. **Settlement**:
+   - Positive difference → **Debit Note** (Distributor owes Nyla)
+   - Negative difference → **Credit Note** (Nyla owes Distributor)
+
+**Database Collections Added**:
+- `distributor_billing_config`: Base prices per SKU per distributor
+- `distributor_provisional_invoices`: Invoices for stock transfers
+- `distributor_reconciliations`: Reconciliation records with line items
+- `distributor_debit_credit_notes`: Settlement documents with payment tracking
+
+**Key API Endpoints**:
+- `GET/POST/DELETE /{id}/billing-config` - Base price configuration
+- `GET /{id}/billing/summary` - Real-time billing dashboard
+- `POST /{id}/reconciliations/calculate` - Preview reconciliation
+- `POST /{id}/reconciliations` - Create reconciliation
+- `POST /{id}/reconciliations/{rec_id}/confirm` - Confirm and generate note
+- `GET /{id}/debit-credit-notes` - List settlement notes
+- `POST /{id}/debit-credit-notes/{note_id}/record-payment` - Record payment
+
+**Frontend UI**:
+- New "Billing & Reconciliation" tab in distributor detail
+- Summary cards: Base Prices, Unreconciled Deliveries, Net Balance, Pending Credits
+- Base Price Configuration table with CRUD
+- Reconciliations table with detail view
+- Debit/Credit Notes table with payment recording
+
+**Testing**: Verified with testing_agent_v3_fork (iteration_57.json) - 100% pass rate (14/14 backend, 100% frontend)
+
 ## Distribution Module - Complete Implementation
 
 ### Phase 1: Distributor Master ✅
