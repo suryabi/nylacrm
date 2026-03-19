@@ -113,28 +113,32 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
   - Auto-calculation of amounts (gross, discount, tax, net)
   - Transport details (vehicle, driver info)
   - Auto-update distributor stock on delivery
-- ⏳ Distributor-to-Account Delivery recording (next up)
-- ⏳ Stock balance tracking at distributor locations
-- ⏳ Validations (coverage, assignment, stock levels)
+- ✅ Distributor-to-Account Delivery recording
+  - Record deliveries from distributor locations to assigned accounts
+  - Automatic margin calculation from margin matrix (city + SKU)
+  - Status workflow: Draft → Confirmed → Delivered
+  - Stock deduction from distributor inventory on completion
+  - Margin tracking for settlement calculations
+- ⏳ Stock balance tracking at distributor locations (basic implementation done)
 
 ### Phase 4: Settlement & Reports
-- Distributor Settlement calculation engine
+- ⏳ Distributor Settlement calculation engine (next up)
 - Settlement approval workflow
 - Reports (stock balance, deliveries, settlements, performance)
 
 ## Pending Tasks
 
 ### P0 - Next Up
-1. **Distribution Module Phase 3 (Part 2)** - Distributor-to-Account Delivery
+1. **Distribution Module Phase 4** - Distributor Settlement calculation
 
 ### P1 - High Priority
-1. **Distribution Module Phase 4** - Distributor Settlement calculation
-2. **Server.py Refactoring** - Move remaining routes to modular files
+1. **Server.py Refactoring** - Move remaining routes to modular files
+2. **Stock Dashboard** - Real-time stock levels across distributor locations
 
 ### P2 - Medium Priority
 1. **AI Assistant RAG Upgrade** - Upgrade to true vector-based RAG system
 2. **Build Out Placeholder Modules** - Maintenance, Inventory modules
-3. **Refactor DistributorDetail.js** - Break into smaller tab components
+3. **Refactor DistributorDetail.js** - Break into smaller tab components (now 3400+ lines)
 
 ## Key API Endpoints
 - `GET /api/leads` - List leads with filters (territory→region mapping fixed)
@@ -156,6 +160,14 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 - `POST /api/distributors/{id}/shipments/{shipment_id}/deliver` - Mark delivered
 - `POST /api/distributors/{id}/shipments/{shipment_id}/cancel` - Cancel shipment
 - `GET /api/distributors/{id}/stock` - Get distributor stock levels
+- `GET /api/distributors/deliveries/all` - List all deliveries with filters
+- `GET /api/distributors/deliveries/summary` - Deliveries summary stats
+- `GET/POST/DELETE /api/distributors/{id}/deliveries` - Delivery CRUD
+- `GET /api/distributors/{id}/deliveries/{delivery_id}` - Get delivery detail
+- `GET /api/distributors/{id}/assigned-accounts` - Get accounts for delivery selection
+- `POST /api/distributors/{id}/deliveries/{delivery_id}/confirm` - Confirm delivery
+- `POST /api/distributors/{id}/deliveries/{delivery_id}/complete` - Complete delivery (deducts stock)
+- `POST /api/distributors/{id}/deliveries/{delivery_id}/cancel` - Cancel delivery
 
 ## Test Credentials
 - **CEO**: `surya.yadavalli@nylaairwater.earth` / `test123`
