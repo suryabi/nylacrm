@@ -1,0 +1,91 @@
+{
+  "summary": "Tested Margin Matrix Base Price Configuration merge - All features working correctly. Backend (11/11 tests pass) and Frontend UI verified. The Margin Matrix now includes base_price, transfer_price, active_from, and active_to fields. Billing tab shows note directing users to Margins tab.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "Margin Matrix model includes base_price field": {
+      "status": "PASS",
+      "details": ["API returns base_price field", "Value=100 stored correctly", "Field editable in UI grid"]
+    },
+    "Margin Matrix model includes active_from and active_to date fields": {
+      "status": "PASS",
+      "details": ["API returns active_from and active_to fields", "Values: 2026-01-01 to 2026-12-31", "Date picker inputs visible in UI"]
+    },
+    "Creating margin entry calculates transfer_price": {
+      "status": "PASS",
+      "details": ["transfer_price = base_price × (1 - margin_value/100)", "Example: 100 × (1 - 2.5/100) = 97.5", "Calculation verified via API"]
+    },
+    "Updating margin entry recalculates transfer_price": {
+      "status": "PASS",
+      "details": ["Updated base_price=200, margin_value=3.0", "transfer_price recalculated to 194.0", "Values restored after test"]
+    },
+    "Reconciliation uses Margin Matrix instead of separate Billing Config": {
+      "status": "PASS",
+      "details": ["calculate_reconciliation endpoint uses distributor_margin_matrix collection", "margin_entry_found field indicates if margin entry was used", "Base price from Margin Matrix used for calculations"]
+    },
+    "Reconciliation filters margin entries by active_from/active_to dates": {
+      "status": "PASS",
+      "details": ["API filters: (active_from is null OR active_from <= period_end)", "AND (active_to is null OR active_to >= period_start)", "Verified in backend code and tested via API"]
+    },
+    "Margin Matrix UI shows Base Price, Transfer Price, Active From, Active To columns": {
+      "status": "PASS",
+      "details": ["All 4 columns visible in Margin Matrix grid", "Base Price: input field with ₹ symbol", "Transfer Price: calculated and displayed (₹97.50)", "Active From/To: date picker inputs"]
+    },
+    "Billing tab shows note directing to Margins tab": {
+      "status": "PASS",
+      "details": ["Note: 'Base prices and margin percentages are now configured in the Margins tab'", "'Go to Margins Tab' button visible", "Click navigates to Margins tab"]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_margin_matrix_base_price.py",
+    "/app/test_reports/pytest/margin_matrix_base_price_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_margin_matrix_base_price.py"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 tests passed, 1 skipped)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_header": "X-Tenant-ID: nyla-air-water"
+  },
+  "seed_data_creation": "None - used existing test data (Margin ID: 30c2abb5-7b78-4004-a08a-99e079a56b00)",
+  "test_data": {
+    "distributor_id": "99fb55dc-532c-4e85-b618-6b8a5e552c04",
+    "distributor_name": "Test (DIST-0002)",
+    "margin_entry": {
+      "id": "30c2abb5-7b78-4004-a08a-99e079a56b00",
+      "sku": "Nyla – 330 ml / Silver",
+      "city": "Gurugram",
+      "base_price": 100,
+      "margin_value": 2.5,
+      "transfer_price": 97.5,
+      "active_from": "2026-01-01",
+      "active_to": "2026-12-31"
+    }
+  },
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Margin Matrix Base Price Configuration merge completed. The feature merges Base Price Config into Margin Matrix with active date fields for time-based validity. Key verification: transfer_price = base_price × (1 - margin_value/100). Reconciliation calculation uses Margin Matrix with date filtering. Billing tab now shows a note directing users to Margins tab instead of a separate Base Price Configuration section.",
+  "business_logic_verification": {
+    "transfer_price_formula": "base_price × (1 - margin_value/100)",
+    "example": "₹100 × (1 - 2.5/100) = ₹97.5",
+    "date_filtering": {
+      "active_from_filter": "(active_from is NULL OR active_from <= period_end)",
+      "active_to_filter": "(active_to is NULL OR active_to >= period_start)"
+    },
+    "reconciliation_uses_margin_matrix": true
+  }
+}

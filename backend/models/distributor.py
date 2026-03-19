@@ -197,12 +197,13 @@ class MarginMatrixCreate(BaseModel):
     city: str
     sku_id: str
     sku_name: Optional[str] = None
+    base_price: float  # Base price for this SKU
     margin_type: str  # percentage, fixed_per_bottle, fixed_per_case
     margin_value: float
     min_quantity: Optional[int] = None
     max_quantity: Optional[int] = None
-    effective_from: Optional[str] = None
-    effective_to: Optional[str] = None
+    active_from: Optional[str] = None  # Date from which this config is active (YYYY-MM-DD)
+    active_to: Optional[str] = None  # Date until which this config is active (YYYY-MM-DD)
     remarks: Optional[str] = None
     status: Optional[str] = "active"
 
@@ -212,12 +213,13 @@ class MarginMatrixUpdate(BaseModel):
     city: Optional[str] = None
     sku_id: Optional[str] = None
     sku_name: Optional[str] = None
+    base_price: Optional[float] = None
     margin_type: Optional[str] = None
     margin_value: Optional[float] = None
     min_quantity: Optional[int] = None
     max_quantity: Optional[int] = None
-    effective_from: Optional[str] = None
-    effective_to: Optional[str] = None
+    active_from: Optional[str] = None
+    active_to: Optional[str] = None
     remarks: Optional[str] = None
     status: Optional[str] = None
 
@@ -230,12 +232,14 @@ class MarginMatrix(BaseModel):
     city: str
     sku_id: str
     sku_name: Optional[str] = None
+    base_price: float  # Base price for this SKU
     margin_type: str
     margin_value: float
+    transfer_price: Optional[float] = None  # Calculated: base_price * (1 - margin_value/100) for percentage type
     min_quantity: Optional[int] = None
     max_quantity: Optional[int] = None
-    effective_from: Optional[str] = None
-    effective_to: Optional[str] = None
+    active_from: Optional[str] = None
+    active_to: Optional[str] = None
     remarks: Optional[str] = None
     status: str = "active"
     created_at: str

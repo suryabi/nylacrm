@@ -273,10 +273,14 @@ export default function DistributorDetail() {
       (response.data.margins || []).forEach(m => {
         grid[m.sku_id] = {
           id: m.id,
+          base_price: m.base_price || '',
           margin_type: m.margin_type,
           margin_value: m.margin_value,
+          transfer_price: m.transfer_price,
           min_quantity: m.min_quantity,
           max_quantity: m.max_quantity,
+          active_from: m.active_from || '',
+          active_to: m.active_to || '',
           status: m.status
         };
       });
@@ -709,7 +713,7 @@ export default function DistributorDetail() {
     setMarginGrid(prev => ({
       ...prev,
       [skuId]: {
-        ...(prev[skuId] || { margin_type: 'percentage', margin_value: 0 }),
+        ...(prev[skuId] || { margin_type: 'percentage', margin_value: 0, base_price: '', active_from: '', active_to: '' }),
         [field]: value
       }
     }));
@@ -740,10 +744,13 @@ export default function DistributorDetail() {
           city: selectedMarginCity,
           sku_id: sku.id,
           sku_name: sku.name || sku.sku_name,
+          base_price: parseFloat(gridEntry.base_price) || 0,
           margin_type: gridEntry.margin_type || 'percentage',
           margin_value: parseFloat(gridEntry.margin_value),
           min_quantity: gridEntry.min_quantity ? parseInt(gridEntry.min_quantity) : null,
           max_quantity: gridEntry.max_quantity ? parseInt(gridEntry.max_quantity) : null,
+          active_from: gridEntry.active_from || new Date().toISOString().split('T')[0],
+          active_to: gridEntry.active_to || null,
           status: 'active'
         };
         
@@ -822,10 +829,13 @@ export default function DistributorDetail() {
         city: copyTargetCity,
         sku_id: m.sku_id,
         sku_name: m.sku_name,
+        base_price: m.base_price || 0,
         margin_type: m.margin_type,
         margin_value: m.margin_value,
         min_quantity: m.min_quantity,
         max_quantity: m.max_quantity,
+        active_from: new Date().toISOString().split('T')[0],
+        active_to: m.active_to || null,
         status: 'active'
       }));
       
@@ -2484,17 +2494,23 @@ export default function DistributorDetail() {
                     <thead>
                       <tr className="border-b bg-muted/50">
                         <th className="text-left p-3 font-medium sticky left-0 bg-muted/50 min-w-[200px]">SKU</th>
-                        <th className="text-center p-3 font-medium min-w-[150px]">Margin Type</th>
-                        <th className="text-center p-3 font-medium min-w-[120px]">Value</th>
-                        <th className="text-center p-3 font-medium min-w-[100px]">Min Qty</th>
-                        <th className="text-center p-3 font-medium min-w-[100px]">Max Qty</th>
+                        <th className="text-center p-3 font-medium min-w-[120px]">Base Price</th>
+                        <th className="text-center p-3 font-medium min-w-[130px]">Margin Type</th>
+                        <th className="text-center p-3 font-medium min-w-[100px]">Margin Value</th>
+                        <th className="text-center p-3 font-medium min-w-[110px]">Transfer Price</th>
+                        <th className="text-center p-3 font-medium min-w-[120px]">Active From</th>
+                        <th className="text-center p-3 font-medium min-w-[120px]">Active To</th>
                         <th className="text-center p-3 font-medium min-w-[80px]">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {skus.map((sku, index) => {
                         const gridEntry = marginGrid[sku.id] || {};
-                        const hasValue = gridEntry.margin_value && gridEntry.margin_value > 0;
+                        const hasValue = gridEntry.margin_value && gridEntry.margin_value > 0 && gridEntry.base_price;
+                        // Calculate transfer price for display
+                        const calcTransferPrice = gridEntry.base_price && gridEntry.margin_type === 'percentage' && gridEntry.margin_value
+                          ? (parseFloat(gridEntry.base_price) * (1 - parseFloat(gridEntry.margin_value) / 100)).toFixed(2)
+                          : gridEntry.transfer_price || '';
                         return (
                           <tr 
                             key={sku.id} 
@@ -2505,6 +2521,21 @@ export default function DistributorDetail() {
                               <div className="flex items-center gap-2">
                                 {hasValue && <Check className="h-4 w-4 text-green-600" />}
                                 <span className="text-sm">{sku.name || sku.sku_name}</span>
+                              </div>
+                            </td>
+                            <td className="p-2">
+                              <div className="relative">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="100"
+                                  className="h-9 text-sm pr-6 text-right"
+                                  value={gridEntry.base_price || ''}
+                                  onChange={(e) => updateMarginGridValue(sku.id, 'base_price', e.target.value)}
+                                  disabled={!canManage}
+                                />
+                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">₹</span>
                               </div>
                             </td>
                             <td className="p-2">
@@ -2531,7 +2562,7 @@ export default function DistributorDetail() {
                                   type="number"
                                   step="0.01"
                                   min="0"
-                                  placeholder="0"
+                                  placeholder="2.5"
                                   className="h-9 text-sm pr-8 text-right"
                                   value={gridEntry.margin_value || ''}
                                   onChange={(e) => updateMarginGridValue(sku.id, 'margin_value', e.target.value)}
@@ -2542,25 +2573,28 @@ export default function DistributorDetail() {
                                 </span>
                               </div>
                             </td>
+                            <td className="p-2 text-center">
+                              {calcTransferPrice ? (
+                                <span className="text-sm font-medium text-green-600">₹{calcTransferPrice}</span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
+                            </td>
                             <td className="p-2">
                               <Input
-                                type="number"
-                                min="0"
-                                placeholder="-"
-                                className="h-9 text-sm text-center"
-                                value={gridEntry.min_quantity || ''}
-                                onChange={(e) => updateMarginGridValue(sku.id, 'min_quantity', e.target.value)}
+                                type="date"
+                                className="h-9 text-sm"
+                                value={gridEntry.active_from || ''}
+                                onChange={(e) => updateMarginGridValue(sku.id, 'active_from', e.target.value)}
                                 disabled={!canManage}
                               />
                             </td>
                             <td className="p-2">
                               <Input
-                                type="number"
-                                min="0"
-                                placeholder="-"
-                                className="h-9 text-sm text-center"
-                                value={gridEntry.max_quantity || ''}
-                                onChange={(e) => updateMarginGridValue(sku.id, 'max_quantity', e.target.value)}
+                                type="date"
+                                className="h-9 text-sm"
+                                value={gridEntry.active_to || ''}
+                                onChange={(e) => updateMarginGridValue(sku.id, 'active_to', e.target.value)}
                                 disabled={!canManage}
                               />
                             </td>
@@ -4087,77 +4121,27 @@ export default function DistributorDetail() {
             </div>
           )}
 
-          {/* Billing Configuration Section */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Settings className="h-5 w-5" />
-                  Base Price Configuration
-                </CardTitle>
-                {canManage && (
-                  <Button onClick={() => setShowBillingConfigDialog(true)} data-testid="add-billing-config-btn">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Base Price
+          {/* Pricing Configuration Note */}
+          <Card className="bg-gradient-to-br from-blue-50/50 to-indigo-50/50 border-blue-200">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <Settings className="h-5 w-5 text-blue-600 mt-0.5" />
+                <div>
+                  <p className="font-medium text-blue-800">Base Prices & Margins</p>
+                  <p className="text-sm text-blue-700 mt-1">
+                    Base prices and margin percentages are now configured in the <strong>Margins</strong> tab.
+                    Go to the Margins tab to set up pricing per SKU per city, with active date ranges for time-based validity.
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="mt-2 border-blue-300 text-blue-700 hover:bg-blue-100"
+                    onClick={() => setActiveTab('margins')}
+                  >
+                    Go to Margins Tab
                   </Button>
-                )}
+                </div>
               </div>
-              <p className="text-sm text-muted-foreground">Configure base prices and margin percentages per SKU for this distributor</p>
-            </CardHeader>
-            <CardContent>
-              {billingConfigsLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <RefreshCw className="h-6 w-6 animate-spin" />
-                </div>
-              ) : billingConfigs.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Settings className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                  <p>No base prices configured</p>
-                  <p className="text-sm">Add base prices for SKUs to enable billing and reconciliation</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-muted/50">
-                        <th className="text-left p-3 font-medium">SKU</th>
-                        <th className="text-right p-3 font-medium">Base Price</th>
-                        <th className="text-right p-3 font-medium">Margin %</th>
-                        <th className="text-right p-3 font-medium">Transfer Price</th>
-                        <th className="text-center p-3 font-medium">Status</th>
-                        <th className="text-right p-3 font-medium">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {billingConfigs.map((config) => (
-                        <tr key={config.id} className="border-b hover:bg-muted/30">
-                          <td className="p-3">{config.sku_name}</td>
-                          <td className="p-3 text-right font-medium">₹{config.base_price?.toLocaleString()}</td>
-                          <td className="p-3 text-right">{config.margin_percent}%</td>
-                          <td className="p-3 text-right text-green-600 font-medium">₹{config.transfer_price?.toLocaleString()}</td>
-                          <td className="p-3 text-center">
-                            <Badge variant={config.status === 'active' ? 'default' : 'secondary'}>
-                              {config.status}
-                            </Badge>
-                          </td>
-                          <td className="p-3 text-right">
-                            {canManage && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteBillingConfig(config.id)}
-                                className="text-red-600 hover:text-red-700"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
             </CardContent>
           </Card>
 
@@ -4711,85 +4695,6 @@ export default function DistributorDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Billing Config Dialog */}
-      <Dialog open={showBillingConfigDialog} onOpenChange={setShowBillingConfigDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add Base Price Configuration</DialogTitle>
-            <DialogDescription>Configure base price and margin for a SKU</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>SKU *</Label>
-              <Select
-                value={billingConfigForm.sku_id}
-                onValueChange={(v) => {
-                  const sku = skus.find(s => s.id === v);
-                  setBillingConfigForm(prev => ({
-                    ...prev,
-                    sku_id: v,
-                    sku_name: sku?.name || sku?.sku_name || ''
-                  }));
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select SKU" />
-                </SelectTrigger>
-                <SelectContent>
-                  {skus.map(sku => (
-                    <SelectItem key={sku.id} value={sku.id}>
-                      {sku.name || sku.sku_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Base Price (₹) *</Label>
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="100.00"
-                value={billingConfigForm.base_price}
-                onChange={(e) => setBillingConfigForm(prev => ({ ...prev, base_price: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Distributor Margin %</Label>
-              <Input
-                type="number"
-                step="0.1"
-                placeholder="2.5"
-                value={billingConfigForm.margin_percent}
-                onChange={(e) => setBillingConfigForm(prev => ({ ...prev, margin_percent: e.target.value }))}
-              />
-              <p className="text-xs text-muted-foreground">
-                Transfer Price = Base Price × (1 - Margin%)
-                {billingConfigForm.base_price && billingConfigForm.margin_percent && (
-                  <span className="block mt-1 font-medium text-green-600">
-                    = ₹{(parseFloat(billingConfigForm.base_price) * (1 - parseFloat(billingConfigForm.margin_percent) / 100)).toFixed(2)}
-                  </span>
-                )}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label>Remarks</Label>
-              <Input
-                placeholder="Optional notes"
-                value={billingConfigForm.remarks}
-                onChange={(e) => setBillingConfigForm(prev => ({ ...prev, remarks: e.target.value }))}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBillingConfigDialog(false)}>Cancel</Button>
-            <Button onClick={handleSaveBillingConfig} disabled={savingBillingConfig}>
-              {savingBillingConfig ? 'Saving...' : 'Save'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Reconciliation Dialog */}
       <Dialog open={showReconciliationDialog} onOpenChange={(open) => {

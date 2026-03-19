@@ -761,6 +761,11 @@ async def create_margin_entry(
         if sku:
             sku_name = sku.get('name')
     
+    # Calculate transfer price for percentage margin type
+    transfer_price = None
+    if data.margin_type == 'percentage' and data.base_price:
+        transfer_price = data.base_price * (1 - data.margin_value / 100)
+    
     margin_doc = {
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
@@ -769,12 +774,14 @@ async def create_margin_entry(
         "city": data.city,
         "sku_id": data.sku_id,
         "sku_name": sku_name,
+        "base_price": data.base_price,
         "margin_type": data.margin_type,
         "margin_value": data.margin_value,
+        "transfer_price": round(transfer_price, 2) if transfer_price else None,
         "min_quantity": data.min_quantity,
         "max_quantity": data.max_quantity,
-        "effective_from": data.effective_from or now,
-        "effective_to": data.effective_to,
+        "active_from": data.active_from or now[:10],
+        "active_to": data.active_to,
         "remarks": data.remarks,
         "status": data.status or "active",
         "created_at": now,
@@ -842,6 +849,11 @@ async def create_bulk_margin_entries(
             if sku:
                 sku_name = sku.get('name')
         
+        # Calculate transfer price for percentage margin type
+        transfer_price = None
+        if item.margin_type == 'percentage' and item.base_price:
+            transfer_price = item.base_price * (1 - item.margin_value / 100)
+        
         margin_doc = {
             "id": str(uuid.uuid4()),
             "tenant_id": tenant_id,
@@ -850,12 +862,14 @@ async def create_bulk_margin_entries(
             "city": item.city,
             "sku_id": item.sku_id,
             "sku_name": sku_name,
+            "base_price": item.base_price,
             "margin_type": item.margin_type,
             "margin_value": item.margin_value,
+            "transfer_price": round(transfer_price, 2) if transfer_price else None,
             "min_quantity": item.min_quantity,
             "max_quantity": item.max_quantity,
-            "effective_from": item.effective_from or now,
-            "effective_to": item.effective_to,
+            "active_from": item.active_from or now[:10],
+            "active_to": item.active_to,
             "remarks": item.remarks,
             "status": item.status or "active",
             "created_at": now,
@@ -899,8 +913,8 @@ async def update_margin_entry(
     
     update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
     
-    for field in ['state', 'city', 'sku_id', 'sku_name', 'margin_type', 'margin_value',
-                  'min_quantity', 'max_quantity', 'effective_from', 'effective_to',
+    for field in ['state', 'city', 'sku_id', 'sku_name', 'base_price', 'margin_type', 'margin_value',
+                  'min_quantity', 'max_quantity', 'active_from', 'active_to',
                   'remarks', 'status']:
         value = getattr(data, field, None)
         if value is not None:
@@ -909,6 +923,14 @@ async def update_margin_entry(
     # Validate margin type if being updated
     if data.margin_type and data.margin_type not in MARGIN_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid margin type. Must be one of: {list(MARGIN_TYPES.keys())}")
+    
+    # Recalculate transfer price if base_price or margin_value changed
+    base_price = update_data.get('base_price', margin.get('base_price'))
+    margin_type = update_data.get('margin_type', margin.get('margin_type'))
+    margin_value = update_data.get('margin_value', margin.get('margin_value'))
+    
+    if margin_type == 'percentage' and base_price:
+        update_data['transfer_price'] = round(base_price * (1 - margin_value / 100), 2)
     
     await db.distributor_margin_matrix.update_one(
         {"id": margin_id, "tenant_id": tenant_id},
@@ -3918,13 +3940,35 @@ async def calculate_reconciliation(
     """Calculate reconciliation for a period (preview without saving)"""
     tenant_id = get_current_tenant_id()
     
-    # Get billing configs
-    configs = await db.distributor_billing_config.find({
+    # Get margin matrix entries for this distributor
+    # Filter by active dates - entry is valid if:
+    # (active_from is null or active_from <= period_end) AND (active_to is null or active_to >= period_start)
+    margin_entries = await db.distributor_margin_matrix.find({
         "tenant_id": tenant_id,
         "distributor_id": distributor_id,
-        "status": "active"
+        "status": "active",
+        "$or": [
+            {"active_from": None},
+            {"active_from": {"$lte": data.period_end}}
+        ]
     }).to_list(500)
-    config_map = {c.get('sku_id'): c for c in configs}
+    
+    # Filter out entries that ended before the period started
+    margin_entries = [
+        m for m in margin_entries 
+        if not m.get('active_to') or m.get('active_to') >= data.period_start
+    ]
+    
+    # Build lookup map: (sku_id, city) -> margin entry
+    # For entries without city match, we'll use sku_id only as fallback
+    margin_map_by_city_sku = {}
+    margin_map_by_sku = {}
+    for m in margin_entries:
+        key = (m.get('sku_id'), m.get('city'))
+        margin_map_by_city_sku[key] = m
+        # Also keep by sku_id only for fallback
+        if m.get('sku_id') not in margin_map_by_sku:
+            margin_map_by_sku[m.get('sku_id')] = m
     
     # Get deliveries in the period
     deliveries = await db.distributor_deliveries.find({
@@ -3953,6 +3997,14 @@ async def calculate_reconciliation(
     # Build delivery map
     delivery_map = {d.get('id'): d for d in deliveries}
     
+    # Get accounts to get city info
+    account_ids = list(set(d.get('account_id') for d in deliveries if d.get('account_id')))
+    accounts = await db.accounts.find(
+        {"id": {"$in": account_ids}},
+        {"_id": 0, "id": 1, "city": 1}
+    ).to_list(500)
+    account_city_map = {a.get('id'): a.get('city') for a in accounts}
+    
     # Calculate reconciliation items
     items = []
     total_provisional = 0
@@ -3970,13 +4022,26 @@ async def calculate_reconciliation(
         quantity = item.get('quantity', 0)
         actual_selling_price = item.get('unit_price', 0)  # Price sold to customer
         
-        # Get base price and margin from config
-        config = config_map.get(sku_id)
-        if config:
-            base_price = config.get('base_price', actual_selling_price)
-            margin_percent = config.get('margin_percent', 2.5)
+        # Get account city for lookup
+        account_id = delivery.get('account_id')
+        account_city = delivery.get('account_city') or account_city_map.get(account_id)
+        
+        # Get margin entry - first try city+sku, then sku only
+        margin_entry = margin_map_by_city_sku.get((sku_id, account_city)) or margin_map_by_sku.get(sku_id)
+        
+        if margin_entry:
+            base_price = margin_entry.get('base_price', actual_selling_price)
+            margin_type = margin_entry.get('margin_type', 'percentage')
+            margin_value = margin_entry.get('margin_value', 2.5)
+            
+            # Calculate margin based on type
+            if margin_type == 'percentage':
+                margin_percent = margin_value
+            else:
+                # For fixed margin types, convert to percentage for calculation
+                margin_percent = (margin_value / base_price * 100) if base_price > 0 else 2.5
         else:
-            base_price = actual_selling_price  # Fallback
+            base_price = actual_selling_price  # Fallback - no margin entry found
             margin_percent = 2.5
         
         transfer_price = base_price * (1 - margin_percent / 100)
@@ -3998,18 +4063,20 @@ async def calculate_reconciliation(
             "delivery_date": delivery.get('delivery_date'),
             "account_id": delivery.get('account_id'),
             "account_name": delivery.get('account_name'),
+            "account_city": account_city,
             "sku_id": sku_id,
             "sku_name": item.get('sku_name'),
             "quantity": quantity,
             "base_price": round(base_price, 2),
-            "margin_percent": margin_percent,
+            "margin_percent": round(margin_percent, 2),
             "transfer_price": round(transfer_price, 2),
             "provisional_amount": round(provisional_amount, 2),
             "actual_selling_price": round(actual_selling_price, 2),
             "actual_gross_amount": round(actual_gross_amount, 2),
             "entitled_margin_amount": round(entitled_margin_amount, 2),
             "actual_net_amount": round(actual_net_amount, 2),
-            "difference_amount": round(difference_amount, 2)
+            "difference_amount": round(difference_amount, 2),
+            "margin_entry_found": margin_entry is not None
         }
         items.append(rec_item)
         
