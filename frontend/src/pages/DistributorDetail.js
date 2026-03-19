@@ -161,6 +161,7 @@ export default function DistributorDetail() {
   const [showDeliveryDialog, setShowDeliveryDialog] = useState(false);
   const [assignedAccounts, setAssignedAccounts] = useState([]);
   const [selectedDeliveryAccount, setSelectedDeliveryAccount] = useState(null);
+  const [deliveryAccountSearch, setDeliveryAccountSearch] = useState('');
   const [deliveryForm, setDeliveryForm] = useState({
     distributor_location_id: '',
     account_id: '',
@@ -772,7 +773,7 @@ export default function DistributorDetail() {
       
       const assignmentData = {
         account_id: selectedAccount.id,
-        account_name: selectedAccount.company || selectedAccount.name,
+        account_name: selectedAccount.account_name,
         distributor_id: id,
         distributor_name: distributor.distributor_name,
         servicing_state: coverage?.state || '',
@@ -792,7 +793,7 @@ export default function DistributorDetail() {
         withCredentials: true
       });
       
-      const accountDisplayName = selectedAccount.company || selectedAccount.name || selectedAccount.account_id || 'Account';
+      const accountDisplayName = selectedAccount.account_name || selectedAccount.account_id || 'Account';
       toast.success(`Account '${accountDisplayName}' assigned successfully`);
       setShowAssignDialog(false);
       setSelectedAccount(null);
@@ -1095,6 +1096,7 @@ export default function DistributorDetail() {
     });
     setDeliveryItems([]);
     setSelectedDeliveryAccount(null);
+    setDeliveryAccountSearch('');
   };
 
   const addDeliveryItem = () => {
@@ -2316,11 +2318,16 @@ export default function DistributorDetail() {
                         <Label>Search Account *</Label>
                         {selectedAccount ? (
                           <div className="flex items-center justify-between p-3 border rounded-md bg-muted/50">
-                            <div>
-                              <p className="font-medium">{selectedAccount.company || selectedAccount.name}</p>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{selectedAccount.account_name}</p>
                               <p className="text-sm text-muted-foreground">
-                                {selectedAccount.city}, {selectedAccount.state}
+                                {selectedAccount.city}{selectedAccount.state ? `, ${selectedAccount.state}` : ''}
                               </p>
+                              {selectedAccount.contact_name && (
+                                <p className="text-xs text-muted-foreground">
+                                  Contact: {selectedAccount.contact_name}
+                                </p>
+                              )}
                             </div>
                             <Button
                               variant="ghost"
@@ -2360,10 +2367,13 @@ export default function DistributorDetail() {
                                     }}
                                     data-testid={`account-result-${account.id}`}
                                   >
-                                    <p className="font-medium">{account.company || account.name}</p>
+                                    <p className="font-medium">{account.account_name}</p>
                                     <p className="text-sm text-muted-foreground">
-                                      {account.city}, {account.state} {account.account_id && `• ${account.account_id}`}
+                                      {account.city}{account.state ? `, ${account.state}` : ''} {account.account_id && `• ${account.account_id}`}
                                     </p>
+                                    {account.contact_name && (
+                                      <p className="text-xs text-muted-foreground">Contact: {account.contact_name}</p>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -3008,57 +3018,119 @@ export default function DistributorDetail() {
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
-                      {/* Account Selection */}
+                      {/* Account Selection - Searchable */}
                       <div className="space-y-2">
                         <Label>Account *</Label>
                         {selectedDeliveryAccount ? (
                           <div className="flex items-center justify-between p-3 border rounded-md bg-muted/50">
-                            <div>
-                              <p className="font-medium">{selectedDeliveryAccount.company || selectedDeliveryAccount.name}</p>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{selectedDeliveryAccount.account_name}</p>
                               <p className="text-sm text-muted-foreground">
-                                {selectedDeliveryAccount.city}, {selectedDeliveryAccount.state}
+                                {selectedDeliveryAccount.city}{selectedDeliveryAccount.state ? `, ${selectedDeliveryAccount.state}` : ''}
+                                {selectedDeliveryAccount.is_primary && ' ★ Primary'}
                               </p>
+                              {selectedDeliveryAccount.contact_name && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Contact: {selectedDeliveryAccount.contact_name}
+                                  {selectedDeliveryAccount.contact_number && ` • ${selectedDeliveryAccount.contact_number}`}
+                                </p>
+                              )}
                             </div>
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => {
                                 setSelectedDeliveryAccount(null);
-                                setDeliveryForm(prev => ({ ...prev, account_id: '' }));
+                                setDeliveryForm(prev => ({ ...prev, account_id: '', distributor_location_id: '' }));
                               }}
                             >
                               <X className="h-4 w-4" />
                             </Button>
                           </div>
                         ) : (
-                          <Select
-                            value={deliveryForm.account_id}
-                            onValueChange={(v) => {
-                              const account = assignedAccounts.find(a => a.id === v);
-                              setSelectedDeliveryAccount(account);
-                              setDeliveryForm(prev => ({ 
-                                ...prev, 
-                                account_id: v,
-                                distributor_location_id: account?.distributor_location_id || ''
-                              }));
-                            }}
-                          >
-                            <SelectTrigger data-testid="delivery-account-select">
-                              <SelectValue placeholder="Select an assigned account" />
-                            </SelectTrigger>
-                            <SelectContent>
+                          <div className="space-y-2">
+                            <Input
+                              placeholder="Search accounts by name or city..."
+                              value={deliveryAccountSearch || ''}
+                              onChange={(e) => setDeliveryAccountSearch(e.target.value)}
+                              data-testid="delivery-account-search"
+                              className="w-full"
+                            />
+                            <div className="border rounded-md max-h-[200px] overflow-y-auto">
                               {assignedAccounts.length === 0 ? (
-                                <div className="p-2 text-sm text-muted-foreground">No accounts assigned to this distributor</div>
+                                <div className="p-4 text-sm text-muted-foreground text-center">
+                                  <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                  <p>No accounts assigned to this distributor</p>
+                                  <p className="text-xs mt-1">Assign accounts first from the Assignments tab</p>
+                                </div>
                               ) : (
-                                assignedAccounts.map(account => (
-                                  <SelectItem key={account.id} value={account.id}>
-                                    {account.company || account.name} ({account.city})
-                                    {account.is_primary && ' ★'}
-                                  </SelectItem>
-                                ))
+                                assignedAccounts
+                                  .filter(account => {
+                                    if (!deliveryAccountSearch) return true;
+                                    const search = deliveryAccountSearch.toLowerCase();
+                                    return (
+                                      account.account_name?.toLowerCase().includes(search) ||
+                                      account.city?.toLowerCase().includes(search) ||
+                                      account.contact_name?.toLowerCase().includes(search) ||
+                                      account.territory?.toLowerCase().includes(search)
+                                    );
+                                  })
+                                  .map(account => (
+                                    <div
+                                      key={account.id}
+                                      className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0 transition-colors"
+                                      onClick={() => {
+                                        setSelectedDeliveryAccount(account);
+                                        setDeliveryForm(prev => ({ 
+                                          ...prev, 
+                                          account_id: account.id,
+                                          distributor_location_id: account.distributor_location_id || ''
+                                        }));
+                                        setDeliveryAccountSearch('');
+                                      }}
+                                      data-testid={`delivery-account-option-${account.id}`}
+                                    >
+                                      <div className="flex items-start justify-between">
+                                        <div className="flex-1 min-w-0">
+                                          <p className="font-medium text-sm truncate">
+                                            {account.account_name}
+                                            {account.is_primary && <span className="ml-2 text-yellow-600">★ Primary</span>}
+                                          </p>
+                                          <p className="text-xs text-muted-foreground mt-0.5">
+                                            {account.city}{account.state ? `, ${account.state}` : ''}
+                                            {account.territory && ` • ${account.territory}`}
+                                          </p>
+                                          {account.contact_name && (
+                                            <p className="text-xs text-muted-foreground">
+                                              Contact: {account.contact_name}
+                                            </p>
+                                          )}
+                                        </div>
+                                        {account.distributor_location_name && (
+                                          <Badge variant="outline" className="ml-2 text-xs shrink-0">
+                                            {account.distributor_location_name}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))
                               )}
-                            </SelectContent>
-                          </Select>
+                              {assignedAccounts.length > 0 && deliveryAccountSearch && 
+                               assignedAccounts.filter(a => {
+                                 const search = deliveryAccountSearch.toLowerCase();
+                                 return a.account_name?.toLowerCase().includes(search) || 
+                                        a.city?.toLowerCase().includes(search) ||
+                                        a.contact_name?.toLowerCase().includes(search);
+                               }).length === 0 && (
+                                <div className="p-4 text-sm text-muted-foreground text-center">
+                                  No accounts found matching "{deliveryAccountSearch}"
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {assignedAccounts.length} account{assignedAccounts.length !== 1 ? 's' : ''} assigned to this distributor
+                            </p>
+                          </div>
                         )}
                       </div>
 
