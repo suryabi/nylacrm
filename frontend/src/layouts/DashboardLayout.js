@@ -65,6 +65,7 @@ const salesNavigationGroups = [
     title: 'Distribution',
     items: [
       { name: 'Distributors', href: '/distributors', icon: Truck, moduleKey: 'distributors', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
+      { name: 'Stock Dashboard', href: '/stock-dashboard', icon: Package, moduleKey: 'distributors', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
     ]
   },
   {

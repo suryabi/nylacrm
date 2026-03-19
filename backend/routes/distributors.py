@@ -2208,6 +2208,155 @@ async def recalculate_shipment_totals(shipment_id: str, tenant_id: str):
     )
 
 
+# ============ Stock Dashboard ============
+
+@router.get("/dashboard/stock-summary")
+async def get_stock_dashboard_summary(
+    city: Optional[str] = None,
+    distributor_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get stock dashboard summary across all distributors"""
+    tenant_id = get_current_tenant_id()
+    
+    # Build query
+    query = {"tenant_id": tenant_id}
+    if distributor_id:
+        query["distributor_id"] = distributor_id
+    
+    # Get all stock records
+    stock = await db.distributor_stock.find(query, {"_id": 0}).to_list(5000)
+    
+    # If city filter is applied, filter by distributor locations in that city
+    if city:
+        # Get locations in this city
+        locations_in_city = await db.distributor_locations.find(
+            {"tenant_id": tenant_id, "city": city},
+            {"id": 1}
+        ).to_list(500)
+        location_ids = [loc['id'] for loc in locations_in_city]
+        stock = [s for s in stock if s.get('distributor_location_id') in location_ids]
+    
+    # Calculate summary metrics
+    total_quantity = sum(s.get('quantity', 0) for s in stock)
+    total_skus = len(set(s.get('sku_id') for s in stock if s.get('sku_id')))
+    total_locations = len(set(s.get('distributor_location_id') for s in stock if s.get('distributor_location_id')))
+    total_distributors = len(set(s.get('distributor_id') for s in stock if s.get('distributor_id')))
+    
+    # Group by distributor
+    by_distributor = {}
+    for item in stock:
+        dist_id = item.get('distributor_id')
+        dist_name = item.get('distributor_name', 'Unknown')
+        if dist_id not in by_distributor:
+            by_distributor[dist_id] = {
+                'distributor_id': dist_id,
+                'distributor_name': dist_name,
+                'total_quantity': 0,
+                'sku_count': set(),
+                'locations': set()
+            }
+        by_distributor[dist_id]['total_quantity'] += item.get('quantity', 0)
+        by_distributor[dist_id]['sku_count'].add(item.get('sku_id'))
+        by_distributor[dist_id]['locations'].add(item.get('distributor_location_id'))
+    
+    # Convert sets to counts
+    distributor_summary = []
+    for dist_id, data in by_distributor.items():
+        distributor_summary.append({
+            'distributor_id': dist_id,
+            'distributor_name': data['distributor_name'],
+            'total_quantity': data['total_quantity'],
+            'sku_count': len(data['sku_count']),
+            'location_count': len(data['locations'])
+        })
+    
+    # Sort by quantity descending
+    distributor_summary.sort(key=lambda x: x['total_quantity'], reverse=True)
+    
+    # Group by SKU
+    by_sku = {}
+    for item in stock:
+        sku_id = item.get('sku_id')
+        sku_name = item.get('sku_name', 'Unknown')
+        if sku_id not in by_sku:
+            by_sku[sku_id] = {
+                'sku_id': sku_id,
+                'sku_name': sku_name,
+                'total_quantity': 0,
+                'locations': set()
+            }
+        by_sku[sku_id]['total_quantity'] += item.get('quantity', 0)
+        by_sku[sku_id]['locations'].add(item.get('distributor_location_id'))
+    
+    sku_summary = []
+    for sku_id, data in by_sku.items():
+        sku_summary.append({
+            'sku_id': sku_id,
+            'sku_name': data['sku_name'],
+            'total_quantity': data['total_quantity'],
+            'location_count': len(data['locations'])
+        })
+    
+    sku_summary.sort(key=lambda x: x['total_quantity'], reverse=True)
+    
+    # Group by location
+    by_location = {}
+    for item in stock:
+        loc_id = item.get('distributor_location_id')
+        loc_name = item.get('location_name', 'Unknown')
+        dist_name = item.get('distributor_name', 'Unknown')
+        if loc_id not in by_location:
+            by_location[loc_id] = {
+                'location_id': loc_id,
+                'location_name': loc_name,
+                'distributor_name': dist_name,
+                'total_quantity': 0,
+                'sku_count': set(),
+                'items': []
+            }
+        by_location[loc_id]['total_quantity'] += item.get('quantity', 0)
+        by_location[loc_id]['sku_count'].add(item.get('sku_id'))
+        by_location[loc_id]['items'].append({
+            'sku_id': item.get('sku_id'),
+            'sku_name': item.get('sku_name'),
+            'quantity': item.get('quantity', 0)
+        })
+    
+    location_summary = []
+    for loc_id, data in by_location.items():
+        location_summary.append({
+            'location_id': loc_id,
+            'location_name': data['location_name'],
+            'distributor_name': data['distributor_name'],
+            'total_quantity': data['total_quantity'],
+            'sku_count': len(data['sku_count']),
+            'items': data['items']
+        })
+    
+    location_summary.sort(key=lambda x: x['total_quantity'], reverse=True)
+    
+    # Get list of cities with stock
+    cities_with_stock = await db.distributor_locations.distinct(
+        "city",
+        {"tenant_id": tenant_id, "id": {"$in": list(set(s.get('distributor_location_id') for s in stock))}}
+    )
+    
+    return {
+        "summary": {
+            "total_quantity": total_quantity,
+            "total_skus": total_skus,
+            "total_locations": total_locations,
+            "total_distributors": total_distributors
+        },
+        "by_distributor": distributor_summary,
+        "by_sku": sku_summary,
+        "by_location": location_summary,
+        "cities": sorted(cities_with_stock) if cities_with_stock else [],
+        "raw_stock": stock
+    }
+
+
 # ============ Distributor Stock ============
 
 @router.get("/{distributor_id}/stock")

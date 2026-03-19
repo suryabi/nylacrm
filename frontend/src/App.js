@@ -80,6 +80,7 @@ import LeadScoringModel from './pages/LeadScoringModel';
 // Distribution Module
 import DistributorList from './pages/DistributorList';
 import DistributorDetail from './pages/DistributorDetail';
+import StockDashboard from './pages/StockDashboard';
 import '@/App.css';
 import { useActivityTracker } from './hooks/useActivityTracker';
 import { NavigationProvider } from './context/NavigationContext';
@@ -231,6 +232,7 @@ function AppRouter() {
           <Route path="/distributors" element={<ProtectedRoute moduleKey="distributors"><DistributorList /></ProtectedRoute>} />
           <Route path="/distributors/:id" element={<ProtectedRoute moduleKey="distributors"><DistributorDetail /></ProtectedRoute>} />
           <Route path="/distributors/:id/edit" element={<ProtectedRoute moduleKey="distributors"><DistributorDetail /></ProtectedRoute>} />
+          <Route path="/stock-dashboard" element={<ProtectedRoute moduleKey="distributors"><StockDashboard /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </>
