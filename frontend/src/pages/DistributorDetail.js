@@ -237,7 +237,7 @@ export default function DistributorDetail() {
   }, [activeTab, distributor, selectedMarginCity]);
 
   useEffect(() => {
-    if (activeTab === 'margins') {
+    if (activeTab === 'margins' || activeTab === 'shipments') {
       fetchSkus();
     }
   }, [activeTab, fetchSkus]);
