@@ -17,7 +17,8 @@ from models.distributor import (
     DistributorLocationCreate, DistributorLocationUpdate,
     MarginMatrixCreate, MarginMatrixUpdate,
     AccountDistributorCreate, AccountDistributorUpdate,
-    PrimaryShipmentCreate, PrimaryShipmentUpdate, ShipmentItemCreate
+    PrimaryShipmentCreate, PrimaryShipmentUpdate, ShipmentItemCreate,
+    AccountDeliveryCreate, AccountDeliveryUpdate, DeliveryItemCreate
 )
 
 router = APIRouter()
@@ -2188,3 +2189,655 @@ async def get_distributor_stock(
     }
 
 
+# ============ Distributor-to-Account Delivery CRUD ============
+
+DELIVERY_STATUSES = {
+    "draft": "Draft - Not yet confirmed",
+    "confirmed": "Confirmed - Ready for delivery",
+    "in_transit": "In Transit - On the way",
+    "delivered": "Delivered - Completed",
+    "partially_delivered": "Partially Delivered",
+    "returned": "Returned",
+    "cancelled": "Cancelled"
+}
+
+
+async def generate_delivery_number(tenant_id: str) -> str:
+    """Generate unique delivery number like DEL-2026-0001"""
+    year = datetime.now().year
+    count = await db.distributor_deliveries.count_documents({
+        "tenant_id": tenant_id,
+        "delivery_number": {"$regex": f"^DEL-{year}-"}
+    })
+    return f"DEL-{year}-{count + 1:04d}"
+
+
+def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_value: float = None) -> dict:
+    """Calculate amounts for a delivery item including margin"""
+    quantity = item.get('quantity', 0)
+    unit_price = item.get('unit_price', 0)
+    discount_percent = item.get('discount_percent', 0) or 0
+    tax_percent = item.get('tax_percent', 0) or 0
+    
+    gross_amount = quantity * unit_price
+    discount_amount = round(gross_amount * discount_percent / 100, 2)
+    taxable_amount = gross_amount - discount_amount
+    tax_amount = round(taxable_amount * tax_percent / 100, 2)
+    net_amount = taxable_amount + tax_amount
+    
+    # Calculate margin/earning
+    margin_amount = 0
+    if margin_type and margin_value:
+        if margin_type == 'percentage':
+            margin_amount = round(net_amount * margin_value / 100, 2)
+        elif margin_type == 'fixed_per_bottle':
+            margin_amount = round(quantity * margin_value, 2)
+        elif margin_type == 'fixed_per_case':
+            # Assuming 12 bottles per case
+            cases = quantity / 12
+            margin_amount = round(cases * margin_value, 2)
+    
+    return {
+        **item,
+        'gross_amount': round(gross_amount, 2),
+        'discount_amount': discount_amount,
+        'taxable_amount': round(taxable_amount, 2),
+        'tax_amount': tax_amount,
+        'net_amount': round(net_amount, 2),
+        'margin_type': margin_type,
+        'margin_value': margin_value,
+        'margin_amount': margin_amount
+    }
+
+
+@router.get("/deliveries/all")
+async def list_all_deliveries(
+    distributor_id: Optional[str] = None,
+    account_id: Optional[str] = None,
+    status: Optional[str] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: dict = Depends(get_current_user)
+):
+    """List all deliveries with filters"""
+    tenant_id = get_current_tenant_id()
+    
+    query = {"tenant_id": tenant_id}
+    
+    if distributor_id:
+        query["distributor_id"] = distributor_id
+    if account_id:
+        query["account_id"] = account_id
+    if status and status != 'all':
+        query["status"] = status
+    if from_date:
+        query["delivery_date"] = {"$gte": from_date}
+    if to_date:
+        if "delivery_date" in query:
+            query["delivery_date"]["$lte"] = to_date
+        else:
+            query["delivery_date"] = {"$lte": to_date}
+    
+    total = await db.distributor_deliveries.count_documents(query)
+    
+    deliveries = await db.distributor_deliveries.find(
+        query,
+        {"_id": 0}
+    ).sort("delivery_date", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    
+    return {
+        "deliveries": deliveries,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size
+    }
+
+
+@router.get("/deliveries/summary")
+async def get_deliveries_summary(
+    distributor_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get deliveries summary stats"""
+    tenant_id = get_current_tenant_id()
+    
+    query = {"tenant_id": tenant_id}
+    if distributor_id:
+        query["distributor_id"] = distributor_id
+    
+    total = await db.distributor_deliveries.count_documents(query)
+    
+    # Count by status
+    draft = await db.distributor_deliveries.count_documents({**query, "status": "draft"})
+    confirmed = await db.distributor_deliveries.count_documents({**query, "status": "confirmed"})
+    delivered = await db.distributor_deliveries.count_documents({**query, "status": "delivered"})
+    cancelled = await db.distributor_deliveries.count_documents({**query, "status": "cancelled"})
+    
+    # Calculate totals
+    pipeline = [
+        {"$match": {**query, "status": {"$nin": ["cancelled", "returned"]}}},
+        {"$group": {
+            "_id": None,
+            "total_quantity": {"$sum": "$total_quantity"},
+            "total_amount": {"$sum": "$total_net_amount"},
+            "total_margin": {"$sum": "$total_margin_amount"}
+        }}
+    ]
+    
+    totals = await db.distributor_deliveries.aggregate(pipeline).to_list(1)
+    total_quantity = totals[0]["total_quantity"] if totals else 0
+    total_amount = totals[0]["total_amount"] if totals else 0
+    total_margin = totals[0]["total_margin"] if totals else 0
+    
+    return {
+        "total": total,
+        "by_status": {
+            "draft": draft,
+            "confirmed": confirmed,
+            "delivered": delivered,
+            "cancelled": cancelled
+        },
+        "total_quantity": total_quantity,
+        "total_amount": round(total_amount, 2),
+        "total_margin": round(total_margin, 2)
+    }
+
+
+@router.get("/{distributor_id}/deliveries")
+async def list_distributor_deliveries(
+    distributor_id: str,
+    status: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: dict = Depends(get_current_user)
+):
+    """List deliveries for a specific distributor"""
+    tenant_id = get_current_tenant_id()
+    
+    query = {"tenant_id": tenant_id, "distributor_id": distributor_id}
+    
+    if status and status != 'all':
+        query["status"] = status
+    
+    total = await db.distributor_deliveries.count_documents(query)
+    
+    deliveries = await db.distributor_deliveries.find(
+        query,
+        {"_id": 0}
+    ).sort("delivery_date", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    
+    return {
+        "deliveries": deliveries,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size
+    }
+
+
+@router.get("/{distributor_id}/deliveries/{delivery_id}")
+async def get_delivery(
+    distributor_id: str,
+    delivery_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a specific delivery with items"""
+    tenant_id = get_current_tenant_id()
+    
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0}
+    )
+    
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    
+    # Get delivery items
+    items = await db.distributor_delivery_items.find(
+        {"delivery_id": delivery_id, "tenant_id": tenant_id},
+        {"_id": 0}
+    ).to_list(500)
+    
+    delivery['items'] = items
+    
+    return delivery
+
+
+@router.get("/{distributor_id}/assigned-accounts")
+async def get_assigned_accounts_for_delivery(
+    distributor_id: str,
+    city: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get accounts assigned to this distributor for delivery selection"""
+    tenant_id = get_current_tenant_id()
+    
+    query = {
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": "active"
+    }
+    
+    if city:
+        query["servicing_city"] = city
+    
+    assignments = await db.account_distributor_assignments.find(
+        query,
+        {"_id": 0}
+    ).to_list(500)
+    
+    # Get account details for each assignment
+    accounts = []
+    for assignment in assignments:
+        account = await db.accounts.find_one(
+            {"id": assignment.get('account_id')},
+            {"_id": 0, "id": 1, "company": 1, "name": 1, "city": 1, "state": 1, "address": 1}
+        )
+        if account:
+            accounts.append({
+                **account,
+                "servicing_city": assignment.get('servicing_city'),
+                "distributor_location_id": assignment.get('distributor_location_id'),
+                "distributor_location_name": assignment.get('distributor_location_name'),
+                "is_primary": assignment.get('is_primary', False)
+            })
+    
+    return {"accounts": accounts}
+
+
+@router.post("/{distributor_id}/deliveries")
+async def create_delivery(
+    distributor_id: str,
+    data: AccountDeliveryCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new delivery to an account"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Validate distributor exists
+    distributor = await db.distributors.find_one(
+        {"id": distributor_id, "tenant_id": tenant_id},
+        {"_id": 0, "distributor_name": 1, "distributor_code": 1}
+    )
+    if not distributor:
+        raise HTTPException(status_code=404, detail="Distributor not found")
+    
+    # Validate location
+    location = await db.distributor_locations.find_one(
+        {"id": data.distributor_location_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0, "location_name": 1, "city": 1}
+    )
+    if not location:
+        raise HTTPException(status_code=400, detail="Invalid distributor location")
+    
+    # Validate account exists
+    account = await db.accounts.find_one(
+        {"id": data.account_id, "tenant_id": tenant_id},
+        {"_id": 0, "company": 1, "name": 1, "city": 1, "state": 1, "address": 1}
+    )
+    if not account:
+        raise HTTPException(status_code=400, detail="Account not found")
+    
+    # Validate items
+    if not data.items or len(data.items) == 0:
+        raise HTTPException(status_code=400, detail="At least one item is required")
+    
+    # Generate delivery number
+    delivery_number = await generate_delivery_number(tenant_id)
+    delivery_id = str(uuid.uuid4())
+    
+    # Build delivery address
+    delivery_address = data.delivery_address or account.get('address', '')
+    
+    # Get margin matrix for this account/city to calculate earnings
+    account_city = account.get('city', '')
+    
+    # Process items and calculate totals
+    items_to_insert = []
+    total_quantity = 0
+    total_gross_amount = 0
+    total_discount_amount = 0
+    total_tax_amount = 0
+    total_net_amount = 0
+    total_margin_amount = 0
+    
+    for item_data in data.items:
+        # Get SKU info
+        sku_name = item_data.sku_name
+        sku_code = None
+        sku = await db.master_skus.find_one({"id": item_data.sku_id}, {"_id": 0, "sku_name": 1, "sku_code": 1})
+        if sku:
+            sku_name = sku_name or sku.get('sku_name')
+            sku_code = sku.get('sku_code')
+        
+        # Get margin for this SKU and city
+        margin = await db.distributor_margin_matrix.find_one({
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "city": account_city,
+            "sku_id": item_data.sku_id,
+            "status": "active"
+        }, {"_id": 0, "margin_type": 1, "margin_value": 1})
+        
+        margin_type = margin.get('margin_type') if margin else None
+        margin_value = margin.get('margin_value') if margin else None
+        
+        item_dict = {
+            'id': str(uuid.uuid4()),
+            'tenant_id': tenant_id,
+            'delivery_id': delivery_id,
+            'sku_id': item_data.sku_id,
+            'sku_name': sku_name,
+            'sku_code': sku_code,
+            'quantity': item_data.quantity,
+            'unit_price': item_data.unit_price,
+            'discount_percent': item_data.discount_percent or 0,
+            'tax_percent': item_data.tax_percent or 0,
+            'remarks': item_data.remarks
+        }
+        
+        # Calculate amounts with margin
+        item_dict = calculate_delivery_item_amounts(item_dict, margin_type, margin_value)
+        items_to_insert.append(item_dict)
+        
+        total_quantity += item_data.quantity
+        total_gross_amount += item_dict['gross_amount']
+        total_discount_amount += item_dict['discount_amount']
+        total_tax_amount += item_dict['tax_amount']
+        total_net_amount += item_dict['net_amount']
+        total_margin_amount += item_dict.get('margin_amount', 0)
+    
+    # Create delivery document
+    delivery_doc = {
+        "id": delivery_id,
+        "tenant_id": tenant_id,
+        "delivery_number": delivery_number,
+        "distributor_id": distributor_id,
+        "distributor_name": distributor.get('distributor_name'),
+        "distributor_code": distributor.get('distributor_code'),
+        "distributor_location_id": data.distributor_location_id,
+        "distributor_location_name": location.get('location_name'),
+        "account_id": data.account_id,
+        "account_name": account.get('company') or account.get('name'),
+        "account_city": account.get('city'),
+        "account_state": account.get('state'),
+        "delivery_date": data.delivery_date,
+        "reference_number": data.reference_number,
+        "vehicle_number": data.vehicle_number,
+        "driver_name": data.driver_name,
+        "driver_contact": data.driver_contact,
+        "delivery_address": delivery_address,
+        "status": "draft",
+        "total_quantity": total_quantity,
+        "total_gross_amount": round(total_gross_amount, 2),
+        "total_discount_amount": round(total_discount_amount, 2),
+        "total_tax_amount": round(total_tax_amount, 2),
+        "total_net_amount": round(total_net_amount, 2),
+        "total_margin_amount": round(total_margin_amount, 2),
+        "remarks": data.remarks,
+        "created_at": now,
+        "updated_at": now,
+        "created_by": current_user.get('id'),
+        "confirmed_at": None,
+        "confirmed_by": None,
+        "delivered_at": None,
+        "delivered_by": None
+    }
+    
+    # Insert delivery and items
+    await db.distributor_deliveries.insert_one(delivery_doc)
+    if items_to_insert:
+        await db.distributor_delivery_items.insert_many(items_to_insert)
+    
+    delivery_doc.pop('_id', None)
+    delivery_doc['items'] = [
+        {k: v for k, v in item.items() if k not in ['_id', 'tenant_id']} 
+        for item in items_to_insert
+    ]
+    
+    logger.info(f"Delivery {delivery_number} created for account {data.account_id} by {current_user['email']}")
+    
+    return delivery_doc
+
+
+@router.put("/{distributor_id}/deliveries/{delivery_id}")
+async def update_delivery(
+    distributor_id: str,
+    delivery_id: str,
+    data: AccountDeliveryUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a delivery"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    
+    current_status = delivery.get('status')
+    
+    # Only allow limited updates for non-draft deliveries
+    if current_status != 'draft':
+        allowed_fields = ['remarks', 'vehicle_number', 'driver_name', 'driver_contact']
+        update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+        
+        for field in allowed_fields:
+            value = getattr(data, field, None)
+            if value is not None:
+                update_data[field] = value
+    else:
+        update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+        
+        for field in ['delivery_date', 'reference_number', 'vehicle_number', 
+                      'driver_name', 'driver_contact', 'delivery_address', 'remarks']:
+            value = getattr(data, field, None)
+            if value is not None:
+                update_data[field] = value
+    
+    await db.distributor_deliveries.update_one(
+        {"id": delivery_id, "tenant_id": tenant_id},
+        {"$set": update_data}
+    )
+    
+    updated = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id},
+        {"_id": 0}
+    )
+    
+    return updated
+
+
+@router.post("/{distributor_id}/deliveries/{delivery_id}/confirm")
+async def confirm_delivery(
+    distributor_id: str,
+    delivery_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Confirm a draft delivery"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    
+    if delivery.get('status') != 'draft':
+        raise HTTPException(status_code=400, detail="Only draft deliveries can be confirmed")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.distributor_deliveries.update_one(
+        {"id": delivery_id, "tenant_id": tenant_id},
+        {"$set": {
+            "status": "confirmed",
+            "confirmed_at": now,
+            "confirmed_by": current_user.get('id'),
+            "updated_at": now
+        }}
+    )
+    
+    logger.info(f"Delivery {delivery['delivery_number']} confirmed by {current_user['email']}")
+    
+    return {"message": f"Delivery {delivery['delivery_number']} confirmed", "status": "confirmed"}
+
+
+@router.post("/{distributor_id}/deliveries/{delivery_id}/complete")
+async def complete_delivery(
+    distributor_id: str,
+    delivery_id: str,
+    delivery_date: Optional[str] = None,
+    remarks: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Mark delivery as completed - deducts from distributor stock"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    
+    if delivery.get('status') not in ['draft', 'confirmed', 'in_transit']:
+        raise HTTPException(status_code=400, detail="Delivery cannot be completed in current status")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    actual_date = delivery_date or now[:10]
+    
+    update_data = {
+        "status": "delivered",
+        "delivery_date": actual_date,
+        "delivered_at": now,
+        "delivered_by": current_user.get('id'),
+        "updated_at": now
+    }
+    
+    if remarks:
+        update_data['remarks'] = (delivery.get('remarks', '') + '\n' + remarks).strip()
+    
+    await db.distributor_deliveries.update_one(
+        {"id": delivery_id, "tenant_id": tenant_id},
+        {"$set": update_data}
+    )
+    
+    # Deduct from distributor stock
+    items = await db.distributor_delivery_items.find(
+        {"delivery_id": delivery_id, "tenant_id": tenant_id},
+        {"_id": 0}
+    ).to_list(500)
+    
+    for item in items:
+        await db.distributor_stock.update_one(
+            {
+                "tenant_id": tenant_id,
+                "distributor_id": distributor_id,
+                "distributor_location_id": delivery.get('distributor_location_id'),
+                "sku_id": item.get('sku_id')
+            },
+            {
+                "$inc": {"quantity": -item.get('quantity', 0)},
+                "$set": {"updated_at": now}
+            }
+        )
+    
+    logger.info(f"Delivery {delivery['delivery_number']} completed by {current_user['email']}")
+    
+    return {"message": f"Delivery {delivery['delivery_number']} completed", "status": "delivered"}
+
+
+@router.delete("/{distributor_id}/deliveries/{delivery_id}")
+async def delete_delivery(
+    distributor_id: str,
+    delivery_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a draft delivery"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    
+    if delivery.get('status') != 'draft':
+        raise HTTPException(status_code=400, detail="Only draft deliveries can be deleted")
+    
+    # Delete items first
+    await db.distributor_delivery_items.delete_many({"delivery_id": delivery_id, "tenant_id": tenant_id})
+    
+    # Delete delivery
+    await db.distributor_deliveries.delete_one({"id": delivery_id, "tenant_id": tenant_id})
+    
+    logger.info(f"Delivery {delivery['delivery_number']} deleted by {current_user['email']}")
+    
+    return {"message": f"Delivery {delivery['delivery_number']} deleted"}
+
+
+@router.post("/{distributor_id}/deliveries/{delivery_id}/cancel")
+async def cancel_delivery(
+    distributor_id: str,
+    delivery_id: str,
+    reason: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Cancel a delivery"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    
+    if delivery.get('status') in ['delivered', 'cancelled']:
+        raise HTTPException(status_code=400, detail="Delivery cannot be cancelled")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    remarks = delivery.get('remarks', '') or ''
+    if reason:
+        remarks = f"{remarks}\nCancelled: {reason}".strip()
+    
+    await db.distributor_deliveries.update_one(
+        {"id": delivery_id, "tenant_id": tenant_id},
+        {"$set": {
+            "status": "cancelled",
+            "remarks": remarks,
+            "updated_at": now
+        }}
+    )
+    
+    logger.info(f"Delivery {delivery['delivery_number']} cancelled by {current_user['email']}")
+    
+    return {"message": f"Delivery {delivery['delivery_number']} cancelled", "status": "cancelled"}

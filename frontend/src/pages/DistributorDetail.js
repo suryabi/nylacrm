@@ -155,6 +155,27 @@ export default function DistributorDetail() {
   const [selectedShipment, setSelectedShipment] = useState(null);
   const [showShipmentDetail, setShowShipmentDetail] = useState(false);
   
+  // Delivery state
+  const [deliveries, setDeliveries] = useState([]);
+  const [deliveriesLoading, setDeliveriesLoading] = useState(false);
+  const [showDeliveryDialog, setShowDeliveryDialog] = useState(false);
+  const [assignedAccounts, setAssignedAccounts] = useState([]);
+  const [selectedDeliveryAccount, setSelectedDeliveryAccount] = useState(null);
+  const [deliveryForm, setDeliveryForm] = useState({
+    distributor_location_id: '',
+    account_id: '',
+    delivery_date: new Date().toISOString().split('T')[0],
+    reference_number: '',
+    vehicle_number: '',
+    driver_name: '',
+    driver_contact: '',
+    remarks: ''
+  });
+  const [deliveryItems, setDeliveryItems] = useState([]);
+  const [savingDelivery, setSavingDelivery] = useState(false);
+  const [selectedDelivery, setSelectedDelivery] = useState(null);
+  const [showDeliveryDetail, setShowDeliveryDetail] = useState(false);
+  
   const canManage = user && ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head'].includes(user.role);
 
   const fetchDistributor = useCallback(async () => {
@@ -291,6 +312,43 @@ export default function DistributorDetail() {
       fetchShipments();
     }
   }, [activeTab, fetchShipments]);
+
+  // Fetch deliveries
+  const fetchDeliveries = useCallback(async () => {
+    try {
+      setDeliveriesLoading(true);
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/deliveries`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setDeliveries(response.data.deliveries || []);
+    } catch (error) {
+      console.error('Failed to fetch deliveries:', error);
+    } finally {
+      setDeliveriesLoading(false);
+    }
+  }, [id, token]);
+
+  // Fetch assigned accounts for delivery
+  const fetchAssignedAccounts = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/assigned-accounts`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setAssignedAccounts(response.data.accounts || []);
+    } catch (error) {
+      console.error('Failed to fetch assigned accounts:', error);
+    }
+  }, [id, token]);
+
+  useEffect(() => {
+    if (activeTab === 'deliveries') {
+      fetchDeliveries();
+      fetchAssignedAccounts();
+      if (skus.length === 0) fetchSkus();
+    }
+  }, [activeTab, fetchDeliveries, fetchAssignedAccounts, fetchSkus, skus.length]);
 
   // Search accounts
   const searchAccounts = useCallback(async (query) => {
@@ -899,6 +957,187 @@ export default function DistributorDetail() {
     return <Badge className={config.color}>{config.label}</Badge>;
   };
 
+  // ============ Delivery Handlers ============
+
+  const handleCreateDelivery = async () => {
+    if (!deliveryForm.account_id) {
+      toast.error('Please select an account');
+      return;
+    }
+    if (!deliveryForm.distributor_location_id) {
+      toast.error('Please select a distributor location');
+      return;
+    }
+    if (!deliveryForm.delivery_date) {
+      toast.error('Please enter delivery date');
+      return;
+    }
+    if (deliveryItems.length === 0) {
+      toast.error('Please add at least one item');
+      return;
+    }
+    
+    try {
+      setSavingDelivery(true);
+      
+      const deliveryData = {
+        distributor_id: id,
+        distributor_location_id: deliveryForm.distributor_location_id,
+        account_id: deliveryForm.account_id,
+        delivery_date: deliveryForm.delivery_date,
+        reference_number: deliveryForm.reference_number || null,
+        vehicle_number: deliveryForm.vehicle_number || null,
+        driver_name: deliveryForm.driver_name || null,
+        driver_contact: deliveryForm.driver_contact || null,
+        remarks: deliveryForm.remarks || null,
+        items: deliveryItems.map(item => ({
+          sku_id: item.sku_id,
+          sku_name: item.sku_name,
+          quantity: parseInt(item.quantity),
+          unit_price: parseFloat(item.unit_price),
+          discount_percent: parseFloat(item.discount_percent) || 0,
+          tax_percent: parseFloat(item.tax_percent) || 0
+        }))
+      };
+      
+      const response = await axios.post(`${API_URL}/api/distributors/${id}/deliveries`, deliveryData, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      
+      toast.success(`Delivery ${response.data.delivery_number} created successfully`);
+      setShowDeliveryDialog(false);
+      resetDeliveryForm();
+      fetchDeliveries();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to create delivery');
+    } finally {
+      setSavingDelivery(false);
+    }
+  };
+
+  const resetDeliveryForm = () => {
+    setDeliveryForm({
+      distributor_location_id: '',
+      account_id: '',
+      delivery_date: new Date().toISOString().split('T')[0],
+      reference_number: '',
+      vehicle_number: '',
+      driver_name: '',
+      driver_contact: '',
+      remarks: ''
+    });
+    setDeliveryItems([]);
+    setSelectedDeliveryAccount(null);
+  };
+
+  const addDeliveryItem = () => {
+    setDeliveryItems(prev => [...prev, {
+      id: Date.now(),
+      sku_id: '',
+      sku_name: '',
+      quantity: 1,
+      unit_price: 0,
+      discount_percent: 0,
+      tax_percent: 18
+    }]);
+  };
+
+  const updateDeliveryItem = (itemId, field, value) => {
+    setDeliveryItems(prev => prev.map(item => 
+      item.id === itemId ? { ...item, [field]: value } : item
+    ));
+  };
+
+  const removeDeliveryItem = (itemId) => {
+    setDeliveryItems(prev => prev.filter(item => item.id !== itemId));
+  };
+
+  const handleConfirmDelivery = async (deliveryId) => {
+    try {
+      await axios.post(`${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/confirm`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Delivery confirmed');
+      fetchDeliveries();
+      setShowDeliveryDetail(false);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to confirm delivery');
+    }
+  };
+
+  const handleCompleteDelivery = async (deliveryId) => {
+    try {
+      await axios.post(`${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/complete`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Delivery completed - stock deducted');
+      fetchDeliveries();
+      setShowDeliveryDetail(false);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to complete delivery');
+    }
+  };
+
+  const handleCancelDelivery = async (deliveryId) => {
+    try {
+      await axios.post(`${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/cancel`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Delivery cancelled');
+      setDeleteTarget(null);
+      fetchDeliveries();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to cancel delivery');
+    }
+  };
+
+  const handleDeleteDelivery = async (deliveryId) => {
+    try {
+      setDeleting(true);
+      await axios.delete(`${API_URL}/api/distributors/${id}/deliveries/${deliveryId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Delivery deleted');
+      setDeleteTarget(null);
+      fetchDeliveries();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete delivery');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const viewDeliveryDetail = async (deliveryId) => {
+    try {
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/deliveries/${deliveryId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setSelectedDelivery(response.data);
+      setShowDeliveryDetail(true);
+    } catch (error) {
+      toast.error('Failed to load delivery details');
+    }
+  };
+
+  const getDeliveryStatusBadge = (status) => {
+    const statusConfig = {
+      draft: { label: 'Draft', color: 'bg-gray-100 text-gray-800' },
+      confirmed: { label: 'Confirmed', color: 'bg-blue-100 text-blue-800' },
+      in_transit: { label: 'In Transit', color: 'bg-yellow-100 text-yellow-800' },
+      delivered: { label: 'Delivered', color: 'bg-green-100 text-green-800' },
+      returned: { label: 'Returned', color: 'bg-orange-100 text-orange-800' },
+      cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800' }
+    };
+    const config = statusConfig[status] || statusConfig.draft;
+    return <Badge className={config.color}>{config.label}</Badge>;
+  };
+
   // Get available cities for the selected state that are not already covered
   const getAvailableCities = () => {
     if (!selectedState) return [];
@@ -994,6 +1233,9 @@ export default function DistributorDetail() {
           </TabsTrigger>
           <TabsTrigger value="shipments" data-testid="shipments-tab">
             Shipments ({shipments.length})
+          </TabsTrigger>
+          <TabsTrigger value="deliveries" data-testid="deliveries-tab">
+            Deliveries ({deliveries.length})
           </TabsTrigger>
         </TabsList>
 
@@ -2521,6 +2763,396 @@ export default function DistributorDetail() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Deliveries Tab */}
+        <TabsContent value="deliveries">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Account Deliveries</CardTitle>
+                <CardDescription>Deliveries from this distributor to assigned accounts</CardDescription>
+              </div>
+              {canManage && (
+                <Dialog open={showDeliveryDialog} onOpenChange={(open) => {
+                  setShowDeliveryDialog(open);
+                  if (!open) resetDeliveryForm();
+                }}>
+                  <DialogTrigger asChild>
+                    <Button data-testid="create-delivery-btn">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Record Delivery
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Record Account Delivery</DialogTitle>
+                      <DialogDescription>
+                        Record a delivery from {distributor.distributor_name} to an account
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      {/* Account Selection */}
+                      <div className="space-y-2">
+                        <Label>Account *</Label>
+                        {selectedDeliveryAccount ? (
+                          <div className="flex items-center justify-between p-3 border rounded-md bg-muted/50">
+                            <div>
+                              <p className="font-medium">{selectedDeliveryAccount.company || selectedDeliveryAccount.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {selectedDeliveryAccount.city}, {selectedDeliveryAccount.state}
+                              </p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedDeliveryAccount(null);
+                                setDeliveryForm(prev => ({ ...prev, account_id: '' }));
+                              }}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <Select
+                            value={deliveryForm.account_id}
+                            onValueChange={(v) => {
+                              const account = assignedAccounts.find(a => a.id === v);
+                              setSelectedDeliveryAccount(account);
+                              setDeliveryForm(prev => ({ 
+                                ...prev, 
+                                account_id: v,
+                                distributor_location_id: account?.distributor_location_id || ''
+                              }));
+                            }}
+                          >
+                            <SelectTrigger data-testid="delivery-account-select">
+                              <SelectValue placeholder="Select an assigned account" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {assignedAccounts.length === 0 ? (
+                                <div className="p-2 text-sm text-muted-foreground">No accounts assigned to this distributor</div>
+                              ) : (
+                                assignedAccounts.map(account => (
+                                  <SelectItem key={account.id} value={account.id}>
+                                    {account.company || account.name} ({account.city})
+                                    {account.is_primary && ' ★'}
+                                  </SelectItem>
+                                ))
+                              )}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+
+                      {/* Location & Date */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>From Location *</Label>
+                          <Select
+                            value={deliveryForm.distributor_location_id}
+                            onValueChange={(v) => setDeliveryForm(prev => ({ ...prev, distributor_location_id: v }))}
+                          >
+                            <SelectTrigger data-testid="delivery-location-select">
+                              <SelectValue placeholder="Select warehouse/location" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(distributor.locations || [])
+                                .filter(loc => loc.status === 'active')
+                                .map(loc => (
+                                  <SelectItem key={loc.id} value={loc.id}>
+                                    {loc.location_name} ({loc.city})
+                                    {loc.is_default && ' ★'}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Delivery Date *</Label>
+                          <Input
+                            type="date"
+                            value={deliveryForm.delivery_date}
+                            onChange={(e) => setDeliveryForm(prev => ({ ...prev, delivery_date: e.target.value }))}
+                            data-testid="delivery-date-input"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Reference Number</Label>
+                          <Input
+                            placeholder="e.g., INV-2026-001"
+                            value={deliveryForm.reference_number}
+                            onChange={(e) => setDeliveryForm(prev => ({ ...prev, reference_number: e.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Vehicle Number</Label>
+                          <Input
+                            placeholder="KA-01-AB-1234"
+                            value={deliveryForm.vehicle_number}
+                            onChange={(e) => setDeliveryForm(prev => ({ ...prev, vehicle_number: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Delivery Items */}
+                      <div className="space-y-3 border-t pt-4">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-base font-semibold">Delivery Items</Label>
+                          <Button variant="outline" size="sm" onClick={addDeliveryItem} data-testid="add-delivery-item-btn">
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add Item
+                          </Button>
+                        </div>
+                        
+                        {deliveryItems.length === 0 ? (
+                          <div className="text-center py-6 text-muted-foreground border rounded-md">
+                            <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                            <p className="text-sm">No items added. Click "Add Item" to start.</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {/* Header Row */}
+                            <div className="flex items-center gap-3 px-3 text-xs font-medium text-muted-foreground">
+                              <div className="flex-[3] min-w-0">SKU</div>
+                              <div className="w-20">Qty</div>
+                              <div className="w-24">Price (₹)</div>
+                              <div className="w-16">Disc %</div>
+                              <div className="w-16">Tax %</div>
+                              <div className="w-28 text-right">Amount</div>
+                              <div className="w-10"></div>
+                            </div>
+                            {deliveryItems.map((item, index) => (
+                              <div key={item.id} className="flex items-center gap-3 p-3 border rounded-md bg-muted/30" data-testid={`delivery-item-${index}`}>
+                                <div className="flex-[3] min-w-0">
+                                  <Select
+                                    value={item.sku_id}
+                                    onValueChange={(v) => {
+                                      const selectedSku = skus.find(s => s.id === v);
+                                      updateDeliveryItem(item.id, 'sku_id', v);
+                                      if (selectedSku) {
+                                        updateDeliveryItem(item.id, 'sku_name', selectedSku.name || selectedSku.sku_name);
+                                      }
+                                    }}
+                                  >
+                                    <SelectTrigger className="h-9">
+                                      <SelectValue placeholder="Select SKU" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {skus.map(sku => (
+                                        <SelectItem key={sku.id} value={sku.id}>
+                                          {sku.name || sku.sku_name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="w-20">
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    className="h-9"
+                                    value={item.quantity}
+                                    onChange={(e) => updateDeliveryItem(item.id, 'quantity', e.target.value)}
+                                  />
+                                </div>
+                                <div className="w-24">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    className="h-9"
+                                    value={item.unit_price}
+                                    onChange={(e) => updateDeliveryItem(item.id, 'unit_price', e.target.value)}
+                                  />
+                                </div>
+                                <div className="w-16">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    className="h-9"
+                                    value={item.discount_percent}
+                                    onChange={(e) => updateDeliveryItem(item.id, 'discount_percent', e.target.value)}
+                                  />
+                                </div>
+                                <div className="w-16">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    className="h-9"
+                                    value={item.tax_percent}
+                                    onChange={(e) => updateDeliveryItem(item.id, 'tax_percent', e.target.value)}
+                                  />
+                                </div>
+                                <div className="w-28 text-right">
+                                  <div className="h-9 flex items-center justify-end text-sm font-semibold whitespace-nowrap">
+                                    ₹{((item.quantity * item.unit_price * (1 - (item.discount_percent || 0) / 100)) * (1 + (item.tax_percent || 0) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </div>
+                                </div>
+                                <div className="w-10 flex justify-end">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-9 w-9 p-0 text-destructive"
+                                    onClick={() => removeDeliveryItem(item.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                            
+                            {/* Total */}
+                            <div className="flex justify-end pt-2 border-t">
+                              <div className="text-right">
+                                <span className="text-muted-foreground mr-4">Total Amount:</span>
+                                <span className="text-lg font-bold">
+                                  ₹{deliveryItems.reduce((sum, item) => {
+                                    const gross = item.quantity * item.unit_price;
+                                    const afterDiscount = gross * (1 - (item.discount_percent || 0) / 100);
+                                    const withTax = afterDiscount * (1 + (item.tax_percent || 0) / 100);
+                                    return sum + withTax;
+                                  }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Remarks */}
+                      <div className="space-y-2">
+                        <Label>Remarks</Label>
+                        <Textarea
+                          placeholder="Any additional notes..."
+                          value={deliveryForm.remarks}
+                          onChange={(e) => setDeliveryForm(prev => ({ ...prev, remarks: e.target.value }))}
+                          rows={2}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setShowDeliveryDialog(false)}>Cancel</Button>
+                      <Button
+                        onClick={handleCreateDelivery}
+                        disabled={savingDelivery || !deliveryForm.account_id || !deliveryForm.distributor_location_id || deliveryItems.length === 0}
+                        data-testid="save-delivery-btn"
+                      >
+                        {savingDelivery ? 'Creating...' : 'Record Delivery'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </CardHeader>
+            <CardContent>
+              {deliveriesLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : deliveries.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Truck className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No deliveries recorded</p>
+                  <p className="text-sm">Record deliveries to track stock movement to accounts</p>
+                  {assignedAccounts.length === 0 && (
+                    <p className="text-sm text-amber-600 mt-2">Note: Assign accounts first before recording deliveries</p>
+                  )}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full" data-testid="deliveries-table">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="text-left p-3 font-medium">Delivery #</th>
+                        <th className="text-left p-3 font-medium">Date</th>
+                        <th className="text-left p-3 font-medium">Account</th>
+                        <th className="text-right p-3 font-medium">Qty</th>
+                        <th className="text-right p-3 font-medium">Amount</th>
+                        <th className="text-right p-3 font-medium">Margin</th>
+                        <th className="text-center p-3 font-medium">Status</th>
+                        <th className="text-right p-3 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deliveries.map((delivery) => (
+                        <tr key={delivery.id} className="border-b hover:bg-muted/30" data-testid={`delivery-row-${delivery.id}`}>
+                          <td className="p-3">
+                            <button 
+                              className="font-medium text-primary hover:underline"
+                              onClick={() => viewDeliveryDetail(delivery.id)}
+                            >
+                              {delivery.delivery_number}
+                            </button>
+                            {delivery.reference_number && (
+                              <p className="text-xs text-muted-foreground">{delivery.reference_number}</p>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-4 w-4 text-muted-foreground" />
+                              {new Date(delivery.delivery_date).toLocaleDateString()}
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <div>
+                              <p className="font-medium">{delivery.account_name}</p>
+                              <p className="text-xs text-muted-foreground">{delivery.account_city}</p>
+                            </div>
+                          </td>
+                          <td className="p-3 text-right font-medium">{delivery.total_quantity}</td>
+                          <td className="p-3 text-right font-medium">₹{delivery.total_net_amount?.toLocaleString()}</td>
+                          <td className="p-3 text-right">
+                            {delivery.total_margin_amount > 0 ? (
+                              <span className="font-medium text-green-600">₹{delivery.total_margin_amount?.toLocaleString()}</span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            {getDeliveryStatusBadge(delivery.status)}
+                          </td>
+                          <td className="p-3 text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => viewDeliveryDetail(delivery.id)}
+                                data-testid={`view-delivery-${delivery.id}`}
+                              >
+                                <FileText className="h-4 w-4" />
+                              </Button>
+                              {canManage && delivery.status === 'draft' && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive"
+                                  onClick={() => setDeleteTarget({
+                                    type: 'delivery',
+                                    id: delivery.id,
+                                    name: delivery.delivery_number
+                                  })}
+                                  data-testid={`delete-delivery-${delivery.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Shipment Detail Dialog */}
@@ -2632,6 +3264,126 @@ export default function DistributorDetail() {
         </DialogContent>
       </Dialog>
 
+      {/* Delivery Detail Dialog */}
+      <Dialog open={showDeliveryDetail} onOpenChange={setShowDeliveryDetail}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              Delivery {selectedDelivery?.delivery_number}
+              {selectedDelivery && getDeliveryStatusBadge(selectedDelivery.status)}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedDelivery && (
+            <div className="space-y-4">
+              {/* Delivery Info */}
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Account:</span>
+                  <span className="ml-2 font-medium">{selectedDelivery.account_name}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">City:</span>
+                  <span className="ml-2 font-medium">{selectedDelivery.account_city}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">From Location:</span>
+                  <span className="ml-2 font-medium">{selectedDelivery.distributor_location_name}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Delivery Date:</span>
+                  <span className="ml-2 font-medium">{new Date(selectedDelivery.delivery_date).toLocaleDateString()}</span>
+                </div>
+                {selectedDelivery.reference_number && (
+                  <div>
+                    <span className="text-muted-foreground">Reference:</span>
+                    <span className="ml-2 font-medium">{selectedDelivery.reference_number}</span>
+                  </div>
+                )}
+                {selectedDelivery.vehicle_number && (
+                  <div>
+                    <span className="text-muted-foreground">Vehicle:</span>
+                    <span className="ml-2 font-medium">{selectedDelivery.vehicle_number}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Items */}
+              <div className="border rounded-md">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="text-left p-2 font-medium">SKU</th>
+                      <th className="text-right p-2 font-medium">Qty</th>
+                      <th className="text-right p-2 font-medium">Price</th>
+                      <th className="text-right p-2 font-medium">Amount</th>
+                      <th className="text-right p-2 font-medium">Margin</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(selectedDelivery.items || []).map((item, idx) => (
+                      <tr key={idx} className="border-b">
+                        <td className="p-2">{item.sku_name || item.sku_id}</td>
+                        <td className="p-2 text-right">{item.quantity}</td>
+                        <td className="p-2 text-right">₹{item.unit_price}</td>
+                        <td className="p-2 text-right">₹{item.net_amount?.toFixed(2)}</td>
+                        <td className="p-2 text-right">
+                          {item.margin_amount > 0 ? (
+                            <span className="text-green-600">₹{item.margin_amount?.toFixed(2)}</span>
+                          ) : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-muted/30">
+                      <td colSpan="3" className="p-2 text-right font-medium">Total:</td>
+                      <td className="p-2 text-right font-bold">₹{selectedDelivery.total_net_amount?.toLocaleString()}</td>
+                      <td className="p-2 text-right font-bold text-green-600">
+                        {selectedDelivery.total_margin_amount > 0 ? `₹${selectedDelivery.total_margin_amount?.toLocaleString()}` : '-'}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {/* Actions */}
+              {canManage && (
+                <div className="flex justify-end gap-2 pt-4 border-t">
+                  {selectedDelivery.status === 'draft' && (
+                    <>
+                      <Button variant="outline" onClick={() => handleCancelDelivery(selectedDelivery.id)}>
+                        Cancel Delivery
+                      </Button>
+                      <Button onClick={() => handleConfirmDelivery(selectedDelivery.id)}>
+                        <Check className="h-4 w-4 mr-2" />
+                        Confirm
+                      </Button>
+                    </>
+                  )}
+                  {selectedDelivery.status === 'confirmed' && (
+                    <>
+                      <Button variant="outline" onClick={() => handleCancelDelivery(selectedDelivery.id)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={() => handleCompleteDelivery(selectedDelivery.id)} className="bg-green-600 hover:bg-green-700">
+                        <Check className="h-4 w-4 mr-2" />
+                        Complete Delivery
+                      </Button>
+                    </>
+                  )}
+                  {selectedDelivery.status === 'in_transit' && (
+                    <Button onClick={() => handleCompleteDelivery(selectedDelivery.id)} className="bg-green-600 hover:bg-green-700">
+                      <Check className="h-4 w-4 mr-2" />
+                      Complete Delivery
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
@@ -2658,6 +3410,8 @@ export default function DistributorDetail() {
                   handleDeleteAssignment(deleteTarget.id);
                 } else if (deleteTarget?.type === 'shipment') {
                   handleDeleteShipment(deleteTarget.id);
+                } else if (deleteTarget?.type === 'delivery') {
+                  handleDeleteDelivery(deleteTarget.id);
                 }
               }}
             >

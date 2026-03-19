@@ -416,3 +416,117 @@ class PrimaryShipment(BaseModel):
     confirmed_by: Optional[str] = None
     delivered_at: Optional[str] = None
     delivered_by: Optional[str] = None
+
+
+# ============ Distributor-to-Account Delivery ============
+
+class DeliveryStatus(str, Enum):
+    DRAFT = "draft"
+    CONFIRMED = "confirmed"
+    IN_TRANSIT = "in_transit"
+    DELIVERED = "delivered"
+    PARTIALLY_DELIVERED = "partially_delivered"
+    RETURNED = "returned"
+    CANCELLED = "cancelled"
+
+
+class DeliveryItemCreate(BaseModel):
+    sku_id: str
+    sku_name: Optional[str] = None
+    quantity: int
+    unit_price: float
+    discount_percent: Optional[float] = 0
+    tax_percent: Optional[float] = 0
+    remarks: Optional[str] = None
+
+
+class DeliveryItemUpdate(BaseModel):
+    sku_id: Optional[str] = None
+    quantity: Optional[int] = None
+    unit_price: Optional[float] = None
+    discount_percent: Optional[float] = None
+    tax_percent: Optional[float] = None
+    remarks: Optional[str] = None
+
+
+class DeliveryItem(BaseModel):
+    id: str
+    delivery_id: str
+    sku_id: str
+    sku_name: Optional[str] = None
+    sku_code: Optional[str] = None
+    quantity: int
+    unit_price: float
+    discount_percent: float = 0
+    tax_percent: float = 0
+    gross_amount: float
+    discount_amount: float
+    taxable_amount: float
+    tax_amount: float
+    net_amount: float
+    margin_type: Optional[str] = None  # From margin matrix
+    margin_value: Optional[float] = None
+    margin_amount: Optional[float] = None  # Calculated earning for this item
+    remarks: Optional[str] = None
+
+
+class AccountDeliveryCreate(BaseModel):
+    distributor_id: str
+    distributor_location_id: str
+    account_id: str
+    delivery_date: str
+    reference_number: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    driver_name: Optional[str] = None
+    driver_contact: Optional[str] = None
+    delivery_address: Optional[str] = None
+    remarks: Optional[str] = None
+    items: List[DeliveryItemCreate]
+
+
+class AccountDeliveryUpdate(BaseModel):
+    delivery_date: Optional[str] = None
+    reference_number: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    driver_name: Optional[str] = None
+    driver_contact: Optional[str] = None
+    delivery_address: Optional[str] = None
+    remarks: Optional[str] = None
+    status: Optional[str] = None
+
+
+class AccountDelivery(BaseModel):
+    id: str
+    tenant_id: str
+    delivery_number: str  # Auto-generated like DEL-2026-0001
+    distributor_id: str
+    distributor_name: Optional[str] = None
+    distributor_code: Optional[str] = None
+    distributor_location_id: str
+    distributor_location_name: Optional[str] = None
+    account_id: str
+    account_name: Optional[str] = None
+    account_city: Optional[str] = None
+    account_state: Optional[str] = None
+    delivery_date: str
+    reference_number: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    driver_name: Optional[str] = None
+    driver_contact: Optional[str] = None
+    delivery_address: Optional[str] = None
+    status: str = "draft"
+    total_quantity: int = 0
+    total_gross_amount: float = 0
+    total_discount_amount: float = 0
+    total_tax_amount: float = 0
+    total_net_amount: float = 0
+    total_margin_amount: float = 0  # Total distributor earning from this delivery
+    remarks: Optional[str] = None
+    items: Optional[List[DeliveryItem]] = None
+    created_at: str
+    updated_at: str
+    created_by: Optional[str] = None
+    confirmed_at: Optional[str] = None
+    confirmed_by: Optional[str] = None
+    delivered_at: Optional[str] = None
+    delivered_by: Optional[str] = None
