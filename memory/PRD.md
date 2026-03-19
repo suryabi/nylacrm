@@ -25,6 +25,25 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Latest Session - March 19, 2026
 
+### FEATURE: Stock Dashboard ✅
+**User Request**: Build a Stock Dashboard to visualize real-time inventory levels across distributor locations.
+
+**Implementation**:
+- Backend: `GET /api/distributors/dashboard/stock-summary` endpoint with city/distributor filters
+- Frontend: `/stock-dashboard` page with:
+  - Summary cards (Total Stock, SKU Types, Locations, Distributors)
+  - Three tabs: By Location, By SKU, By Distributor
+  - Search filter for locations/SKUs
+  - City dropdown filter
+  - Distributor dropdown filter
+  - Refresh button
+- Added sidebar link under Distribution section
+
+**Testing**: 100% pass rate (Backend 10/10, Frontend all features verified)
+- Test file: `/app/backend/tests/test_stock_dashboard.py`
+
+---
+
 ### BUG FIX: Auto-populate Price in Shipment Dialog ✅
 **Issue**: When creating a primary shipment and selecting a SKU, the price was not being auto-populated. Users had to manually enter the price.
 
@@ -271,8 +290,7 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 ## Pending Tasks
 
 ### P1 - High Priority
-1. **Stock Dashboard** - Real-time stock levels across distributor locations
-2. **Auto-generate Provisional Invoice** - Trigger invoice when shipment status is "delivered"
+1. **Auto-generate Provisional Invoice** - Trigger invoice when shipment status is "delivered"
 
 ### P2 - Medium Priority
 1. **Server.py Refactoring** - Move remaining routes to modular files
