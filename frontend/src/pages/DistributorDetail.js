@@ -13,6 +13,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Checkbox } from '../components/ui/checkbox';
+import { Switch } from '../components/ui/switch';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Building2, MapPin, Phone, Mail, Edit2, Trash2,
@@ -129,6 +130,7 @@ export default function DistributorDetail() {
   const [margins, setMargins] = useState([]);
   const [marginsLoading, setMarginsLoading] = useState(false);
   const [selectedMarginCity, setSelectedMarginCity] = useState('');
+  const [showOnlyActiveMargins, setShowOnlyActiveMargins] = useState(false);
   const [skus, setSkus] = useState([]);
   const [marginGrid, setMarginGrid] = useState({}); // Legacy - for grid view
   const [hasMarginChanges, setHasMarginChanges] = useState(false);
@@ -149,6 +151,7 @@ export default function DistributorDetail() {
     active_to: ''
   });
   const [savingMarginEntry, setSavingMarginEntry] = useState(false);
+  const [showActiveOnlyMargins, setShowActiveOnlyMargins] = useState(true); // Default to show only active
   
   // Shipment state
   const [shipments, setShipments] = useState([]);
@@ -2496,6 +2499,21 @@ export default function DistributorDetail() {
                     </SelectContent>
                   </Select>
                   
+                  {/* Show Only Active Toggle */}
+                  {selectedMarginCity && margins.length > 0 && (
+                    <div className="flex items-center gap-2 border rounded-md px-3 py-1.5 bg-muted/30">
+                      <Switch
+                        id="show-active-only"
+                        checked={showOnlyActiveMargins}
+                        onCheckedChange={setShowOnlyActiveMargins}
+                        data-testid="show-active-margins-toggle"
+                      />
+                      <Label htmlFor="show-active-only" className="text-sm cursor-pointer whitespace-nowrap">
+                        Active & Ongoing only
+                      </Label>
+                    </div>
+                  )}
+                  
                   {canManage && selectedMarginCity && margins.length > 0 && (
                     <Dialog open={showCopyDialog} onOpenChange={setShowCopyDialog}>
                       <DialogTrigger asChild>
@@ -2595,6 +2613,28 @@ export default function DistributorDetail() {
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
+                      {/* Filter margins based on toggle */}
+                      {(() => {
+                        const today = new Date().toISOString().split('T')[0];
+                        const filteredMargins = showOnlyActiveMargins 
+                          ? margins.filter(margin => {
+                              // Show active (current) and future entries, hide expired
+                              const isPast = margin.active_to && margin.active_to < today;
+                              return !isPast;
+                            })
+                          : margins;
+                        
+                        if (filteredMargins.length === 0) {
+                          return (
+                            <div className="text-center py-12 text-muted-foreground">
+                              <Percent className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                              <p>No active or ongoing margin entries</p>
+                              <p className="text-sm mt-1">Turn off the filter to see expired entries</p>
+                            </div>
+                          );
+                        }
+                        
+                        return (
                       <table className="w-full border-collapse text-sm">
                         <thead>
                           <tr className="border-b bg-muted/50">
@@ -2609,8 +2649,7 @@ export default function DistributorDetail() {
                           </tr>
                         </thead>
                         <tbody>
-                          {margins.map((margin, index) => {
-                            const today = new Date().toISOString().split('T')[0];
+                          {filteredMargins.map((margin, index) => {
                             const isActive = (!margin.active_from || margin.active_from <= today) && 
                                            (!margin.active_to || margin.active_to >= today);
                             const isFuture = margin.active_from && margin.active_from > today;
@@ -2695,6 +2734,8 @@ export default function DistributorDetail() {
                           })}
                         </tbody>
                       </table>
+                        );
+                      })()}
                     </div>
                   )}
                   
@@ -2702,12 +2743,24 @@ export default function DistributorDetail() {
                   {margins.length > 0 && (
                     <div className="flex items-center justify-between text-sm text-muted-foreground border-t pt-3">
                       <span>
-                        Total: {margins.length} entries | 
-                        Active: {margins.filter(m => {
-                          const today = new Date().toISOString().split('T')[0];
-                          return (!m.active_from || m.active_from <= today) && (!m.active_to || m.active_to >= today);
-                        }).length} | 
-                        SKUs: {new Set(margins.map(m => m.sku_id)).size}
+                        {showOnlyActiveMargins ? (
+                          <>
+                            Showing: {margins.filter(m => {
+                              const today = new Date().toISOString().split('T')[0];
+                              return !(m.active_to && m.active_to < today);
+                            }).length} of {margins.length} entries | 
+                            SKUs: {new Set(margins.map(m => m.sku_id)).size}
+                          </>
+                        ) : (
+                          <>
+                            Total: {margins.length} entries | 
+                            Active: {margins.filter(m => {
+                              const today = new Date().toISOString().split('T')[0];
+                              return (!m.active_from || m.active_from <= today) && (!m.active_to || m.active_to >= today);
+                            }).length} | 
+                            SKUs: {new Set(margins.map(m => m.sku_id)).size}
+                          </>
+                        )}
                       </span>
                     </div>
                   )}
