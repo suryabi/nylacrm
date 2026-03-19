@@ -2291,10 +2291,19 @@ export default function DistributorDetail() {
                           </div>
                         ) : (
                           <div className="space-y-3">
+                            {/* Header Row */}
+                            <div className="flex items-center gap-3 px-3 text-xs font-medium text-muted-foreground">
+                              <div className="flex-[3] min-w-0">SKU</div>
+                              <div className="w-20">Qty</div>
+                              <div className="w-24">Price (₹)</div>
+                              <div className="w-16">Disc %</div>
+                              <div className="w-16">Tax %</div>
+                              <div className="w-28 text-right">Amount</div>
+                              <div className="w-10"></div>
+                            </div>
                             {shipmentItems.map((item, index) => (
-                              <div key={item.id} className="grid grid-cols-12 gap-2 items-end p-3 border rounded-md bg-muted/30" data-testid={`shipment-item-${index}`}>
-                                <div className="col-span-4 space-y-1">
-                                  <Label className="text-xs">SKU</Label>
+                              <div key={item.id} className="flex items-center gap-3 p-3 border rounded-md bg-muted/30" data-testid={`shipment-item-${index}`}>
+                                <div className="flex-[3] min-w-0">
                                   <Select
                                     value={item.sku_id}
                                     onValueChange={(v) => {
@@ -2317,8 +2326,7 @@ export default function DistributorDetail() {
                                     </SelectContent>
                                   </Select>
                                 </div>
-                                <div className="col-span-2 space-y-1">
-                                  <Label className="text-xs">Quantity</Label>
+                                <div className="w-20">
                                   <Input
                                     type="number"
                                     min="1"
@@ -2327,8 +2335,7 @@ export default function DistributorDetail() {
                                     onChange={(e) => updateShipmentItem(item.id, 'quantity', e.target.value)}
                                   />
                                 </div>
-                                <div className="col-span-2 space-y-1">
-                                  <Label className="text-xs">Unit Price (₹)</Label>
+                                <div className="w-24">
                                   <Input
                                     type="number"
                                     min="0"
@@ -2338,8 +2345,7 @@ export default function DistributorDetail() {
                                     onChange={(e) => updateShipmentItem(item.id, 'unit_price', e.target.value)}
                                   />
                                 </div>
-                                <div className="col-span-1 space-y-1">
-                                  <Label className="text-xs">Disc %</Label>
+                                <div className="w-16">
                                   <Input
                                     type="number"
                                     min="0"
@@ -2349,8 +2355,7 @@ export default function DistributorDetail() {
                                     onChange={(e) => updateShipmentItem(item.id, 'discount_percent', e.target.value)}
                                   />
                                 </div>
-                                <div className="col-span-1 space-y-1">
-                                  <Label className="text-xs">Tax %</Label>
+                                <div className="w-16">
                                   <Input
                                     type="number"
                                     min="0"
@@ -2360,13 +2365,12 @@ export default function DistributorDetail() {
                                     onChange={(e) => updateShipmentItem(item.id, 'tax_percent', e.target.value)}
                                   />
                                 </div>
-                                <div className="col-span-1 space-y-1">
-                                  <Label className="text-xs">Amount</Label>
-                                  <div className="h-9 flex items-center text-sm font-medium">
-                                    ₹{((item.quantity * item.unit_price * (1 - (item.discount_percent || 0) / 100)) * (1 + (item.tax_percent || 0) / 100)).toFixed(2)}
+                                <div className="w-28 text-right">
+                                  <div className="h-9 flex items-center justify-end text-sm font-semibold whitespace-nowrap">
+                                    ₹{((item.quantity * item.unit_price * (1 - (item.discount_percent || 0) / 100)) * (1 + (item.tax_percent || 0) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                   </div>
                                 </div>
-                                <div className="col-span-1">
+                                <div className="w-10 flex justify-end">
                                   <Button
                                     variant="ghost"
                                     size="sm"
