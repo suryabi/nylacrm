@@ -740,19 +740,29 @@ async def create_margin_entry(
     if data.margin_type not in MARGIN_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid margin type. Must be one of: {list(MARGIN_TYPES.keys())}")
     
-    # Check for duplicate active entry for same city+SKU+date range
-    existing = await db.distributor_margin_matrix.find_one({
+    # Check for date overlap with existing active entries for same city+SKU
+    # Two date ranges overlap if: start1 <= end2 AND start2 <= end1
+    new_start = data.active_from or now[:10]
+    new_end = data.active_to or "9999-12-31"  # Far future date for open-ended entries
+    
+    existing_entries = await db.distributor_margin_matrix.find({
         "tenant_id": tenant_id,
         "distributor_id": distributor_id,
         "city": data.city,
         "sku_id": data.sku_id,
         "status": "active"
-    })
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Active margin entry already exists for {data.city} + SKU. Edit the existing entry or deactivate it first."
-        )
+    }).to_list(100)
+    
+    for existing in existing_entries:
+        exist_start = existing.get('active_from') or "1900-01-01"
+        exist_end = existing.get('active_to') or "9999-12-31"
+        
+        # Check for overlap: new_start <= exist_end AND exist_start <= new_end
+        if new_start <= exist_end and exist_start <= new_end:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Date range overlaps with existing entry (ID: {existing.get('id')[:8]}..., Active: {exist_start} to {exist_end if exist_end != '9999-12-31' else 'ongoing'}). Please adjust dates to avoid overlap."
+            )
     
     # Get SKU name if not provided
     sku_name = data.sku_name
@@ -923,6 +933,32 @@ async def update_margin_entry(
     # Validate margin type if being updated
     if data.margin_type and data.margin_type not in MARGIN_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid margin type. Must be one of: {list(MARGIN_TYPES.keys())}")
+    
+    # Check for date overlap if dates are being changed
+    if data.active_from is not None or data.active_to is not None:
+        new_start = update_data.get('active_from', margin.get('active_from')) or "1900-01-01"
+        new_end = update_data.get('active_to', margin.get('active_to')) or "9999-12-31"
+        
+        # Get other entries for same city+SKU (excluding current one)
+        other_entries = await db.distributor_margin_matrix.find({
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "city": margin.get('city'),
+            "sku_id": margin.get('sku_id'),
+            "status": "active",
+            "id": {"$ne": margin_id}  # Exclude current entry
+        }).to_list(100)
+        
+        for existing in other_entries:
+            exist_start = existing.get('active_from') or "1900-01-01"
+            exist_end = existing.get('active_to') or "9999-12-31"
+            
+            # Check for overlap
+            if new_start <= exist_end and exist_start <= new_end:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Date range overlaps with existing entry (ID: {existing.get('id')[:8]}..., Active: {exist_start} to {exist_end if exist_end != '9999-12-31' else 'ongoing'}). Please adjust dates to avoid overlap."
+                )
     
     # Recalculate transfer price if base_price or margin_value changed
     base_price = update_data.get('base_price', margin.get('base_price'))

@@ -125,17 +125,30 @@ export default function DistributorDetail() {
   });
   const [savingAssignment, setSavingAssignment] = useState(false);
   
-  // Margin Matrix state - Grid based
+  // Margin Matrix state - List based (multiple entries per SKU)
   const [margins, setMargins] = useState([]);
   const [marginsLoading, setMarginsLoading] = useState(false);
   const [selectedMarginCity, setSelectedMarginCity] = useState('');
   const [skus, setSkus] = useState([]);
-  const [marginGrid, setMarginGrid] = useState({}); // { sku_id: { margin_type, margin_value, ... } }
+  const [marginGrid, setMarginGrid] = useState({}); // Legacy - for grid view
   const [hasMarginChanges, setHasMarginChanges] = useState(false);
   const [savingMargins, setSavingMargins] = useState(false);
   const [showCopyDialog, setShowCopyDialog] = useState(false);
   const [copyTargetCity, setCopyTargetCity] = useState('');
   const [copying, setCopying] = useState(false);
+  const [showAddMarginDialog, setShowAddMarginDialog] = useState(false);
+  const [showEditMarginDialog, setShowEditMarginDialog] = useState(false);
+  const [editMarginEntry, setEditMarginEntry] = useState(null);
+  const [newMarginForm, setNewMarginForm] = useState({
+    sku_id: '',
+    sku_name: '',
+    base_price: '',
+    margin_type: 'percentage',
+    margin_value: '2.5',
+    active_from: '',
+    active_to: ''
+  });
+  const [savingMarginEntry, setSavingMarginEntry] = useState(false);
   
   // Shipment state
   const [shipments, setShipments] = useState([]);
@@ -881,6 +894,71 @@ export default function DistributorDetail() {
       toast.error('Failed to delete margin entry');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleAddMarginEntry = async () => {
+    if (!newMarginForm.sku_id || !newMarginForm.base_price || !newMarginForm.margin_value) {
+      toast.error('Please fill in SKU, Base Price, and Margin Value');
+      return;
+    }
+    
+    try {
+      setSavingMarginEntry(true);
+      const coverage = distributor.operating_coverage?.find(c => c.city === selectedMarginCity);
+      
+      await axios.post(`${API_URL}/api/distributors/${id}/margins`, {
+        distributor_id: id,
+        state: coverage?.state || '',
+        city: selectedMarginCity,
+        sku_id: newMarginForm.sku_id,
+        sku_name: newMarginForm.sku_name,
+        base_price: parseFloat(newMarginForm.base_price),
+        margin_type: newMarginForm.margin_type,
+        margin_value: parseFloat(newMarginForm.margin_value),
+        active_from: newMarginForm.active_from || new Date().toISOString().split('T')[0],
+        active_to: newMarginForm.active_to || null,
+        status: 'active'
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      
+      toast.success('Price entry added successfully');
+      setShowAddMarginDialog(false);
+      fetchMargins();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to add price entry');
+    } finally {
+      setSavingMarginEntry(false);
+    }
+  };
+
+  const handleUpdateMarginEntry = async () => {
+    if (!editMarginEntry) return;
+    
+    try {
+      setSavingMarginEntry(true);
+      
+      await axios.put(`${API_URL}/api/distributors/${id}/margins/${editMarginEntry.id}`, {
+        base_price: parseFloat(editMarginEntry.base_price),
+        margin_type: editMarginEntry.margin_type,
+        margin_value: parseFloat(editMarginEntry.margin_value),
+        active_from: editMarginEntry.active_from,
+        active_to: editMarginEntry.active_to || null
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      
+      toast.success('Price entry updated successfully');
+      setShowEditMarginDialog(false);
+      setEditMarginEntry(null);
+      fetchMargins();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to update price entry');
+    } finally {
+      setSavingMarginEntry(false);
     }
   };
 
@@ -2460,13 +2538,6 @@ export default function DistributorDetail() {
                       </DialogContent>
                     </Dialog>
                   )}
-                  
-                  {canManage && hasMarginChanges && (
-                    <Button onClick={saveAllMargins} disabled={savingMargins} data-testid="save-margins-btn">
-                      <Save className="h-4 w-4 mr-2" />
-                      {savingMargins ? 'Saving...' : 'Save All'}
-                    </Button>
-                  )}
                 </div>
               </div>
             </CardHeader>
@@ -2489,152 +2560,331 @@ export default function DistributorDetail() {
                   <p>No SKUs found in the system</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="border-b bg-muted/50">
-                        <th className="text-left p-3 font-medium sticky left-0 bg-muted/50 min-w-[200px]">SKU</th>
-                        <th className="text-center p-3 font-medium min-w-[120px]">Base Price</th>
-                        <th className="text-center p-3 font-medium min-w-[130px]">Margin Type</th>
-                        <th className="text-center p-3 font-medium min-w-[100px]">Margin Value</th>
-                        <th className="text-center p-3 font-medium min-w-[110px]">Transfer Price</th>
-                        <th className="text-center p-3 font-medium min-w-[120px]">Active From</th>
-                        <th className="text-center p-3 font-medium min-w-[120px]">Active To</th>
-                        <th className="text-center p-3 font-medium min-w-[80px]">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {skus.map((sku, index) => {
-                        const gridEntry = marginGrid[sku.id] || {};
-                        const hasValue = gridEntry.margin_value && gridEntry.margin_value > 0 && gridEntry.base_price;
-                        // Calculate transfer price for display
-                        const calcTransferPrice = gridEntry.base_price && gridEntry.margin_type === 'percentage' && gridEntry.margin_value
-                          ? (parseFloat(gridEntry.base_price) * (1 - parseFloat(gridEntry.margin_value) / 100)).toFixed(2)
-                          : gridEntry.transfer_price || '';
-                        return (
-                          <tr 
-                            key={sku.id} 
-                            className={`border-b hover:bg-muted/20 ${hasValue ? 'bg-green-50/50' : ''}`}
-                            data-testid={`margin-row-${index}`}
-                          >
-                            <td className="p-2 font-medium sticky left-0 bg-background">
-                              <div className="flex items-center gap-2">
-                                {hasValue && <Check className="h-4 w-4 text-green-600" />}
-                                <span className="text-sm">{sku.name || sku.sku_name}</span>
-                              </div>
-                            </td>
-                            <td className="p-2">
-                              <div className="relative">
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  placeholder="100"
-                                  className="h-9 text-sm pr-6 text-right"
-                                  value={gridEntry.base_price || ''}
-                                  onChange={(e) => updateMarginGridValue(sku.id, 'base_price', e.target.value)}
-                                  disabled={!canManage}
-                                />
-                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">₹</span>
-                              </div>
-                            </td>
-                            <td className="p-2">
-                              <Select
-                                value={gridEntry.margin_type || 'percentage'}
-                                onValueChange={(v) => updateMarginGridValue(sku.id, 'margin_type', v)}
-                                disabled={!canManage}
-                              >
-                                <SelectTrigger className="h-9 text-sm">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {MARGIN_TYPES.map(mt => (
-                                    <SelectItem key={mt.value} value={mt.value}>
-                                      {mt.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </td>
-                            <td className="p-2">
-                              <div className="relative">
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  placeholder="2.5"
-                                  className="h-9 text-sm pr-8 text-right"
-                                  value={gridEntry.margin_value || ''}
-                                  onChange={(e) => updateMarginGridValue(sku.id, 'margin_value', e.target.value)}
-                                  disabled={!canManage}
-                                />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                                  {(gridEntry.margin_type || 'percentage') === 'percentage' ? '%' : '₹'}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="p-2 text-center">
-                              {calcTransferPrice ? (
-                                <span className="text-sm font-medium text-green-600">₹{calcTransferPrice}</span>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">-</span>
-                              )}
-                            </td>
-                            <td className="p-2">
-                              <Input
-                                type="date"
-                                className="h-9 text-sm"
-                                value={gridEntry.active_from || ''}
-                                onChange={(e) => updateMarginGridValue(sku.id, 'active_from', e.target.value)}
-                                disabled={!canManage}
-                              />
-                            </td>
-                            <td className="p-2">
-                              <Input
-                                type="date"
-                                className="h-9 text-sm"
-                                value={gridEntry.active_to || ''}
-                                onChange={(e) => updateMarginGridValue(sku.id, 'active_to', e.target.value)}
-                                disabled={!canManage}
-                              />
-                            </td>
-                            <td className="p-2 text-center">
-                              {gridEntry.id && canManage && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-destructive h-8 w-8 p-0"
-                                  onClick={() => setDeleteTarget({ 
-                                    type: 'margin', 
-                                    id: gridEntry.id, 
-                                    name: `${selectedMarginCity} - ${sku.name || sku.sku_name}` 
-                                  })}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </td>
+                <div className="space-y-4">
+                  {/* Add new entry button */}
+                  {canManage && (
+                    <div className="flex justify-end">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setShowAddMarginDialog(true);
+                          setNewMarginForm({
+                            sku_id: '',
+                            sku_name: '',
+                            base_price: '',
+                            margin_type: 'percentage',
+                            margin_value: '2.5',
+                            active_from: new Date().toISOString().split('T')[0],
+                            active_to: ''
+                          });
+                        }}
+                        data-testid="add-margin-entry-btn"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Price Entry
+                      </Button>
+                    </div>
+                  )}
+                  
+                  {/* Margins list - grouped by SKU */}
+                  {margins.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Percent className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>No margin entries for {selectedMarginCity}</p>
+                      <p className="text-sm mt-1">Click "Add Price Entry" to create one</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/50">
+                            <th className="text-left p-3 font-medium min-w-[180px]">SKU</th>
+                            <th className="text-right p-3 font-medium min-w-[100px]">Base Price</th>
+                            <th className="text-center p-3 font-medium min-w-[110px]">Margin</th>
+                            <th className="text-right p-3 font-medium min-w-[110px]">Transfer Price</th>
+                            <th className="text-center p-3 font-medium min-w-[100px]">Active From</th>
+                            <th className="text-center p-3 font-medium min-w-[100px]">Active To</th>
+                            <th className="text-center p-3 font-medium min-w-[80px]">Status</th>
+                            <th className="text-center p-3 font-medium min-w-[100px]">Actions</th>
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                        </thead>
+                        <tbody>
+                          {margins.map((margin, index) => {
+                            const today = new Date().toISOString().split('T')[0];
+                            const isActive = (!margin.active_from || margin.active_from <= today) && 
+                                           (!margin.active_to || margin.active_to >= today);
+                            const isFuture = margin.active_from && margin.active_from > today;
+                            const isPast = margin.active_to && margin.active_to < today;
+                            
+                            return (
+                              <tr 
+                                key={margin.id} 
+                                className={`border-b hover:bg-muted/20 ${isActive ? 'bg-green-50/50' : isPast ? 'bg-gray-50/50 text-muted-foreground' : ''}`}
+                                data-testid={`margin-row-${index}`}
+                              >
+                                <td className="p-3">
+                                  <div className="flex items-center gap-2">
+                                    {isActive && <span className="w-2 h-2 bg-green-500 rounded-full" title="Currently Active" />}
+                                    {isFuture && <span className="w-2 h-2 bg-blue-500 rounded-full" title="Future" />}
+                                    {isPast && <span className="w-2 h-2 bg-gray-400 rounded-full" title="Expired" />}
+                                    <span className="font-medium">{margin.sku_name}</span>
+                                  </div>
+                                </td>
+                                <td className="p-3 text-right font-medium">
+                                  {margin.base_price ? `₹${margin.base_price.toLocaleString()}` : '-'}
+                                </td>
+                                <td className="p-3 text-center">
+                                  <span className="text-sm">
+                                    {margin.margin_value}
+                                    {margin.margin_type === 'percentage' ? '%' : ' ₹'}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-right font-medium text-green-600">
+                                  {margin.transfer_price ? `₹${margin.transfer_price.toLocaleString()}` : '-'}
+                                </td>
+                                <td className="p-3 text-center text-sm">
+                                  {margin.active_from || '-'}
+                                </td>
+                                <td className="p-3 text-center text-sm">
+                                  {margin.active_to || <span className="text-muted-foreground">Ongoing</span>}
+                                </td>
+                                <td className="p-3 text-center">
+                                  {isActive ? (
+                                    <Badge className="bg-green-100 text-green-800">Active</Badge>
+                                  ) : isFuture ? (
+                                    <Badge className="bg-blue-100 text-blue-800">Future</Badge>
+                                  ) : (
+                                    <Badge variant="secondary">Expired</Badge>
+                                  )}
+                                </td>
+                                <td className="p-3 text-center">
+                                  <div className="flex items-center justify-center gap-1">
+                                    {canManage && (
+                                      <>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 w-8 p-0"
+                                          onClick={() => {
+                                            setEditMarginEntry(margin);
+                                            setShowEditMarginDialog(true);
+                                          }}
+                                          title="Edit"
+                                        >
+                                          <Edit2 className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 w-8 p-0 text-destructive"
+                                          onClick={() => setDeleteTarget({ 
+                                            type: 'margin', 
+                                            id: margin.id, 
+                                            name: `${margin.sku_name} (${margin.active_from || 'Start'} - ${margin.active_to || 'Ongoing'})` 
+                                          })}
+                                          title="Delete"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                   
                   {/* Summary */}
-                  <div className="mt-4 p-3 bg-muted/30 rounded-lg flex items-center justify-between">
-                    <div className="text-sm text-muted-foreground">
-                      <strong>{margins.length}</strong> SKUs with margins configured for <strong>{selectedMarginCity}</strong>
+                  {margins.length > 0 && (
+                    <div className="flex items-center justify-between text-sm text-muted-foreground border-t pt-3">
+                      <span>
+                        Total: {margins.length} entries | 
+                        Active: {margins.filter(m => {
+                          const today = new Date().toISOString().split('T')[0];
+                          return (!m.active_from || m.active_from <= today) && (!m.active_to || m.active_to >= today);
+                        }).length} | 
+                        SKUs: {new Set(margins.map(m => m.sku_id)).size}
+                      </span>
                     </div>
-                    {hasMarginChanges && (
-                      <Badge variant="outline" className="text-amber-600 border-amber-600">
-                        Unsaved changes
-                      </Badge>
-                    )}
-                  </div>
+                  )}
                 </div>
               )}
             </CardContent>
           </Card>
+          
+          {/* Add Margin Entry Dialog */}
+          <Dialog open={showAddMarginDialog} onOpenChange={setShowAddMarginDialog}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Add Price Entry</DialogTitle>
+                <DialogDescription>
+                  Add a new base price configuration for {selectedMarginCity}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>SKU *</Label>
+                  <Select
+                    value={newMarginForm.sku_id}
+                    onValueChange={(v) => {
+                      const sku = skus.find(s => s.id === v);
+                      setNewMarginForm(prev => ({
+                        ...prev,
+                        sku_id: v,
+                        sku_name: sku?.name || sku?.sku_name || ''
+                      }));
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select SKU" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {skus.map(sku => (
+                        <SelectItem key={sku.id} value={sku.id}>
+                          {sku.name || sku.sku_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Base Price (₹) *</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="100"
+                      value={newMarginForm.base_price}
+                      onChange={(e) => setNewMarginForm(prev => ({ ...prev, base_price: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Margin % *</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      placeholder="2.5"
+                      value={newMarginForm.margin_value}
+                      onChange={(e) => setNewMarginForm(prev => ({ ...prev, margin_value: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                {newMarginForm.base_price && newMarginForm.margin_value && (
+                  <div className="p-3 bg-green-50 rounded-lg text-center">
+                    <p className="text-sm text-muted-foreground">Transfer Price</p>
+                    <p className="text-xl font-bold text-green-600">
+                      ₹{(parseFloat(newMarginForm.base_price) * (1 - parseFloat(newMarginForm.margin_value) / 100)).toFixed(2)}
+                    </p>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Active From *</Label>
+                    <Input
+                      type="date"
+                      value={newMarginForm.active_from}
+                      onChange={(e) => setNewMarginForm(prev => ({ ...prev, active_from: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Active To</Label>
+                    <Input
+                      type="date"
+                      value={newMarginForm.active_to}
+                      onChange={(e) => setNewMarginForm(prev => ({ ...prev, active_to: e.target.value }))}
+                    />
+                    <p className="text-xs text-muted-foreground">Leave empty for ongoing</p>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowAddMarginDialog(false)}>Cancel</Button>
+                <Button onClick={handleAddMarginEntry} disabled={savingMarginEntry}>
+                  {savingMarginEntry ? 'Adding...' : 'Add Entry'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          
+          {/* Edit Margin Entry Dialog */}
+          <Dialog open={showEditMarginDialog} onOpenChange={(open) => {
+            setShowEditMarginDialog(open);
+            if (!open) setEditMarginEntry(null);
+          }}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Edit Price Entry</DialogTitle>
+                <DialogDescription>
+                  Update pricing for {editMarginEntry?.sku_name}
+                </DialogDescription>
+              </DialogHeader>
+              {editMarginEntry && (
+                <div className="space-y-4 py-4">
+                  <div className="p-3 bg-muted/50 rounded-lg">
+                    <p className="font-medium">{editMarginEntry.sku_name}</p>
+                    <p className="text-sm text-muted-foreground">{selectedMarginCity}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Base Price (₹)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={editMarginEntry.base_price || ''}
+                        onChange={(e) => setEditMarginEntry(prev => ({ ...prev, base_price: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Margin %</Label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={editMarginEntry.margin_value || ''}
+                        onChange={(e) => setEditMarginEntry(prev => ({ ...prev, margin_value: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  {editMarginEntry.base_price && editMarginEntry.margin_value && (
+                    <div className="p-3 bg-green-50 rounded-lg text-center">
+                      <p className="text-sm text-muted-foreground">Transfer Price</p>
+                      <p className="text-xl font-bold text-green-600">
+                        ₹{(parseFloat(editMarginEntry.base_price) * (1 - parseFloat(editMarginEntry.margin_value) / 100)).toFixed(2)}
+                      </p>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Active From</Label>
+                      <Input
+                        type="date"
+                        value={editMarginEntry.active_from || ''}
+                        onChange={(e) => setEditMarginEntry(prev => ({ ...prev, active_from: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Active To</Label>
+                      <Input
+                        type="date"
+                        value={editMarginEntry.active_to || ''}
+                        onChange={(e) => setEditMarginEntry(prev => ({ ...prev, active_to: e.target.value }))}
+                      />
+                      <p className="text-xs text-muted-foreground">Empty = ongoing</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowEditMarginDialog(false)}>Cancel</Button>
+                <Button onClick={handleUpdateMarginEntry} disabled={savingMarginEntry}>
+                  {savingMarginEntry ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* Account Assignments Tab */}

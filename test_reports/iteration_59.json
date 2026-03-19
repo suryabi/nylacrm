@@ -1,0 +1,120 @@
+{
+  "summary": "Tested Margin Matrix Date Overlap Validation feature - Backend (9/9 tests pass) and Frontend UI verified. The feature allows multiple margin entries per SKU with different date ranges while validating that no two entries overlap in time.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "Can create multiple margin entries for the same SKU with different date ranges": {
+      "status": "PASS",
+      "details": [
+        "Created margin entries for 2030, 2031, 2032, 2033, 2034, 2035, 2036 successfully",
+        "UI shows two entries for 'Nyla – 330 ml / Silver' with different date ranges",
+        "2026 entry (Base=100, Margin=2.5%) and 2027 entry (Base=110, Margin=3.0%)"
+      ]
+    },
+    "Date overlap validation rejects entries that overlap with existing ones": {
+      "status": "PASS",
+      "details": [
+        "API returns 400 error with clear message for overlapping dates",
+        "test_reject_overlapping_date_range_on_create: PASSED",
+        "test_reject_fully_contained_date_range: PASSED",
+        "Error message includes: 'Date range overlaps with existing entry'"
+      ]
+    },
+    "Margin list shows all entries with Active/Future/Expired status indicators": {
+      "status": "PASS",
+      "details": [
+        "Green dot indicator for Active entries",
+        "Blue dot indicator for Future entries",
+        "Gray dot indicator for Expired entries",
+        "Status badges show Active (green), Future (blue), Expired (gray)"
+      ]
+    },
+    "Edit margin entry dialog works for updating dates and prices": {
+      "status": "PASS",
+      "details": [
+        "Edit dialog shows Active From and Active To date inputs",
+        "Can update base price, margin value, and date range",
+        "test_update_margin_entry_dates: PASSED"
+      ]
+    },
+    "Delete margin entry works": {
+      "status": "PASS",
+      "details": [
+        "Delete button present for each entry",
+        "test_delete_margin_entry: PASSED",
+        "Entry removed after deletion (returns 404)"
+      ]
+    },
+    "Summary shows total entries count, active count, and unique SKU count": {
+      "status": "PASS",
+      "details": [
+        "Summary text: 'Total: 9 entries | Active: 8 | SKUs: 8'",
+        "Correctly calculates active entries based on date range",
+        "Shows unique SKU count"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_margin_date_overlap.py",
+    "/app/test_reports/pytest/margin_date_overlap_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_margin_date_overlap.py"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 tests passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_header": "X-Tenant-ID: nyla-air-water"
+  },
+  "seed_data_creation": "Test data cleaned up after each test via fixture teardown",
+  "test_data": {
+    "distributor_id": "99fb55dc-532c-4e85-b618-6b8a5e552c04",
+    "distributor_name": "Test (DIST-0002)",
+    "sku_id": "b39203a7-4067-458b-a316-5831a98be946",
+    "sku_name": "Nyla – 330 ml / Silver",
+    "city": "Gurugram",
+    "existing_entries": [
+      {
+        "active_from": "2026-01-01",
+        "active_to": "2026-12-31",
+        "base_price": 100,
+        "margin_value": 2.5,
+        "transfer_price": 97.5,
+        "status": "Active"
+      },
+      {
+        "active_from": "2027-01-01",
+        "active_to": "2027-12-31",
+        "base_price": 110,
+        "margin_value": 3.0,
+        "transfer_price": 106.7,
+        "status": "Future"
+      }
+    ]
+  },
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Margin Matrix Date Overlap Validation feature completed. The system now allows multiple margin entries per SKU with different date ranges while validating no overlaps. Key validation: new_start <= exist_end AND exist_start <= new_end triggers overlap error. Status indicators: Active (green), Future (blue), Expired (gray). Backend validates on both create and update operations.",
+  "business_logic_verification": {
+    "overlap_detection_formula": "Two date ranges overlap if: new_start <= exist_end AND exist_start <= new_end",
+    "status_calculation": {
+      "active": "(active_from is null OR active_from <= today) AND (active_to is null OR active_to >= today)",
+      "future": "active_from > today",
+      "expired": "active_to < today"
+    },
+    "adjacent_dates_allowed": "true - dates like 2033-06-30 to 2033-07-01 are considered non-overlapping"
+  }
+}
