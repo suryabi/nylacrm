@@ -8,12 +8,12 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 2. **Lead Management** - Full CRUD with advanced filtering, scoring quadrants, pipeline views
 3. **Account Management** - Convert leads to accounts, track invoices and payments
 4. **Invoice Management** - ActiveMQ integration for real-time invoice processing
-5. **COGS Calculator** - Calculate cost of goods sold with SKU pricing
+5. **COGS Calculator** - Calculate cost of goods sold with SKU pricing (mobile-friendly)
 6. **Tasks & Meetings** - Create tasks, schedule meetings with Zoom integration
 7. **Travel & Budget Requests** - Approval workflows for expenses
 8. **Daily Status Updates** - Team status tracking with AI assistance
 9. **AI Assistant** - Claude-powered chat for CRM queries
-10. **Distribution Module (Phase 1)** - NEW: Distributor management with coverage and locations
+10. **Distribution Module** - Full distributor management with all phases complete
 
 ## Tech Stack
 - **Frontend**: React 18, TailwindCSS, Shadcn/UI
@@ -23,174 +23,89 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 - **AI**: Claude Sonnet 4.5 via Emergent LLM Key, Gemini
 - **Integrations**: Zoom API, Resend, Google OAuth
 
-## Latest Session - March 18, 2026
+## Latest Session - March 19, 2026
 
-### Completed
+### Bug Fix: Record Delivery Account Selection ✅
+**Issue**: In the "Record Delivery" popup, the account list was not showing account names correctly. The search was also not user-friendly.
 
-#### 1. COGS Deletion Feature ✅
-- Added backend DELETE endpoint `/api/cogs/{sku_id}` for CEO/Admin roles
-- Added frontend UI with checkboxes, "Delete Selected" button, confirmation dialog
-- Role-based access control verified
+**Root Cause**: 
+- Backend was using wrong field names (`company`/`name` instead of `account_name`)
+- Frontend was displaying wrong fields
 
-#### 2. Lead List Filter Fix ✅
-- Fixed territory filter (was filtering on non-existent 'territory' field, now uses 'region')
-- Updated State dropdown to show all states without requiring Territory selection first
-- Updated City dropdown to show all cities without requiring State selection first
+**Fix Applied**:
+1. Backend API `GET /api/distributors/{id}/assigned-accounts` updated to return:
+   - `account_name`, `contact_name`, `contact_number`
+   - `city`, `state`, `territory`
+   - `delivery_address`, `distributor_location_id`, `distributor_location_name`
+2. Backend API `GET /api/distributors/accounts/search` updated to search:
+   - `account_name`, `contact_name`, `account_id`, `city`
+3. Frontend Record Delivery dialog updated:
+   - Changed from dropdown to searchable list
+   - Filter accounts by name, city, or contact name
+   - Clear display with all account details (name, location, contact info)
+   - Primary indicator (★) for primary accounts
+   - Distributor location badge
+4. Assignment dialog updated to use `account_name`
 
-#### 3. Team Edit Dialog Fix ✅
-- Fixed `ReferenceError: designations is not defined` in EditTeamMemberForm
-- Added roles and designations fetching
+**Testing**: Verified with testing_agent_v3_fork (iteration_55.json) - 100% pass rate
 
-#### 4. Role/Designation Independence ✅
-- Role and Designation are now independent fields (no auto-population)
-- CEO can delete system designations and roles
+## Distribution Module - Complete Implementation
 
-#### 5. Distribution Module - Phase 1 ✅
-**Distributor Master**
-- Full CRUD operations for distributors
-- Fields: name, legal entity, GSTIN, PAN, addresses, contacts, payment terms, credit limits
-- Status management (active, inactive, suspended, pending)
+### Phase 1: Distributor Master ✅
+- Full CRUD for distributors
+- Operating coverage (states/cities)
+- Warehouse/stocking locations
 
-**Operating Coverage**
-- Define states/cities where distributor can operate
-- Bulk add coverage for multiple cities at once
-- Integration with master locations
+### Phase 2: Commercial Setup ✅
+- Margin Matrix (city + SKU level margins)
+- Account-Distributor Assignment
 
-**Distributor Locations/Warehouses**
-- Add warehouse/stocking locations for distributors
-- Location validation against operating coverage
-- Default location flag support
+### Phase 3: Operations & Transactions ✅
+- Primary Shipments (stock transfer to distributors)
+- Account Deliveries (distributor to customer)
+- Stock tracking per location
 
-#### 6. Distribution Module - Phase 2 (Margin Matrix) ✅ NEW
-**Distributor Margin Matrix**
-- City + SKU level commercial margins
-- Three margin types supported:
-  - Percentage (% on account invoice value)
-  - Fixed per Bottle (₹ per bottle)
-  - Fixed per Case (₹ per case/crate)
-- Optional min/max quantity conditions
-- Effective date range support
-- Full CRUD with edit/delete capabilities
-- City filter for viewing margins
-
-**Frontend Pages**
-- `/distributors` - List page with summary cards, search, filters, pagination
-- `/distributors/:id` - Detail page with tabs (Overview, Coverage, Locations, **Margin Matrix**)
-- Create/Edit distributor dialogs
-- Add Coverage, Add Location, and **Add Margin** dialogs
-
-**Backend APIs**
-- `GET /api/distributors` - List with filters, pagination
-- `GET /api/distributors/summary` - Summary stats
-- `GET /api/distributors/{id}` - Get distributor with coverage and locations
-- `POST /api/distributors` - Create distributor
-- `PUT /api/distributors/{id}` - Update distributor
-- `DELETE /api/distributors/{id}` - Soft delete
-- `GET/POST/DELETE /api/distributors/{id}/coverage` - Coverage management
-- `POST /api/distributors/{id}/coverage/bulk` - Bulk add coverage
-- `GET/POST/PUT/DELETE /api/distributors/{id}/locations` - Location management
-- `GET/POST/PUT/DELETE /api/distributors/{id}/margins` - **Margin matrix management**
-- `POST /api/distributors/{id}/margins/bulk` - **Bulk add margins**
-
-## Distribution Module - Remaining Phases
-
-### Phase 2: Commercial Setup ✅ COMPLETE
-- ✅ Distributor Margin Matrix (city + SKU level margins)
-- ✅ Account-Distributor Assignment
-  - Map accounts to distributors and warehouse locations
-  - Account search with autocomplete
-  - Servicing city selection (from distributor's coverage)
-  - Distributor location (warehouse) selection
-  - Primary/backup distributor flags
-  - Special margin override support (percentage, fixed per bottle, fixed per case)
-  - Full table view with assignments grouped by city
-  - Delete functionality with confirmation dialog
-
-### Phase 3: Operations & Transactions ✅ COMPLETE
-- ✅ Primary Shipment to Distributor (stock transfer)
-  - Create shipment with items (SKU, quantity, price, discount, tax)
-  - Status workflow: Draft → Confirmed → In Transit → Delivered
-  - Auto-calculation of amounts (gross, discount, tax, net)
-  - Transport details (vehicle, driver info)
-  - Auto-update distributor stock on delivery
-- ✅ Distributor-to-Account Delivery recording
-  - Record deliveries from distributor locations to assigned accounts
-  - Automatic margin calculation from margin matrix (city + SKU)
-  - Status workflow: Draft → Confirmed → Delivered
-  - Stock deduction from distributor inventory on completion
-  - Margin tracking for settlement calculations
-- ⏳ Stock balance tracking at distributor locations (basic implementation done)
-
-### Phase 4: Settlement & Reports
-- ⏳ Distributor Settlement calculation engine (next up)
-- Settlement approval workflow
-- Reports (stock balance, deliveries, settlements, performance)
+### Phase 4: Settlement & Reports (Backend Complete, Frontend Untested)
+- Settlement calculation engine
+- Settlement approval workflow (Pending → Approved/Rejected)
+- Reports need UI verification
 
 ## Pending Tasks
 
-### P0 - Next Up
-1. **Distribution Module Phase 4** - Distributor Settlement calculation
+### P0 - Immediate
+1. **Test Distributor Settlement Feature** - Frontend UI exists but untested
 
 ### P1 - High Priority
-1. **Server.py Refactoring** - Move remaining routes to modular files
+1. **Refactor DistributorDetail.js** - CRITICAL: File is now 4100+ lines
+   - Break into: OverviewTab.js, CoverageTab.js, LocationsTab.js, MarginsTab.js, AssignmentsTab.js, ShipmentsTab.js, DeliveriesTab.js, SettlementsTab.js
 2. **Stock Dashboard** - Real-time stock levels across distributor locations
 
 ### P2 - Medium Priority
-1. **AI Assistant RAG Upgrade** - Upgrade to true vector-based RAG system
-2. **Build Out Placeholder Modules** - Maintenance, Inventory modules
-3. **Refactor DistributorDetail.js** - Break into smaller tab components (now 3400+ lines)
+1. **Server.py Refactoring** - Move remaining routes to modular files
+2. **Settlement Period Configuration** - Auto weekly/monthly cycles
+3. **Reporting Module** - Stock balance, deliveries, settlements reports
 
-## Key API Endpoints
-- `GET /api/leads` - List leads with filters (territory→region mapping fixed)
-- `DELETE /api/cogs/{sku_id}` - Delete COGS entry (Admin only)
-- `GET /api/invoices` - List invoices with filters
-- `POST /api/auth/login` - User authentication
+## Key API Endpoints - Distribution Module
 - `GET/POST/PUT/DELETE /api/distributors` - Distributor CRUD
 - `GET/POST/DELETE /api/distributors/{id}/coverage` - Coverage management
 - `GET/POST/PUT/DELETE /api/distributors/{id}/locations` - Location management
-- `GET/POST/PUT/DELETE /api/distributors/{id}/margins` - Margin matrix management
-- `POST /api/distributors/{id}/margins/bulk` - Bulk add margins
-- `GET/POST/PUT/DELETE /api/distributors/{id}/assignments` - Account-Distributor assignments
-- `GET /api/distributors/accounts/search` - Search accounts for assignment
-- `GET /api/distributors/shipments/all` - List all shipments with filters
-- `GET /api/distributors/shipments/summary` - Shipments summary stats
+- `GET/POST/PUT/DELETE /api/distributors/{id}/margins` - Margin matrix
+- `GET/POST/PUT/DELETE /api/distributors/{id}/assignments` - Account assignments
+- `GET /api/distributors/accounts/search` - Search accounts (uses account_name)
+- `GET /api/distributors/{id}/assigned-accounts` - Get accounts for delivery (uses account_name)
 - `GET/POST/PUT/DELETE /api/distributors/{id}/shipments` - Shipment CRUD
-- `POST /api/distributors/{id}/shipments/{shipment_id}/confirm` - Confirm shipment
-- `POST /api/distributors/{id}/shipments/{shipment_id}/dispatch` - Mark dispatched
-- `POST /api/distributors/{id}/shipments/{shipment_id}/deliver` - Mark delivered
-- `POST /api/distributors/{id}/shipments/{shipment_id}/cancel` - Cancel shipment
-- `GET /api/distributors/{id}/stock` - Get distributor stock levels
-- `GET /api/distributors/deliveries/all` - List all deliveries with filters
-- `GET /api/distributors/deliveries/summary` - Deliveries summary stats
 - `GET/POST/DELETE /api/distributors/{id}/deliveries` - Delivery CRUD
-- `GET /api/distributors/{id}/deliveries/{delivery_id}` - Get delivery detail
-- `GET /api/distributors/{id}/assigned-accounts` - Get accounts for delivery selection
-- `POST /api/distributors/{id}/deliveries/{delivery_id}/confirm` - Confirm delivery
-- `POST /api/distributors/{id}/deliveries/{delivery_id}/complete` - Complete delivery (deducts stock)
-- `POST /api/distributors/{id}/deliveries/{delivery_id}/cancel` - Cancel delivery
+- `GET/POST/PUT/DELETE /api/distributors/{id}/settlements` - Settlement CRUD
+- `POST /api/distributors/{id}/settlements/generate` - Generate settlement report
 
 ## Test Credentials
 - **CEO**: `surya.yadavalli@nylaairwater.earth` / `test123`
-- **Partner-Sales**: `priya.sales@nylaairwater.earth` / `test123`
+- **Tenant Header**: `X-Tenant-ID: nyla-air-water`
 
-## Multi-Tenant Note
-All API calls require X-Tenant-ID header (default: `nyla-air-water`)
+## Test Data
+- **Distributor**: "Test" (ID: 99fb55dc-532c-4e85-b618-6b8a5e552c04)
+- **Assigned Account**: "Test Status Validation Company" (Delhi)
 
-## Files Created This Session
-- `/app/backend/models/distributor.py` - Pydantic models for distributors
-- `/app/backend/routes/distributors.py` - All distributor API endpoints
-- `/app/frontend/src/pages/DistributorList.js` - Distributor list page
-- `/app/frontend/src/pages/DistributorDetail.js` - Distributor detail page with tabs
-
-## Files Modified This Session
-- `/app/backend/routes/__init__.py` - Added distributors router
-- `/app/frontend/src/App.js` - Added distributor routes
-- `/app/frontend/src/layouts/DashboardLayout.js` - Added Distribution section to sidebar
-- `/app/frontend/src/pages/TeamManagement.js` - Fixed edit dialog, role independence
-- `/app/frontend/src/pages/TenantSettings.js` - CEO can delete designations
-- `/app/frontend/src/components/RoleManagement.js` - CEO can delete roles
-- `/app/backend/routes/designations.py` - CEO can delete system designations
-- `/app/backend/routes/roles.py` - CEO can delete system roles
-- `/app/backend/server.py` - Fixed territory→region filter mapping
-- `/app/frontend/src/pages/LeadsList.js` - Fixed State/City dropdown options
-- `/app/frontend/src/pages/COGSCalculator.js` - Added delete functionality
+## Technical Debt
+1. **DistributorDetail.js** - 4100+ lines, urgently needs refactoring
+2. **server.py** - Still contains many routes that should be modularized
