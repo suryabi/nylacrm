@@ -49,6 +49,22 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 **Testing**: Verified with testing_agent_v3_fork (iteration_55.json) - 100% pass rate
 
+### Bug Fix 2: Record Delivery SKU Filtering ✅
+**Issue**: In the Record Delivery screen, after selecting an account, the SKU dropdown was showing all master SKUs instead of only the SKUs configured in the account's SKU Pricing section.
+
+**Fix Applied**:
+1. Backend API `GET /api/distributors/{id}/assigned-accounts` now returns `sku_pricing` array with enriched data:
+   - SKU ID (mapped from master_skus collection)
+   - SKU name, price_per_unit, return_bottle_credit
+2. Frontend SKU dropdown filters based on `selectedDeliveryAccount.sku_pricing`:
+   - Shows only account's configured SKUs with prices ("SKU Name - ₹price")
+   - Auto-populates unit price when SKU is selected
+   - Add Item button disabled until account is selected
+   - Shows helpful message: "Showing X SKU(s) configured for [Account Name]"
+   - Falls back to all master SKUs if account has no SKU pricing configured
+
+**Testing**: Verified with testing_agent_v3_fork (iteration_56.json) - 100% pass rate
+
 ## Distribution Module - Complete Implementation
 
 ### Phase 1: Distributor Master ✅
