@@ -18,7 +18,8 @@ from models.distributor import (
     MarginMatrixCreate, MarginMatrixUpdate,
     AccountDistributorCreate, AccountDistributorUpdate,
     PrimaryShipmentCreate, PrimaryShipmentUpdate, ShipmentItemCreate,
-    AccountDeliveryCreate, AccountDeliveryUpdate, DeliveryItemCreate
+    AccountDeliveryCreate, AccountDeliveryUpdate, DeliveryItemCreate,
+    DistributorSettlementCreate, DistributorSettlementUpdate
 )
 
 router = APIRouter()
@@ -2841,3 +2842,599 @@ async def cancel_delivery(
     logger.info(f"Delivery {delivery['delivery_number']} cancelled by {current_user['email']}")
     
     return {"message": f"Delivery {delivery['delivery_number']} cancelled", "status": "cancelled"}
+
+
+
+# ============ Distributor Settlement CRUD ============
+
+SETTLEMENT_STATUSES = {
+    "draft": "Draft - Being prepared",
+    "pending_approval": "Pending Approval",
+    "approved": "Approved - Ready for payment",
+    "rejected": "Rejected",
+    "paid": "Paid",
+    "cancelled": "Cancelled"
+}
+
+
+async def generate_settlement_number(tenant_id: str) -> str:
+    """Generate unique settlement number like STL-2026-0001"""
+    year = datetime.now().year
+    count = await db.distributor_settlements.count_documents({
+        "tenant_id": tenant_id,
+        "settlement_number": {"$regex": f"^STL-{year}-"}
+    })
+    return f"STL-{year}-{count + 1:04d}"
+
+
+@router.get("/settlements/all")
+async def list_all_settlements(
+    distributor_id: Optional[str] = None,
+    status: Optional[str] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: dict = Depends(get_current_user)
+):
+    """List all settlements with filters"""
+    tenant_id = get_current_tenant_id()
+    
+    query = {"tenant_id": tenant_id}
+    
+    if distributor_id:
+        query["distributor_id"] = distributor_id
+    if status and status != 'all':
+        query["status"] = status
+    if from_date:
+        query["period_start"] = {"$gte": from_date}
+    if to_date:
+        if "period_end" in query:
+            query["period_end"]["$lte"] = to_date
+        else:
+            query["period_end"] = {"$lte": to_date}
+    
+    total = await db.distributor_settlements.count_documents(query)
+    
+    settlements = await db.distributor_settlements.find(
+        query,
+        {"_id": 0}
+    ).sort("created_at", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    
+    return {
+        "settlements": settlements,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size
+    }
+
+
+@router.get("/settlements/summary")
+async def get_settlements_summary(
+    distributor_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get settlements summary stats"""
+    tenant_id = get_current_tenant_id()
+    
+    query = {"tenant_id": tenant_id}
+    if distributor_id:
+        query["distributor_id"] = distributor_id
+    
+    total = await db.distributor_settlements.count_documents(query)
+    
+    # Count by status
+    draft = await db.distributor_settlements.count_documents({**query, "status": "draft"})
+    pending = await db.distributor_settlements.count_documents({**query, "status": "pending_approval"})
+    approved = await db.distributor_settlements.count_documents({**query, "status": "approved"})
+    paid = await db.distributor_settlements.count_documents({**query, "status": "paid"})
+    
+    # Calculate totals for paid settlements
+    pipeline = [
+        {"$match": {**query, "status": "paid"}},
+        {"$group": {
+            "_id": None,
+            "total_paid": {"$sum": "$final_payout"}
+        }}
+    ]
+    
+    totals = await db.distributor_settlements.aggregate(pipeline).to_list(1)
+    total_paid = totals[0]["total_paid"] if totals else 0
+    
+    # Pending payout (approved but not paid)
+    pipeline_pending = [
+        {"$match": {**query, "status": "approved"}},
+        {"$group": {
+            "_id": None,
+            "pending_payout": {"$sum": "$final_payout"}
+        }}
+    ]
+    
+    pending_totals = await db.distributor_settlements.aggregate(pipeline_pending).to_list(1)
+    pending_payout = pending_totals[0]["pending_payout"] if pending_totals else 0
+    
+    return {
+        "total": total,
+        "by_status": {
+            "draft": draft,
+            "pending_approval": pending,
+            "approved": approved,
+            "paid": paid
+        },
+        "total_paid": round(total_paid, 2),
+        "pending_payout": round(pending_payout, 2)
+    }
+
+
+@router.get("/{distributor_id}/settlements")
+async def list_distributor_settlements(
+    distributor_id: str,
+    status: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: dict = Depends(get_current_user)
+):
+    """List settlements for a specific distributor"""
+    tenant_id = get_current_tenant_id()
+    
+    query = {"tenant_id": tenant_id, "distributor_id": distributor_id}
+    
+    if status and status != 'all':
+        query["status"] = status
+    
+    total = await db.distributor_settlements.count_documents(query)
+    
+    settlements = await db.distributor_settlements.find(
+        query,
+        {"_id": 0}
+    ).sort("created_at", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    
+    return {
+        "settlements": settlements,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size
+    }
+
+
+@router.get("/{distributor_id}/settlements/{settlement_id}")
+async def get_settlement(
+    distributor_id: str,
+    settlement_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a specific settlement with items"""
+    tenant_id = get_current_tenant_id()
+    
+    settlement = await db.distributor_settlements.find_one(
+        {"id": settlement_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0}
+    )
+    
+    if not settlement:
+        raise HTTPException(status_code=404, detail="Settlement not found")
+    
+    # Get settlement items (deliveries)
+    items = await db.distributor_settlement_items.find(
+        {"settlement_id": settlement_id, "tenant_id": tenant_id},
+        {"_id": 0}
+    ).sort("delivery_date", 1).to_list(500)
+    
+    settlement['items'] = items
+    
+    return settlement
+
+
+@router.get("/{distributor_id}/unsettled-deliveries")
+async def get_unsettled_deliveries(
+    distributor_id: str,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get completed deliveries that haven't been settled yet"""
+    tenant_id = get_current_tenant_id()
+    
+    # Get all settled delivery IDs
+    settled_items = await db.distributor_settlement_items.find(
+        {"tenant_id": tenant_id},
+        {"delivery_id": 1}
+    ).to_list(10000)
+    
+    settled_delivery_ids = [item['delivery_id'] for item in settled_items]
+    
+    # Query for completed deliveries not in settled list
+    query = {
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": "delivered",
+        "id": {"$nin": settled_delivery_ids}
+    }
+    
+    if from_date:
+        query["delivery_date"] = {"$gte": from_date}
+    if to_date:
+        if "delivery_date" in query:
+            query["delivery_date"]["$lte"] = to_date
+        else:
+            query["delivery_date"] = {"$lte": to_date}
+    
+    deliveries = await db.distributor_deliveries.find(
+        query,
+        {"_id": 0}
+    ).sort("delivery_date", 1).to_list(500)
+    
+    # Calculate totals
+    total_quantity = sum(d.get('total_quantity', 0) for d in deliveries)
+    total_amount = sum(d.get('total_net_amount', 0) for d in deliveries)
+    total_margin = sum(d.get('total_margin_amount', 0) for d in deliveries)
+    
+    return {
+        "deliveries": deliveries,
+        "count": len(deliveries),
+        "total_quantity": total_quantity,
+        "total_amount": round(total_amount, 2),
+        "total_margin": round(total_margin, 2)
+    }
+
+
+@router.post("/{distributor_id}/settlements")
+async def create_settlement(
+    distributor_id: str,
+    data: DistributorSettlementCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new settlement for a period"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Validate distributor
+    distributor = await db.distributors.find_one(
+        {"id": distributor_id, "tenant_id": tenant_id},
+        {"_id": 0, "distributor_name": 1, "distributor_code": 1}
+    )
+    if not distributor:
+        raise HTTPException(status_code=404, detail="Distributor not found")
+    
+    # Get all settled delivery IDs to exclude
+    settled_items = await db.distributor_settlement_items.find(
+        {"tenant_id": tenant_id},
+        {"delivery_id": 1}
+    ).to_list(10000)
+    
+    settled_delivery_ids = [item['delivery_id'] for item in settled_items]
+    
+    # Get completed deliveries for the period that haven't been settled
+    deliveries = await db.distributor_deliveries.find({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": "delivered",
+        "delivery_date": {"$gte": data.period_start, "$lte": data.period_end},
+        "id": {"$nin": settled_delivery_ids}
+    }, {"_id": 0}).sort("delivery_date", 1).to_list(500)
+    
+    if not deliveries:
+        raise HTTPException(status_code=400, detail="No unsettled deliveries found for this period")
+    
+    # Generate settlement
+    settlement_number = await generate_settlement_number(tenant_id)
+    settlement_id = str(uuid.uuid4())
+    
+    # Calculate totals
+    total_deliveries = len(deliveries)
+    total_quantity = sum(d.get('total_quantity', 0) for d in deliveries)
+    total_delivery_amount = sum(d.get('total_net_amount', 0) for d in deliveries)
+    total_margin_amount = sum(d.get('total_margin_amount', 0) for d in deliveries)
+    
+    # Create settlement items
+    items_to_insert = []
+    for delivery in deliveries:
+        items_to_insert.append({
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "settlement_id": settlement_id,
+            "delivery_id": delivery['id'],
+            "delivery_number": delivery.get('delivery_number'),
+            "delivery_date": delivery.get('delivery_date'),
+            "account_id": delivery.get('account_id'),
+            "account_name": delivery.get('account_name'),
+            "account_city": delivery.get('account_city'),
+            "total_quantity": delivery.get('total_quantity', 0),
+            "total_amount": delivery.get('total_net_amount', 0),
+            "margin_amount": delivery.get('total_margin_amount', 0)
+        })
+    
+    # Create settlement document
+    settlement_doc = {
+        "id": settlement_id,
+        "tenant_id": tenant_id,
+        "settlement_number": settlement_number,
+        "distributor_id": distributor_id,
+        "distributor_name": distributor.get('distributor_name'),
+        "distributor_code": distributor.get('distributor_code'),
+        "period_type": data.period_type,
+        "period_start": data.period_start,
+        "period_end": data.period_end,
+        "total_deliveries": total_deliveries,
+        "total_quantity": total_quantity,
+        "total_delivery_amount": round(total_delivery_amount, 2),
+        "total_margin_amount": round(total_margin_amount, 2),
+        "adjustments": 0,
+        "final_payout": round(total_margin_amount, 2),
+        "status": "draft",
+        "remarks": data.remarks,
+        "created_at": now,
+        "updated_at": now,
+        "created_by": current_user.get('id'),
+        "submitted_at": None,
+        "submitted_by": None,
+        "approved_at": None,
+        "approved_by": None,
+        "approved_by_name": None,
+        "rejected_at": None,
+        "rejected_by": None,
+        "rejection_reason": None,
+        "paid_at": None,
+        "paid_by": None,
+        "payment_reference": None
+    }
+    
+    # Insert settlement and items
+    await db.distributor_settlements.insert_one(settlement_doc)
+    if items_to_insert:
+        await db.distributor_settlement_items.insert_many(items_to_insert)
+    
+    settlement_doc.pop('_id', None)
+    settlement_doc['items'] = [
+        {k: v for k, v in item.items() if k not in ['_id', 'tenant_id']} 
+        for item in items_to_insert
+    ]
+    
+    logger.info(f"Settlement {settlement_number} created for distributor {distributor_id} with {total_deliveries} deliveries by {current_user['email']}")
+    
+    return settlement_doc
+
+
+@router.put("/{distributor_id}/settlements/{settlement_id}")
+async def update_settlement(
+    distributor_id: str,
+    settlement_id: str,
+    data: DistributorSettlementUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a settlement (remarks, adjustments)"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    settlement = await db.distributor_settlements.find_one(
+        {"id": settlement_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    
+    if not settlement:
+        raise HTTPException(status_code=404, detail="Settlement not found")
+    
+    if settlement.get('status') not in ['draft', 'pending_approval']:
+        raise HTTPException(status_code=400, detail="Cannot modify settlement in current status")
+    
+    update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    
+    if data.remarks is not None:
+        update_data['remarks'] = data.remarks
+    
+    if data.adjustments is not None:
+        update_data['adjustments'] = data.adjustments
+        update_data['final_payout'] = round(settlement.get('total_margin_amount', 0) + data.adjustments, 2)
+    
+    await db.distributor_settlements.update_one(
+        {"id": settlement_id, "tenant_id": tenant_id},
+        {"$set": update_data}
+    )
+    
+    updated = await db.distributor_settlements.find_one(
+        {"id": settlement_id, "tenant_id": tenant_id},
+        {"_id": 0}
+    )
+    
+    return updated
+
+
+@router.post("/{distributor_id}/settlements/{settlement_id}/submit")
+async def submit_settlement(
+    distributor_id: str,
+    settlement_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Submit settlement for approval"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    settlement = await db.distributor_settlements.find_one(
+        {"id": settlement_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    
+    if not settlement:
+        raise HTTPException(status_code=404, detail="Settlement not found")
+    
+    if settlement.get('status') != 'draft':
+        raise HTTPException(status_code=400, detail="Only draft settlements can be submitted")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.distributor_settlements.update_one(
+        {"id": settlement_id, "tenant_id": tenant_id},
+        {"$set": {
+            "status": "pending_approval",
+            "submitted_at": now,
+            "submitted_by": current_user.get('id'),
+            "updated_at": now
+        }}
+    )
+    
+    logger.info(f"Settlement {settlement['settlement_number']} submitted for approval by {current_user['email']}")
+    
+    return {"message": f"Settlement {settlement['settlement_number']} submitted for approval", "status": "pending_approval"}
+
+
+@router.post("/{distributor_id}/settlements/{settlement_id}/approve")
+async def approve_settlement(
+    distributor_id: str,
+    settlement_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Approve a settlement"""
+    # Only CEO/Director can approve
+    if current_user.get('role') not in ['CEO', 'Director', 'Vice President']:
+        raise HTTPException(status_code=403, detail="Only senior management can approve settlements")
+    
+    tenant_id = get_current_tenant_id()
+    
+    settlement = await db.distributor_settlements.find_one(
+        {"id": settlement_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    
+    if not settlement:
+        raise HTTPException(status_code=404, detail="Settlement not found")
+    
+    if settlement.get('status') != 'pending_approval':
+        raise HTTPException(status_code=400, detail="Settlement is not pending approval")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.distributor_settlements.update_one(
+        {"id": settlement_id, "tenant_id": tenant_id},
+        {"$set": {
+            "status": "approved",
+            "approved_at": now,
+            "approved_by": current_user.get('id'),
+            "approved_by_name": current_user.get('name') or current_user.get('email'),
+            "updated_at": now
+        }}
+    )
+    
+    logger.info(f"Settlement {settlement['settlement_number']} approved by {current_user['email']}")
+    
+    return {"message": f"Settlement {settlement['settlement_number']} approved", "status": "approved"}
+
+
+@router.post("/{distributor_id}/settlements/{settlement_id}/reject")
+async def reject_settlement(
+    distributor_id: str,
+    settlement_id: str,
+    reason: str = "",
+    current_user: dict = Depends(get_current_user)
+):
+    """Reject a settlement"""
+    if current_user.get('role') not in ['CEO', 'Director', 'Vice President']:
+        raise HTTPException(status_code=403, detail="Only senior management can reject settlements")
+    
+    tenant_id = get_current_tenant_id()
+    
+    settlement = await db.distributor_settlements.find_one(
+        {"id": settlement_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    
+    if not settlement:
+        raise HTTPException(status_code=404, detail="Settlement not found")
+    
+    if settlement.get('status') != 'pending_approval':
+        raise HTTPException(status_code=400, detail="Settlement is not pending approval")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.distributor_settlements.update_one(
+        {"id": settlement_id, "tenant_id": tenant_id},
+        {"$set": {
+            "status": "rejected",
+            "rejected_at": now,
+            "rejected_by": current_user.get('id'),
+            "rejection_reason": reason,
+            "updated_at": now
+        }}
+    )
+    
+    logger.info(f"Settlement {settlement['settlement_number']} rejected by {current_user['email']}")
+    
+    return {"message": f"Settlement {settlement['settlement_number']} rejected", "status": "rejected"}
+
+
+@router.post("/{distributor_id}/settlements/{settlement_id}/mark-paid")
+async def mark_settlement_paid(
+    distributor_id: str,
+    settlement_id: str,
+    payment_reference: str = "",
+    current_user: dict = Depends(get_current_user)
+):
+    """Mark settlement as paid"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    settlement = await db.distributor_settlements.find_one(
+        {"id": settlement_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    
+    if not settlement:
+        raise HTTPException(status_code=404, detail="Settlement not found")
+    
+    if settlement.get('status') != 'approved':
+        raise HTTPException(status_code=400, detail="Only approved settlements can be marked as paid")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    await db.distributor_settlements.update_one(
+        {"id": settlement_id, "tenant_id": tenant_id},
+        {"$set": {
+            "status": "paid",
+            "paid_at": now,
+            "paid_by": current_user.get('id'),
+            "payment_reference": payment_reference,
+            "updated_at": now
+        }}
+    )
+    
+    logger.info(f"Settlement {settlement['settlement_number']} marked as paid by {current_user['email']}")
+    
+    return {"message": f"Settlement {settlement['settlement_number']} marked as paid", "status": "paid"}
+
+
+@router.delete("/{distributor_id}/settlements/{settlement_id}")
+async def delete_settlement(
+    distributor_id: str,
+    settlement_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a draft settlement"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    settlement = await db.distributor_settlements.find_one(
+        {"id": settlement_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    
+    if not settlement:
+        raise HTTPException(status_code=404, detail="Settlement not found")
+    
+    if settlement.get('status') != 'draft':
+        raise HTTPException(status_code=400, detail="Only draft settlements can be deleted")
+    
+    # Delete items first
+    await db.distributor_settlement_items.delete_many({"settlement_id": settlement_id, "tenant_id": tenant_id})
+    
+    # Delete settlement
+    await db.distributor_settlements.delete_one({"id": settlement_id, "tenant_id": tenant_id})
+    
+    logger.info(f"Settlement {settlement['settlement_number']} deleted by {current_user['email']}")
+    
+    return {"message": f"Settlement {settlement['settlement_number']} deleted"}

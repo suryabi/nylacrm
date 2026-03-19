@@ -176,7 +176,24 @@ export default function DistributorDetail() {
   const [selectedDelivery, setSelectedDelivery] = useState(null);
   const [showDeliveryDetail, setShowDeliveryDetail] = useState(false);
   
+  // Settlement state
+  const [settlements, setSettlements] = useState([]);
+  const [settlementsLoading, setSettlementsLoading] = useState(false);
+  const [showSettlementDialog, setShowSettlementDialog] = useState(false);
+  const [unsettledDeliveries, setUnsettledDeliveries] = useState([]);
+  const [unsettledLoading, setUnsettledLoading] = useState(false);
+  const [settlementForm, setSettlementForm] = useState({
+    period_type: 'monthly',
+    period_start: '',
+    period_end: '',
+    remarks: ''
+  });
+  const [savingSettlement, setSavingSettlement] = useState(false);
+  const [selectedSettlement, setSelectedSettlement] = useState(null);
+  const [showSettlementDetail, setShowSettlementDetail] = useState(false);
+  
   const canManage = user && ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head'].includes(user.role);
+  const canApprove = user && ['CEO', 'Director', 'Vice President'].includes(user.role);
 
   const fetchDistributor = useCallback(async () => {
     try {
@@ -349,6 +366,55 @@ export default function DistributorDetail() {
       if (skus.length === 0) fetchSkus();
     }
   }, [activeTab, fetchDeliveries, fetchAssignedAccounts, fetchSkus, skus.length]);
+
+  // Fetch settlements
+  const fetchSettlements = useCallback(async () => {
+    try {
+      setSettlementsLoading(true);
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/settlements`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setSettlements(response.data.settlements || []);
+    } catch (error) {
+      console.error('Failed to fetch settlements:', error);
+    } finally {
+      setSettlementsLoading(false);
+    }
+  }, [id, token]);
+
+  // Fetch unsettled deliveries
+  const fetchUnsettledDeliveries = useCallback(async () => {
+    if (!settlementForm.period_start || !settlementForm.period_end) return;
+    
+    try {
+      setUnsettledLoading(true);
+      const response = await axios.get(
+        `${API_URL}/api/distributors/${id}/unsettled-deliveries?from_date=${settlementForm.period_start}&to_date=${settlementForm.period_end}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
+        }
+      );
+      setUnsettledDeliveries(response.data.deliveries || []);
+    } catch (error) {
+      console.error('Failed to fetch unsettled deliveries:', error);
+    } finally {
+      setUnsettledLoading(false);
+    }
+  }, [id, token, settlementForm.period_start, settlementForm.period_end]);
+
+  useEffect(() => {
+    if (activeTab === 'settlements') {
+      fetchSettlements();
+    }
+  }, [activeTab, fetchSettlements]);
+
+  useEffect(() => {
+    if (showSettlementDialog && settlementForm.period_start && settlementForm.period_end) {
+      fetchUnsettledDeliveries();
+    }
+  }, [showSettlementDialog, settlementForm.period_start, settlementForm.period_end, fetchUnsettledDeliveries]);
 
   // Search accounts
   const searchAccounts = useCallback(async (query) => {
@@ -1138,6 +1204,154 @@ export default function DistributorDetail() {
     return <Badge className={config.color}>{config.label}</Badge>;
   };
 
+  // ============ Settlement Handlers ============
+
+  const handleCreateSettlement = async () => {
+    if (!settlementForm.period_start || !settlementForm.period_end) {
+      toast.error('Please select settlement period');
+      return;
+    }
+    if (unsettledDeliveries.length === 0) {
+      toast.error('No unsettled deliveries found for this period');
+      return;
+    }
+    
+    try {
+      setSavingSettlement(true);
+      
+      const settlementData = {
+        distributor_id: id,
+        period_type: settlementForm.period_type,
+        period_start: settlementForm.period_start,
+        period_end: settlementForm.period_end,
+        remarks: settlementForm.remarks || null
+      };
+      
+      const response = await axios.post(`${API_URL}/api/distributors/${id}/settlements`, settlementData, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      
+      toast.success(`Settlement ${response.data.settlement_number} created successfully`);
+      setShowSettlementDialog(false);
+      resetSettlementForm();
+      fetchSettlements();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to create settlement');
+    } finally {
+      setSavingSettlement(false);
+    }
+  };
+
+  const resetSettlementForm = () => {
+    setSettlementForm({
+      period_type: 'monthly',
+      period_start: '',
+      period_end: '',
+      remarks: ''
+    });
+    setUnsettledDeliveries([]);
+  };
+
+  const handleSubmitSettlement = async (settlementId) => {
+    try {
+      await axios.post(`${API_URL}/api/distributors/${id}/settlements/${settlementId}/submit`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Settlement submitted for approval');
+      fetchSettlements();
+      setShowSettlementDetail(false);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to submit settlement');
+    }
+  };
+
+  const handleApproveSettlement = async (settlementId) => {
+    try {
+      await axios.post(`${API_URL}/api/distributors/${id}/settlements/${settlementId}/approve`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Settlement approved');
+      fetchSettlements();
+      setShowSettlementDetail(false);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to approve settlement');
+    }
+  };
+
+  const handleRejectSettlement = async (settlementId, reason = '') => {
+    try {
+      await axios.post(`${API_URL}/api/distributors/${id}/settlements/${settlementId}/reject?reason=${encodeURIComponent(reason)}`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Settlement rejected');
+      fetchSettlements();
+      setShowSettlementDetail(false);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to reject settlement');
+    }
+  };
+
+  const handleMarkPaid = async (settlementId, paymentRef = '') => {
+    try {
+      await axios.post(`${API_URL}/api/distributors/${id}/settlements/${settlementId}/mark-paid?payment_reference=${encodeURIComponent(paymentRef)}`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Settlement marked as paid');
+      fetchSettlements();
+      setShowSettlementDetail(false);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to mark settlement as paid');
+    }
+  };
+
+  const handleDeleteSettlement = async (settlementId) => {
+    try {
+      setDeleting(true);
+      await axios.delete(`${API_URL}/api/distributors/${id}/settlements/${settlementId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Settlement deleted');
+      setDeleteTarget(null);
+      fetchSettlements();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete settlement');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const viewSettlementDetail = async (settlementId) => {
+    try {
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/settlements/${settlementId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setSelectedSettlement(response.data);
+      setShowSettlementDetail(true);
+    } catch (error) {
+      toast.error('Failed to load settlement details');
+    }
+  };
+
+  const getSettlementStatusBadge = (status) => {
+    const statusConfig = {
+      draft: { label: 'Draft', color: 'bg-gray-100 text-gray-800' },
+      pending_approval: { label: 'Pending Approval', color: 'bg-yellow-100 text-yellow-800' },
+      approved: { label: 'Approved', color: 'bg-blue-100 text-blue-800' },
+      rejected: { label: 'Rejected', color: 'bg-red-100 text-red-800' },
+      paid: { label: 'Paid', color: 'bg-green-100 text-green-800' },
+      cancelled: { label: 'Cancelled', color: 'bg-gray-100 text-gray-600' }
+    };
+    const config = statusConfig[status] || statusConfig.draft;
+    return <Badge className={config.color}>{config.label}</Badge>;
+  };
+
   // Get available cities for the selected state that are not already covered
   const getAvailableCities = () => {
     if (!selectedState) return [];
@@ -1236,6 +1450,9 @@ export default function DistributorDetail() {
           </TabsTrigger>
           <TabsTrigger value="deliveries" data-testid="deliveries-tab">
             Deliveries ({deliveries.length})
+          </TabsTrigger>
+          <TabsTrigger value="settlements" data-testid="settlements-tab">
+            Settlements ({settlements.length})
           </TabsTrigger>
         </TabsList>
 
@@ -3153,6 +3370,245 @@ export default function DistributorDetail() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Settlements Tab */}
+        <TabsContent value="settlements">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Settlement History</CardTitle>
+                <CardDescription>Payout settlements for this distributor</CardDescription>
+              </div>
+              {canManage && (
+                <Dialog open={showSettlementDialog} onOpenChange={(open) => {
+                  setShowSettlementDialog(open);
+                  if (!open) resetSettlementForm();
+                }}>
+                  <DialogTrigger asChild>
+                    <Button data-testid="create-settlement-btn">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Generate Settlement
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Generate Settlement</DialogTitle>
+                      <DialogDescription>
+                        Create a settlement for completed deliveries in a period
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      {/* Period Selection */}
+                      <div className="space-y-2">
+                        <Label>Settlement Period Type</Label>
+                        <Select
+                          value={settlementForm.period_type}
+                          onValueChange={(v) => setSettlementForm(prev => ({ ...prev, period_type: v }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select period type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="weekly">Weekly</SelectItem>
+                            <SelectItem value="biweekly">Bi-Weekly</SelectItem>
+                            <SelectItem value="monthly">Monthly</SelectItem>
+                            <SelectItem value="custom">Custom</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Period Start *</Label>
+                          <Input
+                            type="date"
+                            value={settlementForm.period_start}
+                            onChange={(e) => setSettlementForm(prev => ({ ...prev, period_start: e.target.value }))}
+                            data-testid="settlement-start-date"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Period End *</Label>
+                          <Input
+                            type="date"
+                            value={settlementForm.period_end}
+                            onChange={(e) => setSettlementForm(prev => ({ ...prev, period_end: e.target.value }))}
+                            data-testid="settlement-end-date"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Preview of unsettled deliveries */}
+                      {settlementForm.period_start && settlementForm.period_end && (
+                        <div className="border rounded-lg p-4 bg-muted/30">
+                          <div className="flex items-center justify-between mb-3">
+                            <Label className="text-base font-semibold">Deliveries to Settle</Label>
+                            {unsettledLoading && <RefreshCw className="h-4 w-4 animate-spin" />}
+                          </div>
+                          
+                          {unsettledDeliveries.length === 0 ? (
+                            <div className="text-center py-4 text-muted-foreground">
+                              <p className="text-sm">No unsettled deliveries found for this period</p>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="max-h-48 overflow-y-auto border rounded mb-3">
+                                <table className="w-full text-sm">
+                                  <thead className="bg-muted sticky top-0">
+                                    <tr>
+                                      <th className="text-left p-2">Delivery #</th>
+                                      <th className="text-left p-2">Account</th>
+                                      <th className="text-right p-2">Amount</th>
+                                      <th className="text-right p-2">Margin</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {unsettledDeliveries.map(del => (
+                                      <tr key={del.id} className="border-t">
+                                        <td className="p-2">{del.delivery_number}</td>
+                                        <td className="p-2">{del.account_name}</td>
+                                        <td className="p-2 text-right">₹{del.total_net_amount?.toLocaleString()}</td>
+                                        <td className="p-2 text-right text-green-600">₹{del.total_margin_amount?.toLocaleString()}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                              <div className="grid grid-cols-3 gap-4 text-center">
+                                <div className="bg-background rounded p-2">
+                                  <div className="text-xs text-muted-foreground">Deliveries</div>
+                                  <div className="font-bold">{unsettledDeliveries.length}</div>
+                                </div>
+                                <div className="bg-background rounded p-2">
+                                  <div className="text-xs text-muted-foreground">Total Amount</div>
+                                  <div className="font-bold">₹{unsettledDeliveries.reduce((sum, d) => sum + (d.total_net_amount || 0), 0).toLocaleString()}</div>
+                                </div>
+                                <div className="bg-green-50 rounded p-2">
+                                  <div className="text-xs text-muted-foreground">Total Margin (Payout)</div>
+                                  <div className="font-bold text-green-600">₹{unsettledDeliveries.reduce((sum, d) => sum + (d.total_margin_amount || 0), 0).toLocaleString()}</div>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Remarks */}
+                      <div className="space-y-2">
+                        <Label>Remarks</Label>
+                        <Textarea
+                          placeholder="Any notes for this settlement..."
+                          value={settlementForm.remarks}
+                          onChange={(e) => setSettlementForm(prev => ({ ...prev, remarks: e.target.value }))}
+                          rows={2}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setShowSettlementDialog(false)}>Cancel</Button>
+                      <Button
+                        onClick={handleCreateSettlement}
+                        disabled={savingSettlement || !settlementForm.period_start || !settlementForm.period_end || unsettledDeliveries.length === 0}
+                        data-testid="save-settlement-btn"
+                      >
+                        {savingSettlement ? 'Creating...' : 'Generate Settlement'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </CardHeader>
+            <CardContent>
+              {settlementsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : settlements.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No settlements generated</p>
+                  <p className="text-sm">Generate a settlement to calculate distributor payout</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full" data-testid="settlements-table">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="text-left p-3 font-medium">Settlement #</th>
+                        <th className="text-left p-3 font-medium">Period</th>
+                        <th className="text-right p-3 font-medium">Deliveries</th>
+                        <th className="text-right p-3 font-medium">Amount</th>
+                        <th className="text-right p-3 font-medium">Payout</th>
+                        <th className="text-center p-3 font-medium">Status</th>
+                        <th className="text-right p-3 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {settlements.map((settlement) => (
+                        <tr key={settlement.id} className="border-b hover:bg-muted/30" data-testid={`settlement-row-${settlement.id}`}>
+                          <td className="p-3">
+                            <button 
+                              className="font-medium text-primary hover:underline"
+                              onClick={() => viewSettlementDetail(settlement.id)}
+                            >
+                              {settlement.settlement_number}
+                            </button>
+                          </td>
+                          <td className="p-3">
+                            <div className="text-sm">
+                              {new Date(settlement.period_start).toLocaleDateString()} - {new Date(settlement.period_end).toLocaleDateString()}
+                            </div>
+                            <div className="text-xs text-muted-foreground capitalize">{settlement.period_type}</div>
+                          </td>
+                          <td className="p-3 text-right">{settlement.total_deliveries}</td>
+                          <td className="p-3 text-right">₹{settlement.total_delivery_amount?.toLocaleString()}</td>
+                          <td className="p-3 text-right">
+                            <span className="font-bold text-green-600">₹{settlement.final_payout?.toLocaleString()}</span>
+                            {settlement.adjustments !== 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                (adj: {settlement.adjustments > 0 ? '+' : ''}₹{settlement.adjustments})
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            {getSettlementStatusBadge(settlement.status)}
+                          </td>
+                          <td className="p-3 text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => viewSettlementDetail(settlement.id)}
+                                data-testid={`view-settlement-${settlement.id}`}
+                              >
+                                <FileText className="h-4 w-4" />
+                              </Button>
+                              {canManage && settlement.status === 'draft' && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive"
+                                  onClick={() => setDeleteTarget({
+                                    type: 'settlement',
+                                    id: settlement.id,
+                                    name: settlement.settlement_number
+                                  })}
+                                  data-testid={`delete-settlement-${settlement.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Shipment Detail Dialog */}
@@ -3384,6 +3840,150 @@ export default function DistributorDetail() {
         </DialogContent>
       </Dialog>
 
+      {/* Settlement Detail Dialog */}
+      <Dialog open={showSettlementDetail} onOpenChange={setShowSettlementDetail}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              Settlement {selectedSettlement?.settlement_number}
+              {selectedSettlement && getSettlementStatusBadge(selectedSettlement.status)}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedSettlement && (
+            <div className="space-y-4">
+              {/* Settlement Info */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Period:</span>
+                  <div className="font-medium">
+                    {new Date(selectedSettlement.period_start).toLocaleDateString()} - {new Date(selectedSettlement.period_end).toLocaleDateString()}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Type:</span>
+                  <div className="font-medium capitalize">{selectedSettlement.period_type}</div>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Deliveries:</span>
+                  <div className="font-medium">{selectedSettlement.total_deliveries}</div>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Total Quantity:</span>
+                  <div className="font-medium">{selectedSettlement.total_quantity}</div>
+                </div>
+              </div>
+
+              {/* Summary Cards */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-muted/30 rounded-lg p-4 text-center">
+                  <div className="text-sm text-muted-foreground">Delivery Amount</div>
+                  <div className="text-xl font-bold">₹{selectedSettlement.total_delivery_amount?.toLocaleString()}</div>
+                </div>
+                <div className="bg-blue-50 rounded-lg p-4 text-center">
+                  <div className="text-sm text-muted-foreground">Margin Earned</div>
+                  <div className="text-xl font-bold text-blue-600">₹{selectedSettlement.total_margin_amount?.toLocaleString()}</div>
+                </div>
+                <div className="bg-green-50 rounded-lg p-4 text-center">
+                  <div className="text-sm text-muted-foreground">Final Payout</div>
+                  <div className="text-xl font-bold text-green-600">₹{selectedSettlement.final_payout?.toLocaleString()}</div>
+                  {selectedSettlement.adjustments !== 0 && (
+                    <div className="text-xs text-muted-foreground">
+                      (Adjustment: {selectedSettlement.adjustments > 0 ? '+' : ''}₹{selectedSettlement.adjustments})
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Delivery Items */}
+              <div className="border rounded-lg">
+                <div className="bg-muted/50 p-3 font-medium text-sm border-b">Included Deliveries</div>
+                <div className="max-h-64 overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/30 sticky top-0">
+                      <tr>
+                        <th className="text-left p-2">Delivery #</th>
+                        <th className="text-left p-2">Date</th>
+                        <th className="text-left p-2">Account</th>
+                        <th className="text-right p-2">Qty</th>
+                        <th className="text-right p-2">Amount</th>
+                        <th className="text-right p-2">Margin</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(selectedSettlement.items || []).map((item, idx) => (
+                        <tr key={idx} className="border-t">
+                          <td className="p-2">{item.delivery_number}</td>
+                          <td className="p-2">{new Date(item.delivery_date).toLocaleDateString()}</td>
+                          <td className="p-2">{item.account_name}</td>
+                          <td className="p-2 text-right">{item.total_quantity}</td>
+                          <td className="p-2 text-right">₹{item.total_amount?.toLocaleString()}</td>
+                          <td className="p-2 text-right text-green-600">₹{item.margin_amount?.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Approval Info */}
+              {selectedSettlement.approved_by_name && (
+                <div className="text-sm text-muted-foreground">
+                  Approved by: {selectedSettlement.approved_by_name} on {new Date(selectedSettlement.approved_at).toLocaleDateString()}
+                </div>
+              )}
+              {selectedSettlement.rejection_reason && (
+                <div className="text-sm text-red-600">
+                  Rejection reason: {selectedSettlement.rejection_reason}
+                </div>
+              )}
+              {selectedSettlement.payment_reference && (
+                <div className="text-sm text-muted-foreground">
+                  Payment Reference: {selectedSettlement.payment_reference}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                {selectedSettlement.status === 'draft' && canManage && (
+                  <>
+                    <Button variant="outline" onClick={() => {
+                      setDeleteTarget({
+                        type: 'settlement',
+                        id: selectedSettlement.id,
+                        name: selectedSettlement.settlement_number
+                      });
+                      setShowSettlementDetail(false);
+                    }}>
+                      Delete
+                    </Button>
+                    <Button onClick={() => handleSubmitSettlement(selectedSettlement.id)}>
+                      Submit for Approval
+                    </Button>
+                  </>
+                )}
+                {selectedSettlement.status === 'pending_approval' && canApprove && (
+                  <>
+                    <Button variant="outline" onClick={() => handleRejectSettlement(selectedSettlement.id)}>
+                      Reject
+                    </Button>
+                    <Button onClick={() => handleApproveSettlement(selectedSettlement.id)} className="bg-green-600 hover:bg-green-700">
+                      <Check className="h-4 w-4 mr-2" />
+                      Approve
+                    </Button>
+                  </>
+                )}
+                {selectedSettlement.status === 'approved' && canManage && (
+                  <Button onClick={() => handleMarkPaid(selectedSettlement.id)} className="bg-green-600 hover:bg-green-700">
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Mark as Paid
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
@@ -3412,6 +4012,8 @@ export default function DistributorDetail() {
                   handleDeleteShipment(deleteTarget.id);
                 } else if (deleteTarget?.type === 'delivery') {
                   handleDeleteDelivery(deleteTarget.id);
+                } else if (deleteTarget?.type === 'settlement') {
+                  handleDeleteSettlement(deleteTarget.id);
                 }
               }}
             >

@@ -530,3 +530,96 @@ class AccountDelivery(BaseModel):
     confirmed_by: Optional[str] = None
     delivered_at: Optional[str] = None
     delivered_by: Optional[str] = None
+
+
+
+# ============ Distributor Settlement ============
+
+class SettlementStatus(str, Enum):
+    DRAFT = "draft"
+    PENDING_APPROVAL = "pending_approval"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    PAID = "paid"
+    CANCELLED = "cancelled"
+
+
+class SettlementPeriodType(str, Enum):
+    WEEKLY = "weekly"
+    BIWEEKLY = "biweekly"
+    MONTHLY = "monthly"
+    CUSTOM = "custom"
+
+
+class SettlementItemCreate(BaseModel):
+    delivery_id: str
+    delivery_number: str
+    delivery_date: str
+    account_id: str
+    account_name: str
+    total_quantity: int
+    total_amount: float
+    margin_amount: float
+
+
+class SettlementItem(BaseModel):
+    id: str
+    settlement_id: str
+    delivery_id: str
+    delivery_number: str
+    delivery_date: str
+    account_id: str
+    account_name: str
+    account_city: Optional[str] = None
+    total_quantity: int
+    total_amount: float
+    margin_amount: float
+
+
+class DistributorSettlementCreate(BaseModel):
+    distributor_id: str
+    period_type: str = "monthly"
+    period_start: str  # ISO date
+    period_end: str  # ISO date
+    remarks: Optional[str] = None
+
+
+class DistributorSettlementUpdate(BaseModel):
+    remarks: Optional[str] = None
+    adjustments: Optional[float] = None
+    status: Optional[str] = None
+
+
+class DistributorSettlement(BaseModel):
+    id: str
+    tenant_id: str
+    settlement_number: str  # Auto-generated like STL-2026-0001
+    distributor_id: str
+    distributor_name: Optional[str] = None
+    distributor_code: Optional[str] = None
+    period_type: str = "monthly"
+    period_start: str
+    period_end: str
+    total_deliveries: int = 0
+    total_quantity: int = 0
+    total_delivery_amount: float = 0
+    total_margin_amount: float = 0  # Total payout to distributor
+    adjustments: float = 0  # Manual adjustments (+/-)
+    final_payout: float = 0  # total_margin_amount + adjustments
+    status: str = "draft"
+    remarks: Optional[str] = None
+    items: Optional[List[SettlementItem]] = None
+    created_at: str
+    updated_at: str
+    created_by: Optional[str] = None
+    submitted_at: Optional[str] = None
+    submitted_by: Optional[str] = None
+    approved_at: Optional[str] = None
+    approved_by: Optional[str] = None
+    approved_by_name: Optional[str] = None
+    rejected_at: Optional[str] = None
+    rejected_by: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    paid_at: Optional[str] = None
+    paid_by: Optional[str] = None
+    payment_reference: Optional[str] = None
