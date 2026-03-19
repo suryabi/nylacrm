@@ -24,6 +24,7 @@ export default function ShipmentsTab({
   shipmentItems,
   addShipmentItem,
   updateShipmentItem,
+  updateShipmentItemWithPrice,
   removeShipmentItem,
   resetShipmentForm,
   // Handlers
@@ -174,9 +175,9 @@ export default function ShipmentsTab({
                               value={item.sku_id}
                               onValueChange={(v) => {
                                 const selectedSku = skus.find(s => s.id === v);
-                                updateShipmentItem(item.id, 'sku_id', v);
                                 if (selectedSku) {
-                                  updateShipmentItem(item.id, 'sku_name', selectedSku.name || selectedSku.sku_name);
+                                  // Use the enhanced function that looks up the transfer price
+                                  updateShipmentItemWithPrice(item.id, v, selectedSku.name || selectedSku.sku_name);
                                 }
                               }}
                             >

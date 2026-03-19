@@ -25,6 +25,18 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Latest Session - March 19, 2026
 
+### BUG FIX: Auto-populate Price in Shipment Dialog ✅
+**Issue**: When creating a primary shipment and selecting a SKU, the price was not being auto-populated. Users had to manually enter the price.
+
+**Solution**: 
+1. Created `getTransferPriceForSku` function that fetches the transfer price from the Margin Matrix based on the selected location's city and SKU
+2. Created `updateShipmentItemWithPrice` function that updates the SKU and then looks up the transfer price
+3. Updated ShipmentsTab to use the new function when selecting a SKU
+
+**Result**: When a user selects a SKU in the Create Shipment dialog, the transfer price is now automatically populated from the active Margin Matrix entry for that city.
+
+---
+
 ### TEST: Settlement Flow E2E ✅
 **Scope**: Complete end-to-end testing of the Distributor Settlement functionality.
 

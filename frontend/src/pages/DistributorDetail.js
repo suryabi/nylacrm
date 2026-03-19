@@ -1111,6 +1111,56 @@ export default function DistributorDetail() {
     ));
   };
 
+  // Function to get transfer price for a SKU based on location city
+  const getTransferPriceForSku = async (skuId, locationId) => {
+    try {
+      // Find the location to get the city
+      const location = distributor.locations?.find(loc => loc.id === locationId);
+      if (!location) return null;
+      
+      const city = location.city;
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Fetch margins for this city
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/margins?city=${encodeURIComponent(city)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      
+      const margins = response.data.margins || [];
+      
+      // Find the active margin entry for this SKU
+      const activeMargin = margins.find(m => 
+        m.sku_id === skuId && 
+        (!m.active_from || m.active_from <= today) && 
+        (!m.active_to || m.active_to >= today)
+      );
+      
+      return activeMargin?.transfer_price || null;
+    } catch (error) {
+      console.error('Failed to get transfer price:', error);
+      return null;
+    }
+  };
+
+  // Enhanced function to update shipment item with price lookup
+  const updateShipmentItemWithPrice = async (itemId, skuId, skuName) => {
+    // First update the SKU info immediately
+    setShipmentItems(prev => prev.map(item => 
+      item.id === itemId ? { ...item, sku_id: skuId, sku_name: skuName } : item
+    ));
+    
+    // Then look up the transfer price if we have a location selected
+    if (shipmentForm.distributor_location_id) {
+      const transferPrice = await getTransferPriceForSku(skuId, shipmentForm.distributor_location_id);
+      if (transferPrice) {
+        setShipmentItems(prev => prev.map(item => 
+          item.id === itemId ? { ...item, unit_price: transferPrice } : item
+        ));
+      }
+    }
+  };
+
   const removeShipmentItem = (itemId) => {
     setShipmentItems(prev => prev.filter(item => item.id !== itemId));
   };
@@ -1978,6 +2028,7 @@ export default function DistributorDetail() {
             shipmentItems={shipmentItems}
             addShipmentItem={addShipmentItem}
             updateShipmentItem={updateShipmentItem}
+            updateShipmentItemWithPrice={updateShipmentItemWithPrice}
             removeShipmentItem={removeShipmentItem}
             resetShipmentForm={resetShipmentForm}
             handleCreateShipment={handleCreateShipment}
