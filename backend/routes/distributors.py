@@ -2436,9 +2436,38 @@ async def get_assigned_accounts_for_delivery(
     for assignment in assignments:
         account = await db.accounts.find_one(
             {"id": assignment.get('account_id')},
-            {"_id": 0, "id": 1, "account_name": 1, "contact_name": 1, "city": 1, "state": 1, "delivery_address": 1, "territory": 1, "contact_number": 1}
+            {"_id": 0, "id": 1, "account_name": 1, "contact_name": 1, "city": 1, "state": 1, "delivery_address": 1, "territory": 1, "contact_number": 1, "sku_pricing": 1}
         )
         if account:
+            # Get SKU pricing and enrich with master SKU data for ID mapping
+            sku_pricing = account.get('sku_pricing', [])
+            enriched_skus = []
+            if sku_pricing:
+                # Get all master SKUs to map names to IDs
+                # Note: master_skus may not have tenant_id set (global catalog)
+                master_skus = await db.master_skus.find(
+                    {"$or": [{"tenant_id": tenant_id}, {"tenant_id": None}, {"tenant_id": {"$exists": False}}]},
+                    {"_id": 0, "id": 1, "name": 1, "sku_name": 1}
+                ).to_list(500)
+                
+                # Build name-to-ID mapping using sku_name (primary) or name (fallback)
+                sku_name_to_id = {}
+                for s in master_skus:
+                    sku_key = s.get('sku_name') or s.get('name')
+                    if sku_key:
+                        sku_name_to_id[sku_key] = s.get('id')
+                
+                for sku_item in sku_pricing:
+                    sku_name = sku_item.get('sku')
+                    sku_id = sku_name_to_id.get(sku_name)
+                    if sku_id:
+                        enriched_skus.append({
+                            "id": sku_id,
+                            "name": sku_name,
+                            "price_per_unit": sku_item.get('price_per_unit', 0),
+                            "return_bottle_credit": sku_item.get('return_bottle_credit', 0)
+                        })
+            
             accounts.append({
                 "id": account.get('id'),
                 "account_name": account.get('account_name', 'Unknown Account'),
@@ -2451,7 +2480,8 @@ async def get_assigned_accounts_for_delivery(
                 "servicing_city": assignment.get('servicing_city'),
                 "distributor_location_id": assignment.get('distributor_location_id'),
                 "distributor_location_name": assignment.get('distributor_location_name'),
-                "is_primary": assignment.get('is_primary', False)
+                "is_primary": assignment.get('is_primary', False),
+                "sku_pricing": enriched_skus  # Include account's configured SKUs with IDs
             })
     
     return {"accounts": accounts}

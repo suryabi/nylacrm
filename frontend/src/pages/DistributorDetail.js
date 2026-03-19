@@ -3190,14 +3190,35 @@ export default function DistributorDetail() {
                       {/* Delivery Items */}
                       <div className="space-y-3 border-t pt-4">
                         <div className="flex items-center justify-between">
-                          <Label className="text-base font-semibold">Delivery Items</Label>
-                          <Button variant="outline" size="sm" onClick={addDeliveryItem} data-testid="add-delivery-item-btn">
+                          <div>
+                            <Label className="text-base font-semibold">Delivery Items</Label>
+                            {selectedDeliveryAccount && (
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {selectedDeliveryAccount.sku_pricing?.length > 0 
+                                  ? `Showing ${selectedDeliveryAccount.sku_pricing.length} SKU(s) configured for ${selectedDeliveryAccount.account_name}`
+                                  : `No SKU pricing configured for ${selectedDeliveryAccount.account_name} - showing all SKUs`
+                                }
+                              </p>
+                            )}
+                          </div>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={addDeliveryItem} 
+                            disabled={!selectedDeliveryAccount}
+                            data-testid="add-delivery-item-btn"
+                          >
                             <Plus className="h-4 w-4 mr-1" />
                             Add Item
                           </Button>
                         </div>
                         
-                        {deliveryItems.length === 0 ? (
+                        {!selectedDeliveryAccount ? (
+                          <div className="text-center py-6 text-muted-foreground border rounded-md bg-muted/20">
+                            <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                            <p className="text-sm">Select an account first to add delivery items</p>
+                          </div>
+                        ) : deliveryItems.length === 0 ? (
                           <div className="text-center py-6 text-muted-foreground border rounded-md">
                             <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
                             <p className="text-sm">No items added. Click "Add Item" to start.</p>
@@ -3220,10 +3241,16 @@ export default function DistributorDetail() {
                                   <Select
                                     value={item.sku_id}
                                     onValueChange={(v) => {
-                                      const selectedSku = skus.find(s => s.id === v);
+                                      // Use account's SKU pricing if available, otherwise fall back to master SKUs
+                                      const accountSkus = selectedDeliveryAccount?.sku_pricing || [];
+                                      const selectedSku = accountSkus.find(s => s.id === v) || skus.find(s => s.id === v);
                                       updateDeliveryItem(item.id, 'sku_id', v);
                                       if (selectedSku) {
                                         updateDeliveryItem(item.id, 'sku_name', selectedSku.name || selectedSku.sku_name);
+                                        // Auto-populate price from account's SKU pricing
+                                        if (selectedSku.price_per_unit) {
+                                          updateDeliveryItem(item.id, 'unit_price', selectedSku.price_per_unit);
+                                        }
                                       }
                                     }}
                                   >
@@ -3231,11 +3258,21 @@ export default function DistributorDetail() {
                                       <SelectValue placeholder="Select SKU" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      {skus.map(sku => (
+                                      {/* Show only SKUs from account's SKU pricing if available */}
+                                      {(selectedDeliveryAccount?.sku_pricing?.length > 0 
+                                        ? selectedDeliveryAccount.sku_pricing 
+                                        : skus
+                                      ).map(sku => (
                                         <SelectItem key={sku.id} value={sku.id}>
                                           {sku.name || sku.sku_name}
+                                          {sku.price_per_unit && ` - ₹${sku.price_per_unit}`}
                                         </SelectItem>
                                       ))}
+                                      {selectedDeliveryAccount && (!selectedDeliveryAccount.sku_pricing || selectedDeliveryAccount.sku_pricing.length === 0) && (
+                                        <div className="p-2 text-xs text-muted-foreground border-t">
+                                          No SKU pricing configured for this account. Showing all SKUs.
+                                        </div>
+                                      )}
                                     </SelectContent>
                                   </Select>
                                 </div>

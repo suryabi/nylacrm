@@ -1,0 +1,86 @@
+{
+  "summary": "Verified SKU dropdown filtering in Record Delivery dialog - All features working correctly. SKU dropdown now shows only account-configured SKUs with prices, auto-populates price on selection, and Add Item button is disabled until account is selected.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "SKU Dropdown Account-Specific Filtering": {
+      "status": "PASS",
+      "details": [
+        "After selecting 'Test Status Validation Company' account, SKU dropdown shows only 1 SKU from account's sku_pricing",
+        "SKU shown: 'Nyla – 330 ml / Silver' at ₹45 (exact SKU configured in account's sku_pricing)"
+      ]
+    },
+    "SKU Dropdown Price Display": {
+      "status": "PASS",
+      "details": [
+        "SKU dropdown shows price next to each SKU name",
+        "Format verified: 'Nyla – 330 ml / Silver - ₹45'"
+      ]
+    },
+    "Price Auto-Population": {
+      "status": "PASS",
+      "details": [
+        "When SKU is selected, unit price field auto-populates with ₹45 (configured price)",
+        "Amount calculation works correctly with tax"
+      ]
+    },
+    "Add Item Button State": {
+      "status": "PASS",
+      "details": [
+        "Button disabled before account selection",
+        "Button enabled after account selection"
+      ]
+    },
+    "Helpful Message Display": {
+      "status": "PASS",
+      "details": [
+        "Shows: 'Showing 1 SKU(s) configured for Test Status Validation Company'",
+        "Message appears under 'Delivery Items' label"
+      ]
+    },
+    "Backend API - assigned-accounts": {
+      "status": "PASS",
+      "details": [
+        "GET /api/distributors/{id}/assigned-accounts returns sku_pricing array",
+        "sku_pricing contains enriched SKU data: id, name, price_per_unit, return_bottle_credit"
+      ]
+    }
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_header": "X-Tenant-ID: nyla-air-water"
+  },
+  "seed_data_creation": "None - used existing test data",
+  "test_data": {
+    "distributor_id": "99fb55dc-532c-4e85-b618-6b8a5e552c04",
+    "distributor_name": "Test (DIST-0002)",
+    "test_account": "Test Status Validation Company",
+    "account_sku_pricing": [
+      {
+        "id": "b39203a7-4067-458b-a316-5831a98be946",
+        "name": "Nyla – 330 ml / Silver",
+        "price_per_unit": 45,
+        "return_bottle_credit": 14
+      }
+    ]
+  },
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "SKU filtering feature in Record Delivery dialog fully implemented and verified. Backend returns enriched sku_pricing array with SKU IDs mapped from master_skus. Frontend correctly filters SKU dropdown based on selectedDeliveryAccount.sku_pricing and auto-populates price."
+}
