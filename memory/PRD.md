@@ -135,6 +135,33 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 **Testing**: Verified with testing_agent_v3_fork (iteration_58.json) - 100% pass rate (11/11 backend, 100% frontend)
 
+### ENHANCEMENT: Multiple Margin Entries Per SKU with Date Overlap Validation ✅
+**User Request**: Allow multiple margin entries per SKU to maintain pricing history. Ensure only one entry is active at any given time by validating date overlaps.
+
+**Changes Made**:
+1. **Date Overlap Validation**:
+   - New entries validated against existing ones: `new_start <= exist_end AND exist_start <= new_end` = overlap
+   - Clear error message: "Date range overlaps with existing entry (ID: xxx, Active: date to date)"
+   - Same validation on update operations
+   
+2. **Multiple Entries Per SKU**:
+   - Can now create entries like: 2026 (₹100, 2.5%), 2027 (₹110, 3.0%)
+   - Each entry has `active_from` and `active_to` dates
+   - Empty `active_to` = ongoing/indefinite
+   
+3. **Status Indicators**:
+   - 🟢 **Active**: Currently valid (active_from <= today <= active_to)
+   - 🔵 **Future**: Not yet valid (active_from > today)
+   - ⚫ **Expired**: No longer valid (active_to < today)
+   
+4. **UI Redesigned**:
+   - Changed from grid-based (one row per SKU) to list-based (multiple rows per SKU)
+   - "Add Price Entry" button to create new entries
+   - Edit dialog for each entry
+   - Summary: Total entries | Active | Unique SKUs
+
+**Testing**: Verified with testing_agent_v3_fork (iteration_59.json) - 100% pass rate (9/9 backend, 100% frontend)
+
 ## Distribution Module - Complete Implementation
 
 ### Phase 1: Distributor Master ✅
