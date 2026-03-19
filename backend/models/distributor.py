@@ -623,3 +623,226 @@ class DistributorSettlement(BaseModel):
     paid_at: Optional[str] = None
     paid_by: Optional[str] = None
     payment_reference: Optional[str] = None
+
+
+# ============ Distributor Billing & Reconciliation ============
+
+class BillingConfigCreate(BaseModel):
+    """Configuration for base prices at distributor level"""
+    sku_id: str
+    sku_name: Optional[str] = None
+    base_price: float  # Base price for this SKU
+    margin_percent: float = 2.5  # Distributor margin percentage (default 2.5%)
+    effective_from: Optional[str] = None
+    effective_to: Optional[str] = None
+    remarks: Optional[str] = None
+    status: Optional[str] = "active"
+
+
+class BillingConfigUpdate(BaseModel):
+    base_price: Optional[float] = None
+    margin_percent: Optional[float] = None
+    effective_from: Optional[str] = None
+    effective_to: Optional[str] = None
+    remarks: Optional[str] = None
+    status: Optional[str] = None
+
+
+class BillingConfig(BaseModel):
+    """Billing configuration per distributor per SKU"""
+    id: str
+    tenant_id: str
+    distributor_id: str
+    sku_id: str
+    sku_name: Optional[str] = None
+    base_price: float
+    margin_percent: float = 2.5  # Distributor margin percentage
+    transfer_price: Optional[float] = None  # Calculated: base_price * (1 - margin_percent/100)
+    effective_from: Optional[str] = None
+    effective_to: Optional[str] = None
+    remarks: Optional[str] = None
+    status: str = "active"
+    created_at: str
+    updated_at: str
+    created_by: Optional[str] = None
+
+
+class ProvisionalInvoiceItemCreate(BaseModel):
+    """Item in provisional invoice"""
+    sku_id: str
+    sku_name: Optional[str] = None
+    quantity: int
+    base_price: float
+    margin_percent: float = 2.5
+    transfer_price: float  # base_price * (1 - margin_percent/100)
+    gross_amount: float  # quantity * base_price
+    margin_amount: float  # gross_amount * margin_percent/100
+    net_amount: float  # gross_amount - margin_amount = quantity * transfer_price
+
+
+class ProvisionalInvoiceItem(BaseModel):
+    id: str
+    invoice_id: str
+    sku_id: str
+    sku_name: Optional[str] = None
+    quantity: int
+    base_price: float
+    margin_percent: float = 2.5
+    transfer_price: float
+    gross_amount: float
+    margin_amount: float
+    net_amount: float
+
+
+class ProvisionalInvoiceCreate(BaseModel):
+    """Auto-generated when shipment is marked delivered"""
+    invoice_date: Optional[str] = None
+    due_date: Optional[str] = None
+    remarks: Optional[str] = None
+
+
+class ProvisionalInvoice(BaseModel):
+    """Invoice for stock transferred to distributor at provisional transfer price"""
+    id: str
+    tenant_id: str
+    invoice_number: str  # Auto-generated like PINV-2026-0001
+    distributor_id: str
+    distributor_name: Optional[str] = None
+    distributor_code: Optional[str] = None
+    shipment_id: str
+    shipment_number: Optional[str] = None
+    invoice_date: str
+    due_date: Optional[str] = None
+    total_quantity: int = 0
+    total_gross_amount: float = 0  # Sum of (qty * base_price)
+    total_margin_amount: float = 0  # Sum of (gross * margin_percent/100)
+    total_net_amount: float = 0  # gross - margin = amount distributor pays
+    status: str = "pending"  # pending, paid, partially_paid, overdue, cancelled
+    reconciliation_status: str = "pending"  # pending, partially_reconciled, fully_reconciled
+    reconciled_quantity: int = 0  # Quantity reconciled so far
+    reconciled_amount: float = 0  # Amount reconciled so far
+    remarks: Optional[str] = None
+    items: Optional[List[ProvisionalInvoiceItem]] = None
+    created_at: str
+    updated_at: str
+    created_by: Optional[str] = None
+    paid_at: Optional[str] = None
+    paid_amount: Optional[float] = None
+    payment_reference: Optional[str] = None
+
+
+class ReconciliationLineItem(BaseModel):
+    """Detailed reconciliation per delivery item"""
+    id: str
+    reconciliation_id: str
+    delivery_id: str
+    delivery_number: Optional[str] = None
+    delivery_date: Optional[str] = None
+    account_id: str
+    account_name: Optional[str] = None
+    sku_id: str
+    sku_name: Optional[str] = None
+    quantity: int
+    # Provisional (what distributor paid initially)
+    base_price: float
+    margin_percent: float
+    transfer_price: float  # base_price * (1 - margin_percent/100)
+    provisional_amount: float  # quantity * transfer_price
+    # Actual (what distributor sold to customer)
+    actual_selling_price: float  # Customer price
+    actual_gross_amount: float  # quantity * actual_selling_price
+    entitled_margin_amount: float  # actual_gross_amount * margin_percent/100
+    actual_net_amount: float  # actual_gross_amount - entitled_margin_amount
+    # Difference
+    difference_amount: float  # actual_net_amount - provisional_amount
+    # Positive = Distributor owes Nyla (Debit Note)
+    # Negative = Nyla owes Distributor (Credit Note)
+
+
+class ReconciliationCreate(BaseModel):
+    period_start: str
+    period_end: str
+    remarks: Optional[str] = None
+
+
+class Reconciliation(BaseModel):
+    """Periodic reconciliation comparing provisional vs actual amounts"""
+    id: str
+    tenant_id: str
+    reconciliation_number: str  # Auto-generated like REC-2026-0001
+    distributor_id: str
+    distributor_name: Optional[str] = None
+    distributor_code: Optional[str] = None
+    period_start: str
+    period_end: str
+    # Summary totals
+    total_deliveries: int = 0
+    total_quantity: int = 0
+    total_provisional_amount: float = 0  # What distributor paid initially
+    total_actual_gross_amount: float = 0  # What distributor collected from customers
+    total_entitled_margin: float = 0  # 2.5% of actual gross
+    total_actual_net_amount: float = 0  # What distributor should remit
+    total_difference: float = 0  # actual_net - provisional
+    # Positive = Debit Note (distributor owes)
+    # Negative = Credit Note (Nyla owes)
+    adjustments: float = 0  # Manual adjustments
+    final_settlement_amount: float = 0  # difference + adjustments
+    settlement_type: Optional[str] = None  # "debit_note" or "credit_note"
+    status: str = "draft"  # draft, confirmed, settled, cancelled
+    debit_credit_note_id: Optional[str] = None
+    remarks: Optional[str] = None
+    items: Optional[List[ReconciliationLineItem]] = None
+    created_at: str
+    updated_at: str
+    created_by: Optional[str] = None
+    confirmed_at: Optional[str] = None
+    confirmed_by: Optional[str] = None
+    settled_at: Optional[str] = None
+    settled_by: Optional[str] = None
+
+
+class DebitCreditNoteCreate(BaseModel):
+    reconciliation_id: str
+    note_type: str  # "debit" or "credit"
+    amount: float
+    remarks: Optional[str] = None
+
+
+class DebitCreditNote(BaseModel):
+    """Settlement document generated from reconciliation"""
+    id: str
+    tenant_id: str
+    note_number: str  # Auto-generated like DN-2026-0001 or CN-2026-0001
+    note_type: str  # "debit" (distributor pays) or "credit" (Nyla pays)
+    reconciliation_id: str
+    reconciliation_number: Optional[str] = None
+    distributor_id: str
+    distributor_name: Optional[str] = None
+    distributor_code: Optional[str] = None
+    amount: float  # Absolute amount
+    status: str = "pending"  # pending, paid, partially_paid, cancelled
+    paid_amount: float = 0
+    balance_amount: float = 0
+    due_date: Optional[str] = None
+    remarks: Optional[str] = None
+    created_at: str
+    updated_at: str
+    created_by: Optional[str] = None
+    paid_at: Optional[str] = None
+    paid_by: Optional[str] = None
+    payment_reference: Optional[str] = None
+
+
+class AutoReconciliationConfig(BaseModel):
+    """Configuration for automatic reconciliation"""
+    id: str
+    tenant_id: str
+    distributor_id: str
+    is_enabled: bool = True
+    frequency: str = "monthly"  # "weekly", "monthly", "realtime"
+    day_of_week: Optional[int] = None  # 0=Monday, for weekly
+    day_of_month: Optional[int] = None  # 1-28, for monthly
+    last_run_at: Optional[str] = None
+    next_run_at: Optional[str] = None
+    created_at: str
+    updated_at: str

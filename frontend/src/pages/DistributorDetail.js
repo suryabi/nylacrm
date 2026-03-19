@@ -17,7 +17,8 @@ import { toast } from 'sonner';
 import {
   ArrowLeft, Building2, MapPin, Phone, Mail, Edit2, Trash2,
   RefreshCw, Plus, Package, Truck, CreditCard, Calendar,
-  User, FileText, Check, X, Save, Percent, DollarSign, Copy
+  User, FileText, Check, X, Save, Percent, DollarSign, Copy,
+  Settings, Eye, Receipt, Calculator
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -192,6 +193,42 @@ export default function DistributorDetail() {
   const [savingSettlement, setSavingSettlement] = useState(false);
   const [selectedSettlement, setSelectedSettlement] = useState(null);
   const [showSettlementDetail, setShowSettlementDetail] = useState(false);
+  
+  // Billing & Reconciliation state
+  const [billingConfigs, setBillingConfigs] = useState([]);
+  const [billingConfigsLoading, setBillingConfigsLoading] = useState(false);
+  const [provisionalInvoices, setProvisionalInvoices] = useState([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [reconciliations, setReconciliations] = useState([]);
+  const [reconciliationsLoading, setReconciliationsLoading] = useState(false);
+  const [debitCreditNotes, setDebitCreditNotes] = useState([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [billingSummary, setBillingSummary] = useState(null);
+  const [showBillingConfigDialog, setShowBillingConfigDialog] = useState(false);
+  const [billingConfigForm, setBillingConfigForm] = useState({
+    sku_id: '',
+    sku_name: '',
+    base_price: '',
+    margin_percent: '2.5',
+    remarks: ''
+  });
+  const [savingBillingConfig, setSavingBillingConfig] = useState(false);
+  const [showReconciliationDialog, setShowReconciliationDialog] = useState(false);
+  const [reconciliationForm, setReconciliationForm] = useState({
+    period_start: '',
+    period_end: '',
+    remarks: ''
+  });
+  const [reconciliationPreview, setReconciliationPreview] = useState(null);
+  const [calculatingReconciliation, setCalculatingReconciliation] = useState(false);
+  const [savingReconciliation, setSavingReconciliation] = useState(false);
+  const [selectedReconciliation, setSelectedReconciliation] = useState(null);
+  const [showReconciliationDetail, setShowReconciliationDetail] = useState(false);
+  const [selectedNote, setSelectedNote] = useState(null);
+  const [showNoteDetail, setShowNoteDetail] = useState(false);
+  const [recordingPayment, setRecordingPayment] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentReference, setPaymentReference] = useState('');
   
   const canManage = user && ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head'].includes(user.role);
   const canApprove = user && ['CEO', 'Director', 'Vice President'].includes(user.role);
@@ -416,6 +453,90 @@ export default function DistributorDetail() {
       fetchUnsettledDeliveries();
     }
   }, [showSettlementDialog, settlementForm.period_start, settlementForm.period_end, fetchUnsettledDeliveries]);
+
+  // Billing & Reconciliation fetch functions
+  const fetchBillingConfigs = useCallback(async () => {
+    try {
+      setBillingConfigsLoading(true);
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/billing-config`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setBillingConfigs(response.data.configs || []);
+    } catch (error) {
+      console.error('Failed to fetch billing configs:', error);
+    } finally {
+      setBillingConfigsLoading(false);
+    }
+  }, [id, token]);
+
+  const fetchProvisionalInvoices = useCallback(async () => {
+    try {
+      setInvoicesLoading(true);
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/provisional-invoices`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setProvisionalInvoices(response.data.invoices || []);
+    } catch (error) {
+      console.error('Failed to fetch provisional invoices:', error);
+    } finally {
+      setInvoicesLoading(false);
+    }
+  }, [id, token]);
+
+  const fetchReconciliations = useCallback(async () => {
+    try {
+      setReconciliationsLoading(true);
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/reconciliations`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setReconciliations(response.data.reconciliations || []);
+    } catch (error) {
+      console.error('Failed to fetch reconciliations:', error);
+    } finally {
+      setReconciliationsLoading(false);
+    }
+  }, [id, token]);
+
+  const fetchDebitCreditNotes = useCallback(async () => {
+    try {
+      setNotesLoading(true);
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/debit-credit-notes`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setDebitCreditNotes(response.data.notes || []);
+    } catch (error) {
+      console.error('Failed to fetch debit/credit notes:', error);
+    } finally {
+      setNotesLoading(false);
+    }
+  }, [id, token]);
+
+  const fetchBillingSummary = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/billing/summary`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setBillingSummary(response.data);
+    } catch (error) {
+      console.error('Failed to fetch billing summary:', error);
+    }
+  }, [id, token]);
+
+  useEffect(() => {
+    if (activeTab === 'billing') {
+      fetchBillingConfigs();
+      fetchProvisionalInvoices();
+      fetchReconciliations();
+      fetchDebitCreditNotes();
+      fetchBillingSummary();
+      if (skus.length === 0) fetchSkus();
+    }
+  }, [activeTab, fetchBillingConfigs, fetchProvisionalInvoices, fetchReconciliations, fetchDebitCreditNotes, fetchBillingSummary, fetchSkus, skus.length]);
 
   // Search accounts
   const searchAccounts = useCallback(async (query) => {
@@ -1354,6 +1475,213 @@ export default function DistributorDetail() {
     return <Badge className={config.color}>{config.label}</Badge>;
   };
 
+  // Billing & Reconciliation handlers
+  const handleSaveBillingConfig = async () => {
+    if (!billingConfigForm.sku_id || !billingConfigForm.base_price) {
+      toast.error('Please select SKU and enter base price');
+      return;
+    }
+    
+    try {
+      setSavingBillingConfig(true);
+      await axios.post(`${API_URL}/api/distributors/${id}/billing-config`, {
+        sku_id: billingConfigForm.sku_id,
+        sku_name: billingConfigForm.sku_name,
+        base_price: parseFloat(billingConfigForm.base_price),
+        margin_percent: parseFloat(billingConfigForm.margin_percent || '2.5'),
+        remarks: billingConfigForm.remarks
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Billing configuration saved');
+      setShowBillingConfigDialog(false);
+      setBillingConfigForm({ sku_id: '', sku_name: '', base_price: '', margin_percent: '2.5', remarks: '' });
+      fetchBillingConfigs();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to save billing config');
+    } finally {
+      setSavingBillingConfig(false);
+    }
+  };
+
+  const handleDeleteBillingConfig = async (configId) => {
+    try {
+      await axios.delete(`${API_URL}/api/distributors/${id}/billing-config/${configId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Billing configuration deleted');
+      fetchBillingConfigs();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete billing config');
+    }
+  };
+
+  const handleGenerateProvisionalInvoice = async (shipmentId) => {
+    try {
+      await axios.post(`${API_URL}/api/distributors/${id}/provisional-invoices/generate?shipment_id=${shipmentId}`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Provisional invoice generated');
+      fetchProvisionalInvoices();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to generate invoice');
+    }
+  };
+
+  const handleCalculateReconciliation = async () => {
+    if (!reconciliationForm.period_start || !reconciliationForm.period_end) {
+      toast.error('Please select date range');
+      return;
+    }
+    
+    try {
+      setCalculatingReconciliation(true);
+      const response = await axios.post(`${API_URL}/api/distributors/${id}/reconciliations/calculate`, {
+        period_start: reconciliationForm.period_start,
+        period_end: reconciliationForm.period_end
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setReconciliationPreview(response.data);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to calculate reconciliation');
+    } finally {
+      setCalculatingReconciliation(false);
+    }
+  };
+
+  const handleCreateReconciliation = async () => {
+    try {
+      setSavingReconciliation(true);
+      await axios.post(`${API_URL}/api/distributors/${id}/reconciliations`, {
+        period_start: reconciliationForm.period_start,
+        period_end: reconciliationForm.period_end,
+        remarks: reconciliationForm.remarks
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Reconciliation created');
+      setShowReconciliationDialog(false);
+      setReconciliationForm({ period_start: '', period_end: '', remarks: '' });
+      setReconciliationPreview(null);
+      fetchReconciliations();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to create reconciliation');
+    } finally {
+      setSavingReconciliation(false);
+    }
+  };
+
+  const viewReconciliationDetail = async (reconciliationId) => {
+    try {
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/reconciliations/${reconciliationId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setSelectedReconciliation(response.data);
+      setShowReconciliationDetail(true);
+    } catch (error) {
+      toast.error('Failed to load reconciliation details');
+    }
+  };
+
+  const handleConfirmReconciliation = async (reconciliationId, adjustments = 0) => {
+    try {
+      const response = await axios.post(`${API_URL}/api/distributors/${id}/reconciliations/${reconciliationId}/confirm?adjustments=${adjustments}`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success(`Reconciliation confirmed. ${response.data.settlement_type === 'debit_note' ? 'Debit' : 'Credit'} note generated.`);
+      fetchReconciliations();
+      fetchDebitCreditNotes();
+      setShowReconciliationDetail(false);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to confirm reconciliation');
+    }
+  };
+
+  const handleDeleteReconciliation = async (reconciliationId) => {
+    try {
+      await axios.delete(`${API_URL}/api/distributors/${id}/reconciliations/${reconciliationId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Reconciliation deleted');
+      fetchReconciliations();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete reconciliation');
+    }
+  };
+
+  const viewNoteDetail = async (noteId) => {
+    try {
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/debit-credit-notes/${noteId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      setSelectedNote(response.data);
+      setShowNoteDetail(true);
+      setPaymentAmount('');
+      setPaymentReference('');
+    } catch (error) {
+      toast.error('Failed to load note details');
+    }
+  };
+
+  const handleRecordPayment = async () => {
+    if (!paymentAmount || parseFloat(paymentAmount) <= 0) {
+      toast.error('Please enter a valid payment amount');
+      return;
+    }
+    
+    try {
+      setRecordingPayment(true);
+      await axios.post(
+        `${API_URL}/api/distributors/${id}/debit-credit-notes/${selectedNote.id}/record-payment?amount=${paymentAmount}${paymentReference ? `&payment_reference=${encodeURIComponent(paymentReference)}` : ''}`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
+        }
+      );
+      toast.success('Payment recorded');
+      setShowNoteDetail(false);
+      fetchDebitCreditNotes();
+      fetchBillingSummary();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to record payment');
+    } finally {
+      setRecordingPayment(false);
+    }
+  };
+
+  const getReconciliationStatusBadge = (status) => {
+    const statusConfig = {
+      draft: { label: 'Draft', color: 'bg-gray-100 text-gray-800' },
+      confirmed: { label: 'Confirmed', color: 'bg-blue-100 text-blue-800' },
+      settled: { label: 'Settled', color: 'bg-green-100 text-green-800' },
+      cancelled: { label: 'Cancelled', color: 'bg-gray-100 text-gray-600' }
+    };
+    const config = statusConfig[status] || statusConfig.draft;
+    return <Badge className={config.color}>{config.label}</Badge>;
+  };
+
+  const getNoteStatusBadge = (status) => {
+    const statusConfig = {
+      pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
+      partially_paid: { label: 'Partially Paid', color: 'bg-blue-100 text-blue-800' },
+      paid: { label: 'Paid', color: 'bg-green-100 text-green-800' },
+      cancelled: { label: 'Cancelled', color: 'bg-gray-100 text-gray-600' }
+    };
+    const config = statusConfig[status] || statusConfig.pending;
+    return <Badge className={config.color}>{config.label}</Badge>;
+  };
+
   // Get available cities for the selected state that are not already covered
   const getAvailableCities = () => {
     if (!selectedState) return [];
@@ -1455,6 +1783,9 @@ export default function DistributorDetail() {
           </TabsTrigger>
           <TabsTrigger value="settlements" data-testid="settlements-tab">
             Settlements ({settlements.length})
+          </TabsTrigger>
+          <TabsTrigger value="billing" data-testid="billing-tab">
+            Billing & Reconciliation
           </TabsTrigger>
         </TabsList>
 
@@ -3718,6 +4049,253 @@ export default function DistributorDetail() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Billing & Reconciliation Tab */}
+        <TabsContent value="billing" className="space-y-6">
+          {/* Summary Cards */}
+          {billingSummary && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50">
+                <CardContent className="p-4">
+                  <p className="text-sm text-muted-foreground">Base Prices Configured</p>
+                  <p className="text-2xl font-bold">{billingSummary.billing_configs || 0}</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100/50">
+                <CardContent className="p-4">
+                  <p className="text-sm text-muted-foreground">Unreconciled Deliveries</p>
+                  <p className="text-2xl font-bold">{billingSummary.unreconciled_deliveries || 0}</p>
+                </CardContent>
+              </Card>
+              <Card className={`bg-gradient-to-br ${billingSummary.net_balance > 0 ? 'from-red-50 to-red-100/50' : 'from-green-50 to-green-100/50'}`}>
+                <CardContent className="p-4">
+                  <p className="text-sm text-muted-foreground">Net Balance</p>
+                  <p className="text-2xl font-bold">
+                    ₹{Math.abs(billingSummary.net_balance || 0).toLocaleString()}
+                    <span className="text-sm font-normal ml-1">
+                      {billingSummary.net_balance > 0 ? '(Receivable)' : billingSummary.net_balance < 0 ? '(Payable)' : ''}
+                    </span>
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50">
+                <CardContent className="p-4">
+                  <p className="text-sm text-muted-foreground">Pending Credit Notes</p>
+                  <p className="text-2xl font-bold">₹{(billingSummary.pending_credit_amount || 0).toLocaleString()}</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Billing Configuration Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  Base Price Configuration
+                </CardTitle>
+                {canManage && (
+                  <Button onClick={() => setShowBillingConfigDialog(true)} data-testid="add-billing-config-btn">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Base Price
+                  </Button>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">Configure base prices and margin percentages per SKU for this distributor</p>
+            </CardHeader>
+            <CardContent>
+              {billingConfigsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="h-6 w-6 animate-spin" />
+                </div>
+              ) : billingConfigs.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Settings className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p>No base prices configured</p>
+                  <p className="text-sm">Add base prices for SKUs to enable billing and reconciliation</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="text-left p-3 font-medium">SKU</th>
+                        <th className="text-right p-3 font-medium">Base Price</th>
+                        <th className="text-right p-3 font-medium">Margin %</th>
+                        <th className="text-right p-3 font-medium">Transfer Price</th>
+                        <th className="text-center p-3 font-medium">Status</th>
+                        <th className="text-right p-3 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {billingConfigs.map((config) => (
+                        <tr key={config.id} className="border-b hover:bg-muted/30">
+                          <td className="p-3">{config.sku_name}</td>
+                          <td className="p-3 text-right font-medium">₹{config.base_price?.toLocaleString()}</td>
+                          <td className="p-3 text-right">{config.margin_percent}%</td>
+                          <td className="p-3 text-right text-green-600 font-medium">₹{config.transfer_price?.toLocaleString()}</td>
+                          <td className="p-3 text-center">
+                            <Badge variant={config.status === 'active' ? 'default' : 'secondary'}>
+                              {config.status}
+                            </Badge>
+                          </td>
+                          <td className="p-3 text-right">
+                            {canManage && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteBillingConfig(config.id)}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Reconciliations Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Reconciliations
+                </CardTitle>
+                {canManage && (
+                  <Button onClick={() => {
+                    setShowReconciliationDialog(true);
+                    setReconciliationPreview(null);
+                  }} data-testid="new-reconciliation-btn">
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Reconciliation
+                  </Button>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">Compare provisional billing vs actual customer sales</p>
+            </CardHeader>
+            <CardContent>
+              {reconciliationsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="h-6 w-6 animate-spin" />
+                </div>
+              ) : reconciliations.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <FileText className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p>No reconciliations yet</p>
+                  <p className="text-sm">Create a reconciliation to compare provisional vs actual amounts</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="text-left p-3 font-medium">Reconciliation #</th>
+                        <th className="text-left p-3 font-medium">Period</th>
+                        <th className="text-right p-3 font-medium">Deliveries</th>
+                        <th className="text-right p-3 font-medium">Provisional</th>
+                        <th className="text-right p-3 font-medium">Actual Net</th>
+                        <th className="text-right p-3 font-medium">Difference</th>
+                        <th className="text-center p-3 font-medium">Status</th>
+                        <th className="text-right p-3 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reconciliations.map((rec) => (
+                        <tr key={rec.id} className="border-b hover:bg-muted/30 cursor-pointer" onClick={() => viewReconciliationDetail(rec.id)}>
+                          <td className="p-3 font-medium">{rec.reconciliation_number}</td>
+                          <td className="p-3">{rec.period_start} to {rec.period_end}</td>
+                          <td className="p-3 text-right">{rec.total_deliveries}</td>
+                          <td className="p-3 text-right">₹{rec.total_provisional_amount?.toLocaleString()}</td>
+                          <td className="p-3 text-right">₹{rec.total_actual_net_amount?.toLocaleString()}</td>
+                          <td className={`p-3 text-right font-medium ${rec.total_difference > 0 ? 'text-red-600' : rec.total_difference < 0 ? 'text-green-600' : ''}`}>
+                            {rec.total_difference > 0 ? '+' : ''}₹{rec.total_difference?.toLocaleString()}
+                          </td>
+                          <td className="p-3 text-center">{getReconciliationStatusBadge(rec.status)}</td>
+                          <td className="p-3 text-right">
+                            <Button variant="ghost" size="sm">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Debit/Credit Notes Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Receipt className="h-5 w-5" />
+                Debit / Credit Notes
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">Settlement documents generated from reconciliations</p>
+            </CardHeader>
+            <CardContent>
+              {notesLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="h-6 w-6 animate-spin" />
+                </div>
+              ) : debitCreditNotes.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Receipt className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p>No debit/credit notes yet</p>
+                  <p className="text-sm">Notes are generated when reconciliations are confirmed</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="text-left p-3 font-medium">Note #</th>
+                        <th className="text-left p-3 font-medium">Type</th>
+                        <th className="text-right p-3 font-medium">Amount</th>
+                        <th className="text-right p-3 font-medium">Paid</th>
+                        <th className="text-right p-3 font-medium">Balance</th>
+                        <th className="text-center p-3 font-medium">Status</th>
+                        <th className="text-left p-3 font-medium">Date</th>
+                        <th className="text-right p-3 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {debitCreditNotes.map((note) => (
+                        <tr key={note.id} className="border-b hover:bg-muted/30 cursor-pointer" onClick={() => viewNoteDetail(note.id)}>
+                          <td className="p-3 font-medium">{note.note_number}</td>
+                          <td className="p-3">
+                            <Badge variant={note.note_type === 'debit' ? 'destructive' : 'default'}>
+                              {note.note_type === 'debit' ? 'Debit Note' : 'Credit Note'}
+                            </Badge>
+                          </td>
+                          <td className="p-3 text-right font-medium">₹{note.amount?.toLocaleString()}</td>
+                          <td className="p-3 text-right text-green-600">₹{(note.paid_amount || 0).toLocaleString()}</td>
+                          <td className="p-3 text-right text-orange-600">₹{(note.balance_amount || note.amount || 0).toLocaleString()}</td>
+                          <td className="p-3 text-center">{getNoteStatusBadge(note.status)}</td>
+                          <td className="p-3">{note.created_at?.split('T')[0]}</td>
+                          <td className="p-3 text-right">
+                            <Button variant="ghost" size="sm">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Shipment Detail Dialog */}
@@ -4123,6 +4701,8 @@ export default function DistributorDetail() {
                   handleDeleteDelivery(deleteTarget.id);
                 } else if (deleteTarget?.type === 'settlement') {
                   handleDeleteSettlement(deleteTarget.id);
+                } else if (deleteTarget?.type === 'reconciliation') {
+                  handleDeleteReconciliation(deleteTarget.id);
                 }
               }}
             >
@@ -4131,6 +4711,428 @@ export default function DistributorDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Billing Config Dialog */}
+      <Dialog open={showBillingConfigDialog} onOpenChange={setShowBillingConfigDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Base Price Configuration</DialogTitle>
+            <DialogDescription>Configure base price and margin for a SKU</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>SKU *</Label>
+              <Select
+                value={billingConfigForm.sku_id}
+                onValueChange={(v) => {
+                  const sku = skus.find(s => s.id === v);
+                  setBillingConfigForm(prev => ({
+                    ...prev,
+                    sku_id: v,
+                    sku_name: sku?.name || sku?.sku_name || ''
+                  }));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select SKU" />
+                </SelectTrigger>
+                <SelectContent>
+                  {skus.map(sku => (
+                    <SelectItem key={sku.id} value={sku.id}>
+                      {sku.name || sku.sku_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Base Price (₹) *</Label>
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="100.00"
+                value={billingConfigForm.base_price}
+                onChange={(e) => setBillingConfigForm(prev => ({ ...prev, base_price: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Distributor Margin %</Label>
+              <Input
+                type="number"
+                step="0.1"
+                placeholder="2.5"
+                value={billingConfigForm.margin_percent}
+                onChange={(e) => setBillingConfigForm(prev => ({ ...prev, margin_percent: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Transfer Price = Base Price × (1 - Margin%)
+                {billingConfigForm.base_price && billingConfigForm.margin_percent && (
+                  <span className="block mt-1 font-medium text-green-600">
+                    = ₹{(parseFloat(billingConfigForm.base_price) * (1 - parseFloat(billingConfigForm.margin_percent) / 100)).toFixed(2)}
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Remarks</Label>
+              <Input
+                placeholder="Optional notes"
+                value={billingConfigForm.remarks}
+                onChange={(e) => setBillingConfigForm(prev => ({ ...prev, remarks: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBillingConfigDialog(false)}>Cancel</Button>
+            <Button onClick={handleSaveBillingConfig} disabled={savingBillingConfig}>
+              {savingBillingConfig ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reconciliation Dialog */}
+      <Dialog open={showReconciliationDialog} onOpenChange={(open) => {
+        setShowReconciliationDialog(open);
+        if (!open) {
+          setReconciliationPreview(null);
+          setReconciliationForm({ period_start: '', period_end: '', remarks: '' });
+        }
+      }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create Reconciliation</DialogTitle>
+            <DialogDescription>Compare provisional billing vs actual customer sales for a period</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Period Start *</Label>
+                <Input
+                  type="date"
+                  value={reconciliationForm.period_start}
+                  onChange={(e) => setReconciliationForm(prev => ({ ...prev, period_start: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Period End *</Label>
+                <Input
+                  type="date"
+                  value={reconciliationForm.period_end}
+                  onChange={(e) => setReconciliationForm(prev => ({ ...prev, period_end: e.target.value }))}
+                />
+              </div>
+            </div>
+            
+            <Button 
+              variant="outline" 
+              onClick={handleCalculateReconciliation}
+              disabled={calculatingReconciliation || !reconciliationForm.period_start || !reconciliationForm.period_end}
+            >
+              {calculatingReconciliation ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Calculating...
+                </>
+              ) : (
+                <>
+                  <Calculator className="h-4 w-4 mr-2" />
+                  Calculate Preview
+                </>
+              )}
+            </Button>
+
+            {reconciliationPreview && (
+              <div className="space-y-4 border rounded-lg p-4 bg-muted/30">
+                <h4 className="font-semibold">Reconciliation Preview</h4>
+                
+                {reconciliationPreview.total_deliveries === 0 ? (
+                  <p className="text-muted-foreground">No delivered items found in this period</p>
+                ) : (
+                  <>
+                    {/* Summary */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="text-center p-3 bg-background rounded-md">
+                        <p className="text-sm text-muted-foreground">Deliveries</p>
+                        <p className="text-xl font-bold">{reconciliationPreview.total_deliveries}</p>
+                      </div>
+                      <div className="text-center p-3 bg-background rounded-md">
+                        <p className="text-sm text-muted-foreground">Provisional Amount</p>
+                        <p className="text-xl font-bold">₹{reconciliationPreview.total_provisional_amount?.toLocaleString()}</p>
+                      </div>
+                      <div className="text-center p-3 bg-background rounded-md">
+                        <p className="text-sm text-muted-foreground">Actual Net Amount</p>
+                        <p className="text-xl font-bold">₹{reconciliationPreview.total_actual_net_amount?.toLocaleString()}</p>
+                      </div>
+                      <div className={`text-center p-3 rounded-md ${reconciliationPreview.total_difference > 0 ? 'bg-red-50' : reconciliationPreview.total_difference < 0 ? 'bg-green-50' : 'bg-background'}`}>
+                        <p className="text-sm text-muted-foreground">Difference</p>
+                        <p className={`text-xl font-bold ${reconciliationPreview.total_difference > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {reconciliationPreview.total_difference > 0 ? '+' : ''}₹{reconciliationPreview.total_difference?.toLocaleString()}
+                        </p>
+                        <p className="text-xs mt-1">
+                          {reconciliationPreview.settlement_type === 'debit_note' ? 'Debit Note (Distributor Owes)' : 
+                           reconciliationPreview.settlement_type === 'credit_note' ? 'Credit Note (Nyla Owes)' : 'No Settlement'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Item Details */}
+                    {reconciliationPreview.items?.length > 0 && (
+                      <div className="max-h-60 overflow-y-auto">
+                        <table className="w-full text-xs">
+                          <thead className="sticky top-0 bg-muted">
+                            <tr className="border-b">
+                              <th className="text-left p-2">Delivery</th>
+                              <th className="text-left p-2">Account</th>
+                              <th className="text-left p-2">SKU</th>
+                              <th className="text-right p-2">Qty</th>
+                              <th className="text-right p-2">Base</th>
+                              <th className="text-right p-2">Actual</th>
+                              <th className="text-right p-2">Diff</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {reconciliationPreview.items.slice(0, 50).map((item, idx) => (
+                              <tr key={idx} className="border-b">
+                                <td className="p-2">{item.delivery_number}</td>
+                                <td className="p-2 truncate max-w-[100px]">{item.account_name}</td>
+                                <td className="p-2 truncate max-w-[100px]">{item.sku_name}</td>
+                                <td className="p-2 text-right">{item.quantity}</td>
+                                <td className="p-2 text-right">₹{item.base_price}</td>
+                                <td className="p-2 text-right">₹{item.actual_selling_price}</td>
+                                <td className={`p-2 text-right font-medium ${item.difference_amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                  {item.difference_amount > 0 ? '+' : ''}₹{item.difference_amount}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {reconciliationPreview.items.length > 50 && (
+                          <p className="text-xs text-muted-foreground text-center py-2">
+                            Showing 50 of {reconciliationPreview.items.length} items
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>Remarks</Label>
+              <Input
+                placeholder="Optional notes"
+                value={reconciliationForm.remarks}
+                onChange={(e) => setReconciliationForm(prev => ({ ...prev, remarks: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReconciliationDialog(false)}>Cancel</Button>
+            <Button 
+              onClick={handleCreateReconciliation}
+              disabled={savingReconciliation || !reconciliationPreview || reconciliationPreview.total_deliveries === 0}
+            >
+              {savingReconciliation ? 'Creating...' : 'Create Reconciliation'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reconciliation Detail Dialog */}
+      <Dialog open={showReconciliationDetail} onOpenChange={setShowReconciliationDetail}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              Reconciliation {selectedReconciliation?.reconciliation_number}
+              {selectedReconciliation && getReconciliationStatusBadge(selectedReconciliation.status)}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedReconciliation && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Period</p>
+                  <p className="font-medium">{selectedReconciliation.period_start} to {selectedReconciliation.period_end}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Deliveries</p>
+                  <p className="font-medium">{selectedReconciliation.total_deliveries}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Quantity</p>
+                  <p className="font-medium">{selectedReconciliation.total_quantity}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Settlement Type</p>
+                  <Badge variant={selectedReconciliation.settlement_type === 'debit_note' ? 'destructive' : 'default'}>
+                    {selectedReconciliation.settlement_type === 'debit_note' ? 'Debit Note' : 
+                     selectedReconciliation.settlement_type === 'credit_note' ? 'Credit Note' : 'None'}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-lg">
+                <div>
+                  <p className="text-sm text-muted-foreground">Provisional Amount</p>
+                  <p className="text-xl font-bold">₹{selectedReconciliation.total_provisional_amount?.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Actual Gross</p>
+                  <p className="text-xl font-bold">₹{selectedReconciliation.total_actual_gross_amount?.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Entitled Margin (2.5%)</p>
+                  <p className="text-xl font-bold">₹{selectedReconciliation.total_entitled_margin?.toLocaleString()}</p>
+                </div>
+                <div className={selectedReconciliation.total_difference > 0 ? 'text-red-600' : 'text-green-600'}>
+                  <p className="text-sm text-muted-foreground">Final Difference</p>
+                  <p className="text-xl font-bold">
+                    {selectedReconciliation.final_settlement_amount > 0 ? '+' : ''}₹{selectedReconciliation.final_settlement_amount?.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Line Items */}
+              {selectedReconciliation.items?.length > 0 && (
+                <div className="max-h-60 overflow-y-auto border rounded-md">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-muted">
+                      <tr className="border-b">
+                        <th className="text-left p-2">Delivery</th>
+                        <th className="text-left p-2">Account</th>
+                        <th className="text-left p-2">SKU</th>
+                        <th className="text-right p-2">Qty</th>
+                        <th className="text-right p-2">Transfer Price</th>
+                        <th className="text-right p-2">Actual Price</th>
+                        <th className="text-right p-2">Difference</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedReconciliation.items.map((item, idx) => (
+                        <tr key={idx} className="border-b">
+                          <td className="p-2">{item.delivery_number}</td>
+                          <td className="p-2 truncate max-w-[120px]">{item.account_name}</td>
+                          <td className="p-2 truncate max-w-[120px]">{item.sku_name}</td>
+                          <td className="p-2 text-right">{item.quantity}</td>
+                          <td className="p-2 text-right">₹{item.transfer_price}</td>
+                          <td className="p-2 text-right">₹{item.actual_selling_price}</td>
+                          <td className={`p-2 text-right font-medium ${item.difference_amount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {item.difference_amount > 0 ? '+' : ''}₹{item.difference_amount}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                {selectedReconciliation.status === 'draft' && canManage && (
+                  <>
+                    <Button variant="outline" onClick={() => {
+                      setDeleteTarget({
+                        type: 'reconciliation',
+                        id: selectedReconciliation.id,
+                        name: selectedReconciliation.reconciliation_number
+                      });
+                      setShowReconciliationDetail(false);
+                    }}>
+                      Delete
+                    </Button>
+                    <Button onClick={() => handleConfirmReconciliation(selectedReconciliation.id)} className="bg-green-600 hover:bg-green-700">
+                      <Check className="h-4 w-4 mr-2" />
+                      Confirm & Generate Note
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Debit/Credit Note Detail Dialog */}
+      <Dialog open={showNoteDetail} onOpenChange={setShowNoteDetail}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              {selectedNote?.note_type === 'debit' ? 'Debit Note' : 'Credit Note'} {selectedNote?.note_number}
+              {selectedNote && getNoteStatusBadge(selectedNote.status)}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedNote && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Type</p>
+                  <Badge variant={selectedNote.note_type === 'debit' ? 'destructive' : 'default'}>
+                    {selectedNote.note_type === 'debit' ? 'Debit Note (Distributor Owes)' : 'Credit Note (Nyla Owes)'}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">From Reconciliation</p>
+                  <p className="font-medium">{selectedNote.reconciliation_number}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg">
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Amount</p>
+                  <p className="text-xl font-bold">₹{selectedNote.amount?.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Paid Amount</p>
+                  <p className="text-xl font-bold text-green-600">₹{(selectedNote.paid_amount || 0).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Balance</p>
+                  <p className="text-xl font-bold text-orange-600">₹{(selectedNote.balance_amount || selectedNote.amount).toLocaleString()}</p>
+                </div>
+              </div>
+
+              {selectedNote.payment_reference && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Payment Reference</p>
+                  <p className="font-medium">{selectedNote.payment_reference}</p>
+                </div>
+              )}
+
+              {/* Record Payment */}
+              {selectedNote.status !== 'paid' && selectedNote.status !== 'cancelled' && canManage && (
+                <div className="space-y-3 border-t pt-4">
+                  <h4 className="font-semibold">Record Payment</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Amount (₹)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder={`Max: ${selectedNote.balance_amount || selectedNote.amount}`}
+                        value={paymentAmount}
+                        onChange={(e) => setPaymentAmount(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Reference</Label>
+                      <Input
+                        placeholder="Payment ref #"
+                        value={paymentReference}
+                        onChange={(e) => setPaymentReference(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <Button onClick={handleRecordPayment} disabled={recordingPayment} className="w-full">
+                    {recordingPayment ? 'Recording...' : 'Record Payment'}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

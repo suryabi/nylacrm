@@ -19,7 +19,9 @@ from models.distributor import (
     AccountDistributorCreate, AccountDistributorUpdate,
     PrimaryShipmentCreate, PrimaryShipmentUpdate, ShipmentItemCreate,
     AccountDeliveryCreate, AccountDeliveryUpdate, DeliveryItemCreate,
-    DistributorSettlementCreate, DistributorSettlementUpdate
+    DistributorSettlementCreate, DistributorSettlementUpdate,
+    BillingConfigCreate, BillingConfigUpdate,
+    ProvisionalInvoiceCreate, ReconciliationCreate, DebitCreditNoteCreate
 )
 
 router = APIRouter()
@@ -3476,3 +3478,1028 @@ async def delete_settlement(
     logger.info(f"Settlement {settlement['settlement_number']} deleted by {current_user['email']}")
     
     return {"message": f"Settlement {settlement['settlement_number']} deleted"}
+
+
+# ============ Billing Configuration CRUD ============
+
+async def generate_billing_config_id() -> str:
+    return str(uuid.uuid4())
+
+
+@router.get("/{distributor_id}/billing-config")
+async def get_billing_configs(
+    distributor_id: str,
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get billing configurations (base prices) for a distributor"""
+    tenant_id = get_current_tenant_id()
+    
+    query = {"tenant_id": tenant_id, "distributor_id": distributor_id}
+    if status:
+        query["status"] = status
+    
+    configs = await db.distributor_billing_config.find(
+        query, {"_id": 0}
+    ).sort("sku_name", 1).to_list(500)
+    
+    return {"configs": configs, "count": len(configs)}
+
+
+@router.post("/{distributor_id}/billing-config")
+async def create_billing_config(
+    distributor_id: str,
+    data: BillingConfigCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create billing configuration for a SKU at distributor level"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    # Check for existing config
+    existing = await db.distributor_billing_config.find_one({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "sku_id": data.sku_id,
+        "status": "active"
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail="Active billing config already exists for this SKU")
+    
+    # Get SKU name if not provided
+    sku_name = data.sku_name
+    if not sku_name:
+        sku = await db.master_skus.find_one({"id": data.sku_id})
+        sku_name = sku.get('sku_name') or sku.get('name') if sku else None
+    
+    # Calculate transfer price
+    transfer_price = data.base_price * (1 - data.margin_percent / 100)
+    
+    now = datetime.now(timezone.utc).isoformat()
+    config_id = await generate_billing_config_id()
+    
+    config_doc = {
+        "id": config_id,
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "sku_id": data.sku_id,
+        "sku_name": sku_name,
+        "base_price": data.base_price,
+        "margin_percent": data.margin_percent,
+        "transfer_price": transfer_price,
+        "effective_from": data.effective_from or now[:10],
+        "effective_to": data.effective_to,
+        "remarks": data.remarks,
+        "status": data.status or "active",
+        "created_at": now,
+        "updated_at": now,
+        "created_by": current_user.get('id')
+    }
+    
+    await db.distributor_billing_config.insert_one(config_doc)
+    config_doc.pop('_id', None)
+    
+    return config_doc
+
+
+@router.post("/{distributor_id}/billing-config/bulk")
+async def bulk_create_billing_config(
+    distributor_id: str,
+    configs: List[BillingConfigCreate],
+    current_user: dict = Depends(get_current_user)
+):
+    """Bulk create billing configurations"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Get all SKU names
+    sku_ids = [c.sku_id for c in configs]
+    skus = await db.master_skus.find(
+        {"$or": [{"id": {"$in": sku_ids}}, {"tenant_id": tenant_id}]}
+    ).to_list(500)
+    sku_map = {s.get('id'): s.get('sku_name') or s.get('name') for s in skus}
+    
+    created = []
+    skipped = []
+    
+    for data in configs:
+        # Check for existing
+        existing = await db.distributor_billing_config.find_one({
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "sku_id": data.sku_id,
+            "status": "active"
+        })
+        if existing:
+            skipped.append(data.sku_id)
+            continue
+        
+        transfer_price = data.base_price * (1 - data.margin_percent / 100)
+        config_id = await generate_billing_config_id()
+        
+        config_doc = {
+            "id": config_id,
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "sku_id": data.sku_id,
+            "sku_name": data.sku_name or sku_map.get(data.sku_id),
+            "base_price": data.base_price,
+            "margin_percent": data.margin_percent,
+            "transfer_price": transfer_price,
+            "effective_from": data.effective_from or now[:10],
+            "effective_to": data.effective_to,
+            "remarks": data.remarks,
+            "status": data.status or "active",
+            "created_at": now,
+            "updated_at": now,
+            "created_by": current_user.get('id')
+        }
+        
+        await db.distributor_billing_config.insert_one(config_doc)
+        created.append(config_id)
+    
+    return {"created": len(created), "skipped": len(skipped), "skipped_sku_ids": skipped}
+
+
+@router.put("/{distributor_id}/billing-config/{config_id}")
+async def update_billing_config(
+    distributor_id: str,
+    config_id: str,
+    data: BillingConfigUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update billing configuration"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    config = await db.distributor_billing_config.find_one({
+        "id": config_id, "tenant_id": tenant_id, "distributor_id": distributor_id
+    })
+    if not config:
+        raise HTTPException(status_code=404, detail="Billing config not found")
+    
+    update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    
+    if data.base_price is not None:
+        update_data["base_price"] = data.base_price
+    if data.margin_percent is not None:
+        update_data["margin_percent"] = data.margin_percent
+    
+    # Recalculate transfer price if base_price or margin changed
+    base_price = update_data.get("base_price", config.get("base_price"))
+    margin_percent = update_data.get("margin_percent", config.get("margin_percent"))
+    update_data["transfer_price"] = base_price * (1 - margin_percent / 100)
+    
+    if data.effective_from is not None:
+        update_data["effective_from"] = data.effective_from
+    if data.effective_to is not None:
+        update_data["effective_to"] = data.effective_to
+    if data.remarks is not None:
+        update_data["remarks"] = data.remarks
+    if data.status is not None:
+        update_data["status"] = data.status
+    
+    await db.distributor_billing_config.update_one(
+        {"id": config_id, "tenant_id": tenant_id},
+        {"$set": update_data}
+    )
+    
+    return {"message": "Billing config updated", "id": config_id}
+
+
+@router.delete("/{distributor_id}/billing-config/{config_id}")
+async def delete_billing_config(
+    distributor_id: str,
+    config_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete billing configuration"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    result = await db.distributor_billing_config.delete_one({
+        "id": config_id, "tenant_id": tenant_id, "distributor_id": distributor_id
+    })
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Billing config not found")
+    
+    return {"message": "Billing config deleted"}
+
+
+# ============ Provisional Invoice Generation ============
+
+async def generate_provisional_invoice_number(tenant_id: str) -> str:
+    """Generate unique provisional invoice number like PINV-2026-0001"""
+    year = datetime.now().year
+    count = await db.distributor_provisional_invoices.count_documents({
+        "tenant_id": tenant_id,
+        "invoice_number": {"$regex": f"^PINV-{year}-"}
+    })
+    return f"PINV-{year}-{count + 1:04d}"
+
+
+@router.post("/{distributor_id}/provisional-invoices/generate")
+async def generate_provisional_invoice(
+    distributor_id: str,
+    shipment_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Generate provisional invoice when shipment is delivered"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    # Get shipment
+    shipment = await db.distributor_shipments.find_one({
+        "id": shipment_id, "tenant_id": tenant_id, "distributor_id": distributor_id
+    })
+    if not shipment:
+        raise HTTPException(status_code=404, detail="Shipment not found")
+    
+    if shipment.get('status') != 'delivered':
+        raise HTTPException(status_code=400, detail="Shipment must be delivered to generate invoice")
+    
+    # Check if invoice already exists
+    existing = await db.distributor_provisional_invoices.find_one({
+        "tenant_id": tenant_id, "shipment_id": shipment_id
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail="Provisional invoice already exists for this shipment")
+    
+    # Get billing configs for this distributor
+    configs = await db.distributor_billing_config.find({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": "active"
+    }).to_list(500)
+    config_map = {c.get('sku_id'): c for c in configs}
+    
+    # Get shipment items
+    shipment_items = await db.distributor_shipment_items.find({
+        "shipment_id": shipment_id, "tenant_id": tenant_id
+    }).to_list(500)
+    
+    # Generate invoice
+    now = datetime.now(timezone.utc).isoformat()
+    invoice_id = str(uuid.uuid4())
+    invoice_number = await generate_provisional_invoice_number(tenant_id)
+    
+    invoice_items = []
+    total_quantity = 0
+    total_gross_amount = 0
+    total_margin_amount = 0
+    total_net_amount = 0
+    
+    for item in shipment_items:
+        sku_id = item.get('sku_id')
+        quantity = item.get('quantity', 0)
+        config = config_map.get(sku_id)
+        
+        if not config:
+            # If no config, use shipment item price as base
+            base_price = item.get('unit_price', 0)
+            margin_percent = 2.5  # Default margin
+        else:
+            base_price = config.get('base_price', item.get('unit_price', 0))
+            margin_percent = config.get('margin_percent', 2.5)
+        
+        transfer_price = base_price * (1 - margin_percent / 100)
+        gross_amount = quantity * base_price
+        margin_amount = gross_amount * margin_percent / 100
+        net_amount = gross_amount - margin_amount
+        
+        item_id = str(uuid.uuid4())
+        invoice_item = {
+            "id": item_id,
+            "invoice_id": invoice_id,
+            "tenant_id": tenant_id,
+            "sku_id": sku_id,
+            "sku_name": item.get('sku_name'),
+            "quantity": quantity,
+            "base_price": base_price,
+            "margin_percent": margin_percent,
+            "transfer_price": transfer_price,
+            "gross_amount": gross_amount,
+            "margin_amount": margin_amount,
+            "net_amount": net_amount
+        }
+        invoice_items.append(invoice_item)
+        
+        total_quantity += quantity
+        total_gross_amount += gross_amount
+        total_margin_amount += margin_amount
+        total_net_amount += net_amount
+    
+    # Create invoice
+    distributor = await db.distributors.find_one({"id": distributor_id})
+    
+    invoice_doc = {
+        "id": invoice_id,
+        "tenant_id": tenant_id,
+        "invoice_number": invoice_number,
+        "distributor_id": distributor_id,
+        "distributor_name": distributor.get('distributor_name') if distributor else None,
+        "distributor_code": distributor.get('distributor_code') if distributor else None,
+        "shipment_id": shipment_id,
+        "shipment_number": shipment.get('shipment_number'),
+        "invoice_date": now[:10],
+        "due_date": None,
+        "total_quantity": total_quantity,
+        "total_gross_amount": round(total_gross_amount, 2),
+        "total_margin_amount": round(total_margin_amount, 2),
+        "total_net_amount": round(total_net_amount, 2),
+        "status": "pending",
+        "reconciliation_status": "pending",
+        "reconciled_quantity": 0,
+        "reconciled_amount": 0,
+        "remarks": f"Auto-generated from shipment {shipment.get('shipment_number')}",
+        "created_at": now,
+        "updated_at": now,
+        "created_by": current_user.get('id')
+    }
+    
+    await db.distributor_provisional_invoices.insert_one(invoice_doc)
+    if invoice_items:
+        await db.distributor_provisional_invoice_items.insert_many(invoice_items)
+    
+    invoice_doc.pop('_id', None)
+    invoice_doc['items'] = invoice_items
+    
+    logger.info(f"Generated provisional invoice {invoice_number} for shipment {shipment.get('shipment_number')}")
+    
+    return invoice_doc
+
+
+@router.get("/{distributor_id}/provisional-invoices")
+async def get_provisional_invoices(
+    distributor_id: str,
+    status: Optional[str] = None,
+    reconciliation_status: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get provisional invoices for a distributor"""
+    tenant_id = get_current_tenant_id()
+    
+    query = {"tenant_id": tenant_id, "distributor_id": distributor_id}
+    if status:
+        query["status"] = status
+    if reconciliation_status:
+        query["reconciliation_status"] = reconciliation_status
+    
+    total = await db.distributor_provisional_invoices.count_documents(query)
+    invoices = await db.distributor_provisional_invoices.find(
+        query, {"_id": 0}
+    ).sort("created_at", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    
+    return {
+        "invoices": invoices,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size
+    }
+
+
+@router.get("/{distributor_id}/provisional-invoices/{invoice_id}")
+async def get_provisional_invoice(
+    distributor_id: str,
+    invoice_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get provisional invoice with items"""
+    tenant_id = get_current_tenant_id()
+    
+    invoice = await db.distributor_provisional_invoices.find_one({
+        "id": invoice_id, "tenant_id": tenant_id, "distributor_id": distributor_id
+    }, {"_id": 0})
+    
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    items = await db.distributor_provisional_invoice_items.find({
+        "invoice_id": invoice_id, "tenant_id": tenant_id
+    }, {"_id": 0}).to_list(500)
+    
+    invoice['items'] = items
+    return invoice
+
+
+# ============ Reconciliation Engine ============
+
+async def generate_reconciliation_number(tenant_id: str) -> str:
+    """Generate unique reconciliation number like REC-2026-0001"""
+    year = datetime.now().year
+    count = await db.distributor_reconciliations.count_documents({
+        "tenant_id": tenant_id,
+        "reconciliation_number": {"$regex": f"^REC-{year}-"}
+    })
+    return f"REC-{year}-{count + 1:04d}"
+
+
+@router.post("/{distributor_id}/reconciliations/calculate")
+async def calculate_reconciliation(
+    distributor_id: str,
+    data: ReconciliationCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Calculate reconciliation for a period (preview without saving)"""
+    tenant_id = get_current_tenant_id()
+    
+    # Get billing configs
+    configs = await db.distributor_billing_config.find({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": "active"
+    }).to_list(500)
+    config_map = {c.get('sku_id'): c for c in configs}
+    
+    # Get deliveries in the period
+    deliveries = await db.distributor_deliveries.find({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": "delivered",
+        "delivery_date": {"$gte": data.period_start, "$lte": data.period_end}
+    }).to_list(1000)
+    
+    if not deliveries:
+        return {
+            "message": "No delivered items found in this period",
+            "period_start": data.period_start,
+            "period_end": data.period_end,
+            "total_deliveries": 0,
+            "items": []
+        }
+    
+    # Get all delivery items
+    delivery_ids = [d.get('id') for d in deliveries]
+    delivery_items = await db.distributor_delivery_items.find({
+        "delivery_id": {"$in": delivery_ids},
+        "tenant_id": tenant_id
+    }).to_list(5000)
+    
+    # Build delivery map
+    delivery_map = {d.get('id'): d for d in deliveries}
+    
+    # Calculate reconciliation items
+    items = []
+    total_provisional = 0
+    total_actual_gross = 0
+    total_entitled_margin = 0
+    total_actual_net = 0
+    total_quantity = 0
+    
+    for item in delivery_items:
+        delivery = delivery_map.get(item.get('delivery_id'))
+        if not delivery:
+            continue
+        
+        sku_id = item.get('sku_id')
+        quantity = item.get('quantity', 0)
+        actual_selling_price = item.get('unit_price', 0)  # Price sold to customer
+        
+        # Get base price and margin from config
+        config = config_map.get(sku_id)
+        if config:
+            base_price = config.get('base_price', actual_selling_price)
+            margin_percent = config.get('margin_percent', 2.5)
+        else:
+            base_price = actual_selling_price  # Fallback
+            margin_percent = 2.5
+        
+        transfer_price = base_price * (1 - margin_percent / 100)
+        
+        # Provisional (what distributor paid)
+        provisional_amount = quantity * transfer_price
+        
+        # Actual (based on customer selling price)
+        actual_gross_amount = quantity * actual_selling_price
+        entitled_margin_amount = actual_gross_amount * margin_percent / 100
+        actual_net_amount = actual_gross_amount - entitled_margin_amount
+        
+        # Difference
+        difference_amount = actual_net_amount - provisional_amount
+        
+        rec_item = {
+            "delivery_id": delivery.get('id'),
+            "delivery_number": delivery.get('delivery_number'),
+            "delivery_date": delivery.get('delivery_date'),
+            "account_id": delivery.get('account_id'),
+            "account_name": delivery.get('account_name'),
+            "sku_id": sku_id,
+            "sku_name": item.get('sku_name'),
+            "quantity": quantity,
+            "base_price": round(base_price, 2),
+            "margin_percent": margin_percent,
+            "transfer_price": round(transfer_price, 2),
+            "provisional_amount": round(provisional_amount, 2),
+            "actual_selling_price": round(actual_selling_price, 2),
+            "actual_gross_amount": round(actual_gross_amount, 2),
+            "entitled_margin_amount": round(entitled_margin_amount, 2),
+            "actual_net_amount": round(actual_net_amount, 2),
+            "difference_amount": round(difference_amount, 2)
+        }
+        items.append(rec_item)
+        
+        total_quantity += quantity
+        total_provisional += provisional_amount
+        total_actual_gross += actual_gross_amount
+        total_entitled_margin += entitled_margin_amount
+        total_actual_net += actual_net_amount
+    
+    total_difference = total_actual_net - total_provisional
+    settlement_type = "debit_note" if total_difference > 0 else "credit_note" if total_difference < 0 else None
+    
+    return {
+        "period_start": data.period_start,
+        "period_end": data.period_end,
+        "total_deliveries": len(deliveries),
+        "total_quantity": total_quantity,
+        "total_provisional_amount": round(total_provisional, 2),
+        "total_actual_gross_amount": round(total_actual_gross, 2),
+        "total_entitled_margin": round(total_entitled_margin, 2),
+        "total_actual_net_amount": round(total_actual_net, 2),
+        "total_difference": round(total_difference, 2),
+        "settlement_type": settlement_type,
+        "items": items
+    }
+
+
+@router.post("/{distributor_id}/reconciliations")
+async def create_reconciliation(
+    distributor_id: str,
+    data: ReconciliationCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create and save reconciliation"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    # First calculate
+    calc_result = await calculate_reconciliation(distributor_id, data, current_user)
+    
+    if calc_result.get('total_deliveries', 0) == 0:
+        raise HTTPException(status_code=400, detail="No delivered items found in this period")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    reconciliation_id = str(uuid.uuid4())
+    reconciliation_number = await generate_reconciliation_number(tenant_id)
+    
+    # Get distributor info
+    distributor = await db.distributors.find_one({"id": distributor_id})
+    
+    # Create reconciliation document
+    rec_doc = {
+        "id": reconciliation_id,
+        "tenant_id": tenant_id,
+        "reconciliation_number": reconciliation_number,
+        "distributor_id": distributor_id,
+        "distributor_name": distributor.get('distributor_name') if distributor else None,
+        "distributor_code": distributor.get('distributor_code') if distributor else None,
+        "period_start": data.period_start,
+        "period_end": data.period_end,
+        "total_deliveries": calc_result.get('total_deliveries'),
+        "total_quantity": calc_result.get('total_quantity'),
+        "total_provisional_amount": calc_result.get('total_provisional_amount'),
+        "total_actual_gross_amount": calc_result.get('total_actual_gross_amount'),
+        "total_entitled_margin": calc_result.get('total_entitled_margin'),
+        "total_actual_net_amount": calc_result.get('total_actual_net_amount'),
+        "total_difference": calc_result.get('total_difference'),
+        "adjustments": 0,
+        "final_settlement_amount": calc_result.get('total_difference'),
+        "settlement_type": calc_result.get('settlement_type'),
+        "status": "draft",
+        "remarks": data.remarks,
+        "created_at": now,
+        "updated_at": now,
+        "created_by": current_user.get('id')
+    }
+    
+    await db.distributor_reconciliations.insert_one(rec_doc)
+    
+    # Create line items
+    rec_items = []
+    for item in calc_result.get('items', []):
+        item_id = str(uuid.uuid4())
+        rec_item = {
+            "id": item_id,
+            "reconciliation_id": reconciliation_id,
+            "tenant_id": tenant_id,
+            **item
+        }
+        rec_items.append(rec_item)
+    
+    if rec_items:
+        await db.distributor_reconciliation_items.insert_many(rec_items)
+    
+    rec_doc.pop('_id', None)
+    # Remove _id from each item after insert
+    for item in rec_items:
+        item.pop('_id', None)
+    rec_doc['items'] = rec_items
+    
+    logger.info(f"Created reconciliation {reconciliation_number} for distributor {distributor_id}")
+    
+    return rec_doc
+
+
+@router.get("/{distributor_id}/reconciliations")
+async def get_reconciliations(
+    distributor_id: str,
+    status: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get reconciliations for a distributor"""
+    tenant_id = get_current_tenant_id()
+    
+    query = {"tenant_id": tenant_id, "distributor_id": distributor_id}
+    if status:
+        query["status"] = status
+    
+    total = await db.distributor_reconciliations.count_documents(query)
+    recs = await db.distributor_reconciliations.find(
+        query, {"_id": 0}
+    ).sort("created_at", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    
+    return {
+        "reconciliations": recs,
+        "total": total,
+        "page": page,
+        "page_size": page_size
+    }
+
+
+@router.get("/{distributor_id}/reconciliations/{reconciliation_id}")
+async def get_reconciliation(
+    distributor_id: str,
+    reconciliation_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get reconciliation with items"""
+    tenant_id = get_current_tenant_id()
+    
+    rec = await db.distributor_reconciliations.find_one({
+        "id": reconciliation_id, "tenant_id": tenant_id, "distributor_id": distributor_id
+    }, {"_id": 0})
+    
+    if not rec:
+        raise HTTPException(status_code=404, detail="Reconciliation not found")
+    
+    items = await db.distributor_reconciliation_items.find({
+        "reconciliation_id": reconciliation_id, "tenant_id": tenant_id
+    }, {"_id": 0}).to_list(5000)
+    
+    rec['items'] = items
+    return rec
+
+
+@router.post("/{distributor_id}/reconciliations/{reconciliation_id}/confirm")
+async def confirm_reconciliation(
+    distributor_id: str,
+    reconciliation_id: str,
+    adjustments: float = 0,
+    current_user: dict = Depends(get_current_user)
+):
+    """Confirm reconciliation and generate debit/credit note"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+    
+    rec = await db.distributor_reconciliations.find_one({
+        "id": reconciliation_id, "tenant_id": tenant_id, "distributor_id": distributor_id
+    })
+    
+    if not rec:
+        raise HTTPException(status_code=404, detail="Reconciliation not found")
+    
+    if rec.get('status') != 'draft':
+        raise HTTPException(status_code=400, detail="Only draft reconciliations can be confirmed")
+    
+    # Calculate final amount with adjustments
+    total_difference = rec.get('total_difference', 0)
+    final_amount = total_difference + adjustments
+    settlement_type = "debit_note" if final_amount > 0 else "credit_note" if final_amount < 0 else None
+    
+    # Generate debit/credit note if there's a settlement amount
+    note_id = None
+    if abs(final_amount) > 0 and settlement_type:
+        note_id = str(uuid.uuid4())
+        year = datetime.now().year
+        prefix = "DN" if settlement_type == "debit_note" else "CN"
+        count = await db.distributor_debit_credit_notes.count_documents({
+            "tenant_id": tenant_id,
+            "note_number": {"$regex": f"^{prefix}-{year}-"}
+        })
+        note_number = f"{prefix}-{year}-{count + 1:04d}"
+        
+        distributor = await db.distributors.find_one({"id": distributor_id})
+        
+        note_doc = {
+            "id": note_id,
+            "tenant_id": tenant_id,
+            "note_number": note_number,
+            "note_type": "debit" if settlement_type == "debit_note" else "credit",
+            "reconciliation_id": reconciliation_id,
+            "reconciliation_number": rec.get('reconciliation_number'),
+            "distributor_id": distributor_id,
+            "distributor_name": distributor.get('distributor_name') if distributor else None,
+            "distributor_code": distributor.get('distributor_code') if distributor else None,
+            "amount": abs(round(final_amount, 2)),
+            "status": "pending",
+            "paid_amount": 0,
+            "balance_amount": abs(round(final_amount, 2)),
+            "remarks": f"Generated from reconciliation {rec.get('reconciliation_number')}",
+            "created_at": now,
+            "updated_at": now,
+            "created_by": current_user.get('id')
+        }
+        
+        await db.distributor_debit_credit_notes.insert_one(note_doc)
+    
+    # Update reconciliation
+    await db.distributor_reconciliations.update_one(
+        {"id": reconciliation_id, "tenant_id": tenant_id},
+        {"$set": {
+            "status": "confirmed",
+            "adjustments": adjustments,
+            "final_settlement_amount": round(final_amount, 2),
+            "settlement_type": settlement_type,
+            "debit_credit_note_id": note_id,
+            "confirmed_at": now,
+            "confirmed_by": current_user.get('id'),
+            "updated_at": now
+        }}
+    )
+    
+    return {
+        "message": "Reconciliation confirmed",
+        "reconciliation_number": rec.get('reconciliation_number'),
+        "final_settlement_amount": round(final_amount, 2),
+        "settlement_type": settlement_type,
+        "note_id": note_id
+    }
+
+
+@router.delete("/{distributor_id}/reconciliations/{reconciliation_id}")
+async def delete_reconciliation(
+    distributor_id: str,
+    reconciliation_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a draft reconciliation"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    rec = await db.distributor_reconciliations.find_one({
+        "id": reconciliation_id, "tenant_id": tenant_id, "distributor_id": distributor_id
+    })
+    
+    if not rec:
+        raise HTTPException(status_code=404, detail="Reconciliation not found")
+    
+    if rec.get('status') != 'draft':
+        raise HTTPException(status_code=400, detail="Only draft reconciliations can be deleted")
+    
+    await db.distributor_reconciliation_items.delete_many({"reconciliation_id": reconciliation_id})
+    await db.distributor_reconciliations.delete_one({"id": reconciliation_id, "tenant_id": tenant_id})
+    
+    return {"message": "Reconciliation deleted"}
+
+
+# ============ Debit/Credit Notes ============
+
+@router.get("/{distributor_id}/debit-credit-notes")
+async def get_debit_credit_notes(
+    distributor_id: str,
+    note_type: Optional[str] = None,
+    status: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get debit/credit notes for a distributor"""
+    tenant_id = get_current_tenant_id()
+    
+    query = {"tenant_id": tenant_id, "distributor_id": distributor_id}
+    if note_type:
+        query["note_type"] = note_type
+    if status:
+        query["status"] = status
+    
+    total = await db.distributor_debit_credit_notes.count_documents(query)
+    notes = await db.distributor_debit_credit_notes.find(
+        query, {"_id": 0}
+    ).sort("created_at", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    
+    return {
+        "notes": notes,
+        "total": total,
+        "page": page,
+        "page_size": page_size
+    }
+
+
+@router.get("/{distributor_id}/debit-credit-notes/{note_id}")
+async def get_debit_credit_note(
+    distributor_id: str,
+    note_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get debit/credit note details"""
+    tenant_id = get_current_tenant_id()
+    
+    note = await db.distributor_debit_credit_notes.find_one({
+        "id": note_id, "tenant_id": tenant_id, "distributor_id": distributor_id
+    }, {"_id": 0})
+    
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    
+    # Get reconciliation details if available
+    if note.get('reconciliation_id'):
+        rec = await db.distributor_reconciliations.find_one({
+            "id": note.get('reconciliation_id'), "tenant_id": tenant_id
+        }, {"_id": 0})
+        note['reconciliation'] = rec
+    
+    return note
+
+
+@router.post("/{distributor_id}/debit-credit-notes/{note_id}/record-payment")
+async def record_note_payment(
+    distributor_id: str,
+    note_id: str,
+    amount: float,
+    payment_reference: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Record payment against debit/credit note"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+    
+    note = await db.distributor_debit_credit_notes.find_one({
+        "id": note_id, "tenant_id": tenant_id, "distributor_id": distributor_id
+    })
+    
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    
+    if note.get('status') == 'paid':
+        raise HTTPException(status_code=400, detail="Note is already fully paid")
+    
+    if note.get('status') == 'cancelled':
+        raise HTTPException(status_code=400, detail="Note is cancelled")
+    
+    new_paid_amount = (note.get('paid_amount', 0) or 0) + amount
+    new_balance = note.get('amount', 0) - new_paid_amount
+    new_status = "paid" if new_balance <= 0 else "partially_paid"
+    
+    update_data = {
+        "paid_amount": round(new_paid_amount, 2),
+        "balance_amount": round(max(0, new_balance), 2),
+        "status": new_status,
+        "updated_at": now
+    }
+    
+    if new_status == "paid":
+        update_data["paid_at"] = now
+        update_data["paid_by"] = current_user.get('id')
+    
+    if payment_reference:
+        update_data["payment_reference"] = payment_reference
+    
+    await db.distributor_debit_credit_notes.update_one(
+        {"id": note_id, "tenant_id": tenant_id},
+        {"$set": update_data}
+    )
+    
+    # If note is paid, update reconciliation status
+    if new_status == "paid" and note.get('reconciliation_id'):
+        await db.distributor_reconciliations.update_one(
+            {"id": note.get('reconciliation_id'), "tenant_id": tenant_id},
+            {"$set": {
+                "status": "settled",
+                "settled_at": now,
+                "settled_by": current_user.get('id'),
+                "updated_at": now
+            }}
+        )
+    
+    return {
+        "message": "Payment recorded",
+        "paid_amount": round(new_paid_amount, 2),
+        "balance_amount": round(max(0, new_balance), 2),
+        "status": new_status
+    }
+
+
+# ============ Real-time Reconciliation Status ============
+
+@router.get("/{distributor_id}/billing/summary")
+async def get_billing_summary(
+    distributor_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get real-time billing summary for a distributor"""
+    tenant_id = get_current_tenant_id()
+    
+    # Get distributor info
+    distributor = await db.distributors.find_one(
+        {"id": distributor_id, "tenant_id": tenant_id},
+        {"_id": 0, "distributor_name": 1, "distributor_code": 1}
+    )
+    
+    if not distributor:
+        raise HTTPException(status_code=404, detail="Distributor not found")
+    
+    # Count billing configs
+    config_count = await db.distributor_billing_config.count_documents({
+        "tenant_id": tenant_id, "distributor_id": distributor_id, "status": "active"
+    })
+    
+    # Provisional invoices summary
+    invoice_pipeline = [
+        {"$match": {"tenant_id": tenant_id, "distributor_id": distributor_id}},
+        {"$group": {
+            "_id": "$status",
+            "count": {"$sum": 1},
+            "total_amount": {"$sum": "$total_net_amount"}
+        }}
+    ]
+    invoice_stats = await db.distributor_provisional_invoices.aggregate(invoice_pipeline).to_list(10)
+    invoice_summary = {s['_id']: {"count": s['count'], "amount": s['total_amount']} for s in invoice_stats}
+    
+    # Reconciliation summary
+    rec_pipeline = [
+        {"$match": {"tenant_id": tenant_id, "distributor_id": distributor_id}},
+        {"$group": {
+            "_id": "$status",
+            "count": {"$sum": 1},
+            "total_difference": {"$sum": "$total_difference"}
+        }}
+    ]
+    rec_stats = await db.distributor_reconciliations.aggregate(rec_pipeline).to_list(10)
+    rec_summary = {s['_id']: {"count": s['count'], "total_difference": s['total_difference']} for s in rec_stats}
+    
+    # Debit/Credit notes summary
+    note_pipeline = [
+        {"$match": {"tenant_id": tenant_id, "distributor_id": distributor_id}},
+        {"$group": {
+            "_id": {"type": "$note_type", "status": "$status"},
+            "count": {"$sum": 1},
+            "total_amount": {"$sum": "$amount"},
+            "total_balance": {"$sum": "$balance_amount"}
+        }}
+    ]
+    note_stats = await db.distributor_debit_credit_notes.aggregate(note_pipeline).to_list(20)
+    
+    pending_debit = sum(s['total_balance'] for s in note_stats 
+                       if s['_id']['type'] == 'debit' and s['_id']['status'] in ['pending', 'partially_paid'])
+    pending_credit = sum(s['total_balance'] for s in note_stats 
+                        if s['_id']['type'] == 'credit' and s['_id']['status'] in ['pending', 'partially_paid'])
+    
+    # Get unreconciled deliveries count
+    # Find deliveries that are not in any reconciliation
+    reconciled_delivery_ids = await db.distributor_reconciliation_items.distinct(
+        "delivery_id", {"tenant_id": tenant_id}
+    )
+    unreconciled_count = await db.distributor_deliveries.count_documents({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": "delivered",
+        "id": {"$nin": reconciled_delivery_ids}
+    })
+    
+    return {
+        "distributor": distributor,
+        "billing_configs": config_count,
+        "provisional_invoices": invoice_summary,
+        "reconciliations": rec_summary,
+        "pending_debit_amount": round(pending_debit, 2),
+        "pending_credit_amount": round(pending_credit, 2),
+        "net_balance": round(pending_debit - pending_credit, 2),  # Positive = distributor owes
+        "unreconciled_deliveries": unreconciled_count
+    }
