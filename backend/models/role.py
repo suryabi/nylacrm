@@ -66,6 +66,16 @@ DEFAULT_MODULE_PERMISSIONS = {
     "quality_control": {"view": False, "create": False, "edit": False, "delete": False},
     "assets": {"view": False, "create": False, "edit": False, "delete": False},
     "vendors": {"view": False, "create": False, "edit": False, "delete": False},
+    
+    # Distribution Modules
+    "distributors": {"view": False, "create": False, "edit": False, "delete": False},
+    "distributor_coverage": {"view": False, "create": False, "edit": False, "delete": False},
+    "distributor_locations": {"view": False, "create": False, "edit": False, "delete": False},
+    "distributor_margins": {"view": False, "create": False, "edit": False, "delete": False},
+    "distributor_assignments": {"view": False, "create": False, "edit": False, "delete": False},
+    "distributor_shipments": {"view": False, "create": False, "edit": False, "delete": False},
+    "distributor_deliveries": {"view": False, "create": False, "edit": False, "delete": False},
+    "distributor_stock": {"view": False, "create": False, "edit": False, "delete": False},
 }
 
 # Full access permissions (for Admin role)
@@ -209,6 +219,7 @@ MODULE_CATEGORIES = {
     "Requests": ["leaves", "travel_requests", "budget_requests"],
     "Organization": ["company_profile", "team", "master_locations", "lead_statuses", "business_categories", "contact_categories", "expense_categories"],
     "Admin": ["tenant_settings"],
+    "Distribution": ["distributors", "distributor_coverage", "distributor_locations", "distributor_margins", "distributor_assignments", "distributor_shipments", "distributor_deliveries", "distributor_stock"],
     "Production": ["maintenance", "inventory", "quality_control", "assets", "vendors"],
 }
 
@@ -247,6 +258,14 @@ MODULE_LABELS = {
     "contact_categories": "Contact Categories",
     "expense_categories": "Expense Categories",
     "tenant_settings": "Tenant Settings",
+    "distributors": "Distributors",
+    "distributor_coverage": "Operating Coverage",
+    "distributor_locations": "Warehouse Locations",
+    "distributor_margins": "Margin Matrix",
+    "distributor_assignments": "Account Assignments",
+    "distributor_shipments": "Primary Shipments",
+    "distributor_deliveries": "Account Deliveries",
+    "distributor_stock": "Stock Management",
     "maintenance": "Maintenance",
     "inventory": "Inventory",
     "quality_control": "Quality Control",

@@ -147,6 +147,16 @@ export const MODULE_ROUTE_MAP = {
   quality_control: ['/quality-control'],
   assets: ['/assets'],
   vendors: ['/vendors'],
+  
+  // Distribution Modules
+  distributors: ['/distributors'],
+  distributor_coverage: ['/distributors'],
+  distributor_locations: ['/distributors'],
+  distributor_margins: ['/distributors'],
+  distributor_assignments: ['/distributors'],
+  distributor_shipments: ['/distributors'],
+  distributor_deliveries: ['/distributors'],
+  distributor_stock: ['/distributors'],
 };
 
 // Mapping from navigation href to module key

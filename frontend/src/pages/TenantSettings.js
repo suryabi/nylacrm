@@ -17,7 +17,7 @@ import {
   Globe, Clock, DollarSign, Calendar, RefreshCw, MapPin,
   Users, Kanban, Target, CalendarDays, Contact, Plane, Wallet, FolderOpen,
   Wrench, Boxes, ShieldCheck, Box, Landmark, Phone, Mail, FileText,
-  Plus, Trash2, User, Shield, Edit2
+  Plus, Trash2, User, Shield, Edit2, Truck, Package
 } from 'lucide-react';
 import axios from 'axios';
 import RoleManagement from '../components/RoleManagement';
@@ -124,6 +124,20 @@ const MODULE_CONFIG = {
       { key: 'quality_control', label: 'Quality Control', icon: ShieldCheck, description: 'QC processes & checks' },
       { key: 'assets', label: 'Assets', icon: Box, description: 'Asset tracking & management' },
       { key: 'vendors', label: 'Vendors', icon: Building2, description: 'Vendor management' },
+    ]
+  },
+  distribution: {
+    title: 'Distribution',
+    description: 'Distributor & supply chain management',
+    modules: [
+      { key: 'distributors', label: 'Distributors', icon: Truck, description: 'Distributor master data' },
+      { key: 'distributor_coverage', label: 'Operating Coverage', icon: MapPin, description: 'Distributor territory coverage' },
+      { key: 'distributor_locations', label: 'Warehouse Locations', icon: Building2, description: 'Distributor warehouse locations' },
+      { key: 'distributor_margins', label: 'Margin Matrix', icon: DollarSign, description: 'City & SKU level margins' },
+      { key: 'distributor_assignments', label: 'Account Assignments', icon: Users, description: 'Account-distributor mapping' },
+      { key: 'distributor_shipments', label: 'Primary Shipments', icon: Truck, description: 'Stock shipments to distributors' },
+      { key: 'distributor_deliveries', label: 'Account Deliveries', icon: Package, description: 'Deliveries to end accounts' },
+      { key: 'distributor_stock', label: 'Stock Management', icon: Boxes, description: 'Distributor inventory levels' },
     ]
   }
 };
