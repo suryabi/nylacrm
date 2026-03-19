@@ -25,6 +25,29 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Latest Session - March 19, 2026
 
+### FEATURE: "Active & Ongoing Only" Toggle for Margin Matrix ✅
+**User Request**: Add a toggle switch on the Margin Matrix tab to filter and show only active and ongoing pricing entries, hiding expired ones.
+
+**Implementation**:
+1. Added `showOnlyActiveMargins` state variable
+2. Added Switch component from shadcn/ui in the Margin Matrix header
+3. Added client-side filtering logic:
+   - Toggle OFF: Shows all entries (active, future, expired)
+   - Toggle ON: Filters out entries where `active_to < today`
+4. Updated summary section:
+   - OFF: "Total: X entries | Active: Y | SKUs: Z"
+   - ON: "Showing: X of Y entries | SKUs: Z"
+5. Empty state message when all filtered out: "No active or ongoing margin entries"
+
+**Testing**: Verified with testing_agent_v3_fork (iteration_60.json) - 100% pass rate (5/5 features)
+- Toggle visibility when margins exist ✅
+- Toggle OFF shows all entries ✅
+- Toggle ON filters correctly ✅
+- Summary format changes based on state ✅
+- Toggle on/off state transitions ✅
+
+---
+
 ### Bug Fix: Record Delivery Account Selection ✅
 **Issue**: In the "Record Delivery" popup, the account list was not showing account names correctly. The search was also not user-friendly.
 
@@ -186,17 +209,19 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 ## Pending Tasks
 
 ### P0 - Immediate
-1. **Test Distributor Settlement Feature** - Frontend UI exists but untested
+1. **Refactor DistributorDetail.js** - CRITICAL: File is now 5300+ lines
+   - Break into: OverviewTab.js, CoverageTab.js, LocationsTab.js, MarginsTab.js, AssignmentsTab.js, ShipmentsTab.js, DeliveriesTab.js, SettlementsTab.js, BillingTab.js
+2. **Test Distributor Settlement Feature** - Frontend UI exists but untested
 
 ### P1 - High Priority
-1. **Refactor DistributorDetail.js** - CRITICAL: File is now 4100+ lines
-   - Break into: OverviewTab.js, CoverageTab.js, LocationsTab.js, MarginsTab.js, AssignmentsTab.js, ShipmentsTab.js, DeliveriesTab.js, SettlementsTab.js
-2. **Stock Dashboard** - Real-time stock levels across distributor locations
+1. **Stock Dashboard** - Real-time stock levels across distributor locations
+2. **Auto-generate Provisional Invoice** - Trigger invoice when shipment status is "delivered"
 
 ### P2 - Medium Priority
 1. **Server.py Refactoring** - Move remaining routes to modular files
 2. **Settlement Period Configuration** - Auto weekly/monthly cycles
 3. **Reporting Module** - Stock balance, deliveries, settlements reports
+4. **Cleanup deprecated BillingConfig** - Remove obsolete billing config models/routes after merging into Margin Matrix
 
 ## Key API Endpoints - Distribution Module
 - `GET/POST/PUT/DELETE /api/distributors` - Distributor CRUD
@@ -220,5 +245,6 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 - **Assigned Account**: "Test Status Validation Company" (Delhi)
 
 ## Technical Debt
-1. **DistributorDetail.js** - 4100+ lines, urgently needs refactoring
+1. **DistributorDetail.js** - 5300+ lines, urgently needs refactoring into separate tab components
 2. **server.py** - Still contains many routes that should be modularized
+3. **Deprecated BillingConfig** - Old billing config models/routes should be removed after being merged into Margin Matrix
