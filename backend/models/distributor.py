@@ -327,7 +327,9 @@ class ShipmentItemCreate(BaseModel):
     sku_name: Optional[str] = None
     sku_code: Optional[str] = None
     quantity: int
-    unit_price: float
+    base_price: Optional[float] = None  # Base/MRP price
+    distributor_margin: Optional[float] = None  # Margin percentage
+    unit_price: float  # Transfer price (after margin deduction)
     discount_percent: Optional[float] = 0
     tax_percent: Optional[float] = 0
     remarks: Optional[str] = None
@@ -351,7 +353,9 @@ class ShipmentItem(BaseModel):
     sku_name: Optional[str] = None
     sku_code: Optional[str] = None
     quantity: int
-    unit_price: float
+    base_price: Optional[float] = None  # Base/MRP price
+    distributor_margin: Optional[float] = None  # Margin percentage
+    unit_price: float  # Transfer price (after margin deduction)
     discount_percent: float = 0
     tax_percent: float = 0
     gross_amount: float  # quantity * unit_price

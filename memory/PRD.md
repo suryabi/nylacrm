@@ -23,7 +23,39 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 - **AI**: Claude Sonnet 4.5 via Emergent LLM Key, Gemini
 - **Integrations**: Zoom API, Resend, Google OAuth
 
-## Latest Session - March 19, 2026
+## Latest Session - March 20, 2026
+
+### FEATURE: Enhanced Shipments Table with Detailed Pricing Columns ✅
+**User Request**: Add detailed pricing breakdown columns to the Shipments table.
+
+**Implementation**:
+1. **Backend** (`/app/backend/routes/distributors.py`):
+   - Updated `list_distributor_shipments` endpoint to calculate and include weighted averages of item data
+   - Added fields: `avg_base_price`, `avg_distributor_margin`, `avg_transfer_price`, `avg_gst_percent`
+   - Updated `ShipmentItemCreate` model to include `base_price` and `distributor_margin`
+
+2. **Frontend** (`/app/frontend/src/components/distributor/ShipmentsTab.jsx`):
+   - Added new columns: Base Price, Margin %, Transfer Price, Total Transfer, GST %, GST Amt, Total (incl GST)
+   - Displays weighted averages for shipments with multiple items
+
+3. **Frontend** (`/app/frontend/src/pages/DistributorDetail.js`):
+   - Updated `getTransferPriceForSku` to return base_price and margin_value
+   - Updated `updateShipmentItemWithPrice` to capture pricing details
+   - New shipment items now include base_price and distributor_margin
+
+**Columns Added to Shipments Table**:
+- Qty (existing)
+- Base Price (new)
+- Margin % (new)
+- Transfer Price (new)
+- Total Transfer (new)
+- GST % (new)
+- GST Amt (new)
+- Total (incl GST) (new)
+
+**Note**: Existing shipments show "-" for Base Price and Margin % as they were created before these fields were added. New shipments will have complete pricing data.
+
+---
 
 ### FEATURE: CEO/Admin Delete Functionality ✅
 **User Request**: Add delete functionality for Shipments, Deliveries, Settlements, and Billing/Reconciliation records, restricted to CEO and Admin roles only.

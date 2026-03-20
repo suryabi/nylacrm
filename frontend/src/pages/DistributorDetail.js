@@ -1058,6 +1058,8 @@ export default function DistributorDetail() {
           sku_id: item.sku_id,
           sku_name: item.sku_name,
           quantity: parseInt(item.quantity),
+          base_price: item.base_price ? parseFloat(item.base_price) : null,
+          distributor_margin: item.distributor_margin ? parseFloat(item.distributor_margin) : null,
           unit_price: parseFloat(item.unit_price),
           discount_percent: parseFloat(item.discount_percent) || 0,
           tax_percent: parseFloat(item.tax_percent) || 0
@@ -1100,6 +1102,8 @@ export default function DistributorDetail() {
       sku_id: '',
       sku_name: '',
       quantity: 1,
+      base_price: null,
+      distributor_margin: null,
       unit_price: 0,
       discount_percent: 0,
       tax_percent: 18
@@ -1137,7 +1141,14 @@ export default function DistributorDetail() {
         (!m.active_to || m.active_to >= today)
       );
       
-      return activeMargin?.transfer_price || null;
+      if (activeMargin) {
+        return {
+          transfer_price: activeMargin.transfer_price,
+          base_price: activeMargin.base_price,
+          margin_value: activeMargin.margin_value
+        };
+      }
+      return null;
     } catch (error) {
       console.error('Failed to get transfer price:', error);
       return null;
@@ -1153,10 +1164,15 @@ export default function DistributorDetail() {
     
     // Then look up the transfer price if we have a location selected
     if (shipmentForm.distributor_location_id) {
-      const transferPrice = await getTransferPriceForSku(skuId, shipmentForm.distributor_location_id);
-      if (transferPrice) {
+      const priceInfo = await getTransferPriceForSku(skuId, shipmentForm.distributor_location_id);
+      if (priceInfo) {
         setShipmentItems(prev => prev.map(item => 
-          item.id === itemId ? { ...item, unit_price: transferPrice } : item
+          item.id === itemId ? { 
+            ...item, 
+            unit_price: priceInfo.transfer_price,
+            base_price: priceInfo.base_price,
+            distributor_margin: priceInfo.margin_value
+          } : item
         ));
       }
     }

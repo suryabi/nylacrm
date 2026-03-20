@@ -310,83 +310,111 @@ export default function ShipmentsTab({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full" data-testid="shipments-table">
+            <table className="w-full text-sm" data-testid="shipments-table">
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="text-left p-3 font-medium">Shipment #</th>
                   <th className="text-left p-3 font-medium">Date</th>
                   <th className="text-left p-3 font-medium">Location</th>
                   <th className="text-right p-3 font-medium">Qty</th>
-                  <th className="text-right p-3 font-medium">Amount</th>
+                  <th className="text-right p-3 font-medium">Base Price</th>
+                  <th className="text-right p-3 font-medium">Margin %</th>
+                  <th className="text-right p-3 font-medium">Transfer Price</th>
+                  <th className="text-right p-3 font-medium">Total Transfer</th>
+                  <th className="text-right p-3 font-medium">GST %</th>
+                  <th className="text-right p-3 font-medium">GST Amt</th>
+                  <th className="text-right p-3 font-medium">Total (incl GST)</th>
                   <th className="text-center p-3 font-medium">Status</th>
                   <th className="text-right p-3 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {shipments.map((shipment) => (
-                  <tr key={shipment.id} className="border-b hover:bg-muted/30" data-testid={`shipment-row-${shipment.id}`}>
-                    <td className="p-3">
-                      <button 
-                        className="font-medium text-primary hover:underline"
-                        onClick={() => viewShipmentDetail(shipment.id)}
-                      >
-                        {shipment.shipment_number}
-                      </button>
-                      {shipment.reference_number && (
-                        <p className="text-xs text-muted-foreground">{shipment.reference_number}</p>
-                      )}
-                    </td>
-                    <td className="p-3">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        {new Date(shipment.shipment_date).toLocaleDateString()}
-                      </div>
-                    </td>
-                    <td className="p-3">
-                      <div className="flex items-center gap-1">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        {shipment.distributor_location_name}
-                      </div>
-                    </td>
-                    <td className="p-3 text-right font-medium">{shipment.total_quantity}</td>
-                    <td className="p-3 text-right font-medium">₹{shipment.total_net_amount?.toLocaleString()}</td>
-                    <td className="p-3 text-center">
-                      {getShipmentStatusBadge(shipment.status)}
-                    </td>
-                    <td className="p-3 text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
+                {shipments.map((shipment) => {
+                  // Calculate average/first item values for display
+                  const avgBasePrice = shipment.avg_base_price || shipment.base_price || '-';
+                  const avgMargin = shipment.avg_distributor_margin || shipment.distributor_margin;
+                  const avgTransferPrice = shipment.avg_transfer_price || shipment.transfer_price;
+                  const avgGstPercent = shipment.avg_gst_percent || shipment.gst_percent;
+                  
+                  return (
+                    <tr key={shipment.id} className="border-b hover:bg-muted/30" data-testid={`shipment-row-${shipment.id}`}>
+                      <td className="p-3">
+                        <button 
+                          className="font-medium text-primary hover:underline"
                           onClick={() => viewShipmentDetail(shipment.id)}
-                          data-testid={`view-shipment-${shipment.id}`}
                         >
-                          <FileText className="h-4 w-4" />
-                        </Button>
-                        {/* Show delete for draft (canManage) or any status (canDelete for CEO/Admin) */}
-                        {(canDelete || (canManage && shipment.status === 'draft')) && (
+                          {shipment.shipment_number}
+                        </button>
+                        {shipment.reference_number && (
+                          <p className="text-xs text-muted-foreground">{shipment.reference_number}</p>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-4 w-4 text-muted-foreground" />
+                          {new Date(shipment.shipment_date).toLocaleDateString()}
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-1">
+                          <MapPin className="h-4 w-4 text-muted-foreground" />
+                          <span className="truncate max-w-[120px]">{shipment.distributor_location_name}</span>
+                        </div>
+                      </td>
+                      <td className="p-3 text-right font-medium">{shipment.total_quantity}</td>
+                      <td className="p-3 text-right">
+                        {avgBasePrice !== '-' ? `₹${Number(avgBasePrice).toFixed(2)}` : '-'}
+                      </td>
+                      <td className="p-3 text-right">
+                        {avgMargin != null ? `${avgMargin}%` : '-'}
+                      </td>
+                      <td className="p-3 text-right">
+                        {avgTransferPrice != null ? `₹${Number(avgTransferPrice).toFixed(2)}` : '-'}
+                      </td>
+                      <td className="p-3 text-right font-medium">₹{shipment.total_gross_amount?.toLocaleString()}</td>
+                      <td className="p-3 text-right">
+                        {avgGstPercent != null ? `${avgGstPercent}%` : (shipment.total_tax_amount > 0 ? '18%' : '-')}
+                      </td>
+                      <td className="p-3 text-right">₹{shipment.total_tax_amount?.toLocaleString()}</td>
+                      <td className="p-3 text-right font-medium text-green-600">₹{shipment.total_net_amount?.toLocaleString()}</td>
+                      <td className="p-3 text-center">
+                        {getShipmentStatusBadge(shipment.status)}
+                      </td>
+                      <td className="p-3 text-right">
+                        <div className="flex justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteTarget({
-                                type: 'shipment',
-                                id: shipment.id,
-                                name: shipment.shipment_number
-                              });
-                            }}
-                            data-testid={`delete-shipment-${shipment.id}`}
-                            title={canDelete ? "Delete (Admin)" : "Delete draft"}
+                            onClick={() => viewShipmentDetail(shipment.id)}
+                            data-testid={`view-shipment-${shipment.id}`}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <FileText className="h-4 w-4" />
                           </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {/* Show delete for draft (canManage) or any status (canDelete for CEO/Admin) */}
+                          {(canDelete || (canManage && shipment.status === 'draft')) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteTarget({
+                                  type: 'shipment',
+                                  id: shipment.id,
+                                  name: shipment.shipment_number
+                                });
+                              }}
+                              data-testid={`delete-shipment-${shipment.id}`}
+                              title={canDelete ? "Delete (Admin)" : "Delete draft"}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

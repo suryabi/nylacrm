@@ -1567,7 +1567,7 @@ async def list_distributor_shipments(
     page_size: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(get_current_user)
 ):
-    """List shipments for a specific distributor"""
+    """List shipments for a specific distributor with item aggregates"""
     tenant_id = get_current_tenant_id()
     
     query = {"tenant_id": tenant_id, "distributor_id": distributor_id}
@@ -1581,6 +1581,33 @@ async def list_distributor_shipments(
         query,
         {"_id": 0}
     ).sort("shipment_date", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    
+    # For each shipment, get aggregated item data
+    for shipment in shipments:
+        items = await db.distributor_shipment_items.find(
+            {"shipment_id": shipment['id'], "tenant_id": tenant_id},
+            {"_id": 0, "base_price": 1, "distributor_margin": 1, "unit_price": 1, "tax_percent": 1, "quantity": 1}
+        ).to_list(500)
+        
+        if items:
+            # Calculate weighted averages
+            total_qty = sum(item.get('quantity', 0) for item in items)
+            if total_qty > 0:
+                # Weighted average base price
+                weighted_base = sum((item.get('base_price') or 0) * item.get('quantity', 0) for item in items)
+                shipment['avg_base_price'] = round(weighted_base / total_qty, 2) if weighted_base else None
+                
+                # Weighted average margin
+                weighted_margin = sum((item.get('distributor_margin') or 0) * item.get('quantity', 0) for item in items)
+                shipment['avg_distributor_margin'] = round(weighted_margin / total_qty, 2) if weighted_margin else None
+                
+                # Weighted average transfer price
+                weighted_transfer = sum((item.get('unit_price') or 0) * item.get('quantity', 0) for item in items)
+                shipment['avg_transfer_price'] = round(weighted_transfer / total_qty, 2) if weighted_transfer else None
+                
+                # Weighted average GST
+                weighted_gst = sum((item.get('tax_percent') or 0) * item.get('quantity', 0) for item in items)
+                shipment['avg_gst_percent'] = round(weighted_gst / total_qty, 2) if weighted_gst else None
     
     return {
         "shipments": shipments,
@@ -1689,6 +1716,8 @@ async def create_shipment(
             'sku_name': sku_name,
             'sku_code': sku_code,
             'quantity': item_data.quantity,
+            'base_price': item_data.base_price,
+            'distributor_margin': item_data.distributor_margin,
             'unit_price': item_data.unit_price,
             'discount_percent': item_data.discount_percent or 0,
             'tax_percent': item_data.tax_percent or 0,
