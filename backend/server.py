@@ -6701,9 +6701,9 @@ async def get_dashboard_analytics(
     leads_lost = status_counts.get('closed_lost', 0)
     conversion_rate = (leads_won / total_leads * 100) if total_leads > 0 else 0
     
-    # Pipeline value
+    # Pipeline value - exclude won, lost, closed_won, closed_lost, and not_qualified (only active opportunities)
     pipeline_value_pipeline = [
-        {'$match': {**match_stage, 'status': {'$ne': 'closed_lost'}}},
+        {'$match': {**match_stage, 'status': {'$nin': ['closed_lost', 'closed_won', 'not_qualified', 'won', 'lost']}}},
         {'$group': {'_id': None, 'total_value': {'$sum': '$estimated_value'}}}
     ]
     pipeline_value_result = await get_tdb().leads.aggregate(pipeline_value_pipeline).to_list(1)
@@ -6815,9 +6815,9 @@ async def get_dashboard_analytics(
     leads_lost = status_counts.get('closed_lost', 0)
     conversion_rate = (leads_won / total_leads * 100) if total_leads > 0 else 0
     
-    # Pipeline value
+    # Pipeline value - exclude won, lost, closed_won, closed_lost, and not_qualified (only active opportunities)
     pipeline_value_pipeline = [
-        {'$match': {**match_stage, 'status': {'$ne': 'closed_lost'}}},
+        {'$match': {**match_stage, 'status': {'$nin': ['closed_lost', 'closed_won', 'not_qualified', 'won', 'lost']}}},
         {'$group': {'_id': None, 'total_value': {'$sum': '$estimated_value'}}}
     ]
     pipeline_value_result = await get_tdb().leads.aggregate(pipeline_value_pipeline).to_list(1)
@@ -6901,9 +6901,9 @@ async def get_pipeline_accounts(
         start_date = None
         end_date = None
     
-    # Build match stage
+    # Build match stage - exclude won, lost, closed_won, closed_lost, and not_qualified (only active opportunities)
     match_stage = {
-        'status': {'$ne': 'closed_lost'},  # Exclude closed lost leads
+        'status': {'$nin': ['closed_lost', 'closed_won', 'not_qualified', 'won', 'lost']},
         'estimated_value': {'$gt': 0}  # Only leads with value
     }
     
