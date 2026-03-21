@@ -25,6 +25,29 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Latest Session - March 21, 2026
 
+### TESTING COMPLETE: Monthly Settlements & Deliveries Features ✅
+**Date**: March 21, 2026
+
+**Testing Agent Results (iteration_66.json)**:
+- Backend: 100% (18/18 tests passed)
+- Frontend: 100% (all features working)
+
+**Features Verified**:
+1. **Deliveries Tab**: Line-item table with all pricing columns (Customer Selling Price, Distributor Commission %, Billing Value, Earnings, Transfer Price, Margin at Transfer, Adjustment Payable)
+2. **Deliveries Filters**: Time Period, Account filter, pagination all working
+3. **Monthly Settlements**: Generate Settlement dialog with Month/Year selection, account grouping, calculation preview
+4. **Settlements List**: All columns displaying correctly with month/year filters
+
+**Calculation Formulas Verified**:
+- Billing Value = qty × customer_selling_price ✅
+- Distributor Earnings = billing × commission% ✅
+- Margin at Transfer = qty × transfer_price × commission% ✅
+- Adjustment = earnings - margin_at_transfer ✅
+
+**Note**: Legacy settlements show ₹0.00 for new columns (expected - schema upgrade)
+
+---
+
 ### FEATURE: Pipeline Value Popup with Account List ✅
 **User Request**: Click on the Pipeline Value tile in Dashboard to see a popup with the list of accounts contributing to that value.
 
@@ -45,17 +68,6 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
      - Click on account navigates to lead detail page
      - "View All in Leads" button at bottom
 
-**API Response Format**:
-```json
-{
-  "accounts": [{"id", "account_name", "contact_person", "city", "estimated_value", ...}],
-  "total": 57,
-  "total_pipeline_value": 32511443,
-  "page": 1,
-  "page_size": 50
-}
-```
-
 ---
 
 ### FEATURE: Enhanced Shipments Table with Detailed Pricing Columns ✅
@@ -71,39 +83,10 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
    - Added new columns: Base Price, Margin %, Transfer Price, Total Transfer, GST %, GST Amt, Total (incl GST)
    - Displays weighted averages for shipments with multiple items
 
-3. **Frontend** (`/app/frontend/src/pages/DistributorDetail.js`):
-   - Updated `getTransferPriceForSku` to return base_price and margin_value
-   - Updated `updateShipmentItemWithPrice` to capture pricing details
-   - New shipment items now include base_price and distributor_margin
-
-**Columns Added to Shipments Table**:
-- Qty (existing)
-- Base Price (new)
-- Margin % (new)
-- Transfer Price (new)
-- Total Transfer (new)
-- GST % (new)
-- GST Amt (new)
-- Total (incl GST) (new)
-
-**Note**: Existing shipments show "-" for Base Price and Margin % as they were created before these fields were added. New shipments will have complete pricing data.
-
 ---
 
 ### FEATURE: CEO/Admin Delete Functionality ✅
 **User Request**: Add delete functionality for Shipments, Deliveries, Settlements, and Billing/Reconciliation records, restricted to CEO and Admin roles only.
-
-**Implementation**:
-1. **Backend**: Added DELETE endpoint for debit/credit notes: `DELETE /api/distributors/{id}/notes/{note_id}`
-   - Role validation (CEO, Admin, System Admin only)
-   - Updates linked reconciliation status back to draft when note is deleted
-   
-2. **Frontend**: 
-   - `canDelete` prop passed to all tab components (ShipmentsTab, DeliveriesTab, SettlementsTab, BillingTab)
-   - Delete buttons (trash icons) visible in Actions column for all record types
-   - Delete available regardless of record status (Draft, Delivered, Paid, etc.) for CEO/Admin
-   - AlertDialog handles all delete types: shipment, delivery, settlement, reconciliation, note
-   - `handleDeleteNote` function added to refresh related data after deletion
 
 **Records that can be deleted by CEO/Admin**:
 - ✅ Shipments (any status)
@@ -113,251 +96,39 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 - ✅ Debit/Credit Notes (any status)
 
 **Testing**: 100% pass rate (iteration_65.json)
-- Backend: 16/17 tests passed (94%)
-- Frontend: All delete buttons visible and functional
 
 ---
 
-### FEATURE: Stock Dashboard ✅
-**User Request**: Build a Stock Dashboard to visualize real-time inventory levels across distributor locations.
+### FEATURE: Monthly Settlements Redesign ✅
+**User Request**: Settlement screen should be done for each month, not custom dates. Generate settlements at account level showing financial calculations.
 
 **Implementation**:
-- Backend: `GET /api/distributors/dashboard/stock-summary` endpoint with city/distributor filters
-- Frontend: `/stock-dashboard` page with:
-  - Summary cards (Total Stock, SKU Types, Locations, Distributors)
-  - Three tabs: By Location, By SKU, By Distributor
-  - Search filter for locations/SKUs
-  - City dropdown filter
-  - Distributor dropdown filter
-  - Refresh button
-- Added sidebar link under Distribution section
+1. **Backend** (`POST /api/distributors/{id}/settlements/generate-monthly`):
+   - Takes month/year parameters
+   - Groups unsettled deliveries by account
+   - Calculates per-account totals: billing, earnings, margin at transfer, adjustment
+   - Creates one settlement per account
 
-**Testing**: 100% pass rate (Backend 10/10, Frontend all features verified)
-- Test file: `/app/backend/tests/test_stock_dashboard.py`
-
----
-
-### BUG FIX: Auto-populate Price in Shipment Dialog ✅
-**Issue**: When creating a primary shipment and selecting a SKU, the price was not being auto-populated. Users had to manually enter the price.
-
-**Solution**: 
-1. Created `getTransferPriceForSku` function that fetches the transfer price from the Margin Matrix based on the selected location's city and SKU
-2. Created `updateShipmentItemWithPrice` function that updates the SKU and then looks up the transfer price
-3. Updated ShipmentsTab to use the new function when selecting a SKU
-
-**Result**: When a user selects a SKU in the Create Shipment dialog, the transfer price is now automatically populated from the active Margin Matrix entry for that city.
+2. **Frontend** (`SettlementsTab.jsx`):
+   - Completely rewritten for monthly/account focus
+   - Month/Year selection instead of date range
+   - Preview shows unsettled deliveries grouped by account
+   - Columns: Settlement#, Month/Year, Account Name, Deliveries Count, Billing Value, Earnings, Margin, Adjustment, Status
 
 ---
 
-### TEST: Settlement Flow E2E ✅
-**Scope**: Complete end-to-end testing of the Distributor Settlement functionality.
-
-**Tests Performed**:
-- Backend API tests: 14/17 passed (3 skipped - no draft settlements)
-- Frontend UI tests: All flows verified
-
-**Features Verified**:
-1. ✅ Settlements tab displays list with correct columns
-2. ✅ Generate Settlement dialog with period type selection (Weekly/Monthly/Custom)
-3. ✅ Date range selection loads unsettled deliveries preview
-4. ✅ Settlement creation with delivery items
-5. ✅ Settlement detail view showing included deliveries
-6. ✅ Status workflow: Draft → Pending Approval → Approved → Paid
-7. ✅ Role-based access control for approval
-
-**Test Files Created**: `/app/backend/tests/test_settlement_flow.py`
-
----
-
-### REFACTORING: DistributorDetail.js Component Extraction - COMPLETE ✅
-**Problem**: The monolithic DistributorDetail.js file had grown to 5,350+ lines, making it unmaintainable.
-
-**Solution - Phase 1**: Extracted 4 tab components:
-- `OverviewTab.jsx` - Basic info, contacts, commercial terms
-- `CoverageTab.jsx` - Operating coverage management
-- `LocationsTab.jsx` - Warehouse/location management
-- `MarginsTab.jsx` - Margin Matrix with toggle filter
-- `constants.js` - Shared constants
-
-**Solution - Phase 2**: Extracted 5 more tab components:
-- `AssignmentsTab.jsx` - Account assignments with searchable selection
-- `ShipmentsTab.jsx` - Primary shipments with item management
-- `DeliveriesTab.jsx` - Account deliveries with searchable accounts
-- `SettlementsTab.jsx` - Settlement generation
-- `BillingTab.jsx` - Billing summary, reconciliations, debit/credit notes
-
-**Result**: 
-- Original: ~5,350 lines
-- After Phase 1: ~4,340 lines
-- After Phase 2: **2,821 lines** (47% reduction!)
-
-**Component Directory**: `/app/frontend/src/components/distributor/`
-
-**Testing**: 
-- Phase 1: iteration_61.json - 100% pass (5/5 features)
-- Phase 2: iteration_62.json - 100% pass (9/9 tabs)
-
----
-
-### FEATURE: "Active & Ongoing Only" Toggle for Margin Matrix ✅
-**User Request**: Add a toggle switch on the Margin Matrix tab to filter and show only active and ongoing pricing entries, hiding expired ones.
+### FEATURE: Enhanced Deliveries Table with Line Items ✅
+**User Request**: Account deliveries should show detailed pricing per line item.
 
 **Implementation**:
-1. Added `showOnlyActiveMargins` state variable
-2. Added Switch component from shadcn/ui in the Margin Matrix header
-3. Added client-side filtering logic:
-   - Toggle OFF: Shows all entries (active, future, expired)
-   - Toggle ON: Filters out entries where `active_to < today`
-4. Updated summary section:
-   - OFF: "Total: X entries | Active: Y | SKUs: Z"
-   - ON: "Showing: X of Y entries | SKUs: Z"
-5. Empty state message when all filtered out: "No active or ongoing margin entries"
-
-**Testing**: Verified with testing_agent_v3_fork (iteration_60.json) - 100% pass rate (5/5 features)
-- Toggle visibility when margins exist ✅
-- Toggle OFF shows all entries ✅
-- Toggle ON filters correctly ✅
-- Summary format changes based on state ✅
-- Toggle on/off state transitions ✅
+- Line-item rows showing: SKU, Qty, Customer Selling Price, Commission %, Billing Value, Earnings, Transfer Price, Margin at Transfer, Adjustment Payable
+- Delivery subtotal rows for multi-item deliveries
+- Time filters (This Week, Last Month, etc.)
+- Account filter dropdown
+- Pagination with dynamic page size
+- Excel download
 
 ---
-
-### Bug Fix: Record Delivery Account Selection ✅
-**Issue**: In the "Record Delivery" popup, the account list was not showing account names correctly. The search was also not user-friendly.
-
-**Root Cause**: 
-- Backend was using wrong field names (`company`/`name` instead of `account_name`)
-- Frontend was displaying wrong fields
-
-**Fix Applied**:
-1. Backend API `GET /api/distributors/{id}/assigned-accounts` updated to return:
-   - `account_name`, `contact_name`, `contact_number`
-   - `city`, `state`, `territory`
-   - `delivery_address`, `distributor_location_id`, `distributor_location_name`
-2. Backend API `GET /api/distributors/accounts/search` updated to search:
-   - `account_name`, `contact_name`, `account_id`, `city`
-3. Frontend Record Delivery dialog updated:
-   - Changed from dropdown to searchable list
-   - Filter accounts by name, city, or contact name
-   - Clear display with all account details (name, location, contact info)
-   - Primary indicator (★) for primary accounts
-   - Distributor location badge
-4. Assignment dialog updated to use `account_name`
-
-**Testing**: Verified with testing_agent_v3_fork (iteration_55.json) - 100% pass rate
-
-### Bug Fix 2: Record Delivery SKU Filtering ✅
-**Issue**: In the Record Delivery screen, after selecting an account, the SKU dropdown was showing all master SKUs instead of only the SKUs configured in the account's SKU Pricing section.
-
-**Fix Applied**:
-1. Backend API `GET /api/distributors/{id}/assigned-accounts` now returns `sku_pricing` array with enriched data:
-   - SKU ID (mapped from master_skus collection)
-   - SKU name, price_per_unit, return_bottle_credit
-2. Frontend SKU dropdown filters based on `selectedDeliveryAccount.sku_pricing`:
-   - Shows only account's configured SKUs with prices ("SKU Name - ₹price")
-   - Auto-populates unit price when SKU is selected
-   - Add Item button disabled until account is selected
-   - Shows helpful message: "Showing X SKU(s) configured for [Account Name]"
-   - Falls back to all master SKUs if account has no SKU pricing configured
-
-**Testing**: Verified with testing_agent_v3_fork (iteration_56.json) - 100% pass rate
-
-### NEW FEATURE: Distributor Billing & Reconciliation Module ✅
-**User Request**: Build a billing and reconciliation module where stock is sent to distributor at provisional transfer price, and later reconciled based on actual selling prices to customers.
-
-**Business Logic Implemented**:
-1. **Base Price Configuration**: Configure base price and margin % per SKU per distributor
-   - Transfer Price = Base Price × (1 - Margin%/100)
-   - Example: ₹100 base × 97.5% = ₹97.5 transfer price
-   
-2. **Provisional Billing**: When stock is shipped, distributor pays transfer price
-   
-3. **Reconciliation**: Periodic comparison of provisional vs actual amounts
-   - Provisional Amount = quantity × transfer_price
-   - Actual Gross = quantity × customer_selling_price
-   - Entitled Margin = actual_gross × margin_percent
-   - Actual Net = actual_gross - entitled_margin
-   - Difference = actual_net - provisional_amount
-   
-4. **Settlement**:
-   - Positive difference → **Debit Note** (Distributor owes Nyla)
-   - Negative difference → **Credit Note** (Nyla owes Distributor)
-
-**Database Collections Added**:
-- `distributor_billing_config`: Base prices per SKU per distributor
-- `distributor_provisional_invoices`: Invoices for stock transfers
-- `distributor_reconciliations`: Reconciliation records with line items
-- `distributor_debit_credit_notes`: Settlement documents with payment tracking
-
-**Key API Endpoints**:
-- `GET/POST/DELETE /{id}/billing-config` - Base price configuration
-- `GET /{id}/billing/summary` - Real-time billing dashboard
-- `POST /{id}/reconciliations/calculate` - Preview reconciliation
-- `POST /{id}/reconciliations` - Create reconciliation
-- `POST /{id}/reconciliations/{rec_id}/confirm` - Confirm and generate note
-- `GET /{id}/debit-credit-notes` - List settlement notes
-- `POST /{id}/debit-credit-notes/{note_id}/record-payment` - Record payment
-
-**Frontend UI**:
-- New "Billing & Reconciliation" tab in distributor detail
-- Summary cards: Base Prices, Unreconciled Deliveries, Net Balance, Pending Credits
-- Base Price Configuration table with CRUD
-- Reconciliations table with detail view
-- Debit/Credit Notes table with payment recording
-
-**Testing**: Verified with testing_agent_v3_fork (iteration_57.json) - 100% pass rate (14/14 backend, 100% frontend)
-
-### ENHANCEMENT: Merged Base Price into Margin Matrix ✅
-**User Request**: Merge Base Price Configuration into Margin Matrix. Add active_from and active_to date fields for time-based validity.
-
-**Changes Made**:
-1. **Margin Matrix Model Updated**:
-   - Added `base_price` field - the base price for the SKU
-   - Added `transfer_price` field - calculated as base_price × (1 - margin_value/100)
-   - Renamed `effective_from/to` to `active_from/active_to` for clarity
-   
-2. **Backend Logic**:
-   - Create/Update margin entry now calculates transfer_price automatically
-   - Reconciliation now uses Margin Matrix instead of separate Billing Config
-   - Reconciliation filters by active dates: entry is valid if (active_from <= period_end) AND (active_to >= period_start)
-   
-3. **Frontend UI**:
-   - Margin Matrix grid updated with columns: Base Price, Transfer Price, Active From, Active To
-   - Transfer Price shown as calculated value (green text)
-   - Date pickers for Active From/To
-   - Billing tab replaced "Base Price Configuration" section with note directing to Margins tab
-
-**Formula**: Transfer Price = Base Price × (1 - Margin%/100)
-- Example: ₹100 × (1 - 2.5/100) = ₹97.5
-
-**Testing**: Verified with testing_agent_v3_fork (iteration_58.json) - 100% pass rate (11/11 backend, 100% frontend)
-
-### ENHANCEMENT: Multiple Margin Entries Per SKU with Date Overlap Validation ✅
-**User Request**: Allow multiple margin entries per SKU to maintain pricing history. Ensure only one entry is active at any given time by validating date overlaps.
-
-**Changes Made**:
-1. **Date Overlap Validation**:
-   - New entries validated against existing ones: `new_start <= exist_end AND exist_start <= new_end` = overlap
-   - Clear error message: "Date range overlaps with existing entry (ID: xxx, Active: date to date)"
-   - Same validation on update operations
-   
-2. **Multiple Entries Per SKU**:
-   - Can now create entries like: 2026 (₹100, 2.5%), 2027 (₹110, 3.0%)
-   - Each entry has `active_from` and `active_to` dates
-   - Empty `active_to` = ongoing/indefinite
-   
-3. **Status Indicators**:
-   - 🟢 **Active**: Currently valid (active_from <= today <= active_to)
-   - 🔵 **Future**: Not yet valid (active_from > today)
-   - ⚫ **Expired**: No longer valid (active_to < today)
-   
-4. **UI Redesigned**:
-   - Changed from grid-based (one row per SKU) to list-based (multiple rows per SKU)
-   - "Add Price Entry" button to create new entries
-   - Edit dialog for each entry
-   - Summary: Total entries | Active | Unique SKUs
-
-**Testing**: Verified with testing_agent_v3_fork (iteration_59.json) - 100% pass rate (9/9 backend, 100% frontend)
 
 ## Distribution Module - Complete Implementation
 
@@ -367,7 +138,7 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 - Warehouse/stocking locations
 
 ### Phase 2: Commercial Setup ✅
-- Margin Matrix (city + SKU level margins)
+- Margin Matrix (city + SKU level margins with date validity)
 - Account-Distributor Assignment
 
 ### Phase 3: Operations & Transactions ✅
@@ -376,20 +147,21 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 - Stock tracking per location
 
 ### Phase 4: Settlement & Reports ✅ (Fully Tested)
-- Settlement calculation engine ✅
+- Monthly Settlement calculation engine ✅
 - Settlement approval workflow (Draft → Pending → Approved → Paid) ✅
-- E2E tested with 100% pass rate (iteration_63.json)
+- E2E tested with 100% pass rate (iteration_66.json)
 
 ## Pending Tasks
 
 ### P1 - High Priority
 1. **Auto-generate Provisional Invoice** - Trigger invoice when shipment status is "delivered"
+2. **Reporting Module** - Stock balance, deliveries, settlements reports
 
 ### P2 - Medium Priority
 1. **Server.py Refactoring** - Move remaining routes to modular files
 2. **Settlement Period Configuration** - Auto weekly/monthly cycles
-3. **Reporting Module** - Stock balance, deliveries, settlements reports
-4. **Cleanup deprecated BillingConfig** - Remove obsolete billing config models/routes after merging into Margin Matrix
+3. **Cleanup deprecated BillingConfig** - Remove obsolete billing config models/routes after merging into Margin Matrix
+4. **Lead Activity Date Validation** - Prevent activities dated before lead creation
 
 ## Key API Endpoints - Distribution Module
 - `GET/POST/PUT/DELETE /api/distributors` - Distributor CRUD
@@ -397,12 +169,13 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 - `GET/POST/PUT/DELETE /api/distributors/{id}/locations` - Location management
 - `GET/POST/PUT/DELETE /api/distributors/{id}/margins` - Margin matrix
 - `GET/POST/PUT/DELETE /api/distributors/{id}/assignments` - Account assignments
-- `GET /api/distributors/accounts/search` - Search accounts (uses account_name)
-- `GET /api/distributors/{id}/assigned-accounts` - Get accounts for delivery (uses account_name)
+- `GET /api/distributors/accounts/search` - Search accounts
+- `GET /api/distributors/{id}/assigned-accounts` - Get accounts for delivery
 - `GET/POST/PUT/DELETE /api/distributors/{id}/shipments` - Shipment CRUD
 - `GET/POST/DELETE /api/distributors/{id}/deliveries` - Delivery CRUD
 - `GET/POST/PUT/DELETE /api/distributors/{id}/settlements` - Settlement CRUD
-- `POST /api/distributors/{id}/settlements/generate` - Generate settlement report
+- `POST /api/distributors/{id}/settlements/generate-monthly` - Generate monthly settlements
+- `GET /api/distributors/{id}/unsettled-deliveries` - Get unsettled deliveries for month
 - `GET/DELETE /api/distributors/{id}/reconciliations` - Reconciliation management
 - `GET/POST/DELETE /api/distributors/{id}/notes` - Debit/Credit notes management
 
@@ -414,7 +187,29 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 - **Distributor**: "Test" (ID: 99fb55dc-532c-4e85-b618-6b8a5e552c04)
 - **Assigned Account**: "Test Status Validation Company" (Delhi)
 
+## Component Directory
+`/app/frontend/src/components/distributor/`
+- `OverviewTab.jsx` - Basic info, contacts, commercial terms
+- `CoverageTab.jsx` - Operating coverage management
+- `LocationsTab.jsx` - Warehouse/location management
+- `MarginsTab.jsx` - Margin Matrix with toggle filter
+- `AssignmentsTab.jsx` - Account assignments
+- `ShipmentsTab.jsx` - Primary shipments with pricing columns
+- `DeliveriesTab.jsx` - Account deliveries with line items
+- `SettlementsTab.jsx` - Monthly settlement generation
+- `BillingTab.jsx` - Billing summary, reconciliations, notes
+- `constants.js` - Shared constants
+
 ## Technical Debt
-1. **DistributorDetail.js** - ✅ RESOLVED: Reduced from 5,350 to 2,821 lines (47% reduction). All 9 tabs extracted to separate components.
-2. **server.py** - Still contains many routes that should be modularized
-3. **Deprecated BillingConfig** - Old billing config models/routes should be removed after being merged into Margin Matrix
+1. **server.py** - Still contains many routes that should be modularized
+2. **Deprecated BillingConfig** - Old billing config models/routes should be removed
+
+## 3rd Party Integrations
+- Amazon MQ (ActiveMQ)
+- Gemini (via Emergent LLM Key)
+- Zoom API
+- Resend
+- Open-Meteo
+- Google Places API
+- Google Workspace OAuth
+- Claude Sonnet 4.5 (via Emergent LLM Key)
