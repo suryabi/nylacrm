@@ -4452,7 +4452,7 @@ async def get_reconciliations(
     page_size: int = 20,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get reconciliations for a distributor"""
+    """Get reconciliations for a distributor with delivery items"""
     tenant_id = get_current_tenant_id()
     
     query = {"tenant_id": tenant_id, "distributor_id": distributor_id}
@@ -4463,6 +4463,37 @@ async def get_reconciliations(
     recs = await db.distributor_reconciliations.find(
         query, {"_id": 0}
     ).sort("created_at", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    
+    # For each reconciliation, fetch the delivery items with adjustment amounts
+    for rec in recs:
+        items = await db.distributor_reconciliation_items.find(
+            {"reconciliation_id": rec['id'], "tenant_id": tenant_id},
+            {"_id": 0}
+        ).to_list(500)
+        
+        # Enrich items with delivery details
+        delivery_items = []
+        for item in items:
+            delivery_id = item.get('delivery_id')
+            if delivery_id:
+                # Get delivery info
+                delivery = await db.distributor_deliveries.find_one(
+                    {"id": delivery_id, "tenant_id": tenant_id},
+                    {"_id": 0, "delivery_number": 1, "account_name": 1, "account_id": 1}
+                )
+                if delivery:
+                    item['delivery_number'] = delivery.get('delivery_number')
+                    item['account_name'] = delivery.get('account_name')
+            
+            # Calculate adjustment if not already present
+            distributor_earnings = item.get('distributor_earnings') or item.get('margin_amount') or 0
+            margin_at_transfer = item.get('margin_at_transfer_price') or 0
+            item['adjustment_amount'] = item.get('adjustment_amount') or item.get('adjustment_payable') or (distributor_earnings - margin_at_transfer)
+            item['total_billing_value'] = item.get('total_billing_value') or item.get('gross_amount') or item.get('actual_net_amount') or 0
+            
+            delivery_items.append(item)
+        
+        rec['delivery_items'] = delivery_items
     
     return {
         "reconciliations": recs,

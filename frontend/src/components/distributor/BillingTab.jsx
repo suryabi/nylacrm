@@ -105,7 +105,7 @@ export default function BillingTab({
               </Button>
             )}
           </div>
-          <p className="text-sm text-muted-foreground">Compare provisional billing vs actual customer sales</p>
+          <p className="text-sm text-muted-foreground">Account delivery reconciliation with adjustment amounts</p>
         </CardHeader>
         <CardContent>
           {reconciliationsLoading ? (
@@ -116,7 +116,7 @@ export default function BillingTab({
             <div className="text-center py-8 text-muted-foreground">
               <FileText className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p>No reconciliations yet</p>
-              <p className="text-sm">Create a reconciliation to compare provisional vs actual amounts</p>
+              <p className="text-sm">Create a reconciliation to track delivery adjustments</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -124,56 +124,138 @@ export default function BillingTab({
                 <thead>
                   <tr className="border-b bg-muted/50">
                     <th className="text-left p-3 font-medium">Reconciliation #</th>
-                    <th className="text-left p-3 font-medium">Period</th>
-                    <th className="text-right p-3 font-medium">Deliveries</th>
-                    <th className="text-right p-3 font-medium">Provisional</th>
-                    <th className="text-right p-3 font-medium">Actual Net</th>
-                    <th className="text-right p-3 font-medium">Difference</th>
+                    <th className="text-left p-3 font-medium">Account Delivery ID</th>
+                    <th className="text-left p-3 font-medium">Account Name</th>
+                    <th className="text-right p-3 font-medium">Total Billing</th>
+                    <th className="text-right p-3 font-medium">Distributor Earnings</th>
+                    <th className="text-right p-3 font-medium">Margin at Transfer</th>
+                    <th className="text-right p-3 font-medium">Adjustment Amount</th>
                     <th className="text-center p-3 font-medium">Status</th>
                     <th className="text-right p-3 font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {reconciliations.map((rec) => (
-                    <tr key={rec.id} className="border-b hover:bg-muted/30 cursor-pointer" onClick={() => viewReconciliationDetail(rec.id)}>
-                      <td className="p-3 font-medium">{rec.reconciliation_number}</td>
-                      <td className="p-3">{rec.period_start} to {rec.period_end}</td>
-                      <td className="p-3 text-right">{rec.total_deliveries}</td>
-                      <td className="p-3 text-right">₹{rec.total_provisional_amount?.toLocaleString()}</td>
-                      <td className="p-3 text-right">₹{rec.total_actual_net_amount?.toLocaleString()}</td>
-                      <td className={`p-3 text-right font-medium ${rec.total_difference > 0 ? 'text-red-600' : rec.total_difference < 0 ? 'text-green-600' : ''}`}>
-                        {rec.total_difference > 0 ? '+' : ''}₹{rec.total_difference?.toLocaleString()}
-                      </td>
-                      <td className="p-3 text-center">{getReconciliationStatusBadge(rec.status)}</td>
-                      <td className="p-3 text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); viewReconciliationDetail(rec.id); }}>
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          {/* Show delete for draft (canManage) or any status (canDelete for CEO/Admin) */}
-                          {(canDelete || (canManage && rec.status === 'draft')) && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteTarget({
-                                  type: 'reconciliation',
-                                  id: rec.id,
-                                  name: rec.reconciliation_number
-                                });
-                              }}
-                              data-testid={`delete-reconciliation-${rec.id}`}
-                              title={canDelete ? "Delete (Admin)" : "Delete draft"}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                  {reconciliations.map((rec) => {
+                    // If reconciliation has delivery items, show each
+                    const items = rec.delivery_items || rec.items || [];
+                    
+                    if (items.length > 0) {
+                      return items.map((item, idx) => (
+                        <tr 
+                          key={`${rec.id}-${item.delivery_id || idx}`} 
+                          className={`border-b hover:bg-muted/30 ${idx === 0 ? 'border-t-2 border-t-slate-300' : ''}`}
+                        >
+                          {idx === 0 && (
+                            <td className="p-3 font-medium align-top" rowSpan={items.length}>
+                              <button 
+                                className="text-primary hover:underline"
+                                onClick={() => viewReconciliationDetail(rec.id)}
+                              >
+                                {rec.reconciliation_number}
+                              </button>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {rec.period_start} to {rec.period_end}
+                              </p>
+                            </td>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                          <td className="p-3">
+                            <span className="font-mono text-xs bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
+                              {item.delivery_number || item.delivery_id?.slice(0, 8) || '-'}
+                            </span>
+                          </td>
+                          <td className="p-3">{item.account_name || '-'}</td>
+                          <td className="p-3 text-right">₹{(item.total_billing_value || item.gross_amount || 0).toLocaleString()}</td>
+                          <td className="p-3 text-right text-green-600">₹{(item.distributor_earnings || item.margin_amount || 0).toLocaleString()}</td>
+                          <td className="p-3 text-right">₹{(item.margin_at_transfer_price || 0).toLocaleString()}</td>
+                          <td className={`p-3 text-right font-medium ${(item.adjustment_amount || item.adjustment_payable || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {(item.adjustment_amount || item.adjustment_payable || 0) >= 0 ? '+' : ''}₹{(item.adjustment_amount || item.adjustment_payable || 0).toLocaleString()}
+                          </td>
+                          {idx === 0 && (
+                            <>
+                              <td className="p-3 text-center align-top" rowSpan={items.length}>
+                                {getReconciliationStatusBadge(rec.status)}
+                              </td>
+                              <td className="p-3 text-right align-top" rowSpan={items.length}>
+                                <div className="flex flex-col gap-1 items-end">
+                                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); viewReconciliationDetail(rec.id); }}>
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  {(canDelete || (canManage && rec.status === 'draft')) && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-destructive"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeleteTarget({
+                                          type: 'reconciliation',
+                                          id: rec.id,
+                                          name: rec.reconciliation_number
+                                        });
+                                      }}
+                                      data-testid={`delete-reconciliation-${rec.id}`}
+                                      title={canDelete ? "Delete (Admin)" : "Delete draft"}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      ));
+                    }
+                    
+                    // Fallback for reconciliations without items
+                    return (
+                      <tr key={rec.id} className="border-b hover:bg-muted/30 border-t-2 border-t-slate-300">
+                        <td className="p-3 font-medium">
+                          <button 
+                            className="text-primary hover:underline"
+                            onClick={() => viewReconciliationDetail(rec.id)}
+                          >
+                            {rec.reconciliation_number}
+                          </button>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {rec.period_start} to {rec.period_end}
+                          </p>
+                        </td>
+                        <td className="p-3 text-muted-foreground" colSpan={5}>
+                          {rec.total_deliveries || 0} deliveries | 
+                          Total: ₹{rec.total_provisional_amount?.toLocaleString()} | 
+                          Difference: <span className={rec.total_difference > 0 ? 'text-red-600' : 'text-green-600'}>
+                            {rec.total_difference > 0 ? '+' : ''}₹{rec.total_difference?.toLocaleString()}
+                          </span>
+                        </td>
+                        <td className="p-3 text-center">{getReconciliationStatusBadge(rec.status)}</td>
+                        <td className="p-3 text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); viewReconciliationDetail(rec.id); }}>
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            {(canDelete || (canManage && rec.status === 'draft')) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteTarget({
+                                    type: 'reconciliation',
+                                    id: rec.id,
+                                    name: rec.reconciliation_number
+                                  });
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
