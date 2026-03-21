@@ -2531,7 +2531,8 @@ async def register(user_input: UserCreate):
 
 @api_router.post("/auth/login")
 async def login(credentials: UserLogin, request: Request, response: Response):
-    user_doc = await get_tdb().users.find_one({'email': credentials.email}, {'_id': 0})
+    # Use db directly (not get_tdb) for login since we don't have tenant context yet
+    user_doc = await db.users.find_one({'email': credentials.email}, {'_id': 0})
     if not user_doc or not verify_password(credentials.password, user_doc['password']):
         raise HTTPException(status_code=401, detail='Invalid credentials')
     
