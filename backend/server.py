@@ -6600,9 +6600,12 @@ async def get_dashboard_analytics(
         start_date = now.replace(day=1, hour=0, minute=0, second=0).isoformat()
         end_date = now.isoformat()
     elif time_filter == 'last_month':
-        last_month = now.replace(day=1) - timedelta(days=1)
-        start_date = last_month.replace(day=1, hour=0, minute=0, second=0).isoformat()
-        end_date = last_month.replace(hour=23, minute=59, second=59).isoformat()
+        # Get the first day of current month, then go back one day to get last day of previous month
+        first_of_current = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        last_day_of_prev = first_of_current - timedelta(days=1)
+        first_of_prev = last_day_of_prev.replace(day=1)
+        start_date = first_of_prev.isoformat()
+        end_date = last_day_of_prev.replace(hour=23, minute=59, second=59).isoformat()
     elif time_filter == 'last_3_months':
         start_date = (now - timedelta(days=90)).replace(hour=0, minute=0, second=0).isoformat()
         end_date = now.isoformat()
@@ -6748,9 +6751,12 @@ async def get_dashboard_analytics(
         start_date = now.replace(day=1, hour=0, minute=0, second=0).isoformat()
         end_date = now.isoformat()
     elif time_filter == 'last_month':
-        last_month = now.replace(day=1) - timedelta(days=1)
-        start_date = last_month.replace(day=1, hour=0, minute=0, second=0).isoformat()
-        end_date = last_month.replace(hour=23, minute=59, second=59).isoformat()
+        # Get the first day of current month, then go back one day to get last day of previous month
+        first_of_current = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        last_day_of_prev = first_of_current - timedelta(days=1)
+        first_of_prev = last_day_of_prev.replace(day=1)
+        start_date = first_of_prev.isoformat()
+        end_date = last_day_of_prev.replace(hour=23, minute=59, second=59).isoformat()
     elif time_filter == 'last_3_months':
         start_date = (now - timedelta(days=90)).replace(hour=0, minute=0, second=0).isoformat()
         end_date = now.isoformat()
@@ -6876,9 +6882,12 @@ async def get_pipeline_accounts(
         start_date = now.replace(day=1, hour=0, minute=0, second=0).isoformat()
         end_date = now.isoformat()
     elif time_filter == 'last_month':
-        last_month = now.replace(day=1) - timedelta(days=1)
-        start_date = last_month.replace(day=1, hour=0, minute=0, second=0).isoformat()
-        end_date = last_month.replace(hour=23, minute=59, second=59).isoformat()
+        # Get the first day of current month, then go back one day to get last day of previous month
+        first_of_current = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        last_day_of_prev = first_of_current - timedelta(days=1)
+        first_of_prev = last_day_of_prev.replace(day=1)
+        start_date = first_of_prev.isoformat()
+        end_date = last_day_of_prev.replace(hour=23, minute=59, second=59).isoformat()
     elif time_filter == 'last_3_months':
         start_date = (now - timedelta(days=90)).replace(hour=0, minute=0, second=0).isoformat()
         end_date = now.isoformat()
