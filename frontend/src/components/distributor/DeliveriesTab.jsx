@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -7,7 +7,18 @@ import { Badge } from '../ui/badge';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
-import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X } from 'lucide-react';
+import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+
+const TIME_FILTERS = [
+  { value: 'this_week', label: 'This Week' },
+  { value: 'last_week', label: 'Last Week' },
+  { value: 'this_month', label: 'This Month' },
+  { value: 'last_month', label: 'Last Month' },
+  { value: 'last_3_months', label: 'Last 3 Months' },
+  { value: 'last_6_months', label: 'Last 6 Months' },
+  { value: 'this_year', label: 'This Year' },
+  { value: 'lifetime', label: 'Lifetime' }
+];
 
 export default function DeliveriesTab({
   distributor,
@@ -15,6 +26,16 @@ export default function DeliveriesTab({
   canDelete,
   deliveries,
   deliveriesLoading,
+  deliveriesTotal,
+  deliveriesPage,
+  deliveriesPageSize,
+  setDeliveriesPage,
+  setDeliveriesPageSize,
+  deliveriesTimeFilter,
+  setDeliveriesTimeFilter,
+  deliveriesAccountFilter,
+  setDeliveriesAccountFilter,
+  fetchDeliveries,
   skus,
   assignedAccounts,
   // Dialog state
@@ -38,26 +59,140 @@ export default function DeliveriesTab({
   savingDelivery,
   viewDeliveryDetail,
   setDeleteTarget,
-  getDeliveryStatusBadge
+  getDeliveryStatusBadge,
+  // Excel download
+  API_URL,
+  token
 }) {
+  const [downloading, setDownloading] = useState(false);
+  
+  const totalPages = Math.ceil((deliveriesTotal || 0) / (deliveriesPageSize || 20));
+  
+  // Download as Excel
+  const downloadExcel = async () => {
+    setDownloading(true);
+    try {
+      // Prepare data for Excel
+      const excelData = [];
+      
+      deliveries.forEach(delivery => {
+        const items = delivery.items || [];
+        if (items.length > 0) {
+          items.forEach(item => {
+            const qty = item.quantity || 0;
+            const customerPrice = item.customer_selling_price || item.unit_price || 0;
+            const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
+            const transferPrice = item.transfer_price || item.base_price || 0;
+            
+            const billingValue = qty * customerPrice;
+            const distributorEarnings = billingValue * (commissionPct / 100);
+            const marginAtTransfer = qty * transferPrice * (commissionPct / 100);
+            const adjustment = distributorEarnings - marginAtTransfer;
+            
+            excelData.push({
+              'Delivery #': delivery.delivery_number,
+              'Date': new Date(delivery.delivery_date).toLocaleDateString(),
+              'Account': delivery.account_name,
+              'City': delivery.account_city,
+              'SKU': item.sku_name || item.sku_code || 'N/A',
+              'Quantity': qty,
+              'Customer Selling Price (Per Unit)': customerPrice,
+              'Distributor Commission %': commissionPct,
+              'Total Customer Billing Value': billingValue,
+              'Distributor Earnings (On Selling Price)': distributorEarnings,
+              'Transfer Price (Per Unit)': transferPrice,
+              'Distributor Margin at Transfer Price': marginAtTransfer,
+              'Adjustment Payable': adjustment,
+              'Status': delivery.status
+            });
+          });
+        } else {
+          excelData.push({
+            'Delivery #': delivery.delivery_number,
+            'Date': new Date(delivery.delivery_date).toLocaleDateString(),
+            'Account': delivery.account_name,
+            'City': delivery.account_city,
+            'SKU': 'No items',
+            'Quantity': 0,
+            'Customer Selling Price (Per Unit)': 0,
+            'Distributor Commission %': 0,
+            'Total Customer Billing Value': 0,
+            'Distributor Earnings (On Selling Price)': 0,
+            'Transfer Price (Per Unit)': 0,
+            'Distributor Margin at Transfer Price': 0,
+            'Adjustment Payable': 0,
+            'Status': delivery.status
+          });
+        }
+      });
+      
+      // Convert to CSV
+      if (excelData.length === 0) {
+        alert('No data to download');
+        return;
+      }
+      
+      const headers = Object.keys(excelData[0]);
+      const csvContent = [
+        headers.join(','),
+        ...excelData.map(row => 
+          headers.map(header => {
+            const value = row[header];
+            // Escape commas and quotes
+            if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+              return `"${value.replace(/"/g, '""')}"`;
+            }
+            return value;
+          }).join(',')
+        )
+      ].join('\n');
+      
+      // Download
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `deliveries_${distributor?.name || 'distributor'}_${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (error) {
+      console.error('Download failed:', error);
+      alert('Failed to download');
+    } finally {
+      setDownloading(false);
+    }
+  };
+  
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle className="text-lg">Account Deliveries</CardTitle>
-          <CardDescription>Deliveries from this distributor to assigned accounts</CardDescription>
-        </div>
-        {canManage && (
-          <Dialog open={showDeliveryDialog} onOpenChange={(open) => {
-            setShowDeliveryDialog(open);
-            if (!open) resetDeliveryForm();
-          }}>
-            <DialogTrigger asChild>
-              <Button data-testid="create-delivery-btn">
-                <Plus className="h-4 w-4 mr-2" />
-                Record Delivery
-              </Button>
-            </DialogTrigger>
+      <CardHeader className="flex flex-col gap-4">
+        <div className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-lg">Account Deliveries</CardTitle>
+            <CardDescription>Deliveries from this distributor to assigned accounts</CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Excel Download */}
+            <Button 
+              variant="outline" 
+              onClick={downloadExcel} 
+              disabled={downloading || deliveries.length === 0}
+              data-testid="download-deliveries-btn"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              {downloading ? 'Downloading...' : 'Download Excel'}
+            </Button>
+            
+            {canManage && (
+              <Dialog open={showDeliveryDialog} onOpenChange={(open) => {
+                setShowDeliveryDialog(open);
+                if (!open) resetDeliveryForm();
+              }}>
+                <DialogTrigger asChild>
+                  <Button data-testid="create-delivery-btn">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Record Delivery
+                  </Button>
+                </DialogTrigger>
             <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Record Account Delivery</DialogTitle>
@@ -415,8 +550,79 @@ export default function DeliveriesTab({
             </DialogContent>
           </Dialog>
         )}
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
+        {/* Filters Row */}
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4 pb-4 border-b">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Time Period:</span>
+            </div>
+            <select
+              value={deliveriesTimeFilter || 'this_month'}
+              onChange={(e) => {
+                setDeliveriesTimeFilter(e.target.value);
+                setDeliveriesPage(1);
+              }}
+              className="text-sm border rounded-md px-3 py-1.5 bg-background"
+              data-testid="deliveries-time-filter"
+            >
+              {TIME_FILTERS.map(tf => (
+                <option key={tf.value} value={tf.value}>{tf.label}</option>
+              ))}
+            </select>
+            
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Account:</span>
+            </div>
+            <select
+              value={deliveriesAccountFilter || 'all'}
+              onChange={(e) => {
+                setDeliveriesAccountFilter(e.target.value);
+                setDeliveriesPage(1);
+              }}
+              className="text-sm border rounded-md px-3 py-1.5 bg-background min-w-[200px]"
+              data-testid="deliveries-account-filter"
+            >
+              <option value="all">All Accounts</option>
+              {assignedAccounts.map(account => (
+                <option key={account.id} value={account.account_id}>
+                  {account.account_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Show:</span>
+              <select
+                value={deliveriesPageSize || 20}
+                onChange={(e) => {
+                  setDeliveriesPageSize(Number(e.target.value));
+                  setDeliveriesPage(1);
+                }}
+                className="text-sm border rounded-md px-2 py-1.5 bg-background"
+                data-testid="deliveries-page-size"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span className="text-sm text-muted-foreground">per page</span>
+            </div>
+            
+            <div className="text-sm text-muted-foreground">
+              Total: <span className="font-medium">{deliveriesTotal || 0}</span> deliveries
+            </div>
+          </div>
+        </div>
+        
         {deliveriesLoading ? (
           <div className="flex items-center justify-center py-12">
             <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -431,6 +637,7 @@ export default function DeliveriesTab({
             )}
           </div>
         ) : (
+          <>
           <div className="overflow-x-auto">
             <table className="w-full text-sm" data-testid="deliveries-table">
               <thead>
@@ -632,6 +839,69 @@ export default function DeliveriesTab({
               </tbody>
             </table>
           </div>
+          
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t">
+              <div className="text-sm text-muted-foreground">
+                Showing {((deliveriesPage - 1) * deliveriesPageSize) + 1} to {Math.min(deliveriesPage * deliveriesPageSize, deliveriesTotal)} of {deliveriesTotal} deliveries
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeliveriesPage(1)}
+                  disabled={deliveriesPage === 1}
+                >
+                  First
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeliveriesPage(prev => Math.max(1, prev - 1))}
+                  disabled={deliveriesPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                <div className="flex items-center gap-1 px-2">
+                  <span className="text-sm">Page</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={deliveriesPage}
+                    onChange={(e) => {
+                      const page = parseInt(e.target.value);
+                      if (page >= 1 && page <= totalPages) {
+                        setDeliveriesPage(page);
+                      }
+                    }}
+                    className="w-16 h-8 text-center"
+                  />
+                  <span className="text-sm">of {totalPages}</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeliveriesPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={deliveriesPage === totalPages}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeliveriesPage(totalPages)}
+                  disabled={deliveriesPage === totalPages}
+                >
+                  Last
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
         )}
       </CardContent>
     </Card>

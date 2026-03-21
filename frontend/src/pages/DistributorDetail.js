@@ -153,6 +153,11 @@ export default function DistributorDetail() {
   // Delivery state
   const [deliveries, setDeliveries] = useState([]);
   const [deliveriesLoading, setDeliveriesLoading] = useState(false);
+  const [deliveriesTotal, setDeliveriesTotal] = useState(0);
+  const [deliveriesPage, setDeliveriesPage] = useState(1);
+  const [deliveriesPageSize, setDeliveriesPageSize] = useState(20);
+  const [deliveriesTimeFilter, setDeliveriesTimeFilter] = useState('this_month');
+  const [deliveriesAccountFilter, setDeliveriesAccountFilter] = useState('all');
   const [showDeliveryDialog, setShowDeliveryDialog] = useState(false);
   const [assignedAccounts, setAssignedAccounts] = useState([]);
   const [selectedDeliveryAccount, setSelectedDeliveryAccount] = useState(null);
@@ -371,17 +376,26 @@ export default function DistributorDetail() {
   const fetchDeliveries = useCallback(async () => {
     try {
       setDeliveriesLoading(true);
-      const response = await axios.get(`${API_URL}/api/distributors/${id}/deliveries`, {
+      const params = new URLSearchParams({
+        page: deliveriesPage,
+        page_size: deliveriesPageSize,
+        time_filter: deliveriesTimeFilter
+      });
+      if (deliveriesAccountFilter && deliveriesAccountFilter !== 'all') {
+        params.append('account_id', deliveriesAccountFilter);
+      }
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/deliveries?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
         withCredentials: true
       });
       setDeliveries(response.data.deliveries || []);
+      setDeliveriesTotal(response.data.total || 0);
     } catch (error) {
       console.error('Failed to fetch deliveries:', error);
     } finally {
       setDeliveriesLoading(false);
     }
-  }, [id, token]);
+  }, [id, token, deliveriesPage, deliveriesPageSize, deliveriesTimeFilter, deliveriesAccountFilter]);
 
   // Fetch assigned accounts for delivery
   const fetchAssignedAccounts = useCallback(async () => {
@@ -402,7 +416,7 @@ export default function DistributorDetail() {
       fetchAssignedAccounts();
       if (skus.length === 0) fetchSkus();
     }
-  }, [activeTab, fetchDeliveries, fetchAssignedAccounts, fetchSkus, skus.length]);
+  }, [activeTab, fetchDeliveries, fetchAssignedAccounts, fetchSkus, skus.length, deliveriesPage, deliveriesPageSize, deliveriesTimeFilter, deliveriesAccountFilter]);
 
   // Fetch settlements
   const fetchSettlements = useCallback(async () => {
@@ -2088,6 +2102,16 @@ export default function DistributorDetail() {
             canDelete={canDelete}
             deliveries={deliveries}
             deliveriesLoading={deliveriesLoading}
+            deliveriesTotal={deliveriesTotal}
+            deliveriesPage={deliveriesPage}
+            deliveriesPageSize={deliveriesPageSize}
+            setDeliveriesPage={setDeliveriesPage}
+            setDeliveriesPageSize={setDeliveriesPageSize}
+            deliveriesTimeFilter={deliveriesTimeFilter}
+            setDeliveriesTimeFilter={setDeliveriesTimeFilter}
+            deliveriesAccountFilter={deliveriesAccountFilter}
+            setDeliveriesAccountFilter={setDeliveriesAccountFilter}
+            fetchDeliveries={fetchDeliveries}
             skus={skus}
             assignedAccounts={assignedAccounts}
             showDeliveryDialog={showDeliveryDialog}
@@ -2108,6 +2132,8 @@ export default function DistributorDetail() {
             viewDeliveryDetail={viewDeliveryDetail}
             setDeleteTarget={setDeleteTarget}
             getDeliveryStatusBadge={getDeliveryStatusBadge}
+            API_URL={API_URL}
+            token={token}
           />
         </TabsContent>
 

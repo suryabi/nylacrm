@@ -3,7 +3,7 @@ Distributor Management Routes
 CRUD operations for distributors, operating coverage, and locations
 """
 from fastapi import APIRouter, HTTPException, Depends, Query
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 import logging
 import uuid
@@ -2622,17 +2622,58 @@ async def get_deliveries_summary(
 async def list_distributor_deliveries(
     distributor_id: str,
     status: Optional[str] = None,
+    account_id: Optional[str] = None,
+    time_filter: Optional[str] = 'this_month',
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(get_current_user)
 ):
-    """List deliveries for a specific distributor with items"""
+    """List deliveries for a specific distributor with items, pagination, and time filter"""
     tenant_id = get_current_tenant_id()
     
     query = {"tenant_id": tenant_id, "distributor_id": distributor_id}
     
     if status and status != 'all':
         query["status"] = status
+    
+    if account_id and account_id != 'all':
+        query["account_id"] = account_id
+    
+    # Apply time filter
+    now = datetime.now(timezone.utc)
+    if time_filter and time_filter != 'lifetime':
+        if time_filter == 'this_week':
+            start_date = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+            end_date = now
+        elif time_filter == 'last_week':
+            start_date = (now - timedelta(days=now.weekday() + 7)).replace(hour=0, minute=0, second=0, microsecond=0)
+            end_date = (now - timedelta(days=now.weekday() + 1)).replace(hour=23, minute=59, second=59, microsecond=999999)
+        elif time_filter == 'this_month':
+            start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_date = now
+        elif time_filter == 'last_month':
+            first_of_current = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            last_day_of_prev = first_of_current - timedelta(days=1)
+            start_date = last_day_of_prev.replace(day=1)
+            end_date = last_day_of_prev.replace(hour=23, minute=59, second=59, microsecond=999999)
+        elif time_filter == 'last_3_months':
+            start_date = (now - timedelta(days=90)).replace(hour=0, minute=0, second=0, microsecond=0)
+            end_date = now
+        elif time_filter == 'last_6_months':
+            start_date = (now - timedelta(days=180)).replace(hour=0, minute=0, second=0, microsecond=0)
+            end_date = now
+        elif time_filter == 'this_year':
+            start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_date = now
+        else:
+            start_date = None
+            end_date = None
+        
+        if start_date and end_date:
+            query["delivery_date"] = {
+                "$gte": start_date.strftime("%Y-%m-%d"),
+                "$lte": end_date.strftime("%Y-%m-%d")
+            }
     
     total = await db.distributor_deliveries.count_documents(query)
     
