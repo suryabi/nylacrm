@@ -180,13 +180,17 @@ export default function DistributorDetail() {
   // Settlement state
   const [settlements, setSettlements] = useState([]);
   const [settlementsLoading, setSettlementsLoading] = useState(false);
+  const [settlementsTotal, setSettlementsTotal] = useState(0);
+  const [settlementsPage, setSettlementsPage] = useState(1);
+  const [settlementsPageSize, setSettlementsPageSize] = useState(20);
+  const [settlementsMonthFilter, setSettlementsMonthFilter] = useState('all');
+  const [settlementsYearFilter, setSettlementsYearFilter] = useState('all');
   const [showSettlementDialog, setShowSettlementDialog] = useState(false);
   const [unsettledDeliveries, setUnsettledDeliveries] = useState([]);
   const [unsettledLoading, setUnsettledLoading] = useState(false);
   const [settlementForm, setSettlementForm] = useState({
-    period_type: 'monthly',
-    period_start: '',
-    period_end: '',
+    settlement_month: new Date().getMonth() + 1,
+    settlement_year: new Date().getFullYear(),
     remarks: ''
   });
   const [savingSettlement, setSavingSettlement] = useState(false);
@@ -422,26 +426,36 @@ export default function DistributorDetail() {
   const fetchSettlements = useCallback(async () => {
     try {
       setSettlementsLoading(true);
-      const response = await axios.get(`${API_URL}/api/distributors/${id}/settlements`, {
+      const params = new URLSearchParams({
+        page: settlementsPage,
+        page_size: settlementsPageSize
+      });
+      if (settlementsMonthFilter && settlementsMonthFilter !== 'all') {
+        params.append('month', settlementsMonthFilter);
+      }
+      if (settlementsYearFilter && settlementsYearFilter !== 'all') {
+        params.append('year', settlementsYearFilter);
+      }
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/settlements?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
         withCredentials: true
       });
       setSettlements(response.data.settlements || []);
+      setSettlementsTotal(response.data.total || 0);
     } catch (error) {
       console.error('Failed to fetch settlements:', error);
     } finally {
       setSettlementsLoading(false);
     }
-  }, [id, token]);
+  }, [id, token, settlementsPage, settlementsPageSize, settlementsMonthFilter, settlementsYearFilter]);
 
-  // Fetch unsettled deliveries
-  const fetchUnsettledDeliveries = useCallback(async () => {
-    if (!settlementForm.period_start || !settlementForm.period_end) return;
-    
+  // Fetch unsettled deliveries for a specific month/year
+  const fetchUnsettledDeliveries = useCallback(async (month, year) => {
+    if (!month || !year) return;
     try {
       setUnsettledLoading(true);
       const response = await axios.get(
-        `${API_URL}/api/distributors/${id}/unsettled-deliveries?from_date=${settlementForm.period_start}&to_date=${settlementForm.period_end}`,
+        `${API_URL}/api/distributors/${id}/unsettled-deliveries?month=${month}&year=${year}`,
         {
           headers: { Authorization: `Bearer ${token}` },
           withCredentials: true
@@ -450,22 +464,17 @@ export default function DistributorDetail() {
       setUnsettledDeliveries(response.data.deliveries || []);
     } catch (error) {
       console.error('Failed to fetch unsettled deliveries:', error);
+      setUnsettledDeliveries([]);
     } finally {
       setUnsettledLoading(false);
     }
-  }, [id, token, settlementForm.period_start, settlementForm.period_end]);
+  }, [id, token]);
 
   useEffect(() => {
     if (activeTab === 'settlements') {
       fetchSettlements();
     }
-  }, [activeTab, fetchSettlements]);
-
-  useEffect(() => {
-    if (showSettlementDialog && settlementForm.period_start && settlementForm.period_end) {
-      fetchUnsettledDeliveries();
-    }
-  }, [showSettlementDialog, settlementForm.period_start, settlementForm.period_end, fetchUnsettledDeliveries]);
+  }, [activeTab, fetchSettlements, settlementsPage, settlementsPageSize, settlementsMonthFilter, settlementsYearFilter]);
 
   // Billing & Reconciliation fetch functions
   const fetchBillingConfigs = useCallback(async () => {
@@ -1480,8 +1489,8 @@ export default function DistributorDetail() {
   // ============ Settlement Handlers ============
 
   const handleCreateSettlement = async () => {
-    if (!settlementForm.period_start || !settlementForm.period_end) {
-      toast.error('Please select settlement period');
+    if (!settlementForm.settlement_month || !settlementForm.settlement_year) {
+      toast.error('Please select month and year');
       return;
     }
     if (unsettledDeliveries.length === 0) {
@@ -1494,18 +1503,18 @@ export default function DistributorDetail() {
       
       const settlementData = {
         distributor_id: id,
-        period_type: settlementForm.period_type,
-        period_start: settlementForm.period_start,
-        period_end: settlementForm.period_end,
+        settlement_month: settlementForm.settlement_month,
+        settlement_year: settlementForm.settlement_year,
         remarks: settlementForm.remarks || null
       };
       
-      const response = await axios.post(`${API_URL}/api/distributors/${id}/settlements`, settlementData, {
+      const response = await axios.post(`${API_URL}/api/distributors/${id}/settlements/generate-monthly`, settlementData, {
         headers: { Authorization: `Bearer ${token}` },
         withCredentials: true
       });
       
-      toast.success(`Settlement ${response.data.settlement_number} created successfully`);
+      const count = response.data.settlements_created || 1;
+      toast.success(`${count} settlement(s) created successfully`);
       setShowSettlementDialog(false);
       resetSettlementForm();
       fetchSettlements();
@@ -1518,9 +1527,8 @@ export default function DistributorDetail() {
 
   const resetSettlementForm = () => {
     setSettlementForm({
-      period_type: 'monthly',
-      period_start: '',
-      period_end: '',
+      settlement_month: new Date().getMonth() + 1,
+      settlement_year: new Date().getFullYear(),
       remarks: ''
     });
     setUnsettledDeliveries([]);
@@ -2140,10 +2148,21 @@ export default function DistributorDetail() {
         {/* Settlements Tab */}
         <TabsContent value="settlements">
           <SettlementsTab
+            distributor={distributor}
             canManage={canManage}
             canDelete={canDelete}
             settlements={settlements}
             settlementsLoading={settlementsLoading}
+            settlementsTotal={settlementsTotal}
+            settlementsPage={settlementsPage}
+            settlementsPageSize={settlementsPageSize}
+            setSettlementsPage={setSettlementsPage}
+            setSettlementsPageSize={setSettlementsPageSize}
+            settlementsMonthFilter={settlementsMonthFilter}
+            setSettlementsMonthFilter={setSettlementsMonthFilter}
+            settlementsYearFilter={settlementsYearFilter}
+            setSettlementsYearFilter={setSettlementsYearFilter}
+            fetchSettlements={fetchSettlements}
             showSettlementDialog={showSettlementDialog}
             setShowSettlementDialog={setShowSettlementDialog}
             settlementForm={settlementForm}
@@ -2151,11 +2170,13 @@ export default function DistributorDetail() {
             resetSettlementForm={resetSettlementForm}
             unsettledDeliveries={unsettledDeliveries}
             unsettledLoading={unsettledLoading}
+            fetchUnsettledDeliveries={fetchUnsettledDeliveries}
             handleCreateSettlement={handleCreateSettlement}
             savingSettlement={savingSettlement}
             viewSettlementDetail={viewSettlementDetail}
             setDeleteTarget={setDeleteTarget}
             getSettlementStatusBadge={getSettlementStatusBadge}
+            assignedAccounts={assignedAccounts}
           />
         </TabsContent>
 

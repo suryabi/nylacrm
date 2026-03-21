@@ -3334,11 +3334,13 @@ async def get_settlements_summary(
 async def list_distributor_settlements(
     distributor_id: str,
     status: Optional[str] = None,
+    month: Optional[int] = None,
+    year: Optional[int] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(get_current_user)
 ):
-    """List settlements for a specific distributor"""
+    """List settlements for a specific distributor with month/year filters"""
     tenant_id = get_current_tenant_id()
     
     query = {"tenant_id": tenant_id, "distributor_id": distributor_id}
@@ -3346,12 +3348,18 @@ async def list_distributor_settlements(
     if status and status != 'all':
         query["status"] = status
     
+    if month:
+        query["settlement_month"] = int(month)
+    
+    if year:
+        query["settlement_year"] = int(year)
+    
     total = await db.distributor_settlements.count_documents(query)
     
     settlements = await db.distributor_settlements.find(
         query,
         {"_id": 0}
-    ).sort("created_at", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    ).sort([("settlement_year", -1), ("settlement_month", -1), ("created_at", -1)]).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
     
     return {
         "settlements": settlements,
@@ -3393,11 +3401,13 @@ async def get_settlement(
 @router.get("/{distributor_id}/unsettled-deliveries")
 async def get_unsettled_deliveries(
     distributor_id: str,
+    month: Optional[int] = None,
+    year: Optional[int] = None,
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get completed deliveries that haven't been settled yet"""
+    """Get completed deliveries that haven't been settled yet, filtered by month/year"""
     tenant_id = get_current_tenant_id()
     
     # Get all settled delivery IDs
@@ -3416,18 +3426,37 @@ async def get_unsettled_deliveries(
         "id": {"$nin": settled_delivery_ids}
     }
     
-    if from_date:
-        query["delivery_date"] = {"$gte": from_date}
-    if to_date:
-        if "delivery_date" in query:
-            query["delivery_date"]["$lte"] = to_date
+    # Filter by month/year if provided
+    if month and year:
+        # Calculate date range for the month
+        start_date = f"{year}-{month:02d}-01"
+        if month == 12:
+            end_date = f"{year + 1}-01-01"
         else:
-            query["delivery_date"] = {"$lte": to_date}
+            end_date = f"{year}-{month + 1:02d}-01"
+        query["delivery_date"] = {"$gte": start_date, "$lt": end_date}
+    else:
+        # Use from_date/to_date if provided
+        if from_date:
+            query["delivery_date"] = {"$gte": from_date}
+        if to_date:
+            if "delivery_date" in query:
+                query["delivery_date"]["$lte"] = to_date
+            else:
+                query["delivery_date"] = {"$lte": to_date}
     
     deliveries = await db.distributor_deliveries.find(
         query,
         {"_id": 0}
     ).sort("delivery_date", 1).to_list(500)
+    
+    # Fetch items for each delivery
+    for delivery in deliveries:
+        items = await db.distributor_delivery_items.find(
+            {"delivery_id": delivery['id'], "tenant_id": tenant_id},
+            {"_id": 0}
+        ).to_list(500)
+        delivery['items'] = items
     
     # Calculate totals
     total_quantity = sum(d.get('total_quantity', 0) for d in deliveries)
@@ -3561,6 +3590,183 @@ async def create_settlement(
     logger.info(f"Settlement {settlement_number} created for distributor {distributor_id} with {total_deliveries} deliveries by {current_user['email']}")
     
     return settlement_doc
+
+
+@router.post("/{distributor_id}/settlements/generate-monthly")
+async def generate_monthly_settlements(
+    distributor_id: str,
+    data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Generate monthly settlements - one per account for the given month/year"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    settlement_month = data.get('settlement_month')
+    settlement_year = data.get('settlement_year')
+    remarks = data.get('remarks', '')
+    
+    if not settlement_month or not settlement_year:
+        raise HTTPException(status_code=400, detail="Month and year are required")
+    
+    # Get distributor info
+    distributor = await db.distributors.find_one(
+        {"id": distributor_id, "tenant_id": tenant_id}
+    )
+    if not distributor:
+        raise HTTPException(status_code=404, detail="Distributor not found")
+    
+    # Get all settled delivery IDs to exclude
+    settled_items = await db.distributor_settlement_items.find(
+        {"tenant_id": tenant_id},
+        {"delivery_id": 1}
+    ).to_list(10000)
+    settled_delivery_ids = [item['delivery_id'] for item in settled_items]
+    
+    # Calculate date range for the month
+    start_date = f"{settlement_year}-{settlement_month:02d}-01"
+    if settlement_month == 12:
+        end_date = f"{settlement_year + 1}-01-01"
+    else:
+        end_date = f"{settlement_year}-{settlement_month + 1:02d}-01"
+    
+    # Get unsettled deliveries for the month
+    query = {
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": "delivered",
+        "id": {"$nin": settled_delivery_ids},
+        "delivery_date": {"$gte": start_date, "$lt": end_date}
+    }
+    
+    deliveries = await db.distributor_deliveries.find(query, {"_id": 0}).to_list(1000)
+    
+    if not deliveries:
+        raise HTTPException(status_code=400, detail="No unsettled deliveries found for this period")
+    
+    # Group deliveries by account
+    accounts = {}
+    for delivery in deliveries:
+        account_id = delivery.get('account_id', 'unknown')
+        if account_id not in accounts:
+            accounts[account_id] = {
+                'account_id': account_id,
+                'account_name': delivery.get('account_name', 'Unknown'),
+                'deliveries': []
+            }
+        accounts[account_id]['deliveries'].append(delivery)
+    
+    settlements_created = []
+    
+    for account_id, account_data in accounts.items():
+        account_deliveries = account_data['deliveries']
+        
+        # Fetch items for each delivery and calculate totals
+        total_billing_value = 0
+        distributor_earnings = 0
+        margin_at_transfer_price = 0
+        total_quantity = 0
+        
+        items_to_insert = []
+        
+        for delivery in account_deliveries:
+            # Get delivery items
+            items = await db.distributor_delivery_items.find(
+                {"delivery_id": delivery['id'], "tenant_id": tenant_id},
+                {"_id": 0}
+            ).to_list(500)
+            
+            delivery_billing = 0
+            delivery_earnings = 0
+            delivery_margin_at_transfer = 0
+            
+            for item in items:
+                qty = item.get('quantity', 0)
+                customer_price = item.get('customer_selling_price') or item.get('unit_price') or 0
+                commission_pct = item.get('distributor_commission_percent') or item.get('margin_percent') or 2.5
+                transfer_price = item.get('transfer_price') or item.get('base_price') or 0
+                
+                billing_value = qty * customer_price
+                earnings = billing_value * (commission_pct / 100)
+                margin_transfer = qty * transfer_price * (commission_pct / 100)
+                
+                delivery_billing += billing_value
+                delivery_earnings += earnings
+                delivery_margin_at_transfer += margin_transfer
+            
+            total_billing_value += delivery_billing
+            distributor_earnings += delivery_earnings
+            margin_at_transfer_price += delivery_margin_at_transfer
+            total_quantity += delivery.get('total_quantity', 0)
+            
+            items_to_insert.append({
+                "id": str(uuid.uuid4()),
+                "tenant_id": tenant_id,
+                "settlement_id": None,  # Will be set below
+                "delivery_id": delivery['id'],
+                "delivery_number": delivery.get('delivery_number'),
+                "delivery_date": delivery.get('delivery_date'),
+                "account_id": account_id,
+                "account_name": account_data['account_name'],
+                "total_quantity": delivery.get('total_quantity', 0),
+                "total_billing_value": round(delivery_billing, 2),
+                "distributor_earnings": round(delivery_earnings, 2),
+                "margin_at_transfer_price": round(delivery_margin_at_transfer, 2),
+                "adjustment_payable": round(delivery_earnings - delivery_margin_at_transfer, 2)
+            })
+        
+        # Generate settlement for this account
+        settlement_number = await generate_settlement_number(tenant_id)
+        settlement_id = str(uuid.uuid4())
+        
+        # Update items with settlement_id
+        for item in items_to_insert:
+            item['settlement_id'] = settlement_id
+        
+        adjustment_payable = distributor_earnings - margin_at_transfer_price
+        
+        settlement_doc = {
+            "id": settlement_id,
+            "tenant_id": tenant_id,
+            "settlement_number": settlement_number,
+            "distributor_id": distributor_id,
+            "distributor_name": distributor.get('distributor_name'),
+            "distributor_code": distributor.get('distributor_code'),
+            "account_id": account_id,
+            "account_name": account_data['account_name'],
+            "settlement_month": settlement_month,
+            "settlement_year": settlement_year,
+            "total_deliveries": len(account_deliveries),
+            "total_quantity": total_quantity,
+            "total_billing_value": round(total_billing_value, 2),
+            "distributor_earnings": round(distributor_earnings, 2),
+            "margin_at_transfer_price": round(margin_at_transfer_price, 2),
+            "adjustment_payable": round(adjustment_payable, 2),
+            "final_payout": round(distributor_earnings, 2),
+            "status": "draft",
+            "remarks": remarks,
+            "created_by": current_user['id'],
+            "created_by_name": current_user.get('name', current_user.get('email')),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        # Insert settlement and items
+        await db.distributor_settlements.insert_one(settlement_doc)
+        if items_to_insert:
+            await db.distributor_settlement_items.insert_many(items_to_insert)
+        
+        settlement_doc.pop('_id', None)
+        settlements_created.append(settlement_doc)
+    
+    logger.info(f"Created {len(settlements_created)} monthly settlements for distributor {distributor_id} ({settlement_month}/{settlement_year}) by {current_user['email']}")
+    
+    return {
+        "settlements_created": len(settlements_created),
+        "settlements": settlements_created
+    }
 
 
 @router.put("/{distributor_id}/settlements/{settlement_id}")
