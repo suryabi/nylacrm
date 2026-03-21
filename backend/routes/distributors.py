@@ -2452,20 +2452,46 @@ async def generate_delivery_number(tenant_id: str) -> str:
     return f"DEL-{year}-{count + 1:04d}"
 
 
-def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_value: float = None) -> dict:
-    """Calculate amounts for a delivery item including margin"""
+def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_value: float = None, transfer_price: float = None, base_price: float = None) -> dict:
+    """Calculate amounts for a delivery item including margin and adjustment calculations
+    
+    Calculations:
+    - Total Customer Billing Value = Qty × Customer Selling Price
+    - Distributor Earnings (On Selling Price) = Total Billing × Commission %
+    - Distributor Margin at Transfer Price = Qty × Transfer Price × Commission %
+    - Adjustment Payable = Distributor Earnings - Margin at Transfer Price
+    """
     quantity = item.get('quantity', 0)
-    unit_price = item.get('unit_price', 0)
+    unit_price = item.get('unit_price', 0)  # Customer Selling Price
+    customer_selling_price = item.get('customer_selling_price') or unit_price
     discount_percent = item.get('discount_percent', 0) or 0
     tax_percent = item.get('tax_percent', 0) or 0
     
-    gross_amount = quantity * unit_price
+    # Get transfer price from item or passed parameter
+    item_transfer_price = item.get('transfer_price') or item.get('base_price') or transfer_price or base_price or 0
+    
+    # Get commission percentage from item or margin_value
+    commission_percent = item.get('distributor_commission_percent') or margin_value or 0
+    
+    # Calculate billing amounts
+    gross_amount = quantity * customer_selling_price  # Total Customer Billing Value
     discount_amount = round(gross_amount * discount_percent / 100, 2)
     taxable_amount = gross_amount - discount_amount
     tax_amount = round(taxable_amount * tax_percent / 100, 2)
     net_amount = taxable_amount + tax_amount
     
-    # Calculate margin/earning
+    # Calculate distributor earnings and adjustments
+    # Distributor Earnings = Total Customer Billing Value × Commission %
+    distributor_earnings = round(gross_amount * commission_percent / 100, 2) if commission_percent else 0
+    
+    # Margin at Transfer Price = Qty × Transfer Price × Commission %
+    margin_at_transfer_price = round(quantity * item_transfer_price * commission_percent / 100, 2) if item_transfer_price and commission_percent else 0
+    
+    # Adjustment Payable = Distributor Earnings - Margin at Transfer Price
+    # Positive means distributor owes company, Negative means company owes distributor
+    adjustment_payable = round(distributor_earnings - margin_at_transfer_price, 2)
+    
+    # Legacy margin calculation (for backward compatibility)
     margin_amount = 0
     if margin_type and margin_value:
         if margin_type == 'percentage':
@@ -2473,20 +2499,26 @@ def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_
         elif margin_type == 'fixed_per_bottle':
             margin_amount = round(quantity * margin_value, 2)
         elif margin_type == 'fixed_per_case':
-            # Assuming 12 bottles per case
             cases = quantity / 12
             margin_amount = round(cases * margin_value, 2)
     
     return {
         **item,
+        'customer_selling_price': customer_selling_price,
+        'distributor_commission_percent': commission_percent,
+        'transfer_price': item_transfer_price,
+        'base_price': item_transfer_price,
         'gross_amount': round(gross_amount, 2),
         'discount_amount': discount_amount,
         'taxable_amount': round(taxable_amount, 2),
         'tax_amount': tax_amount,
         'net_amount': round(net_amount, 2),
+        'distributor_earnings': distributor_earnings,
+        'margin_at_transfer_price': margin_at_transfer_price,
+        'adjustment_payable': adjustment_payable,
         'margin_type': margin_type,
         'margin_value': margin_value,
-        'margin_amount': margin_amount
+        'margin_amount': margin_amount or distributor_earnings  # Use new calculation as default
     }
 
 
@@ -2594,7 +2626,7 @@ async def list_distributor_deliveries(
     page_size: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(get_current_user)
 ):
-    """List deliveries for a specific distributor"""
+    """List deliveries for a specific distributor with items"""
     tenant_id = get_current_tenant_id()
     
     query = {"tenant_id": tenant_id, "distributor_id": distributor_id}
@@ -2608,6 +2640,14 @@ async def list_distributor_deliveries(
         query,
         {"_id": 0}
     ).sort("delivery_date", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    
+    # Fetch items for each delivery
+    for delivery in deliveries:
+        items = await db.distributor_delivery_items.find(
+            {"delivery_id": delivery['id'], "tenant_id": tenant_id},
+            {"_id": 0}
+        ).to_list(500)
+        delivery['items'] = items
     
     return {
         "deliveries": deliveries,
@@ -2801,10 +2841,12 @@ async def create_delivery(
             "city": account_city,
             "sku_id": item_data.sku_id,
             "status": "active"
-        }, {"_id": 0, "margin_type": 1, "margin_value": 1})
+        }, {"_id": 0, "margin_type": 1, "margin_value": 1, "transfer_price": 1, "base_price": 1})
         
         margin_type = margin.get('margin_type') if margin else None
         margin_value = margin.get('margin_value') if margin else None
+        transfer_price = margin.get('transfer_price') if margin else None
+        base_price = margin.get('base_price') if margin else None
         
         item_dict = {
             'id': str(uuid.uuid4()),
@@ -2815,13 +2857,17 @@ async def create_delivery(
             'sku_code': sku_code,
             'quantity': item_data.quantity,
             'unit_price': item_data.unit_price,
+            'customer_selling_price': item_data.customer_selling_price or item_data.unit_price,
+            'distributor_commission_percent': item_data.distributor_commission_percent or margin_value,
+            'transfer_price': item_data.transfer_price or transfer_price,
+            'base_price': item_data.base_price or base_price,
             'discount_percent': item_data.discount_percent or 0,
             'tax_percent': item_data.tax_percent or 0,
             'remarks': item_data.remarks
         }
         
-        # Calculate amounts with margin
-        item_dict = calculate_delivery_item_amounts(item_dict, margin_type, margin_value)
+        # Calculate amounts with margin and transfer price
+        item_dict = calculate_delivery_item_amounts(item_dict, margin_type, margin_value, transfer_price, base_price)
         items_to_insert.append(item_dict)
         
         total_quantity += item_data.quantity

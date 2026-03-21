@@ -442,7 +442,11 @@ class DeliveryItemCreate(BaseModel):
     sku_id: str
     sku_name: Optional[str] = None
     quantity: int
-    unit_price: float
+    unit_price: float  # Customer Selling Price (Per Unit)
+    customer_selling_price: Optional[float] = None  # Alias for unit_price
+    distributor_commission_percent: Optional[float] = None  # Commission %
+    transfer_price: Optional[float] = None  # Transfer Price to Distributor (Per Unit)
+    base_price: Optional[float] = None  # Alias for transfer_price
     discount_percent: Optional[float] = 0
     tax_percent: Optional[float] = 0
     remarks: Optional[str] = None
@@ -464,14 +468,21 @@ class DeliveryItem(BaseModel):
     sku_name: Optional[str] = None
     sku_code: Optional[str] = None
     quantity: int
-    unit_price: float
+    unit_price: float  # Customer Selling Price
+    customer_selling_price: Optional[float] = None
+    distributor_commission_percent: Optional[float] = None
+    transfer_price: Optional[float] = None
+    base_price: Optional[float] = None
     discount_percent: float = 0
     tax_percent: float = 0
-    gross_amount: float
+    gross_amount: float  # Total Customer Billing Value
     discount_amount: float
     taxable_amount: float
     tax_amount: float
     net_amount: float
+    distributor_earnings: Optional[float] = None  # Earnings on selling price
+    margin_at_transfer_price: Optional[float] = None  # Margin at transfer price
+    adjustment_payable: Optional[float] = None  # Difference to settle
     margin_type: Optional[str] = None  # From margin matrix
     margin_value: Optional[float] = None
     margin_amount: Optional[float] = None  # Calculated earning for this item

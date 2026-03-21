@@ -432,91 +432,203 @@ export default function DeliveriesTab({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full" data-testid="deliveries-table">
+            <table className="w-full text-sm" data-testid="deliveries-table">
               <thead>
                 <tr className="border-b bg-muted/50">
-                  <th className="text-left p-3 font-medium">Delivery #</th>
-                  <th className="text-left p-3 font-medium">Date</th>
-                  <th className="text-left p-3 font-medium">Account</th>
-                  <th className="text-right p-3 font-medium">Qty</th>
-                  <th className="text-right p-3 font-medium">Amount</th>
-                  <th className="text-right p-3 font-medium">Margin</th>
-                  <th className="text-center p-3 font-medium">Status</th>
-                  <th className="text-right p-3 font-medium">Actions</th>
+                  <th className="text-left p-2 font-medium">Delivery #</th>
+                  <th className="text-left p-2 font-medium">SKU</th>
+                  <th className="text-right p-2 font-medium">Qty</th>
+                  <th className="text-right p-2 font-medium">Customer Selling Price (Per Unit)</th>
+                  <th className="text-right p-2 font-medium">Distributor Commission %</th>
+                  <th className="text-right p-2 font-medium">Total Customer Billing Value</th>
+                  <th className="text-right p-2 font-medium">Distributor Earnings (On Selling Price)</th>
+                  <th className="text-right p-2 font-medium">Transfer Price (Per Unit)</th>
+                  <th className="text-right p-2 font-medium">Distributor Margin at Transfer Price</th>
+                  <th className="text-right p-2 font-medium">Adjustment Payable</th>
+                  <th className="text-center p-2 font-medium">Status</th>
+                  <th className="text-right p-2 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {deliveries.map((delivery) => (
-                  <tr key={delivery.id} className="border-b hover:bg-muted/30" data-testid={`delivery-row-${delivery.id}`}>
-                    <td className="p-3">
-                      <button 
-                        className="font-medium text-primary hover:underline"
-                        onClick={() => viewDeliveryDetail(delivery.id)}
-                      >
-                        {delivery.delivery_number}
-                      </button>
-                      {delivery.reference_number && (
-                        <p className="text-xs text-muted-foreground">{delivery.reference_number}</p>
-                      )}
-                    </td>
-                    <td className="p-3">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        {new Date(delivery.delivery_date).toLocaleDateString()}
-                      </div>
-                    </td>
-                    <td className="p-3">
-                      <div>
-                        <p className="font-medium">{delivery.account_name}</p>
-                        <p className="text-xs text-muted-foreground">{delivery.account_city}</p>
-                      </div>
-                    </td>
-                    <td className="p-3 text-right font-medium">{delivery.total_quantity}</td>
-                    <td className="p-3 text-right font-medium">₹{delivery.total_net_amount?.toLocaleString()}</td>
-                    <td className="p-3 text-right">
-                      {delivery.total_margin_amount > 0 ? (
-                        <span className="font-medium text-green-600">₹{delivery.total_margin_amount?.toLocaleString()}</span>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </td>
-                    <td className="p-3 text-center">
-                      {getDeliveryStatusBadge(delivery.status)}
-                    </td>
-                    <td className="p-3 text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => viewDeliveryDetail(delivery.id)}
-                          data-testid={`view-delivery-${delivery.id}`}
-                        >
-                          <FileText className="h-4 w-4" />
-                        </Button>
-                        {/* Show delete for draft (canManage) or any status (canDelete for CEO/Admin) */}
-                        {(canDelete || (canManage && delivery.status === 'draft')) && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteTarget({
-                                type: 'delivery',
-                                id: delivery.id,
-                                name: delivery.delivery_number
-                              });
-                            }}
-                            data-testid={`delete-delivery-${delivery.id}`}
-                            title={canDelete ? "Delete (Admin)" : "Delete draft"}
+                {deliveries.map((delivery) => {
+                  const items = delivery.items || [];
+                  const rowSpan = Math.max(items.length, 1);
+                  
+                  // Calculate totals for the delivery
+                  let totalBillingValue = 0;
+                  let totalDistributorEarnings = 0;
+                  let totalMarginAtTransfer = 0;
+                  let totalAdjustment = 0;
+                  
+                  items.forEach(item => {
+                    const qty = item.quantity || 0;
+                    const customerPrice = item.customer_selling_price || item.unit_price || 0;
+                    const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
+                    const transferPrice = item.transfer_price || item.base_price || 0;
+                    
+                    const billingValue = qty * customerPrice;
+                    const distributorEarnings = billingValue * (commissionPct / 100);
+                    const marginAtTransfer = qty * transferPrice * (commissionPct / 100);
+                    const adjustment = distributorEarnings - marginAtTransfer;
+                    
+                    totalBillingValue += billingValue;
+                    totalDistributorEarnings += distributorEarnings;
+                    totalMarginAtTransfer += marginAtTransfer;
+                    totalAdjustment += adjustment;
+                  });
+                  
+                  return (
+                    <React.Fragment key={delivery.id}>
+                      {items.length > 0 ? items.map((item, itemIndex) => {
+                        const qty = item.quantity || 0;
+                        const customerPrice = item.customer_selling_price || item.unit_price || 0;
+                        const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
+                        const transferPrice = item.transfer_price || item.base_price || 0;
+                        
+                        const billingValue = qty * customerPrice;
+                        const distributorEarnings = billingValue * (commissionPct / 100);
+                        const marginAtTransfer = qty * transferPrice * (commissionPct / 100);
+                        const adjustment = distributorEarnings - marginAtTransfer;
+                        
+                        return (
+                          <tr 
+                            key={`${delivery.id}-${item.id || itemIndex}`} 
+                            className={`border-b hover:bg-muted/30 ${itemIndex === 0 ? 'border-t-2 border-t-slate-300' : ''}`}
+                            data-testid={`delivery-row-${delivery.id}-${itemIndex}`}
                           >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                            {itemIndex === 0 && (
+                              <td className="p-2 align-top" rowSpan={rowSpan}>
+                                <button 
+                                  className="font-medium text-primary hover:underline"
+                                  onClick={() => viewDeliveryDetail(delivery.id)}
+                                >
+                                  {delivery.delivery_number}
+                                </button>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {new Date(delivery.delivery_date).toLocaleDateString()}
+                                </p>
+                                <p className="text-xs font-medium mt-1">{delivery.account_name}</p>
+                                <p className="text-xs text-muted-foreground">{delivery.account_city}</p>
+                              </td>
+                            )}
+                            <td className="p-2">
+                              <span className="font-medium">{item.sku_name || item.sku_code || 'N/A'}</span>
+                            </td>
+                            <td className="p-2 text-right font-medium">{qty}</td>
+                            <td className="p-2 text-right">₹{customerPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right">{commissionPct}%</td>
+                            <td className="p-2 text-right font-medium">₹{billingValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right text-green-600">₹{distributorEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right">₹{transferPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right">₹{marginAtTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className={`p-2 text-right font-medium ${adjustment >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {adjustment >= 0 ? '' : '-'}₹{Math.abs(adjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </td>
+                            {itemIndex === 0 && (
+                              <>
+                                <td className="p-2 text-center align-top" rowSpan={rowSpan}>
+                                  {getDeliveryStatusBadge(delivery.status)}
+                                </td>
+                                <td className="p-2 text-right align-top" rowSpan={rowSpan}>
+                                  <div className="flex flex-col gap-1 items-end">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => viewDeliveryDetail(delivery.id)}
+                                      data-testid={`view-delivery-${delivery.id}`}
+                                    >
+                                      <FileText className="h-4 w-4" />
+                                    </Button>
+                                    {(canDelete || (canManage && delivery.status === 'draft')) && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-destructive"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setDeleteTarget({
+                                            type: 'delivery',
+                                            id: delivery.id,
+                                            name: delivery.delivery_number
+                                          });
+                                        }}
+                                        data-testid={`delete-delivery-${delivery.id}`}
+                                        title={canDelete ? "Delete (Admin)" : "Delete draft"}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </td>
+                              </>
+                            )}
+                          </tr>
+                        );
+                      }) : (
+                        <tr key={delivery.id} className="border-b hover:bg-muted/30 border-t-2 border-t-slate-300" data-testid={`delivery-row-${delivery.id}`}>
+                          <td className="p-2">
+                            <button 
+                              className="font-medium text-primary hover:underline"
+                              onClick={() => viewDeliveryDetail(delivery.id)}
+                            >
+                              {delivery.delivery_number}
+                            </button>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {new Date(delivery.delivery_date).toLocaleDateString()}
+                            </p>
+                            <p className="text-xs font-medium mt-1">{delivery.account_name}</p>
+                          </td>
+                          <td className="p-2 text-muted-foreground" colSpan={8}>No line items</td>
+                          <td className="p-2 text-center">
+                            {getDeliveryStatusBadge(delivery.status)}
+                          </td>
+                          <td className="p-2 text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => viewDeliveryDetail(delivery.id)}
+                              >
+                                <FileText className="h-4 w-4" />
+                              </Button>
+                              {(canDelete || (canManage && delivery.status === 'draft')) && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeleteTarget({
+                                      type: 'delivery',
+                                      id: delivery.id,
+                                      name: delivery.delivery_number
+                                    });
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      {/* Delivery subtotal row */}
+                      {items.length > 1 && (
+                        <tr className="bg-slate-100 dark:bg-slate-800 font-semibold text-sm">
+                          <td className="p-2 text-right" colSpan={5}>Delivery Total:</td>
+                          <td className="p-2 text-right">₹{totalBillingValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className="p-2 text-right text-green-600">₹{totalDistributorEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className="p-2"></td>
+                          <td className="p-2 text-right">₹{totalMarginAtTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className={`p-2 text-right ${totalAdjustment >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {totalAdjustment >= 0 ? '' : '-'}₹{Math.abs(totalAdjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td colSpan={2}></td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
