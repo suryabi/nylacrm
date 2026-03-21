@@ -23,7 +23,40 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 - **AI**: Claude Sonnet 4.5 via Emergent LLM Key, Gemini
 - **Integrations**: Zoom API, Resend, Google OAuth
 
-## Latest Session - March 20, 2026
+## Latest Session - March 21, 2026
+
+### FEATURE: Pipeline Value Popup with Account List ✅
+**User Request**: Click on the Pipeline Value tile in Dashboard to see a popup with the list of accounts contributing to that value.
+
+**Implementation**:
+1. **Backend** (`/app/backend/server.py`):
+   - Added new endpoint `GET /api/analytics/pipeline-accounts`
+   - Returns paginated list of accounts with pipeline value (estimated_value > 0, status != closed_lost)
+   - Sorted by estimated_value descending
+   - Includes total count and total pipeline value
+
+2. **Frontend** (`/app/frontend/src/pages/Dashboard.js`):
+   - Added Dialog component for Pipeline Accounts
+   - Pipeline Value tile is now clickable with "(click for details)" indicator
+   - Dialog shows:
+     - Total pipeline value and account count in header
+     - Numbered list of accounts sorted by value
+     - Each account shows: name, contact person, city, value, percentage of total
+     - Click on account navigates to lead detail page
+     - "View All in Leads" button at bottom
+
+**API Response Format**:
+```json
+{
+  "accounts": [{"id", "account_name", "contact_person", "city", "estimated_value", ...}],
+  "total": 57,
+  "total_pipeline_value": 32511443,
+  "page": 1,
+  "page_size": 50
+}
+```
+
+---
 
 ### FEATURE: Enhanced Shipments Table with Detailed Pricing Columns ✅
 **User Request**: Add detailed pricing breakdown columns to the Shipments table.

@@ -4,11 +4,13 @@ import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { 
   LayoutDashboard, Filter, Loader2, 
   MapPin, Phone, UserPlus, CheckCircle, XCircle, TrendingUp,
-  Clock, MessageSquare, Target, ThumbsUp, ThumbsDown, Calendar
+  Clock, MessageSquare, Target, ThumbsUp, ThumbsDown, Calendar,
+  Building2, User, IndianRupee, ChevronRight, X
 } from 'lucide-react';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
@@ -77,6 +79,13 @@ export default function Dashboard() {
   const [stateFilter, setStateFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
   const [salesResource, setSalesResource] = useState('all');
+  
+  // Pipeline accounts dialog state
+  const [showPipelineDialog, setShowPipelineDialog] = useState(false);
+  const [pipelineAccounts, setPipelineAccounts] = useState([]);
+  const [pipelineLoading, setPipelineLoading] = useState(false);
+  const [pipelineTotal, setPipelineTotal] = useState(0);
+  const [pipelineTotalValue, setPipelineTotalValue] = useState(0);
 
   const { territories: masterTerritories, getStateNamesByTerritoryName, getCityNamesByStateName } = useMasterLocations();
 
@@ -170,13 +179,48 @@ export default function Dashboard() {
     navigateTo(url, { label: 'Leads' });
   };
 
+  // Fetch pipeline accounts for the dialog
+  const fetchPipelineAccounts = async () => {
+    setPipelineLoading(true);
+    try {
+      const params = new URLSearchParams({
+        time_filter: timeFilter,
+        ...(territoryFilter !== 'all' && { territory: territoryFilter }),
+        ...(stateFilter !== 'all' && { state: stateFilter }),
+        ...(cityFilter !== 'all' && { city: cityFilter }),
+        ...(salesResource !== 'all' && { sales_resource: salesResource }),
+        page_size: 100
+      });
+      const response = await axios.get(`${API_URL}/analytics/pipeline-accounts?${params}`, { withCredentials: true });
+      setPipelineAccounts(response.data.accounts || []);
+      setPipelineTotal(response.data.total || 0);
+      setPipelineTotalValue(response.data.total_pipeline_value || 0);
+    } catch (error) {
+      toast.error('Failed to load pipeline accounts');
+    } finally {
+      setPipelineLoading(false);
+    }
+  };
+
+  // Handle Pipeline Value tile click
+  const handlePipelineClick = () => {
+    setShowPipelineDialog(true);
+    fetchPipelineAccounts();
+  };
+
+  // Navigate to lead detail from the dialog
+  const handleAccountClick = (accountId) => {
+    setShowPipelineDialog(false);
+    navigate(`/leads/${accountId}`);
+  };
+
   const totalLeads = analytics?.status_distribution ? Object.values(analytics.status_distribution).reduce((sum, val) => sum + val, 0) : 0;
 
   const activityStats = [
     { label: 'Visits', value: analytics?.total_visits || 0, sub: `${analytics?.unique_visits || 0} unique`, icon: MapPin, gradient: 'from-teal-500 to-cyan-600', bgGradient: 'from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/20', iconBg: 'bg-teal-100 dark:bg-teal-900/50', textColor: 'text-teal-700 dark:text-teal-300' },
     { label: 'Calls', value: analytics?.total_calls || 0, sub: `${analytics?.unique_calls || 0} unique`, icon: Phone, gradient: 'from-cyan-500 to-blue-600', bgGradient: 'from-cyan-50 to-blue-50 dark:from-cyan-950/30 dark:to-blue-950/20', iconBg: 'bg-cyan-100 dark:bg-cyan-900/50', textColor: 'text-cyan-700 dark:text-cyan-300' },
     { label: 'New Leads', value: analytics?.new_leads_added || 0, sub: 'this period', icon: UserPlus, gradient: 'from-violet-500 to-purple-600', bgGradient: 'from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/20', iconBg: 'bg-violet-100 dark:bg-violet-900/50', textColor: 'text-violet-700 dark:text-violet-300' },
-    { label: 'Pipeline Value', value: `₹${((analytics?.pipeline_value || 0) / 100000).toFixed(1)}L`, sub: 'total value', icon: TrendingUp, gradient: 'from-amber-500 to-orange-600', bgGradient: 'from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20', iconBg: 'bg-amber-100 dark:bg-amber-900/50', textColor: 'text-amber-700 dark:text-amber-300' }
+    { label: 'Pipeline Value', value: `₹${((analytics?.pipeline_value || 0) / 100000).toFixed(1)}L`, sub: 'total value', icon: TrendingUp, gradient: 'from-amber-500 to-orange-600', bgGradient: 'from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20', iconBg: 'bg-amber-100 dark:bg-amber-900/50', textColor: 'text-amber-700 dark:text-amber-300', clickable: true, onClick: handlePipelineClick }
   ];
 
   return (
@@ -259,12 +303,20 @@ export default function Dashboard() {
               {activityStats.map((stat) => {
                 const Icon = stat.icon;
                 return (
-                  <Card key={stat.label} className={`relative overflow-hidden border-0 bg-gradient-to-br ${stat.bgGradient} backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5`}>
+                  <Card 
+                    key={stat.label} 
+                    className={`relative overflow-hidden border-0 bg-gradient-to-br ${stat.bgGradient} backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5 ${stat.clickable ? 'cursor-pointer ring-2 ring-transparent hover:ring-amber-400/50' : ''}`}
+                    onClick={stat.onClick}
+                    data-testid={`stat-card-${stat.label.toLowerCase().replace(/\s+/g, '-')}`}
+                  >
                     <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.gradient}`} />
                     <div className="p-5">
                       <div className="flex items-start justify-between">
                         <div className="space-y-2">
-                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{stat.label}</p>
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                            {stat.label}
+                            {stat.clickable && <span className="ml-1 text-amber-600">(click for details)</span>}
+                          </p>
                           <p className={`text-2xl lg:text-3xl font-bold ${stat.textColor} tabular-nums`}>{stat.value}</p>
                           <p className="text-xs text-muted-foreground">{stat.sub}</p>
                         </div>
@@ -376,6 +428,109 @@ export default function Dashboard() {
           </>
         )}
       </div>
+      
+      {/* Pipeline Accounts Dialog */}
+      <Dialog open={showPipelineDialog} onOpenChange={setShowPipelineDialog}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader className="pb-4 border-b">
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <TrendingUp className="h-5 w-5 text-amber-600" />
+              Pipeline Accounts
+            </DialogTitle>
+            <DialogDescription className="flex items-center justify-between">
+              <span>Accounts contributing to your pipeline value</span>
+              <span className="font-semibold text-amber-600">
+                Total: ₹{(pipelineTotalValue / 100000).toFixed(2)}L ({pipelineTotal} accounts)
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto py-4">
+            {pipelineLoading ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
+                <p className="text-muted-foreground text-sm mt-3">Loading accounts...</p>
+              </div>
+            ) : pipelineAccounts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <Building2 className="h-12 w-12 mb-4 opacity-50" />
+                <p>No accounts with pipeline value found</p>
+                <p className="text-sm">Accounts with estimated value will appear here</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {pipelineAccounts.map((account, index) => (
+                  <div
+                    key={account.id}
+                    onClick={() => handleAccountClick(account.id)}
+                    className="group flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:border-amber-300 dark:hover:border-amber-700 cursor-pointer transition-all duration-200"
+                    data-testid={`pipeline-account-${account.id}`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/20 text-amber-700 dark:text-amber-400 font-semibold">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-800 dark:text-slate-200 group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors">
+                          {account.account_name}
+                        </p>
+                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                          {account.contact_person && (
+                            <span className="flex items-center gap-1">
+                              <User className="h-3 w-3" />
+                              {account.contact_person}
+                            </span>
+                          )}
+                          {account.city && (
+                            <span className="flex items-center gap-1">
+                              <MapPin className="h-3 w-3" />
+                              {account.city}
+                            </span>
+                          )}
+                          {account.assigned_to_name && (
+                            <span className="text-xs bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">
+                              {account.assigned_to_name}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="font-bold text-lg text-amber-600 dark:text-amber-400">
+                          ₹{(account.estimated_value / 100000).toFixed(2)}L
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {((account.estimated_value / pipelineTotalValue) * 100).toFixed(1)}% of total
+                        </p>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-slate-400 group-hover:text-amber-600 transition-colors" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          {pipelineAccounts.length > 0 && (
+            <div className="pt-4 border-t flex justify-between items-center">
+              <p className="text-sm text-muted-foreground">
+                Showing top {pipelineAccounts.length} accounts by value
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowPipelineDialog(false);
+                  navigateToLeads({ metric: 'pipeline' });
+                }}
+              >
+                View All in Leads
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -6849,7 +6849,122 @@ async def get_dashboard_analytics(
         'time_filter': time_filter
     }
 
-@api_router.get("/analytics/reports")
+
+@api_router.get("/analytics/pipeline-accounts")
+async def get_pipeline_accounts(
+    time_filter: Optional[str] = 'lifetime',
+    territory: Optional[str] = None,
+    state: Optional[str] = None,
+    city: Optional[str] = None,
+    sales_resource: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get list of accounts/leads contributing to pipeline value"""
+    
+    # Calculate date range based on time filter
+    now = datetime.now(timezone.utc)
+    
+    if time_filter == 'this_week':
+        start_date = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0).isoformat()
+        end_date = now.isoformat()
+    elif time_filter == 'last_week':
+        start_date = (now - timedelta(days=now.weekday() + 7)).replace(hour=0, minute=0, second=0).isoformat()
+        end_date = (now - timedelta(days=now.weekday() + 1)).replace(hour=23, minute=59, second=59).isoformat()
+    elif time_filter == 'this_month':
+        start_date = now.replace(day=1, hour=0, minute=0, second=0).isoformat()
+        end_date = now.isoformat()
+    elif time_filter == 'last_month':
+        last_month = now.replace(day=1) - timedelta(days=1)
+        start_date = last_month.replace(day=1, hour=0, minute=0, second=0).isoformat()
+        end_date = last_month.replace(hour=23, minute=59, second=59).isoformat()
+    elif time_filter == 'last_3_months':
+        start_date = (now - timedelta(days=90)).replace(hour=0, minute=0, second=0).isoformat()
+        end_date = now.isoformat()
+    elif time_filter == 'last_6_months':
+        start_date = (now - timedelta(days=180)).replace(hour=0, minute=0, second=0).isoformat()
+        end_date = now.isoformat()
+    elif time_filter == 'this_quarter':
+        quarter = (now.month - 1) // 3
+        start_date = now.replace(month=quarter * 3 + 1, day=1, hour=0, minute=0, second=0).isoformat()
+        end_date = now.isoformat()
+    elif time_filter == 'last_quarter':
+        quarter = (now.month - 1) // 3
+        if quarter == 0:
+            start_date = now.replace(year=now.year - 1, month=10, day=1, hour=0, minute=0, second=0).isoformat()
+            end_date = now.replace(year=now.year - 1, month=12, day=31, hour=23, minute=59, second=59).isoformat()
+        else:
+            start_date = now.replace(month=(quarter - 1) * 3 + 1, day=1, hour=0, minute=0, second=0).isoformat()
+            end_date = now.replace(month=quarter * 3, day=1, hour=0, minute=0, second=0).isoformat()
+    else:  # lifetime or default
+        start_date = None
+        end_date = None
+    
+    # Build match stage
+    match_stage = {
+        'status': {'$ne': 'closed_lost'},  # Exclude closed lost leads
+        'estimated_value': {'$gt': 0}  # Only leads with value
+    }
+    
+    # Add date filter if not lifetime
+    if start_date and end_date:
+        match_stage['created_at'] = {'$gte': start_date, '$lte': end_date}
+    
+    # Add territory/state/city filters
+    if territory and territory != 'all':
+        match_stage['territory'] = territory
+    if state and state != 'all':
+        match_stage['state'] = state
+    if city and city != 'all':
+        match_stage['city'] = city
+    
+    # Add sales resource filter
+    if sales_resource and sales_resource != 'all':
+        match_stage['assigned_to'] = sales_resource
+    
+    # Get total count
+    total = await get_tdb().leads.count_documents(match_stage)
+    
+    # Get total pipeline value
+    pipeline_value_result = await get_tdb().leads.aggregate([
+        {'$match': match_stage},
+        {'$group': {'_id': None, 'total_value': {'$sum': '$estimated_value'}}}
+    ]).to_list(1)
+    total_pipeline_value = pipeline_value_result[0]['total_value'] if pipeline_value_result else 0
+    
+    # Get paginated accounts sorted by estimated_value descending
+    accounts = await get_tdb().leads.find(
+        match_stage,
+        {
+            '_id': 0,
+            'id': 1,
+            'company': 1,
+            'contact_person': 1,
+            'phone': 1,
+            'city': 1,
+            'state': 1,
+            'status': 1,
+            'estimated_value': 1,
+            'assigned_to': 1,
+            'assigned_to_name': 1,
+            'created_at': 1,
+            'updated_at': 1
+        }
+    ).sort('estimated_value', -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    
+    # Map company to account_name for frontend compatibility
+    for account in accounts:
+        account['account_name'] = account.pop('company', None)
+    
+    return {
+        'accounts': accounts,
+        'total': total,
+        'total_pipeline_value': total_pipeline_value,
+        'page': page,
+        'page_size': page_size,
+        'total_pages': (total + page_size - 1) // page_size
+    }
 async def get_reports(current_user: dict = Depends(get_current_user)):
     # Build match stage based on role
     match_stage = {} if current_user['role'] in ['admin', 'sales_manager'] else {'assigned_to': current_user['id']}
