@@ -5,7 +5,7 @@ import { Badge } from '../ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
-import { Plus, RefreshCw, FileText, Receipt, Eye, Settings, Trash2, Calendar, Building2, ChevronDown, ChevronUp, Download, Clock, CheckCircle } from 'lucide-react';
+import { Plus, RefreshCw, FileText, Receipt, Eye, Settings, Trash2, Calendar, Building2, ChevronDown, ChevronUp, Download, Clock, CheckCircle, FileDown, Loader2 } from 'lucide-react';
 
 const MONTHS = [
   { value: 1, label: 'January' },
@@ -55,6 +55,7 @@ export default function BillingTab({
   const [noteRemarks, setNoteRemarks] = useState('');
   const [monthlyData, setMonthlyData] = useState(null);
   const [loadingMonthlyData, setLoadingMonthlyData] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(null); // Track which note is downloading
 
   // Fetch settlements for selected month when month/year changes
   useEffect(() => {
@@ -134,7 +135,7 @@ export default function BillingTab({
         setNoteRemarks('');
         fetchMonthlyReconciliationData();
         if (fetchNotes) fetchNotes();
-        alert('Note generated successfully!');
+        alert('Note generated successfully with PDF!');
       } else {
         const error = await response.json();
         alert(`Failed to generate note: ${error.detail || 'Unknown error'}`);
@@ -144,6 +145,47 @@ export default function BillingTab({
       alert('Failed to generate note');
     } finally {
       setGeneratingNote(false);
+    }
+  };
+
+  const handleDownloadPdf = async (note) => {
+    setDownloadingPdf(note.id);
+    try {
+      const authToken = token || localStorage.getItem('token');
+      const tenantId = localStorage.getItem('selectedTenant') || localStorage.getItem('tenant_id') || 'nyla-air-water';
+      
+      const response = await fetch(
+        `${API_URL}/api/distributors/${distributor.id}/notes/${note.id}/download`,
+        {
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'X-Tenant-ID': tenantId
+          }
+        }
+      );
+      
+      if (response.ok) {
+        // Get the blob from response
+        const blob = await response.blob();
+        
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${note.note_number || 'note'}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } else {
+        const error = await response.json();
+        alert(`Failed to download PDF: ${error.detail || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Failed to download PDF:', error);
+      alert('Failed to download PDF');
+    } finally {
+      setDownloadingPdf(null);
     }
   };
 
@@ -579,6 +621,7 @@ export default function BillingTab({
                     <th className="text-right p-3 font-medium">Balance</th>
                     <th className="text-center p-3 font-medium">Status</th>
                     <th className="text-left p-3 font-medium">Created</th>
+                    <th className="text-center p-3 font-medium">PDF</th>
                     <th className="text-right p-3 font-medium">Actions</th>
                   </tr>
                 </thead>
@@ -599,6 +642,26 @@ export default function BillingTab({
                       <td className="p-3 text-right text-orange-600">₹{(note.balance_amount || note.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                       <td className="p-3 text-center">{getNoteStatusBadge ? getNoteStatusBadge(note.status) : <Badge variant="outline">{note.status}</Badge>}</td>
                       <td className="p-3">{note.created_at?.split('T')[0]}</td>
+                      <td className="p-3 text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownloadPdf(note);
+                          }}
+                          disabled={downloadingPdf === note.id}
+                          data-testid={`download-pdf-${note.id}`}
+                          title="Download PDF"
+                        >
+                          {downloadingPdf === note.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <FileDown className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </td>
                       <td className="p-3 text-right">
                         <div className="flex justify-end gap-1">
                           <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); viewNoteDetail && viewNoteDetail(note.id); }}>

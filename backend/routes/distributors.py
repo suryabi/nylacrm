@@ -2,7 +2,7 @@
 Distributor Management Routes
 CRUD operations for distributors, operating coverage, and locations
 """
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Response
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 import logging
@@ -24,6 +24,8 @@ from models.distributor import (
     BillingConfigCreate, BillingConfigUpdate,
     ProvisionalInvoiceCreate, ReconciliationCreate, DebitCreditNoteCreate
 )
+from utils.pdf_generator import generate_debit_credit_note_pdf
+from utils.object_storage import upload_pdf, download_pdf, init_storage
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -5418,7 +5420,7 @@ async def generate_monthly_note(
     data: dict,
     current_user: dict = Depends(get_current_user)
 ):
-    """Generate a Debit or Credit Note for approved but unreconciled settlements"""
+    """Generate a Debit or Credit Note for approved but unreconciled settlements with PDF"""
     if not is_distributor_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
@@ -5454,14 +5456,19 @@ async def generate_monthly_note(
     if net_adjustment == 0:
         raise HTTPException(status_code=400, detail="Net adjustment is zero - no note required")
     
-    # Get distributor info
+    # Get distributor full info for PDF
     distributor = await db.distributors.find_one(
         {"id": distributor_id, "tenant_id": tenant_id},
-        {"_id": 0, "distributor_name": 1, "distributor_code": 1}
+        {"_id": 0}
     )
     
     if not distributor:
         raise HTTPException(status_code=404, detail="Distributor not found")
+    
+    # Get tenant settings for company profile
+    tenant = await db.tenants.find_one({"tenant_id": tenant_id}, {"_id": 0})
+    company_profile = tenant.get('company_profile', {}) if tenant else {}
+    branding = tenant.get('branding', {}) if tenant else {}
     
     # Determine note type
     note_type = "credit" if net_adjustment >= 0 else "debit"
@@ -5501,6 +5508,31 @@ async def generate_monthly_note(
         "updated_at": now
     }
     
+    # Generate PDF
+    try:
+        pdf_bytes = generate_debit_credit_note_pdf(
+            note_data=note_doc,
+            company_profile=company_profile,
+            distributor_data=distributor,
+            settlements=settlements,
+            branding=branding
+        )
+        
+        # Upload PDF to object storage
+        pdf_filename = f"{note_number}.pdf"
+        storage_result = upload_pdf(pdf_filename, pdf_bytes, subfolder=f"debit-credit-notes/{distributor_id}")
+        
+        # Store PDF reference in note document
+        note_doc["pdf_path"] = storage_result.get("path")
+        note_doc["pdf_size"] = storage_result.get("size")
+        note_doc["pdf_generated_at"] = now
+        
+        logger.info(f"PDF generated and uploaded for note {note_number}: {storage_result.get('path')}")
+    except Exception as e:
+        logger.error(f"Failed to generate/upload PDF for note {note_number}: {e}")
+        # Continue without PDF - note will still be created
+        note_doc["pdf_error"] = str(e)
+    
     await db.distributor_debit_credit_notes.insert_one(note_doc)
     
     # Update settlements to mark them as reconciled
@@ -5515,3 +5547,91 @@ async def generate_monthly_note(
     logger.info(f"Generated {note_type} note {note_number} for ₹{amount} for distributor {distributor_id} ({month}/{year}) by {current_user['email']}")
     
     return note_doc
+
+
+@router.get("/{distributor_id}/notes/{note_id}/download")
+async def download_note_pdf(
+    distributor_id: str,
+    note_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Download PDF for a debit/credit note"""
+    tenant_id = get_current_tenant_id()
+    
+    # Find the note
+    note = await db.distributor_debit_credit_notes.find_one(
+        {"id": note_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0}
+    )
+    
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    
+    pdf_path = note.get("pdf_path")
+    
+    if not pdf_path:
+        # PDF not generated yet - generate it now
+        distributor = await db.distributors.find_one(
+            {"id": distributor_id, "tenant_id": tenant_id},
+            {"_id": 0}
+        )
+        
+        if not distributor:
+            raise HTTPException(status_code=404, detail="Distributor not found")
+        
+        # Get settlements for this note
+        settlements = await db.distributor_settlements.find(
+            {"id": {"$in": note.get("settlement_ids", [])}, "tenant_id": tenant_id},
+            {"_id": 0}
+        ).to_list(1000)
+        
+        # Get tenant settings
+        tenant = await db.tenants.find_one({"tenant_id": tenant_id}, {"_id": 0})
+        company_profile = tenant.get('company_profile', {}) if tenant else {}
+        branding = tenant.get('branding', {}) if tenant else {}
+        
+        try:
+            pdf_bytes = generate_debit_credit_note_pdf(
+                note_data=note,
+                company_profile=company_profile,
+                distributor_data=distributor,
+                settlements=settlements,
+                branding=branding
+            )
+            
+            # Upload and store reference
+            pdf_filename = f"{note.get('note_number', note_id)}.pdf"
+            storage_result = upload_pdf(pdf_filename, pdf_bytes, subfolder=f"debit-credit-notes/{distributor_id}")
+            
+            # Update note with PDF path
+            await db.distributor_debit_credit_notes.update_one(
+                {"id": note_id, "tenant_id": tenant_id},
+                {"$set": {
+                    "pdf_path": storage_result.get("path"),
+                    "pdf_size": storage_result.get("size"),
+                    "pdf_generated_at": datetime.now(timezone.utc).isoformat()
+                }}
+            )
+            
+            pdf_path = storage_result.get("path")
+            
+        except Exception as e:
+            logger.error(f"Failed to generate PDF on-demand for note {note_id}: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
+    
+    # Download PDF from storage
+    try:
+        pdf_content = download_pdf(pdf_path)
+        
+        filename = f"{note.get('note_number', note_id)}.pdf"
+        
+        return Response(
+            content=pdf_content,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            }
+        )
+    except Exception as e:
+        logger.error(f"Failed to download PDF from storage for note {note_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to download PDF: {str(e)}")
