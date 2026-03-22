@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../co
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../components/ui/alert-dialog';
@@ -19,7 +20,7 @@ import {
   ArrowLeft, Building2, MapPin, Phone, Mail, Edit2, Trash2,
   RefreshCw, Plus, Package, Truck, CreditCard, Calendar,
   User, FileText, Check, X, Save, Percent, DollarSign, Copy,
-  Settings, Eye, Receipt, Calculator
+  Settings, Eye, Receipt, Calculator, Warehouse
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -33,8 +34,6 @@ import ShipmentsTab from '../components/distributor/ShipmentsTab';
 import DeliveriesTab from '../components/distributor/DeliveriesTab';
 import SettlementsTab from '../components/distributor/SettlementsTab';
 import BillingTab from '../components/distributor/BillingTab';
-import DistributorSidebar from '../components/distributor/DistributorSidebar';
-import DistributorHeader from '../components/distributor/DistributorHeader';
 import { PAYMENT_TERMS, STATUS_OPTIONS, MARGIN_TYPES, formatMarginValue } from '../components/distributor/constants';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -58,7 +57,7 @@ export default function DistributorDetail() {
   
   const [loading, setLoading] = useState(true);
   const [distributor, setDistributor] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('profile');
   
   // Edit mode
   const [isEditing, setIsEditing] = useState(false);
@@ -1929,297 +1928,340 @@ export default function DistributorDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/30" data-testid="distributor-detail-page">
+    <div className="p-6 space-y-6" data-testid="distributor-detail-page">
       {/* Header */}
-      <DistributorHeader
-        distributor={distributor}
-        onEdit={() => setIsEditing(true)}
-        canManage={canManage}
-        isEditing={isEditing}
-        onSave={handleSave}
-        onCancel={() => { setIsEditing(false); setEditData(distributor); }}
-        saving={saving}
-      />
-
-      {/* Main Layout with Sidebar */}
-      <div className="flex">
-        {/* Sidebar Navigation */}
-        <DistributorSidebar
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          distributor={distributor}
-          counts={{
-            coverage: distributor.operating_coverage?.length || 0,
-            locations: distributor.locations?.length || 0,
-            margins: margins.length,
-            assignments: assignments.length,
-            shipments: shipments.length,
-            deliveries: deliveries.length,
-            settlements: settlements.length,
-          }}
-        />
-
-        {/* Main Content Area */}
-        <main className="flex-1 min-h-[calc(100vh-73px)] overflow-auto">
-          <div className="p-6 lg:p-8 max-w-6xl">
-            {/* Content Title */}
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold text-slate-900 tracking-tight">
-                {activeTab === 'overview' && 'Overview'}
-                {activeTab === 'coverage' && 'Operating Coverage'}
-                {activeTab === 'locations' && 'Warehouse Locations'}
-                {activeTab === 'margins' && 'Margin Matrix'}
-                {activeTab === 'assignments' && 'Account Assignments'}
-                {activeTab === 'shipments' && 'Stock In (Factory → Distributor)'}
-                {activeTab === 'deliveries' && 'Stock Out (Distributor → Customer)'}
-                {activeTab === 'settlements' && 'Monthly Settlements'}
-                {activeTab === 'billing' && 'Billing & Reconciliation'}
-              </h2>
-              <p className="text-sm text-slate-500 mt-1">
-                {activeTab === 'overview' && 'Basic information and commercial terms'}
-                {activeTab === 'coverage' && 'States and cities where distributor operates'}
-                {activeTab === 'locations' && 'Warehouse and stocking locations'}
-                {activeTab === 'margins' && 'SKU-level margin configurations by city'}
-                {activeTab === 'assignments' && 'Customer accounts linked to this distributor'}
-                {activeTab === 'shipments' && 'Inventory received from factory'}
-                {activeTab === 'deliveries' && 'Deliveries made to customers'}
-                {activeTab === 'settlements' && 'Account-level settlement records grouped by customer'}
-                {activeTab === 'billing' && 'Monthly reconciliation and debit/credit notes'}
-              </p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/distributors')}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold">{distributor.distributor_name}</h1>
+              <Badge variant="outline">{distributor.distributor_code}</Badge>
+              {getStatusBadge(distributor.status)}
             </div>
-
-            {/* Tab Contents */}
-            <div className="space-y-6">
-              {activeTab === 'overview' && (
-                <OverviewTab
-                  distributor={distributor}
-                  isEditing={isEditing}
-                  editData={editData}
-                  setEditData={setEditData}
-                />
-              )}
-
-              {activeTab === 'coverage' && (
-                <CoverageTab
-                  distributor={distributor}
-                  canManage={canManage}
-                  showCoverageDialog={showCoverageDialog}
-                  setShowCoverageDialog={setShowCoverageDialog}
-                  selectedState={selectedState}
-                  setSelectedState={setSelectedState}
-                  selectedCities={selectedCities}
-                  setSelectedCities={setSelectedCities}
-                  stateNames={stateNames}
-                  getAvailableCities={getAvailableCities}
-                  handleAddCoverage={handleAddCoverage}
-                  addingCoverage={addingCoverage}
-                  setDeleteTarget={setDeleteTarget}
-                />
-              )}
-
-              {activeTab === 'locations' && (
-                <LocationsTab
-                  distributor={distributor}
-                  canManage={canManage}
-                  showLocationDialog={showLocationDialog}
-                  setShowLocationDialog={setShowLocationDialog}
-                  newLocation={newLocation}
-                  setNewLocation={setNewLocation}
-                  stateNames={stateNames}
-                  getCoveredCities={getCoveredCities}
-                  handleAddLocation={handleAddLocation}
-                  addingLocation={addingLocation}
-                  setDeleteTarget={setDeleteTarget}
-                />
-              )}
-
-              {activeTab === 'margins' && (
-                <MarginsTab
-                  distributor={distributor}
-                  canManage={canManage}
-                  margins={margins}
-                  marginsLoading={marginsLoading}
-                  selectedMarginCity={selectedMarginCity}
-                  setSelectedMarginCity={setSelectedMarginCity}
-                  showOnlyActiveMargins={showOnlyActiveMargins}
-                  setShowOnlyActiveMargins={setShowOnlyActiveMargins}
-                  getCoveredCities={getCoveredCities}
-                  skus={skus}
-                  showCopyDialog={showCopyDialog}
-                  setShowCopyDialog={setShowCopyDialog}
-                  copyTargetCity={copyTargetCity}
-                  setCopyTargetCity={setCopyTargetCity}
-                  copyMarginsToCity={copyMarginsToCity}
-                  copying={copying}
-                  showAddMarginDialog={showAddMarginDialog}
-                  setShowAddMarginDialog={setShowAddMarginDialog}
-                  newMarginForm={newMarginForm}
-                  setNewMarginForm={setNewMarginForm}
-                  handleAddMarginEntry={handleAddMarginEntry}
-                  savingMarginEntry={savingMarginEntry}
-                  showEditMarginDialog={showEditMarginDialog}
-                  setShowEditMarginDialog={setShowEditMarginDialog}
-                  editMarginEntry={editMarginEntry}
-                  setEditMarginEntry={setEditMarginEntry}
-                  handleUpdateMarginEntry={handleUpdateMarginEntry}
-                  setDeleteTarget={setDeleteTarget}
-                />
-              )}
-
-              {activeTab === 'assignments' && (
-                <AssignmentsTab
-                  distributor={distributor}
-                  canManage={canManage}
-                  assignments={assignments}
-                  assignmentsLoading={assignmentsLoading}
-                  showAssignDialog={showAssignDialog}
-                  setShowAssignDialog={setShowAssignDialog}
-                  accountSearch={accountSearch}
-                  setAccountSearch={setAccountSearch}
-                  searching={searching}
-                  searchResults={searchResults}
-                  setSearchResults={setSearchResults}
-                  selectedAccount={selectedAccount}
-                  setSelectedAccount={setSelectedAccount}
-                  assignmentForm={assignmentForm}
-                  setAssignmentForm={setAssignmentForm}
-                  getCoveredCities={getCoveredCities}
-                  handleCreateAssignment={handleCreateAssignment}
-                  savingAssignment={savingAssignment}
-                  setDeleteTarget={setDeleteTarget}
-                />
-              )}
-
-              {activeTab === 'shipments' && (
-                <ShipmentsTab
-                  distributor={distributor}
-                  canManage={canManage}
-                  canDelete={canDelete}
-                  shipments={shipments}
-                  shipmentsLoading={shipmentsLoading}
-                  skus={skus}
-                  showShipmentDialog={showShipmentDialog}
-                  setShowShipmentDialog={setShowShipmentDialog}
-                  shipmentForm={shipmentForm}
-                  setShipmentForm={setShipmentForm}
-                  shipmentItems={shipmentItems}
-                  addShipmentItem={addShipmentItem}
-                  updateShipmentItem={updateShipmentItem}
-                  updateShipmentItemWithPrice={updateShipmentItemWithPrice}
-                  removeShipmentItem={removeShipmentItem}
-                  resetShipmentForm={resetShipmentForm}
-                  handleCreateShipment={handleCreateShipment}
-                  savingShipment={savingShipment}
-                  viewShipmentDetail={viewShipmentDetail}
-                  setDeleteTarget={setDeleteTarget}
-                  getShipmentStatusBadge={getShipmentStatusBadge}
-                />
-              )}
-
-              {activeTab === 'deliveries' && (
-                <DeliveriesTab
-                  distributor={distributor}
-                  canManage={canManage}
-                  canDelete={canDelete}
-                  deliveries={deliveries}
-                  deliveriesLoading={deliveriesLoading}
-                  deliveriesTotal={deliveriesTotal}
-                  deliveriesPage={deliveriesPage}
-                  deliveriesPageSize={deliveriesPageSize}
-                  setDeliveriesPage={setDeliveriesPage}
-                  setDeliveriesPageSize={setDeliveriesPageSize}
-                  deliveriesTimeFilter={deliveriesTimeFilter}
-                  setDeliveriesTimeFilter={setDeliveriesTimeFilter}
-                  deliveriesAccountFilter={deliveriesAccountFilter}
-                  setDeliveriesAccountFilter={setDeliveriesAccountFilter}
-                  fetchDeliveries={fetchDeliveries}
-                  skus={skus}
-                  assignedAccounts={assignedAccounts}
-                  showDeliveryDialog={showDeliveryDialog}
-                  setShowDeliveryDialog={setShowDeliveryDialog}
-                  selectedDeliveryAccount={selectedDeliveryAccount}
-                  setSelectedDeliveryAccount={setSelectedDeliveryAccount}
-                  deliveryAccountSearch={deliveryAccountSearch}
-                  setDeliveryAccountSearch={setDeliveryAccountSearch}
-                  deliveryForm={deliveryForm}
-                  setDeliveryForm={setDeliveryForm}
-                  deliveryItems={deliveryItems}
-                  addDeliveryItem={addDeliveryItem}
-                  updateDeliveryItem={updateDeliveryItem}
-                  removeDeliveryItem={removeDeliveryItem}
-                  resetDeliveryForm={resetDeliveryForm}
-                  handleCreateDelivery={handleCreateDelivery}
-                  savingDelivery={savingDelivery}
-                  viewDeliveryDetail={viewDeliveryDetail}
-                  setDeleteTarget={setDeleteTarget}
-                  getDeliveryStatusBadge={getDeliveryStatusBadge}
-                  API_URL={API_URL}
-                  token={token}
-                />
-              )}
-
-              {activeTab === 'settlements' && (
-                <SettlementsTab
-                  distributor={distributor}
-                  canManage={canManage}
-                  canDelete={canDelete}
-                  canApprove={canApprove}
-                  settlements={settlements}
-                  settlementsLoading={settlementsLoading}
-                  settlementsTotal={settlementsTotal}
-                  settlementsPage={settlementsPage}
-                  settlementsPageSize={settlementsPageSize}
-                  setSettlementsPage={setSettlementsPage}
-                  setSettlementsPageSize={setSettlementsPageSize}
-                  settlementsMonthFilter={settlementsMonthFilter}
-                  setSettlementsMonthFilter={setSettlementsMonthFilter}
-                  settlementsYearFilter={settlementsYearFilter}
-                  setSettlementsYearFilter={setSettlementsYearFilter}
-                  fetchSettlements={fetchSettlements}
-                  showSettlementDialog={showSettlementDialog}
-                  setShowSettlementDialog={setShowSettlementDialog}
-                  settlementForm={settlementForm}
-                  setSettlementForm={setSettlementForm}
-                  resetSettlementForm={resetSettlementForm}
-                  unsettledDeliveries={unsettledDeliveries}
-                  unsettledLoading={unsettledLoading}
-                  fetchUnsettledDeliveries={fetchUnsettledDeliveries}
-                  handleCreateSettlement={handleCreateSettlement}
-                  handleSubmitSettlement={handleSubmitSettlement}
-                  handleApproveSettlement={handleApproveSettlement}
-                  handleRejectSettlement={handleRejectSettlement}
-                  savingSettlement={savingSettlement}
-                  viewSettlementDetail={viewSettlementDetail}
-                  setDeleteTarget={setDeleteTarget}
-                  getSettlementStatusBadge={getSettlementStatusBadge}
-                  assignedAccounts={assignedAccounts}
-                />
-              )}
-
-              {activeTab === 'billing' && (
-                <BillingTab
-                  distributor={distributor}
-                  canManage={canManage}
-                  canDelete={canDelete}
-                  settlements={settlements}
-                  settlementsLoading={settlementsLoading}
-                  fetchSettlements={fetchSettlements}
-                  debitCreditNotes={debitCreditNotes}
-                  notesLoading={notesLoading}
-                  fetchNotes={fetchDebitCreditNotes}
-                  viewNoteDetail={viewNoteDetail}
-                  getNoteStatusBadge={getNoteStatusBadge}
-                  getSettlementStatusBadge={getSettlementStatusBadge}
-                  setActiveTab={setActiveTab}
-                  setDeleteTarget={setDeleteTarget}
-                  API_URL={API_URL}
-                  token={token}
-                />
-              )}
-            </div>
+            {distributor.legal_entity_name && (
+              <p className="text-muted-foreground">{distributor.legal_entity_name}</p>
+            )}
           </div>
-        </main>
+        </div>
+        
+        {canManage && !isEditing && (
+          <Button onClick={() => setIsEditing(true)}>
+            <Edit2 className="h-4 w-4 mr-2" />
+            Edit
+          </Button>
+        )}
+        
+        {isEditing && (
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => { setIsEditing(false); setEditData(distributor); }}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={saving}>
+              <Save className="h-4 w-4 mr-2" />
+              {saving ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        )}
       </div>
+
+      {/* Tabs - Consolidated Structure */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-6 h-auto p-1">
+          <TabsTrigger value="profile" className="flex items-center gap-2 py-2.5" data-testid="profile-tab">
+            <Building2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Profile</span>
+          </TabsTrigger>
+          <TabsTrigger value="commercial" className="flex items-center gap-2 py-2.5" data-testid="commercial-tab">
+            <Percent className="h-4 w-4" />
+            <span className="hidden sm:inline">Commercial</span>
+          </TabsTrigger>
+          <TabsTrigger value="stockin" className="flex items-center gap-2 py-2.5" data-testid="stockin-tab">
+            <Package className="h-4 w-4" />
+            <span className="hidden sm:inline">Stock In</span>
+          </TabsTrigger>
+          <TabsTrigger value="stockout" className="flex items-center gap-2 py-2.5" data-testid="stockout-tab">
+            <Truck className="h-4 w-4" />
+            <span className="hidden sm:inline">Stock Out</span>
+          </TabsTrigger>
+          <TabsTrigger value="settlements" className="flex items-center gap-2 py-2.5" data-testid="settlements-tab">
+            <Receipt className="h-4 w-4" />
+            <span className="hidden sm:inline">Settlements</span>
+          </TabsTrigger>
+          <TabsTrigger value="billing" className="flex items-center gap-2 py-2.5" data-testid="billing-tab">
+            <Calculator className="h-4 w-4" />
+            <span className="hidden sm:inline">Billing</span>
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Profile Tab: Overview + Coverage + Locations */}
+        <TabsContent value="profile" className="space-y-8">
+          {/* Overview Section */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <FileText className="h-5 w-5 text-muted-foreground" />
+              Basic Information
+            </h3>
+            <OverviewTab
+              distributor={distributor}
+              isEditing={isEditing}
+              editData={editData}
+              setEditData={setEditData}
+            />
+          </div>
+          
+          {/* Coverage Section */}
+          <div className="border-t pt-8">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-muted-foreground" />
+              Operating Coverage
+              <Badge variant="secondary" className="ml-2">{distributor.operating_coverage?.length || 0} cities</Badge>
+            </h3>
+            <CoverageTab
+              distributor={distributor}
+              canManage={canManage}
+              showCoverageDialog={showCoverageDialog}
+              setShowCoverageDialog={setShowCoverageDialog}
+              selectedState={selectedState}
+              setSelectedState={setSelectedState}
+              selectedCities={selectedCities}
+              setSelectedCities={setSelectedCities}
+              stateNames={stateNames}
+              getAvailableCities={getAvailableCities}
+              handleAddCoverage={handleAddCoverage}
+              addingCoverage={addingCoverage}
+              setDeleteTarget={setDeleteTarget}
+            />
+          </div>
+          
+          {/* Locations Section */}
+          <div className="border-t pt-8">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <Warehouse className="h-5 w-5 text-muted-foreground" />
+              Warehouse Locations
+              <Badge variant="secondary" className="ml-2">{distributor.locations?.length || 0} locations</Badge>
+            </h3>
+            <LocationsTab
+              distributor={distributor}
+              canManage={canManage}
+              showLocationDialog={showLocationDialog}
+              setShowLocationDialog={setShowLocationDialog}
+              newLocation={newLocation}
+              setNewLocation={setNewLocation}
+              stateNames={stateNames}
+              getCoveredCities={getCoveredCities}
+              handleAddLocation={handleAddLocation}
+              addingLocation={addingLocation}
+              setDeleteTarget={setDeleteTarget}
+            />
+          </div>
+        </TabsContent>
+
+        {/* Commercial Tab: Margins + Assignments */}
+        <TabsContent value="commercial" className="space-y-8">
+          {/* Margin Matrix Section */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <Percent className="h-5 w-5 text-muted-foreground" />
+              Margin Matrix
+              <Badge variant="secondary" className="ml-2">{margins.length} entries</Badge>
+            </h3>
+            <MarginsTab
+              distributor={distributor}
+              canManage={canManage}
+              margins={margins}
+              marginsLoading={marginsLoading}
+              selectedMarginCity={selectedMarginCity}
+              setSelectedMarginCity={setSelectedMarginCity}
+              showOnlyActiveMargins={showOnlyActiveMargins}
+              setShowOnlyActiveMargins={setShowOnlyActiveMargins}
+              getCoveredCities={getCoveredCities}
+              skus={skus}
+              showCopyDialog={showCopyDialog}
+              setShowCopyDialog={setShowCopyDialog}
+              copyTargetCity={copyTargetCity}
+              setCopyTargetCity={setCopyTargetCity}
+              copyMarginsToCity={copyMarginsToCity}
+              copying={copying}
+              showAddMarginDialog={showAddMarginDialog}
+              setShowAddMarginDialog={setShowAddMarginDialog}
+              newMarginForm={newMarginForm}
+              setNewMarginForm={setNewMarginForm}
+              handleAddMarginEntry={handleAddMarginEntry}
+              savingMarginEntry={savingMarginEntry}
+              showEditMarginDialog={showEditMarginDialog}
+              setShowEditMarginDialog={setShowEditMarginDialog}
+              editMarginEntry={editMarginEntry}
+              setEditMarginEntry={setEditMarginEntry}
+              handleUpdateMarginEntry={handleUpdateMarginEntry}
+              setDeleteTarget={setDeleteTarget}
+            />
+          </div>
+          
+          {/* Account Assignments Section */}
+          <div className="border-t pt-8">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <User className="h-5 w-5 text-muted-foreground" />
+              Account Assignments
+              <Badge variant="secondary" className="ml-2">{assignments.length} accounts</Badge>
+            </h3>
+            <AssignmentsTab
+              distributor={distributor}
+              canManage={canManage}
+              assignments={assignments}
+              assignmentsLoading={assignmentsLoading}
+              showAssignDialog={showAssignDialog}
+              setShowAssignDialog={setShowAssignDialog}
+              accountSearch={accountSearch}
+              setAccountSearch={setAccountSearch}
+              searching={searching}
+              searchResults={searchResults}
+              setSearchResults={setSearchResults}
+              selectedAccount={selectedAccount}
+              setSelectedAccount={setSelectedAccount}
+              assignmentForm={assignmentForm}
+              setAssignmentForm={setAssignmentForm}
+              getCoveredCities={getCoveredCities}
+              handleCreateAssignment={handleCreateAssignment}
+              savingAssignment={savingAssignment}
+              setDeleteTarget={setDeleteTarget}
+            />
+          </div>
+        </TabsContent>
+
+        {/* Stock In Tab */}
+        <TabsContent value="stockin" className="space-y-4">
+          <ShipmentsTab
+            distributor={distributor}
+            canManage={canManage}
+            canDelete={canDelete}
+            shipments={shipments}
+            shipmentsLoading={shipmentsLoading}
+            skus={skus}
+            showShipmentDialog={showShipmentDialog}
+            setShowShipmentDialog={setShowShipmentDialog}
+            shipmentForm={shipmentForm}
+            setShipmentForm={setShipmentForm}
+            shipmentItems={shipmentItems}
+            addShipmentItem={addShipmentItem}
+            updateShipmentItem={updateShipmentItem}
+            updateShipmentItemWithPrice={updateShipmentItemWithPrice}
+            removeShipmentItem={removeShipmentItem}
+            resetShipmentForm={resetShipmentForm}
+            handleCreateShipment={handleCreateShipment}
+            savingShipment={savingShipment}
+            viewShipmentDetail={viewShipmentDetail}
+            setDeleteTarget={setDeleteTarget}
+            getShipmentStatusBadge={getShipmentStatusBadge}
+          />
+        </TabsContent>
+
+        {/* Stock Out Tab */}
+        <TabsContent value="stockout" className="space-y-4">
+          <DeliveriesTab
+            distributor={distributor}
+            canManage={canManage}
+            canDelete={canDelete}
+            deliveries={deliveries}
+            deliveriesLoading={deliveriesLoading}
+            deliveriesTotal={deliveriesTotal}
+            deliveriesPage={deliveriesPage}
+            deliveriesPageSize={deliveriesPageSize}
+            setDeliveriesPage={setDeliveriesPage}
+            setDeliveriesPageSize={setDeliveriesPageSize}
+            deliveriesTimeFilter={deliveriesTimeFilter}
+            setDeliveriesTimeFilter={setDeliveriesTimeFilter}
+            deliveriesAccountFilter={deliveriesAccountFilter}
+            setDeliveriesAccountFilter={setDeliveriesAccountFilter}
+            fetchDeliveries={fetchDeliveries}
+            skus={skus}
+            assignedAccounts={assignedAccounts}
+            showDeliveryDialog={showDeliveryDialog}
+            setShowDeliveryDialog={setShowDeliveryDialog}
+            selectedDeliveryAccount={selectedDeliveryAccount}
+            setSelectedDeliveryAccount={setSelectedDeliveryAccount}
+            deliveryAccountSearch={deliveryAccountSearch}
+            setDeliveryAccountSearch={setDeliveryAccountSearch}
+            deliveryForm={deliveryForm}
+            setDeliveryForm={setDeliveryForm}
+            deliveryItems={deliveryItems}
+            addDeliveryItem={addDeliveryItem}
+            updateDeliveryItem={updateDeliveryItem}
+            removeDeliveryItem={removeDeliveryItem}
+            resetDeliveryForm={resetDeliveryForm}
+            handleCreateDelivery={handleCreateDelivery}
+            savingDelivery={savingDelivery}
+            viewDeliveryDetail={viewDeliveryDetail}
+            setDeleteTarget={setDeleteTarget}
+            getDeliveryStatusBadge={getDeliveryStatusBadge}
+            API_URL={API_URL}
+            token={token}
+          />
+        </TabsContent>
+
+        {/* Settlements Tab */}
+        <TabsContent value="settlements" className="space-y-4">
+          <SettlementsTab
+            distributor={distributor}
+            canManage={canManage}
+            canDelete={canDelete}
+            canApprove={canApprove}
+            settlements={settlements}
+            settlementsLoading={settlementsLoading}
+            settlementsTotal={settlementsTotal}
+            settlementsPage={settlementsPage}
+            settlementsPageSize={settlementsPageSize}
+            setSettlementsPage={setSettlementsPage}
+            setSettlementsPageSize={setSettlementsPageSize}
+            settlementsMonthFilter={settlementsMonthFilter}
+            setSettlementsMonthFilter={setSettlementsMonthFilter}
+            settlementsYearFilter={settlementsYearFilter}
+            setSettlementsYearFilter={setSettlementsYearFilter}
+            fetchSettlements={fetchSettlements}
+            showSettlementDialog={showSettlementDialog}
+            setShowSettlementDialog={setShowSettlementDialog}
+            settlementForm={settlementForm}
+            setSettlementForm={setSettlementForm}
+            resetSettlementForm={resetSettlementForm}
+            unsettledDeliveries={unsettledDeliveries}
+            unsettledLoading={unsettledLoading}
+            fetchUnsettledDeliveries={fetchUnsettledDeliveries}
+            handleCreateSettlement={handleCreateSettlement}
+            handleSubmitSettlement={handleSubmitSettlement}
+            handleApproveSettlement={handleApproveSettlement}
+            handleRejectSettlement={handleRejectSettlement}
+            savingSettlement={savingSettlement}
+            viewSettlementDetail={viewSettlementDetail}
+            setDeleteTarget={setDeleteTarget}
+            getSettlementStatusBadge={getSettlementStatusBadge}
+            assignedAccounts={assignedAccounts}
+          />
+        </TabsContent>
+
+        {/* Billing Tab */}
+        <TabsContent value="billing" className="space-y-4">
+          <BillingTab
+            distributor={distributor}
+            canManage={canManage}
+            canDelete={canDelete}
+            settlements={settlements}
+            settlementsLoading={settlementsLoading}
+            fetchSettlements={fetchSettlements}
+            debitCreditNotes={debitCreditNotes}
+            notesLoading={notesLoading}
+            fetchNotes={fetchDebitCreditNotes}
+            viewNoteDetail={viewNoteDetail}
+            getNoteStatusBadge={getNoteStatusBadge}
+            getSettlementStatusBadge={getSettlementStatusBadge}
+            setActiveTab={setActiveTab}
+            setDeleteTarget={setDeleteTarget}
+            API_URL={API_URL}
+            token={token}
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Shipment Detail Dialog */}
       <Dialog open={showShipmentDetail} onOpenChange={setShowShipmentDetail}>
