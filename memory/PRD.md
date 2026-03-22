@@ -5,6 +5,38 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Latest Session - March 22, 2026 (Session 2)
 
+### Distribution as Separate Top-Level Module ✅
+
+**User Requirements:**
+- Make Distribution a separate module like Sales and Production
+- Current toggle won't work for many modules - need scalable selector
+- Distribution should have its own sidebar items like Sales does
+
+**Implementation:**
+1. **Module Selector Dropdown** - Replaced toggle with scalable dropdown
+   - Shows: Sales, Production, Distribution
+   - Icon indicator shows active module
+   - Persists selection in localStorage per user
+
+2. **Distribution Module Navigation** - Separate sidebar when Distribution selected:
+   - DISTRIBUTION: Distributors, Stock Dashboard
+   - PRODUCT & SKU: SKU Management
+   - DOCUMENTS: Files & Documents
+   - ORGANIZATION: Company Profile, Team
+   - ADMIN: Tenant Settings
+
+3. **Sales Module Cleanup** - Removed Distribution section from Sales sidebar
+
+**Files Modified:**
+- `/app/frontend/src/context/AppContextContext.js` - Added Distribution module support
+- `/app/frontend/src/layouts/DashboardLayout.js` - Module selector & Distribution nav groups
+
+**Testing Results (iteration_70.json):**
+- Frontend: 100% (all 7 features verified)
+- Module switching, navigation, persistence all tested
+
+---
+
 ### Distribution Module Complete Redesign ✅
 
 **User Requirements:**
