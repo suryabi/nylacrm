@@ -819,8 +819,8 @@ export default function DeliveriesTab({
                           </td>
                         </tr>
                       )}
-                      {/* Delivery subtotal row */}
-                      {items.length > 1 && (
+                      {/* Delivery subtotal row - always show */}
+                      {items.length >= 1 && (
                         <tr className="bg-slate-100 dark:bg-slate-800 font-semibold text-sm">
                           <td className="p-2 text-right" colSpan={5}>Delivery Total:</td>
                           <td className="p-2 text-right">₹{totalBillingValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
