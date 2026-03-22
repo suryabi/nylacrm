@@ -2151,6 +2151,7 @@ export default function DistributorDetail() {
             distributor={distributor}
             canManage={canManage}
             canDelete={canDelete}
+            canApprove={canApprove}
             settlements={settlements}
             settlementsLoading={settlementsLoading}
             settlementsTotal={settlementsTotal}
@@ -2172,6 +2173,9 @@ export default function DistributorDetail() {
             unsettledLoading={unsettledLoading}
             fetchUnsettledDeliveries={fetchUnsettledDeliveries}
             handleCreateSettlement={handleCreateSettlement}
+            handleSubmitSettlement={handleSubmitSettlement}
+            handleApproveSettlement={handleApproveSettlement}
+            handleRejectSettlement={handleRejectSettlement}
             savingSettlement={savingSettlement}
             viewSettlementDetail={viewSettlementDetail}
             setDeleteTarget={setDeleteTarget}
@@ -2545,19 +2549,35 @@ export default function DistributorDetail() {
                 </div>
               )}
 
-              {/* Actions - Only Delete for draft settlements */}
+              {/* Actions */}
               <div className="flex justify-end gap-2 pt-4 border-t">
                 {selectedSettlement.status === 'draft' && canManage && (
-                  <Button variant="outline" onClick={() => {
-                    setDeleteTarget({
-                      type: 'settlement',
-                      id: selectedSettlement.id,
-                      name: selectedSettlement.settlement_number
-                    });
-                    setShowSettlementDetail(false);
-                  }}>
-                    Delete
-                  </Button>
+                  <>
+                    <Button variant="outline" onClick={() => {
+                      setDeleteTarget({
+                        type: 'settlement',
+                        id: selectedSettlement.id,
+                        name: selectedSettlement.settlement_number
+                      });
+                      setShowSettlementDetail(false);
+                    }}>
+                      Delete
+                    </Button>
+                    <Button onClick={() => handleSubmitSettlement(selectedSettlement.id)}>
+                      Submit for Approval
+                    </Button>
+                  </>
+                )}
+                {selectedSettlement.status === 'pending_approval' && canApprove && (
+                  <>
+                    <Button variant="outline" onClick={() => handleRejectSettlement(selectedSettlement.id)}>
+                      Reject
+                    </Button>
+                    <Button onClick={() => handleApproveSettlement(selectedSettlement.id)} className="bg-green-600 hover:bg-green-700">
+                      <Check className="h-4 w-4 mr-2" />
+                      Approve
+                    </Button>
+                  </>
                 )}
                 {selectedSettlement.reconciled && (
                   <div className="text-sm text-muted-foreground flex items-center gap-2">

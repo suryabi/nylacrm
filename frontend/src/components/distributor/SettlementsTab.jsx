@@ -4,7 +4,7 @@ import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
-import { Plus, Trash2, DollarSign, RefreshCw, FileText, Calendar, Download, Building2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, DollarSign, RefreshCw, FileText, Calendar, Download, Building2, ChevronLeft, ChevronRight, Send, Check, X } from 'lucide-react';
 
 const MONTHS = [
   { value: 1, label: 'January' },
@@ -29,6 +29,7 @@ export default function SettlementsTab({
   distributor,
   canManage,
   canDelete,
+  canApprove,
   settlements,
   settlementsLoading,
   settlementsTotal,
@@ -54,6 +55,9 @@ export default function SettlementsTab({
   fetchUnsettledDeliveries,
   // Handlers
   handleCreateSettlement,
+  handleSubmitSettlement,
+  handleApproveSettlement,
+  handleRejectSettlement,
   savingSettlement,
   viewSettlementDetail,
   setDeleteTarget,
@@ -467,6 +471,54 @@ export default function SettlementsTab({
                           >
                             <FileText className="h-4 w-4" />
                           </Button>
+                          {/* Submit for Approval button - only for draft */}
+                          {settlement.status === 'draft' && canManage && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-blue-600 hover:text-blue-700"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSubmitSettlement && handleSubmitSettlement(settlement.id);
+                              }}
+                              data-testid={`submit-settlement-${settlement.id}`}
+                              title="Submit for Approval"
+                            >
+                              <Send className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {/* Approve button - only for pending_approval */}
+                          {settlement.status === 'pending_approval' && canApprove && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-green-600 hover:text-green-700"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleApproveSettlement && handleApproveSettlement(settlement.id);
+                              }}
+                              data-testid={`approve-settlement-${settlement.id}`}
+                              title="Approve"
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {/* Reject button - only for pending_approval */}
+                          {settlement.status === 'pending_approval' && canApprove && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-orange-600 hover:text-orange-700"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRejectSettlement && handleRejectSettlement(settlement.id);
+                              }}
+                              data-testid={`reject-settlement-${settlement.id}`}
+                              title="Reject"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          )}
                           {(canDelete || (canManage && settlement.status === 'draft')) && (
                             <Button
                               variant="ghost"
