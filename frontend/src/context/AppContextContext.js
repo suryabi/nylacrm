@@ -3,36 +3,44 @@ import { useAuth } from './AuthContext';
 
 const AppContextContext = createContext(null);
 
-// Roles that can access both contexts
+// Roles that can access all modules
 const ADMIN_ROLES = ['CEO', 'Director'];
+
+// Module definitions
+const MODULES = {
+  sales: { id: 'sales', label: 'Sales', icon: 'Store', defaultRoute: '/home' },
+  production: { id: 'production', label: 'Production', icon: 'Factory', defaultRoute: '/maintenance' },
+  distribution: { id: 'distribution', label: 'Distribution', icon: 'Truck', defaultRoute: '/distributors' },
+};
 
 export function AppContextProvider({ children }) {
   const { user } = useAuth();
   const [currentContext, setCurrentContext] = useState('sales');
   
-  // Determine which contexts the user can access
-  const canAccessBothContexts = () => {
+  // Determine which modules the user can access
+  const canAccessModule = (moduleId) => {
     if (!user) return false;
-    // Admin roles can always access both
+    // Admin roles can always access all modules
     if (ADMIN_ROLES.includes(user.role)) return true;
-    // Users with 'both' department can access both
-    if (user.department === 'both') return true;
+    // Check department-based access
+    if (user.department === 'both' || user.department === 'all') return true;
+    if (moduleId === 'sales' && (user.department === 'sales' || !user.department)) return true;
+    if (moduleId === 'production' && user.department === 'production') return true;
+    if (moduleId === 'distribution' && (user.department === 'distribution' || user.department === 'sales')) return true;
     return false;
   };
   
-  const canAccessSales = () => {
-    if (!user) return false;
-    if (ADMIN_ROLES.includes(user.role)) return true;
-    if (user.department === 'both' || user.department === 'sales') return true;
-    return false;
+  const getAccessibleModules = () => {
+    return Object.values(MODULES).filter(module => canAccessModule(module.id));
   };
   
-  const canAccessProduction = () => {
-    if (!user) return false;
-    if (ADMIN_ROLES.includes(user.role)) return true;
-    if (user.department === 'both' || user.department === 'production') return true;
-    return false;
+  const canAccessMultipleModules = () => {
+    return getAccessibleModules().length > 1;
   };
+  
+  const canAccessSales = () => canAccessModule('sales');
+  const canAccessProduction = () => canAccessModule('production');
+  const canAccessDistribution = () => canAccessModule('distribution');
   
   // Set default context based on user's department
   useEffect(() => {
@@ -40,16 +48,8 @@ export function AppContextProvider({ children }) {
       // Load saved context from localStorage
       const savedContext = localStorage.getItem(`appContext_${user.id}`);
       
-      if (savedContext && (savedContext === 'sales' || savedContext === 'production')) {
-        // Validate saved context against user permissions
-        if (savedContext === 'production' && canAccessProduction()) {
-          setCurrentContext('production');
-        } else if (savedContext === 'sales' && canAccessSales()) {
-          setCurrentContext('sales');
-        } else {
-          // Fall back to default based on department
-          setDefaultContext();
-        }
+      if (savedContext && MODULES[savedContext] && canAccessModule(savedContext)) {
+        setCurrentContext(savedContext);
       } else {
         setDefaultContext();
       }
@@ -68,21 +68,18 @@ export function AppContextProvider({ children }) {
     // Set based on department
     if (user.department === 'production') {
       setCurrentContext('production');
+    } else if (user.department === 'distribution') {
+      setCurrentContext('distribution');
     } else {
       setCurrentContext('sales');
     }
   };
   
   const switchContext = (newContext) => {
-    if (newContext === 'sales' && canAccessSales()) {
-      setCurrentContext('sales');
+    if (canAccessModule(newContext)) {
+      setCurrentContext(newContext);
       if (user) {
-        localStorage.setItem(`appContext_${user.id}`, 'sales');
-      }
-    } else if (newContext === 'production' && canAccessProduction()) {
-      setCurrentContext('production');
-      if (user) {
-        localStorage.setItem(`appContext_${user.id}`, 'production');
+        localStorage.setItem(`appContext_${user.id}`, newContext);
       }
     }
   };
@@ -90,9 +87,13 @@ export function AppContextProvider({ children }) {
   const value = {
     currentContext,
     switchContext,
-    canAccessBothContexts: canAccessBothContexts(),
+    canAccessMultipleModules: canAccessMultipleModules(),
+    canAccessBothContexts: canAccessMultipleModules(), // Backward compatibility
     canAccessSales: canAccessSales(),
     canAccessProduction: canAccessProduction(),
+    canAccessDistribution: canAccessDistribution(),
+    getAccessibleModules,
+    modules: MODULES,
   };
   
   return (

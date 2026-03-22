@@ -62,13 +62,6 @@ const salesNavigationGroups = [
     ]
   },
   {
-    title: 'Distribution',
-    items: [
-      { name: 'Distributors', href: '/distributors', icon: Truck, moduleKey: 'distributors', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
-      { name: 'Stock Dashboard', href: '/stock-dashboard', icon: Package, moduleKey: 'distributors', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
-    ]
-  },
-  {
     title: 'Product & SKU',
     items: [
       { name: 'SKU Management', href: '/sku-management', icon: Package, moduleKey: 'sku_management', roles: ['CEO', 'Director', 'National Sales Head', 'Admin', 'System Admin'] },
@@ -151,9 +144,45 @@ const productionNavigationGroups = [
   },
 ];
 
+// Distribution Context Navigation
+const distributionNavigationGroups = [
+  {
+    title: 'Distribution',
+    items: [
+      { name: 'Distributors', href: '/distributors', icon: Truck, moduleKey: 'distributors', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
+      { name: 'Stock Dashboard', href: '/stock-dashboard', icon: Package, moduleKey: 'distributors', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
+    ]
+  },
+  {
+    title: 'Product & SKU',
+    items: [
+      { name: 'SKU Management', href: '/sku-management', icon: Package, moduleKey: 'sku_management', roles: ['CEO', 'Director', 'National Sales Head', 'Admin', 'System Admin'] },
+    ]
+  },
+  {
+    title: 'Documents',
+    items: [
+      { name: 'Files & Documents', href: '/files-documents', icon: FolderOpen, moduleKey: 'files_documents', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
+    ]
+  },
+  {
+    title: 'Organization',
+    items: [
+      { name: 'Company Profile', href: '/company-profile', icon: Building, moduleKey: 'company_profile', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
+      { name: 'Team', href: '/team', icon: UserCog, moduleKey: 'team', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
+    ]
+  },
+  {
+    title: 'Admin',
+    items: [
+      { name: 'Tenant Settings', href: '/tenant-settings', icon: Settings, roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
+    ]
+  },
+];
+
 export default function DashboardLayout({ children }) {
   const { user, logout } = useAuth();
-  const { currentContext, switchContext, canAccessBothContexts } = useAppContext();
+  const { currentContext, switchContext, canAccessMultipleModules, getAccessibleModules, modules } = useAppContext();
   const { theme, toggleTheme } = useTheme();
   const { navigateTo } = useNavigation();
   const { isModuleEnabled, hasRolePermission, branding } = useTenantConfig();
@@ -163,7 +192,7 @@ export default function DashboardLayout({ children }) {
   // Get branding values with fallbacks
   const logoUrl = branding?.logo_url || NYLA_LOGO;
   const appName = branding?.app_name || 'Nyla Air Water';
-  const tagline = branding?.tagline || (currentContext === 'production' ? 'Production' : 'Sales CRM');
+  const tagline = branding?.tagline || (currentContext === 'production' ? 'Production' : currentContext === 'distribution' ? 'Distribution' : 'Sales CRM');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(
     location.pathname === '/dashboard' || location.pathname === '/sales-revenue' || 
@@ -191,15 +220,25 @@ export default function DashboardLayout({ children }) {
   const handleContextSwitch = (newContext) => {
     switchContext(newContext);
     // Navigate to appropriate default page
-    if (newContext === 'production') {
-      navigateTo('/maintenance', { fromSidebar: true });
-    } else {
-      navigateTo('/home', { fromSidebar: true });
+    const module = modules[newContext];
+    if (module) {
+      navigateTo(module.defaultRoute, { fromSidebar: true });
     }
   };
 
   // Select navigation groups based on current context
-  const navigationGroups = currentContext === 'production' ? productionNavigationGroups : salesNavigationGroups;
+  const getNavigationGroups = () => {
+    switch (currentContext) {
+      case 'production':
+        return productionNavigationGroups;
+      case 'distribution':
+        return distributionNavigationGroups;
+      default:
+        return salesNavigationGroups;
+    }
+  };
+  
+  const navigationGroups = getNavigationGroups();
 
   // Filter dashboard submenu based on role AND module configuration
   const filteredDashboardSubmenu = dashboardSubmenu.filter(item => {
@@ -262,34 +301,35 @@ export default function DashboardLayout({ children }) {
             </div>
           </div>
           
-          {/* Context Switcher */}
-          {canAccessBothContexts && (
+          {/* Module Selector - Scalable for multiple modules */}
+          {canAccessMultipleModules && (
             <div className="px-4 py-3 border-b border-white/10">
-              <div className="flex items-center gap-2 bg-white/5 rounded-lg p-1">
-                <button
-                  onClick={() => handleContextSwitch('sales')}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-xs font-medium transition-all ${
-                    currentContext === 'sales'
-                      ? 'bg-primary text-white'
-                      : 'text-white/60 hover:text-white hover:bg-white/10'
-                  }`}
-                  data-testid="context-switch-sales"
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-2 block">
+                Module
+              </label>
+              <div className="relative">
+                <select
+                  value={currentContext}
+                  onChange={(e) => handleContextSwitch(e.target.value)}
+                  className="w-full appearance-none bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm font-medium text-white cursor-pointer hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                  data-testid="module-selector"
                 >
-                  <Store className="w-3.5 h-3.5" />
-                  Sales
-                </button>
-                <button
-                  onClick={() => handleContextSwitch('production')}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-xs font-medium transition-all ${
-                    currentContext === 'production'
-                      ? 'bg-primary text-white'
-                      : 'text-white/60 hover:text-white hover:bg-white/10'
-                  }`}
-                  data-testid="context-switch-production"
-                >
-                  <Factory className="w-3.5 h-3.5" />
-                  Production
-                </button>
+                  {getAccessibleModules().map((module) => (
+                    <option key={module.id} value={module.id} className="bg-slate-800 text-white">
+                      {module.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50 pointer-events-none" />
+              </div>
+              {/* Active Module Indicator */}
+              <div className="mt-2 flex items-center gap-2">
+                {currentContext === 'sales' && <Store className="w-4 h-4 text-primary" />}
+                {currentContext === 'production' && <Factory className="w-4 h-4 text-primary" />}
+                {currentContext === 'distribution' && <Truck className="w-4 h-4 text-primary" />}
+                <span className="text-xs text-primary font-medium">
+                  {modules[currentContext]?.label || 'Sales'} Module Active
+                </span>
               </div>
             </div>
           )}
