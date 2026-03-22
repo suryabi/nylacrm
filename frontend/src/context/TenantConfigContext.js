@@ -376,6 +376,18 @@ export const TenantConfigProvider = ({ children }) => {
     fetchTenantConfig();
   }, [fetchTenantConfig]);
 
+  // Get tenant settings with defaults
+  const getSettings = useCallback(() => {
+    return {
+      timezone: tenantConfig?.settings?.timezone || 'Asia/Kolkata',
+      currency: tenantConfig?.settings?.currency || 'INR',
+      currency_symbol: tenantConfig?.settings?.currency_symbol || '₹',
+      date_format: tenantConfig?.settings?.date_format || 'DD/MM/YYYY',
+      fiscal_year_start: tenantConfig?.settings?.fiscal_year_start || '04-01',
+      default_distributor_gst_percent: tenantConfig?.settings?.default_distributor_gst_percent ?? 18,
+    };
+  }, [tenantConfig]);
+
   return (
     <TenantConfigContext.Provider value={{
       tenantConfig,
@@ -391,6 +403,7 @@ export const TenantConfigProvider = ({ children }) => {
       isRouteAccessible,
       getDisabledRoutes,
       refreshConfig,
+      getSettings,
     }}>
       {children}
     </TenantConfigContext.Provider>

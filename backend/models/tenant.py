@@ -128,6 +128,9 @@ class TenantSettings(BaseModel):
     currency_symbol: str = "₹"
     date_format: str = "DD/MM/YYYY"
     fiscal_year_start: str = "04-01"  # April 1st
+    
+    # Distribution Module Settings
+    default_distributor_gst_percent: float = 18.0  # Default GST % for distributor transactions
 
 
 # ============= INDUSTRY PROFILE SYSTEM =============

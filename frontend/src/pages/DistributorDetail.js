@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTenantConfig } from '../context/TenantConfigContext';
 import useMasterLocations from '../hooks/useMasterLocations';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -47,7 +48,12 @@ export default function DistributorDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { token, user } = useAuth();
+  const { getSettings } = useTenantConfig();
   const { stateNames, cityNames, getCityNamesByStateName } = useMasterLocations();
+  
+  // Get default GST from tenant settings
+  const tenantSettings = getSettings();
+  const defaultGstPercent = tenantSettings.default_distributor_gst_percent || 18;
   
   const [loading, setLoading] = useState(true);
   const [distributor, setDistributor] = useState(null);
@@ -1129,7 +1135,7 @@ export default function DistributorDetail() {
       distributor_margin: null,
       unit_price: 0,
       discount_percent: 0,
-      tax_percent: 18
+      tax_percent: defaultGstPercent
     }]);
   };
 
@@ -1387,7 +1393,7 @@ export default function DistributorDetail() {
       quantity: 1,
       unit_price: 0,
       discount_percent: 0,
-      tax_percent: 18
+      tax_percent: defaultGstPercent
     }]);
   };
 

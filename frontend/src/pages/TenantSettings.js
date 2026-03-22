@@ -209,7 +209,8 @@ export default function TenantSettings() {
     currency: 'INR',
     currency_symbol: '₹',
     date_format: 'DD/MM/YYYY',
-    fiscal_year_start: '04-01'
+    fiscal_year_start: '04-01',
+    default_distributor_gst_percent: 18
   });
   
   // Auth config for Google Workspace SSO
@@ -1396,6 +1397,42 @@ export default function TenantSettings() {
               </div>
             </CardContent>
           </Card>
+          
+          {/* Distribution Module Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Truck className="h-5 w-5" />
+                Distribution Settings
+              </CardTitle>
+              <CardDescription>Configure default values for distributor transactions</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-6 lg:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <DollarSign className="h-4 w-4" />
+                  Default GST %
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    value={settings.default_distributor_gst_percent || 18}
+                    onChange={(e) => setSettings(prev => ({ ...prev, default_distributor_gst_percent: parseFloat(e.target.value) || 0 }))}
+                    className="max-w-[120px]"
+                    data-testid="input-default-gst"
+                  />
+                  <span className="text-muted-foreground">%</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  This GST percentage will be applied to shipments and deliveries in the Distribution module
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+          
           <div className="sticky bottom-0 bg-background pt-4 pb-2 border-t border-border mt-6">
             <div className="flex justify-end gap-3">
               <Button onClick={saveAuthConfig} disabled={saving} variant="outline" data-testid="save-auth-config-btn">
