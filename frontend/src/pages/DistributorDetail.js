@@ -1362,6 +1362,7 @@ export default function DistributorDetail() {
           sku_name: item.sku_name,
           quantity: parseInt(item.quantity),
           unit_price: parseFloat(item.unit_price),
+          customer_selling_price: parseFloat(item.unit_price), // unit_price is the customer selling price
           discount_percent: parseFloat(item.discount_percent) || 0,
           tax_percent: parseFloat(item.tax_percent) || 0
         }))

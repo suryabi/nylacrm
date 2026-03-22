@@ -2943,6 +2943,32 @@ async def create_delivery(
     # Get margin matrix for this account/city to calculate earnings
     account_city = account.get('city', '')
     
+    # VALIDATION: Check if margin matrix is configured for all SKUs in this city
+    missing_margins = []
+    for item_data in data.items:
+        sku = await db.master_skus.find_one({"id": item_data.sku_id}, {"_id": 0, "sku_name": 1, "sku_code": 1})
+        sku_name = item_data.sku_name or (sku.get('sku_name') if sku else f"SKU {item_data.sku_id}")
+        
+        margin = await db.distributor_margin_matrix.find_one({
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "city": account_city,
+            "sku_id": item_data.sku_id,
+            "status": "active"
+        }, {"_id": 0, "id": 1})
+        
+        if not margin:
+            missing_margins.append(sku_name)
+    
+    if missing_margins:
+        sku_list = ", ".join(missing_margins[:3])
+        if len(missing_margins) > 3:
+            sku_list += f" and {len(missing_margins) - 3} more"
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Margin matrix not configured for city '{account_city}'. Please configure margins for: {sku_list}"
+        )
+    
     # Process items and calculate totals
     items_to_insert = []
     total_quantity = 0
