@@ -1264,6 +1264,14 @@ async def create_account_assignment(
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
     
+    # Validate account's city matches servicing city
+    account_city = account.get('city', '')
+    if account_city and data.servicing_city and account_city.lower() != data.servicing_city.lower():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Account is located in '{account_city}' but servicing city is '{data.servicing_city}'. Account can only be assigned to distributors serving its city."
+        )
+    
     # Validate city is in distributor's operating coverage
     coverage = await db.distributor_operating_coverage.find_one({
         "tenant_id": tenant_id,
@@ -1503,6 +1511,50 @@ async def search_accounts_for_assignment(
     ).limit(limit).to_list(limit)
     
     return {"accounts": accounts}
+
+
+@router.get("/{distributor_id}/search-assignable-accounts")
+async def search_assignable_accounts_for_distributor(
+    distributor_id: str,
+    q: str = Query(..., min_length=2),
+    limit: int = Query(20, le=50),
+    current_user: dict = Depends(get_current_user)
+):
+    """Search accounts that can be assigned to this distributor (only accounts in covered cities)"""
+    tenant_id = get_current_tenant_id()
+    
+    # Get distributor's covered cities
+    coverage = await db.distributor_operating_coverage.find(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": "active"},
+        {"_id": 0, "city": 1}
+    ).to_list(100)
+    
+    covered_cities = [c.get('city') for c in coverage if c.get('city')]
+    
+    if not covered_cities:
+        return {"accounts": [], "message": "Distributor has no operating coverage configured. Please add coverage first."}
+    
+    # Search accounts only in covered cities
+    query = {
+        "tenant_id": tenant_id,
+        "city": {"$in": covered_cities},
+        "$or": [
+            {"account_name": {"$regex": q, "$options": "i"}},
+            {"contact_name": {"$regex": q, "$options": "i"}},
+            {"account_id": {"$regex": q, "$options": "i"}},
+            {"city": {"$regex": q, "$options": "i"}}
+        ]
+    }
+    
+    accounts = await db.accounts.find(
+        query,
+        {"_id": 0, "id": 1, "account_name": 1, "contact_name": 1, "city": 1, "state": 1, "account_id": 1, "territory": 1, "contact_number": 1, "delivery_address": 1}
+    ).limit(limit).to_list(limit)
+    
+    return {
+        "accounts": accounts,
+        "covered_cities": covered_cities
+    }
 
 
 # ============ Primary Shipment / Stock Receipt CRUD ============

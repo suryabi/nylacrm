@@ -589,17 +589,24 @@ export default function DistributorDetail() {
     
     try {
       setSearching(true);
-      const response = await axios.get(`${API_URL}/api/distributors/accounts/search?q=${encodeURIComponent(query)}`, {
+      // Use the new endpoint that filters accounts by distributor's covered cities
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/search-assignable-accounts?q=${encodeURIComponent(query)}`, {
         headers: { Authorization: `Bearer ${token}` },
         withCredentials: true
       });
       setSearchResults(response.data.accounts || []);
+      
+      // Show warning if no coverage configured
+      if (response.data.message) {
+        toast.warning(response.data.message);
+      }
     } catch (error) {
       console.error('Failed to search accounts:', error);
+      toast.error('Failed to search accounts');
     } finally {
       setSearching(false);
     }
-  }, [token]);
+  }, [token, id]);
 
   // Debounced search
   useEffect(() => {
