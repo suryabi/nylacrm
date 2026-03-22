@@ -5179,49 +5179,72 @@ async def get_monthly_reconciliation_data(
     year: int,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get all settlements for a specific month for reconciliation"""
+    """Get approved but not yet reconciled settlements for a specific month"""
     tenant_id = get_current_tenant_id()
     
     logger.info(f"Monthly reconciliation request: distributor={distributor_id}, month={month}, year={year}, tenant={tenant_id}")
     
-    # Get all settlements for this month/year
-    settlements = await db.distributor_settlements.find(
+    # Get only APPROVED and NOT RECONCILED settlements for this month/year
+    unreconciled_settlements = await db.distributor_settlements.find(
         {
             "tenant_id": tenant_id,
             "distributor_id": distributor_id,
             "settlement_month": month,
-            "settlement_year": year
+            "settlement_year": year,
+            "status": "approved",
+            "reconciled": {"$ne": True}  # Not reconciled yet
         },
         {"_id": 0}
     ).sort("account_name", 1).to_list(1000)
     
-    logger.info(f"Found {len(settlements)} settlements for tenant={tenant_id}")
+    # Also get already reconciled settlements for this month (for display purposes)
+    reconciled_settlements = await db.distributor_settlements.find(
+        {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "settlement_month": month,
+            "settlement_year": year,
+            "reconciled": True
+        },
+        {"_id": 0}
+    ).sort("account_name", 1).to_list(1000)
     
-    # Check if a note already exists for this month
-    existing_note = await db.distributor_debit_credit_notes.find_one(
+    logger.info(f"Found {len(unreconciled_settlements)} unreconciled and {len(reconciled_settlements)} reconciled settlements for tenant={tenant_id}")
+    
+    # Get all notes for this month (multiple notes allowed)
+    existing_notes = await db.distributor_debit_credit_notes.find(
         {
             "tenant_id": tenant_id,
             "distributor_id": distributor_id,
             "month": month,
             "year": year
         },
-        {"_id": 0, "id": 1, "note_number": 1, "note_type": 1, "amount": 1, "status": 1}
-    )
+        {"_id": 0, "id": 1, "note_number": 1, "note_type": 1, "amount": 1, "status": 1, "created_at": 1}
+    ).sort("created_at", -1).to_list(100)
     
-    # Calculate totals
-    total_billing = sum(s.get('total_billing_value', 0) for s in settlements)
-    total_earnings = sum(s.get('distributor_earnings', 0) for s in settlements)
-    total_margin_at_transfer = sum(s.get('margin_at_transfer_price', 0) for s in settlements)
-    net_adjustment = sum(s.get('adjustment_payable', 0) for s in settlements)
+    # Calculate totals for unreconciled settlements only
+    total_billing = sum(s.get('total_billing_value', 0) for s in unreconciled_settlements)
+    total_earnings = sum(s.get('distributor_earnings', 0) for s in unreconciled_settlements)
+    total_margin_at_transfer = sum(s.get('margin_at_transfer_price', 0) for s in unreconciled_settlements)
+    net_adjustment = sum(s.get('adjustment_payable', 0) for s in unreconciled_settlements)
+    
+    # Calculate totals for already reconciled
+    reconciled_billing = sum(s.get('total_billing_value', 0) for s in reconciled_settlements)
+    reconciled_adjustment = sum(s.get('adjustment_payable', 0) for s in reconciled_settlements)
     
     return {
-        "settlements": settlements,
-        "total_settlements": len(settlements),
+        "unreconciled_settlements": unreconciled_settlements,
+        "reconciled_settlements": reconciled_settlements,
+        "total_unreconciled": len(unreconciled_settlements),
+        "total_reconciled": len(reconciled_settlements),
         "total_billing_value": round(total_billing, 2),
         "total_distributor_earnings": round(total_earnings, 2),
         "total_margin_at_transfer": round(total_margin_at_transfer, 2),
         "net_adjustment": round(net_adjustment, 2),
-        "existing_note": existing_note
+        "reconciled_billing_value": round(reconciled_billing, 2),
+        "reconciled_adjustment": round(reconciled_adjustment, 2),
+        "existing_notes": existing_notes,
+        "total_notes": len(existing_notes)
     }
 
 
@@ -5231,7 +5254,7 @@ async def generate_monthly_note(
     data: dict,
     current_user: dict = Depends(get_current_user)
 ):
-    """Generate a Debit or Credit Note for a month's reconciliation"""
+    """Generate a Debit or Credit Note for approved but unreconciled settlements"""
     if not is_distributor_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
@@ -5244,32 +5267,24 @@ async def generate_monthly_note(
     if not month or not year:
         raise HTTPException(status_code=400, detail="Month and year are required")
     
-    # Check if note already exists
-    existing_note = await db.distributor_debit_credit_notes.find_one({
-        "tenant_id": tenant_id,
-        "distributor_id": distributor_id,
-        "month": month,
-        "year": year
-    })
-    
-    if existing_note:
-        raise HTTPException(status_code=400, detail=f"A note already exists for this month: {existing_note.get('note_number')}")
-    
-    # Get all settlements for this month
+    # Get only APPROVED and NOT RECONCILED settlements for this month
+    # Multiple notes per month are allowed - each processes unreconciled settlements
     settlements = await db.distributor_settlements.find(
         {
             "tenant_id": tenant_id,
             "distributor_id": distributor_id,
             "settlement_month": month,
-            "settlement_year": year
+            "settlement_year": year,
+            "status": "approved",
+            "reconciled": {"$ne": True}
         },
         {"_id": 0}
     ).to_list(1000)
     
     if not settlements:
-        raise HTTPException(status_code=400, detail="No settlements found for this month")
+        raise HTTPException(status_code=400, detail="No approved unreconciled settlements found for this month")
     
-    # Calculate net adjustment
+    # Calculate net adjustment for these settlements
     net_adjustment = sum(s.get('adjustment_payable', 0) for s in settlements)
     
     if net_adjustment == 0:

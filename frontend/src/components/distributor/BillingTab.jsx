@@ -5,7 +5,7 @@ import { Badge } from '../ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
-import { Plus, RefreshCw, FileText, Receipt, Eye, Settings, Trash2, Calendar, Building2, ChevronDown, ChevronUp, Download } from 'lucide-react';
+import { Plus, RefreshCw, FileText, Receipt, Eye, Settings, Trash2, Calendar, Building2, ChevronDown, ChevronUp, Download, Clock, CheckCircle } from 'lucide-react';
 
 const MONTHS = [
   { value: 1, label: 'January' },
@@ -147,8 +147,8 @@ export default function BillingTab({
     }
   };
 
-  // Group settlements by account
-  const settlementsByAccount = (monthlyData?.settlements || []).reduce((acc, settlement) => {
+  // Group UNRECONCILED settlements by account (these can be reconciled)
+  const unreconciledByAccount = (monthlyData?.unreconciled_settlements || []).reduce((acc, settlement) => {
     const accountId = settlement.account_id || 'unknown';
     if (!acc[accountId]) {
       acc[accountId] = {
@@ -171,10 +171,32 @@ export default function BillingTab({
     return acc;
   }, {});
 
-  const accountGroups = Object.values(settlementsByAccount);
+  const unreconciledGroups = Object.values(unreconciledByAccount);
 
-  // Calculate grand totals
-  const grandTotals = accountGroups.reduce((acc, group) => ({
+  // Group RECONCILED settlements by account (already processed)
+  const reconciledByAccount = (monthlyData?.reconciled_settlements || []).reduce((acc, settlement) => {
+    const accountId = settlement.account_id || 'unknown';
+    if (!acc[accountId]) {
+      acc[accountId] = {
+        account_id: accountId,
+        account_name: settlement.account_name || 'Unknown Account',
+        settlements: [],
+        totals: {
+          total_billing: 0,
+          adjustment: 0
+        }
+      };
+    }
+    acc[accountId].settlements.push(settlement);
+    acc[accountId].totals.total_billing += settlement.total_billing_value || 0;
+    acc[accountId].totals.adjustment += settlement.adjustment_payable || 0;
+    return acc;
+  }, {});
+
+  const reconciledGroups = Object.values(reconciledByAccount);
+
+  // Calculate grand totals for unreconciled only
+  const grandTotals = unreconciledGroups.reduce((acc, group) => ({
     total_billing: acc.total_billing + group.totals.total_billing,
     distributor_earnings: acc.distributor_earnings + group.totals.distributor_earnings,
     margin_at_transfer: acc.margin_at_transfer + group.totals.margin_at_transfer,
@@ -182,7 +204,8 @@ export default function BillingTab({
   }), { total_billing: 0, distributor_earnings: 0, margin_at_transfer: 0, adjustment: 0 });
 
   const noteType = grandTotals.adjustment >= 0 ? 'credit' : 'debit';
-  const hasExistingNote = monthlyData?.existing_note != null;
+  const existingNotes = monthlyData?.existing_notes || [];
+  const hasUnreconciledSettlements = unreconciledGroups.length > 0;
 
   return (
     <div className="space-y-6">
@@ -267,187 +290,257 @@ export default function BillingTab({
             <div className="flex items-center justify-center py-12">
               <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : accountGroups.length === 0 ? (
+          ) : !hasUnreconciledSettlements && reconciledGroups.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No settlements found for {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}</p>
-              <p className="text-sm">Generate settlements from the Settlements tab first</p>
+              <p>No approved settlements found for {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}</p>
+              <p className="text-sm">Generate and approve settlements from the Settlements tab first</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {/* Summary Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <Card className="bg-muted/30">
-                  <CardContent className="p-4 text-center">
-                    <p className="text-sm text-muted-foreground">Total Accounts</p>
-                    <p className="text-2xl font-bold">{accountGroups.length}</p>
-                  </CardContent>
-                </Card>
-                <Card className="bg-muted/30">
-                  <CardContent className="p-4 text-center">
-                    <p className="text-sm text-muted-foreground">Total Billing Value</p>
-                    <p className="text-xl font-bold">₹{grandTotals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                  </CardContent>
-                </Card>
-                <Card className="bg-blue-50">
-                  <CardContent className="p-4 text-center">
-                    <p className="text-sm text-muted-foreground">Distributor Earnings</p>
-                    <p className="text-xl font-bold text-blue-600">₹{grandTotals.distributor_earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                  </CardContent>
-                </Card>
-                <Card className="bg-slate-100">
-                  <CardContent className="p-4 text-center">
-                    <p className="text-sm text-muted-foreground">Margin at Transfer</p>
-                    <p className="text-xl font-bold">₹{grandTotals.margin_at_transfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                  </CardContent>
-                </Card>
-                <Card className={grandTotals.adjustment >= 0 ? 'bg-green-50' : 'bg-red-50'}>
-                  <CardContent className="p-4 text-center">
-                    <p className="text-sm text-muted-foreground">Net Adjustment</p>
-                    <p className={`text-xl font-bold ${grandTotals.adjustment >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {grandTotals.adjustment >= 0 ? '+' : ''}₹{grandTotals.adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            <div className="space-y-6">
+              {/* Pending Reconciliation Section */}
+              {hasUnreconciledSettlements && (
+                <>
+                  <div className="border-l-4 border-orange-500 pl-4">
+                    <h3 className="font-semibold text-lg flex items-center gap-2">
+                      <Clock className="h-5 w-5 text-orange-500" />
+                      Pending Reconciliation
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {unreconciledGroups.length} account(s) with {monthlyData?.total_unreconciled || 0} approved settlement(s) ready to reconcile
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {grandTotals.adjustment >= 0 ? 'Credit Note' : 'Debit Note'}
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
+                  </div>
 
-              {/* Settlements by Account */}
-              <div className="border rounded-lg">
-                <div className="p-3 bg-muted/50 border-b font-medium">
-                  Settlements by Account - {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}
-                </div>
-                <div className="divide-y">
-                  {accountGroups.map(group => (
-                    <div key={group.account_id}>
-                      {/* Account Header */}
-                      <div 
-                        className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors"
-                        onClick={() => toggleAccountExpand(group.account_id)}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Building2 className="h-5 w-5 text-muted-foreground" />
-                          <div>
-                            <p className="font-medium">{group.account_name}</p>
-                            <p className="text-sm text-muted-foreground">{group.settlements.length} settlement(s)</p>
+                  {/* Summary Cards for Unreconciled */}
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <Card className="bg-muted/30">
+                      <CardContent className="p-4 text-center">
+                        <p className="text-sm text-muted-foreground">Accounts</p>
+                        <p className="text-2xl font-bold">{unreconciledGroups.length}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-muted/30">
+                      <CardContent className="p-4 text-center">
+                        <p className="text-sm text-muted-foreground">Billing Value</p>
+                        <p className="text-xl font-bold">₹{grandTotals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-blue-50">
+                      <CardContent className="p-4 text-center">
+                        <p className="text-sm text-muted-foreground">Distributor Earnings</p>
+                        <p className="text-xl font-bold text-blue-600">₹{grandTotals.distributor_earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-slate-100">
+                      <CardContent className="p-4 text-center">
+                        <p className="text-sm text-muted-foreground">Margin at Transfer</p>
+                        <p className="text-xl font-bold">₹{grandTotals.margin_at_transfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                      </CardContent>
+                    </Card>
+                    <Card className={grandTotals.adjustment >= 0 ? 'bg-green-50' : 'bg-red-50'}>
+                      <CardContent className="p-4 text-center">
+                        <p className="text-sm text-muted-foreground">Net Adjustment</p>
+                        <p className={`text-xl font-bold ${grandTotals.adjustment >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {grandTotals.adjustment >= 0 ? '+' : ''}₹{grandTotals.adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {grandTotals.adjustment >= 0 ? 'Credit Note' : 'Debit Note'}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Unreconciled Settlements by Account */}
+                  <div className="border rounded-lg">
+                    <div className="p-3 bg-orange-50 border-b font-medium flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-orange-500" />
+                      Settlements Pending Reconciliation
+                    </div>
+                    <div className="divide-y">
+                      {unreconciledGroups.map(group => (
+                        <div key={group.account_id}>
+                          <div 
+                            className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors"
+                            onClick={() => toggleAccountExpand(group.account_id)}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Building2 className="h-5 w-5 text-muted-foreground" />
+                              <div>
+                                <p className="font-medium">{group.account_name}</p>
+                                <p className="text-sm text-muted-foreground">{group.settlements.length} settlement(s)</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-6">
+                              <div className="text-right">
+                                <p className="text-sm text-muted-foreground">Billing</p>
+                                <p className="font-medium">₹{group.totals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm text-muted-foreground">Adjustment</p>
+                                <p className={`font-medium ${group.totals.adjustment >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {group.totals.adjustment >= 0 ? '+' : ''}₹{group.totals.adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </p>
+                              </div>
+                              {expandedAccounts[group.account_id] ? (
+                                <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                              ) : (
+                                <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                              )}
+                            </div>
                           </div>
+                          
+                          {expandedAccounts[group.account_id] && (
+                            <div className="bg-muted/20 p-4 border-t">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="border-b">
+                                    <th className="text-left p-2 font-medium">Settlement #</th>
+                                    <th className="text-right p-2 font-medium">Deliveries</th>
+                                    <th className="text-right p-2 font-medium">Billing</th>
+                                    <th className="text-right p-2 font-medium">Earnings</th>
+                                    <th className="text-right p-2 font-medium">Adjustment</th>
+                                    <th className="text-center p-2 font-medium">Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {group.settlements.map(settlement => (
+                                    <tr key={settlement.id} className="border-b hover:bg-muted/30">
+                                      <td className="p-2 font-medium">{settlement.settlement_number}</td>
+                                      <td className="p-2 text-right">{settlement.total_deliveries || 0}</td>
+                                      <td className="p-2 text-right">₹{(settlement.total_billing_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                      <td className="p-2 text-right text-blue-600">₹{(settlement.distributor_earnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                      <td className={`p-2 text-right font-medium ${(settlement.adjustment_payable || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {(settlement.adjustment_payable || 0) >= 0 ? '+' : ''}₹{(settlement.adjustment_payable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                      </td>
+                                      <td className="p-2 text-center">
+                                        {getSettlementStatusBadge ? getSettlementStatusBadge(settlement.status) : (
+                                          <Badge variant="outline">{settlement.status}</Badge>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
                         </div>
+                      ))}
+                    </div>
+                    
+                    {/* Grand Total Row */}
+                    <div className="p-4 bg-slate-100 dark:bg-slate-800 border-t-2">
+                      <div className="flex items-center justify-between">
+                        <div className="font-semibold">Total Pending ({unreconciledGroups.length} accounts, {monthlyData?.total_unreconciled || 0} settlements)</div>
                         <div className="flex items-center gap-6">
                           <div className="text-right">
                             <p className="text-sm text-muted-foreground">Billing</p>
-                            <p className="font-medium">₹{group.totals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                            <p className="font-bold">₹{grandTotals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm text-muted-foreground">Earnings</p>
-                            <p className="font-medium text-blue-600">₹{group.totals.distributor_earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm text-muted-foreground">Adjustment</p>
-                            <p className={`font-medium ${group.totals.adjustment >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {group.totals.adjustment >= 0 ? '+' : ''}₹{group.totals.adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            <p className="text-sm text-muted-foreground">Net Adjustment</p>
+                            <p className={`font-bold ${grandTotals.adjustment >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {grandTotals.adjustment >= 0 ? '+' : ''}₹{grandTotals.adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                             </p>
                           </div>
-                          {expandedAccounts[group.account_id] ? (
-                            <ChevronUp className="h-5 w-5 text-muted-foreground" />
-                          ) : (
-                            <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                          )}
+                          <div className="w-20"></div>
                         </div>
                       </div>
-                      
-                      {/* Expanded Settlement Details */}
-                      {expandedAccounts[group.account_id] && (
-                        <div className="bg-muted/20 p-4 border-t">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="border-b">
-                                <th className="text-left p-2 font-medium">Settlement #</th>
-                                <th className="text-right p-2 font-medium">Deliveries</th>
-                                <th className="text-right p-2 font-medium">Billing Value</th>
-                                <th className="text-right p-2 font-medium">Earnings</th>
-                                <th className="text-right p-2 font-medium">Margin at Transfer</th>
-                                <th className="text-right p-2 font-medium">Adjustment</th>
-                                <th className="text-center p-2 font-medium">Status</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {group.settlements.map(settlement => (
-                                <tr key={settlement.id} className="border-b hover:bg-muted/30">
-                                  <td className="p-2 font-medium">{settlement.settlement_number}</td>
-                                  <td className="p-2 text-right">{settlement.total_deliveries || 0}</td>
-                                  <td className="p-2 text-right">₹{(settlement.total_billing_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                  <td className="p-2 text-right text-blue-600">₹{(settlement.distributor_earnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                  <td className="p-2 text-right">₹{(settlement.margin_at_transfer_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                  <td className={`p-2 text-right font-medium ${(settlement.adjustment_payable || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {(settlement.adjustment_payable || 0) >= 0 ? '+' : ''}₹{(settlement.adjustment_payable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                  </td>
-                                  <td className="p-2 text-center">
-                                    {getSettlementStatusBadge ? getSettlementStatusBadge(settlement.status) : (
-                                      <Badge variant="outline">{settlement.status}</Badge>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Grand Total Row */}
-                <div className="p-4 bg-slate-100 dark:bg-slate-800 border-t-2">
-                  <div className="flex items-center justify-between">
-                    <div className="font-semibold">Grand Total ({accountGroups.length} accounts, {monthlyData?.settlements?.length || 0} settlements)</div>
-                    <div className="flex items-center gap-6">
-                      <div className="text-right">
-                        <p className="text-sm text-muted-foreground">Billing</p>
-                        <p className="font-bold">₹{grandTotals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-muted-foreground">Earnings</p>
-                        <p className="font-bold text-blue-600">₹{grandTotals.distributor_earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-muted-foreground">Net Adjustment</p>
-                        <p className={`font-bold ${grandTotals.adjustment >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {grandTotals.adjustment >= 0 ? '+' : ''}₹{grandTotals.adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </p>
-                      </div>
-                      <div className="w-24"></div>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Generate Note Button */}
-              <div className="flex justify-end gap-4 pt-4">
-                {hasExistingNote ? (
-                  <div className="flex items-center gap-3 text-muted-foreground">
-                    <Receipt className="h-5 w-5" />
-                    <span>
-                      {noteType === 'credit' ? 'Credit' : 'Debit'} Note already generated for this month: 
-                      <strong className="ml-1">{monthlyData.existing_note.note_number}</strong>
-                    </span>
+                  {/* Generate Note Button */}
+                  <div className="flex justify-end">
+                    {grandTotals.adjustment !== 0 ? (
+                      <Button
+                        onClick={() => setShowGenerateNoteDialog(true)}
+                        className={noteType === 'credit' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}
+                        data-testid="generate-note-btn"
+                      >
+                        <Receipt className="h-4 w-4 mr-2" />
+                        Generate {noteType === 'credit' ? 'Credit' : 'Debit'} Note (₹{Math.abs(grandTotals.adjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })})
+                      </Button>
+                    ) : (
+                      <div className="text-muted-foreground">
+                        Net adjustment is ₹0 - no note required
+                      </div>
+                    )}
                   </div>
-                ) : grandTotals.adjustment !== 0 ? (
-                  <Button
-                    onClick={() => setShowGenerateNoteDialog(true)}
-                    className={noteType === 'credit' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}
-                    data-testid="generate-note-btn"
-                  >
-                    <Receipt className="h-4 w-4 mr-2" />
-                    Generate {noteType === 'credit' ? 'Credit' : 'Debit'} Note (₹{Math.abs(grandTotals.adjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })})
-                  </Button>
-                ) : (
-                  <div className="text-muted-foreground">
-                    Net adjustment is ₹0 - no note required
+                </>
+              )}
+
+              {/* Already Reconciled Section */}
+              {reconciledGroups.length > 0 && (
+                <>
+                  <div className="border-l-4 border-green-500 pl-4 mt-6">
+                    <h3 className="font-semibold text-lg flex items-center gap-2">
+                      <CheckCircle className="h-5 w-5 text-green-500" />
+                      Already Reconciled
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {reconciledGroups.length} account(s) with {monthlyData?.total_reconciled || 0} settlement(s) already processed
+                    </p>
                   </div>
-                )}
-              </div>
+
+                  <div className="border rounded-lg">
+                    <div className="p-3 bg-green-50 border-b font-medium flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                      Reconciled Settlements
+                    </div>
+                    <div className="divide-y">
+                      {reconciledGroups.map(group => (
+                        <div key={group.account_id} className="flex items-center justify-between p-4">
+                          <div className="flex items-center gap-3">
+                            <Building2 className="h-5 w-5 text-muted-foreground" />
+                            <div>
+                              <p className="font-medium">{group.account_name}</p>
+                              <p className="text-sm text-muted-foreground">{group.settlements.length} settlement(s)</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-6">
+                            <div className="text-right">
+                              <p className="text-sm text-muted-foreground">Billing</p>
+                              <p className="font-medium">₹{group.totals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm text-muted-foreground">Adjustment</p>
+                              <p className={`font-medium ${group.totals.adjustment >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {group.totals.adjustment >= 0 ? '+' : ''}₹{group.totals.adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </p>
+                            </div>
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              Reconciled
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="p-4 bg-green-50 border-t">
+                      <div className="flex items-center justify-between">
+                        <div className="font-semibold text-green-700">Total Reconciled</div>
+                        <div className="flex items-center gap-6">
+                          <div className="text-right">
+                            <p className="font-bold">₹{(monthlyData?.reconciled_billing_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className={`font-bold ${(monthlyData?.reconciled_adjustment || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {(monthlyData?.reconciled_adjustment || 0) >= 0 ? '+' : ''}₹{(monthlyData?.reconciled_adjustment || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                          <div className="w-24"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* No pending settlements message */}
+              {!hasUnreconciledSettlements && reconciledGroups.length > 0 && (
+                <div className="text-center py-6 text-muted-foreground bg-muted/30 rounded-lg">
+                  <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
+                  <p>All approved settlements for {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear} have been reconciled</p>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -556,11 +649,11 @@ export default function BillingTab({
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-muted/30 p-4 rounded-lg">
                 <p className="text-sm text-muted-foreground">Total Accounts</p>
-                <p className="text-xl font-bold">{accountGroups.length}</p>
+                <p className="text-xl font-bold">{unreconciledGroups.length}</p>
               </div>
               <div className="bg-muted/30 p-4 rounded-lg">
                 <p className="text-sm text-muted-foreground">Total Settlements</p>
-                <p className="text-xl font-bold">{monthlyData?.settlements?.length || 0}</p>
+                <p className="text-xl font-bold">{monthlyData?.total_unreconciled || 0}</p>
               </div>
             </div>
             
