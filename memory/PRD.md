@@ -87,9 +87,24 @@ Payout
 2. **Build Reporting Module** - Stock balance, deliveries, settlements reports
 
 ### P2 - Medium Priority
-1. **Fix Delivery Detail Popup** - "Margin" column shows incorrect value (₹368.75 vs ₹312.50)
-2. **Server.py Refactoring** - Move remaining routes to modular files
-3. **Settlement Period Configuration** - Auto weekly/monthly cycles
+1. **Server.py Refactoring** - Move remaining routes to modular files
+2. **Settlement Period Configuration** - Auto weekly/monthly cycles
+
+---
+
+## Completed Fixes - March 22, 2026 (Session 2)
+
+### P0 Bug Fixed ✅
+- **Delivery Detail Popup Margin Bug** - Fixed incorrect margin display
+  - Before: Showed ₹368.75 (legacy `margin_amount` field with tax-inclusive formula)
+  - After: Shows ₹312.50 (correct `distributor_earnings` = gross_amount × commission%)
+  - File changed: `/app/frontend/src/pages/DistributorDetail.js` (lines 2387-2404)
+  - Total margin now calculated dynamically from items' `distributor_earnings`
+
+### Customer-Grouped Settlements ✅
+- Settlements tab now groups by Customer/Account with accordion layout
+- Shows per-customer totals (Billing Value, Earnings, Adjustment)
+- Grand Total row aggregates across all customers
 
 ---
 

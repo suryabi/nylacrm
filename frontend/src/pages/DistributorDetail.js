@@ -2385,8 +2385,8 @@ export default function DistributorDetail() {
                         <td className="p-2 text-right">₹{item.unit_price}</td>
                         <td className="p-2 text-right">₹{item.net_amount?.toFixed(2)}</td>
                         <td className="p-2 text-right">
-                          {item.margin_amount > 0 ? (
-                            <span className="text-green-600">₹{item.margin_amount?.toFixed(2)}</span>
+                          {item.distributor_earnings > 0 ? (
+                            <span className="text-green-600">₹{item.distributor_earnings?.toFixed(2)}</span>
                           ) : '-'}
                         </td>
                       </tr>
@@ -2397,7 +2397,10 @@ export default function DistributorDetail() {
                       <td colSpan="3" className="p-2 text-right font-medium">Total:</td>
                       <td className="p-2 text-right font-bold">₹{selectedDelivery.total_net_amount?.toLocaleString()}</td>
                       <td className="p-2 text-right font-bold text-green-600">
-                        {selectedDelivery.total_margin_amount > 0 ? `₹${selectedDelivery.total_margin_amount?.toLocaleString()}` : '-'}
+                        {(() => {
+                          const totalEarnings = (selectedDelivery.items || []).reduce((sum, item) => sum + (item.distributor_earnings || 0), 0);
+                          return totalEarnings > 0 ? `₹${totalEarnings.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-';
+                        })()}
                       </td>
                     </tr>
                   </tfoot>
