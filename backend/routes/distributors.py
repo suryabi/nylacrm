@@ -3137,11 +3137,13 @@ async def delete_delivery(
     delivery_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Delete a draft delivery"""
+    """Delete a delivery - CEO/Admin can delete any status, others only draft"""
     if not is_distributor_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     tenant_id = get_current_tenant_id()
+    user_role = current_user.get('role', '').lower()
+    is_ceo_or_admin = user_role in ['ceo', 'admin']
     
     delivery = await db.distributor_deliveries.find_one(
         {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
@@ -3150,8 +3152,14 @@ async def delete_delivery(
     if not delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")
     
-    if delivery.get('status') != 'draft':
-        raise HTTPException(status_code=400, detail="Only draft deliveries can be deleted")
+    # CEO/Admin can delete any delivery regardless of status
+    # Others can only delete draft deliveries
+    if not is_ceo_or_admin and delivery.get('status') != 'draft':
+        raise HTTPException(status_code=400, detail="Only draft deliveries can be deleted. Contact CEO/Admin to delete non-draft deliveries.")
+    
+    # If delivery is settled, prevent deletion even for CEO/Admin
+    if delivery.get('settlement_id'):
+        raise HTTPException(status_code=400, detail="Cannot delete delivery that is part of a settlement")
     
     # Delete items first
     await db.distributor_delivery_items.delete_many({"delivery_id": delivery_id, "tenant_id": tenant_id})
@@ -3159,7 +3167,7 @@ async def delete_delivery(
     # Delete delivery
     await db.distributor_deliveries.delete_one({"id": delivery_id, "tenant_id": tenant_id})
     
-    logger.info(f"Delivery {delivery['delivery_number']} deleted by {current_user['email']}")
+    logger.info(f"Delivery {delivery['delivery_number']} (status: {delivery.get('status')}) deleted by {current_user['email']} (role: {user_role})")
     
     return {"message": f"Delivery {delivery['delivery_number']} deleted"}
 
