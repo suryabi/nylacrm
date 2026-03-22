@@ -5,6 +5,45 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Latest Session - March 22, 2026 (Session 2)
 
+### Distributor Self-Service Access ✅
+
+**User Requirements:**
+- Auto-create user when distributor is created using primary contact email
+- Default password "nyladist##" with force password change on first login
+- Distributor users can only see their own data
+- Distributors can: View profile, Create deliveries, Update contact info, Download reports
+
+**Implementation:**
+1. **Auto-User Creation** - When distributor created:
+   - Creates user with role "Distributor" using primary contact email
+   - Sets `distributor_id` to link user to distributor
+   - Sets `force_password_change: true`
+   - Default password: "nyladist##"
+
+2. **Data Filtering** - Distributor users see only their data:
+   - List API returns only their distributor
+   - Detail API validates access (403 for other distributors)
+   - Cannot create/delete distributors
+
+3. **Auto-Redirect** - On login, distributors redirect to `/distributors/{id}`
+
+4. **Simplified Sidebar** - Only shows "My Profile" under "MY DISTRIBUTOR"
+
+5. **Password Change API** - `POST /api/auth/change-password`
+
+**Files Modified:**
+- `/app/backend/routes/distributors.py` - Auto user creation, data filtering
+- `/app/backend/server.py` - Login returns force_password_change, change-password endpoint
+- `/app/frontend/src/context/AppContextContext.js` - isDistributorUser, getDistributorId
+- `/app/frontend/src/layouts/DashboardLayout.js` - Redirect logic, distributorUserNavigationGroups
+
+**Testing Results (iteration_71.json):**
+- Backend: 100% (14/14 tests)
+- Frontend: 100% (all features verified)
+- Test Credentials: john.distributor@test.com / nyladist##
+
+---
+
 ### Distribution as Separate Top-Level Module ✅
 
 **User Requirements:**
