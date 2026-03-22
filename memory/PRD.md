@@ -3,65 +3,44 @@
 ## Original Problem Statement
 Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. The application helps manage leads, accounts, invoices, COGS calculations, and sales team performance.
 
-## Core Features Implemented
-1. **Authentication** - Session-based login with Google OAuth and email/password
-2. **Lead Management** - Full CRUD with advanced filtering, scoring quadrants, pipeline views
-3. **Account Management** - Convert leads to accounts, track invoices and payments
-4. **Invoice Management** - ActiveMQ integration for real-time invoice processing
-5. **COGS Calculator** - Calculate cost of goods sold with SKU pricing (mobile-friendly)
-6. **Tasks & Meetings** - Create tasks, schedule meetings with Zoom integration
-7. **Travel & Budget Requests** - Approval workflows for expenses
-8. **Daily Status Updates** - Team status tracking with AI assistance
-9. **AI Assistant** - Claude-powered chat for CRM queries
-10. **Distribution Module** - Full distributor management with all phases complete
+## Latest Session - March 22, 2026
 
-## Tech Stack
-- **Frontend**: React 18, TailwindCSS, Shadcn/UI
-- **Backend**: FastAPI (Python)
-- **Database**: MongoDB
-- **Message Queue**: Amazon MQ (ActiveMQ)
-- **AI**: Claude Sonnet 4.5 via Emergent LLM Key, Gemini
-- **Integrations**: Zoom API, Resend, Google OAuth
+### Billing & Reconciliation Module Redesign ✅
 
-## Latest Session - March 21, 2026
+**New Workflow:**
+```
+Settlements (per Account, multiple per month)
+    ↓
+Monthly Reconciliation (all accounts combined for the month)
+    ↓
+Debit/Credit Note Generation
+    ↓
+Payout
+```
 
-### Data Cleanup & Module Rebuild ✅
-**Date**: March 21, 2026
+**Key Changes:**
+1. Settlements no longer have approval/payout actions - they just record earnings
+2. Monthly Reconciliation aggregates all settlements for a month
+3. Single Debit/Credit Note per month based on net adjustment:
+   - Positive adjustment → Credit Note (we pay distributor extra)
+   - Negative adjustment → Debit Note (distributor owes us)
 
-**Actions Performed:**
-1. Deleted all test data from: Shipments, Deliveries, Settlements, Reconciliations, Debit/Credit Notes
-2. Verified Billing & Reconciliation module works correctly with fresh state
-3. Fixed login endpoint bug (was using tenant-filtered query for authentication)
+**New Endpoints:**
+- `GET /api/distributors/{id}/monthly-reconciliation?month=X&year=Y` - Get all settlements for month
+- `POST /api/distributors/{id}/generate-monthly-note` - Generate Debit/Credit Note
 
-**Testing Results (iteration_67.json):**
-- Backend: 100% (20/20 tests passed)
+**Testing Results (iteration_68.json):**
+- Backend: 100% (10/10 tests passed)
 - Frontend: 100% (all UI elements verified)
-
-### Bug Fix: Login Endpoint
-**Issue**: Login was using `get_tdb().users` which filters by tenant_id, but during login we don't have tenant context yet.
-**Fix**: Changed to use `db.users` directly for authentication lookup.
-**File**: `/app/backend/server.py` line 2534
 
 ---
 
-### TESTING COMPLETE: Monthly Settlements & Deliveries Features ✅
-**Date**: March 21, 2026
+### Other Changes This Session
 
-**Testing Agent Results (iteration_66.json)**:
-- Backend: 100% (18/18 tests passed)
-- Frontend: 100% (all features working)
-
-**Features Verified**:
-1. **Deliveries Tab**: Line-item table with all pricing columns
-2. **Deliveries Filters**: Time Period, Account filter, pagination
-3. **Monthly Settlements**: Generate Settlement dialog with Month/Year selection
-4. **Settlements List**: All columns displaying correctly with month/year filters
-
-**Calculation Formulas Verified**:
-- Billing Value = qty × customer_selling_price ✅
-- Distributor Earnings = billing × commission% ✅
-- Margin at Transfer = qty × transfer_price × commission% ✅
-- Adjustment = earnings - margin_at_transfer ✅
+1. **CEO/Admin Delete Delivery** - Can delete deliveries regardless of status
+2. **Delivery Total Row** - Always shows for all deliveries (including single SKU)
+3. **Settlement Detail Popup Fixed** - Correct field mappings for new schema
+4. **Login Bug Fix** - Fixed tenant-agnostic user lookup
 
 ---
 
@@ -82,34 +61,22 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 - Stock tracking per location
 
 ### Phase 4: Settlement & Billing ✅
-- Monthly Settlement calculation engine
-- Billing & Reconciliation module
-- Debit/Credit Notes generation
-- All E2E tested with 100% pass rate
+- Monthly Settlement generation (per account)
+- Monthly Reconciliation (all accounts combined)
+- Debit/Credit Note generation
+- E2E tested with 100% pass rate
 
 ---
 
 ## Billing & Reconciliation Flow
 
-### Flow Diagram:
-```
-Shipment (at Transfer Price)
-    ↓
-Delivery (at Customer Selling Price)
-    ↓
-Reconciliation (Compare: Transfer vs Selling)
-    ↓
-Debit/Credit Note (Settlement)
-```
-
 ### Calculation Logic:
-1. **Provisional Amount** = Quantity × Transfer Price
-2. **Actual Gross** = Quantity × Customer Selling Price
-3. **Entitled Margin** = Actual Gross × Margin %
-4. **Actual Net** = Actual Gross - Entitled Margin
-5. **Difference** = Actual Net - Provisional Amount
-   - Positive → **Debit Note** (Distributor owes)
-   - Negative → **Credit Note** (Company owes)
+1. **Customer Billing Value** = Qty × Customer Selling Price
+2. **Distributor Earnings** = Billing Value × Commission %
+3. **Margin at Transfer Price** = Qty × Transfer Price × Commission %
+4. **Adjustment Payable** = Earnings - Margin at Transfer
+   - Positive → We owe distributor (Credit Note)
+   - Negative → Distributor owes us (Debit Note)
 
 ---
 
@@ -117,12 +84,12 @@ Debit/Credit Note (Settlement)
 
 ### P1 - High Priority
 1. **Auto-generate Provisional Invoice** - Trigger invoice when shipment status → "delivered"
-2. **Reporting Module** - Stock balance, deliveries, settlements reports
+2. **Build Reporting Module** - Stock balance, deliveries, settlements reports
 
 ### P2 - Medium Priority
-1. **Server.py Refactoring** - Move remaining routes to modular files
-2. **Settlement Period Configuration** - Auto weekly/monthly cycles
-3. **Cleanup deprecated BillingConfig** - Remove obsolete billing config endpoints
+1. **Fix Delivery Detail Popup** - "Margin" column shows incorrect value (₹368.75 vs ₹312.50)
+2. **Server.py Refactoring** - Move remaining routes to modular files
+3. **Settlement Period Configuration** - Auto weekly/monthly cycles
 
 ---
 
@@ -135,21 +102,16 @@ Debit/Credit Note (Settlement)
 - `GET/POST/PUT/DELETE /api/distributors/{id}/margins` - Margin matrix
 
 ### Operations
-- `GET/POST/PUT/DELETE /api/distributors/{id}/assignments` - Account assignments
 - `GET/POST/PUT/DELETE /api/distributors/{id}/shipments` - Shipment CRUD
-- `GET/POST/DELETE /api/distributors/{id}/deliveries` - Delivery CRUD
+- `GET/POST/DELETE /api/distributors/{id}/deliveries` - Delivery CRUD (CEO/Admin can delete any status)
 
 ### Settlements
 - `GET/POST/PUT/DELETE /api/distributors/{id}/settlements` - Settlement CRUD
-- `POST /api/distributors/{id}/settlements/generate-monthly` - Generate monthly settlements
-- `GET /api/distributors/{id}/unsettled-deliveries` - Get unsettled deliveries
+- `POST /api/distributors/{id}/settlements/generate-monthly` - Generate monthly settlements per account
 
 ### Billing & Reconciliation
-- `GET /api/distributors/{id}/billing/summary` - Billing dashboard
-- `POST /api/distributors/{id}/reconciliations/calculate` - Preview reconciliation
-- `POST /api/distributors/{id}/reconciliations` - Create reconciliation
-- `GET /api/distributors/{id}/reconciliations` - List reconciliations
-- `POST /api/distributors/{id}/reconciliations/{id}/confirm` - Confirm and generate note
+- `GET /api/distributors/{id}/monthly-reconciliation?month=X&year=Y` - Monthly reconciliation data
+- `POST /api/distributors/{id}/generate-monthly-note` - Generate Debit/Credit Note
 - `GET /api/distributors/{id}/debit-credit-notes` - List notes
 
 ---
@@ -160,7 +122,8 @@ Debit/Credit Note (Settlement)
 
 ## Test Data
 - **Distributor**: "Test" (ID: 99fb55dc-532c-4e85-b618-6b8a5e552c04)
-- **Status**: Clean (all transaction data deleted, 57 margin matrix entries remain)
+- **Settlements**: 3 for March 2026 (total adjustment: +₹865.81)
+- **Credit Note**: CN-2026-0001 for ₹165.81 (generated earlier with 2 settlements)
 
 ---
 
@@ -173,8 +136,8 @@ Debit/Credit Note (Settlement)
 - `AssignmentsTab.jsx` - Account assignments
 - `ShipmentsTab.jsx` - Primary shipments with pricing columns
 - `DeliveriesTab.jsx` - Account deliveries with line items
-- `SettlementsTab.jsx` - Monthly settlement generation
-- `BillingTab.jsx` - Reconciliations and Debit/Credit Notes
+- `SettlementsTab.jsx` - Monthly settlement generation per account
+- `BillingTab.jsx` - Monthly Reconciliation and Debit/Credit Notes
 - `constants.js` - Shared constants
 
 ---
