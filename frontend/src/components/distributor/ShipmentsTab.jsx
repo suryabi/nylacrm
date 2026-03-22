@@ -39,7 +39,7 @@ export default function ShipmentsTab({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
-          <CardTitle className="text-lg">Primary Shipments</CardTitle>
+          <CardTitle className="text-lg">Stock In (Factory → Distributor)</CardTitle>
           <CardDescription>Stock shipments to this distributor's locations</CardDescription>
         </div>
         {canManage && (

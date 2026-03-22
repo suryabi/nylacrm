@@ -167,7 +167,7 @@ export default function DeliveriesTab({
       <CardHeader className="flex flex-col gap-4">
         <div className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-lg">Account Deliveries</CardTitle>
+            <CardTitle className="text-lg">Stock Out (Distributor → Customer)</CardTitle>
             <CardDescription>Deliveries from this distributor to assigned accounts</CardDescription>
           </div>
           <div className="flex items-center gap-2">

@@ -1963,10 +1963,10 @@ export default function DistributorDetail() {
             Account Assignments ({assignments.length})
           </TabsTrigger>
           <TabsTrigger value="shipments" data-testid="shipments-tab">
-            Shipments ({shipments.length})
+            Stock In (Factory → Distributor) ({shipments.length})
           </TabsTrigger>
           <TabsTrigger value="deliveries" data-testid="deliveries-tab">
-            Deliveries ({deliveries.length})
+            Stock Out (Distributor → Customer) ({deliveries.length})
           </TabsTrigger>
           <TabsTrigger value="settlements" data-testid="settlements-tab">
             Settlements ({settlements.length})
