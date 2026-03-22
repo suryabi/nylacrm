@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,68 +6,82 @@
 
 @layer base {
     :root {
-        /* Light Mode - Dark Aqua Blue Theme */
-        --background: 195 30% 98%;
-        --background-secondary: 195 25% 95%;
-        --foreground: 200 50% 10%;
-        --foreground-muted: 200 20% 40%;
+        /* Light Mode - Deep Emerald/Sage Theme (Professional B2B) */
+        --background: 210 20% 98%;
+        --background-secondary: 210 15% 96%;
+        --foreground: 222 47% 11%;
+        --foreground-muted: 215 16% 47%;
         --card: 0 0% 100%;
-        --card-foreground: 200 50% 10%;
+        --card-foreground: 222 47% 11%;
         --popover: 0 0% 100%;
-        --popover-foreground: 200 50% 10%;
-        --primary: 185 70% 35%;
+        --popover-foreground: 222 47% 11%;
+        --primary: 160 84% 20%;
         --primary-foreground: 0 0% 100%;
-        --secondary: 195 30% 94%;
-        --secondary-foreground: 200 50% 15%;
-        --muted: 195 20% 90%;
-        --muted-foreground: 200 15% 45%;
-        --accent: 185 70% 35%;
+        --secondary: 210 20% 96%;
+        --secondary-foreground: 222 47% 11%;
+        --muted: 210 15% 92%;
+        --muted-foreground: 215 16% 47%;
+        --accent: 160 84% 20%;
         --accent-foreground: 0 0% 100%;
         --destructive: 0 84% 60%;
         --destructive-foreground: 0 0% 100%;
-        --border: 195 25% 88%;
-        --input: 195 25% 88%;
-        --ring: 185 70% 35%;
-        --radius: 0.5rem;
+        --border: 214 20% 90%;
+        --input: 214 20% 90%;
+        --ring: 160 84% 20%;
+        --radius: 0.625rem;
+        
+        /* Emerald accent shades */
+        --emerald-50: 151 81% 96%;
+        --emerald-100: 149 80% 90%;
+        --emerald-500: 160 84% 39%;
+        --emerald-600: 160 84% 20%;
+        --emerald-700: 161 94% 17%;
         
         /* Chart colors */
-        --chart-1: 185 70% 40%;
-        --chart-2: 195 65% 50%;
-        --chart-3: 175 60% 45%;
-        --chart-4: 165 55% 50%;
-        --chart-5: 155 50% 55%;
+        --chart-1: 160 84% 39%;
+        --chart-2: 172 66% 50%;
+        --chart-3: 142 71% 45%;
+        --chart-4: 152 60% 52%;
+        --chart-5: 158 55% 55%;
     }
     
     :root.dark {
-        /* Dark Mode - Dark Aqua Blue Theme */
-        --background: 200 35% 8%;
-        --background-secondary: 200 30% 12%;
-        --foreground: 195 30% 95%;
-        --foreground-muted: 195 20% 65%;
-        --card: 200 30% 12%;
-        --card-foreground: 195 30% 95%;
-        --popover: 200 30% 14%;
-        --popover-foreground: 195 30% 95%;
-        --primary: 185 65% 45%;
-        --primary-foreground: 200 50% 8%;
-        --secondary: 200 25% 18%;
-        --secondary-foreground: 195 25% 90%;
-        --muted: 200 20% 22%;
-        --muted-foreground: 195 15% 60%;
-        --accent: 185 65% 45%;
-        --accent-foreground: 200 50% 8%;
+        /* Dark Mode - Deep Emerald Theme */
+        --background: 222 47% 6%;
+        --background-secondary: 222 40% 10%;
+        --foreground: 210 20% 98%;
+        --foreground-muted: 215 20% 65%;
+        --card: 222 40% 10%;
+        --card-foreground: 210 20% 98%;
+        --popover: 222 38% 12%;
+        --popover-foreground: 210 20% 98%;
+        --primary: 160 60% 45%;
+        --primary-foreground: 222 47% 6%;
+        --secondary: 222 30% 16%;
+        --secondary-foreground: 210 15% 90%;
+        --muted: 222 25% 18%;
+        --muted-foreground: 215 15% 55%;
+        --accent: 160 60% 45%;
+        --accent-foreground: 222 47% 6%;
         --destructive: 0 70% 50%;
         --destructive-foreground: 0 0% 100%;
-        --border: 200 25% 22%;
-        --input: 200 25% 22%;
-        --ring: 185 65% 45%;
+        --border: 222 25% 20%;
+        --input: 222 25% 20%;
+        --ring: 160 60% 45%;
+        
+        /* Emerald accent shades for dark */
+        --emerald-50: 155 30% 15%;
+        --emerald-100: 155 35% 20%;
+        --emerald-500: 160 60% 45%;
+        --emerald-600: 160 55% 40%;
+        --emerald-700: 161 50% 35%;
         
         /* Chart colors for dark mode */
-        --chart-1: 185 65% 50%;
-        --chart-2: 195 60% 55%;
-        --chart-3: 175 55% 50%;
-        --chart-4: 165 50% 55%;
-        --chart-5: 155 45% 60%;
+        --chart-1: 160 60% 50%;
+        --chart-2: 172 55% 55%;
+        --chart-3: 142 55% 50%;
+        --chart-4: 152 50% 55%;
+        --chart-5: 158 45% 58%;
     }
 }
 

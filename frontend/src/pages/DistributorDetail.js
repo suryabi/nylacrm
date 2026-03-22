@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../co
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../components/ui/alert-dialog';
@@ -34,6 +33,8 @@ import ShipmentsTab from '../components/distributor/ShipmentsTab';
 import DeliveriesTab from '../components/distributor/DeliveriesTab';
 import SettlementsTab from '../components/distributor/SettlementsTab';
 import BillingTab from '../components/distributor/BillingTab';
+import DistributorSidebar from '../components/distributor/DistributorSidebar';
+import DistributorHeader from '../components/distributor/DistributorHeader';
 import { PAYMENT_TERMS, STATUS_OPTIONS, MARGIN_TYPES, formatMarginValue } from '../components/distributor/constants';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -1907,311 +1908,297 @@ export default function DistributorDetail() {
   }
 
   return (
-    <div className="p-6 space-y-6" data-testid="distributor-detail-page">
+    <div className="min-h-screen bg-slate-50/30" data-testid="distributor-detail-page">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/distributors')}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold">{distributor.distributor_name}</h1>
-              <Badge variant="outline">{distributor.distributor_code}</Badge>
-              {getStatusBadge(distributor.status)}
+      <DistributorHeader
+        distributor={distributor}
+        onEdit={() => setIsEditing(true)}
+        canManage={canManage}
+        isEditing={isEditing}
+        onSave={handleSave}
+        onCancel={() => { setIsEditing(false); setEditData(distributor); }}
+        saving={saving}
+      />
+
+      {/* Main Layout with Sidebar */}
+      <div className="flex">
+        {/* Sidebar Navigation */}
+        <DistributorSidebar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          distributor={distributor}
+          counts={{
+            coverage: distributor.operating_coverage?.length || 0,
+            locations: distributor.locations?.length || 0,
+            margins: margins.length,
+            assignments: assignments.length,
+            shipments: shipments.length,
+            deliveries: deliveries.length,
+            settlements: settlements.length,
+          }}
+        />
+
+        {/* Main Content Area */}
+        <main className="flex-1 min-h-[calc(100vh-73px)] overflow-auto">
+          <div className="p-6 lg:p-8 max-w-6xl">
+            {/* Content Title */}
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-slate-900 tracking-tight">
+                {activeTab === 'overview' && 'Overview'}
+                {activeTab === 'coverage' && 'Operating Coverage'}
+                {activeTab === 'locations' && 'Warehouse Locations'}
+                {activeTab === 'margins' && 'Margin Matrix'}
+                {activeTab === 'assignments' && 'Account Assignments'}
+                {activeTab === 'shipments' && 'Stock In (Factory → Distributor)'}
+                {activeTab === 'deliveries' && 'Stock Out (Distributor → Customer)'}
+                {activeTab === 'settlements' && 'Monthly Settlements'}
+                {activeTab === 'billing' && 'Billing & Reconciliation'}
+              </h2>
+              <p className="text-sm text-slate-500 mt-1">
+                {activeTab === 'overview' && 'Basic information and commercial terms'}
+                {activeTab === 'coverage' && 'States and cities where distributor operates'}
+                {activeTab === 'locations' && 'Warehouse and stocking locations'}
+                {activeTab === 'margins' && 'SKU-level margin configurations by city'}
+                {activeTab === 'assignments' && 'Customer accounts linked to this distributor'}
+                {activeTab === 'shipments' && 'Inventory received from factory'}
+                {activeTab === 'deliveries' && 'Deliveries made to customers'}
+                {activeTab === 'settlements' && 'Account-level settlement records grouped by customer'}
+                {activeTab === 'billing' && 'Monthly reconciliation and debit/credit notes'}
+              </p>
             </div>
-            {distributor.legal_entity_name && (
-              <p className="text-muted-foreground">{distributor.legal_entity_name}</p>
-            )}
+
+            {/* Tab Contents */}
+            <div className="space-y-6">
+              {activeTab === 'overview' && (
+                <OverviewTab
+                  distributor={distributor}
+                  isEditing={isEditing}
+                  editData={editData}
+                  setEditData={setEditData}
+                />
+              )}
+
+              {activeTab === 'coverage' && (
+                <CoverageTab
+                  distributor={distributor}
+                  canManage={canManage}
+                  showCoverageDialog={showCoverageDialog}
+                  setShowCoverageDialog={setShowCoverageDialog}
+                  selectedState={selectedState}
+                  setSelectedState={setSelectedState}
+                  selectedCities={selectedCities}
+                  setSelectedCities={setSelectedCities}
+                  stateNames={stateNames}
+                  getAvailableCities={getAvailableCities}
+                  handleAddCoverage={handleAddCoverage}
+                  addingCoverage={addingCoverage}
+                  setDeleteTarget={setDeleteTarget}
+                />
+              )}
+
+              {activeTab === 'locations' && (
+                <LocationsTab
+                  distributor={distributor}
+                  canManage={canManage}
+                  showLocationDialog={showLocationDialog}
+                  setShowLocationDialog={setShowLocationDialog}
+                  newLocation={newLocation}
+                  setNewLocation={setNewLocation}
+                  stateNames={stateNames}
+                  getCoveredCities={getCoveredCities}
+                  handleAddLocation={handleAddLocation}
+                  addingLocation={addingLocation}
+                  setDeleteTarget={setDeleteTarget}
+                />
+              )}
+
+              {activeTab === 'margins' && (
+                <MarginsTab
+                  distributor={distributor}
+                  canManage={canManage}
+                  margins={margins}
+                  marginsLoading={marginsLoading}
+                  selectedMarginCity={selectedMarginCity}
+                  setSelectedMarginCity={setSelectedMarginCity}
+                  showOnlyActiveMargins={showOnlyActiveMargins}
+                  setShowOnlyActiveMargins={setShowOnlyActiveMargins}
+                  getCoveredCities={getCoveredCities}
+                  skus={skus}
+                  showCopyDialog={showCopyDialog}
+                  setShowCopyDialog={setShowCopyDialog}
+                  copyTargetCity={copyTargetCity}
+                  setCopyTargetCity={setCopyTargetCity}
+                  copyMarginsToCity={copyMarginsToCity}
+                  copying={copying}
+                  showAddMarginDialog={showAddMarginDialog}
+                  setShowAddMarginDialog={setShowAddMarginDialog}
+                  newMarginForm={newMarginForm}
+                  setNewMarginForm={setNewMarginForm}
+                  handleAddMarginEntry={handleAddMarginEntry}
+                  savingMarginEntry={savingMarginEntry}
+                  showEditMarginDialog={showEditMarginDialog}
+                  setShowEditMarginDialog={setShowEditMarginDialog}
+                  editMarginEntry={editMarginEntry}
+                  setEditMarginEntry={setEditMarginEntry}
+                  handleUpdateMarginEntry={handleUpdateMarginEntry}
+                  setDeleteTarget={setDeleteTarget}
+                />
+              )}
+
+              {activeTab === 'assignments' && (
+                <AssignmentsTab
+                  distributor={distributor}
+                  canManage={canManage}
+                  assignments={assignments}
+                  assignmentsLoading={assignmentsLoading}
+                  showAssignDialog={showAssignDialog}
+                  setShowAssignDialog={setShowAssignDialog}
+                  accountSearch={accountSearch}
+                  setAccountSearch={setAccountSearch}
+                  searching={searching}
+                  searchResults={searchResults}
+                  setSearchResults={setSearchResults}
+                  selectedAccount={selectedAccount}
+                  setSelectedAccount={setSelectedAccount}
+                  assignmentForm={assignmentForm}
+                  setAssignmentForm={setAssignmentForm}
+                  getCoveredCities={getCoveredCities}
+                  handleCreateAssignment={handleCreateAssignment}
+                  savingAssignment={savingAssignment}
+                  setDeleteTarget={setDeleteTarget}
+                />
+              )}
+
+              {activeTab === 'shipments' && (
+                <ShipmentsTab
+                  distributor={distributor}
+                  canManage={canManage}
+                  canDelete={canDelete}
+                  shipments={shipments}
+                  shipmentsLoading={shipmentsLoading}
+                  skus={skus}
+                  showShipmentDialog={showShipmentDialog}
+                  setShowShipmentDialog={setShowShipmentDialog}
+                  shipmentForm={shipmentForm}
+                  setShipmentForm={setShipmentForm}
+                  shipmentItems={shipmentItems}
+                  addShipmentItem={addShipmentItem}
+                  updateShipmentItem={updateShipmentItem}
+                  updateShipmentItemWithPrice={updateShipmentItemWithPrice}
+                  removeShipmentItem={removeShipmentItem}
+                  resetShipmentForm={resetShipmentForm}
+                  handleCreateShipment={handleCreateShipment}
+                  savingShipment={savingShipment}
+                  viewShipmentDetail={viewShipmentDetail}
+                  setDeleteTarget={setDeleteTarget}
+                  getShipmentStatusBadge={getShipmentStatusBadge}
+                />
+              )}
+
+              {activeTab === 'deliveries' && (
+                <DeliveriesTab
+                  distributor={distributor}
+                  canManage={canManage}
+                  canDelete={canDelete}
+                  deliveries={deliveries}
+                  deliveriesLoading={deliveriesLoading}
+                  deliveriesTotal={deliveriesTotal}
+                  deliveriesPage={deliveriesPage}
+                  deliveriesPageSize={deliveriesPageSize}
+                  setDeliveriesPage={setDeliveriesPage}
+                  setDeliveriesPageSize={setDeliveriesPageSize}
+                  deliveriesTimeFilter={deliveriesTimeFilter}
+                  setDeliveriesTimeFilter={setDeliveriesTimeFilter}
+                  deliveriesAccountFilter={deliveriesAccountFilter}
+                  setDeliveriesAccountFilter={setDeliveriesAccountFilter}
+                  fetchDeliveries={fetchDeliveries}
+                  skus={skus}
+                  assignedAccounts={assignedAccounts}
+                  showDeliveryDialog={showDeliveryDialog}
+                  setShowDeliveryDialog={setShowDeliveryDialog}
+                  selectedDeliveryAccount={selectedDeliveryAccount}
+                  setSelectedDeliveryAccount={setSelectedDeliveryAccount}
+                  deliveryAccountSearch={deliveryAccountSearch}
+                  setDeliveryAccountSearch={setDeliveryAccountSearch}
+                  deliveryForm={deliveryForm}
+                  setDeliveryForm={setDeliveryForm}
+                  deliveryItems={deliveryItems}
+                  addDeliveryItem={addDeliveryItem}
+                  updateDeliveryItem={updateDeliveryItem}
+                  removeDeliveryItem={removeDeliveryItem}
+                  resetDeliveryForm={resetDeliveryForm}
+                  handleCreateDelivery={handleCreateDelivery}
+                  savingDelivery={savingDelivery}
+                  viewDeliveryDetail={viewDeliveryDetail}
+                  setDeleteTarget={setDeleteTarget}
+                  getDeliveryStatusBadge={getDeliveryStatusBadge}
+                  API_URL={API_URL}
+                  token={token}
+                />
+              )}
+
+              {activeTab === 'settlements' && (
+                <SettlementsTab
+                  distributor={distributor}
+                  canManage={canManage}
+                  canDelete={canDelete}
+                  canApprove={canApprove}
+                  settlements={settlements}
+                  settlementsLoading={settlementsLoading}
+                  settlementsTotal={settlementsTotal}
+                  settlementsPage={settlementsPage}
+                  settlementsPageSize={settlementsPageSize}
+                  setSettlementsPage={setSettlementsPage}
+                  setSettlementsPageSize={setSettlementsPageSize}
+                  settlementsMonthFilter={settlementsMonthFilter}
+                  setSettlementsMonthFilter={setSettlementsMonthFilter}
+                  settlementsYearFilter={settlementsYearFilter}
+                  setSettlementsYearFilter={setSettlementsYearFilter}
+                  fetchSettlements={fetchSettlements}
+                  showSettlementDialog={showSettlementDialog}
+                  setShowSettlementDialog={setShowSettlementDialog}
+                  settlementForm={settlementForm}
+                  setSettlementForm={setSettlementForm}
+                  resetSettlementForm={resetSettlementForm}
+                  unsettledDeliveries={unsettledDeliveries}
+                  unsettledLoading={unsettledLoading}
+                  fetchUnsettledDeliveries={fetchUnsettledDeliveries}
+                  handleCreateSettlement={handleCreateSettlement}
+                  handleSubmitSettlement={handleSubmitSettlement}
+                  handleApproveSettlement={handleApproveSettlement}
+                  handleRejectSettlement={handleRejectSettlement}
+                  savingSettlement={savingSettlement}
+                  viewSettlementDetail={viewSettlementDetail}
+                  setDeleteTarget={setDeleteTarget}
+                  getSettlementStatusBadge={getSettlementStatusBadge}
+                  assignedAccounts={assignedAccounts}
+                />
+              )}
+
+              {activeTab === 'billing' && (
+                <BillingTab
+                  distributor={distributor}
+                  canManage={canManage}
+                  canDelete={canDelete}
+                  settlements={settlements}
+                  settlementsLoading={settlementsLoading}
+                  fetchSettlements={fetchSettlements}
+                  debitCreditNotes={debitCreditNotes}
+                  notesLoading={notesLoading}
+                  fetchNotes={fetchDebitCreditNotes}
+                  viewNoteDetail={viewNoteDetail}
+                  getNoteStatusBadge={getNoteStatusBadge}
+                  getSettlementStatusBadge={getSettlementStatusBadge}
+                  setActiveTab={setActiveTab}
+                  setDeleteTarget={setDeleteTarget}
+                  API_URL={API_URL}
+                  token={token}
+                />
+              )}
+            </div>
           </div>
-        </div>
-        
-        {canManage && !isEditing && (
-          <Button onClick={() => setIsEditing(true)}>
-            <Edit2 className="h-4 w-4 mr-2" />
-            Edit
-          </Button>
-        )}
-        
-        {isEditing && (
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => { setIsEditing(false); setEditData(distributor); }}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              <Save className="h-4 w-4 mr-2" />
-              {saving ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </div>
-        )}
+        </main>
       </div>
-
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="coverage">
-            Operating Coverage ({distributor.operating_coverage?.length || 0})
-          </TabsTrigger>
-          <TabsTrigger value="locations">
-            Locations ({distributor.locations?.length || 0})
-          </TabsTrigger>
-          <TabsTrigger value="margins">
-            Margin Matrix ({margins.length})
-          </TabsTrigger>
-          <TabsTrigger value="assignments" data-testid="assignments-tab">
-            Account Assignments ({assignments.length})
-          </TabsTrigger>
-          <TabsTrigger value="shipments" data-testid="shipments-tab">
-            Stock In (Factory → Distributor) ({shipments.length})
-          </TabsTrigger>
-          <TabsTrigger value="deliveries" data-testid="deliveries-tab">
-            Stock Out (Distributor → Customer) ({deliveries.length})
-          </TabsTrigger>
-          <TabsTrigger value="settlements" data-testid="settlements-tab">
-            Settlements ({settlements.length})
-          </TabsTrigger>
-          <TabsTrigger value="billing" data-testid="billing-tab">
-            Billing & Reconciliation
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Overview Tab */}
-        <TabsContent value="overview" className="space-y-6">
-          <OverviewTab
-            distributor={distributor}
-            isEditing={isEditing}
-            editData={editData}
-            setEditData={setEditData}
-          />
-        </TabsContent>
-
-        {/* Operating Coverage Tab */}
-        <TabsContent value="coverage">
-          <CoverageTab
-            distributor={distributor}
-            canManage={canManage}
-            showCoverageDialog={showCoverageDialog}
-            setShowCoverageDialog={setShowCoverageDialog}
-            selectedState={selectedState}
-            setSelectedState={setSelectedState}
-            selectedCities={selectedCities}
-            setSelectedCities={setSelectedCities}
-            stateNames={stateNames}
-            getAvailableCities={getAvailableCities}
-            handleAddCoverage={handleAddCoverage}
-            addingCoverage={addingCoverage}
-            setDeleteTarget={setDeleteTarget}
-          />
-        </TabsContent>
-
-        {/* Locations Tab */}
-        <TabsContent value="locations">
-          <LocationsTab
-            distributor={distributor}
-            canManage={canManage}
-            showLocationDialog={showLocationDialog}
-            setShowLocationDialog={setShowLocationDialog}
-            newLocation={newLocation}
-            setNewLocation={setNewLocation}
-            stateNames={stateNames}
-            getCoveredCities={getCoveredCities}
-            handleAddLocation={handleAddLocation}
-            addingLocation={addingLocation}
-            setDeleteTarget={setDeleteTarget}
-          />
-        </TabsContent>
-
-        {/* Margin Matrix Tab */}
-        <TabsContent value="margins">
-          <MarginsTab
-            distributor={distributor}
-            canManage={canManage}
-            margins={margins}
-            marginsLoading={marginsLoading}
-            selectedMarginCity={selectedMarginCity}
-            setSelectedMarginCity={setSelectedMarginCity}
-            showOnlyActiveMargins={showOnlyActiveMargins}
-            setShowOnlyActiveMargins={setShowOnlyActiveMargins}
-            getCoveredCities={getCoveredCities}
-            skus={skus}
-            showCopyDialog={showCopyDialog}
-            setShowCopyDialog={setShowCopyDialog}
-            copyTargetCity={copyTargetCity}
-            setCopyTargetCity={setCopyTargetCity}
-            copyMarginsToCity={copyMarginsToCity}
-            copying={copying}
-            showAddMarginDialog={showAddMarginDialog}
-            setShowAddMarginDialog={setShowAddMarginDialog}
-            newMarginForm={newMarginForm}
-            setNewMarginForm={setNewMarginForm}
-            handleAddMarginEntry={handleAddMarginEntry}
-            savingMarginEntry={savingMarginEntry}
-            showEditMarginDialog={showEditMarginDialog}
-            setShowEditMarginDialog={setShowEditMarginDialog}
-            editMarginEntry={editMarginEntry}
-            setEditMarginEntry={setEditMarginEntry}
-            handleUpdateMarginEntry={handleUpdateMarginEntry}
-            setDeleteTarget={setDeleteTarget}
-          />
-        </TabsContent>
-
-        {/* Account Assignments Tab */}
-        <TabsContent value="assignments">
-          <AssignmentsTab
-            distributor={distributor}
-            canManage={canManage}
-            assignments={assignments}
-            assignmentsLoading={assignmentsLoading}
-            showAssignDialog={showAssignDialog}
-            setShowAssignDialog={setShowAssignDialog}
-            accountSearch={accountSearch}
-            setAccountSearch={setAccountSearch}
-            searching={searching}
-            searchResults={searchResults}
-            setSearchResults={setSearchResults}
-            selectedAccount={selectedAccount}
-            setSelectedAccount={setSelectedAccount}
-            assignmentForm={assignmentForm}
-            setAssignmentForm={setAssignmentForm}
-            getCoveredCities={getCoveredCities}
-            handleCreateAssignment={handleCreateAssignment}
-            savingAssignment={savingAssignment}
-            setDeleteTarget={setDeleteTarget}
-          />
-        </TabsContent>
-
-        {/* Shipments Tab */}
-        <TabsContent value="shipments">
-          <ShipmentsTab
-            distributor={distributor}
-            canManage={canManage}
-            canDelete={canDelete}
-            shipments={shipments}
-            shipmentsLoading={shipmentsLoading}
-            skus={skus}
-            showShipmentDialog={showShipmentDialog}
-            setShowShipmentDialog={setShowShipmentDialog}
-            shipmentForm={shipmentForm}
-            setShipmentForm={setShipmentForm}
-            shipmentItems={shipmentItems}
-            addShipmentItem={addShipmentItem}
-            updateShipmentItem={updateShipmentItem}
-            updateShipmentItemWithPrice={updateShipmentItemWithPrice}
-            removeShipmentItem={removeShipmentItem}
-            resetShipmentForm={resetShipmentForm}
-            handleCreateShipment={handleCreateShipment}
-            savingShipment={savingShipment}
-            viewShipmentDetail={viewShipmentDetail}
-            setDeleteTarget={setDeleteTarget}
-            getShipmentStatusBadge={getShipmentStatusBadge}
-          />
-        </TabsContent>
-
-        {/* Deliveries Tab */}
-        <TabsContent value="deliveries">
-          <DeliveriesTab
-            distributor={distributor}
-            canManage={canManage}
-            canDelete={canDelete}
-            deliveries={deliveries}
-            deliveriesLoading={deliveriesLoading}
-            deliveriesTotal={deliveriesTotal}
-            deliveriesPage={deliveriesPage}
-            deliveriesPageSize={deliveriesPageSize}
-            setDeliveriesPage={setDeliveriesPage}
-            setDeliveriesPageSize={setDeliveriesPageSize}
-            deliveriesTimeFilter={deliveriesTimeFilter}
-            setDeliveriesTimeFilter={setDeliveriesTimeFilter}
-            deliveriesAccountFilter={deliveriesAccountFilter}
-            setDeliveriesAccountFilter={setDeliveriesAccountFilter}
-            fetchDeliveries={fetchDeliveries}
-            skus={skus}
-            assignedAccounts={assignedAccounts}
-            showDeliveryDialog={showDeliveryDialog}
-            setShowDeliveryDialog={setShowDeliveryDialog}
-            selectedDeliveryAccount={selectedDeliveryAccount}
-            setSelectedDeliveryAccount={setSelectedDeliveryAccount}
-            deliveryAccountSearch={deliveryAccountSearch}
-            setDeliveryAccountSearch={setDeliveryAccountSearch}
-            deliveryForm={deliveryForm}
-            setDeliveryForm={setDeliveryForm}
-            deliveryItems={deliveryItems}
-            addDeliveryItem={addDeliveryItem}
-            updateDeliveryItem={updateDeliveryItem}
-            removeDeliveryItem={removeDeliveryItem}
-            resetDeliveryForm={resetDeliveryForm}
-            handleCreateDelivery={handleCreateDelivery}
-            savingDelivery={savingDelivery}
-            viewDeliveryDetail={viewDeliveryDetail}
-            setDeleteTarget={setDeleteTarget}
-            getDeliveryStatusBadge={getDeliveryStatusBadge}
-            API_URL={API_URL}
-            token={token}
-          />
-        </TabsContent>
-
-        {/* Settlements Tab */}
-        <TabsContent value="settlements">
-          <SettlementsTab
-            distributor={distributor}
-            canManage={canManage}
-            canDelete={canDelete}
-            canApprove={canApprove}
-            settlements={settlements}
-            settlementsLoading={settlementsLoading}
-            settlementsTotal={settlementsTotal}
-            settlementsPage={settlementsPage}
-            settlementsPageSize={settlementsPageSize}
-            setSettlementsPage={setSettlementsPage}
-            setSettlementsPageSize={setSettlementsPageSize}
-            settlementsMonthFilter={settlementsMonthFilter}
-            setSettlementsMonthFilter={setSettlementsMonthFilter}
-            settlementsYearFilter={settlementsYearFilter}
-            setSettlementsYearFilter={setSettlementsYearFilter}
-            fetchSettlements={fetchSettlements}
-            showSettlementDialog={showSettlementDialog}
-            setShowSettlementDialog={setShowSettlementDialog}
-            settlementForm={settlementForm}
-            setSettlementForm={setSettlementForm}
-            resetSettlementForm={resetSettlementForm}
-            unsettledDeliveries={unsettledDeliveries}
-            unsettledLoading={unsettledLoading}
-            fetchUnsettledDeliveries={fetchUnsettledDeliveries}
-            handleCreateSettlement={handleCreateSettlement}
-            handleSubmitSettlement={handleSubmitSettlement}
-            handleApproveSettlement={handleApproveSettlement}
-            handleRejectSettlement={handleRejectSettlement}
-            savingSettlement={savingSettlement}
-            viewSettlementDetail={viewSettlementDetail}
-            setDeleteTarget={setDeleteTarget}
-            getSettlementStatusBadge={getSettlementStatusBadge}
-            assignedAccounts={assignedAccounts}
-          />
-        </TabsContent>
-
-        {/* Billing & Reconciliation Tab */}
-        <TabsContent value="billing" className="space-y-6">
-          <BillingTab
-            distributor={distributor}
-            canManage={canManage}
-            canDelete={canDelete}
-            settlements={settlements}
-            settlementsLoading={settlementsLoading}
-            fetchSettlements={fetchSettlements}
-            debitCreditNotes={debitCreditNotes}
-            notesLoading={notesLoading}
-            fetchNotes={fetchDebitCreditNotes}
-            viewNoteDetail={viewNoteDetail}
-            getNoteStatusBadge={getNoteStatusBadge}
-            getSettlementStatusBadge={getSettlementStatusBadge}
-            setActiveTab={setActiveTab}
-            setDeleteTarget={setDeleteTarget}
-            API_URL={API_URL}
-            token={token}
-          />
-        </TabsContent>
-      </Tabs>
 
       {/* Shipment Detail Dialog */}
       <Dialog open={showShipmentDetail} onOpenChange={setShowShipmentDetail}>

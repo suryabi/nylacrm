@@ -4,7 +4,7 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
-import { Building2, User, Phone, Mail, CreditCard } from 'lucide-react';
+import { Building2, User, Phone, Mail, CreditCard, FileText } from 'lucide-react';
 import { PAYMENT_TERMS, STATUS_OPTIONS } from './constants';
 
 export default function OverviewTab({ 
@@ -16,10 +16,12 @@ export default function OverviewTab({
   return (
     <div className="grid md:grid-cols-2 gap-6">
       {/* Basic Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Building2 className="h-5 w-5" />
+      <Card className="border border-slate-200/60 shadow-[0_4px_24px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)] transition-shadow duration-300">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base font-semibold flex items-center gap-2.5 text-slate-800">
+            <div className="p-2 rounded-lg bg-emerald-50">
+              <FileText className="h-4 w-4 text-emerald-600" strokeWidth={1.75} />
+            </div>
             Basic Information
           </CardTitle>
         </CardHeader>
@@ -99,10 +101,12 @@ export default function OverviewTab({
       </Card>
 
       {/* Contact Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <User className="h-5 w-5" />
+      <Card className="border border-slate-200/60 shadow-[0_4px_24px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)] transition-shadow duration-300">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base font-semibold flex items-center gap-2.5 text-slate-800">
+            <div className="p-2 rounded-lg bg-emerald-50">
+              <User className="h-4 w-4 text-emerald-600" strokeWidth={1.75} />
+            </div>
             Contact Information
           </CardTitle>
         </CardHeader>
@@ -205,10 +209,12 @@ export default function OverviewTab({
       </Card>
 
       {/* Commercial Terms */}
-      <Card className="md:col-span-2">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <CreditCard className="h-5 w-5" />
+      <Card className="md:col-span-2 border border-slate-200/60 shadow-[0_4px_24px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)] transition-shadow duration-300">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base font-semibold flex items-center gap-2.5 text-slate-800">
+            <div className="p-2 rounded-lg bg-emerald-50">
+              <CreditCard className="h-4 w-4 text-emerald-600" strokeWidth={1.75} />
+            </div>
             Commercial Terms
           </CardTitle>
         </CardHeader>
