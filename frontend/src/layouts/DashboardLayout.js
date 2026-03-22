@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useAppContext } from '../context/AppContextContext';
@@ -180,9 +180,19 @@ const distributionNavigationGroups = [
   },
 ];
 
+// Distributor User Navigation (simplified for distributor role users)
+const distributorUserNavigationGroups = [
+  {
+    title: 'My Distributor',
+    items: [
+      { name: 'My Profile', href: '/distributors', icon: Building, moduleKey: 'distributors', roles: ['Distributor'] },
+    ]
+  },
+];
+
 export default function DashboardLayout({ children }) {
   const { user, logout } = useAuth();
-  const { currentContext, switchContext, canAccessMultipleModules, getAccessibleModules, modules } = useAppContext();
+  const { currentContext, switchContext, canAccessMultipleModules, getAccessibleModules, modules, isDistributorUser, getDistributorId } = useAppContext();
   const { theme, toggleTheme } = useTheme();
   const { navigateTo } = useNavigation();
   const { isModuleEnabled, hasRolePermission, branding } = useTenantConfig();
@@ -201,6 +211,24 @@ export default function DashboardLayout({ children }) {
     location.pathname === '/account-performance'
   );
   const [collapsedGroups, setCollapsedGroups] = useState({});
+
+  // Redirect Distributor users to their profile page
+  useEffect(() => {
+    if (isDistributorUser && getDistributorId) {
+      // Distributor users should always be on their profile page, not sales home
+      const distributorProfilePath = `/distributors/${getDistributorId}`;
+      const allowedPaths = [distributorProfilePath, '/login', '/logout'];
+      
+      // If on any path not related to their distributor, redirect to profile
+      if (!location.pathname.startsWith('/distributors/') && !allowedPaths.includes(location.pathname)) {
+        navigate(distributorProfilePath);
+      }
+      // If on distributors list, redirect to their specific profile
+      else if (location.pathname === '/distributors') {
+        navigate(distributorProfilePath);
+      }
+    }
+  }, [isDistributorUser, getDistributorId, location.pathname, navigate]);
 
   const handleLogout = async () => {
     await logout();
@@ -226,8 +254,13 @@ export default function DashboardLayout({ children }) {
     }
   };
 
-  // Select navigation groups based on current context
+  // Select navigation groups based on current context and user role
   const getNavigationGroups = () => {
+    // Distributor users get a simplified nav
+    if (isDistributorUser) {
+      return distributorUserNavigationGroups;
+    }
+    
     switch (currentContext) {
       case 'production':
         return productionNavigationGroups;

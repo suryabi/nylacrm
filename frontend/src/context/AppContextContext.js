@@ -20,6 +20,12 @@ export function AppContextProvider({ children }) {
   // Determine which modules the user can access
   const canAccessModule = (moduleId) => {
     if (!user) return false;
+    
+    // Distributor role users can ONLY access Distribution module
+    if (user.role === 'Distributor') {
+      return moduleId === 'distribution';
+    }
+    
     // Admin roles can always access all modules
     if (ADMIN_ROLES.includes(user.role)) return true;
     // Check department-based access
@@ -42,9 +48,26 @@ export function AppContextProvider({ children }) {
   const canAccessProduction = () => canAccessModule('production');
   const canAccessDistribution = () => canAccessModule('distribution');
   
-  // Set default context based on user's department
+  // Check if user is a Distributor
+  const isDistributorUser = () => {
+    return user?.role === 'Distributor';
+  };
+  
+  // Get distributor_id for Distributor users
+  const getDistributorId = () => {
+    return user?.distributor_id || null;
+  };
+  
+  // Set default context based on user's role/department
   useEffect(() => {
     if (user) {
+      // Distributor users always go to Distribution module
+      if (user.role === 'Distributor') {
+        setCurrentContext('distribution');
+        localStorage.setItem(`appContext_${user.id}`, 'distribution');
+        return;
+      }
+      
       // Load saved context from localStorage
       const savedContext = localStorage.getItem(`appContext_${user.id}`);
       
@@ -58,6 +81,12 @@ export function AppContextProvider({ children }) {
   
   const setDefaultContext = () => {
     if (!user) return;
+    
+    // Distributor users always default to distribution
+    if (user.role === 'Distributor') {
+      setCurrentContext('distribution');
+      return;
+    }
     
     // Admin roles default to sales
     if (ADMIN_ROLES.includes(user.role)) {
@@ -76,6 +105,11 @@ export function AppContextProvider({ children }) {
   };
   
   const switchContext = (newContext) => {
+    // Distributor users cannot switch context
+    if (user?.role === 'Distributor') {
+      return;
+    }
+    
     if (canAccessModule(newContext)) {
       setCurrentContext(newContext);
       if (user) {
@@ -94,6 +128,8 @@ export function AppContextProvider({ children }) {
     canAccessDistribution: canAccessDistribution(),
     getAccessibleModules,
     modules: MODULES,
+    isDistributorUser: isDistributorUser(),
+    getDistributorId: getDistributorId(),
   };
   
   return (

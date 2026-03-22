@@ -526,9 +526,9 @@ class User(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     email: EmailStr
     name: str
-    role: str  # 'ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'
+    role: str  # 'ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep', 'Distributor'
     designation: Optional[str] = None  # Full title like 'CEO & Managing Director'
-    department: Optional[str] = 'Sales'  # 'Admin', 'Sales', 'Production', 'Marketing', 'Finance'
+    department: Optional[str] = 'Sales'  # 'Admin', 'Sales', 'Production', 'Marketing', 'Finance', 'Distribution'
     phone: Optional[str] = None
     avatar: Optional[str] = None
     city: Optional[str] = None
@@ -541,6 +541,9 @@ class User(BaseModel):
     # Employee HR fields (visible to CEO, Director, Admin only)
     ctc_monthly: Optional[float] = None  # Cost to Company per month in INR
     joining_date: Optional[str] = None  # Format: YYYY-MM-DD
+    # Distributor link (for Distributor role users)
+    distributor_id: Optional[str] = None  # Links user to their distributor record
+    force_password_change: bool = False  # Force password change on first login
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class UserCreate(BaseModel):
@@ -549,7 +552,7 @@ class UserCreate(BaseModel):
     name: str
     role: str = 'sales_rep'
     designation: Optional[str] = None
-    department: Optional[str] = 'Sales'  # 'Admin', 'Sales', 'Production', 'Marketing', 'Finance'
+    department: Optional[str] = 'Sales'  # 'Admin', 'Sales', 'Production', 'Marketing', 'Finance', 'Distribution'
     phone: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
@@ -559,6 +562,8 @@ class UserCreate(BaseModel):
     dotted_line_to: Optional[str] = None
     ctc_monthly: Optional[float] = None
     joining_date: Optional[str] = None
+    distributor_id: Optional[str] = None  # Links user to their distributor record
+    force_password_change: bool = False
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -2585,9 +2590,12 @@ async def login(credentials: UserLogin, request: Request, response: Response):
     if isinstance(user_doc['created_at'], str):
         user_doc['created_at'] = datetime.fromisoformat(user_doc['created_at'])
     
+    # Include distributor-specific fields in response
     return {
         'user': user_doc,
-        'session_token': session_token
+        'session_token': session_token,
+        'force_password_change': user_doc.get('force_password_change', False),
+        'distributor_id': user_doc.get('distributor_id')
     }
 
 @api_router.get("/auth/me", response_model=User)
@@ -2595,6 +2603,43 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     if isinstance(current_user['created_at'], str):
         current_user['created_at'] = datetime.fromisoformat(current_user['created_at'])
     return current_user
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@api_router.post("/auth/change-password")
+async def change_password(
+    request: PasswordChangeRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Change user password (also clears force_password_change flag)"""
+    # Verify current password
+    user_doc = await db.users.find_one({'id': current_user['id']}, {'_id': 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail='User not found')
+    
+    if not verify_password(request.current_password, user_doc.get('password', '')):
+        raise HTTPException(status_code=401, detail='Current password is incorrect')
+    
+    # Validate new password
+    if len(request.new_password) < 6:
+        raise HTTPException(status_code=400, detail='New password must be at least 6 characters')
+    
+    # Update password and clear force_password_change flag
+    new_hashed = hash_password(request.new_password)
+    await db.users.update_one(
+        {'id': current_user['id']},
+        {'$set': {
+            'password': new_hashed,
+            'force_password_change': False,
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {'message': 'Password changed successfully'}
 
 # ============= DASHBOARD ROUTES =============
 

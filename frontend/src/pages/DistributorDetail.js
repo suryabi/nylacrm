@@ -240,9 +240,22 @@ export default function DistributorDetail() {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentReference, setPaymentReference] = useState('');
   
-  const canManage = user && ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head'].includes(user.role);
+  // Permission checks - Distributor role users have limited permissions
+  const isDistributorRole = user?.role === 'Distributor';
+  const canManage = user && (
+    ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head'].includes(user.role) ||
+    isDistributorRole // Distributors can manage their own profile and create deliveries
+  );
   const canDelete = user && ['CEO', 'Admin', 'System Admin'].includes(user.role);
   const canApprove = user && ['CEO', 'Director', 'Vice President'].includes(user.role);
+  const canUpdateProfile = user && (
+    ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head'].includes(user.role) ||
+    isDistributorRole // Distributors can update their contact info
+  );
+  const canCreateDelivery = user && (
+    ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head', 'Regional Sales Manager'].includes(user.role) ||
+    isDistributorRole // Distributors can create deliveries
+  );
 
   const fetchDistributor = useCallback(async () => {
     try {

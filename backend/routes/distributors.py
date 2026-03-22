@@ -7,6 +7,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 import logging
 import uuid
+import bcrypt
 
 from database import db
 from deps import get_current_user
@@ -27,10 +28,30 @@ from models.distributor import (
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Default password for distributor users
+DISTRIBUTOR_DEFAULT_PASSWORD = "nyladist##"
+
+
+def hash_password(password: str) -> str:
+    """Hash password using bcrypt (same as server.py)"""
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
 
 def is_distributor_admin(user: dict) -> bool:
     """Check if user can manage distributors"""
     return user.get('role') in ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head']
+
+
+def is_distributor_user(user: dict) -> bool:
+    """Check if user is a distributor"""
+    return user.get('role') == 'Distributor'
+
+
+def get_user_distributor_id(user: dict) -> Optional[str]:
+    """Get distributor_id for a distributor user"""
+    if is_distributor_user(user):
+        return user.get('distributor_id')
+    return None
 
 
 async def generate_distributor_code(tenant_id: str) -> str:
@@ -58,10 +79,25 @@ async def list_distributors(
     page_size: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(get_current_user)
 ):
-    """List all distributors for current tenant"""
+    """List all distributors for current tenant (filtered for distributor users)"""
     tenant_id = get_current_tenant_id()
     
     query = {"tenant_id": tenant_id}
+    
+    # If user is a Distributor, only show their own distributor
+    if is_distributor_user(current_user):
+        user_distributor_id = get_user_distributor_id(current_user)
+        if user_distributor_id:
+            query["id"] = user_distributor_id
+        else:
+            # No distributor linked - return empty
+            return {
+                "distributors": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": 0
+            }
     
     if status and status != 'all':
         query["status"] = status
@@ -132,6 +168,12 @@ async def get_distributor(distributor_id: str, current_user: dict = Depends(get_
     """Get a specific distributor by ID"""
     tenant_id = get_current_tenant_id()
     
+    # If user is a Distributor, verify they can only access their own distributor
+    if is_distributor_user(current_user):
+        user_distributor_id = get_user_distributor_id(current_user)
+        if user_distributor_id != distributor_id:
+            raise HTTPException(status_code=403, detail="Access denied - you can only view your own distributor profile")
+    
     distributor = await db.distributors.find_one(
         {"id": distributor_id, "tenant_id": tenant_id},
         {"_id": 0}
@@ -159,7 +201,7 @@ async def create_distributor(
     data: DistributorCreate,
     current_user: dict = Depends(get_current_user)
 ):
-    """Create a new distributor"""
+    """Create a new distributor and auto-create a user account for them"""
     if not is_distributor_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required to create distributors")
     
@@ -177,8 +219,10 @@ async def create_distributor(
     if existing:
         raise HTTPException(status_code=400, detail="Distributor code already exists")
     
+    distributor_id = str(uuid.uuid4())
+    
     distributor_doc = {
-        "id": str(uuid.uuid4()),
+        "id": distributor_id,
         "tenant_id": tenant_id,
         "distributor_name": data.distributor_name,
         "legal_entity_name": data.legal_entity_name,
@@ -207,7 +251,49 @@ async def create_distributor(
     await db.distributors.insert_one(distributor_doc)
     distributor_doc.pop('_id', None)
     
+    # Auto-create user for distributor if primary contact email is provided
+    user_created = False
+    if data.primary_contact_email:
+        # Check if user already exists with this email
+        existing_user = await db.users.find_one({'email': data.primary_contact_email}, {'_id': 0})
+        
+        if not existing_user:
+            # Create new user for distributor
+            user_doc = {
+                'id': str(uuid.uuid4()),
+                'email': data.primary_contact_email,
+                'name': data.primary_contact_name or data.distributor_name,
+                'password': hash_password(DISTRIBUTOR_DEFAULT_PASSWORD),
+                'role': 'Distributor',
+                'designation': 'Distributor',
+                'department': 'Distribution',
+                'phone': data.primary_contact_mobile,
+                'is_active': True,
+                'distributor_id': distributor_id,
+                'force_password_change': True,
+                'created_at': now,
+                'tenant_id': tenant_id
+            }
+            await db.users.insert_one(user_doc)
+            user_created = True
+            logger.info(f"User account created for distributor '{data.distributor_name}' with email '{data.primary_contact_email}'")
+        else:
+            # Update existing user to link to this distributor if they don't have one
+            if not existing_user.get('distributor_id'):
+                await db.users.update_one(
+                    {'email': data.primary_contact_email},
+                    {'$set': {
+                        'distributor_id': distributor_id,
+                        'role': 'Distributor',
+                        'department': 'Distribution'
+                    }}
+                )
+                logger.info(f"Existing user '{data.primary_contact_email}' linked to distributor '{data.distributor_name}'")
+    
     logger.info(f"Distributor '{data.distributor_name}' created by {current_user['email']}")
+    
+    # Add user_created flag to response
+    distributor_doc['user_created'] = user_created
     
     return distributor_doc
 

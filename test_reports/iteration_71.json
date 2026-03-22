@@ -1,0 +1,81 @@
+{
+  "summary": "Tested distributor user access feature. Fixed critical bug in tenant middleware where internal cluster hostnames (emergentcf.cloud) were not recognized as preview environments, causing tenant mismatch. All 14 backend tests pass. Frontend tests confirm: distributor login works, auto-redirect to profile page, simplified sidebar with 'My Profile' only, and navigation to all distributor sections (Overview, Coverage, Locations, Stock In/Out, Settlements).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_distributor_user_access.py",
+    "/app/test_reports/pytest/distributor_user_access_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/core/tenant.py - Added 'emergentcf.cloud' to preview environment detection to fix tenant context issue"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "100% (all features verified)"
+  },
+  "test_credentials": {
+    "admin": {"email": "surya.yadavalli@nylaairwater.earth", "password": "test123"},
+    "distributor": {"email": "john.distributor@test.com", "password": "nyladist##"}
+  },
+  "seed_data_creation": "Test distributor 'Test Distributor User' (ID: bb12d90e-4d33-4890-ac5f-17573c551b5c) and user 'john.distributor@test.com' already existed in tenant 'nyla-air-water'",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Distributor user access is fully working. Key points: 1) Distributor users login with default password 'nyladist##', 2) Login response includes force_password_change=true and distributor_id, 3) Distributor users are auto-redirected to /distributors/{distributor_id}, 4) Sidebar shows only 'My Profile' under 'MY DISTRIBUTOR' section, 5) Distributor detail page has internal sidebar with Overview, Coverage, Locations, Margin Matrix, Accounts, Stock In, Stock Out, Settlements, Reconciliation. Fixed tenant middleware to recognize internal cluster hostnames.",
+  "features_tested": {
+    "distributor_login_with_default_password": {
+      "status": "PASSED",
+      "password": "nyladist##"
+    },
+    "login_response_includes_force_password_change": {
+      "status": "PASSED",
+      "value": true
+    },
+    "login_response_includes_distributor_id": {
+      "status": "PASSED",
+      "distributor_id": "bb12d90e-4d33-4890-ac5f-17573c551b5c"
+    },
+    "user_has_distributor_role": {
+      "status": "PASSED",
+      "role": "Distributor"
+    },
+    "distributor_auto_redirect_to_profile": {
+      "status": "PASSED",
+      "redirect_url": "/distributors/bb12d90e-4d33-4890-ac5f-17573c551b5c"
+    },
+    "simplified_sidebar_navigation": {
+      "status": "PASSED",
+      "sidebar_items": ["My Profile"],
+      "hidden_items": ["Leads", "Accounts", "Dashboard", "Pipeline"]
+    },
+    "distributor_can_only_see_own_data": {
+      "status": "PASSED",
+      "total_distributors_visible": 1
+    },
+    "distributor_cannot_access_other_distributors": {
+      "status": "PASSED",
+      "returns_403": true
+    },
+    "distributor_cannot_create_distributors": {
+      "status": "PASSED",
+      "returns_403": true
+    },
+    "distributor_detail_page_navigation": {
+      "status": "PASSED",
+      "sections_accessible": ["Overview", "Coverage", "Locations", "Stock In", "Stock Out", "Settlements"]
+    }
+  },
+  "bug_fixed": {
+    "description": "Tenant middleware was not recognizing internal cluster hostnames (*.emergentcf.cloud) as preview environments, causing tenant context to be extracted from subdomain instead of using default tenant",
+    "file": "/app/backend/core/tenant.py",
+    "fix": "Added 'emergentcf.cloud' to the preview environment detection condition"
+  }
+}

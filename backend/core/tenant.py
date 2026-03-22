@@ -50,8 +50,8 @@ def extract_tenant_from_request(request: Request) -> str:
     # Extract from host
     host = request.headers.get('host', '')
     
-    # Handle localhost and preview environments
-    if 'localhost' in host or 'preview.emergentagent.com' in host or '127.0.0.1' in host:
+    # Handle localhost and preview environments (including internal cluster hostnames)
+    if 'localhost' in host or 'preview.emergentagent.com' in host or 'emergentcf.cloud' in host or '127.0.0.1' in host:
         return DEFAULT_TENANT_ID
     
     # Domain-to-tenant mapping for production
