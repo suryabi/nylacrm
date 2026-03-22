@@ -2434,7 +2434,7 @@ export default function DistributorDetail() {
 
       {/* Settlement Detail Dialog */}
       <Dialog open={showSettlementDetail} onOpenChange={setShowSettlementDetail}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
               Settlement {selectedSettlement?.settlement_number}
@@ -2444,45 +2444,52 @@ export default function DistributorDetail() {
           {selectedSettlement && (
             <div className="space-y-4">
               {/* Settlement Info */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                 <div>
-                  <span className="text-muted-foreground">Period:</span>
+                  <span className="text-muted-foreground">Month/Year:</span>
                   <div className="font-medium">
-                    {new Date(selectedSettlement.period_start).toLocaleDateString()} - {new Date(selectedSettlement.period_end).toLocaleDateString()}
+                    {selectedSettlement.settlement_month ? 
+                      ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][selectedSettlement.settlement_month] 
+                      : '-'} {selectedSettlement.settlement_year || '-'}
                   </div>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Type:</span>
-                  <div className="font-medium capitalize">{selectedSettlement.period_type}</div>
+                  <span className="text-muted-foreground">Account:</span>
+                  <div className="font-medium">{selectedSettlement.account_name || '-'}</div>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Deliveries:</span>
-                  <div className="font-medium">{selectedSettlement.total_deliveries}</div>
+                  <div className="font-medium">{selectedSettlement.total_deliveries || 0}</div>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Total Quantity:</span>
-                  <div className="font-medium">{selectedSettlement.total_quantity}</div>
+                  <div className="font-medium">{selectedSettlement.total_quantity || 0}</div>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Created By:</span>
+                  <div className="font-medium">{selectedSettlement.created_by_name || '-'}</div>
                 </div>
               </div>
 
               {/* Summary Cards */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-4 gap-4">
                 <div className="bg-muted/30 rounded-lg p-4 text-center">
-                  <div className="text-sm text-muted-foreground">Delivery Amount</div>
-                  <div className="text-xl font-bold">₹{selectedSettlement.total_delivery_amount?.toLocaleString()}</div>
+                  <div className="text-sm text-muted-foreground">Total Customer Billing</div>
+                  <div className="text-xl font-bold">₹{(selectedSettlement.total_billing_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
                 </div>
                 <div className="bg-blue-50 rounded-lg p-4 text-center">
-                  <div className="text-sm text-muted-foreground">Margin Earned</div>
-                  <div className="text-xl font-bold text-blue-600">₹{selectedSettlement.total_margin_amount?.toLocaleString()}</div>
+                  <div className="text-sm text-muted-foreground">Distributor Earnings</div>
+                  <div className="text-xl font-bold text-blue-600">₹{(selectedSettlement.distributor_earnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                </div>
+                <div className="bg-slate-100 rounded-lg p-4 text-center">
+                  <div className="text-sm text-muted-foreground">Margin at Transfer Price</div>
+                  <div className="text-xl font-bold">₹{(selectedSettlement.margin_at_transfer_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
                 </div>
                 <div className="bg-green-50 rounded-lg p-4 text-center">
-                  <div className="text-sm text-muted-foreground">Final Payout</div>
-                  <div className="text-xl font-bold text-green-600">₹{selectedSettlement.final_payout?.toLocaleString()}</div>
-                  {selectedSettlement.adjustments !== 0 && (
-                    <div className="text-xs text-muted-foreground">
-                      (Adjustment: {selectedSettlement.adjustments > 0 ? '+' : ''}₹{selectedSettlement.adjustments})
-                    </div>
-                  )}
+                  <div className="text-sm text-muted-foreground">Adjustment Payable</div>
+                  <div className={`text-xl font-bold ${(selectedSettlement.adjustment_payable || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {(selectedSettlement.adjustment_payable || 0) >= 0 ? '+' : ''}₹{(selectedSettlement.adjustment_payable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </div>
                 </div>
               </div>
 
@@ -2495,21 +2502,25 @@ export default function DistributorDetail() {
                       <tr>
                         <th className="text-left p-2">Delivery #</th>
                         <th className="text-left p-2">Date</th>
-                        <th className="text-left p-2">Account</th>
                         <th className="text-right p-2">Qty</th>
-                        <th className="text-right p-2">Amount</th>
-                        <th className="text-right p-2">Margin</th>
+                        <th className="text-right p-2">Billing Value</th>
+                        <th className="text-right p-2">Earnings</th>
+                        <th className="text-right p-2">Margin at Transfer</th>
+                        <th className="text-right p-2">Adjustment</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(selectedSettlement.items || []).map((item, idx) => (
                         <tr key={idx} className="border-t">
                           <td className="p-2">{item.delivery_number}</td>
-                          <td className="p-2">{new Date(item.delivery_date).toLocaleDateString()}</td>
-                          <td className="p-2">{item.account_name}</td>
-                          <td className="p-2 text-right">{item.total_quantity}</td>
-                          <td className="p-2 text-right">₹{item.total_amount?.toLocaleString()}</td>
-                          <td className="p-2 text-right text-green-600">₹{item.margin_amount?.toLocaleString()}</td>
+                          <td className="p-2">{item.delivery_date ? new Date(item.delivery_date).toLocaleDateString() : '-'}</td>
+                          <td className="p-2 text-right">{item.total_quantity || 0}</td>
+                          <td className="p-2 text-right">₹{(item.total_billing_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className="p-2 text-right text-blue-600">₹{(item.distributor_earnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className="p-2 text-right">₹{(item.margin_at_transfer_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className={`p-2 text-right font-medium ${(item.adjustment_payable || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {(item.adjustment_payable || 0) >= 0 ? '+' : ''}₹{(item.adjustment_payable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

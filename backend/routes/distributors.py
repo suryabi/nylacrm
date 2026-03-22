@@ -2838,7 +2838,7 @@ async def create_delivery(
     # Validate account exists
     account = await db.accounts.find_one(
         {"id": data.account_id, "tenant_id": tenant_id},
-        {"_id": 0, "company": 1, "name": 1, "city": 1, "state": 1, "address": 1}
+        {"_id": 0, "company": 1, "name": 1, "account_name": 1, "city": 1, "state": 1, "address": 1}
     )
     if not account:
         raise HTTPException(status_code=400, detail="Account not found")
@@ -2929,7 +2929,7 @@ async def create_delivery(
         "distributor_location_id": data.distributor_location_id,
         "distributor_location_name": location.get('location_name'),
         "account_id": data.account_id,
-        "account_name": account.get('company') or account.get('name'),
+        "account_name": account.get('account_name') or account.get('company') or account.get('name') or 'Unknown',
         "account_city": account.get('city'),
         "account_state": account.get('state'),
         "delivery_date": data.delivery_date,
@@ -3659,9 +3659,15 @@ async def generate_monthly_settlements(
     for delivery in deliveries:
         account_id = delivery.get('account_id', 'unknown')
         if account_id not in accounts:
+            # Get account name from delivery, or fetch from accounts table
+            account_name = delivery.get('account_name')
+            if not account_name and account_id != 'unknown':
+                account_doc = await db.accounts.find_one({"id": account_id}, {"_id": 0, "account_name": 1, "company": 1, "name": 1})
+                if account_doc:
+                    account_name = account_doc.get('account_name') or account_doc.get('company') or account_doc.get('name')
             accounts[account_id] = {
                 'account_id': account_id,
-                'account_name': delivery.get('account_name', 'Unknown'),
+                'account_name': account_name or 'Unknown',
                 'deliveries': []
             }
         accounts[account_id]['deliveries'].append(delivery)
