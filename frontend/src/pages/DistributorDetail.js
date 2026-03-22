@@ -331,7 +331,7 @@ export default function DistributorDetail() {
 
   // Set default city when coverage loads
   useEffect(() => {
-    if (activeTab === 'margins' && distributor?.operating_coverage?.length > 0 && !selectedMarginCity) {
+    if (activeTab === 'commercial' && distributor?.operating_coverage?.length > 0 && !selectedMarginCity) {
       const firstActiveCity = distributor.operating_coverage.find(c => c.status === 'active');
       if (firstActiveCity) {
         setSelectedMarginCity(firstActiveCity.city);
@@ -340,13 +340,13 @@ export default function DistributorDetail() {
   }, [activeTab, distributor, selectedMarginCity]);
 
   useEffect(() => {
-    if (activeTab === 'margins' || activeTab === 'shipments') {
+    if (activeTab === 'commercial' || activeTab === 'stockin') {
       fetchSkus();
     }
   }, [activeTab, fetchSkus]);
 
   useEffect(() => {
-    if (activeTab === 'margins' && selectedMarginCity) {
+    if (activeTab === 'commercial' && selectedMarginCity) {
       fetchMargins();
     }
   }, [activeTab, selectedMarginCity, fetchMargins]);
@@ -368,7 +368,7 @@ export default function DistributorDetail() {
   }, [id, token]);
 
   useEffect(() => {
-    if (activeTab === 'assignments') {
+    if (activeTab === 'commercial') {
       fetchAssignments();
     }
   }, [activeTab, fetchAssignments]);
@@ -390,7 +390,7 @@ export default function DistributorDetail() {
   }, [id, token]);
 
   useEffect(() => {
-    if (activeTab === 'shipments') {
+    if (activeTab === 'stockin') {
       fetchShipments();
     }
   }, [activeTab, fetchShipments]);
@@ -434,7 +434,7 @@ export default function DistributorDetail() {
   }, [id, token]);
 
   useEffect(() => {
-    if (activeTab === 'deliveries') {
+    if (activeTab === 'stockout') {
       fetchDeliveries();
       fetchAssignedAccounts();
       if (skus.length === 0) fetchSkus();
