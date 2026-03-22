@@ -2183,22 +2183,22 @@ export default function DistributorDetail() {
         {/* Billing & Reconciliation Tab */}
         <TabsContent value="billing" className="space-y-6">
           <BillingTab
+            distributor={distributor}
             canManage={canManage}
             canDelete={canDelete}
-            billingSummary={billingSummary}
-            reconciliations={reconciliations}
-            reconciliationsLoading={reconciliationsLoading}
-            showReconciliationDialog={showReconciliationDialog}
-            setShowReconciliationDialog={setShowReconciliationDialog}
-            setReconciliationPreview={setReconciliationPreview}
-            viewReconciliationDetail={viewReconciliationDetail}
-            getReconciliationStatusBadge={getReconciliationStatusBadge}
+            settlements={settlements}
+            settlementsLoading={settlementsLoading}
+            fetchSettlements={fetchSettlements}
             debitCreditNotes={debitCreditNotes}
             notesLoading={notesLoading}
+            fetchNotes={fetchDebitCreditNotes}
             viewNoteDetail={viewNoteDetail}
             getNoteStatusBadge={getNoteStatusBadge}
+            getSettlementStatusBadge={getSettlementStatusBadge}
             setActiveTab={setActiveTab}
             setDeleteTarget={setDeleteTarget}
+            API_URL={API_URL}
+            token={token}
           />
         </TabsContent>
       </Tabs>
@@ -2545,41 +2545,25 @@ export default function DistributorDetail() {
                 </div>
               )}
 
-              {/* Actions */}
+              {/* Actions - Only Delete for draft settlements */}
               <div className="flex justify-end gap-2 pt-4 border-t">
                 {selectedSettlement.status === 'draft' && canManage && (
-                  <>
-                    <Button variant="outline" onClick={() => {
-                      setDeleteTarget({
-                        type: 'settlement',
-                        id: selectedSettlement.id,
-                        name: selectedSettlement.settlement_number
-                      });
-                      setShowSettlementDetail(false);
-                    }}>
-                      Delete
-                    </Button>
-                    <Button onClick={() => handleSubmitSettlement(selectedSettlement.id)}>
-                      Submit for Approval
-                    </Button>
-                  </>
-                )}
-                {selectedSettlement.status === 'pending_approval' && canApprove && (
-                  <>
-                    <Button variant="outline" onClick={() => handleRejectSettlement(selectedSettlement.id)}>
-                      Reject
-                    </Button>
-                    <Button onClick={() => handleApproveSettlement(selectedSettlement.id)} className="bg-green-600 hover:bg-green-700">
-                      <Check className="h-4 w-4 mr-2" />
-                      Approve
-                    </Button>
-                  </>
-                )}
-                {selectedSettlement.status === 'approved' && canManage && (
-                  <Button onClick={() => handleMarkPaid(selectedSettlement.id)} className="bg-green-600 hover:bg-green-700">
-                    <DollarSign className="h-4 w-4 mr-2" />
-                    Mark as Paid
+                  <Button variant="outline" onClick={() => {
+                    setDeleteTarget({
+                      type: 'settlement',
+                      id: selectedSettlement.id,
+                      name: selectedSettlement.settlement_number
+                    });
+                    setShowSettlementDetail(false);
+                  }}>
+                    Delete
                   </Button>
+                )}
+                {selectedSettlement.reconciled && (
+                  <div className="text-sm text-muted-foreground flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Included in {selectedSettlement.note_number || 'reconciliation'}
+                  </div>
                 )}
               </div>
             </div>

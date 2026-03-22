@@ -5169,3 +5169,170 @@ async def get_billing_summary(
         "net_balance": round(pending_debit - pending_credit, 2),  # Positive = distributor owes
         "unreconciled_deliveries": unreconciled_count
     }
+
+
+
+@router.get("/{distributor_id}/monthly-reconciliation")
+async def get_monthly_reconciliation_data(
+    distributor_id: str,
+    month: int,
+    year: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all settlements for a specific month for reconciliation"""
+    tenant_id = get_current_tenant_id()
+    
+    logger.info(f"Monthly reconciliation request: distributor={distributor_id}, month={month}, year={year}, tenant={tenant_id}")
+    
+    # Get all settlements for this month/year
+    settlements = await db.distributor_settlements.find(
+        {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "settlement_month": month,
+            "settlement_year": year
+        },
+        {"_id": 0}
+    ).sort("account_name", 1).to_list(1000)
+    
+    logger.info(f"Found {len(settlements)} settlements for tenant={tenant_id}")
+    
+    # Check if a note already exists for this month
+    existing_note = await db.distributor_debit_credit_notes.find_one(
+        {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "month": month,
+            "year": year
+        },
+        {"_id": 0, "id": 1, "note_number": 1, "note_type": 1, "amount": 1, "status": 1}
+    )
+    
+    # Calculate totals
+    total_billing = sum(s.get('total_billing_value', 0) for s in settlements)
+    total_earnings = sum(s.get('distributor_earnings', 0) for s in settlements)
+    total_margin_at_transfer = sum(s.get('margin_at_transfer_price', 0) for s in settlements)
+    net_adjustment = sum(s.get('adjustment_payable', 0) for s in settlements)
+    
+    return {
+        "settlements": settlements,
+        "total_settlements": len(settlements),
+        "total_billing_value": round(total_billing, 2),
+        "total_distributor_earnings": round(total_earnings, 2),
+        "total_margin_at_transfer": round(total_margin_at_transfer, 2),
+        "net_adjustment": round(net_adjustment, 2),
+        "existing_note": existing_note
+    }
+
+
+@router.post("/{distributor_id}/generate-monthly-note")
+async def generate_monthly_note(
+    distributor_id: str,
+    data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Generate a Debit or Credit Note for a month's reconciliation"""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    month = data.get('month')
+    year = data.get('year')
+    remarks = data.get('remarks', '')
+    
+    if not month or not year:
+        raise HTTPException(status_code=400, detail="Month and year are required")
+    
+    # Check if note already exists
+    existing_note = await db.distributor_debit_credit_notes.find_one({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "month": month,
+        "year": year
+    })
+    
+    if existing_note:
+        raise HTTPException(status_code=400, detail=f"A note already exists for this month: {existing_note.get('note_number')}")
+    
+    # Get all settlements for this month
+    settlements = await db.distributor_settlements.find(
+        {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "settlement_month": month,
+            "settlement_year": year
+        },
+        {"_id": 0}
+    ).to_list(1000)
+    
+    if not settlements:
+        raise HTTPException(status_code=400, detail="No settlements found for this month")
+    
+    # Calculate net adjustment
+    net_adjustment = sum(s.get('adjustment_payable', 0) for s in settlements)
+    
+    if net_adjustment == 0:
+        raise HTTPException(status_code=400, detail="Net adjustment is zero - no note required")
+    
+    # Get distributor info
+    distributor = await db.distributors.find_one(
+        {"id": distributor_id, "tenant_id": tenant_id},
+        {"_id": 0, "distributor_name": 1, "distributor_code": 1}
+    )
+    
+    if not distributor:
+        raise HTTPException(status_code=404, detail="Distributor not found")
+    
+    # Determine note type
+    note_type = "credit" if net_adjustment >= 0 else "debit"
+    amount = abs(net_adjustment)
+    
+    # Generate note number
+    count = await db.distributor_debit_credit_notes.count_documents({"tenant_id": tenant_id})
+    note_number = f"{'CN' if note_type == 'credit' else 'DN'}-{year}-{count + 1:04d}"
+    
+    # Create note document
+    note_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    
+    note_doc = {
+        "id": note_id,
+        "tenant_id": tenant_id,
+        "note_number": note_number,
+        "distributor_id": distributor_id,
+        "distributor_name": distributor.get('distributor_name'),
+        "distributor_code": distributor.get('distributor_code'),
+        "note_type": note_type,
+        "month": month,
+        "year": year,
+        "amount": round(amount, 2),
+        "paid_amount": 0,
+        "balance_amount": round(amount, 2),
+        "settlement_ids": [s['id'] for s in settlements],
+        "total_settlements": len(settlements),
+        "total_billing_value": round(sum(s.get('total_billing_value', 0) for s in settlements), 2),
+        "total_distributor_earnings": round(sum(s.get('distributor_earnings', 0) for s in settlements), 2),
+        "total_margin_at_transfer": round(sum(s.get('margin_at_transfer_price', 0) for s in settlements), 2),
+        "remarks": remarks,
+        "status": "pending",
+        "created_by": current_user['id'],
+        "created_by_name": current_user.get('name', current_user.get('email')),
+        "created_at": now,
+        "updated_at": now
+    }
+    
+    await db.distributor_debit_credit_notes.insert_one(note_doc)
+    
+    # Update settlements to mark them as reconciled
+    settlement_ids = [s['id'] for s in settlements]
+    await db.distributor_settlements.update_many(
+        {"id": {"$in": settlement_ids}, "tenant_id": tenant_id},
+        {"$set": {"reconciled": True, "note_id": note_id, "note_number": note_number}}
+    )
+    
+    note_doc.pop('_id', None)
+    
+    logger.info(f"Generated {note_type} note {note_number} for ₹{amount} for distributor {distributor_id} ({month}/{year}) by {current_user['email']}")
+    
+    return note_doc
