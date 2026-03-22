@@ -1,754 +1,130 @@
 {
-  "project_name": "Nyla Air Water - Sales Target Planning & Allocation System",
-  "design_context": "dashboard",
-  "theme": "light",
-  "design_philosophy": {
-    "primary_goal": "Create an intuitive, spreadsheet-like enterprise planning interface with clear visual hierarchy and real-time validation feedback",
-    "emotional_tone": "Professional, trustworthy, efficient, calm",
-    "visual_mood": "Clean minimal aesthetic with organic warmth",
-    "key_principles": [
-      "Spreadsheet-like clarity for data entry and allocation",
-      "Clear parent-child hierarchical relationships",
-      "Real-time validation with visual feedback",
-      "Progressive disclosure (expand/collapse)",
-      "Generous spacing for breathing room",
-      "High information density without clutter",
-      "Desktop-first with mobile-friendly review mode"
-    ]
-  },
-  "color_system": {
-    "archetype": "ORGANIC & EARTHY (Trust, Growth, Calm)",
-    "rationale": "Enterprise planning tool for leadership requires trust, clarity, and calm decision-making environment. Organic palette with sage green and warm beige creates grounded, professional atmosphere without corporate coldness",
-    "palette": {
-      "primary": {
-        "value": "hsl(155, 35%, 42%)",
-        "hex": "#4A9B7F",
-        "usage": "CTAs, active states, success indicators, primary actions",
-        "contrast_note": "Sage green - meets WCAG AA for white text"
-      },
-      "accent": {
-        "value": "hsl(42, 85%, 65%)",
-        "hex": "#F4C542",
-        "usage": "Warnings, pending states, highlights, attention markers",
-        "contrast_note": "Warm golden yellow - use with dark text only"
-      },
-      "destructive": {
-        "value": "hsl(0, 72%, 60%)",
-        "hex": "#E84855",
-        "usage": "Over-allocation warnings, errors, delete actions",
-        "contrast_note": "Coral red - softer than pure red, maintains urgency"
-      },
-      "background": {
-        "value": "hsl(40, 30%, 97%)",
-        "hex": "#F9F7F4",
-        "usage": "Main background - warm off-white",
-        "tint_note": "Tinted with warm beige, never pure white"
-      },
-      "background_secondary": {
-        "value": "hsl(38, 35%, 94%)",
-        "hex": "#F3EFE8",
-        "usage": "Cards, panels, secondary surfaces",
-        "tint_note": "Slightly darker warm beige for layering"
-      },
-      "foreground": {
-        "value": "hsl(25, 15%, 25%)",
-        "hex": "#4A4238",
-        "usage": "Primary text - warm dark brown",
-        "contrast_note": "Tinted with warm undertone, not pure black"
-      },
-      "foreground_muted": {
-        "value": "hsl(25, 10%, 45%)",
-        "hex": "#7A6F64",
-        "usage": "Secondary text, labels, metadata",
-        "contrast_note": "Warm grey for hierarchy"
-      },
-      "border": {
-        "value": "hsl(35, 15%, 88%)",
-        "hex": "#E5DFD6",
-        "usage": "Subtle borders, dividers, table lines",
-        "tint_note": "Warm tinted grey, not neutral"
-      },
-      "validation_colors": {
-        "success": "hsl(155, 35%, 42%)",
-        "warning": "hsl(42, 85%, 65%)",
-        "error": "hsl(0, 72%, 60%)",
-        "info": "hsl(210, 50%, 55%)"
-      }
-    },
-    "contrast_rules": {
-      "text_on_background": "4.5:1 minimum (WCAG AA)",
-      "text_on_primary": "White text on sage green meets AA",
-      "text_on_accent": "Dark text required on yellow",
-      "interactive_elements": "3:1 minimum against adjacent colors",
-      "hover_states": "Always explicitly set text color on hover - never rely on inheritance"
-    }
-  },
   "typography": {
-    "font_families": {
-      "heading": {
-        "family": "Manrope",
-        "weights": [300, 400, 500, 600, 700, 800],
-        "usage": "All headings (h1-h6), section titles, page titles",
-        "rationale": "Geometric sans with warmth - professional yet approachable",
-        "import": "Already imported in index.css"
-      },
-      "subheading": {
-        "family": "Work Sans",
-        "weights": [400, 500, 600],
-        "usage": "Subheadings, labels, overlines, table headers",
-        "rationale": "Clean sans for hierarchy and clarity",
-        "import": "Already imported in index.css"
-      },
-      "body": {
-        "family": "IBM Plex Sans",
-        "weights": [300, 400, 500],
-        "usage": "Body text, paragraphs, descriptions, table cells",
-        "rationale": "Highly legible for data-heavy interfaces",
-        "import": "Already imported in index.css"
-      },
-      "mono": {
-        "family": "IBM Plex Mono",
-        "weights": [400, 500],
-        "usage": "Numbers, currency values, IDs, codes",
-        "rationale": "Monospace for numerical alignment and precision",
-        "import": "Already imported in index.css"
-      }
+    "headings": {
+      "family": "Manrope",
+      "weights": ["500", "600", "800"],
+      "classes": "font-heading tracking-tight text-slate-900 dark:text-slate-50"
     },
-    "scale": {
-      "page_title": "text-3xl md:text-4xl font-heading font-bold tracking-tight",
-      "section_title": "text-2xl md:text-3xl font-heading font-semibold tracking-tight",
-      "card_title": "text-xl font-heading font-semibold",
-      "subsection_title": "text-lg font-subheading font-medium",
-      "table_header": "text-sm font-subheading font-medium uppercase tracking-wide",
-      "body_large": "text-base font-body",
-      "body_default": "text-sm font-body",
-      "body_small": "text-xs font-body",
-      "label": "text-xs font-subheading font-medium uppercase tracking-wider",
-      "number_display": "font-mono tabular-nums"
+    "body": {
+      "family": "IBM Plex Sans",
+      "weights": ["400", "500"],
+      "classes": "font-body leading-relaxed text-slate-600 dark:text-slate-400"
     },
-    "line_height": {
-      "tight": "leading-tight (headings, titles)",
-      "normal": "leading-normal (body text)",
-      "relaxed": "leading-relaxed (long-form content)"
-    },
-    "letter_spacing": {
-      "tighter": "tracking-tighter (large headings >32px)",
-      "tight": "tracking-tight (headings)",
-      "normal": "tracking-normal (body)",
-      "wide": "tracking-wide (labels)",
-      "wider": "tracking-wider (uppercase labels)"
+    "mono": {
+      "family": "IBM Plex Mono",
+      "weights": ["400"],
+      "classes": "font-mono text-slate-500"
     }
   },
-  "spacing_system": {
-    "philosophy": "Generous spacing (2-3x typical) for breathing room and clarity",
-    "scale": {
-      "xs": "p-1 (4px)",
-      "sm": "p-2 (8px)",
-      "md": "p-4 (16px)",
-      "lg": "p-6 (24px)",
-      "xl": "p-8 (32px)",
-      "2xl": "p-12 (48px)",
-      "3xl": "p-16 (64px)",
-      "4xl": "p-20 (80px)",
-      "5xl": "p-24 (96px)"
+  "colors": {
+    "archetype": "ORGANIC & EARTHY (Professional B2B Trust)",
+    "primary": {
+      "base": "#065F46", 
+      "hover": "#047857",
+      "light": "#D1FAE5",
+      "dark": "#022C22",
+      "description": "Deep Emerald/Sage replacing the bright teal for a more grounded, premium B2B feel."
     },
-    "application": {
-      "page_container": "px-6 md:px-8 lg:px-12 py-6 md:py-8",
-      "card_padding": "p-6 md:p-8",
-      "section_spacing": "space-y-8 md:space-y-12",
-      "table_cell": "px-4 py-3",
-      "button_padding": "px-4 py-2 (default), px-6 py-3 (large)",
-      "input_padding": "px-4 py-2",
-      "gap_between_elements": "gap-4 md:gap-6"
+    "background": {
+      "base": "#F8FAFC", 
+      "card": "#FFFFFF",
+      "sidebar": "#F1F5F9",
+      "dark_base": "#0F172A",
+      "dark_card": "#1E293B",
+      "dark_sidebar": "#0B1120"
     },
-    "critical_rules": [
-      "Containers with borders MUST have internal padding (p-6 or p-8)",
-      "Never let text touch container edges",
-      "Use optical alignment over geometric alignment",
-      "Mobile: reduce spacing by 25-33% but maintain hierarchy"
-    ]
-  },
-  "layout_patterns": {
-    "grid_system": {
-      "type": "High Density Grid (Dashboard Mode B)",
-      "base_grid": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4",
-      "gap_strategy": "gap-4 md:gap-6 (tight for data correlation)",
-      "span_logic": {
-        "summary_cards": "col-span-1 (single metric cards)",
-        "main_allocation_area": "col-span-2 md:col-span-3 (primary workspace)",
-        "hierarchy_tree": "col-span-1 md:col-span-1 (sidebar tree view)",
-        "validation_panel": "col-span-full (full-width alerts)"
-      },
-      "alignment": "align-items: start (override default stretch)",
-      "mobile_first": "Always start with grid-cols-1"
+    "text": {
+      "main": "#0F172A",
+      "muted": "#64748B",
+      "inverse": "#FFFFFF",
+      "dark_main": "#F8FAFC",
+      "dark_muted": "#94A3B8"
     },
-    "page_layouts": {
-      "target_plan_list": {
-        "structure": "Header + Filter Bar + Grid of Plan Cards + Pagination",
-        "grid": "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-      },
-      "allocation_workspace": {
-        "structure": "Header + Breadcrumb + Main Grid (Tree Sidebar + Allocation Area) + Validation Footer",
-        "layout": "Two-column: 1/4 tree navigation, 3/4 allocation workspace",
-        "responsive": "Stack vertically on mobile with collapsible tree"
-      },
-      "plan_creation_form": {
-        "structure": "Centered form card (max-w-2xl) with clear sections",
-        "layout": "Single column with grouped fields"
-      }
-    },
-    "component_layouts": {
-      "allocation_table": {
-        "type": "Spreadsheet-like table with inline editing",
-        "columns": "Territory/City Name | Target Amount | Allocated Amount | Remaining | Progress Bar | Actions",
-        "features": "Sticky header, zebra striping, hover states, inline input fields"
-      },
-      "hierarchy_tree": {
-        "type": "Expandable/collapsible tree with indentation",
-        "levels": "Country → Territory → State → City → Resource",
-        "visual": "Indent by 16px per level, use icons for expand/collapse, show allocation status badges"
-      },
-      "summary_cards": {
-        "type": "Metric cards with icon, label, value, and mini progress",
-        "layout": "Grid of 4 cards (Total Target, Allocated, Remaining, Progress %)"
-      }
+    "borders": {
+      "light": "#E2E8F0",
+      "dark": "#334155"
     }
   },
-  "component_strategy": {
-    "shadcn_components": {
-      "use_cases": [
-        "Table (for allocation grids)",
-        "Button (all interactive actions)",
-        "Input (inline editing, form fields)",
-        "Select (dropdowns for filters)",
-        "Dialog (modals for confirmations)",
-        "Badge (status indicators)",
-        "Progress (allocation progress bars)",
-        "Accordion (collapsible sections)",
-        "Tabs (switching between views)",
-        "Calendar (date range picker)",
-        "Tooltip (contextual help)",
-        "Alert (validation messages)",
-        "Separator (visual dividers)",
-        "Skeleton (loading states)"
-      ],
-      "customization_required": [
-        "Override default Shadcn styling to match warm organic palette",
-        "Adjust border-radius to match --radius: 0.75rem",
-        "Ensure hover states explicitly set text colors",
-        "Add data-testid attributes to all interactive elements"
-      ]
+  "visual_enhancers": {
+    "shadows": {
+      "card": "shadow-[0_4px_24px_rgba(0,0,0,0.02)]",
+      "hover": "shadow-[0_12px_32px_rgba(0,0,0,0.06)]"
     },
-    "custom_components_needed": [
-      "AllocationRow (table row with inline editing)",
-      "HierarchyTreeNode (recursive tree component)",
-      "ValidationAlert (custom alert with allocation status)",
-      "ProgressIndicator (custom progress with labels)",
-      "AllocationInput (input with validation and formatting)",
-      "StatusBadge (custom badge with allocation states)"
-    ],
-    "component_conventions": {
-      "exports": "Named exports for components (export const ComponentName)",
-      "pages": "Default exports for pages (export default function PageName)",
-      "location": "Components in src/components/, Pages in src/pages/",
-      "styling": "Tailwind classes only, no inline styles",
-      "state": "Simple useState, avoid complex nested state"
+    "borders": {
+      "radius": "rounded-xl",
+      "style": "border border-slate-200 dark:border-slate-800"
+    },
+    "glass": {
+      "classes": "bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50"
     }
   },
-  "surface_strategies": {
-    "header": {
-      "style": "Solid background with subtle bottom border",
-      "background": "bg-background-secondary",
-      "border": "border-b border-border",
-      "height": "h-16",
-      "padding": "px-6 md:px-8",
-      "position": "sticky top-0 z-50",
-      "rationale": "Solid for clarity, not glass (data-heavy context)"
-    },
-    "cards": {
-      "style": "Flat with subtle border, no shadow by default",
-      "background": "bg-background-secondary",
-      "border": "border border-border",
-      "radius": "rounded-lg",
-      "padding": "p-6 md:p-8",
-      "hover": "hover:border-primary/40 hover:shadow-sm transition-all duration-200"
-    },
-    "tables": {
-      "style": "Grid borders (technical look)",
-      "background": "bg-background",
-      "borders": "border-b border-border/40 on rows",
-      "header": "bg-background-secondary border-b-2 border-border",
-      "hover": "hover:bg-primary/5 transition-colors",
-      "zebra": "Optional: even:bg-background-secondary/50"
-    },
-    "modals": {
-      "style": "Solid card with overlay",
-      "overlay": "bg-black/40 backdrop-blur-sm",
-      "card": "bg-background border border-border rounded-lg shadow-xl",
-      "padding": "p-6 md:p-8"
-    },
-    "sidebar": {
-      "style": "Solid with right border",
-      "background": "bg-background-secondary",
-      "border": "border-r border-border",
-      "width": "w-64 md:w-80",
-      "padding": "p-4 md:p-6"
-    }
+  "layouts": {
+    "page_structure": "Sidebar layout for details. Left sidebar (w-64 or col-span-2) + Main content area (col-span-10).",
+    "grids": "The 'Bento' High Density Grid (for Dashboards) - tight gaps (gap-6), F-pattern data priority.",
+    "spacing": "Generous spacing philosophy: p-6 to p-8 for cards. gap-6 to gap-8 between sections.",
+    "tables": "Sticky headers, 1px bottom borders (border-b border-slate-200), py-3 px-4 cells, right-aligned numbers."
   },
-  "motion_and_interactions": {
-    "required_animations": [
-      "Hover states on all interactive elements",
-      "Click/press states (scale-95 or brightness shift)",
-      "Focus states with ring (focus-visible:ring-2 focus-visible:ring-ring)",
-      "Expand/collapse animations for tree nodes",
-      "Progress bar transitions",
-      "Modal enter/exit animations",
-      "Loading skeleton animations"
-    ],
-    "transition_properties": {
-      "default": "transition-colors duration-200",
-      "transform": "transition-transform duration-200 ease-out",
-      "opacity": "transition-opacity duration-200",
-      "all_interactive": "transition-all duration-200",
-      "never_use": "transition: all (breaks transforms)"
-    },
-    "hover_states": {
-      "buttons": "hover:bg-primary/90 hover:text-primary-foreground",
-      "table_rows": "hover:bg-primary/5",
-      "cards": "hover:border-primary/40 hover:shadow-sm hover:-translate-y-0.5",
-      "links": "hover:text-primary hover:underline",
-      "critical_rule": "ALWAYS explicitly set text color on hover"
-    },
-    "focus_states": {
-      "all_interactive": "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-      "inputs": "focus:border-primary focus:ring-2 focus:ring-primary/20"
-    },
-    "loading_states": {
-      "skeleton": "animate-pulse bg-muted",
-      "spinner": "animate-spin",
-      "progress": "transition-all duration-300 ease-out"
-    },
-    "accessibility": {
-      "reduced_motion": "Respect prefers-reduced-motion media query",
-      "decorative_elements": "Add aria-hidden='true' to decorative icons",
-      "focus_management": "Ensure keyboard navigation works smoothly"
-    }
-  },
-  "icons_and_assets": {
-    "icon_library": {
-      "primary": "lucide-react (already installed)",
-      "rationale": "Clean, consistent, matches Tailwind sizing",
-      "usage": "All UI icons (ChevronDown, Plus, Check, X, AlertCircle, etc.)"
-    },
-    "icon_usage": {
-      "tree_expand_collapse": "ChevronRight (collapsed), ChevronDown (expanded)",
-      "actions": "Plus (add), Trash2 (delete), Edit (edit), Lock (finalize)",
-      "status": "CheckCircle (complete), AlertCircle (warning), XCircle (error)",
-      "navigation": "ArrowLeft (back), Home, Menu",
-      "data": "TrendingUp, TrendingDown, DollarSign, Users"
-    },
-    "icon_sizing": {
-      "small": "w-4 h-4 (16px)",
-      "default": "w-5 h-5 (20px)",
-      "large": "w-6 h-6 (24px)",
-      "hero": "w-8 h-8 (32px)"
-    },
-    "images": {
-      "not_required": "This is a data-heavy dashboard - no decorative images needed",
-      "logo": "Nyla Air Water logo in header (to be provided by client)",
-      "empty_states": "Use illustrations or icons for empty states"
-    }
-  },
-  "validation_and_feedback": {
-    "validation_states": {
-      "fully_allocated": {
-        "color": "text-primary",
-        "badge": "bg-primary/10 text-primary border-primary/20",
-        "icon": "CheckCircle",
-        "message": "Fully allocated"
-      },
-      "under_allocated": {
-        "color": "text-accent",
-        "badge": "bg-accent/10 text-accent-foreground border-accent/20",
-        "icon": "AlertCircle",
-        "message": "Under-allocated by ₹X"
-      },
-      "over_allocated": {
-        "color": "text-destructive",
-        "badge": "bg-destructive/10 text-destructive border-destructive/20",
-        "icon": "XCircle",
-        "message": "Over-allocated by ₹X"
-      },
-      "not_started": {
-        "color": "text-muted-foreground",
-        "badge": "bg-muted text-muted-foreground",
-        "icon": "Circle",
-        "message": "Not allocated"
-      }
-    },
-    "progress_indicators": {
-      "type": "Progress bar with percentage label",
-      "colors": {
-        "0-50%": "bg-destructive (red - under-allocated)",
-        "51-99%": "bg-accent (yellow - partial)",
-        "100%": "bg-primary (green - complete)"
-      },
-      "display": "Show percentage and absolute values (₹X / ₹Y)"
-    },
-    "real_time_validation": {
-      "trigger": "On input change (debounced 300ms)",
-      "display": "Inline validation messages below inputs",
-      "summary": "Validation summary panel at bottom of allocation workspace",
-      "blocking": "Prevent finalization if validation fails"
-    },
-    "toast_notifications": {
-      "library": "sonner (already installed)",
-      "usage": "Success/error feedback for actions (save, delete, finalize)",
-      "position": "top-right",
-      "duration": "3000ms (success), 5000ms (error)"
-    }
-  },
-  "data_display_patterns": {
-    "currency_formatting": {
-      "format": "₹X,XX,XXX (Indian numbering system)",
-      "component": "Use Intl.NumberFormat with 'en-IN' locale",
-      "display": "font-mono tabular-nums for alignment",
-      "example": "₹12,34,567"
-    },
-    "percentage_display": {
-      "format": "XX.X%",
-      "rounding": "1 decimal place",
-      "display": "font-mono tabular-nums"
-    },
-    "date_display": {
-      "format": "DD MMM YYYY (e.g., 15 Jan 2024)",
-      "range": "DD MMM - DD MMM YYYY",
-      "component": "Use date-fns for formatting"
-    },
-    "hierarchy_display": {
-      "indentation": "16px per level (pl-4 per level)",
-      "connectors": "Subtle vertical lines (border-l border-border)",
-      "badges": "Show allocation status at each level",
-      "expand_icon": "ChevronRight/ChevronDown before label"
-    },
-    "table_patterns": {
-      "sticky_header": "sticky top-0 z-10 bg-background-secondary",
-      "zebra_striping": "even:bg-background-secondary/50",
-      "hover_highlight": "hover:bg-primary/5",
-      "inline_editing": "Click cell to edit, show input with focus",
-      "action_column": "Right-aligned with icon buttons"
-    }
-  },
-  "responsive_design": {
-    "breakpoints": {
-      "sm": "640px",
-      "md": "768px",
-      "lg": "1024px",
-      "xl": "1280px",
-      "2xl": "1536px"
-    },
-    "strategy": "Desktop-first for planning, mobile-friendly for review",
-    "mobile_adaptations": {
-      "allocation_workspace": "Stack tree and allocation area vertically, collapsible tree",
-      "tables": "Horizontal scroll with sticky first column",
-      "cards": "Single column grid",
-      "spacing": "Reduce padding by 25-33%",
-      "typography": "Slightly smaller scales"
-    },
-    "tablet_optimizations": {
-      "allocation_workspace": "Side-by-side layout with narrower tree",
-      "tables": "Full table view with comfortable spacing",
-      "cards": "2-column grid"
-    }
+  "motion": {
+    "hover": "translate-y-[-2px] transition-transform duration-200 ease-in-out",
+    "click": "scale-[0.98] transition-transform duration-100",
+    "tabs_to_sidebar": "Smooth opacity/x-axis slide transition when switching sidebar nav items (framer-motion AnimatePresence)."
   },
   "accessibility": {
-    "contrast": {
-      "standard": "WCAG AA (4.5:1 for normal text, 3:1 for large text)",
-      "tool": "Use APCA contrast calculator for accuracy",
-      "critical_rule": "Always test text on colored backgrounds"
-    },
-    "keyboard_navigation": {
-      "focus_visible": "Clear focus indicators on all interactive elements",
-      "tab_order": "Logical tab order following visual hierarchy",
-      "shortcuts": "Consider keyboard shortcuts for common actions"
-    },
-    "screen_readers": {
-      "aria_labels": "Add aria-label to icon-only buttons",
-      "aria_hidden": "Add aria-hidden='true' to decorative elements",
-      "semantic_html": "Use proper heading hierarchy (h1, h2, h3)"
-    },
-    "testing_attributes": {
-      "data_testid": "MUST add to all interactive and key informational elements",
-      "convention": "kebab-case, role-based (e.g., 'territory-allocation-input')",
-      "examples": [
-        "data-testid='create-plan-button'",
-        "data-testid='territory-allocation-row'",
-        "data-testid='validation-alert'",
-        "data-testid='hierarchy-tree-node'",
-        "data-testid='allocation-progress-bar'"
-      ]
-    }
+    "contrast": "Ensure all text meets APCA > 60 for body, > 45 for large text.",
+    "testing": "All interactive elements MUST have `data-testid` (e.g., `data-testid=\"sidebar-nav-overview\"`).",
+    "focus": "focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
   },
-  "page_specifications": {
-    "target_plan_list": {
-      "purpose": "View all target plans, select one to work on",
-      "layout": "Header + Filter Bar + Grid of Plan Cards + Pagination",
-      "components": [
-        "Header with 'Create New Plan' button",
-        "Filter bar (Year, Status, Search)",
-        "Plan cards showing: Name, Period, Total Target, Status, Progress",
-        "Pagination controls"
-      ],
-      "interactions": [
-        "Click card to open allocation workspace",
-        "Filter and search plans",
-        "Create new plan button opens creation form"
-      ]
-    },
-    "target_plan_creation": {
-      "purpose": "Create new target plan with country-level target",
-      "layout": "Centered form card (max-w-2xl)",
-      "fields": [
-        "Plan Name (text input)",
-        "Financial Year (select)",
-        "Start Date (date picker)",
-        "End Date (date picker)",
-        "Country Target Amount (currency input)",
-        "Description (textarea, optional)"
-      ],
-      "validation": [
-        "All fields required except description",
-        "End date must be after start date",
-        "Target amount must be positive"
-      ],
-      "actions": [
-        "Create Plan (primary button)",
-        "Cancel (secondary button)"
-      ]
-    },
-    "allocation_workspace": {
-      "purpose": "Main planning interface for allocating targets",
-      "layout": "Two-column: Tree Sidebar (1/4) + Allocation Area (3/4)",
-      "sections": {
-        "header": {
-          "components": ["Breadcrumb", "Plan name", "Status badge", "Actions (Save, Finalize, Export)"]
-        },
-        "tree_sidebar": {
-          "components": ["Hierarchical tree view", "Expand/collapse all", "Search/filter"],
-          "features": ["Show allocation status at each level", "Click to navigate to allocation section"]
-        },
-        "allocation_area": {
-          "tabs": ["Territory Allocation", "City Allocation", "Resource Assignment"],
-          "components": ["Allocation table", "Summary cards", "Validation alerts"]
-        },
-        "validation_footer": {
-          "components": ["Validation summary", "Quick stats", "Action buttons"]
-        }
-      },
-      "territory_allocation": {
-        "table_columns": ["Territory Name", "Target Amount", "Allocated Amount", "Remaining", "Progress", "Actions"],
-        "features": ["Inline editing", "Auto-calculate remaining", "Progress bar", "Validation feedback"]
-      },
-      "city_allocation": {
-        "grouped_by": "Territory",
-        "table_columns": ["City Name", "State (auto)", "Target Amount", "Allocated Amount", "Remaining", "Progress", "Actions"],
-        "features": ["Expandable territory groups", "Inline editing", "State auto-calculated from city totals"]
-      },
-      "resource_assignment": {
-        "grouped_by": "City",
-        "table_columns": ["Resource Name", "Role", "Target Amount", "Actions"],
-        "features": ["Assign resources to cities", "Multiple resources per city", "Sum must equal city target"]
+  "media": {
+    "icons": "lucide-react (stroke-width 1.5 for a cleaner, premium look)",
+    "charts": "Recharts (with customized tooltips using the glass visual enhancer, and emerald primary colors)",
+    "images": [
+      {
+        "url": "https://images.unsplash.com/photo-1769778674824-e69f58d7c55d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjB3YXJlaG91c2UlMjBleHRlcmlvcnxlbnwwfHx8fDE3NzQxNzY0ODF8MA&ixlib=rb-4.1.0&q=85",
+        "category": "locations",
+        "description": "Modern warehouse exterior for the 'Locations' tab or Overview card."
       }
-    },
-    "hierarchy_tree_view": {
-      "purpose": "Visual representation of entire allocation hierarchy",
-      "structure": "Country → Territory → State → City → Resource",
-      "features": [
-        "Expandable/collapsible nodes",
-        "Indentation per level (16px)",
-        "Status badges at each level",
-        "Click to navigate to allocation section",
-        "Show allocated vs target at each level"
-      ],
-      "visual_design": [
-        "Vertical connector lines (border-l)",
-        "Icons for expand/collapse (ChevronRight/Down)",
-        "Color-coded status badges",
-        "Hover highlight on nodes"
-      ]
-    },
-    "validation_summary": {
-      "purpose": "Show overall allocation status and issues",
-      "display": "Panel at bottom of allocation workspace",
-      "sections": [
-        "Overall Status (Fully/Under/Over allocated)",
-        "Issues List (territories/cities with problems)",
-        "Quick Actions (Navigate to issue, Auto-distribute)"
-      ],
-      "states": [
-        "All Clear (green, CheckCircle icon)",
-        "Warnings (yellow, AlertCircle icon)",
-        "Errors (red, XCircle icon)"
-      ]
-    }
-  },
-  "technical_constraints": {
-    "framework": "React (JavaScript, not TypeScript)",
-    "styling": "Tailwind CSS",
-    "components": "Shadcn UI primitives",
-    "state_management": "Simple useState, avoid complex nested state",
-    "array_operations": "Avoid complex array operations (babel compatibility)",
-    "file_extensions": ".js and .jsx (not .tsx)",
-    "backend": "FastAPI (APIs already built and working)",
-    "data_format": "JSON responses from backend"
-  },
-  "universal_guidelines": {
-    "avoid_ai_slop": [
-      "No generic centered layouts",
-      "No simplistic gradients",
-      "No uniform styling everywhere",
-      "Create depth through layered design with z-index hierarchy"
-    ],
-    "transitions": [
-      "NEVER use 'transition: all' - breaks transforms",
-      "Always specify transition properties explicitly",
-      "Example: transition-colors, transition-transform, transition-opacity"
-    ],
-    "text_alignment": [
-      "NEVER center-align the entire app container",
-      "Left-align body text, forms, tables for natural reading flow",
-      "Center-align only specific elements (headings, CTAs) when appropriate"
-    ],
-    "button_styles": [
-      "Modern pill-shaped or sharp buttons with rounded-lg",
-      "Interaction animations (hover, active states)",
-      "Colors relevant to app style (sage green primary)"
-    ],
-    "no_emoji_icons": [
-      "NEVER use emoji characters for icons",
-      "Always use proper icon library (lucide-react)"
-    ],
-    "micro_animations": [
-      "Every interaction needs micro-animations",
-      "Hover states, transitions, entrance animations",
-      "Static = dead"
-    ],
-    "spacing_generosity": [
-      "Use 2-3x more spacing than feels comfortable",
-      "Cramped designs look cheap",
-      "Breathing room creates premium feel"
-    ],
-    "component_reuse": [
-      "Prioritize using pre-existing Shadcn components",
-      "Create new components matching existing patterns",
-      "Examine existing components before creating new ones"
-    ],
-    "export_conventions": [
-      "Components: Named exports (export const ComponentName)",
-      "Pages: Default exports (export default function PageName)"
-    ],
-    "toasts": [
-      "Use sonner for all toast notifications",
-      "Located in /app/frontend/src/components/ui/sonner.jsx"
     ]
   },
-  "implementation_steps": [
-    {
-      "step": 1,
-      "task": "Set up routing and page structure",
-      "details": "Create pages for Target Plan List, Plan Creation, Allocation Workspace"
+  "components": {
+    "sidebar_nav": {
+      "style": "Vertical list, active state has bg-emerald-50 dark:bg-emerald-900/20 and text-emerald-800 dark:text-emerald-300 with a 3px left border (border-l-emerald-600). Inactive state has text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800/50."
     },
-    {
-      "step": 2,
-      "task": "Build Target Plan List page",
-      "details": "Grid of plan cards with filters, search, and pagination"
+    "cards": {
+      "style": "Flat background (bg-white dark:bg-slate-900), 1px border, subtle ambient shadow. No heavy neumorphism."
     },
-    {
-      "step": 3,
-      "task": "Build Plan Creation form",
-      "details": "Form with validation for creating new target plans"
-    },
-    {
-      "step": 4,
-      "task": "Build Allocation Workspace layout",
-      "details": "Two-column layout with tree sidebar and allocation area"
-    },
-    {
-      "step": 5,
-      "task": "Build Hierarchy Tree component",
-      "details": "Recursive tree with expand/collapse, status badges, navigation"
-    },
-    {
-      "step": 6,
-      "task": "Build Territory Allocation table",
-      "details": "Spreadsheet-like table with inline editing and validation"
-    },
-    {
-      "step": 7,
-      "task": "Build City Allocation table",
-      "details": "Grouped by territory with state auto-calculation"
-    },
-    {
-      "step": 8,
-      "task": "Build Resource Assignment section",
-      "details": "Assign sales resources to cities with validation"
-    },
-    {
-      "step": 9,
-      "task": "Build Validation Summary panel",
-      "details": "Real-time validation feedback and issue navigation"
-    },
-    {
-      "step": 10,
-      "task": "Implement auto-save and lock mechanism",
-      "details": "Auto-save drafts, finalize/lock workflow"
-    },
-    {
-      "step": 11,
-      "task": "Add responsive design and mobile optimizations",
-      "details": "Ensure mobile-friendly review mode"
-    },
-    {
-      "step": 12,
-      "task": "Add loading states and error handling",
-      "details": "Skeleton loaders, error messages, retry logic"
+    "status_badges": {
+      "style": "Pill shaped (rounded-full), px-2.5 py-0.5 text-xs font-medium. Success: bg-emerald-100 text-emerald-800. Warning: bg-amber-100 text-amber-800. Neutral: bg-slate-100 text-slate-800."
     }
+  },
+  "instructions_to_main_agent": [
+    "Install `lucide-react` if not present. Use stroke-width of 1.5 for a minimal, premium feel.",
+    "Refactor the Distributor Detail page: Remove the overflowing horizontal tabs and implement a left sidebar navigation layout.",
+    "Implement the 'Bento' High Density Grid for the Overview dashboard: metric cards spanning columns appropriately with tight gaps (gap-6).",
+    "Customize the data tables in 'Deliveries', 'Shipments', and 'Settlements' to have clean headers, generous horizontal padding (px-4 or px-6), and clear visual hierarchy (no heavy zebra striping).",
+    "Use 'Deep Emerald' (#065F46) as the primary brand color, replacing the bright teal to align with a Trustworthy B2B Corporate aesthetic.",
+    "Apply `data-testid` to all sidebar links, buttons, and table rows for testing.",
+    "Add micro-interactions (hover translations, active states) using the defined motion guidelines.",
+    "CRITICAL: Write Javascript (.js/.jsx) files, not Typescript (.tsx)."
   ],
-  "design_references": {
-    "inspiration_sources": [
-      "Smartsheet - spreadsheet-like allocation interface with drag-and-drop",
-      "SaaSFrame dashboard examples - hierarchical tree views in tables",
-      "Godly.website enterprise tools - clean minimal aesthetic",
-      "Linear - clean dashboard with excellent hierarchy",
-      "Notion - expandable/collapsible tree structures"
-    ],
-    "key_takeaways": [
-      "Spreadsheet familiarity reduces learning curve",
-      "Real-time validation prevents errors",
-      "Visual hierarchy through indentation and color",
-      "Progressive disclosure keeps interface clean",
-      "Inline editing for efficiency"
-    ]
-  },
-  "special_considerations": {
-    "indian_context": {
-      "currency": "₹ (Indian Rupee)",
-      "number_format": "Indian numbering system (₹12,34,567)",
-      "regions": "North, South, East, West India territories",
-      "cities": "9 major cities across India"
-    },
-    "business_logic": {
-      "hierarchy": "Country → Territory → State → City → Resource",
-      "validation": "Child totals must equal parent target",
-      "states": "Auto-calculated from city totals (not directly editable)",
-      "locking": "Once finalized, plan cannot be edited without unlocking"
-    },
-    "user_roles": {
-      "ceo": "View all plans, create plans, finalize plans",
-      "directors": "View and edit plans, cannot finalize",
-      "vp": "View and edit assigned territories",
-      "territory_heads": "View and edit assigned territory",
-      "state_heads": "View assigned state, cannot edit"
-    }
-  }
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. In frontend design, this creates what users call the 'AI slop' aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms.",
+    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file. This disrupts the human natural reading flow of text.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
+    "NEVER: use AI assistant Emoji characters for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN.",
+    "Prioritize using pre-existing components from src/components/ui when applicable.",
+    "Create new components that match the style and conventions of existing components when needed.",
+    "Examine existing components to understand the project's component patterns before creating new ones.",
+    "Components MUST use named exports (export const ComponentName = ...)",
+    "Pages MUST use default exports (export default function PageName() {...})",
+    "Use sonner for toasts. Sonner component are located in /app/frontend/src/components/ui/sonner.js or similar."
+  ]
 }
