@@ -3,7 +3,53 @@
 ## Original Problem Statement
 Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. The application helps manage leads, accounts, invoices, COGS calculations, and sales team performance.
 
-## Latest Session - March 22, 2026 (Session 2)
+## Latest Session - March 22, 2026 (Session 3)
+
+### PDF Credit/Debit Note Generation ✅
+
+**User Requirements:**
+- Generate actual PDF documents for Credit/Debit notes
+- Include company logos, itemized breakdown, and signature blocks
+- Store PDFs in object storage for later download
+- Attach PDF reference to reconciliation records
+
+**Implementation:**
+1. **PDF Generator** - `reportlab` based PDF with:
+   - Company header with logo support
+   - Note details (number, date, period, status)
+   - Distributor details (name, GSTIN, PAN, address, contact)
+   - Itemized settlements breakdown table (up to 30 items)
+   - Financial summary (billing value, earnings, transfer margin, adjustment)
+   - Signature blocks (Prepared By, Authorized Signatory, Distributor Acknowledgment)
+   - Footer with generation timestamp
+
+2. **Object Storage Integration** - Using Emergent Object Storage API:
+   - Uploads PDFs to `nyla-crm/debit-credit-notes/{distributor_id}/{note_number}.pdf`
+   - On-demand generation if PDF not stored
+   - Download endpoint returns PDF with proper Content-Disposition header
+
+3. **API Endpoints**:
+   - `POST /api/distributors/{id}/generate-monthly-note` - Creates note with PDF
+   - `GET /api/distributors/{id}/notes/{note_id}/download` - Downloads PDF
+
+4. **Frontend Download Button** - Added to BillingTab.jsx:
+   - FileDown icon with loading spinner during download
+   - Blob-based download for proper file handling
+
+**Files Created/Modified:**
+- `/app/backend/utils/pdf_generator.py` - PDF generation logic
+- `/app/backend/utils/object_storage.py` - Storage utility
+- `/app/backend/utils/__init__.py` - Package init
+- `/app/backend/routes/distributors.py` - Updated endpoints
+- `/app/frontend/src/components/distributor/BillingTab.jsx` - Download button
+
+**Testing Results (iteration_72.json):**
+- Backend: 100% (12/12 tests)
+- Frontend: 100% (PDF download verified)
+
+---
+
+## Previous Session - March 22, 2026 (Session 2)
 
 ### Distributor Self-Service Access ✅
 
@@ -147,6 +193,7 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 - Monthly Settlement generation (per account)
 - Monthly Reconciliation (all accounts combined)
 - Debit/Credit Note generation
+- PDF Generation with object storage ✅ (NEW - March 22, 2026)
 - E2E tested with 100% pass rate
 
 ---
@@ -161,6 +208,12 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
    - Positive → We owe distributor (Credit Note)
    - Negative → Distributor owes us (Debit Note)
 
+### PDF Note Generation:
+- PDFs generated using `reportlab` library
+- Stored in Emergent Object Storage at `nyla-crm/debit-credit-notes/{distributor_id}/{note_number}.pdf`
+- On-demand generation for notes without stored PDF
+- Download via `GET /api/distributors/{id}/notes/{note_id}/download`
+
 ---
 
 ## Pending Tasks
@@ -168,10 +221,12 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 ### P1 - High Priority
 1. **Auto-generate Provisional Invoice** - Trigger invoice when shipment status → "delivered"
 2. **Build Reporting Module** - Stock balance, deliveries, settlements reports
+3. **First-login Force Password Change Modal** - Frontend modal for distributors on first login
 
 ### P2 - Medium Priority
 1. **Server.py Refactoring** - Move remaining routes to modular files
 2. **Settlement Period Configuration** - Auto weekly/monthly cycles
+3. **Bulk Copy Margins** - Copy margin matrix from one city to all covered cities
 
 ---
 
