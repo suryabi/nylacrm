@@ -196,15 +196,15 @@ export default function MarginsTab({
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse text-sm">
                     <thead>
-                      <tr className="border-b bg-muted/50">
-                        <th className="text-left p-3 font-medium min-w-[180px]">SKU</th>
-                        <th className="text-right p-3 font-medium min-w-[100px]">Base Price</th>
-                        <th className="text-center p-3 font-medium min-w-[110px]">Margin</th>
-                        <th className="text-right p-3 font-medium min-w-[110px]">Transfer Price</th>
-                        <th className="text-center p-3 font-medium min-w-[100px]">Active From</th>
-                        <th className="text-center p-3 font-medium min-w-[100px]">Active To</th>
-                        <th className="text-center p-3 font-medium min-w-[80px]">Status</th>
-                        <th className="text-center p-3 font-medium min-w-[100px]">Actions</th>
+                      <tr className="bg-emerald-50/30 border-b border-emerald-100/60">
+                        <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs min-w-[180px]" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>SKU</th>
+                        <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs min-w-[100px]" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Base Price</th>
+                        <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs min-w-[110px]" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Margin</th>
+                        <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs min-w-[110px]" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Transfer Price</th>
+                        <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs min-w-[100px]" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Active From</th>
+                        <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs min-w-[100px]" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Active To</th>
+                        <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs min-w-[80px]" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Status</th>
+                        <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs min-w-[100px]" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -217,7 +217,9 @@ export default function MarginsTab({
                         return (
                           <tr 
                             key={margin.id} 
-                            className={`border-b hover:bg-muted/20 ${isActive ? 'bg-green-50/50' : isPast ? 'bg-gray-50/50 text-muted-foreground' : ''}`}
+                            className={`border-b border-emerald-50 transition-colors duration-200
+                              ${index % 2 === 1 ? 'bg-emerald-50/40' : 'bg-white'}
+                              ${isActive ? 'hover:bg-green-50/60' : isPast ? 'opacity-60 hover:bg-slate-50' : 'hover:bg-emerald-50/60'}`}
                             data-testid={`margin-row-${index}`}
                           >
                             <td className="p-3">
