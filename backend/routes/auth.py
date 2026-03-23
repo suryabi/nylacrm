@@ -63,12 +63,33 @@ async def register(user_input: UserCreate):
 @router.post("/login")
 async def login(credentials: UserLogin, response: Response):
     """Login with email and password"""
+    current_tenant = get_current_tenant_id()
+    logger.info(f"[LOGIN DEBUG] Attempt started | email={credentials.email} | tenant={current_tenant}")
+
     tdb = get_tdb()
     user_doc = await tdb.users.find_one({'email': credentials.email}, {'_id': 0})
-    if not user_doc or not user_doc.get('password') or not verify_password(credentials.password, user_doc['password']):
+
+    if not user_doc:
+        logger.warning(f"[LOGIN DEBUG] User not found | email={credentials.email} | tenant={current_tenant}")
+    else:
+        logger.info(
+            f"[LOGIN DEBUG] User loaded | email={credentials.email} | tenant={current_tenant} | "
+            f"user_id={user_doc.get('id')} | is_active={user_doc.get('is_active', True)}"
+        )
+
+    has_password = bool(user_doc and user_doc.get('password'))
+    password_ok = bool(has_password and verify_password(credentials.password, user_doc['password']))
+    logger.info(
+        f"[LOGIN DEBUG] Credential checks | email={credentials.email} | tenant={current_tenant} | "
+        f"has_password={has_password} | password_ok={password_ok}"
+    )
+
+    if not user_doc or not has_password or not password_ok:
+        logger.warning(f"[LOGIN DEBUG] Login failed: invalid credentials | email={credentials.email} | tenant={current_tenant}")
         raise HTTPException(status_code=401, detail='Invalid credentials')
     
     if not user_doc.get('is_active', True):
+        logger.warning(f"[LOGIN DEBUG] Login blocked: account inactive | email={credentials.email} | tenant={current_tenant}")
         raise HTTPException(status_code=401, detail='Account is inactive')
     
     session_token = str(uuid.uuid4())
@@ -77,11 +98,15 @@ async def login(credentials: UserLogin, response: Response):
     # Sessions are global (not tenant-filtered)
     await db.user_sessions.insert_one({
         'user_id': user_doc['id'],
-        'tenant_id': get_current_tenant_id(),
+        'tenant_id': current_tenant,
         'session_token': session_token,
         'expires_at': expires_at.isoformat(),
         'created_at': datetime.now(timezone.utc).isoformat()
     })
+    logger.info(
+        f"[LOGIN DEBUG] Session created | email={credentials.email} | tenant={current_tenant} | "
+        f"user_id={user_doc.get('id')}"
+    )
     
     response.set_cookie(
         key='session_token',
@@ -97,6 +122,11 @@ async def login(credentials: UserLogin, response: Response):
     if isinstance(user_doc['created_at'], str):
         user_doc['created_at'] = datetime.fromisoformat(user_doc['created_at'])
     
+    logger.info(
+        f"[LOGIN DEBUG] Login successful | email={credentials.email} | tenant={current_tenant} | "
+        f"user_id={user_doc.get('id')}"
+    )
+
     return {
         'user': user_doc,
         'session_token': session_token
