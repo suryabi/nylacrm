@@ -185,6 +185,23 @@ security = HTTPBearer()
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
+# Health check endpoint for deployment - must be at root level
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Kubernetes/deployment health probes"""
+    return {"status": "healthy", "service": "backend"}
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {"status": "ok", "service": "nyla-crm-api"}
+
+# Also add health check under /api prefix for ingress routing
+@api_router.get("/health")
+async def api_health_check():
+    """Health check endpoint under /api prefix"""
+    return {"status": "healthy", "service": "backend"}
+
 # Import modular routes
 from routes import routes_router
 
@@ -10817,126 +10834,128 @@ class City(BaseModel):
 @app.on_event("startup")
 async def init_master_locations():
     """Initialize default Indian territories, states, and cities"""
+    try:
+        # Check if territories already exist
+        existing_count = await db.master_territories.count_documents({})
+        if existing_count > 0:
+            return  # Already initialized
     
-    # Check if territories already exist
-    existing_count = await db.master_territories.count_documents({})
-    if existing_count > 0:
-        return  # Already initialized
-    
-    # Default territories
-    territories_data = [
-        {"name": "North India", "code": "north_india"},
-        {"name": "South India", "code": "south_india"},
-        {"name": "West India", "code": "west_india"},
-        {"name": "East India", "code": "east_india"},
-        {"name": "Central India", "code": "central_india"},
-    ]
-    
-    territory_map = {}
-    for t in territories_data:
-        territory_id = str(uuid.uuid4())
-        territory_map[t["code"]] = territory_id
-        await db.master_territories.insert_one({
-            "id": territory_id,
-            "name": t["name"],
-            "code": t["code"],
-            "is_active": True,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        })
-    
-    # Default states by territory
-    states_data = {
-        "north_india": [
-            {"name": "Delhi NCR", "code": "delhi_ncr"},
-            {"name": "Uttar Pradesh", "code": "uttar_pradesh"},
-            {"name": "Punjab", "code": "punjab"},
-            {"name": "Haryana", "code": "haryana"},
-            {"name": "Rajasthan", "code": "rajasthan"},
-            {"name": "Himachal Pradesh", "code": "himachal_pradesh"},
-            {"name": "Uttarakhand", "code": "uttarakhand"},
-            {"name": "Jammu & Kashmir", "code": "jammu_kashmir"},
-        ],
-        "south_india": [
-            {"name": "Karnataka", "code": "karnataka"},
-            {"name": "Tamil Nadu", "code": "tamil_nadu"},
-            {"name": "Kerala", "code": "kerala"},
-            {"name": "Andhra Pradesh", "code": "andhra_pradesh"},
-            {"name": "Telangana", "code": "telangana"},
-        ],
-        "west_india": [
-            {"name": "Maharashtra", "code": "maharashtra"},
-            {"name": "Gujarat", "code": "gujarat"},
-            {"name": "Goa", "code": "goa"},
-        ],
-        "east_india": [
-            {"name": "West Bengal", "code": "west_bengal"},
-            {"name": "Bihar", "code": "bihar"},
-            {"name": "Odisha", "code": "odisha"},
-            {"name": "Jharkhand", "code": "jharkhand"},
-            {"name": "Assam", "code": "assam"},
-        ],
-        "central_india": [
-            {"name": "Madhya Pradesh", "code": "madhya_pradesh"},
-            {"name": "Chhattisgarh", "code": "chhattisgarh"},
-        ],
-    }
-    
-    state_map = {}
-    for territory_code, states in states_data.items():
-        territory_id = territory_map[territory_code]
-        for s in states:
-            state_id = str(uuid.uuid4())
-            state_map[s["code"]] = state_id
-            await db.master_states.insert_one({
-                "id": state_id,
-                "name": s["name"],
-                "code": s["code"],
-                "territory_id": territory_id,
+        # Default territories
+        territories_data = [
+            {"name": "North India", "code": "north_india"},
+            {"name": "South India", "code": "south_india"},
+            {"name": "West India", "code": "west_india"},
+            {"name": "East India", "code": "east_india"},
+            {"name": "Central India", "code": "central_india"},
+        ]
+        
+        territory_map = {}
+        for t in territories_data:
+            territory_id = str(uuid.uuid4())
+            territory_map[t["code"]] = territory_id
+            await db.master_territories.insert_one({
+                "id": territory_id,
+                "name": t["name"],
+                "code": t["code"],
                 "is_active": True,
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "updated_at": datetime.now(timezone.utc).isoformat()
             })
-    
-    # Default cities by state
-    cities_data = {
-        "delhi_ncr": ["New Delhi", "Gurugram", "Noida", "Faridabad", "Ghaziabad"],
-        "uttar_pradesh": ["Lucknow", "Kanpur", "Agra", "Varanasi", "Prayagraj", "Meerut"],
-        "punjab": ["Chandigarh", "Ludhiana", "Amritsar", "Jalandhar", "Patiala"],
-        "haryana": ["Gurugram", "Faridabad", "Panipat", "Ambala", "Karnal"],
-        "rajasthan": ["Jaipur", "Jodhpur", "Udaipur", "Kota", "Ajmer"],
-        "karnataka": ["Bengaluru", "Mysuru", "Hubli", "Mangaluru", "Belgaum"],
-        "tamil_nadu": ["Chennai", "Coimbatore", "Madurai", "Tiruchirappalli", "Salem"],
-        "kerala": ["Thiruvananthapuram", "Kochi", "Kozhikode", "Thrissur", "Kollam"],
-        "andhra_pradesh": ["Visakhapatnam", "Vijayawada", "Guntur", "Nellore", "Tirupati"],
-        "telangana": ["Hyderabad", "Warangal", "Nizamabad", "Karimnagar", "Khammam"],
-        "maharashtra": ["Mumbai", "Pune", "Nagpur", "Nashik", "Aurangabad", "Thane"],
-        "gujarat": ["Ahmedabad", "Surat", "Vadodara", "Rajkot", "Gandhinagar"],
-        "goa": ["Panaji", "Margao", "Vasco da Gama"],
-        "west_bengal": ["Kolkata", "Howrah", "Durgapur", "Asansol", "Siliguri"],
-        "bihar": ["Patna", "Gaya", "Bhagalpur", "Muzaffarpur", "Darbhanga"],
-        "odisha": ["Bhubaneswar", "Cuttack", "Rourkela", "Berhampur", "Sambalpur"],
-        "madhya_pradesh": ["Bhopal", "Indore", "Jabalpur", "Gwalior", "Ujjain"],
-        "chhattisgarh": ["Raipur", "Bhilai", "Bilaspur", "Korba", "Durg"],
-    }
-    
-    for state_code, cities in cities_data.items():
-        if state_code not in state_map:
-            continue
-        state_id = state_map[state_code]
-        for city_name in cities:
-            city_code = city_name.lower().replace(" ", "_").replace("'", "")
-            await db.master_cities.insert_one({
-                "id": str(uuid.uuid4()),
-                "name": city_name,
-                "code": city_code,
-                "state_id": state_id,
-                "is_active": True,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            })
-    
-    logger.info("Master locations initialized with default Indian territories, states, and cities")
+        
+        # Default states by territory
+        states_data = {
+            "north_india": [
+                {"name": "Delhi NCR", "code": "delhi_ncr"},
+                {"name": "Uttar Pradesh", "code": "uttar_pradesh"},
+                {"name": "Punjab", "code": "punjab"},
+                {"name": "Haryana", "code": "haryana"},
+                {"name": "Rajasthan", "code": "rajasthan"},
+                {"name": "Himachal Pradesh", "code": "himachal_pradesh"},
+                {"name": "Uttarakhand", "code": "uttarakhand"},
+                {"name": "Jammu & Kashmir", "code": "jammu_kashmir"},
+            ],
+            "south_india": [
+                {"name": "Karnataka", "code": "karnataka"},
+                {"name": "Tamil Nadu", "code": "tamil_nadu"},
+                {"name": "Kerala", "code": "kerala"},
+                {"name": "Andhra Pradesh", "code": "andhra_pradesh"},
+                {"name": "Telangana", "code": "telangana"},
+            ],
+            "west_india": [
+                {"name": "Maharashtra", "code": "maharashtra"},
+                {"name": "Gujarat", "code": "gujarat"},
+                {"name": "Goa", "code": "goa"},
+            ],
+            "east_india": [
+                {"name": "West Bengal", "code": "west_bengal"},
+                {"name": "Bihar", "code": "bihar"},
+                {"name": "Odisha", "code": "odisha"},
+                {"name": "Jharkhand", "code": "jharkhand"},
+                {"name": "Assam", "code": "assam"},
+            ],
+            "central_india": [
+                {"name": "Madhya Pradesh", "code": "madhya_pradesh"},
+                {"name": "Chhattisgarh", "code": "chhattisgarh"},
+            ],
+        }
+        
+        state_map = {}
+        for territory_code, states in states_data.items():
+            territory_id = territory_map[territory_code]
+            for s in states:
+                state_id = str(uuid.uuid4())
+                state_map[s["code"]] = state_id
+                await db.master_states.insert_one({
+                    "id": state_id,
+                    "name": s["name"],
+                    "code": s["code"],
+                    "territory_id": territory_id,
+                    "is_active": True,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                })
+        
+        # Default cities by state
+        cities_data = {
+            "delhi_ncr": ["New Delhi", "Gurugram", "Noida", "Faridabad", "Ghaziabad"],
+            "uttar_pradesh": ["Lucknow", "Kanpur", "Agra", "Varanasi", "Prayagraj", "Meerut"],
+            "punjab": ["Chandigarh", "Ludhiana", "Amritsar", "Jalandhar", "Patiala"],
+            "haryana": ["Gurugram", "Faridabad", "Panipat", "Ambala", "Karnal"],
+            "rajasthan": ["Jaipur", "Jodhpur", "Udaipur", "Kota", "Ajmer"],
+            "karnataka": ["Bengaluru", "Mysuru", "Hubli", "Mangaluru", "Belgaum"],
+            "tamil_nadu": ["Chennai", "Coimbatore", "Madurai", "Tiruchirappalli", "Salem"],
+            "kerala": ["Thiruvananthapuram", "Kochi", "Kozhikode", "Thrissur", "Kollam"],
+            "andhra_pradesh": ["Visakhapatnam", "Vijayawada", "Guntur", "Nellore", "Tirupati"],
+            "telangana": ["Hyderabad", "Warangal", "Nizamabad", "Karimnagar", "Khammam"],
+            "maharashtra": ["Mumbai", "Pune", "Nagpur", "Nashik", "Aurangabad", "Thane"],
+            "gujarat": ["Ahmedabad", "Surat", "Vadodara", "Rajkot", "Gandhinagar"],
+            "goa": ["Panaji", "Margao", "Vasco da Gama"],
+            "west_bengal": ["Kolkata", "Howrah", "Durgapur", "Asansol", "Siliguri"],
+            "bihar": ["Patna", "Gaya", "Bhagalpur", "Muzaffarpur", "Darbhanga"],
+            "odisha": ["Bhubaneswar", "Cuttack", "Rourkela", "Berhampur", "Sambalpur"],
+            "madhya_pradesh": ["Bhopal", "Indore", "Jabalpur", "Gwalior", "Ujjain"],
+            "chhattisgarh": ["Raipur", "Bhilai", "Bilaspur", "Korba", "Durg"],
+        }
+        
+        for state_code, cities in cities_data.items():
+            if state_code not in state_map:
+                continue
+            state_id = state_map[state_code]
+            for city_name in cities:
+                city_code = city_name.lower().replace(" ", "_").replace("'", "")
+                await db.master_cities.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "name": city_name,
+                    "code": city_code,
+                    "state_id": state_id,
+                    "is_active": True,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                })
+        
+        logger.info("Master locations initialized with default Indian territories, states, and cities")
+    except Exception as e:
+        logger.warning(f"Failed to initialize master locations (non-blocking): {e}")
 
 # Get all locations (hierarchical)
 @api_router.get("/master-locations")
