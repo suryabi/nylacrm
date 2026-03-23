@@ -52,7 +52,8 @@ async def seed_data():
             'reports_to': None,  # Top of hierarchy
             'dotted_line_to': None,
             'is_active': True,
-            'created_at': datetime.now(timezone.utc).isoformat()
+            'created_at': datetime.now(timezone.utc).isoformat(),
+            "tenant_id":"nyla-air-water"
         },
         # Second Level - Director
         {
@@ -70,7 +71,8 @@ async def seed_data():
             'reports_to': surya_id,  # Reports to Surya
             'dotted_line_to': None,
             'is_active': True,
-            'created_at': datetime.now(timezone.utc).isoformat()
+            'created_at': datetime.now(timezone.utc).isoformat(),
+            "tenant_id":"nyla-air-water"
         },
         # Third Level - VP Growth & Strategy
         {
@@ -88,7 +90,8 @@ async def seed_data():
             'reports_to': vamsi_id,  # Reports to Vamsi
             'dotted_line_to': surya_id,  # Dotted line to Surya
             'is_active': True,
-            'created_at': datetime.now(timezone.utc).isoformat()
+            'created_at': datetime.now(timezone.utc).isoformat(),
+            "tenant_id":"nyla-air-water"
         },
         # Sales Team - Reports to Karanabir
         {
@@ -106,7 +109,8 @@ async def seed_data():
             'reports_to': karanabir_id,  # Reports to Karanabir
             'dotted_line_to': None,
             'is_active': True,
-            'created_at': datetime.now(timezone.utc).isoformat()
+            'created_at': datetime.now(timezone.utc).isoformat(),
+            "tenant_id":"nyla-air-water"
         },
         {
             'id': rep1_id,
@@ -123,7 +127,8 @@ async def seed_data():
             'reports_to': karanabir_id,  # Reports to Karanabir
             'dotted_line_to': None,
             'is_active': True,
-            'created_at': datetime.now(timezone.utc).isoformat()
+            'created_at': datetime.now(timezone.utc).isoformat(),
+            "tenant_id":"nyla-air-water"
         },
         {
             'id': rep2_id,
@@ -140,7 +145,8 @@ async def seed_data():
             'reports_to': karanabir_id,  # Reports to Karanabir
             'dotted_line_to': None,
             'is_active': True,
-            'created_at': datetime.now(timezone.utc).isoformat()
+            'created_at': datetime.now(timezone.utc).isoformat(),
+            "tenant_id":"nyla-air-water"
         }
     ]
     
