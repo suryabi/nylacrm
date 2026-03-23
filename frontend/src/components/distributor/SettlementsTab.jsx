@@ -453,67 +453,78 @@ export default function SettlementsTab({
         ) : (
           <>
             {/* Settlements grouped by customer/account */}
-            <div className="space-y-3">
+            <div className="space-y-4">
               {settlementAccountGroups.map((group) => (
-                <div key={group.account_id} className="border rounded-lg overflow-hidden">
+                <div key={group.account_id} className="border border-emerald-100 rounded-xl overflow-hidden shadow-[0_2px_8px_rgba(6,95,70,0.04)] hover:shadow-[0_8px_24px_rgba(6,95,70,0.08)] transition-[transform,box-shadow] duration-300">
                   {/* Account Header - Clickable */}
                   <div 
-                    className="flex items-center justify-between p-4 bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
+                    className="flex items-center justify-between p-5 bg-white cursor-pointer hover:bg-emerald-50/30 transition-colors duration-200"
                     onClick={() => toggleSettlementAccount(group.account_id)}
+                    data-testid={`settlement-account-${group.account_id}`}
                   >
-                    <div className="flex items-center gap-3">
-                      <Building2 className="h-5 w-5 text-primary" />
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+                        <Building2 className="h-5 w-5 text-emerald-700" />
+                      </div>
                       <div>
-                        <p className="font-semibold text-base">{group.account_name}</p>
-                        <p className="text-sm text-muted-foreground">{group.settlements.length} settlement(s)</p>
+                        <p className="font-semibold text-base text-emerald-900" style={{ fontFamily: 'Manrope, sans-serif' }}>{group.account_name}</p>
+                        <p className="text-sm text-emerald-600/60">{group.settlements.length} settlement(s)</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-8">
                       <div className="text-right">
-                        <p className="text-xs text-muted-foreground">Billing Value</p>
-                        <p className="font-medium">₹{group.totals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                        <p className="text-xs text-emerald-600/60 uppercase tracking-wider font-medium">Billing Value</p>
+                        <p className="font-semibold text-slate-800">₹{group.totals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs text-muted-foreground">Earnings</p>
-                        <p className="font-medium text-blue-600">₹{group.totals.distributor_earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                        <p className="text-xs text-emerald-600/60 uppercase tracking-wider font-medium">Earnings</p>
+                        <p className="font-semibold text-emerald-600">₹{group.totals.distributor_earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs text-muted-foreground">Adjustment</p>
-                        <p className={`font-medium ${group.totals.adjustment >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        <p className="text-xs text-emerald-600/60 uppercase tracking-wider font-medium">Adjustment</p>
+                        <p className={`font-semibold ${group.totals.adjustment >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                           {group.totals.adjustment >= 0 ? '+' : ''}₹{group.totals.adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </p>
                       </div>
-                      {expandedSettlementAccounts[group.account_id] ? (
-                        <ChevronLeft className="h-5 w-5 text-muted-foreground rotate-90" />
-                      ) : (
-                        <ChevronLeft className="h-5 w-5 text-muted-foreground -rotate-90" />
-                      )}
+                      <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center">
+                        {expandedSettlementAccounts[group.account_id] ? (
+                          <ChevronLeft className="h-5 w-5 text-emerald-700 rotate-90" />
+                        ) : (
+                          <ChevronLeft className="h-5 w-5 text-emerald-700 -rotate-90" />
+                        )}
+                      </div>
                     </div>
                   </div>
                   
                   {/* Expanded Settlements Table */}
                   {expandedSettlementAccounts[group.account_id] && (
-                    <div className="border-t">
-                      <table className="w-full text-sm">
+                    <div className="border-t border-emerald-100">
+                      <table className="w-full border-collapse text-sm">
                         <thead>
-                          <tr className="bg-muted/20">
-                            <th className="text-left p-3 font-medium">Settlement #</th>
-                            <th className="text-left p-3 font-medium">Month/Year</th>
-                            <th className="text-right p-3 font-medium">Deliveries</th>
-                            <th className="text-right p-3 font-medium">Billing Value</th>
-                            <th className="text-right p-3 font-medium">Earnings</th>
-                            <th className="text-right p-3 font-medium">Margin at Transfer</th>
-                            <th className="text-right p-3 font-medium">Adjustment</th>
-                            <th className="text-center p-3 font-medium">Status</th>
-                            <th className="text-right p-3 font-medium">Actions</th>
+                          <tr className="bg-emerald-50/30 border-b border-emerald-100/60">
+                            <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Settlement #</th>
+                            <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Month/Year</th>
+                            <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Deliveries</th>
+                            <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Billing Value</th>
+                            <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Earnings</th>
+                            <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Margin at Transfer</th>
+                            <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Adjustment</th>
+                            <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Status</th>
+                            <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actions</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {group.settlements.map((settlement) => (
-                            <tr key={settlement.id} className="border-t hover:bg-muted/20">
-                              <td className="p-3">
+                          {group.settlements.map((settlement, index) => (
+                            <tr 
+                              key={settlement.id} 
+                              className={`border-b border-emerald-50 transition-colors duration-200 cursor-pointer
+                                ${index % 2 === 1 ? 'bg-emerald-50/40' : 'bg-white'}
+                                hover:bg-emerald-50/60`}
+                              onClick={() => viewSettlementDetail(settlement.id)}
+                            >
+                              <td className="p-4">
                                 <button 
-                                  className="font-medium text-primary hover:underline"
+                                  className="font-medium text-emerald-700 hover:text-emerald-800 hover:underline"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     viewSettlementDetail(settlement.id);
@@ -522,36 +533,37 @@ export default function SettlementsTab({
                                   {settlement.settlement_number}
                                 </button>
                               </td>
-                              <td className="p-3">
+                              <td className="p-4 text-slate-700">
                                 {settlement.settlement_month ? MONTHS.find(m => m.value === settlement.settlement_month)?.label : '-'} {settlement.settlement_year}
                               </td>
-                              <td className="p-3 text-right">{settlement.total_deliveries || 0}</td>
-                              <td className="p-3 text-right">₹{(settlement.total_billing_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                              <td className="p-3 text-right text-blue-600">₹{(settlement.distributor_earnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                              <td className="p-3 text-right">₹{(settlement.margin_at_transfer_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                              <td className={`p-3 text-right font-medium ${(settlement.adjustment_payable || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              <td className="p-4 text-right text-slate-800">{settlement.total_deliveries || 0}</td>
+                              <td className="p-4 text-right font-medium text-slate-800">₹{(settlement.total_billing_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                              <td className="p-4 text-right text-emerald-600 font-medium">₹{(settlement.distributor_earnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                              <td className="p-4 text-right text-slate-700">₹{(settlement.margin_at_transfer_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                              <td className={`p-4 text-right font-medium ${(settlement.adjustment_payable || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                                 {(settlement.adjustment_payable || 0) >= 0 ? '+' : ''}₹{(settlement.adjustment_payable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                               </td>
-                              <td className="p-3 text-center">
+                              <td className="p-4 text-center">
                                 {getSettlementStatusBadge(settlement.status)}
                               </td>
-                              <td className="p-3 text-right">
-                                <div className="flex justify-end gap-1">
+                              <td className="p-4 text-center">
+                                <div className="flex justify-center gap-1">
                                   <Button
                                     variant="ghost"
                                     size="sm"
+                                    className="h-8 w-8 p-0 hover:bg-emerald-100"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       viewSettlementDetail(settlement.id);
                                     }}
                                   >
-                                    <FileText className="h-4 w-4" />
+                                    <FileText className="h-4 w-4 text-emerald-700" />
                                   </Button>
                                   {settlement.status === 'draft' && canManage && (
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      className="text-blue-600 hover:text-blue-700"
+                                      className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handleSubmitSettlement && handleSubmitSettlement(settlement.id);
@@ -566,7 +578,7 @@ export default function SettlementsTab({
                                       <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="text-green-600 hover:text-green-700"
+                                        className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           handleApproveSettlement && handleApproveSettlement(settlement.id);
@@ -578,7 +590,7 @@ export default function SettlementsTab({
                                       <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="text-orange-600 hover:text-orange-700"
+                                        className="h-8 w-8 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           handleRejectSettlement && handleRejectSettlement(settlement.id);
@@ -593,7 +605,7 @@ export default function SettlementsTab({
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      className="text-destructive"
+                                      className="h-8 w-8 p-0 text-destructive hover:bg-red-50"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setDeleteTarget({
@@ -612,13 +624,13 @@ export default function SettlementsTab({
                             </tr>
                           ))}
                           {/* Account Total Row */}
-                          <tr className="bg-muted/40 font-semibold">
-                            <td colSpan={2} className="p-3 text-right">Account Total:</td>
-                            <td className="p-3 text-right">{group.totals.total_deliveries}</td>
-                            <td className="p-3 text-right">₹{group.totals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-3 text-right text-blue-600">₹{group.totals.distributor_earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-3 text-right">₹{group.totals.margin_at_transfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className={`p-3 text-right ${group.totals.adjustment >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          <tr className="bg-emerald-100/50 font-semibold">
+                            <td colSpan={2} className="p-4 text-right text-emerald-800">Account Total:</td>
+                            <td className="p-4 text-right text-emerald-800">{group.totals.total_deliveries}</td>
+                            <td className="p-4 text-right text-emerald-800">₹{group.totals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-4 text-right text-emerald-600">₹{group.totals.distributor_earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-4 text-right text-emerald-800">₹{group.totals.margin_at_transfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className={`p-4 text-right ${group.totals.adjustment >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                               {group.totals.adjustment >= 0 ? '+' : ''}₹{group.totals.adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                             </td>
                             <td colSpan={2}></td>
@@ -631,23 +643,23 @@ export default function SettlementsTab({
               ))}
               
               {/* Grand Total */}
-              <div className="border rounded-lg p-4 bg-slate-100 dark:bg-slate-800">
+              <div className="border border-emerald-200 rounded-xl p-6 bg-gradient-to-r from-emerald-50 to-emerald-100/50 shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
                 <div className="flex items-center justify-between">
-                  <div className="font-semibold">
+                  <div className="font-semibold text-emerald-900" style={{ fontFamily: 'Manrope, sans-serif' }}>
                     Grand Total ({settlementAccountGroups.length} customer(s), {settlements.length} settlement(s))
                   </div>
-                  <div className="flex items-center gap-6">
+                  <div className="flex items-center gap-8">
                     <div className="text-right">
-                      <p className="text-xs text-muted-foreground">Total Billing</p>
-                      <p className="font-bold">₹{settlementAccountGroups.reduce((sum, g) => sum + g.totals.total_billing, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                      <p className="text-xs text-emerald-600/60 uppercase tracking-wider font-medium">Total Billing</p>
+                      <p className="font-bold text-lg text-emerald-800">₹{settlementAccountGroups.reduce((sum, g) => sum + g.totals.total_billing, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs text-muted-foreground">Total Earnings</p>
-                      <p className="font-bold text-blue-600">₹{settlementAccountGroups.reduce((sum, g) => sum + g.totals.distributor_earnings, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                      <p className="text-xs text-emerald-600/60 uppercase tracking-wider font-medium">Total Earnings</p>
+                      <p className="font-bold text-lg text-emerald-600">₹{settlementAccountGroups.reduce((sum, g) => sum + g.totals.distributor_earnings, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs text-muted-foreground">Net Adjustment</p>
-                      <p className={`font-bold ${settlementAccountGroups.reduce((sum, g) => sum + g.totals.adjustment, 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <p className="text-xs text-emerald-600/60 uppercase tracking-wider font-medium">Net Adjustment</p>
+                      <p className={`font-bold text-lg ${settlementAccountGroups.reduce((sum, g) => sum + g.totals.adjustment, 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                         {settlementAccountGroups.reduce((sum, g) => sum + g.totals.adjustment, 0) >= 0 ? '+' : ''}₹{settlementAccountGroups.reduce((sum, g) => sum + g.totals.adjustment, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </p>
                     </div>

@@ -310,26 +310,26 @@ export default function ShipmentsTab({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" data-testid="shipments-table">
+            <table className="w-full border-collapse text-sm" data-testid="shipments-table">
               <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left p-3 font-medium">Shipment #</th>
-                  <th className="text-left p-3 font-medium">Date</th>
-                  <th className="text-left p-3 font-medium">Location</th>
-                  <th className="text-right p-3 font-medium">Qty</th>
-                  <th className="text-right p-3 font-medium">Base Price</th>
-                  <th className="text-right p-3 font-medium">Margin %</th>
-                  <th className="text-right p-3 font-medium">Transfer Price</th>
-                  <th className="text-right p-3 font-medium">Total Transfer</th>
-                  <th className="text-right p-3 font-medium">GST %</th>
-                  <th className="text-right p-3 font-medium">GST Amt</th>
-                  <th className="text-right p-3 font-medium">Total (incl GST)</th>
-                  <th className="text-center p-3 font-medium">Status</th>
-                  <th className="text-right p-3 font-medium">Actions</th>
+                <tr className="bg-emerald-50/30 border-b border-emerald-100/60">
+                  <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Shipment #</th>
+                  <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Date</th>
+                  <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Location</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Qty</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Base Price</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Margin %</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Transfer Price</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Total Transfer</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>GST %</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>GST Amt</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Total (incl GST)</th>
+                  <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Status</th>
+                  <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {shipments.map((shipment) => {
+                {shipments.map((shipment, index) => {
                   // Calculate average/first item values for display
                   const avgBasePrice = shipment.avg_base_price || shipment.base_price || '-';
                   const avgMargin = shipment.avg_distributor_margin || shipment.distributor_margin;
@@ -337,65 +337,72 @@ export default function ShipmentsTab({
                   const avgGstPercent = shipment.avg_gst_percent || shipment.gst_percent;
                   
                   return (
-                    <tr key={shipment.id} className="border-b hover:bg-muted/30" data-testid={`shipment-row-${shipment.id}`}>
-                      <td className="p-3">
+                    <tr 
+                      key={shipment.id} 
+                      className={`border-b border-emerald-50 transition-colors duration-200 cursor-pointer
+                        ${index % 2 === 1 ? 'bg-emerald-50/40' : 'bg-white'}
+                        hover:bg-emerald-50/60`}
+                      onClick={() => viewShipmentDetail(shipment.id)}
+                      data-testid={`shipment-row-${shipment.id}`}
+                    >
+                      <td className="p-4">
                         <button 
-                          className="font-medium text-primary hover:underline"
-                          onClick={() => viewShipmentDetail(shipment.id)}
+                          className="font-medium text-emerald-700 hover:text-emerald-800 hover:underline"
+                          onClick={(e) => { e.stopPropagation(); viewShipmentDetail(shipment.id); }}
                         >
                           {shipment.shipment_number}
                         </button>
                         {shipment.reference_number && (
-                          <p className="text-xs text-muted-foreground">{shipment.reference_number}</p>
+                          <p className="text-xs text-emerald-600/60 mt-0.5">{shipment.reference_number}</p>
                         )}
                       </td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          {new Date(shipment.shipment_date).toLocaleDateString()}
+                      <td className="p-4">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="h-4 w-4 text-emerald-600/50" />
+                          <span className="text-slate-700">{new Date(shipment.shipment_date).toLocaleDateString()}</span>
                         </div>
                       </td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-1">
-                          <MapPin className="h-4 w-4 text-muted-foreground" />
-                          <span className="truncate max-w-[120px]">{shipment.distributor_location_name}</span>
+                      <td className="p-4">
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="h-4 w-4 text-emerald-600/50" />
+                          <span className="truncate max-w-[120px] text-slate-700">{shipment.distributor_location_name}</span>
                         </div>
                       </td>
-                      <td className="p-3 text-right font-medium">{shipment.total_quantity}</td>
-                      <td className="p-3 text-right">
+                      <td className="p-4 text-right font-medium text-slate-800">{shipment.total_quantity}</td>
+                      <td className="p-4 text-right text-slate-700">
                         {avgBasePrice !== '-' ? `₹${Number(avgBasePrice).toFixed(2)}` : '-'}
                       </td>
-                      <td className="p-3 text-right">
+                      <td className="p-4 text-right text-slate-700">
                         {avgMargin != null ? `${avgMargin}%` : '-'}
                       </td>
-                      <td className="p-3 text-right">
+                      <td className="p-4 text-right text-slate-700">
                         {avgTransferPrice != null ? `₹${Number(avgTransferPrice).toFixed(2)}` : '-'}
                       </td>
-                      <td className="p-3 text-right font-medium">₹{shipment.total_gross_amount?.toLocaleString()}</td>
-                      <td className="p-3 text-right">
+                      <td className="p-4 text-right font-medium text-slate-800">₹{shipment.total_gross_amount?.toLocaleString()}</td>
+                      <td className="p-4 text-right text-slate-700">
                         {avgGstPercent != null ? `${avgGstPercent}%` : (shipment.total_tax_amount > 0 ? '18%' : '-')}
                       </td>
-                      <td className="p-3 text-right">₹{shipment.total_tax_amount?.toLocaleString()}</td>
-                      <td className="p-3 text-right font-medium text-green-600">₹{shipment.total_net_amount?.toLocaleString()}</td>
-                      <td className="p-3 text-center">
+                      <td className="p-4 text-right text-slate-700">₹{shipment.total_tax_amount?.toLocaleString()}</td>
+                      <td className="p-4 text-right font-medium text-emerald-600">₹{shipment.total_net_amount?.toLocaleString()}</td>
+                      <td className="p-4 text-center">
                         {getShipmentStatusBadge(shipment.status)}
                       </td>
-                      <td className="p-3 text-right">
-                        <div className="flex justify-end gap-1">
+                      <td className="p-4 text-center">
+                        <div className="flex justify-center gap-1">
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => viewShipmentDetail(shipment.id)}
+                            className="h-8 w-8 p-0 hover:bg-emerald-100"
+                            onClick={(e) => { e.stopPropagation(); viewShipmentDetail(shipment.id); }}
                             data-testid={`view-shipment-${shipment.id}`}
                           >
-                            <FileText className="h-4 w-4" />
+                            <FileText className="h-4 w-4 text-emerald-700" />
                           </Button>
-                          {/* Show delete for draft (canManage) or any status (canDelete for CEO/Admin) */}
                           {(canDelete || (canManage && shipment.status === 'draft')) && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="text-destructive"
+                              className="h-8 w-8 p-0 text-destructive hover:bg-red-50"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setDeleteTarget({

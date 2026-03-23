@@ -639,21 +639,21 @@ export default function DeliveriesTab({
         ) : (
           <>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" data-testid="deliveries-table">
+            <table className="w-full border-collapse text-sm" data-testid="deliveries-table">
               <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left p-2 font-medium">Delivery #</th>
-                  <th className="text-left p-2 font-medium">SKU</th>
-                  <th className="text-right p-2 font-medium">Qty</th>
-                  <th className="text-right p-2 font-medium">Customer Selling Price (Per Unit)</th>
-                  <th className="text-right p-2 font-medium">Distributor Commission %</th>
-                  <th className="text-right p-2 font-medium">Total Customer Billing Value</th>
-                  <th className="text-right p-2 font-medium">Distributor Earnings (On Selling Price)</th>
-                  <th className="text-right p-2 font-medium">Transfer Price (Per Unit)</th>
-                  <th className="text-right p-2 font-medium">Distributor Margin at Transfer Price</th>
-                  <th className="text-right p-2 font-medium">Adjustment Payable</th>
-                  <th className="text-center p-2 font-medium">Status</th>
-                  <th className="text-right p-2 font-medium">Actions</th>
+                <tr className="bg-emerald-50/30 border-b border-emerald-100/60">
+                  <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Delivery #</th>
+                  <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>SKU</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Qty</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Selling Price</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Commission %</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Billing Value</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Earnings</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Transfer Price</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Margin at Transfer</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Adjustment</th>
+                  <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Status</th>
+                  <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -700,57 +700,62 @@ export default function DeliveriesTab({
                         return (
                           <tr 
                             key={`${delivery.id}-${item.id || itemIndex}`} 
-                            className={`border-b hover:bg-muted/30 ${itemIndex === 0 ? 'border-t-2 border-t-slate-300' : ''}`}
+                            className={`border-b border-emerald-50 transition-colors duration-200 cursor-pointer
+                              ${itemIndex % 2 === 1 ? 'bg-emerald-50/40' : 'bg-white'}
+                              ${itemIndex === 0 ? 'border-t-2 border-t-emerald-200' : ''}
+                              hover:bg-emerald-50/60`}
+                            onClick={() => viewDeliveryDetail(delivery.id)}
                             data-testid={`delivery-row-${delivery.id}-${itemIndex}`}
                           >
                             {itemIndex === 0 && (
-                              <td className="p-2 align-top" rowSpan={rowSpan}>
+                              <td className="p-4 align-top" rowSpan={rowSpan}>
                                 <button 
-                                  className="font-medium text-primary hover:underline"
-                                  onClick={() => viewDeliveryDetail(delivery.id)}
+                                  className="font-medium text-emerald-700 hover:text-emerald-800 hover:underline"
+                                  onClick={(e) => { e.stopPropagation(); viewDeliveryDetail(delivery.id); }}
                                 >
                                   {delivery.delivery_number}
                                 </button>
-                                <p className="text-xs text-muted-foreground mt-1">
+                                <p className="text-xs text-emerald-600/60 mt-1">
                                   {new Date(delivery.delivery_date).toLocaleDateString()}
                                 </p>
-                                <p className="text-xs font-medium mt-1">{delivery.account_name}</p>
-                                <p className="text-xs text-muted-foreground">{delivery.account_city}</p>
+                                <p className="text-xs font-medium mt-1 text-slate-700">{delivery.account_name}</p>
+                                <p className="text-xs text-emerald-600/60">{delivery.account_city}</p>
                               </td>
                             )}
-                            <td className="p-2">
-                              <span className="font-medium">{item.sku_name || item.sku_code || 'N/A'}</span>
+                            <td className="p-4">
+                              <span className="font-medium text-slate-700">{item.sku_name || item.sku_code || 'N/A'}</span>
                             </td>
-                            <td className="p-2 text-right font-medium">{qty}</td>
-                            <td className="p-2 text-right">₹{customerPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-2 text-right">{commissionPct}%</td>
-                            <td className="p-2 text-right font-medium">₹{billingValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-2 text-right text-green-600">₹{distributorEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-2 text-right">₹{transferPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-2 text-right">₹{marginAtTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className={`p-2 text-right font-medium ${adjustment >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            <td className="p-4 text-right font-medium text-slate-800">{qty}</td>
+                            <td className="p-4 text-right text-slate-700">₹{customerPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-4 text-right text-slate-700">{commissionPct}%</td>
+                            <td className="p-4 text-right font-medium text-slate-800">₹{billingValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-4 text-right text-emerald-600 font-medium">₹{distributorEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-4 text-right text-slate-700">₹{transferPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-4 text-right text-slate-700">₹{marginAtTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className={`p-4 text-right font-medium ${adjustment >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                               {adjustment >= 0 ? '' : '-'}₹{Math.abs(adjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                             </td>
                             {itemIndex === 0 && (
                               <>
-                                <td className="p-2 text-center align-top" rowSpan={rowSpan}>
+                                <td className="p-4 text-center align-top" rowSpan={rowSpan}>
                                   {getDeliveryStatusBadge(delivery.status)}
                                 </td>
-                                <td className="p-2 text-right align-top" rowSpan={rowSpan}>
-                                  <div className="flex flex-col gap-1 items-end">
+                                <td className="p-4 text-center align-top" rowSpan={rowSpan}>
+                                  <div className="flex flex-col gap-1 items-center">
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      onClick={() => viewDeliveryDetail(delivery.id)}
+                                      className="h-8 w-8 p-0 hover:bg-emerald-100"
+                                      onClick={(e) => { e.stopPropagation(); viewDeliveryDetail(delivery.id); }}
                                       data-testid={`view-delivery-${delivery.id}`}
                                     >
-                                      <FileText className="h-4 w-4" />
+                                      <FileText className="h-4 w-4 text-emerald-700" />
                                     </Button>
                                     {(canDelete || (canManage && delivery.status === 'draft')) && (
                                       <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="text-destructive"
+                                        className="h-8 w-8 p-0 text-destructive hover:bg-red-50"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setDeleteTarget({
@@ -772,37 +777,38 @@ export default function DeliveriesTab({
                           </tr>
                         );
                       }) : (
-                        <tr key={delivery.id} className="border-b hover:bg-muted/30 border-t-2 border-t-slate-300" data-testid={`delivery-row-${delivery.id}`}>
-                          <td className="p-2">
+                        <tr key={delivery.id} className="border-b border-emerald-50 hover:bg-emerald-50/60 border-t-2 border-t-emerald-200 cursor-pointer transition-colors duration-200" onClick={() => viewDeliveryDetail(delivery.id)} data-testid={`delivery-row-${delivery.id}`}>
+                          <td className="p-4">
                             <button 
-                              className="font-medium text-primary hover:underline"
-                              onClick={() => viewDeliveryDetail(delivery.id)}
+                              className="font-medium text-emerald-700 hover:text-emerald-800 hover:underline"
+                              onClick={(e) => { e.stopPropagation(); viewDeliveryDetail(delivery.id); }}
                             >
                               {delivery.delivery_number}
                             </button>
-                            <p className="text-xs text-muted-foreground mt-1">
+                            <p className="text-xs text-emerald-600/60 mt-1">
                               {new Date(delivery.delivery_date).toLocaleDateString()}
                             </p>
-                            <p className="text-xs font-medium mt-1">{delivery.account_name}</p>
+                            <p className="text-xs font-medium mt-1 text-slate-700">{delivery.account_name}</p>
                           </td>
-                          <td className="p-2 text-muted-foreground" colSpan={8}>No line items</td>
-                          <td className="p-2 text-center">
+                          <td className="p-4 text-emerald-600/60" colSpan={8}>No line items</td>
+                          <td className="p-4 text-center">
                             {getDeliveryStatusBadge(delivery.status)}
                           </td>
-                          <td className="p-2 text-right">
-                            <div className="flex justify-end gap-1">
+                          <td className="p-4 text-center">
+                            <div className="flex justify-center gap-1">
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => viewDeliveryDetail(delivery.id)}
+                                className="h-8 w-8 p-0 hover:bg-emerald-100"
+                                onClick={(e) => { e.stopPropagation(); viewDeliveryDetail(delivery.id); }}
                               >
-                                <FileText className="h-4 w-4" />
+                                <FileText className="h-4 w-4 text-emerald-700" />
                               </Button>
                               {(canDelete || (canManage && delivery.status === 'draft')) && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="text-destructive"
+                                  className="h-8 w-8 p-0 text-destructive hover:bg-red-50"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setDeleteTarget({
@@ -821,13 +827,13 @@ export default function DeliveriesTab({
                       )}
                       {/* Delivery subtotal row - always show */}
                       {items.length >= 1 && (
-                        <tr className="bg-slate-100 dark:bg-slate-800 font-semibold text-sm">
-                          <td className="p-2 text-right" colSpan={5}>Delivery Total:</td>
-                          <td className="p-2 text-right">₹{totalBillingValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className="p-2 text-right text-green-600">₹{totalDistributorEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className="p-2"></td>
-                          <td className="p-2 text-right">₹{totalMarginAtTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className={`p-2 text-right ${totalAdjustment >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        <tr className="bg-emerald-100/50 font-semibold text-sm">
+                          <td className="p-4 text-right text-emerald-800" colSpan={5}>Delivery Total:</td>
+                          <td className="p-4 text-right text-emerald-800">₹{totalBillingValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className="p-4 text-right text-emerald-600">₹{totalDistributorEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className="p-4"></td>
+                          <td className="p-4 text-right text-emerald-800">₹{totalMarginAtTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className={`p-4 text-right ${totalAdjustment >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                             {totalAdjustment >= 0 ? '' : '-'}₹{Math.abs(totalAdjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                           </td>
                           <td colSpan={2}></td>

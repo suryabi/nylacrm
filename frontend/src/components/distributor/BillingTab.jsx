@@ -600,53 +600,59 @@ export default function BillingTab({
         <CardContent>
           {notesLoading ? (
             <div className="flex items-center justify-center py-8">
-              <RefreshCw className="h-6 w-6 animate-spin" />
+              <RefreshCw className="h-6 w-6 animate-spin text-emerald-600" />
             </div>
           ) : debitCreditNotes.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-8 text-emerald-600/60">
               <Receipt className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p>No debit/credit notes yet</p>
               <p className="text-sm">Generate notes from monthly reconciliation above</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full border-collapse text-sm">
                 <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="text-left p-3 font-medium">Note #</th>
-                    <th className="text-left p-3 font-medium">Month/Year</th>
-                    <th className="text-left p-3 font-medium">Type</th>
-                    <th className="text-right p-3 font-medium">Amount</th>
-                    <th className="text-right p-3 font-medium">Paid</th>
-                    <th className="text-right p-3 font-medium">Balance</th>
-                    <th className="text-center p-3 font-medium">Status</th>
-                    <th className="text-left p-3 font-medium">Created</th>
-                    <th className="text-center p-3 font-medium">PDF</th>
-                    <th className="text-right p-3 font-medium">Actions</th>
+                  <tr className="bg-emerald-50/30 border-b border-emerald-100/60">
+                    <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Note #</th>
+                    <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Month/Year</th>
+                    <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Type</th>
+                    <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Amount</th>
+                    <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Paid</th>
+                    <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Balance</th>
+                    <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Status</th>
+                    <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Created</th>
+                    <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>PDF</th>
+                    <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {debitCreditNotes.map((note) => (
-                    <tr key={note.id} className="border-b hover:bg-muted/30 cursor-pointer" onClick={() => viewNoteDetail && viewNoteDetail(note.id)}>
-                      <td className="p-3 font-medium">{note.note_number}</td>
-                      <td className="p-3">
+                  {debitCreditNotes.map((note, index) => (
+                    <tr 
+                      key={note.id} 
+                      className={`border-b border-emerald-50 transition-colors duration-200 cursor-pointer
+                        ${index % 2 === 1 ? 'bg-emerald-50/40' : 'bg-white'}
+                        hover:bg-emerald-50/60`}
+                      onClick={() => viewNoteDetail && viewNoteDetail(note.id)}
+                    >
+                      <td className="p-4 font-medium text-emerald-700">{note.note_number}</td>
+                      <td className="p-4 text-slate-700">
                         {note.month ? `${MONTHS.find(m => m.value === note.month)?.label || note.month} ${note.year}` : '-'}
                       </td>
-                      <td className="p-3">
-                        <Badge variant={note.note_type === 'debit' ? 'destructive' : 'default'}>
+                      <td className="p-4">
+                        <Badge variant={note.note_type === 'debit' ? 'destructive' : 'default'} className={note.note_type === 'credit' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : ''}>
                           {note.note_type === 'debit' ? 'Debit Note' : 'Credit Note'}
                         </Badge>
                       </td>
-                      <td className="p-3 text-right font-medium">₹{(note.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                      <td className="p-3 text-right text-green-600">₹{(note.paid_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                      <td className="p-3 text-right text-orange-600">₹{(note.balance_amount || note.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                      <td className="p-3 text-center">{getNoteStatusBadge ? getNoteStatusBadge(note.status) : <Badge variant="outline">{note.status}</Badge>}</td>
-                      <td className="p-3">{note.created_at?.split('T')[0]}</td>
-                      <td className="p-3 text-center">
+                      <td className="p-4 text-right font-medium text-slate-800">₹{(note.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      <td className="p-4 text-right text-emerald-600 font-medium">₹{(note.paid_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      <td className="p-4 text-right text-orange-600 font-medium">₹{(note.balance_amount || note.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      <td className="p-4 text-center">{getNoteStatusBadge ? getNoteStatusBadge(note.status) : <Badge variant="outline">{note.status}</Badge>}</td>
+                      <td className="p-4 text-slate-700">{note.created_at?.split('T')[0]}</td>
+                      <td className="p-4 text-center">
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                          className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleDownloadPdf(note);
@@ -662,16 +668,21 @@ export default function BillingTab({
                           )}
                         </Button>
                       </td>
-                      <td className="p-3 text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); viewNoteDetail && viewNoteDetail(note.id); }}>
-                            <Eye className="h-4 w-4" />
+                      <td className="p-4 text-center">
+                        <div className="flex justify-center gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0 hover:bg-emerald-100"
+                            onClick={(e) => { e.stopPropagation(); viewNoteDetail && viewNoteDetail(note.id); }}
+                          >
+                            <Eye className="h-4 w-4 text-emerald-700" />
                           </Button>
                           {canDelete && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="text-destructive"
+                              className="h-8 w-8 p-0 text-destructive hover:bg-red-50"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setDeleteTarget({
