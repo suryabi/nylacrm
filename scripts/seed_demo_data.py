@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 import uuid
 import os
 
-MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
+MONGO_URL = os.environ.get('MONGO_URL', 'mongodb://172.35.7.216:27017')
 DB_NAME = os.environ.get('DB_NAME', 'test_database')
 
 def hash_password(password: str) -> str:
