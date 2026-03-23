@@ -7744,7 +7744,7 @@ async def get_leave_requests(
 ):
     """Get leave requests - users see their own, managers see their team's"""
     
-    if current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'sales_manager']:
+    if current_user['role'].lower() in ['ceo', 'director', 'vp', 'admin', 'sales_manager']:
         # Managers see requests from their direct reports
         direct_reports = await get_tdb().users.find(
             {'reports_to': current_user['id']},
@@ -7780,6 +7780,51 @@ async def get_leave_requests(
             req['approval_date'] = datetime.fromisoformat(req['approval_date'])
         
         req['user_name'] = user_map.get(req['user_id'], 'Unknown')
+    
+    return requests
+
+@api_router.get("/leave-requests/for-approver")
+async def get_leave_requests_for_approver(
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all leave requests relevant to approver (pending from reportees + previously acted upon)"""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"get_leave_requests_for_approver called for user: {current_user.get('id')}")
+    
+    # Get users who report to current user
+    reporters = await get_tdb().users.find({'reports_to': current_user['id']}, {'_id': 0, 'id': 1}).to_list(100)
+    reporter_ids = [r['id'] for r in reporters]
+    logger.info(f"Reporter IDs: {reporter_ids}")
+    
+    # Build query: requests from reportees OR approved/rejected by this user
+    query = {
+        '$or': [
+            {'user_id': {'$in': reporter_ids}},  # From reportees
+            {'approved_by': current_user['id']}   # Previously acted upon
+        ]
+    }
+    logger.info(f"Query: {query}")
+    
+    if status and status != 'all':
+        query['status'] = status
+    
+    requests = await get_tdb().leave_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
+    logger.info(f"Found {len(requests)} leave requests")
+    
+    # Get user names for all requests
+    user_ids = list(set([r.get('user_id') for r in requests if r.get('user_id')]))
+    if user_ids:
+        users = await get_tdb().users.find(
+            {'id': {'$in': user_ids}},
+            {'_id': 0, 'id': 1, 'name': 1}
+        ).to_list(100)
+        user_map = {u['id']: u['name'] for u in users}
+        
+        for req in requests:
+            if req.get('user_id'):
+                req['user_name'] = user_map.get(req['user_id'], req.get('user_name', 'Unknown'))
     
     return requests
 
@@ -8019,6 +8064,43 @@ async def get_travel_requests(
     
     for req in requests:
         req['user_name'] = user_map.get(req['user_id'], req.get('user_name', 'Unknown'))
+    
+    return requests
+
+@api_router.get("/travel-requests/for-approver")
+async def get_travel_requests_for_approver(
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all travel requests relevant to approver (pending from reportees + previously acted upon)"""
+    # Get users who report to current user
+    reporters = await get_tdb().users.find({'reports_to': current_user['id']}, {'_id': 0, 'id': 1}).to_list(100)
+    reporter_ids = [r['id'] for r in reporters]
+    
+    # Build query: requests from reportees OR approved/rejected by this user
+    query = {
+        '$or': [
+            {'user_id': {'$in': reporter_ids}},  # From reportees
+            {'approved_by': current_user['id']}   # Previously acted upon
+        ]
+    }
+    
+    if status and status != 'all':
+        query['status'] = status
+    
+    requests = await get_tdb().travel_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
+    
+    # Get user names for all requests
+    user_ids = list(set([r['user_id'] for r in requests]))
+    if user_ids:
+        users = await get_tdb().users.find(
+            {'id': {'$in': user_ids}},
+            {'_id': 0, 'id': 1, 'name': 1}
+        ).to_list(100)
+        user_map = {u['id']: u['name'] for u in users}
+        
+        for req in requests:
+            req['user_name'] = user_map.get(req['user_id'], req.get('user_name', 'Unknown'))
     
     return requests
 
@@ -8340,6 +8422,44 @@ async def get_budget_requests(
     
     return requests
 
+@api_router.get("/budget-requests/for-approver")
+async def get_budget_requests_for_approver(
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all budget requests relevant to approver (pending from reportees + previously acted upon)"""
+    # Get users who report to current user
+    reporters = await get_tdb().users.find({'reports_to': current_user['id']}, {'_id': 0, 'id': 1}).to_list(100)
+    reporter_ids = [r['id'] for r in reporters]
+    
+    # Build query: requests from reportees OR approved/rejected by this user
+    query = {
+        '$or': [
+            {'user_id': {'$in': reporter_ids}},  # From reportees
+            {'approved_by': current_user['id']}   # Previously acted upon
+        ]
+    }
+    
+    if status and status != 'all':
+        query['status'] = status
+    
+    requests = await get_tdb().budget_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
+    
+    # Get user names for all requests
+    user_ids = list(set([r.get('user_id') for r in requests if r.get('user_id')]))
+    if user_ids:
+        users = await get_tdb().users.find(
+            {'id': {'$in': user_ids}},
+            {'_id': 0, 'id': 1, 'name': 1}
+        ).to_list(100)
+        user_map = {u['id']: u['name'] for u in users}
+        
+        for req in requests:
+            if req.get('user_id'):
+                req['user_name'] = user_map.get(req['user_id'], req.get('user_name', 'Unknown'))
+    
+    return requests
+
 @api_router.get("/budget-requests/{request_id}")
 async def get_budget_request(request_id: str, current_user: dict = Depends(get_current_user)):
     """Get single budget request"""
@@ -8639,6 +8759,31 @@ async def get_expense_requests(
         query['user_id'] = current_user['id']
     
     expenses = await get_tdb().expense_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(500)
+    
+    return expenses
+
+@api_router.get("/expense-requests/for-approver")
+async def get_expense_requests_for_approver(
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all expense requests relevant to approver (pending from reportees + previously acted upon)"""
+    # Get users who report to current user
+    reporters = await get_tdb().users.find({'reports_to': current_user['id']}, {'_id': 0, 'id': 1}).to_list(100)
+    reporter_ids = [r['id'] for r in reporters]
+    
+    # Build query: requests from reportees OR approved/rejected by this user
+    query = {
+        '$or': [
+            {'user_id': {'$in': reporter_ids}},  # From reportees
+            {'approved_by': current_user['id']}   # Previously acted upon
+        ]
+    }
+    
+    if status and status != 'all':
+        query['status'] = status
+    
+    expenses = await get_tdb().expense_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
     
     return expenses
 

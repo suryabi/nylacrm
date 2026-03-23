@@ -255,6 +255,31 @@ async def get_pending_leave_approvals(current_user: dict = Depends(get_current_u
     return requests
 
 
+@router.get("/leave-requests/for-approver")
+async def get_leave_requests_for_approver(
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all leave requests relevant to approver (pending from reportees + previously acted upon)"""
+    # Get users who report to current user
+    reporters = await get_tdb().users.find({'reports_to': current_user['id']}, {'_id': 0, 'id': 1}).to_list(100)
+    reporter_ids = [r['id'] for r in reporters]
+    
+    # Build query: requests from reportees OR approved/rejected by this user
+    query = {
+        '$or': [
+            {'user_id': {'$in': reporter_ids}},  # From reportees
+            {'approved_by': current_user['id']}   # Previously acted upon
+        ]
+    }
+    
+    if status and status != 'all':
+        query['status'] = status
+    
+    requests = await get_tdb().leave_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
+    return requests
+
+
 # ============= TRAVEL REQUEST ROUTES =============
 
 TRAVEL_PURPOSES = [
@@ -297,6 +322,45 @@ async def get_travel_requests(
     if user_id:
         query['user_id'] = user_id
     if status:
+        query['status'] = status
+    
+    requests = await get_tdb().travel_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
+    return requests
+
+
+@router.get("/travel-requests/pending-approvals/count")
+async def get_pending_travel_count(current_user: dict = Depends(get_current_user)):
+    """Get count of pending travel requests for approval"""
+    reporters = await get_tdb().users.find({'reports_to': current_user['id']}, {'_id': 0, 'id': 1}).to_list(100)
+    reporter_ids = [r['id'] for r in reporters]
+    
+    count = await get_tdb().travel_requests.count_documents({
+        'user_id': {'$in': reporter_ids},
+        'status': 'pending'
+    })
+    
+    return {'count': count}
+
+
+@router.get("/travel-requests/for-approver")
+async def get_travel_requests_for_approver(
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all travel requests relevant to approver (pending from reportees + previously acted upon)"""
+    # Get users who report to current user
+    reporters = await get_tdb().users.find({'reports_to': current_user['id']}, {'_id': 0, 'id': 1}).to_list(100)
+    reporter_ids = [r['id'] for r in reporters]
+    
+    # Build query: requests from reportees OR approved/rejected by this user
+    query = {
+        '$or': [
+            {'user_id': {'$in': reporter_ids}},  # From reportees
+            {'approved_by': current_user['id']}   # Previously acted upon
+        ]
+    }
+    
+    if status and status != 'all':
         query['status'] = status
     
     requests = await get_tdb().travel_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
@@ -380,20 +444,6 @@ async def cancel_travel_request(request_id: str, current_user: dict = Depends(ge
     return await get_tdb().travel_requests.find_one({'id': request_id}, {'_id': 0})
 
 
-@router.get("/travel-requests/pending-approvals/count")
-async def get_pending_travel_count(current_user: dict = Depends(get_current_user)):
-    """Get count of pending travel requests for approval"""
-    reporters = await get_tdb().users.find({'reports_to': current_user['id']}, {'_id': 0, 'id': 1}).to_list(100)
-    reporter_ids = [r['id'] for r in reporters]
-    
-    count = await get_tdb().travel_requests.count_documents({
-        'user_id': {'$in': reporter_ids},
-        'status': 'pending'
-    })
-    
-    return {'count': count}
-
-
 # ============= BUDGET REQUEST ROUTES =============
 
 BUDGET_CATEGORIES = [
@@ -436,6 +486,31 @@ async def get_budget_requests(
     if user_id:
         query['user_id'] = user_id
     if status:
+        query['status'] = status
+    
+    requests = await get_tdb().budget_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
+    return requests
+
+
+@router.get("/budget-requests/for-approver")
+async def get_budget_requests_for_approver(
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all budget requests relevant to approver (pending from reportees + previously acted upon)"""
+    # Get users who report to current user
+    reporters = await get_tdb().users.find({'reports_to': current_user['id']}, {'_id': 0, 'id': 1}).to_list(100)
+    reporter_ids = [r['id'] for r in reporters]
+    
+    # Build query: requests from reportees OR approved/rejected by this user
+    query = {
+        '$or': [
+            {'user_id': {'$in': reporter_ids}},  # From reportees
+            {'approved_by': current_user['id']}   # Previously acted upon
+        ]
+    }
+    
+    if status and status != 'all':
         query['status'] = status
     
     requests = await get_tdb().budget_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
@@ -568,6 +643,31 @@ async def get_expense_requests(
     if user_id:
         query['user_id'] = user_id
     if status:
+        query['status'] = status
+    
+    requests = await get_tdb().expense_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
+    return requests
+
+
+@router.get("/expense-requests/for-approver")
+async def get_expense_requests_for_approver(
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all expense requests relevant to approver (pending from reportees + previously acted upon)"""
+    # Get users who report to current user
+    reporters = await get_tdb().users.find({'reports_to': current_user['id']}, {'_id': 0, 'id': 1}).to_list(100)
+    reporter_ids = [r['id'] for r in reporters]
+    
+    # Build query: requests from reportees OR approved/rejected by this user
+    query = {
+        '$or': [
+            {'user_id': {'$in': reporter_ids}},  # From reportees
+            {'approved_by': current_user['id']}   # Previously acted upon
+        ]
+    }
+    
+    if status and status != 'all':
         query['status'] = status
     
     requests = await get_tdb().expense_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)

@@ -42,25 +42,31 @@ export default function LeaveManagement() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (user?.id) {
+      fetchData();
+    }
+  }, [user?.id]);
 
   const fetchData = async () => {
+    if (!user?.id) return; // Wait for user to be loaded
+    
     try {
       const token = localStorage.getItem('token');
       
-      const [requestsRes, approvalsRes] = await Promise.all([
-        axios.get(`${API_URL}/leave-requests`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        axios.get(`${API_URL}/leave-requests/pending-approvals`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-      ]);
+      // Fetch my requests (all statuses)
+      const myRequestsRes = await axios.get(`${API_URL}/leave-requests?user_id=${user.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       
-      setMyRequests(requestsRes.data);
-      setPendingApprovals(approvalsRes.data.pending_requests || []);
+      // Fetch requests for approver (pending from reportees + previously acted upon)
+      const approverRes = await axios.get(`${API_URL}/leave-requests/for-approver`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setMyRequests(myRequestsRes.data || []);
+      setPendingApprovals(approverRes.data || []);
     } catch (error) {
+      console.error('Failed to load leave data:', error);
       toast.error('Failed to load leave data');
     } finally {
       setLoading(false);
@@ -93,7 +99,7 @@ export default function LeaveManagement() {
     );
   }
 
-  const isManager = ['ceo', 'director', 'vp', 'admin', 'sales_manager'].includes(user?.role);
+  const isManager = ['ceo', 'director', 'vp', 'admin', 'sales_manager'].includes(user?.role?.toLowerCase());
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="leave-management-page">
@@ -131,11 +137,19 @@ export default function LeaveManagement() {
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-            <h2 className="text-xl font-semibold text-slate-800 dark:text-white">Pending Approvals ({pendingApprovals.length})</h2>
+            <h2 className="text-xl font-semibold text-slate-800 dark:text-white">Team Requests ({pendingApprovals.length})</h2>
           </div>
-          {pendingApprovals.map(req => (
+          {pendingApprovals.filter(req => req.status === 'pending').map(req => (
             <LeaveRequestCard key={req.id} request={req} onApprove={handleApproval} showActions />
           ))}
+          {pendingApprovals.filter(req => req.status !== 'pending').length > 0 && (
+            <>
+              <h3 className="text-lg font-medium text-slate-600 dark:text-slate-400 mt-6">Previously Reviewed</h3>
+              {pendingApprovals.filter(req => req.status !== 'pending').map(req => (
+                <LeaveRequestCard key={req.id} request={req} />
+              ))}
+            </>
+          )}
         </div>
       )}
 
@@ -147,21 +161,13 @@ export default function LeaveManagement() {
             <p className="text-muted-foreground">No leave requests yet</p>
           </Card>
         ) : (
-          myRequests.filter(r => r.user_id === user.id).map(req => (
+          myRequests.map(req => (
             <LeaveRequestCard key={req.id} request={req} />
           ))
         )}
       </div>
 
       {/* Team Requests (for managers) */}
-      {isManager && myRequests.filter(r => r.user_id !== user.id).length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-slate-800 dark:text-white">Team Leave Requests</h2>
-          {myRequests.filter(r => r.user_id !== user.id).map(req => (
-            <LeaveRequestCard key={req.id} request={req} onApprove={handleApproval} showActions={req.status === 'pending'} />
-          ))}
-        </div>
-      )}
       </div>
     </div>
   );

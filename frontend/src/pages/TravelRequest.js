@@ -69,23 +69,28 @@ export default function TravelRequest() {
   const isApprover = ['ceo', 'director'].includes(user?.role?.toLowerCase());
 
   const fetchData = useCallback(async () => {
+    if (!user?.id) return; // Wait for user to be loaded
+    
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_URL}/travel-requests`, {
+      
+      // Fetch my own requests
+      const myResponse = await axios.get(`${API_URL}/travel-requests?user_id=${user.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      setMyRequests(myResponse.data || []);
       
-      const allRequests = response.data || [];
-      
-      // Separate my requests and pending approvals
-      const mine = allRequests.filter(r => r.user_id === user?.id);
-      const pending = isApprover 
-        ? allRequests.filter(r => r.status === 'pending_approval' && r.user_id !== user?.id)
-        : [];
-      
-      setMyRequests(mine);
-      setPendingApprovals(pending);
+      // Fetch requests for approver (from reportees + previously acted upon)
+      if (isApprover) {
+        const approverResponse = await axios.get(`${API_URL}/travel-requests/for-approver`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setPendingApprovals(approverResponse.data || []);
+      } else {
+        setPendingApprovals([]);
+      }
     } catch (error) {
+      console.error('Failed to load travel requests:', error);
       toast.error('Failed to load travel requests');
     } finally {
       setLoading(false);
@@ -174,17 +179,38 @@ export default function TravelRequest() {
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-              <h2 className="text-xl font-semibold text-slate-800 dark:text-white">Pending Approvals ({pendingApprovals.length})</h2>
+              <h2 className="text-xl font-semibold text-slate-800 dark:text-white">Team Requests ({pendingApprovals.length})</h2>
             </div>
-            {pendingApprovals.map(req => (
-              <TravelRequestCard 
-                key={req.id} 
-                request={req} 
-                onApprove={handleApproval} 
-                showActions 
-                onViewDetail={() => viewRequestDetail(req)}
-              />
-            ))}
+            
+            {/* Pending Requests */}
+            {pendingApprovals.filter(req => req.status === 'pending_approval').length > 0 && (
+              <>
+                <h3 className="text-lg font-medium text-amber-700 dark:text-amber-400">Pending Approval ({pendingApprovals.filter(req => req.status === 'pending_approval').length})</h3>
+                {pendingApprovals.filter(req => req.status === 'pending_approval').map(req => (
+                  <TravelRequestCard 
+                    key={req.id} 
+                    request={req} 
+                    onApprove={handleApproval} 
+                    showActions 
+                    onViewDetail={() => viewRequestDetail(req)}
+                  />
+                ))}
+              </>
+            )}
+            
+            {/* Previously Reviewed */}
+            {pendingApprovals.filter(req => req.status !== 'pending_approval').length > 0 && (
+              <>
+                <h3 className="text-lg font-medium text-slate-600 dark:text-slate-400 mt-6">Previously Reviewed</h3>
+                {pendingApprovals.filter(req => req.status !== 'pending_approval').map(req => (
+                  <TravelRequestCard 
+                    key={req.id} 
+                    request={req}
+                    onViewDetail={() => viewRequestDetail(req)}
+                  />
+                ))}
+              </>
+            )}
           </div>
         )}
 
