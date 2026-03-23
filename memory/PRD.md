@@ -3,7 +3,44 @@
 ## Original Problem Statement
 Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. The application helps manage leads, accounts, invoices, COGS calculations, and sales team performance.
 
-## Latest Session - March 22, 2026 (Session 3)
+## Latest Session - March 23, 2026 (Session 4)
+
+### Request Visibility for Requestors and Approvers ✅
+
+**User Requirements:**
+- All request types (Leave, Travel, Budget, Expense) visible to both requestor and approver
+- Requestors should always see their own requests (any status)
+- Approvers should see requests pending their approval + requests they've already acted upon
+
+**Implementation:**
+1. **New `/for-approver` Backend Endpoints** - Added to all request types:
+   - `/api/leave-requests/for-approver`
+   - `/api/travel-requests/for-approver`
+   - `/api/budget-requests/for-approver`
+   - `/api/expense-requests/for-approver`
+   
+   Each endpoint returns:
+   - Requests from users who report to the current user (reportees)
+   - Requests the current user has previously approved/rejected
+
+2. **Frontend Updates**:
+   - LeaveManagement.js - Split view with "Team Requests" + "My Leave Requests"
+   - TravelRequest.js - Split view with "Team Requests" (Pending + Previously Reviewed) + "My Travel Requests"
+   - BudgetRequest.js - Split view with "Team Requests" + "My Budget Requests"
+
+3. **Bug Fixes Applied**:
+   - Fixed route order in FastAPI (static paths before dynamic paths)
+   - Fixed case-sensitive role checks (CEO vs ceo)
+   - Fixed isApprover check to include CEO role
+   - Added tenant_id to leave_requests collection
+
+**Testing Results:**
+- Backend: 18/18 tests passed
+- Frontend: All pages showing correct Team Requests sections
+
+---
+
+## Previous Session - March 22, 2026 (Session 3)
 
 ### PDF Credit/Debit Note Generation ✅
 
