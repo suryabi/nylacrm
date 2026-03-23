@@ -1,130 +1,123 @@
 {
+  "theme": "light",
   "typography": {
-    "headings": {
-      "family": "Manrope",
-      "weights": ["500", "600", "800"],
-      "classes": "font-heading tracking-tight text-slate-900 dark:text-slate-50"
+    "fonts": {
+      "headings": "Manrope",
+      "body": "IBM Plex Sans",
+      "mono": "JetBrains Mono"
     },
-    "body": {
-      "family": "IBM Plex Sans",
-      "weights": ["400", "500"],
-      "classes": "font-body leading-relaxed text-slate-600 dark:text-slate-400"
-    },
-    "mono": {
-      "family": "IBM Plex Mono",
-      "weights": ["400"],
-      "classes": "font-mono text-slate-500"
-    }
-  },
-  "colors": {
-    "archetype": "ORGANIC & EARTHY (Professional B2B Trust)",
-    "primary": {
-      "base": "#065F46", 
-      "hover": "#047857",
-      "light": "#D1FAE5",
-      "dark": "#022C22",
-      "description": "Deep Emerald/Sage replacing the bright teal for a more grounded, premium B2B feel."
-    },
-    "background": {
-      "base": "#F8FAFC", 
-      "card": "#FFFFFF",
-      "sidebar": "#F1F5F9",
-      "dark_base": "#0F172A",
-      "dark_card": "#1E293B",
-      "dark_sidebar": "#0B1120"
-    },
-    "text": {
-      "main": "#0F172A",
-      "muted": "#64748B",
-      "inverse": "#FFFFFF",
-      "dark_main": "#F8FAFC",
-      "dark_muted": "#94A3B8"
-    },
-    "borders": {
-      "light": "#E2E8F0",
-      "dark": "#334155"
-    }
-  },
-  "visual_enhancers": {
-    "shadows": {
-      "card": "shadow-[0_4px_24px_rgba(0,0,0,0.02)]",
-      "hover": "shadow-[0_12px_32px_rgba(0,0,0,0.06)]"
-    },
-    "borders": {
-      "radius": "rounded-xl",
-      "style": "border border-slate-200 dark:border-slate-800"
-    },
-    "glass": {
-      "classes": "bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50"
-    }
-  },
-  "layouts": {
-    "page_structure": "Sidebar layout for details. Left sidebar (w-64 or col-span-2) + Main content area (col-span-10).",
-    "grids": "The 'Bento' High Density Grid (for Dashboards) - tight gaps (gap-6), F-pattern data priority.",
-    "spacing": "Generous spacing philosophy: p-6 to p-8 for cards. gap-6 to gap-8 between sections.",
-    "tables": "Sticky headers, 1px bottom borders (border-b border-slate-200), py-3 px-4 cells, right-aligned numbers."
-  },
-  "motion": {
-    "hover": "translate-y-[-2px] transition-transform duration-200 ease-in-out",
-    "click": "scale-[0.98] transition-transform duration-100",
-    "tabs_to_sidebar": "Smooth opacity/x-axis slide transition when switching sidebar nav items (framer-motion AnimatePresence)."
-  },
-  "accessibility": {
-    "contrast": "Ensure all text meets APCA > 60 for body, > 45 for large text.",
-    "testing": "All interactive elements MUST have `data-testid` (e.g., `data-testid=\"sidebar-nav-overview\"`).",
-    "focus": "focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
-  },
-  "media": {
-    "icons": "lucide-react (stroke-width 1.5 for a cleaner, premium look)",
-    "charts": "Recharts (with customized tooltips using the glass visual enhancer, and emerald primary colors)",
-    "images": [
-      {
-        "url": "https://images.unsplash.com/photo-1769778674824-e69f58d7c55d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjB3YXJlaG91c2UlMjBleHRlcmlvcnxlbnwwfHx8fDE3NzQxNzY0ODF8MA&ixlib=rb-4.1.0&q=85",
-        "category": "locations",
-        "description": "Modern warehouse exterior for the 'Locations' tab or Overview card."
-      }
+    "rules": [
+      "DO NOT use Inter, Roboto, Open Sans, or Lato for headings.",
+      "Headlines (>32px) MUST use tracking-tight.",
+      "Overlines/Labels MUST be Uppercase, text-xs, with tracking-[0.2em].",
+      "Use font-light for large numbers in KPI tiles to make them elegant, not bulky."
     ]
   },
+  "colors": {
+    "archetype": "ORGANIC & EARTHY",
+    "primary": "#065F46",
+    "primary_tailwind": "emerald-800",
+    "background": "#F9FAFB",
+    "surface": "#FFFFFF",
+    "accents": {
+      "sage": "#86A789",
+      "forest": "#022C22",
+      "terracotta": "#E2725B"
+    },
+    "table_alternate_row": "bg-emerald-50/40",
+    "table_hover_row": "bg-emerald-50/60",
+    "rules": [
+      "No pure black or pure gray. Tint neutrals slightly towards green/emerald.",
+      "Ensure text meets APCA minimum 4.5:1 contrast.",
+      "Limit the use of primary color to CTAs and active states.",
+      "CRITICAL: DO NOT use complete transparent background in header, overlays, any surface that has content under it."
+    ]
+  },
+  "visual_enhancers": {
+    "shadows": [
+      "KPI Tiles & Address Cards: shadow-[0_2px_8px_rgba(6,95,70,0.04)]",
+      "Hover state: shadow-[0_8px_24px_rgba(6,95,70,0.08)] -translate-y-[2px]"
+    ],
+    "borders": "1px solid border-emerald-100/60",
+    "radius": "rounded-xl for cards, rounded-lg for inner elements like badges."
+  },
+  "grids_and_layouts": {
+    "bento_mode": "High Density Grid (For Dashboards/Analytics)",
+    "kpi_grid": "grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6",
+    "address_grid": "grid-cols-1 md:grid-cols-3 gap-6",
+    "spacing": "Generous spacing. Use p-6 or p-8 inside cards."
+  },
   "components": {
-    "sidebar_nav": {
-      "style": "Vertical list, active state has bg-emerald-50 dark:bg-emerald-900/20 and text-emerald-800 dark:text-emerald-300 with a 3px left border (border-l-emerald-600). Inactive state has text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800/50."
+    "KPI_Tiles": {
+      "description": "Elegant tiles with large numbers, icons, mini sparkline charts, and progress indicators.",
+      "layout": "Flex column, top section with Title & Icon, middle with massive font-light Number & Badge, bottom with Recharts sparkline.",
+      "chart": "Recharts LineChart with height 60px, no axes, no grid, stroke emerald-600, strokeWidth 2."
     },
-    "cards": {
-      "style": "Flat background (bg-white dark:bg-slate-900), 1px border, subtle ambient shadow. No heavy neumorphism."
+    "Address_Cards": {
+      "description": "Minimalist, visually interesting address cards.",
+      "layout": "Include a subtle leading icon (MapPin), uppercase overline for address type (e.g., BILLING), and standard body text for address.",
+      "style": "Flat background, 1px emerald-100 border, hover lift effect."
     },
-    "status_badges": {
-      "style": "Pill shaped (rounded-full), px-2.5 py-0.5 text-xs font-medium. Success: bg-emerald-100 text-emerald-800. Warning: bg-amber-100 text-amber-800. Neutral: bg-slate-100 text-slate-800."
+    "Data_Table": {
+      "features": ["Sorting", "Pagination (default 50 rows)", "Clickable rows"],
+      "style": "border-collapse, alternating rows using even:bg-emerald-50/40, hover:bg-emerald-50/60. Headers should have uppercase tracking-wider text-xs font-semibold text-emerald-800/70.",
+      "interaction": "TableRow must have cursor-pointer and onClick handler navigating to details."
+    },
+    "Tabs": {
+      "style": "Minimalist underline style. Active tab gets a 2px bottom border of emerald-800 and text-emerald-900. Inactive tabs text-emerald-600/60."
     }
   },
+  "motion": {
+    "hover": "transition-[transform,box-shadow,background-color] duration-300 ease-out",
+    "table_row": "transition-colors duration-200",
+    "rules": [
+      "Do not use generic 'transition-all' on elements that transform.",
+      "Add micro-interactions to table row clicks (e.g., active:scale-[0.99])."
+    ]
+  },
+  "accessibility": {
+    "rules": [
+      "All interactive elements MUST include data-testid attribute (e.g., data-testid='distributor-row-1').",
+      "Sparklines must have aria-label for screen readers.",
+      "Status badges must use appropriate accessible colors."
+    ]
+  },
   "instructions_to_main_agent": [
-    "Install `lucide-react` if not present. Use stroke-width of 1.5 for a minimal, premium feel.",
-    "Refactor the Distributor Detail page: Remove the overflowing horizontal tabs and implement a left sidebar navigation layout.",
-    "Implement the 'Bento' High Density Grid for the Overview dashboard: metric cards spanning columns appropriately with tight gaps (gap-6).",
-    "Customize the data tables in 'Deliveries', 'Shipments', and 'Settlements' to have clean headers, generous horizontal padding (px-4 or px-6), and clear visual hierarchy (no heavy zebra striping).",
-    "Use 'Deep Emerald' (#065F46) as the primary brand color, replacing the bright teal to align with a Trustworthy B2B Corporate aesthetic.",
-    "Apply `data-testid` to all sidebar links, buttons, and table rows for testing.",
-    "Add micro-interactions (hover translations, active states) using the defined motion guidelines.",
-    "CRITICAL: Write Javascript (.js/.jsx) files, not Typescript (.tsx)."
+    "Install and use 'Manrope' for headings and 'IBM Plex Sans' for body font.",
+    "Install '@phosphor-icons/react' for elegant, professional icons suitable for dense dashboards.",
+    "Install 'recharts' for the mini sparkline charts inside KPI tiles.",
+    "For the Distribution module, create a layout that features 4 KPI tiles at the top, followed by a filter/search bar, and then the main Distributors Table.",
+    "For the Distributor Detail page (/distributors/:id), implement a header with the Distributor Name and Status, followed by the Address Cards grid, and then the 6 Tabs (Profile, Commercial, Stock In, Stock Out, Settlements, Billing).",
+    "Implement table pagination defaulting to 50 rows per page. Add a dropdown to change row count.",
+    "Ensure table rows are fully clickable and navigate to the distributor detail page.",
+    "Alternate table rows MUST use 'even:bg-emerald-50/40' to give a very light brand color tint.",
+    "KPI Tile Numbers MUST use a light font weight (e.g., font-light text-4xl or text-5xl) to appear elegant rather than clunky.",
+    "Do NOT center align the app container. Keep text aligned naturally.",
+    "Use 'sonner' for any toast notifications.",
+    "Ensure all code is written in .js/.jsx, as the project does not use TypeScript."
   ],
-  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
-    "You tend to converge toward generic, 'on distribution' outputs. In frontend design, this creates what users call the 'AI slop' aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight.",
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. Avoid this: make creative, distinctive frontends that surprise and delight.",
     "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
     "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
     "Create depth through layered design elements with z-index hierarchy.",
     "Use glass-morphism effects with backdrop filters (12-24px blur).",
-    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms.",
-    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file. This disrupts the human natural reading flow of text.",
+    "You MUST NOT apply universal transition (e.g., transition: all). Always add transitions for specific interactive elements like button, input excluding transforms.",
+    "You MUST NOT center align the app container. Do not add '.App { text-align: center; }' in the css file.",
     "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
-    "NEVER: use AI assistant Emoji characters for icons.",
+    "NEVER use AI assistant Emoji characters for icons.",
     "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
     "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
-    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
-    "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations separate good from extraordinary.",
     "Prioritize using pre-existing components from src/components/ui when applicable.",
-    "Create new components that match the style and conventions of existing components when needed.",
-    "Examine existing components to understand the project's component patterns before creating new ones.",
-    "Components MUST use named exports (export const ComponentName = ...)",
-    "Pages MUST use default exports (export default function PageName() {...})",
-    "Use sonner for toasts. Sonner component are located in /app/frontend/src/components/ui/sonner.js or similar."
-  ]
+    "Components MUST use named exports. Pages MUST use default exports."
+  ],
+  "libraries_to_install": [
+    "@phosphor-icons/react",
+    "recharts",
+    "sonner",
+    "clsx",
+    "tailwind-merge"
+  ],
+  "image_urls": []
 }
