@@ -65,6 +65,16 @@ const TABLE_HEADER_CLASS = "text-left p-4 font-semibold text-emerald-800/70 uppe
 // Table row class - from design_guidelines.json
 const getTableRowClass = (index) => `border-b border-emerald-50 transition-colors duration-200 cursor-pointer ${index % 2 === 1 ? 'bg-emerald-50/40' : 'bg-white'} hover:bg-emerald-50/60`;
 
+// Get 2-letter initials from name (like lead list page)
+const getInitials = (name) => {
+  if (!name) return 'NA';
+  const parts = name.trim().split(' ').filter(Boolean);
+  if (parts.length >= 2) {
+    return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+};
+
 // Safe date formatter
 const formatDate = (dateString, formatStr = 'MMM d, yyyy') => {
   if (!dateString) return null;
@@ -134,7 +144,6 @@ export default function TaskManagement() {
     milestone_id: '',
     labels: [],
     due_date: '',
-    due_time: '',
     reminder_date: '',
     linked_entity_type: '',
     linked_entity_id: ''
@@ -354,7 +363,6 @@ export default function TaskManagement() {
       milestone_id: '',
       labels: [],
       due_date: '',
-      due_time: '',
       reminder_date: '',
       linked_entity_type: '',
       linked_entity_id: ''
@@ -373,7 +381,6 @@ export default function TaskManagement() {
       milestone_id: task.milestone_id || '',
       labels: task.labels || [],
       due_date: task.due_date || '',
-      due_time: task.due_time || '',
       reminder_date: task.reminder_date || '',
       linked_entity_type: task.linked_entity_type || '',
       linked_entity_id: task.linked_entity_id || ''
@@ -637,14 +644,14 @@ export default function TaskManagement() {
                               {task.assignees_data?.slice(0, 3).map((assignee, i) => (
                                 <div
                                   key={assignee.id}
-                                  className="w-7 h-7 rounded-full bg-emerald-100 border-2 border-white flex items-center justify-center text-xs font-medium text-emerald-700"
+                                  className="w-8 h-8 rounded-full bg-emerald-100 border-2 border-white flex items-center justify-center text-xs font-medium text-emerald-700"
                                   title={assignee.name}
                                 >
-                                  {assignee.name?.charAt(0)}
+                                  {getInitials(assignee.name)}
                                 </div>
                               ))}
                               {task.assignees?.length > 3 && (
-                                <div className="w-7 h-7 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-xs font-medium text-slate-600">
+                                <div className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-xs font-medium text-slate-600">
                                   +{task.assignees.length - 3}
                                 </div>
                               )}
@@ -765,7 +772,7 @@ export default function TaskManagement() {
                                 className="w-6 h-6 rounded-full bg-emerald-100 border-2 border-white flex items-center justify-center text-[10px] font-medium text-emerald-700"
                                 title={a.name}
                               >
-                                {a.name?.charAt(0)}
+                                {getInitials(a.name)}
                               </div>
                             ))}
                           </div>
@@ -990,24 +997,83 @@ export default function TaskManagement() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Assignees</Label>
-              <div className="flex flex-wrap gap-2 p-3 border rounded-lg min-h-[60px]">
-                {users.map(u => (
-                  <label key={u.id} className="flex items-center gap-2 cursor-pointer">
-                    <Checkbox
-                      checked={taskForm.assignees.includes(u.id)}
-                      onCheckedChange={(checked) => {
-                        setTaskForm(f => ({
-                          ...f,
-                          assignees: checked 
-                            ? [...f.assignees, u.id]
-                            : f.assignees.filter(id => id !== u.id)
-                        }));
-                      }}
-                    />
-                    <span className="text-sm">{u.name}</span>
-                  </label>
-                ))}
+              <Label>Assignees {taskForm.department_id && <span className="text-xs text-slate-400 ml-1">(from {taskForm.department_id})</span>}</Label>
+              {/* Selected assignees chips */}
+              <div className="flex flex-wrap gap-2 min-h-[40px] p-2 border border-emerald-100 rounded-lg bg-slate-50/50">
+                {taskForm.assignees.length === 0 ? (
+                  <span className="text-sm text-slate-400">No assignees selected</span>
+                ) : (
+                  taskForm.assignees.map(assigneeId => {
+                    const assignee = users.find(u => u.id === assigneeId);
+                    if (!assignee) return null;
+                    return (
+                      <div 
+                        key={assigneeId}
+                        className="flex items-center gap-1.5 pl-1 pr-2 py-1 bg-emerald-100 rounded-full text-sm"
+                      >
+                        <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center text-[10px] font-medium text-white">
+                          {getInitials(assignee.name)}
+                        </div>
+                        <span className="text-emerald-800">{assignee.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setTaskForm(f => ({ ...f, assignees: f.assignees.filter(id => id !== assigneeId) }))}
+                          className="ml-1 text-emerald-600 hover:text-emerald-800"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              {/* Assignee selection dropdown - filtered by department */}
+              <div className="border border-emerald-100 rounded-lg max-h-48 overflow-y-auto">
+                {!taskForm.department_id ? (
+                  <div className="p-3 text-sm text-slate-400 text-center">
+                    Select a department first to see available assignees
+                  </div>
+                ) : (
+                  users
+                    .filter(u => u.department === taskForm.department_id || !u.department)
+                    .map(u => {
+                      const isSelected = taskForm.assignees.includes(u.id);
+                      return (
+                        <div
+                          key={u.id}
+                          onClick={() => {
+                            setTaskForm(f => ({
+                              ...f,
+                              assignees: isSelected
+                                ? f.assignees.filter(id => id !== u.id)
+                                : [...f.assignees, u.id]
+                            }));
+                          }}
+                          className={`flex items-center gap-3 p-2.5 cursor-pointer transition-colors ${
+                            isSelected ? 'bg-emerald-50' : 'hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${
+                            isSelected ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-700'
+                          }`}>
+                            {getInitials(u.name)}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-slate-700">{u.name}</p>
+                            <p className="text-xs text-slate-400">{u.role || u.department}</p>
+                          </div>
+                          {isSelected && (
+                            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                          )}
+                        </div>
+                      );
+                    })
+                )}
+                {taskForm.department_id && users.filter(u => u.department === taskForm.department_id || !u.department).length === 0 && (
+                  <div className="p-3 text-sm text-slate-400 text-center">
+                    No users found in this department
+                  </div>
+                )}
               </div>
             </div>
             <div className="space-y-2">
@@ -1049,21 +1115,13 @@ export default function TaskManagement() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Due Time</Label>
+                <Label>Reminder Date</Label>
                 <Input
-                  type="time"
-                  value={taskForm.due_time}
-                  onChange={(e) => setTaskForm(f => ({ ...f, due_time: e.target.value }))}
+                  type="date"
+                  value={taskForm.reminder_date}
+                  onChange={(e) => setTaskForm(f => ({ ...f, reminder_date: e.target.value }))}
                 />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Reminder Date</Label>
-              <Input
-                type="date"
-                value={taskForm.reminder_date}
-                onChange={(e) => setTaskForm(f => ({ ...f, reminder_date: e.target.value }))}
-              />
             </div>
           </div>
           <DialogFooter>

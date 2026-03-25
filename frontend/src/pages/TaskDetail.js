@@ -50,6 +50,16 @@ const STATUS_CONFIG = {
 // Card styling from design guidelines
 const CARD_CLASS = "border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]";
 
+// Get 2-letter initials from name
+const getInitials = (name) => {
+  if (!name) return 'NA';
+  const parts = name.trim().split(' ').filter(Boolean);
+  if (parts.length >= 2) {
+    return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+};
+
 // Format date safely
 const formatDate = (dateString, formatStr = 'MMM d, yyyy') => {
   if (!dateString) return null;
@@ -149,7 +159,6 @@ export default function TaskDetail() {
         milestone_id: taskRes.data.milestone_id || '',
         labels: taskRes.data.labels || [],
         due_date: taskRes.data.due_date || '',
-        due_time: taskRes.data.due_time || '',
         reminder_date: taskRes.data.reminder_date || ''
       });
     } catch (error) {
@@ -495,8 +504,8 @@ export default function TaskDetail() {
                 <div className="space-y-4">
                   {/* Add Comment */}
                   <div className="flex gap-3">
-                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-sm font-medium text-emerald-700 shrink-0">
-                      {user?.name?.charAt(0) || 'U'}
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-xs font-medium text-emerald-700 shrink-0">
+                      {getInitials(user?.name)}
                     </div>
                     <div className="flex-1 space-y-2">
                       <Textarea
@@ -526,8 +535,8 @@ export default function TaskDetail() {
                     ) : (
                       task.comments?.map(comment => (
                         <div key={comment.id} className="flex gap-3" data-testid={`comment-${comment.id}`}>
-                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-sm font-medium text-slate-700 shrink-0">
-                            {comment.created_by_name?.charAt(0) || 'U'}
+                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-medium text-slate-700 shrink-0">
+                            {getInitials(comment.created_by_name)}
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
@@ -560,8 +569,8 @@ export default function TaskDetail() {
                   ) : (
                     task.activities?.map(activity => (
                       <div key={activity.id} className="flex items-start gap-3 text-sm">
-                        <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-medium text-slate-600 shrink-0 mt-0.5">
-                          {activity.created_by_name?.charAt(0) || 'S'}
+                        <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-medium text-slate-600 shrink-0 mt-0.5">
+                          {getInitials(activity.created_by_name)}
                         </div>
                         <div className="flex-1">
                           <p className="text-slate-600">
@@ -656,18 +665,12 @@ export default function TaskDetail() {
               <div>
                 <Label className="text-xs text-slate-500">Due Date</Label>
                 {isEditing ? (
-                  <div className="grid grid-cols-2 gap-2 mt-1">
-                    <Input
-                      type="date"
-                      value={editForm.due_date}
-                      onChange={(e) => setEditForm(f => ({ ...f, due_date: e.target.value }))}
-                    />
-                    <Input
-                      type="time"
-                      value={editForm.due_time}
-                      onChange={(e) => setEditForm(f => ({ ...f, due_time: e.target.value }))}
-                    />
-                  </div>
+                  <Input
+                    type="date"
+                    value={editForm.due_date}
+                    onChange={(e) => setEditForm(f => ({ ...f, due_date: e.target.value }))}
+                    className="mt-1"
+                  />
                 ) : (
                   <div className={`flex items-center gap-2 mt-1 ${isOverdue(task.due_date) ? 'text-red-600' : ''}`}>
                     <Calendar className="h-4 w-4 text-slate-400" />
@@ -675,7 +678,6 @@ export default function TaskDetail() {
                       {task.due_date ? (
                         <>
                           {formatDate(task.due_date)}
-                          {task.due_time && ` at ${task.due_time}`}
                           {isOverdue(task.due_date) && task.status !== 'closed' && (
                             <span className="text-red-600 ml-2">(Overdue)</span>
                           )}
@@ -737,8 +739,8 @@ export default function TaskDetail() {
                 <div className="space-y-2">
                   {task.assignees_data.map(assignee => (
                     <div key={assignee.id} className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-sm font-medium text-emerald-700">
-                        {assignee.name?.charAt(0)}
+                      <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-xs font-medium text-emerald-700">
+                        {getInitials(assignee.name)}
                       </div>
                       <div>
                         <p className="text-sm font-medium">{assignee.name}</p>
@@ -760,8 +762,8 @@ export default function TaskDetail() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-sm font-medium text-slate-700">
-                  {task.created_by_name?.charAt(0) || 'U'}
+                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-medium text-slate-700">
+                  {getInitials(task.created_by_name)}
                 </div>
                 <div>
                   <p className="text-sm font-medium">{task.created_by_name}</p>
@@ -787,15 +789,15 @@ export default function TaskDetail() {
                   return (
                     <div
                       key={watcherId}
-                      className="w-7 h-7 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-xs font-medium text-slate-700"
+                      className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-xs font-medium text-slate-700"
                       title={watcher?.name || 'User'}
                     >
-                      {watcher?.name?.charAt(0) || 'U'}
+                      {getInitials(watcher?.name)}
                     </div>
                   );
                 })}
                 {task.watchers?.length > 8 && (
-                  <div className="w-7 h-7 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-xs font-medium text-slate-600">
+                  <div className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-xs font-medium text-slate-600">
                     +{task.watchers.length - 8}
                   </div>
                 )}
