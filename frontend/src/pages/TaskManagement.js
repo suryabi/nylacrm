@@ -42,14 +42,14 @@ import { toast } from 'sonner';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-// Severity styles
+// Severity styles - using global theme colors
 const SEVERITY_STYLES = {
   high: { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-400', border: 'border-red-200 dark:border-red-800' },
   medium: { bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-400', border: 'border-amber-200 dark:border-amber-800' },
   low: { bg: 'bg-emerald-100 dark:bg-emerald-900/30', text: 'text-emerald-700 dark:text-emerald-400', border: 'border-emerald-200 dark:border-emerald-800' }
 };
 
-// Status configurations
+// Status configurations - aligned with global theme
 const STATUS_CONFIG = {
   open: { label: 'Open', icon: Circle, color: 'text-blue-600', bg: 'bg-blue-50' },
   in_progress: { label: 'In Progress', icon: ArrowRight, color: 'text-amber-600', bg: 'bg-amber-50' },
@@ -58,6 +58,12 @@ const STATUS_CONFIG = {
 };
 
 const KANBAN_COLUMNS = ['open', 'in_progress', 'review', 'closed'];
+
+// Table header class - from design_guidelines.json
+const TABLE_HEADER_CLASS = "text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs";
+
+// Table row class - from design_guidelines.json
+const getTableRowClass = (index) => `border-b border-emerald-50 transition-colors duration-200 cursor-pointer ${index % 2 === 1 ? 'bg-emerald-50/40' : 'bg-white'} hover:bg-emerald-50/60`;
 
 // Safe date formatter
 const formatDate = (dateString, formatStr = 'MMM d, yyyy') => {
@@ -406,7 +412,7 @@ export default function TaskManagement() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white" style={{ fontFamily: 'Manrope, sans-serif' }}>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
             Task Management
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
@@ -449,54 +455,54 @@ export default function TaskManagement() {
       {/* Stats Cards */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/20 dark:to-slate-900">
-            <CardContent className="p-4">
+          <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)] hover:shadow-[0_8px_24px_rgba(6,95,70,0.08)] hover:-translate-y-[2px] transition-[transform,box-shadow] duration-300 bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/20 dark:to-slate-900">
+            <CardContent className="p-5">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50">
+                <div className="p-2.5 rounded-xl bg-blue-100 dark:bg-blue-900/50">
                   <Circle className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.by_status?.open || 0}</p>
-                  <p className="text-xs text-slate-500">Open</p>
+                  <p className="text-2xl font-light text-slate-900 dark:text-white">{stats.by_status?.open || 0}</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider">Open</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-white dark:from-amber-900/20 dark:to-slate-900">
-            <CardContent className="p-4">
+          <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)] hover:shadow-[0_8px_24px_rgba(6,95,70,0.08)] hover:-translate-y-[2px] transition-[transform,box-shadow] duration-300 bg-gradient-to-br from-amber-50 to-white dark:from-amber-900/20 dark:to-slate-900">
+            <CardContent className="p-5">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/50">
+                <div className="p-2.5 rounded-xl bg-amber-100 dark:bg-amber-900/50">
                   <ArrowRight className="h-5 w-5 text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.by_status?.in_progress || 0}</p>
-                  <p className="text-xs text-slate-500">In Progress</p>
+                  <p className="text-2xl font-light text-slate-900 dark:text-white">{stats.by_status?.in_progress || 0}</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider">In Progress</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="border-0 shadow-sm bg-gradient-to-br from-red-50 to-white dark:from-red-900/20 dark:to-slate-900">
-            <CardContent className="p-4">
+          <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)] hover:shadow-[0_8px_24px_rgba(6,95,70,0.08)] hover:-translate-y-[2px] transition-[transform,box-shadow] duration-300 bg-gradient-to-br from-red-50 to-white dark:from-red-900/20 dark:to-slate-900">
+            <CardContent className="p-5">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/50">
+                <div className="p-2.5 rounded-xl bg-red-100 dark:bg-red-900/50">
                   <AlertTriangle className="h-5 w-5 text-red-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.overdue || 0}</p>
-                  <p className="text-xs text-slate-500">Overdue</p>
+                  <p className="text-2xl font-light text-slate-900 dark:text-white">{stats.overdue || 0}</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider">Overdue</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="border-0 shadow-sm bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-900/20 dark:to-slate-900">
-            <CardContent className="p-4">
+          <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)] hover:shadow-[0_8px_24px_rgba(6,95,70,0.08)] hover:-translate-y-[2px] transition-[transform,box-shadow] duration-300 bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-900/20 dark:to-slate-900">
+            <CardContent className="p-5">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/50">
+                <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-900/50">
                   <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-white">{stats.by_status?.closed || 0}</p>
-                  <p className="text-xs text-slate-500">Closed</p>
+                  <p className="text-2xl font-light text-slate-900 dark:text-white">{stats.by_status?.closed || 0}</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider">Closed</p>
                 </div>
               </div>
             </CardContent>
@@ -568,19 +574,19 @@ export default function TaskManagement() {
 
         {/* List View */}
         <TabsContent value="list" className="space-y-4">
-          <Card className="border-0 shadow-sm">
+          <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse text-sm">
                   <thead>
                     <tr className="bg-emerald-50/30 border-b border-emerald-100/60">
-                      <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Task</th>
-                      <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Status</th>
-                      <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Severity</th>
-                      <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Department</th>
-                      <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Assignees</th>
-                      <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Due Date</th>
-                      <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actions</th>
+                      <th className={TABLE_HEADER_CLASS}>Task</th>
+                      <th className={TABLE_HEADER_CLASS}>Status</th>
+                      <th className={TABLE_HEADER_CLASS}>Severity</th>
+                      <th className={TABLE_HEADER_CLASS}>Department</th>
+                      <th className={TABLE_HEADER_CLASS}>Assignees</th>
+                      <th className={TABLE_HEADER_CLASS}>Due Date</th>
+                      <th className={`${TABLE_HEADER_CLASS} text-center`}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -594,9 +600,7 @@ export default function TaskManagement() {
                       filteredTasks.map((task, index) => (
                         <tr 
                           key={task.id}
-                          className={`border-b border-emerald-50 transition-colors duration-200 cursor-pointer
-                            ${index % 2 === 1 ? 'bg-emerald-50/40' : 'bg-white'}
-                            hover:bg-emerald-50/60`}
+                          className={getTableRowClass(index)}
                           onClick={() => navigate(`/tasks/${task.id}`)}
                           data-testid={`task-row-${task.id}`}
                         >
@@ -793,8 +797,8 @@ export default function TaskManagement() {
               </Card>
             ) : (
               milestones.map(milestone => (
-                <Card key={milestone.id} className="overflow-hidden" data-testid={`milestone-${milestone.id}`}>
-                  <CardContent className="p-4">
+                <Card key={milestone.id} className="overflow-hidden border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)] hover:shadow-[0_8px_24px_rgba(6,95,70,0.08)] transition-[transform,box-shadow] duration-300" data-testid={`milestone-${milestone.id}`}>
+                  <CardContent className="p-5">
                     <div className="flex items-start justify-between">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
@@ -871,7 +875,7 @@ export default function TaskManagement() {
                 </Card>
               ) : (
                 labels.map(label => (
-                  <Card key={label.id} className="overflow-hidden" data-testid={`label-${label.id}`}>
+                  <Card key={label.id} className="overflow-hidden border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)] hover:shadow-[0_8px_24px_rgba(6,95,70,0.08)] transition-[transform,box-shadow] duration-300" data-testid={`label-${label.id}`}>
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">

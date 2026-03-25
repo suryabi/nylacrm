@@ -32,20 +32,23 @@ import { toast } from 'sonner';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-// Severity styles
+// Severity styles - using global theme colors
 const SEVERITY_STYLES = {
   high: { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-400', border: 'border-red-200' },
   medium: { bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-400', border: 'border-amber-200' },
   low: { bg: 'bg-emerald-100 dark:bg-emerald-900/30', text: 'text-emerald-700 dark:text-emerald-400', border: 'border-emerald-200' }
 };
 
-// Status configurations
+// Status configurations - aligned with global theme
 const STATUS_CONFIG = {
   open: { label: 'Open', icon: Circle, color: 'text-blue-600', bg: 'bg-blue-50' },
   in_progress: { label: 'In Progress', icon: ArrowRight, color: 'text-amber-600', bg: 'bg-amber-50' },
   review: { label: 'In Review', icon: Eye, color: 'text-purple-600', bg: 'bg-purple-50' },
   closed: { label: 'Closed', icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' }
 };
+
+// Card styling from design guidelines
+const CARD_CLASS = "border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]";
 
 // Format date safely
 const formatDate = (dateString, formatStr = 'MMM d, yyyy') => {
@@ -339,7 +342,7 @@ export default function TaskDetail() {
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
           {/* Task Header */}
-          <Card className="border-0 shadow-sm">
+          <Card className={CARD_CLASS}>
             <CardContent className="p-6">
               <div className="flex items-start gap-4">
                 <div className="flex-1 space-y-4">
@@ -366,7 +369,7 @@ export default function TaskDetail() {
                           </Badge>
                         )}
                       </div>
-                      <h1 className="text-2xl font-bold text-slate-900 dark:text-white" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                      <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
                         {task.title}
                       </h1>
                     </div>
@@ -460,7 +463,7 @@ export default function TaskDetail() {
           </Card>
 
           {/* Comments & Activity */}
-          <Card className="border-0 shadow-sm">
+          <Card className={CARD_CLASS}>
             <CardHeader className="pb-2">
               <div className="flex gap-4 border-b">
                 <button
@@ -581,9 +584,9 @@ export default function TaskDetail() {
         {/* Sidebar */}
         <div className="space-y-4">
           {/* Details Card */}
-          <Card className="border-0 shadow-sm">
+          <Card className={CARD_CLASS}>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Details</CardTitle>
+              <CardTitle className="text-sm font-semibold text-emerald-800/70 uppercase tracking-wider">Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Department */}
@@ -704,9 +707,9 @@ export default function TaskDetail() {
           </Card>
 
           {/* Assignees Card */}
-          <Card className="border-0 shadow-sm">
+          <Card className={CARD_CLASS}>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Assignees</CardTitle>
+              <CardTitle className="text-sm font-semibold text-emerald-800/70 uppercase tracking-wider">Assignees</CardTitle>
             </CardHeader>
             <CardContent>
               {isEditing ? (
@@ -751,9 +754,9 @@ export default function TaskDetail() {
           </Card>
 
           {/* Reporter Card */}
-          <Card className="border-0 shadow-sm">
+          <Card className={CARD_CLASS}>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Reporter</CardTitle>
+              <CardTitle className="text-sm font-semibold text-emerald-800/70 uppercase tracking-wider">Reporter</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
@@ -771,9 +774,9 @@ export default function TaskDetail() {
           </Card>
 
           {/* Watchers Card */}
-          <Card className="border-0 shadow-sm">
+          <Card className={CARD_CLASS}>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold text-slate-500 uppercase tracking-wider">
+              <CardTitle className="text-sm font-semibold text-emerald-800/70 uppercase tracking-wider">
                 Watchers ({task.watchers?.length || 0})
               </CardTitle>
             </CardHeader>
