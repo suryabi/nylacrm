@@ -81,6 +81,8 @@ import LeadScoringModel from './pages/LeadScoringModel';
 import DistributorList from './pages/DistributorList';
 import DistributorDetail from './pages/DistributorDetail';
 import StockDashboard from './pages/StockDashboard';
+import TaskManagement from './pages/TaskManagement';
+import TaskDetail from './pages/TaskDetail';
 import '@/App.css';
 import { useActivityTracker } from './hooks/useActivityTracker';
 import { NavigationProvider } from './context/NavigationContext';
@@ -233,6 +235,10 @@ function AppRouter() {
           <Route path="/distributors/:id" element={<ProtectedRoute moduleKey="distributors"><DistributorDetail /></ProtectedRoute>} />
           <Route path="/distributors/:id/edit" element={<ProtectedRoute moduleKey="distributors"><DistributorDetail /></ProtectedRoute>} />
           <Route path="/stock-dashboard" element={<ProtectedRoute moduleKey="distributors"><StockDashboard /></ProtectedRoute>} />
+          
+          {/* Task Management */}
+          <Route path="/tasks" element={<ProtectedRoute><TaskManagement /></ProtectedRoute>} />
+          <Route path="/tasks/:taskId" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </>

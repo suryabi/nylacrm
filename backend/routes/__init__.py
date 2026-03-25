@@ -29,6 +29,7 @@ from .ai_assistant import router as ai_assistant_router
 from .scoring import router as scoring_router
 from .invoices import router as invoices_router
 from .distributors import router as distributors_router
+from .task_management import router as task_management_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -61,5 +62,8 @@ routes_router.include_router(invoices_router, prefix="/invoices", tags=["Invoice
 
 # Distributor Management
 routes_router.include_router(distributors_router, prefix="/distributors", tags=["Distributors"])
+
+# Task Management (GitHub-style Issue Tracker)
+routes_router.include_router(task_management_router, prefix="/task-management", tags=["Task Management"])
 
 __all__ = ['routes_router']
