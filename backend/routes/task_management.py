@@ -388,9 +388,13 @@ async def get_tasks(
 @router.get("/tasks/stats")
 async def get_task_stats(
     department_id: Optional[str] = None,
+    view: Optional[str] = None,
+    status: Optional[str] = None,
+    severity: Optional[str] = None,
+    assignee_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get task statistics for dashboard"""
+    """Get task statistics for the tasks page"""
     tdb = get_tdb()
     
     user_department = current_user.get('department', 'Sales')
@@ -418,9 +422,15 @@ async def get_task_stats(
         {'$group': {'_id': '$severity', 'count': {'$sum': 1}}}
     ]).to_list(10)
     
-    # Get my tasks count
-    my_tasks_query = {**base_query, 'assignees': user_id, 'status': {'$ne': 'closed'}}
-    my_tasks_count = await tdb.tasks_v2.count_documents(my_tasks_query)
+    # Get my tasks count (assigned to me, not closed)
+    my_tasks_count = await tdb.tasks_v2.count_documents(
+        {'assignees': user_id, 'status': {'$ne': 'closed'}}
+    )
+    
+    # Get created by me count (not closed)
+    created_by_me_count = await tdb.tasks_v2.count_documents(
+        {'created_by': user_id, 'status': {'$ne': 'closed'}}
+    )
     
     # Get overdue count
     today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
@@ -435,8 +445,62 @@ async def get_task_stats(
         'by_status': {item['_id']: item['count'] for item in status_counts},
         'by_severity': {item['_id']: item['count'] for item in severity_counts},
         'my_tasks': my_tasks_count,
+        'created_by_me': created_by_me_count,
         'overdue': overdue_count,
         'total': sum(item['count'] for item in status_counts)
+    }
+
+
+@router.get("/tasks/my-dashboard-stats")
+async def get_my_dashboard_stats(current_user: dict = Depends(get_current_user)):
+    """Get personal task metrics for the home dashboard"""
+    tdb = get_tdb()
+    user_id = current_user['id']
+    today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    
+    # Assigned to me (not closed)
+    assigned_to_me = await tdb.tasks_v2.count_documents(
+        {'assignees': user_id, 'status': {'$ne': 'closed'}}
+    )
+    
+    # Created by me (not closed)
+    created_by_me = await tdb.tasks_v2.count_documents(
+        {'created_by': user_id, 'status': {'$ne': 'closed'}}
+    )
+    
+    # Overdue (assigned to me, past due, not closed)
+    overdue = await tdb.tasks_v2.count_documents({
+        'assignees': user_id,
+        'due_date': {'$lt': today, '$ne': None},
+        'status': {'$nin': ['closed', 'resolved']}
+    })
+    
+    # High severity (assigned to me, not closed)
+    high_severity = await tdb.tasks_v2.count_documents({
+        'assignees': user_id,
+        'severity': 'high',
+        'status': {'$ne': 'closed'}
+    })
+    
+    # In progress (assigned to me)
+    in_progress = await tdb.tasks_v2.count_documents({
+        'assignees': user_id,
+        'status': 'in_progress'
+    })
+    
+    # Completed by me (closed tasks where I'm assignee)
+    completed = await tdb.tasks_v2.count_documents({
+        'assignees': user_id,
+        'status': 'closed'
+    })
+    
+    return {
+        'assigned_to_me': assigned_to_me,
+        'created_by_me': created_by_me,
+        'overdue': overdue,
+        'high_severity': high_severity,
+        'in_progress': in_progress,
+        'completed': completed
     }
 
 

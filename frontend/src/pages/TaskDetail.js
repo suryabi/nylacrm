@@ -176,6 +176,21 @@ export default function TaskDetail() {
     fetchTask();
   }, [fetchTask]);
 
+  // Quick update a single field
+  const handleQuickUpdate = async (field, value) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API}/api/task-management/tasks/${taskId}`, 
+        { [field]: value },
+        { headers: { Authorization: `Bearer ${token}` }}
+      );
+      toast.success('Updated');
+      fetchTask();
+    } catch (error) {
+      toast.error('Failed to update');
+    }
+  };
+
   // Update task
   const handleSave = async () => {
     setSaving(true);
@@ -385,24 +400,35 @@ export default function TaskDetail() {
                   )}
 
                   {/* Quick Status Change */}
-                  {!isEditing && canEdit && task.status !== 'closed' && (
-                    <div className="flex items-center gap-2 pt-2">
+                  {!isEditing && canEdit && (
+                    <div className="flex items-center gap-2 pt-2 flex-wrap">
                       <span className="text-sm text-slate-500">Quick actions:</span>
-                      {Object.entries(STATUS_CONFIG)
-                        .filter(([key]) => key !== task.status)
-                        .map(([key, config]) => (
-                          <Button
-                            key={key}
-                            variant="outline"
-                            size="sm"
-                            className={`${config.bg} ${config.color} border-0 hover:opacity-80`}
-                            onClick={() => handleStatusChange(key)}
-                          >
-                            {React.createElement(config.icon, { className: 'h-3 w-3 mr-1' })}
-                            {config.label}
-                          </Button>
-                        ))
-                      }
+                      {task.status === 'closed' ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="bg-blue-50 text-blue-600 border-0 hover:bg-blue-100"
+                          onClick={() => handleStatusChange('open')}
+                        >
+                          <Circle className="h-3 w-3 mr-1" />
+                          Reopen
+                        </Button>
+                      ) : (
+                        Object.entries(STATUS_CONFIG)
+                          .filter(([key]) => key !== task.status)
+                          .map(([key, config]) => (
+                            <Button
+                              key={key}
+                              variant="outline"
+                              size="sm"
+                              className={`${config.bg} ${config.color} border-0 hover:opacity-80`}
+                              onClick={() => handleStatusChange(key)}
+                            >
+                              {React.createElement(config.icon, { className: 'h-3 w-3 mr-1' })}
+                              {config.label}
+                            </Button>
+                          ))
+                      )}
                     </div>
                   )}
                 </div>
@@ -592,18 +618,53 @@ export default function TaskDetail() {
 
         {/* Sidebar */}
         <div className="space-y-4">
-          {/* Details Card */}
+          {/* Details Card - Always inline editable */}
           <Card className={CARD_CLASS}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-emerald-800/70 uppercase tracking-wider">Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Status */}
+              <div>
+                <Label className="text-xs text-slate-500">Status</Label>
+                {canEdit ? (
+                  <Select value={task.status} onValueChange={(v) => handleQuickUpdate('status', v)}>
+                    <SelectTrigger className="mt-1 h-9">
+                      <div className="flex items-center gap-2">
+                        {React.createElement(STATUS_CONFIG[task.status]?.icon || Circle, { className: `h-4 w-4 ${STATUS_CONFIG[task.status]?.color}` })}
+                        <span>{STATUS_CONFIG[task.status]?.label}</span>
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+                        <SelectItem key={key} value={key}>
+                          <div className="flex items-center gap-2">
+                            {React.createElement(config.icon, { className: `h-4 w-4 ${config.color}` })}
+                            {config.label}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="flex items-center gap-2 mt-1">
+                    {React.createElement(STATUS_CONFIG[task.status]?.icon || Circle, { className: `h-4 w-4 ${STATUS_CONFIG[task.status]?.color}` })}
+                    <span className="text-sm">{STATUS_CONFIG[task.status]?.label}</span>
+                  </div>
+                )}
+              </div>
+
               {/* Department */}
               <div>
                 <Label className="text-xs text-slate-500">Department</Label>
-                {isEditing ? (
-                  <Select value={editForm.department_id} onValueChange={(v) => setEditForm(f => ({ ...f, department_id: v }))}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                {canEdit ? (
+                  <Select value={task.department_id} onValueChange={(v) => handleQuickUpdate('department_id', v)}>
+                    <SelectTrigger className="mt-1 h-9">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-slate-400" />
+                        <span>{task.department_id}</span>
+                      </div>
+                    </SelectTrigger>
                     <SelectContent>
                       {departments.map(d => (
                         <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
@@ -621,13 +682,26 @@ export default function TaskDetail() {
               {/* Severity */}
               <div>
                 <Label className="text-xs text-slate-500">Severity</Label>
-                {isEditing ? (
-                  <Select value={editForm.severity} onValueChange={(v) => setEditForm(f => ({ ...f, severity: v }))}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                {canEdit ? (
+                  <Select value={task.severity} onValueChange={(v) => handleQuickUpdate('severity', v)}>
+                    <SelectTrigger className="mt-1 h-9">
+                      <div className="flex items-center gap-2">
+                        <Flag className="h-4 w-4 text-slate-400" />
+                        <Badge className={`${SEVERITY_STYLES[task.severity]?.bg} ${SEVERITY_STYLES[task.severity]?.text}`}>
+                          {task.severity}
+                        </Badge>
+                      </div>
+                    </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="high">
+                        <Badge className={`${SEVERITY_STYLES.high.bg} ${SEVERITY_STYLES.high.text}`}>High</Badge>
+                      </SelectItem>
+                      <SelectItem value="medium">
+                        <Badge className={`${SEVERITY_STYLES.medium.bg} ${SEVERITY_STYLES.medium.text}`}>Medium</Badge>
+                      </SelectItem>
+                      <SelectItem value="low">
+                        <Badge className={`${SEVERITY_STYLES.low.bg} ${SEVERITY_STYLES.low.text}`}>Low</Badge>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 ) : (
@@ -643,9 +717,17 @@ export default function TaskDetail() {
               {/* Milestone */}
               <div>
                 <Label className="text-xs text-slate-500">Milestone</Label>
-                {isEditing ? (
-                  <Select value={editForm.milestone_id || "none"} onValueChange={(v) => setEditForm(f => ({ ...f, milestone_id: v === "none" ? "" : v }))}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="None" /></SelectTrigger>
+                {canEdit ? (
+                  <Select 
+                    value={task.milestone_id || "none"} 
+                    onValueChange={(v) => handleQuickUpdate('milestone_id', v === "none" ? null : v)}
+                  >
+                    <SelectTrigger className="mt-1 h-9">
+                      <div className="flex items-center gap-2">
+                        <Target className="h-4 w-4 text-slate-400" />
+                        <span>{task.milestone_data?.title || 'None'}</span>
+                      </div>
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
                       {milestones.filter(m => m.status === 'open').map(m => (
@@ -664,25 +746,19 @@ export default function TaskDetail() {
               {/* Due Date */}
               <div>
                 <Label className="text-xs text-slate-500">Due Date</Label>
-                {isEditing ? (
+                {canEdit ? (
                   <Input
                     type="date"
-                    value={editForm.due_date}
-                    onChange={(e) => setEditForm(f => ({ ...f, due_date: e.target.value }))}
-                    className="mt-1"
+                    value={task.due_date || ''}
+                    onChange={(e) => handleQuickUpdate('due_date', e.target.value || null)}
+                    className={`mt-1 h-9 ${isOverdue(task.due_date) && task.status !== 'closed' ? 'border-red-300 text-red-600' : ''}`}
                   />
                 ) : (
-                  <div className={`flex items-center gap-2 mt-1 ${isOverdue(task.due_date) ? 'text-red-600' : ''}`}>
+                  <div className={`flex items-center gap-2 mt-1 ${isOverdue(task.due_date) && task.status !== 'closed' ? 'text-red-600' : ''}`}>
                     <Calendar className="h-4 w-4 text-slate-400" />
                     <span className="text-sm">
-                      {task.due_date ? (
-                        <>
-                          {formatDate(task.due_date)}
-                          {isOverdue(task.due_date) && task.status !== 'closed' && (
-                            <span className="text-red-600 ml-2">(Overdue)</span>
-                          )}
-                        </>
-                      ) : 'Not set'}
+                      {task.due_date ? formatDate(task.due_date) : 'Not set'}
+                      {isOverdue(task.due_date) && task.status !== 'closed' && ' (Overdue)'}
                     </span>
                   </div>
                 )}
@@ -691,12 +767,12 @@ export default function TaskDetail() {
               {/* Reminder */}
               <div>
                 <Label className="text-xs text-slate-500">Reminder</Label>
-                {isEditing ? (
+                {canEdit ? (
                   <Input
                     type="date"
-                    value={editForm.reminder_date}
-                    onChange={(e) => setEditForm(f => ({ ...f, reminder_date: e.target.value }))}
-                    className="mt-1"
+                    value={task.reminder_date || ''}
+                    onChange={(e) => handleQuickUpdate('reminder_date', e.target.value || null)}
+                    className="mt-1 h-9"
                   />
                 ) : (
                   <div className="flex items-center gap-2 mt-1">
@@ -708,49 +784,80 @@ export default function TaskDetail() {
             </CardContent>
           </Card>
 
-          {/* Assignees Card */}
+          {/* Assignees Card - Inline editable */}
           <Card className={CARD_CLASS}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-emerald-800/70 uppercase tracking-wider">Assignees</CardTitle>
             </CardHeader>
             <CardContent>
-              {isEditing ? (
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {users.map(u => (
-                    <label key={u.id} className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 p-1 rounded">
-                      <input
-                        type="checkbox"
-                        checked={editForm.assignees.includes(u.id)}
-                        onChange={(e) => {
-                          setEditForm(f => ({
-                            ...f,
-                            assignees: e.target.checked
-                              ? [...f.assignees, u.id]
-                              : f.assignees.filter(id => id !== u.id)
-                          }));
-                        }}
-                        className="rounded"
-                      />
-                      <span className="text-sm">{u.name}</span>
-                    </label>
-                  ))}
-                </div>
-              ) : task.assignees_data?.length > 0 ? (
-                <div className="space-y-2">
+              {/* Current Assignees */}
+              {task.assignees_data?.length > 0 && (
+                <div className="space-y-2 mb-3">
                   {task.assignees_data.map(assignee => (
-                    <div key={assignee.id} className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-xs font-medium text-emerald-700">
-                        {getInitials(assignee.name)}
+                    <div key={assignee.id} className="flex items-center justify-between group">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-xs font-medium text-emerald-700">
+                          {getInitials(assignee.name)}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{assignee.name}</p>
+                          <p className="text-xs text-slate-500">{assignee.department}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium">{assignee.name}</p>
-                        <p className="text-xs text-slate-500">{assignee.department}</p>
-                      </div>
+                      {canEdit && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500"
+                          onClick={() => {
+                            const newAssignees = task.assignees.filter(id => id !== assignee.id);
+                            handleQuickUpdate('assignees', newAssignees);
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>
-              ) : (
+              )}
+              {task.assignees_data?.length === 0 && !canEdit && (
                 <p className="text-sm text-slate-400">No assignees</p>
+              )}
+              {/* Add Assignee Dropdown */}
+              {canEdit && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="w-full justify-start text-slate-500 border-dashed">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add assignee
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-56 max-h-64 overflow-y-auto">
+                    {users
+                      .filter(u => !task.assignees?.includes(u.id))
+                      .filter(u => u.department === task.department_id || !task.department_id)
+                      .map(u => (
+                        <DropdownMenuItem
+                          key={u.id}
+                          onClick={() => handleQuickUpdate('assignees', [...(task.assignees || []), u.id])}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-[10px] font-medium text-emerald-700">
+                              {getInitials(u.name)}
+                            </div>
+                            <div>
+                              <p className="text-sm">{u.name}</p>
+                              <p className="text-xs text-slate-400">{u.role || u.department}</p>
+                            </div>
+                          </div>
+                        </DropdownMenuItem>
+                      ))}
+                    {users.filter(u => !task.assignees?.includes(u.id)).length === 0 && (
+                      <DropdownMenuItem disabled>No more users to add</DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
             </CardContent>
           </Card>

@@ -111,18 +111,19 @@ export default function TaskManagement() {
   const [stats, setStats] = useState(null);
   const [user, setUser] = useState(null);
   
-  // View state
+  // Initialize filters from URL params
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'list');
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState({
-    department_id: '',
-    status: '',
-    severity: '',
-    milestone_id: '',
-    label_id: '',
-    assignee_id: '',
-    view: 'all'
+    department_id: searchParams.get('department_id') || '',
+    status: searchParams.get('status') || '',
+    severity: searchParams.get('severity') || '',
+    milestone_id: searchParams.get('milestone_id') || '',
+    label_id: searchParams.get('label_id') || '',
+    assignee_id: searchParams.get('assignee_id') || '',
+    view: searchParams.get('view') || 'all'
   });
+  const [filterOverdue, setFilterOverdue] = useState(searchParams.get('overdue') === 'true');
   
   // Dialog state
   const [showTaskDialog, setShowTaskDialog] = useState(false);
@@ -192,10 +193,17 @@ export default function TaskManagement() {
     fetchData();
   }, [fetchData]);
 
-  // Update URL when tab changes
+  // Update URL when tab or filters change
   useEffect(() => {
-    setSearchParams({ tab: activeTab });
-  }, [activeTab, setSearchParams]);
+    const params = { tab: activeTab };
+    if (filters.view && filters.view !== 'all') params.view = filters.view;
+    if (filters.status) params.status = filters.status;
+    if (filters.severity) params.severity = filters.severity;
+    if (filters.department_id) params.department_id = filters.department_id;
+    if (filters.assignee_id) params.assignee_id = filters.assignee_id;
+    if (filterOverdue) params.overdue = 'true';
+    setSearchParams(params, { replace: true });
+  }, [activeTab, filters, filterOverdue, setSearchParams]);
 
   // Task CRUD
   const handleSaveTask = async () => {
@@ -389,8 +397,11 @@ export default function TaskManagement() {
     setShowTaskDialog(true);
   };
 
-  // Filter tasks based on search
+  // Filter tasks based on search and overdue flag
   const filteredTasks = tasks.filter(task => {
+    // Overdue filter
+    if (filterOverdue && !isOverdue(task.due_date)) return false;
+    // Search filter
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -459,61 +470,39 @@ export default function TaskManagement() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Metric Cards */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)] hover:shadow-[0_8px_24px_rgba(6,95,70,0.08)] hover:-translate-y-[2px] transition-[transform,box-shadow] duration-300 bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/20 dark:to-slate-900">
-            <CardContent className="p-5">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-blue-100 dark:bg-blue-900/50">
-                  <Circle className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-light text-slate-900 dark:text-white">{stats.by_status?.open || 0}</p>
-                  <p className="text-xs text-slate-500 uppercase tracking-wider">Open</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)] hover:shadow-[0_8px_24px_rgba(6,95,70,0.08)] hover:-translate-y-[2px] transition-[transform,box-shadow] duration-300 bg-gradient-to-br from-amber-50 to-white dark:from-amber-900/20 dark:to-slate-900">
-            <CardContent className="p-5">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-amber-100 dark:bg-amber-900/50">
-                  <ArrowRight className="h-5 w-5 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-light text-slate-900 dark:text-white">{stats.by_status?.in_progress || 0}</p>
-                  <p className="text-xs text-slate-500 uppercase tracking-wider">In Progress</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)] hover:shadow-[0_8px_24px_rgba(6,95,70,0.08)] hover:-translate-y-[2px] transition-[transform,box-shadow] duration-300 bg-gradient-to-br from-red-50 to-white dark:from-red-900/20 dark:to-slate-900">
-            <CardContent className="p-5">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-red-100 dark:bg-red-900/50">
-                  <AlertTriangle className="h-5 w-5 text-red-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-light text-slate-900 dark:text-white">{stats.overdue || 0}</p>
-                  <p className="text-xs text-slate-500 uppercase tracking-wider">Overdue</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)] hover:shadow-[0_8px_24px_rgba(6,95,70,0.08)] hover:-translate-y-[2px] transition-[transform,box-shadow] duration-300 bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-900/20 dark:to-slate-900">
-            <CardContent className="p-5">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-900/50">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-light text-slate-900 dark:text-white">{stats.by_status?.closed || 0}</p>
-                  <p className="text-xs text-slate-500 uppercase tracking-wider">Closed</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3" data-testid="task-stats">
+          {[
+            { label: 'Total', value: stats.total || 0, icon: LayoutList, color: 'text-slate-700', bg: 'bg-slate-50', iconBg: 'bg-slate-100', onClick: () => { setFilters(f => ({ ...f, view: 'all', status: '', severity: '' })); setFilterOverdue(false); }},
+            { label: 'Assigned to Me', value: stats.my_tasks || 0, icon: User, color: 'text-blue-600', bg: 'bg-blue-50', iconBg: 'bg-blue-100', onClick: () => { setFilters(f => ({ ...f, view: 'my_tasks', status: '', severity: '' })); setFilterOverdue(false); }},
+            { label: 'Created by Me', value: stats.created_by_me || 0, icon: Users, color: 'text-emerald-600', bg: 'bg-emerald-50', iconBg: 'bg-emerald-100', onClick: () => { setFilters(f => ({ ...f, view: 'assigned_by_me', status: '', severity: '' })); setFilterOverdue(false); }},
+            { label: 'Open', value: stats.by_status?.open || 0, icon: Circle, color: 'text-blue-600', bg: 'bg-blue-50', iconBg: 'bg-blue-100', onClick: () => { setFilters(f => ({ ...f, status: 'open', view: 'all', severity: '' })); setFilterOverdue(false); }},
+            { label: 'Overdue', value: stats.overdue || 0, icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-50', iconBg: 'bg-red-100', onClick: () => { setFilterOverdue(true); setFilters(f => ({ ...f, status: '', view: 'all', severity: '' })); }},
+            { label: 'Closed', value: stats.by_status?.closed || 0, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50', iconBg: 'bg-emerald-100', onClick: () => { setFilters(f => ({ ...f, status: 'closed', view: 'all', severity: '' })); setFilterOverdue(false); }},
+          ].map(metric => {
+            const Icon = metric.icon;
+            return (
+              <Card 
+                key={metric.label}
+                onClick={metric.onClick}
+                className={`border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)] hover:shadow-[0_8px_24px_rgba(6,95,70,0.08)] hover:-translate-y-[2px] transition-[transform,box-shadow] duration-300 cursor-pointer ${metric.bg}`}
+                data-testid={`task-stat-${metric.label.toLowerCase().replace(/\s+/g, '-')}`}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-xl ${metric.iconBg}`}>
+                      <Icon className={`h-4 w-4 ${metric.color}`} />
+                    </div>
+                    <div>
+                      <p className="text-xl font-light text-slate-900 dark:text-white">{metric.value}</p>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-wider">{metric.label}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -542,18 +531,44 @@ export default function TaskManagement() {
           </TabsList>
 
           {/* Search and Filters */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
                 placeholder="Search tasks..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 w-64"
+                className="pl-9 w-56"
+                data-testid="task-search-input"
               />
             </div>
+            <Select value={filters.view || "all"} onValueChange={(v) => setFilters(f => ({ ...f, view: v === "all" ? "" : v }))}>
+              <SelectTrigger className="w-36" data-testid="task-view-filter">
+                <Eye className="h-4 w-4 mr-2 text-slate-400" />
+                <SelectValue placeholder="View" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Tasks</SelectItem>
+                <SelectItem value="my_tasks">Assigned to Me</SelectItem>
+                <SelectItem value="assigned_by_me">Created by Me</SelectItem>
+                <SelectItem value="watching">Watching</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filters.status || "all"} onValueChange={(v) => { setFilters(f => ({ ...f, status: v === "all" ? "" : v })); setFilterOverdue(false); }}>
+              <SelectTrigger className="w-32" data-testid="task-status-filter">
+                <Circle className="h-4 w-4 mr-2 text-slate-400" />
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="open">Open</SelectItem>
+                <SelectItem value="in_progress">In Progress</SelectItem>
+                <SelectItem value="review">In Review</SelectItem>
+                <SelectItem value="closed">Closed</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={filters.department_id || "all"} onValueChange={(v) => setFilters(f => ({ ...f, department_id: v === "all" ? "" : v }))}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-40" data-testid="task-dept-filter">
                 <Building2 className="h-4 w-4 mr-2 text-slate-400" />
                 <SelectValue placeholder="Department" />
               </SelectTrigger>
@@ -565,7 +580,7 @@ export default function TaskManagement() {
               </SelectContent>
             </Select>
             <Select value={filters.severity || "all"} onValueChange={(v) => setFilters(f => ({ ...f, severity: v === "all" ? "" : v }))}>
-              <SelectTrigger className="w-32">
+              <SelectTrigger className="w-32" data-testid="task-severity-filter">
                 <Flag className="h-4 w-4 mr-2 text-slate-400" />
                 <SelectValue placeholder="Severity" />
               </SelectTrigger>
@@ -576,6 +591,19 @@ export default function TaskManagement() {
                 <SelectItem value="low">Low</SelectItem>
               </SelectContent>
             </Select>
+            {/* Active filter indicators */}
+            {(filters.view !== 'all' && filters.view !== '' || filters.status || filters.severity || filters.department_id || filterOverdue) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setFilters({ department_id: '', status: '', severity: '', milestone_id: '', label_id: '', assignee_id: '', view: 'all' }); setFilterOverdue(false); }}
+                className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                data-testid="task-clear-filters"
+              >
+                <X className="h-4 w-4 mr-1" />
+                Clear
+              </Button>
+            )}
           </div>
         </div>
 
