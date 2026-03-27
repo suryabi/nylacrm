@@ -3,7 +3,38 @@
 ## Original Problem Statement
 Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. The application helps manage leads, accounts, invoices, COGS calculations, and sales team performance.
 
-## Latest Session - March 25, 2026 (Session 7)
+## Latest Session - March 27, 2026 (Session 8)
+
+### Home Dashboard Task Metrics & Task Page Filters ✅
+
+**User Requirements:**
+- Remove task creation from home page
+- Remove old metric tiles (Activities, Calls, Emails, Meetings) from home page
+- Replace with Task metrics (Assigned to Me, Created by Me, Overdue, High Severity)
+- Each metric tile clickable → navigates to /tasks with proper filters applied
+- Task page: Add metrics tiles (Total, Assigned to Me, Created by Me, Open, Overdue, Closed)
+- Task page: Add comprehensive filters (View, Status, Department, Severity)
+- Department-based visibility for tasks
+
+**Implementation:**
+
+1. **Backend (`/app/backend/routes/task_management.py`):**
+   - New endpoint: `GET /api/task-management/tasks/my-dashboard-stats` — personal task metrics
+   - Enhanced `GET /api/task-management/tasks/stats` — added `created_by_me` field
+
+2. **Frontend Changes:**
+   - New widget: `TaskMetricsWidget.js` — 4 clickable tiles on home dashboard
+   - Updated `HomeDashboard.js` — replaced TodaySummaryWidget, removed NewTaskDialog
+   - Updated `ActionItemsWidget.js` — removed "New Task" button
+   - Updated `TaskManagement.js` — 6 metric tiles, comprehensive filters, URL param support, Clear button
+
+**Testing Results (iteration_75.json):**
+- Backend: 100% (8/8 tests passed)
+- Frontend: 100% — All features verified
+
+---
+
+## Previous Session - March 25, 2026 (Session 7)
 
 ### Task Management Module - GitHub-style Issue Tracker ✅
 
