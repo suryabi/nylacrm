@@ -5,6 +5,14 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Latest Session - March 28, 2026 (Session 9)
 
+### Price Premium in Stock Out (Deliveries Tab) ✅ (March 28 continued)
+
+Added "Price Premium" column to the **Deliveries/Stock Out** tab showing the additional amount the manufacturer receives when customer price > base price. Formula: `qty × (customer_price - transfer_price)`. Also in Excel export. Verified: DEL-2026-0009: 10 × (399.00 - 97.50) = ₹3,015.00
+
+**Testing (iteration_79.json):** 100% backend (11/11), 100% frontend
+
+---
+
 ### Price Premium Payable in Distribution Module ✅ (March 28 continued)
 
 **Business Logic**: When customer is charged more than the base/transfer price, the distributor collects extra on behalf of the company. The system now calculates:
