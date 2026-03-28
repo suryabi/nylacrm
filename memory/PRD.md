@@ -5,6 +5,22 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Latest Session - March 28, 2026 (Session 9)
 
+### Task Metrics Filter Navigation Fix ✅ (March 28 continued)
+
+**Problem**: Home dashboard task tiles navigated to task page but filters weren't applied correctly (closed tasks showed when metric excluded them). Overdue was client-side only.
+
+**Fixes:**
+1. Home tiles now pass `status=active` to exclude closed tasks (matching metric counts)
+2. Backend supports `?overdue=true` and `?status=active` query params (server-side filtering)
+3. Task page metric tiles highlight with emerald ring when active
+4. "Overdue" badge with dismiss button shows when overdue filter is on
+5. New "Active" status filter option (not closed)
+6. Clean params sent to API (no empty strings)
+
+**Testing (iteration_77.json):** 100% backend (12/12), 100% frontend
+
+---
+
 ### Action Items Removed + Auto-Task from Requests + RBAC + OAuth Fix ✅
 
 **Changes:**
