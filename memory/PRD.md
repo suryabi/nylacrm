@@ -5,6 +5,42 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Latest Session - March 28, 2026 (Session 9)
 
+### Customer Returns Module - Phase 2 ✅ (March 28 - COMPLETED)
+
+**User Request**: Build Customer Returns tracking module in Distribution. Track returns by reason category for factory return.
+
+**Implementation - New "Returns" Tab in Distributor Detail:**
+- **Summary Cards**: Total Returns, Total Quantity, Total Credit, Pending Factory Return
+- **Category Summary**: Empty/Reusable, Expired, Damaged, Promotional with factory return counts
+- **Returns List Table**: Return #, Account, Date, Items, Credit, Factory Return status, Status badges
+- **Create Return Dialog**: Account selector, Return Date, Add items with SKU/Qty/Reason, Notes
+- **Return Detail Dialog**: Full breakdown with credit calculation per item, factory return status
+
+**Credit Calculation** (based on return reason type):
+- `sku_return_credit` → Uses `return_credit_per_unit` from Account SKU Pricing
+- `full_price` → Returns 100% of unit_price × quantity
+- `percentage` → Returns X% of unit_price × quantity
+- `no_credit` → Returns ₹0 (FOC/Promo items)
+
+**Factory Return Tracking**:
+- Each reason has `return_to_factory` flag
+- Items tracked as pending → completed
+- Category-wise summary for factory coordination
+
+**Files Created:**
+- `/app/backend/routes/customer_returns.py` - Complete CRUD with credit calculation
+- `/app/backend/models/customer_return.py` - CustomerReturn and CustomerReturnItem models
+- `/app/frontend/src/components/distributor/ReturnsTab.jsx` - Full UI component
+
+**Files Modified:**
+- `/app/backend/routes/__init__.py` - Registered customer_returns_router
+- `/app/frontend/src/pages/DistributorDetail.js` - Added Returns tab (7 tabs total)
+
+**Testing (iteration_85.json):** 100% backend (20/20 tests), 100% frontend
+- Bug fixed: SKU lookup changed from db.skus to db.master_skus
+
+---
+
 ### Return Reasons Master - Phase 1 ✅ (March 28 - COMPLETED)
 
 **User Request**: Build a Returns module for tracking customer returns to distributors. 4 return reason types:
