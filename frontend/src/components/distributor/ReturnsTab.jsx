@@ -28,7 +28,7 @@ const CATEGORY_COLORS = {
 // Status badges
 const STATUS_BADGES = {
   draft: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Draft' },
-  confirmed: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Confirmed' },
+  approved: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Approved' },
   processed: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Processed' },
   settled: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Settled' },
   cancelled: { bg: 'bg-red-100', text: 'text-red-700', label: 'Cancelled' }
@@ -265,21 +265,21 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
     setItemForm({ sku_id: '', quantity: 1, reason_id: '', unit_price: '' });
   };
 
-  // Confirm return
-  const confirmReturn = async (returnId) => {
+  // Approve return
+  const approveReturn = async (returnId) => {
     try {
       await axios.post(
-        `${API_URL}/api/distributors/${distributorId}/returns/${returnId}/confirm`,
+        `${API_URL}/api/distributors/${distributorId}/returns/${returnId}/approve`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      toast.success('Return confirmed');
+      toast.success('Return approved');
       fetchReturns();
       if (selectedReturn?.id === returnId) {
         viewReturnDetail(returnId);
       }
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to confirm return');
+      toast.error(error.response?.data?.detail || 'Failed to approve return');
     }
   };
 
@@ -480,7 +480,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="confirmed">Confirmed</SelectItem>
+              <SelectItem value="approved">Approved</SelectItem>
               <SelectItem value="processed">Processed</SelectItem>
               <SelectItem value="settled">Settled</SelectItem>
               <SelectItem value="cancelled">Cancelled</SelectItem>
@@ -912,9 +912,9 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                       <X className="h-4 w-4 mr-2" />
                       Cancel Return
                     </Button>
-                    <Button onClick={() => confirmReturn(selectedReturn.id)}>
+                    <Button onClick={() => approveReturn(selectedReturn.id)}>
                       <Check className="h-4 w-4 mr-2" />
-                      Confirm Return
+                      Approve Return
                     </Button>
                   </>
                 )}

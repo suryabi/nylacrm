@@ -354,7 +354,7 @@ async def update_customer_return(
         update_data["notes"] = data.notes
     
     if data.status:
-        if data.status not in ['draft', 'confirmed', 'cancelled']:
+        if data.status not in ['draft', 'approved', 'cancelled']:
             raise HTTPException(status_code=400, detail="Invalid status")
         update_data["status"] = data.status
     
@@ -371,13 +371,13 @@ async def update_customer_return(
     return {"message": "Return updated", "return": updated}
 
 
-@router.post("/{distributor_id}/returns/{return_id}/confirm")
-async def confirm_customer_return(
+@router.post("/{distributor_id}/returns/{return_id}/approve")
+async def approve_customer_return(
     distributor_id: str,
     return_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Confirm a customer return and auto-create credit note"""
+    """Approve a customer return and auto-create credit note"""
     tenant_id = get_current_tenant_id()
     
     ret = await db.customer_returns.find_one(
@@ -388,17 +388,17 @@ async def confirm_customer_return(
         raise HTTPException(status_code=404, detail="Return not found")
     
     if ret.get('status') != 'draft':
-        raise HTTPException(status_code=400, detail="Can only confirm draft returns")
+        raise HTTPException(status_code=400, detail="Can only approve draft returns")
     
     await db.customer_returns.update_one(
         {"id": return_id, "tenant_id": tenant_id},
         {"$set": {
-            "status": "confirmed",
+            "status": "approved",
             "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
     
-    # Auto-create credit note for the confirmed return
+    # Auto-create credit note for the approved return
     credit_note = None
     if ret.get('total_credit', 0) > 0:
         try:
@@ -413,8 +413,8 @@ async def confirm_customer_return(
             logger.error(f"Failed to create credit note for return {ret['return_number']}: {e}")
     
     return {
-        "message": "Return confirmed",
-        "status": "confirmed",
+        "message": "Return approved",
+        "status": "approved",
         "credit_note": credit_note
     }
 
@@ -468,8 +468,8 @@ async def mark_factory_return(
     if not ret:
         raise HTTPException(status_code=404, detail="Return not found")
     
-    if ret.get('status') not in ['confirmed', 'processed']:
-        raise HTTPException(status_code=400, detail="Can only mark factory return for confirmed/processed returns")
+    if ret.get('status') not in ['approved', 'processed']:
+        raise HTTPException(status_code=400, detail="Can only mark factory return for approved/processed returns")
     
     return_date = data.return_date or datetime.now(timezone.utc).strftime('%Y-%m-%d')
     
