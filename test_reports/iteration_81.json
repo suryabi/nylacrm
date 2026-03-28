@@ -1,0 +1,122 @@
+{
+  "summary": "Iteration 81 testing completed. All features for restructured Deliveries/Stock Out table columns verified successfully. Column order, calculations, color coding, subtotal row, and Excel export all working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/deliveries_distributor_2026-03-28.csv"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A - Frontend only testing",
+    "frontend": "100% - All 7 test cases passed"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123"
+  },
+  "seed_data_creation": "No new seed data created",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Deliveries/Stock Out table restructuring is complete and verified. All columns in correct order with proper color coding and calculations.",
+  "features_tested": {
+    "Column_Order_Verification": {
+      "status": "PASSED",
+      "columns_verified": [
+        "Delivery #",
+        "SKU",
+        "Qty",
+        "Base Price (blue)",
+        "Transfer Price (blue)",
+        "Billed to Dist (blue)",
+        "Customer Price (emerald)",
+        "New Transfer Price (emerald)",
+        "Actual Billable (emerald)",
+        "Adjustment (amber)",
+        "Customer Invoice",
+        "Status",
+        "Actions"
+      ]
+    },
+    "Billed_to_Dist_Calculation": {
+      "status": "PASSED",
+      "formula": "qty × transfer_price",
+      "example": "1 × 142.594 = ₹142.594"
+    },
+    "Actual_Billable_Calculation": {
+      "status": "PASSED",
+      "formula": "qty × new_transfer_price",
+      "example": "1 × 136.50 = ₹136.50"
+    },
+    "Adjustment_Calculation": {
+      "status": "PASSED",
+      "formula": "Actual Billable - Billed to Dist",
+      "example": "136.50 - 142.594 = -6.094",
+      "color_coding": "Negative values shown in red (text-red-600)"
+    },
+    "Customer_Invoice_Calculation": {
+      "status": "PASSED",
+      "formula": "qty × customer_price",
+      "example": "1 × 140 = ₹140.00"
+    },
+    "Subtotal_Row_Verification": {
+      "status": "PASSED",
+      "verified_totals": {
+        "Billed_to_Dist": "₹142.594",
+        "Actual_Billable": "₹136.50",
+        "Adjustment": "₹-6.094",
+        "Customer_Invoice": "₹140.00"
+      }
+    },
+    "Excel_Export_Verification": {
+      "status": "PASSED",
+      "file_downloaded": "deliveries_distributor_2026-03-28.csv",
+      "columns_in_export": [
+        "Delivery #",
+        "Date",
+        "Account",
+        "City",
+        "SKU",
+        "Quantity",
+        "Margin %",
+        "Base Price",
+        "Transfer Price",
+        "Billed to Distributor",
+        "Customer Price",
+        "New Transfer Price",
+        "Actual Billable",
+        "Adjustment (Dist to Company)",
+        "Customer Invoice Amount",
+        "Status"
+      ]
+    },
+    "Color_Coding_Verification": {
+      "status": "PASSED",
+      "blue_columns": ["Base Price", "Transfer Price", "Billed to Dist"],
+      "emerald_columns": ["Customer Price", "New Transfer Price", "Actual Billable"],
+      "amber_columns": ["Adjustment"],
+      "css_classes_verified": {
+        "blue": "bg-blue-50/40, text-blue-800/70",
+        "emerald": "bg-emerald-50/40, text-emerald-800/70",
+        "amber": "bg-amber-50/40, text-amber-800/70"
+      }
+    }
+  },
+  "test_data_used": {
+    "distributor": "Brian (DIST-0003)",
+    "delivery": "DEL-2026-0008",
+    "sku": "Nyla – 330 ml / Silver",
+    "qty": 1,
+    "margin_percent": 2.5,
+    "base_price": 146.25,
+    "customer_price": 140.00
+  }
+}

@@ -1,0 +1,2 @@
+Delivery #,Date,Account,City,SKU,Quantity,Margin %,Base Price,Transfer Price,Billed to Distributor,Customer Price,New Transfer Price,Actual Billable,Adjustment (Dist to Company),Customer Invoice Amount,Status
+DEL-2026-0008,3/22/2026,Empire Restaurant,Bengaluru,Nyla – 330 ml / Silver,1,2.5,146.25,142.59375,142.59375,140,136.5,136.5,-6.09375,140,delivered
