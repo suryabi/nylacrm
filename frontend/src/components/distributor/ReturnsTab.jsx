@@ -40,6 +40,8 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
   const [returns, setReturns] = useState([]);
   const [summary, setSummary] = useState(null);
   const [returnReasons, setReturnReasons] = useState([]);
+  const [accountSkus, setAccountSkus] = useState([]); // SKUs with pricing for selected account
+  const [loadingAccountSkus, setLoadingAccountSkus] = useState(false);
   
   // Filters
   const [statusFilter, setStatusFilter] = useState('');
@@ -102,10 +104,62 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
     }
   }, [token]);
 
+  // Fetch account SKU pricing when account is selected
+  const fetchAccountSkus = useCallback(async (accountId) => {
+    if (!accountId) {
+      setAccountSkus([]);
+      return;
+    }
+    
+    // First check if the account has sku_pricing in the passed accounts array
+    const selectedAccount = accounts.find(a => a.id === accountId);
+    if (selectedAccount?.sku_pricing?.length > 0) {
+      // Use the sku_pricing already in the account (from assigned-accounts endpoint)
+      const enrichedSkus = selectedAccount.sku_pricing.map(sku => ({
+        sku_id: sku.id,
+        sku_name: sku.name,
+        selling_price: sku.price_per_unit || 0,
+        return_credit_per_unit: sku.return_bottle_credit || 0
+      }));
+      setAccountSkus(enrichedSkus);
+      return;
+    }
+    
+    // Fallback: try API endpoint
+    try {
+      setLoadingAccountSkus(true);
+      const response = await axios.get(
+        `${API_URL}/api/accounts/${accountId}/sku-pricing`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const skuPricing = response.data.sku_pricing || response.data || [];
+      setAccountSkus(skuPricing);
+    } catch (error) {
+      console.error('Failed to fetch account SKU pricing:', error);
+      // Final fallback: show all master SKUs
+      setAccountSkus(skus.map(s => ({ 
+        sku_id: s.id, 
+        sku_name: s.name || s.sku_code,
+        selling_price: s.mrp || 0
+      })));
+    } finally {
+      setLoadingAccountSkus(false);
+    }
+  }, [token, skus, accounts]);
+
   useEffect(() => {
     fetchReturns();
     fetchReturnReasons();
   }, [fetchReturns, fetchReturnReasons]);
+
+  // Fetch account SKUs when account changes in create form
+  useEffect(() => {
+    if (createForm.account_id) {
+      fetchAccountSkus(createForm.account_id);
+    } else {
+      setAccountSkus([]);
+    }
+  }, [createForm.account_id, fetchAccountSkus]);
 
   // Add item to form
   const addItemToForm = () => {
@@ -114,12 +168,16 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
       return;
     }
     
-    const sku = skus.find(s => s.id === itemForm.sku_id);
+    // Find SKU from account SKUs or fallback to master SKUs
+    const accountSku = accountSkus.find(s => s.sku_id === itemForm.sku_id || s.id === itemForm.sku_id);
+    const masterSku = skus.find(s => s.id === itemForm.sku_id);
+    const sku = accountSku || masterSku;
     const reason = returnReasons.find(r => r.id === itemForm.reason_id);
     
     const newItem = {
       ...itemForm,
-      sku_name: sku?.name || sku?.sku_code || 'Unknown SKU',
+      sku_name: sku?.sku_name || sku?.name || sku?.sku_code || 'Unknown SKU',
+      unit_price: itemForm.unit_price || accountSku?.selling_price || masterSku?.mrp || 0,
       reason_name: reason?.reason_name || 'Unknown Reason',
       reason_category: reason?.category || 'other',
       credit_type: reason?.credit_type || 'no_credit'
@@ -548,18 +606,40 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
 
             {/* Add Item Form */}
             <div className="p-4 rounded-lg bg-muted/30 border space-y-4">
-              <p className="font-medium text-sm">Add Return Items</p>
+              <div className="flex items-center justify-between">
+                <p className="font-medium text-sm">Add Return Items</p>
+                {!createForm.account_id && (
+                  <p className="text-xs text-amber-600">Select an account first to see available SKUs</p>
+                )}
+              </div>
               <div className="grid grid-cols-4 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs">SKU</Label>
-                  <Select value={itemForm.sku_id} onValueChange={(v) => setItemForm(prev => ({ ...prev, sku_id: v }))}>
+                  <Select 
+                    value={itemForm.sku_id} 
+                    onValueChange={(v) => setItemForm(prev => ({ ...prev, sku_id: v }))}
+                    disabled={!createForm.account_id || loadingAccountSkus}
+                  >
                     <SelectTrigger className="h-9" data-testid="return-sku-select">
-                      <SelectValue placeholder="Select SKU" />
+                      <SelectValue placeholder={loadingAccountSkus ? "Loading SKUs..." : (createForm.account_id ? "Select SKU" : "Select account first")} />
                     </SelectTrigger>
                     <SelectContent>
-                      {skus.map(sku => (
-                        <SelectItem key={sku.id} value={sku.id}>{sku.name || sku.sku_code}</SelectItem>
-                      ))}
+                      {accountSkus.length > 0 ? (
+                        accountSkus.map(sku => (
+                          <SelectItem key={sku.sku_id || sku.id} value={sku.sku_id || sku.id}>
+                            <div className="flex items-center justify-between w-full">
+                              <span>{sku.sku_name || sku.name || sku.sku_code}</span>
+                              {sku.selling_price && (
+                                <span className="text-xs text-muted-foreground ml-2">₹{sku.selling_price}</span>
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))
+                      ) : (
+                        skus.map(sku => (
+                          <SelectItem key={sku.id} value={sku.id}>{sku.name || sku.sku_code}</SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
