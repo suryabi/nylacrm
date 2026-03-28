@@ -2595,11 +2595,15 @@ async def generate_delivery_number(tenant_id: str) -> str:
 def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_value: float = None, transfer_price: float = None, base_price: float = None) -> dict:
     """Calculate amounts for a delivery item including margin and adjustment calculations
     
-    Calculations:
-    - Total Customer Billing Value = Qty × Customer Selling Price
-    - Distributor Earnings (On Selling Price) = Total Billing × Commission %
-    - Distributor Margin at Transfer Price = Qty × Transfer Price × Commission %
-    - Adjustment Payable = Distributor Earnings - Margin at Transfer Price
+    Columns (in display order):
+    - Base Price: The original/standard price of the product
+    - Transfer Price: base_price × (1 - margin%) — price at which factory sells to distributor
+    - Customer Price: What the customer actually pays
+    - New Transfer Price: customer_price × (1 - margin%) — adjusted transfer price based on actual sale
+    - Quantity: Number of units
+    - Distributor → Customer Billing: qty × customer_price
+    - Factory → Distributor Adjustment: qty × margin% × (customer_price - base_price)
+      Positive = distributor owes factory (sold higher), Negative = factory owes distributor (sold lower)
     """
     quantity = item.get('quantity', 0)
     unit_price = item.get('unit_price', 0)  # Customer Selling Price
@@ -2607,38 +2611,43 @@ def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_
     discount_percent = item.get('discount_percent', 0) or 0
     tax_percent = item.get('tax_percent', 0) or 0
     
-    # Get transfer price from item or passed parameter
-    item_transfer_price = item.get('transfer_price') or item.get('base_price') or transfer_price or base_price or 0
+    # Base price from margin matrix
+    item_base_price = item.get('base_price') or base_price or transfer_price or 0
     
-    # Get commission percentage from item or margin_value
+    # Get commission/margin percentage from item or margin_value
     commission_percent = item.get('distributor_commission_percent') or margin_value or 0
     
+    # Transfer Price = base_price × (1 - margin%)
+    item_transfer_price = item.get('transfer_price') or (round(item_base_price * (1 - commission_percent / 100), 2) if item_base_price and commission_percent else item_base_price)
+    
+    # New Transfer Price = customer_price × (1 - margin%)
+    new_transfer_price = round(customer_selling_price * (1 - commission_percent / 100), 2) if customer_selling_price and commission_percent else customer_selling_price
+    
     # Calculate billing amounts
-    gross_amount = quantity * customer_selling_price  # Total Customer Billing Value
+    gross_amount = quantity * customer_selling_price  # Distributor → Customer Billing
     discount_amount = round(gross_amount * discount_percent / 100, 2)
     taxable_amount = gross_amount - discount_amount
     tax_amount = round(taxable_amount * tax_percent / 100, 2)
     net_amount = taxable_amount + tax_amount
     
-    # Calculate distributor earnings and adjustments
-    # Distributor Earnings = Total Customer Billing Value × Commission %
+    # Distributor → Customer Billing = qty × customer_price
+    customer_billing = round(gross_amount, 2)
+    
+    # Factory → Distributor Adjustment = qty × margin% × (customer_price - base_price)
+    # Positive when customer_price > base_price (distributor earns more margin, pays difference to factory)
+    # Negative when customer_price < base_price (distributor earns less margin, factory compensates)
+    factory_distributor_adjustment = round(quantity * (commission_percent / 100) * (customer_selling_price - item_base_price), 2) if commission_percent and item_base_price else 0
+    
+    # Margin per unit = commission% of customer_price
+    margin_per_unit = round(customer_selling_price * commission_percent / 100, 2) if commission_percent else 0
+    
+    # Legacy calculations (kept for backward compatibility)
     distributor_earnings = round(gross_amount * commission_percent / 100, 2) if commission_percent else 0
-    
-    # Margin at Transfer Price = Qty × Transfer Price × Commission %
-    margin_at_transfer_price = round(quantity * item_transfer_price * commission_percent / 100, 2) if item_transfer_price and commission_percent else 0
-    
-    # Adjustment Payable = Distributor Earnings - Margin at Transfer Price
-    # Positive means distributor owes company, Negative means company owes distributor
+    margin_at_transfer_price = round(quantity * item_base_price * commission_percent / 100, 2) if item_base_price and commission_percent else 0
     adjustment_payable = round(distributor_earnings - margin_at_transfer_price, 2)
+    price_premium_payable = round(quantity * (customer_selling_price - item_base_price), 2) if customer_selling_price > item_base_price and item_base_price > 0 else 0
     
-    # Price Premium Payable = When customer is charged more than base/transfer price,
-    # the distributor collects extra on behalf of the company and must pay it back
-    # Price Premium = Qty × (Customer Selling Price - Base/Transfer Price) when customer price > base price
-    price_premium_payable = 0
-    if customer_selling_price > item_transfer_price and item_transfer_price > 0:
-        price_premium_payable = round(quantity * (customer_selling_price - item_transfer_price), 2)
-    
-    # Legacy margin calculation (for backward compatibility)
+    # Legacy margin calculation
     margin_amount = 0
     if margin_type and margin_value:
         if margin_type == 'percentage':
@@ -2651,22 +2660,27 @@ def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_
     
     return {
         **item,
-        'customer_selling_price': customer_selling_price,
-        'distributor_commission_percent': commission_percent,
+        'base_price': item_base_price,
         'transfer_price': item_transfer_price,
-        'base_price': item_transfer_price,
+        'customer_selling_price': customer_selling_price,
+        'new_transfer_price': new_transfer_price,
+        'distributor_commission_percent': commission_percent,
+        'margin_per_unit': margin_per_unit,
         'gross_amount': round(gross_amount, 2),
+        'customer_billing': customer_billing,
+        'factory_distributor_adjustment': factory_distributor_adjustment,
         'discount_amount': discount_amount,
         'taxable_amount': round(taxable_amount, 2),
         'tax_amount': tax_amount,
         'net_amount': round(net_amount, 2),
+        # Legacy fields
         'distributor_earnings': distributor_earnings,
         'margin_at_transfer_price': margin_at_transfer_price,
         'adjustment_payable': adjustment_payable,
         'price_premium_payable': price_premium_payable,
         'margin_type': margin_type,
         'margin_value': margin_value,
-        'margin_amount': margin_amount or distributor_earnings  # Use new calculation as default
+        'margin_amount': margin_amount or distributor_earnings
     }
 
 
@@ -3040,6 +3054,7 @@ async def create_delivery(
     total_net_amount = 0
     total_margin_amount = 0
     total_price_premium = 0
+    total_factory_adjustment = 0
     
     for item_data in data.items:
         # Get SKU info
@@ -3093,6 +3108,7 @@ async def create_delivery(
         total_net_amount += item_dict['net_amount']
         total_margin_amount += item_dict.get('margin_amount', 0)
         total_price_premium += item_dict.get('price_premium_payable', 0)
+        total_factory_adjustment += item_dict.get('factory_distributor_adjustment', 0)
     
     # Create delivery document
     delivery_doc = {
@@ -3122,6 +3138,7 @@ async def create_delivery(
         "total_net_amount": round(total_net_amount, 2),
         "total_margin_amount": round(total_margin_amount, 2),
         "total_price_premium": round(total_price_premium, 2),
+        "total_factory_adjustment": round(total_factory_adjustment, 2),
         "remarks": data.remarks,
         "created_at": now,
         "updated_at": now,
@@ -3860,6 +3877,7 @@ async def generate_monthly_settlements(
         margin_at_transfer_price = 0
         total_quantity = 0
         total_price_premium = 0
+        total_factory_adj = 0
         
         items_to_insert = []
         
@@ -3874,32 +3892,36 @@ async def generate_monthly_settlements(
             delivery_earnings = 0
             delivery_margin_at_transfer = 0
             delivery_price_premium = 0
+            delivery_factory_adj = 0
             
             for item in items:
                 qty = item.get('quantity', 0)
                 customer_price = item.get('customer_selling_price') or item.get('unit_price') or 0
                 commission_pct = item.get('distributor_commission_percent') or item.get('margin_percent') or 2.5
-                transfer_price = item.get('transfer_price') or item.get('base_price') or 0
+                base_p = item.get('base_price') or item.get('transfer_price') or 0
                 
                 billing_value = qty * customer_price
                 earnings = billing_value * (commission_pct / 100)
-                margin_transfer = qty * transfer_price * (commission_pct / 100)
+                margin_transfer = qty * base_p * (commission_pct / 100)
                 
-                # Price premium: extra collected when customer price > base/transfer price
-                price_premium = 0
-                if customer_price > transfer_price and transfer_price > 0:
-                    price_premium = qty * (customer_price - transfer_price)
+                # Price premium: extra collected when customer price > base price
+                price_premium = qty * (customer_price - base_p) if customer_price > base_p and base_p > 0 else 0
+                
+                # Factory → Distributor Adjustment = qty × margin% × (customer_price - base_price)
+                factory_adj = qty * (commission_pct / 100) * (customer_price - base_p) if commission_pct and base_p else 0
                 
                 delivery_billing += billing_value
                 delivery_earnings += earnings
                 delivery_margin_at_transfer += margin_transfer
                 delivery_price_premium += price_premium
+                delivery_factory_adj += factory_adj
             
             total_billing_value += delivery_billing
             distributor_earnings += delivery_earnings
             margin_at_transfer_price += delivery_margin_at_transfer
             total_quantity += delivery.get('total_quantity', 0)
             total_price_premium += delivery_price_premium
+            total_factory_adj += delivery_factory_adj
             
             items_to_insert.append({
                 "id": str(uuid.uuid4()),
@@ -3915,7 +3937,8 @@ async def generate_monthly_settlements(
                 "distributor_earnings": round(delivery_earnings, 2),
                 "margin_at_transfer_price": round(delivery_margin_at_transfer, 2),
                 "adjustment_payable": round(delivery_earnings - delivery_margin_at_transfer, 2),
-                "price_premium_payable": round(delivery_price_premium, 2)
+                "price_premium_payable": round(delivery_price_premium, 2),
+                "factory_distributor_adjustment": round(delivery_factory_adj, 2)
             })
         
         # Generate settlement for this account
@@ -3946,6 +3969,7 @@ async def generate_monthly_settlements(
             "margin_at_transfer_price": round(margin_at_transfer_price, 2),
             "adjustment_payable": round(adjustment_payable, 2),
             "price_premium_payable": round(total_price_premium, 2),
+            "factory_distributor_adjustment": round(total_factory_adj, 2),
             "final_payout": round(distributor_earnings, 2),
             "status": "draft",
             "remarks": remarks,

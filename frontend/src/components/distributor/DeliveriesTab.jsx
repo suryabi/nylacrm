@@ -85,10 +85,10 @@ export default function DeliveriesTab({
             const transferPrice = item.transfer_price || item.base_price || 0;
             
             const billingValue = qty * customerPrice;
-            const distributorEarnings = billingValue * (commissionPct / 100);
-            const marginAtTransfer = qty * transferPrice * (commissionPct / 100);
-            const adjustment = distributorEarnings - marginAtTransfer;
-            const pricePremium = customerPrice > transferPrice && transferPrice > 0 ? qty * (customerPrice - transferPrice) : 0;
+            const basePrice = item.base_price || item.transfer_price || 0;
+            const transferPriceCalc = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
+            const newTransferPrice = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
+            const factoryAdj = commissionPct && basePrice ? qty * (commissionPct / 100) * (customerPrice - basePrice) : 0;
             
             excelData.push({
               'Delivery #': delivery.delivery_number,
@@ -96,15 +96,14 @@ export default function DeliveriesTab({
               'Account': delivery.account_name,
               'City': delivery.account_city,
               'SKU': item.sku_name || item.sku_code || 'N/A',
+              'Margin %': commissionPct,
+              'Base Price': basePrice,
+              'Transfer Price': transferPriceCalc,
+              'Customer Price': customerPrice,
+              'New Transfer Price': newTransferPrice,
               'Quantity': qty,
-              'Customer Selling Price (Per Unit)': customerPrice,
-              'Distributor Commission %': commissionPct,
-              'Total Customer Billing Value': billingValue,
-              'Distributor Earnings (On Selling Price)': distributorEarnings,
-              'Transfer Price (Per Unit)': transferPrice,
-              'Distributor Margin at Transfer Price': marginAtTransfer,
-              'Adjustment Payable': adjustment,
-              'Price Premium (Mfr Receives)': pricePremium,
+              'Distributor → Customer Billing': billingValue,
+              'Factory → Distributor Adjustment': factoryAdj,
               'Status': delivery.status
             });
           });
@@ -643,20 +642,20 @@ export default function DeliveriesTab({
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm" data-testid="deliveries-table">
               <thead>
-                <tr className="bg-emerald-50/30 border-b border-emerald-100/60">
-                  <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Delivery #</th>
-                  <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>SKU</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Qty</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Selling Price</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Commission %</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Billing Value</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Earnings</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Transfer Price</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Margin at Transfer</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Adjustment</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Price Premium</th>
-                  <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Status</th>
-                  <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actions</th>
+                <tr className="border-b border-emerald-100/60">
+                  <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Delivery #</th>
+                  <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>SKU</th>
+                  {/* Theoretical / Initial columns - Blue tint */}
+                  <th className="text-right p-4 font-semibold text-blue-800/70 uppercase tracking-wider text-xs bg-blue-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Base Price</th>
+                  <th className="text-right p-4 font-semibold text-blue-800/70 uppercase tracking-wider text-xs bg-blue-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Transfer Price</th>
+                  {/* Actual columns - Emerald tint */}
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Customer Price</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>New Transfer Price</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Qty</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Dist → Customer Billing</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Factory → Dist Adjustment</th>
+                  <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Status</th>
+                  <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -666,28 +665,19 @@ export default function DeliveriesTab({
                   
                   // Calculate totals for the delivery
                   let totalBillingValue = 0;
-                  let totalDistributorEarnings = 0;
-                  let totalMarginAtTransfer = 0;
-                  let totalAdjustment = 0;
-                  let totalPricePremium = 0;
+                  let totalFactoryAdj = 0;
                   
                   items.forEach(item => {
                     const qty = item.quantity || 0;
                     const customerPrice = item.customer_selling_price || item.unit_price || 0;
                     const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
-                    const transferPrice = item.transfer_price || item.base_price || 0;
+                    const basePrice = item.base_price || item.transfer_price || 0;
                     
                     const billingValue = qty * customerPrice;
-                    const distributorEarnings = billingValue * (commissionPct / 100);
-                    const marginAtTransfer = qty * transferPrice * (commissionPct / 100);
-                    const adjustment = distributorEarnings - marginAtTransfer;
-                    const pricePremium = customerPrice > transferPrice && transferPrice > 0 ? qty * (customerPrice - transferPrice) : 0;
+                    const factoryAdj = commissionPct && basePrice ? qty * (commissionPct / 100) * (customerPrice - basePrice) : 0;
                     
                     totalBillingValue += billingValue;
-                    totalDistributorEarnings += distributorEarnings;
-                    totalMarginAtTransfer += marginAtTransfer;
-                    totalAdjustment += adjustment;
-                    totalPricePremium += pricePremium;
+                    totalFactoryAdj += factoryAdj;
                   });
                   
                   return (
@@ -696,13 +686,12 @@ export default function DeliveriesTab({
                         const qty = item.quantity || 0;
                         const customerPrice = item.customer_selling_price || item.unit_price || 0;
                         const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
-                        const transferPrice = item.transfer_price || item.base_price || 0;
+                        const basePrice = item.base_price || item.transfer_price || 0;
                         
+                        const transferPrice = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
+                        const newTransferPrice = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
                         const billingValue = qty * customerPrice;
-                        const distributorEarnings = billingValue * (commissionPct / 100);
-                        const marginAtTransfer = qty * transferPrice * (commissionPct / 100);
-                        const adjustment = distributorEarnings - marginAtTransfer;
-                        const pricePremium = customerPrice > transferPrice && transferPrice > 0 ? qty * (customerPrice - transferPrice) : 0;
+                        const factoryAdj = commissionPct && basePrice ? qty * (commissionPct / 100) * (customerPrice - basePrice) : 0;
                         
                         return (
                           <tr 
@@ -731,19 +720,18 @@ export default function DeliveriesTab({
                             )}
                             <td className="p-4">
                               <span className="font-medium text-slate-700">{item.sku_name || item.sku_code || 'N/A'}</span>
+                              <p className="text-xs text-slate-400 mt-0.5">Margin: {commissionPct}%</p>
                             </td>
+                            {/* Theoretical columns - Blue tint */}
+                            <td className="p-4 text-right text-blue-700 bg-blue-50/30">₹{basePrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-4 text-right text-blue-700 bg-blue-50/30">₹{transferPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            {/* Actual columns - Emerald tint */}
+                            <td className="p-4 text-right font-medium text-emerald-700 bg-emerald-50/30">₹{customerPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-4 text-right font-medium text-emerald-700 bg-emerald-50/30">₹{newTransferPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             <td className="p-4 text-right font-medium text-slate-800">{qty}</td>
-                            <td className="p-4 text-right text-slate-700">₹{customerPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-4 text-right text-slate-700">{commissionPct}%</td>
-                            <td className="p-4 text-right font-medium text-slate-800">₹{billingValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-4 text-right text-emerald-600 font-medium">₹{distributorEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-4 text-right text-slate-700">₹{transferPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-4 text-right text-slate-700">₹{marginAtTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className={`p-4 text-right font-medium ${adjustment >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                              {adjustment >= 0 ? '' : '-'}₹{Math.abs(adjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className={`p-4 text-right font-medium ${pricePremium > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
-                              ₹{pricePremium.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            <td className="p-4 text-right font-medium text-slate-800 bg-emerald-50/30">₹{billingValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className={`p-4 text-right font-semibold bg-emerald-50/30 ${factoryAdj > 0 ? 'text-emerald-600' : factoryAdj < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                              {factoryAdj > 0 ? '+' : ''}{factoryAdj !== 0 ? '' : ''}₹{Math.abs(factoryAdj).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                             </td>
                             {itemIndex === 0 && (
                               <>
@@ -838,13 +826,10 @@ export default function DeliveriesTab({
                       {/* Delivery subtotal row - always show */}
                       {items.length >= 1 && (
                         <tr className="bg-emerald-100/50 font-semibold text-sm">
-                          <td className="p-4 text-right text-emerald-800" colSpan={5}>Delivery Total:</td>
+                          <td className="p-4 text-right text-emerald-800" colSpan={7}>Delivery Total:</td>
                           <td className="p-4 text-right text-emerald-800">₹{totalBillingValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className="p-4 text-right text-emerald-600">₹{totalDistributorEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className="p-4"></td>
-                          <td className="p-4 text-right text-emerald-800">₹{totalMarginAtTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className={`p-4 text-right ${totalAdjustment >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {totalAdjustment >= 0 ? '' : '-'}₹{Math.abs(totalAdjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          <td className={`p-4 text-right ${totalFactoryAdj > 0 ? 'text-emerald-600' : totalFactoryAdj < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                            {totalFactoryAdj > 0 ? '+' : ''}₹{Math.abs(totalFactoryAdj).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                           </td>
                           <td colSpan={2}></td>
                         </tr>
