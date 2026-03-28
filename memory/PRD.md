@@ -3,7 +3,22 @@
 ## Original Problem Statement
 Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. The application helps manage leads, accounts, invoices, COGS calculations, and sales team performance.
 
-## Latest Session - March 27, 2026 (Session 8)
+## Latest Session - March 28, 2026 (Session 9)
+
+### Action Items Removed + Auto-Task from Requests + RBAC + OAuth Fix ✅
+
+**Changes:**
+
+1. **Deleted Action Items module** from Home Dashboard completely (widget, state, handlers)
+2. **Auto-task creation**: Travel/Budget requests with `submit_for_approval=true` now auto-create tasks in Task Management module (`tasks_v2`) assigned to approvers
+3. **RBAC**: Added Task Management (Tasks, Milestones, Labels) to role permission settings
+4. **Google OAuth login loop fix**: Stored `session_token` in localStorage + `window.location.href` to force AuthProvider re-init on iPad/Chrome
+
+**Testing (iteration_76.json):** 100% backend (10/10), 100% frontend
+
+---
+
+## Previous Session - March 27, 2026 (Session 8)
 
 ### Home Dashboard Task Metrics & Task Page Filters ✅
 
