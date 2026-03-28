@@ -178,10 +178,24 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
       ...itemForm,
       sku_name: sku?.sku_name || sku?.name || sku?.sku_code || 'Unknown SKU',
       unit_price: itemForm.unit_price || accountSku?.selling_price || masterSku?.mrp || 0,
+      return_credit_per_unit: accountSku?.return_credit_per_unit || 0,
       reason_name: reason?.reason_name || 'Unknown Reason',
       reason_category: reason?.category || 'other',
       credit_type: reason?.credit_type || 'no_credit'
     };
+    
+    // Calculate estimated credit for preview
+    const qty = itemForm.quantity || 1;
+    const creditType = reason?.credit_type || 'no_credit';
+    let estimatedCredit = 0;
+    if (creditType === 'sku_return_credit') {
+      estimatedCredit = qty * (accountSku?.return_credit_per_unit || 0);
+    } else if (creditType === 'full_price') {
+      estimatedCredit = qty * (itemForm.unit_price || accountSku?.selling_price || 0);
+    } else if (creditType === 'percentage' && reason?.credit_percentage) {
+      estimatedCredit = qty * (itemForm.unit_price || accountSku?.selling_price || 0) * (reason.credit_percentage / 100);
+    }
+    newItem.estimated_credit = estimatedCredit;
     
     setCreateForm(prev => ({
       ...prev,
@@ -692,6 +706,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         <th className="text-center p-3 font-medium">Qty</th>
                         <th className="text-left p-3 font-medium">Reason</th>
                         <th className="text-center p-3 font-medium">Category</th>
+                        <th className="text-right p-3 font-medium">Est. Credit</th>
                         <th className="text-center p-3 font-medium"></th>
                       </tr>
                     </thead>
@@ -700,11 +715,21 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         const catInfo = CATEGORY_COLORS[item.reason_category] || CATEGORY_COLORS.promotional;
                         return (
                           <tr key={idx} className="border-t">
-                            <td className="p-3 font-medium">{item.sku_name}</td>
+                            <td className="p-3 font-medium">
+                              <div>
+                                {item.sku_name}
+                                {item.credit_type === 'sku_return_credit' && item.return_credit_per_unit > 0 && (
+                                  <p className="text-xs text-emerald-600">Bottle credit: ₹{item.return_credit_per_unit}/unit</p>
+                                )}
+                              </div>
+                            </td>
                             <td className="p-3 text-center">{item.quantity}</td>
                             <td className="p-3">{item.reason_name}</td>
                             <td className="p-3 text-center">
                               <Badge className={`${catInfo.bg} ${catInfo.text}`}>{catInfo.label}</Badge>
+                            </td>
+                            <td className="p-3 text-right font-medium text-emerald-600">
+                              ₹{(item.estimated_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                             </td>
                             <td className="p-3 text-center">
                               <Button variant="ghost" size="sm" className="text-destructive h-7 w-7 p-0" onClick={() => removeItemFromForm(idx)}>
@@ -715,6 +740,15 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         );
                       })}
                     </tbody>
+                    <tfoot className="bg-muted/30">
+                      <tr>
+                        <td className="p-3 font-bold" colSpan={4}>Total Estimated Credit</td>
+                        <td className="p-3 text-right font-bold text-emerald-600">
+                          ₹{createForm.items.reduce((sum, item) => sum + (item.estimated_credit || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="p-3"></td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               </div>

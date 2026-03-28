@@ -219,11 +219,35 @@ async def create_customer_return(
             raise HTTPException(status_code=404, detail=f"Return reason {item_data.reason_id} not found or inactive")
         
         # Get account SKU pricing for return credit
+        # First try the separate collection
         account_sku = await db.account_sku_pricing.find_one({
             "tenant_id": tenant_id,
             "account_id": data.account_id,
             "sku_id": item_data.sku_id
         })
+        
+        # If not found, check the embedded sku_pricing in the account document
+        if not account_sku:
+            # The SKU pricing might be embedded in the account with a 'sku' name field
+            # We need to match by sku_id or sku name
+            sku_name = sku.get('name') or sku.get('sku_name')
+            if account.get('sku_pricing'):
+                for pricing in account.get('sku_pricing', []):
+                    # Match by ID or name
+                    if pricing.get('sku_id') == item_data.sku_id or pricing.get('id') == item_data.sku_id:
+                        account_sku = {
+                            'sku_id': item_data.sku_id,
+                            'selling_price': pricing.get('price_per_unit', 0),
+                            'return_credit_per_unit': pricing.get('return_bottle_credit', 0)
+                        }
+                        break
+                    elif pricing.get('sku') == sku_name:
+                        account_sku = {
+                            'sku_id': item_data.sku_id,
+                            'selling_price': pricing.get('price_per_unit', 0),
+                            'return_credit_per_unit': pricing.get('return_bottle_credit', 0)
+                        }
+                        break
         
         # Get unit price - from input, account pricing, or SKU default
         unit_price = item_data.unit_price
