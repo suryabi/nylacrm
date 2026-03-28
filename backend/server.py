@@ -495,6 +495,41 @@ async def create_approval_task(
     
     await get_tdb().tasks.insert_one(task_doc)
     
+    # Also create in tasks_v2 (Task Management module) so it shows up in the new module
+    approver_dept = 'Sales'
+    approver_doc = await get_tdb().users.find_one({'id': approver_id}, {'_id': 0, 'department': 1})
+    if approver_doc:
+        approver_dept = approver_doc.get('department', 'Sales')
+    
+    task_count = await get_tdb().tasks_v2.count_documents({})
+    task_v2_doc = {
+        'id': task_id,
+        'task_number': f"TASK-{task_count + 1:05d}",
+        'title': title,
+        'description': full_description if full_description else None,
+        'severity': 'high' if (custom_priority or config['priority']) == 'high' else 'medium',
+        'status': 'open',
+        'department_id': approver_dept,
+        'assignees': [approver_id],
+        'assignees_data': [{'id': approver_id, 'name': approver_name or ''}],
+        'milestone_id': None,
+        'labels': [],
+        'due_date': due_date,
+        'due_time': None,
+        'reminder_date': None,
+        'linked_entity_type': reference_type or f'{approval_type}',
+        'linked_entity_id': reference_id,
+        'watchers': [requester_id, approver_id],
+        'created_by': requester_id,
+        'created_by_name': requester_name,
+        'is_approval_task': True,
+        'approval_type': approval_type,
+        'created_at': now.isoformat(),
+        'updated_at': now.isoformat()
+    }
+    
+    await get_tdb().tasks_v2.insert_one(task_v2_doc)
+    
     # Return without _id
     return {k: v for k, v in task_doc.items() if k != '_id'}
 
@@ -530,6 +565,24 @@ async def complete_approval_task(
             }
         }
     )
+    
+    # Also update in tasks_v2 (Task Management module)
+    v2_status = 'closed' if status == 'completed' else 'closed'
+    await get_tdb().tasks_v2.update_many(
+        {
+            'is_approval_task': True,
+            'approval_type': approval_type,
+            'linked_entity_id': reference_id,
+            'status': {'$in': ['open', 'in_progress', 'review']}
+        },
+        {
+            '$set': {
+                'status': v2_status,
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
     return result.modified_count > 0
 
 

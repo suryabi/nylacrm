@@ -19,7 +19,6 @@ import {
 import {
   WeatherTimeWidget,
   TaskMetricsWidget,
-  ActionItemsWidget,
   UpcomingFollowupsWidget,
   UpcomingMeetingsWidget,
   PipelineSummaryWidget,
@@ -56,7 +55,6 @@ export default function HomeDashboard() {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [savingMeeting, setSavingMeeting] = useState(false);
   const [users, setUsers] = useState([]);
-  const [taskFilter, setTaskFilter] = useState('assigned');
   const [selectedMeeting, setSelectedMeeting] = useState(null);
   const [editMode, setEditMode] = useState(false);
   
@@ -151,19 +149,6 @@ export default function HomeDashboard() {
     
     return () => clearInterval(timeInterval);
   }, []);
-
-  // Auto-select the appropriate tab
-  useEffect(() => {
-    if (!dashboardData || !user?.id) return;
-    
-    const tasks = dashboardData?.action_items?.tasks || [];
-    const assignedToMe = tasks.filter(t => t.assigned_to === user.id);
-    const createdByMe = tasks.filter(t => t.assigned_by === user.id || t.created_by === user.id);
-    
-    if (assignedToMe.length === 0 && createdByMe.length > 0) {
-      setTaskFilter('created');
-    }
-  }, [dashboardData, user?.id]);
 
   const handleCreateOrUpdateMeeting = async () => {
     if (!newMeeting.title.trim()) {
@@ -280,27 +265,6 @@ export default function HomeDashboard() {
     }
   };
 
-  const handleCompleteTask = async (taskId) => {
-    try {
-      await axios.put(`${API_URL}/tasks/${taskId}`, { status: 'completed' }, { withCredentials: true });
-      toast.success('Task completed');
-      fetchDashboardData();
-    } catch (error) {
-      const message = error.response?.data?.detail || 'Failed to update task';
-      toast.error(message);
-    }
-  };
-
-  const handleUpdateTask = async (taskId, updates) => {
-    try {
-      await axios.put(`${API_URL}/tasks/${taskId}`, updates, { withCredentials: true });
-      toast.success(updates.assigned_to ? 'Task reassigned' : 'Comment added');
-      fetchDashboardData();
-    } catch (error) {
-      toast.error('Failed to update task');
-    }
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
@@ -315,7 +279,7 @@ export default function HomeDashboard() {
     );
   }
 
-  const { action_items, upcoming_leads, upcoming_meetings, pipeline } = dashboardData || {};
+  const { upcoming_leads, upcoming_meetings, pipeline } = dashboardData || {};
   
   // Check if user is in Sales department for ROI Panel (check if department contains 'sales')
   const showSalesROIPanel = user?.department?.toLowerCase()?.includes('sales');
@@ -372,17 +336,6 @@ export default function HomeDashboard() {
           <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-12">
             {/* Left Column - Primary Content (full width on mobile, 8 cols on desktop) */}
             <div className="lg:col-span-8 space-y-4 sm:space-y-6 order-2 lg:order-1">
-              {/* Action Items - Large Card */}
-              <ActionItemsWidget
-                actionItems={action_items}
-                user={user}
-                users={users}
-                taskFilter={taskFilter}
-                setTaskFilter={setTaskFilter}
-                onCompleteTask={handleCompleteTask}
-                onUpdateTask={handleUpdateTask}
-              />
-              
               {/* Bottom Row - Upcoming Follow-ups full width */}
               <UpcomingFollowupsWidget upcomingLeads={upcoming_leads} />
             </div>
