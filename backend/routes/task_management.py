@@ -292,6 +292,7 @@ async def get_tasks(
     search: Optional[str] = None,
     linked_entity_type: Optional[str] = None,
     linked_entity_id: Optional[str] = None,
+    overdue: Optional[str] = None,
     view: str = 'all',  # 'all', 'my_tasks', 'assigned_by_me', 'watching'
     current_user: dict = Depends(get_current_user)
 ):
@@ -328,8 +329,11 @@ async def get_tasks(
     
     # Other filters
     if status:
-        statuses = status.split(',')
-        query['status'] = {'$in': statuses}
+        if status == 'active':
+            query['status'] = {'$nin': ['closed']}
+        else:
+            statuses = status.split(',')
+            query['status'] = {'$in': statuses}
     
     if severity:
         severities = severity.split(',')
@@ -350,6 +354,13 @@ async def get_tasks(
     if linked_entity_type and linked_entity_id:
         query['linked_entity_type'] = linked_entity_type
         query['linked_entity_id'] = linked_entity_id
+    
+    # Overdue filter
+    if overdue and overdue.lower() == 'true':
+        today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+        query['due_date'] = {'$lt': today, '$ne': None}
+        if 'status' not in query:
+            query['status'] = {'$nin': ['closed', 'resolved']}
     
     if search:
         query['$or'] = [

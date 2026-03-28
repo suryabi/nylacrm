@@ -37,7 +37,7 @@ export function TaskMetricsWidget() {
       bgGradient: 'from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20',
       iconBg: 'bg-blue-100 dark:bg-blue-900/50',
       textColor: 'text-blue-700 dark:text-blue-300',
-      onClick: () => navigate('/tasks?view=my_tasks')
+      onClick: () => navigate('/tasks?view=my_tasks&status=active')
     },
     {
       label: 'Created by Me',
@@ -47,7 +47,7 @@ export function TaskMetricsWidget() {
       bgGradient: 'from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20',
       iconBg: 'bg-emerald-100 dark:bg-emerald-900/50',
       textColor: 'text-emerald-700 dark:text-emerald-300',
-      onClick: () => navigate('/tasks?view=assigned_by_me')
+      onClick: () => navigate('/tasks?view=assigned_by_me&status=active')
     },
     {
       label: 'Overdue',
@@ -57,7 +57,7 @@ export function TaskMetricsWidget() {
       bgGradient: 'from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/20',
       iconBg: 'bg-red-100 dark:bg-red-900/50',
       textColor: 'text-red-700 dark:text-red-300',
-      onClick: () => navigate('/tasks?view=my_tasks&status=open,in_progress,review&overdue=true')
+      onClick: () => navigate('/tasks?overdue=true')
     },
     {
       label: 'High Severity',
@@ -67,7 +67,7 @@ export function TaskMetricsWidget() {
       bgGradient: 'from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20',
       iconBg: 'bg-amber-100 dark:bg-amber-900/50',
       textColor: 'text-amber-700 dark:text-amber-300',
-      onClick: () => navigate('/tasks?view=my_tasks&severity=high')
+      onClick: () => navigate('/tasks?view=my_tasks&severity=high&status=active')
     }
   ];
 

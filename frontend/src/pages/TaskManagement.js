@@ -164,8 +164,19 @@ export default function TaskManagement() {
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
       
+      // Build clean params (remove empty values)
+      const params = {};
+      if (filters.view && filters.view !== 'all') params.view = filters.view;
+      if (filters.department_id) params.department_id = filters.department_id;
+      if (filters.status) params.status = filters.status;
+      if (filters.severity) params.severity = filters.severity;
+      if (filters.milestone_id) params.milestone_id = filters.milestone_id;
+      if (filters.label_id) params.label_id = filters.label_id;
+      if (filters.assignee_id) params.assignee_id = filters.assignee_id;
+      if (filterOverdue) params.overdue = 'true';
+      
       const [tasksRes, labelsRes, milestonesRes, deptRes, usersRes, statsRes, meRes] = await Promise.all([
-        axios.get(`${API}/api/task-management/tasks`, { headers, params: filters }),
+        axios.get(`${API}/api/task-management/tasks`, { headers, params }),
         axios.get(`${API}/api/task-management/labels`, { headers }),
         axios.get(`${API}/api/task-management/milestones`, { headers }),
         axios.get(`${API}/api/task-management/departments`, { headers }),
@@ -187,7 +198,7 @@ export default function TaskManagement() {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, filterOverdue]);
 
   useEffect(() => {
     fetchData();
@@ -397,11 +408,8 @@ export default function TaskManagement() {
     setShowTaskDialog(true);
   };
 
-  // Filter tasks based on search and overdue flag
+  // Filter tasks based on search (overdue and status now handled by backend)
   const filteredTasks = tasks.filter(task => {
-    // Overdue filter
-    if (filterOverdue && !isOverdue(task.due_date)) return false;
-    // Search filter
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -474,19 +482,19 @@ export default function TaskManagement() {
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3" data-testid="task-stats">
           {[
-            { label: 'Total', value: stats.total || 0, icon: LayoutList, color: 'text-slate-700', bg: 'bg-slate-50', iconBg: 'bg-slate-100', onClick: () => { setFilters(f => ({ ...f, view: 'all', status: '', severity: '' })); setFilterOverdue(false); }},
-            { label: 'Assigned to Me', value: stats.my_tasks || 0, icon: User, color: 'text-blue-600', bg: 'bg-blue-50', iconBg: 'bg-blue-100', onClick: () => { setFilters(f => ({ ...f, view: 'my_tasks', status: '', severity: '' })); setFilterOverdue(false); }},
-            { label: 'Created by Me', value: stats.created_by_me || 0, icon: Users, color: 'text-emerald-600', bg: 'bg-emerald-50', iconBg: 'bg-emerald-100', onClick: () => { setFilters(f => ({ ...f, view: 'assigned_by_me', status: '', severity: '' })); setFilterOverdue(false); }},
-            { label: 'Open', value: stats.by_status?.open || 0, icon: Circle, color: 'text-blue-600', bg: 'bg-blue-50', iconBg: 'bg-blue-100', onClick: () => { setFilters(f => ({ ...f, status: 'open', view: 'all', severity: '' })); setFilterOverdue(false); }},
-            { label: 'Overdue', value: stats.overdue || 0, icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-50', iconBg: 'bg-red-100', onClick: () => { setFilterOverdue(true); setFilters(f => ({ ...f, status: '', view: 'all', severity: '' })); }},
-            { label: 'Closed', value: stats.by_status?.closed || 0, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50', iconBg: 'bg-emerald-100', onClick: () => { setFilters(f => ({ ...f, status: 'closed', view: 'all', severity: '' })); setFilterOverdue(false); }},
+            { label: 'Total', value: stats.total || 0, icon: LayoutList, color: 'text-slate-700', bg: 'bg-slate-50', iconBg: 'bg-slate-100', isActive: !filters.view || filters.view === 'all', onClick: () => { setFilters(f => ({ ...f, view: 'all', status: '', severity: '' })); setFilterOverdue(false); }},
+            { label: 'Assigned to Me', value: stats.my_tasks || 0, icon: User, color: 'text-blue-600', bg: 'bg-blue-50', iconBg: 'bg-blue-100', isActive: filters.view === 'my_tasks', onClick: () => { setFilters(f => ({ ...f, view: 'my_tasks', status: 'active', severity: '' })); setFilterOverdue(false); }},
+            { label: 'Created by Me', value: stats.created_by_me || 0, icon: Users, color: 'text-emerald-600', bg: 'bg-emerald-50', iconBg: 'bg-emerald-100', isActive: filters.view === 'assigned_by_me', onClick: () => { setFilters(f => ({ ...f, view: 'assigned_by_me', status: 'active', severity: '' })); setFilterOverdue(false); }},
+            { label: 'Open', value: stats.by_status?.open || 0, icon: Circle, color: 'text-blue-600', bg: 'bg-blue-50', iconBg: 'bg-blue-100', isActive: filters.status === 'open', onClick: () => { setFilters(f => ({ ...f, status: 'open', view: 'all', severity: '' })); setFilterOverdue(false); }},
+            { label: 'Overdue', value: stats.overdue || 0, icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-50', iconBg: 'bg-red-100', isActive: filterOverdue, onClick: () => { setFilterOverdue(true); setFilters(f => ({ ...f, status: '', view: 'all', severity: '' })); }},
+            { label: 'Closed', value: stats.by_status?.closed || 0, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50', iconBg: 'bg-emerald-100', isActive: filters.status === 'closed', onClick: () => { setFilters(f => ({ ...f, status: 'closed', view: 'all', severity: '' })); setFilterOverdue(false); }},
           ].map(metric => {
             const Icon = metric.icon;
             return (
               <Card 
                 key={metric.label}
                 onClick={metric.onClick}
-                className={`border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)] hover:shadow-[0_8px_24px_rgba(6,95,70,0.08)] hover:-translate-y-[2px] transition-[transform,box-shadow] duration-300 cursor-pointer ${metric.bg}`}
+                className={`border rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)] hover:shadow-[0_8px_24px_rgba(6,95,70,0.08)] hover:-translate-y-[2px] transition-[transform,box-shadow] duration-300 cursor-pointer ${metric.bg} ${metric.isActive ? 'ring-2 ring-emerald-500 border-emerald-300' : 'border-emerald-100/60'}`}
                 data-testid={`task-stat-${metric.label.toLowerCase().replace(/\s+/g, '-')}`}
               >
                 <CardContent className="p-4">
@@ -554,44 +562,51 @@ export default function TaskManagement() {
                 <SelectItem value="watching">Watching</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filters.status || "all"} onValueChange={(v) => { setFilters(f => ({ ...f, status: v === "all" ? "" : v })); setFilterOverdue(false); }}>
+            <Select value={filters.status || "all_status"} onValueChange={(v) => { setFilters(f => ({ ...f, status: v === "all_status" ? "" : v })); if (v !== 'all_status') setFilterOverdue(false); }}>
               <SelectTrigger className="w-32" data-testid="task-status-filter">
                 <Circle className="h-4 w-4 mr-2 text-slate-400" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="all_status">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="open">Open</SelectItem>
                 <SelectItem value="in_progress">In Progress</SelectItem>
                 <SelectItem value="review">In Review</SelectItem>
                 <SelectItem value="closed">Closed</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filters.department_id || "all"} onValueChange={(v) => setFilters(f => ({ ...f, department_id: v === "all" ? "" : v }))}>
+            <Select value={filters.department_id || "all_dept"} onValueChange={(v) => setFilters(f => ({ ...f, department_id: v === "all_dept" ? "" : v }))}>
               <SelectTrigger className="w-40" data-testid="task-dept-filter">
                 <Building2 className="h-4 w-4 mr-2 text-slate-400" />
                 <SelectValue placeholder="Department" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Departments</SelectItem>
+                <SelectItem value="all_dept">All Departments</SelectItem>
                 {departments.map(d => (
                   <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Select value={filters.severity || "all"} onValueChange={(v) => setFilters(f => ({ ...f, severity: v === "all" ? "" : v }))}>
+            <Select value={filters.severity || "all_sev"} onValueChange={(v) => setFilters(f => ({ ...f, severity: v === "all_sev" ? "" : v }))}>
               <SelectTrigger className="w-32" data-testid="task-severity-filter">
                 <Flag className="h-4 w-4 mr-2 text-slate-400" />
                 <SelectValue placeholder="Severity" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="all_sev">All</SelectItem>
                 <SelectItem value="high">High</SelectItem>
                 <SelectItem value="medium">Medium</SelectItem>
                 <SelectItem value="low">Low</SelectItem>
               </SelectContent>
             </Select>
             {/* Active filter indicators */}
+            {filterOverdue && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                Overdue
+                <X className="h-3 w-3 cursor-pointer" onClick={() => setFilterOverdue(false)} />
+              </span>
+            )}
             {(filters.view !== 'all' && filters.view !== '' || filters.status || filters.severity || filters.department_id || filterOverdue) && (
               <Button
                 variant="ghost"
