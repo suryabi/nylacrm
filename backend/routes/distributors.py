@@ -2598,12 +2598,13 @@ def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_
     Columns (in display order):
     - Base Price: The original/standard price of the product
     - Transfer Price: base_price × (1 - margin%) — price at which factory sells to distributor
+    - Billed to Dist: qty × transfer_price — amount initially billed based on base price
     - Customer Price: What the customer actually pays
     - New Transfer Price: customer_price × (1 - margin%) — adjusted transfer price based on actual sale
-    - Quantity: Number of units
-    - Distributor → Customer Billing: qty × customer_price
-    - Factory → Distributor Adjustment: qty × margin% × (customer_price - base_price)
+    - Actual Billable to Dist: qty × new_transfer_price — amount that should be billed based on customer price
+    - Adjustment (Dist → Factory): Actual Billable - Billed to Dist = qty × (1 - margin%) × (customer_price - base_price)
       Positive = distributor owes factory (sold higher), Negative = factory owes distributor (sold lower)
+    - Customer Invoice: qty × customer_price — what the customer pays
     """
     quantity = item.get('quantity', 0)
     unit_price = item.get('unit_price', 0)  # Customer Selling Price
@@ -2623,20 +2624,28 @@ def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_
     # New Transfer Price = customer_price × (1 - margin%)
     new_transfer_price = round(customer_selling_price * (1 - commission_percent / 100), 2) if customer_selling_price and commission_percent else customer_selling_price
     
+    # Billed to Distributor = qty × transfer_price (initial billing based on base price)
+    billed_to_dist = round(quantity * item_transfer_price, 2) if item_transfer_price else 0
+    
+    # Actual Billable to Distributor = qty × new_transfer_price (actual billing based on customer price)
+    actual_billable_to_dist = round(quantity * new_transfer_price, 2) if new_transfer_price else 0
+    
     # Calculate billing amounts
-    gross_amount = quantity * customer_selling_price  # Distributor → Customer Billing
+    gross_amount = quantity * customer_selling_price  # Customer Invoice = qty × customer_price
     discount_amount = round(gross_amount * discount_percent / 100, 2)
     taxable_amount = gross_amount - discount_amount
     tax_amount = round(taxable_amount * tax_percent / 100, 2)
     net_amount = taxable_amount + tax_amount
     
-    # Distributor → Customer Billing = qty × customer_price
+    # Customer Invoice = qty × customer_price
     customer_billing = round(gross_amount, 2)
     
-    # Factory → Distributor Adjustment = qty × margin% × (customer_price - base_price)
-    # Positive when customer_price > base_price (distributor earns more margin, pays difference to factory)
-    # Negative when customer_price < base_price (distributor earns less margin, factory compensates)
-    factory_distributor_adjustment = round(quantity * (commission_percent / 100) * (customer_selling_price - item_base_price), 2) if commission_percent and item_base_price else 0
+    # NEW FORMULA: Adjustment (Dist → Factory) = Actual Billable - Billed to Dist
+    # = qty × new_transfer_price - qty × transfer_price
+    # = qty × (1 - margin%) × (customer_price - base_price)
+    # Positive when customer_price > base_price (distributor owes factory)
+    # Negative when customer_price < base_price (factory owes distributor)
+    factory_distributor_adjustment = round(actual_billable_to_dist - billed_to_dist, 2)
     
     # Margin per unit = commission% of customer_price
     margin_per_unit = round(customer_selling_price * commission_percent / 100, 2) if commission_percent else 0
@@ -2664,6 +2673,8 @@ def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_
         'transfer_price': item_transfer_price,
         'customer_selling_price': customer_selling_price,
         'new_transfer_price': new_transfer_price,
+        'billed_to_dist': billed_to_dist,
+        'actual_billable_to_dist': actual_billable_to_dist,
         'distributor_commission_percent': commission_percent,
         'margin_per_unit': margin_per_unit,
         'gross_amount': round(gross_amount, 2),
@@ -3989,8 +4000,15 @@ async def generate_monthly_settlements(
                 # Price premium: extra collected when customer price > base price
                 price_premium = qty * (customer_price - base_p) if customer_price > base_p and base_p > 0 else 0
                 
-                # Factory → Distributor Adjustment = qty × margin% × (customer_price - base_price)
-                factory_adj = qty * (commission_pct / 100) * (customer_price - base_p) if commission_pct and base_p else 0
+                # NEW FORMULA: Adjustment (Dist → Factory) = Actual Billable - Billed to Dist
+                # Billed to Dist = qty × transfer_price = qty × base_price × (1 - margin%)
+                # Actual Billable = qty × new_transfer_price = qty × customer_price × (1 - margin%)
+                # Adjustment = qty × (1 - margin%) × (customer_price - base_price)
+                transfer_price = base_p * (1 - commission_pct / 100) if base_p > 0 else 0
+                new_transfer_price = customer_price * (1 - commission_pct / 100) if customer_price > 0 else 0
+                billed_to_dist = qty * transfer_price
+                actual_billable = qty * new_transfer_price
+                factory_adj = actual_billable - billed_to_dist
                 
                 delivery_billing += billing_value
                 delivery_earnings += earnings

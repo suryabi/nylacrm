@@ -137,29 +137,38 @@ export default function SettlementsTab({
         account_name: del.account_name || 'Unknown Account',
         deliveries: [],
         total_billing: 0,
-        distributor_earnings: 0,
-        margin_at_transfer: 0,
+        billed_to_dist: 0,
+        actual_billable: 0,
         adjustment: 0
       };
     }
     acc[accountId].deliveries.push(del);
     
-    // Calculate totals from delivery items
+    // Calculate totals from delivery items using NEW FORMULA
     const items = del.items || [];
     items.forEach(item => {
       const qty = item.quantity || 0;
       const customerPrice = item.customer_selling_price || item.unit_price || 0;
       const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
-      const transferPrice = item.transfer_price || item.base_price || 0;
+      const basePrice = item.base_price || item.transfer_price || 0;
       
+      // Transfer Price = base_price × (1 - margin%)
+      const transferPrice = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
+      // New Transfer Price = customer_price × (1 - margin%)
+      const newTransferPrice = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
+      
+      // Billed to Dist = qty × transfer_price
+      const billedToDist = qty * transferPrice;
+      // Actual Billable = qty × new_transfer_price
+      const actualBillable = qty * newTransferPrice;
+      // Adjustment = Actual Billable - Billed to Dist
+      const adjustment = actualBillable - billedToDist;
+      // Customer Invoice = qty × customer_price
       const billingValue = qty * customerPrice;
-      const distributorEarnings = billingValue * (commissionPct / 100);
-      const marginAtTransfer = qty * transferPrice * (commissionPct / 100);
-      const adjustment = distributorEarnings - marginAtTransfer;
       
       acc[accountId].total_billing += billingValue;
-      acc[accountId].distributor_earnings += distributorEarnings;
-      acc[accountId].margin_at_transfer += marginAtTransfer;
+      acc[accountId].billed_to_dist += billedToDist;
+      acc[accountId].actual_billable += actualBillable;
       acc[accountId].adjustment += adjustment;
     });
     
@@ -315,10 +324,10 @@ export default function SettlementsTab({
                               <tr>
                                 <th className="text-left p-3 font-medium">Account Name</th>
                                 <th className="text-right p-3 font-medium">Deliveries</th>
-                                <th className="text-right p-3 font-medium">Total Customer Billing</th>
-                                <th className="text-right p-3 font-medium">Distributor Earnings</th>
-                                <th className="text-right p-3 font-medium">Margin at Transfer</th>
-                                <th className="text-right p-3 font-medium">Adjustment</th>
+                                <th className="text-right p-3 font-medium">Customer Invoice</th>
+                                <th className="text-right p-3 font-medium bg-blue-50/50">Billed to Dist</th>
+                                <th className="text-right p-3 font-medium bg-emerald-50/50">Actual Billable</th>
+                                <th className="text-right p-3 font-medium bg-amber-50/50">Adjustment (Dist→Factory)</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -327,9 +336,9 @@ export default function SettlementsTab({
                                   <td className="p-3 font-medium">{group.account_name}</td>
                                   <td className="p-3 text-right">{group.deliveries.length}</td>
                                   <td className="p-3 text-right">₹{group.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                  <td className="p-3 text-right text-green-600">₹{group.distributor_earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                  <td className="p-3 text-right">₹{group.margin_at_transfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                  <td className={`p-3 text-right font-medium ${group.adjustment >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  <td className="p-3 text-right bg-blue-50/30">₹{group.billed_to_dist.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                  <td className="p-3 text-right bg-emerald-50/30">₹{group.actual_billable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                  <td className={`p-3 text-right font-medium bg-amber-50/30 ${group.adjustment >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                                     {group.adjustment >= 0 ? '+' : ''}₹{group.adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                   </td>
                                 </tr>
@@ -340,9 +349,9 @@ export default function SettlementsTab({
                                 <td className="p-3">Total ({accountGroups.length} accounts)</td>
                                 <td className="p-3 text-right">{unsettledDeliveries.length}</td>
                                 <td className="p-3 text-right">₹{accountGroups.reduce((s, g) => s + g.total_billing, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                <td className="p-3 text-right text-green-600">₹{accountGroups.reduce((s, g) => s + g.distributor_earnings, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                <td className="p-3 text-right">₹{accountGroups.reduce((s, g) => s + g.margin_at_transfer, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                <td className={`p-3 text-right ${accountGroups.reduce((s, g) => s + g.adjustment, 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                <td className="p-3 text-right bg-blue-50/30">₹{accountGroups.reduce((s, g) => s + g.billed_to_dist, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td className="p-3 text-right bg-emerald-50/30">₹{accountGroups.reduce((s, g) => s + g.actual_billable, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                <td className={`p-3 text-right bg-amber-50/30 ${accountGroups.reduce((s, g) => s + g.adjustment, 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                                   {accountGroups.reduce((s, g) => s + g.adjustment, 0) >= 0 ? '+' : ''}₹{accountGroups.reduce((s, g) => s + g.adjustment, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                 </td>
                               </tr>

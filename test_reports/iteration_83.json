@@ -1,0 +1,84 @@
+{
+  "summary": "Iteration 83 testing completed. Verified settlement adjustment formula implementation. The NEW formula (Adjustment = Actual Billable - Billed to Dist) is correctly implemented in both backend and frontend. Stock Out tab shows correct values. Create Settlement dialog shows new columns with correct calculations. Existing settlements created before the update don't have factory_distributor_adjustment field.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_settlement_adjustment.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Existing settlements created before the formula update don't have factory_distributor_adjustment field - this is expected behavior as the field was added in the update"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_settlement_adjustment.py"
+  ],
+  "success_rate": {
+    "backend": "100% - Settlement generation uses NEW formula correctly",
+    "frontend": "100% - All new columns and calculations verified"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123"
+  },
+  "seed_data_creation": "No new seed data created",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Settlement adjustment formula has been updated. NEW formula: Adjustment = Actual Billable - Billed to Dist = qty × (1 - margin%) × (customer_price - base_price). Existing settlements may not have factory_distributor_adjustment field.",
+  "features_tested": {
+    "Stock_Out_Tab_Columns": {
+      "status": "PASSED",
+      "columns_verified": ["Base Price", "Transfer Price", "Billed to Dist", "Customer Price", "New Transfer Price", "Actual Billable to Dist", "Adjustment (Dist→Factory)", "Customer Invoice"],
+      "test_values": {
+        "qty": 1,
+        "base_price": 146.25,
+        "customer_price": 140,
+        "margin_percent": 2.5,
+        "transfer_price": 142.594,
+        "new_transfer_price": 136.50,
+        "billed_to_dist": 142.594,
+        "actual_billable": 136.50,
+        "adjustment": -6.094
+      }
+    },
+    "Create_Settlement_Dialog_Columns": {
+      "status": "PASSED",
+      "columns_verified": ["Account Name", "Deliveries", "Customer Invoice", "Billed to Dist", "Actual Billable", "Adjustment (Dist→Factory)"],
+      "frontend_calculation": "Uses NEW formula correctly in SettlementsTab.jsx lines 130-178"
+    },
+    "Backend_Settlement_Generation": {
+      "status": "PASSED",
+      "endpoint": "POST /api/distributors/{distributor_id}/generate-monthly-settlements",
+      "formula_implementation": "Lines 4003-4011 in distributors.py use NEW formula",
+      "field_stored": "factory_distributor_adjustment"
+    },
+    "Settlement_Detail_View": {
+      "status": "PASSED",
+      "note": "Shows adjustment_payable for backward compatibility with existing settlements"
+    },
+    "Adjustment_Sign_Verification": {
+      "status": "PASSED",
+      "positive_case": "customer_price > base_price → positive adjustment (distributor owes factory)",
+      "negative_case": "customer_price < base_price → negative adjustment (factory owes distributor)"
+    }
+  },
+  "formula_verification": {
+    "OLD_FORMULA": "Adjustment = qty × margin% × (customer_price - base_price)",
+    "OLD_EXAMPLE": "1 × 0.025 × (140 - 146.25) = -0.156",
+    "NEW_FORMULA": "Adjustment = Actual Billable - Billed to Dist = qty × (1 - margin%) × (customer_price - base_price)",
+    "NEW_EXAMPLE": "(1 × 140 × 0.975) - (1 × 146.25 × 0.975) = 136.5 - 142.59 = -6.09"
+  },
+  "test_data_used": {
+    "distributor": "Brian (DIST-0003)",
+    "delivery": "DEL-2026-0008",
+    "settlement": "STL-2026-0006",
+    "account": "Empire Restaurant",
+    "city": "Bengaluru"
+  }
+}
