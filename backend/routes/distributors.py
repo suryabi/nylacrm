@@ -2631,6 +2631,13 @@ def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_
     # Positive means distributor owes company, Negative means company owes distributor
     adjustment_payable = round(distributor_earnings - margin_at_transfer_price, 2)
     
+    # Price Premium Payable = When customer is charged more than base/transfer price,
+    # the distributor collects extra on behalf of the company and must pay it back
+    # Price Premium = Qty × (Customer Selling Price - Base/Transfer Price) when customer price > base price
+    price_premium_payable = 0
+    if customer_selling_price > item_transfer_price and item_transfer_price > 0:
+        price_premium_payable = round(quantity * (customer_selling_price - item_transfer_price), 2)
+    
     # Legacy margin calculation (for backward compatibility)
     margin_amount = 0
     if margin_type and margin_value:
@@ -2656,6 +2663,7 @@ def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_
         'distributor_earnings': distributor_earnings,
         'margin_at_transfer_price': margin_at_transfer_price,
         'adjustment_payable': adjustment_payable,
+        'price_premium_payable': price_premium_payable,
         'margin_type': margin_type,
         'margin_value': margin_value,
         'margin_amount': margin_amount or distributor_earnings  # Use new calculation as default
@@ -3031,6 +3039,7 @@ async def create_delivery(
     total_tax_amount = 0
     total_net_amount = 0
     total_margin_amount = 0
+    total_price_premium = 0
     
     for item_data in data.items:
         # Get SKU info
@@ -3083,6 +3092,7 @@ async def create_delivery(
         total_tax_amount += item_dict['tax_amount']
         total_net_amount += item_dict['net_amount']
         total_margin_amount += item_dict.get('margin_amount', 0)
+        total_price_premium += item_dict.get('price_premium_payable', 0)
     
     # Create delivery document
     delivery_doc = {
@@ -3111,6 +3121,7 @@ async def create_delivery(
         "total_tax_amount": round(total_tax_amount, 2),
         "total_net_amount": round(total_net_amount, 2),
         "total_margin_amount": round(total_margin_amount, 2),
+        "total_price_premium": round(total_price_premium, 2),
         "remarks": data.remarks,
         "created_at": now,
         "updated_at": now,
@@ -3848,6 +3859,7 @@ async def generate_monthly_settlements(
         distributor_earnings = 0
         margin_at_transfer_price = 0
         total_quantity = 0
+        total_price_premium = 0
         
         items_to_insert = []
         
@@ -3861,6 +3873,7 @@ async def generate_monthly_settlements(
             delivery_billing = 0
             delivery_earnings = 0
             delivery_margin_at_transfer = 0
+            delivery_price_premium = 0
             
             for item in items:
                 qty = item.get('quantity', 0)
@@ -3872,14 +3885,21 @@ async def generate_monthly_settlements(
                 earnings = billing_value * (commission_pct / 100)
                 margin_transfer = qty * transfer_price * (commission_pct / 100)
                 
+                # Price premium: extra collected when customer price > base/transfer price
+                price_premium = 0
+                if customer_price > transfer_price and transfer_price > 0:
+                    price_premium = qty * (customer_price - transfer_price)
+                
                 delivery_billing += billing_value
                 delivery_earnings += earnings
                 delivery_margin_at_transfer += margin_transfer
+                delivery_price_premium += price_premium
             
             total_billing_value += delivery_billing
             distributor_earnings += delivery_earnings
             margin_at_transfer_price += delivery_margin_at_transfer
             total_quantity += delivery.get('total_quantity', 0)
+            total_price_premium += delivery_price_premium
             
             items_to_insert.append({
                 "id": str(uuid.uuid4()),
@@ -3894,7 +3914,8 @@ async def generate_monthly_settlements(
                 "total_billing_value": round(delivery_billing, 2),
                 "distributor_earnings": round(delivery_earnings, 2),
                 "margin_at_transfer_price": round(delivery_margin_at_transfer, 2),
-                "adjustment_payable": round(delivery_earnings - delivery_margin_at_transfer, 2)
+                "adjustment_payable": round(delivery_earnings - delivery_margin_at_transfer, 2),
+                "price_premium_payable": round(delivery_price_premium, 2)
             })
         
         # Generate settlement for this account
@@ -3924,6 +3945,7 @@ async def generate_monthly_settlements(
             "distributor_earnings": round(distributor_earnings, 2),
             "margin_at_transfer_price": round(margin_at_transfer_price, 2),
             "adjustment_payable": round(adjustment_payable, 2),
+            "price_premium_payable": round(total_price_premium, 2),
             "final_payout": round(distributor_earnings, 2),
             "status": "draft",
             "remarks": remarks,

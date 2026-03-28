@@ -93,7 +93,8 @@ export default function SettlementsTab({
             total_billing: 0,
             distributor_earnings: 0,
             margin_at_transfer: 0,
-            adjustment: 0
+            adjustment: 0,
+            price_premium: 0
           }
         };
       }
@@ -103,6 +104,7 @@ export default function SettlementsTab({
       acc[accountId].totals.distributor_earnings += settlement.distributor_earnings || 0;
       acc[accountId].totals.margin_at_transfer += settlement.margin_at_transfer_price || 0;
       acc[accountId].totals.adjustment += settlement.adjustment_payable || 0;
+      acc[accountId].totals.price_premium += settlement.price_premium_payable || 0;
       return acc;
     }, {});
   }, [settlements]);
@@ -178,6 +180,7 @@ export default function SettlementsTab({
         'Distributor Earnings (On Selling Price)': s.distributor_earnings || 0,
         'Distributor Margin at Transfer Price': s.margin_at_transfer_price || 0,
         'Adjustment Payable': s.adjustment_payable || 0,
+        'Price Premium Payable': s.price_premium_payable || 0,
         'Status': s.status
       }));
       
@@ -486,6 +489,12 @@ export default function SettlementsTab({
                           {group.totals.adjustment >= 0 ? '+' : ''}₹{group.totals.adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </p>
                       </div>
+                      <div className="text-right">
+                        <p className="text-xs text-emerald-600/60 uppercase tracking-wider font-medium">Price Premium</p>
+                        <p className={`font-semibold ${group.totals.price_premium > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                          ₹{group.totals.price_premium.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </p>
+                      </div>
                       <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center">
                         {expandedSettlementAccounts[group.account_id] ? (
                           <ChevronLeft className="h-5 w-5 text-emerald-700 rotate-90" />
@@ -509,6 +518,7 @@ export default function SettlementsTab({
                             <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Earnings</th>
                             <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Margin at Transfer</th>
                             <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Adjustment</th>
+                            <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Price Premium</th>
                             <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Status</th>
                             <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actions</th>
                           </tr>
@@ -542,6 +552,9 @@ export default function SettlementsTab({
                               <td className="p-4 text-right text-slate-700">₹{(settlement.margin_at_transfer_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                               <td className={`p-4 text-right font-medium ${(settlement.adjustment_payable || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                                 {(settlement.adjustment_payable || 0) >= 0 ? '+' : ''}₹{(settlement.adjustment_payable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className={`p-4 text-right font-medium ${(settlement.price_premium_payable || 0) > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                                ₹{(settlement.price_premium_payable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                               </td>
                               <td className="p-4 text-center">
                                 {getSettlementStatusBadge(settlement.status)}

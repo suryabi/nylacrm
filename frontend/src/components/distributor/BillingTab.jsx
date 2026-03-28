@@ -201,7 +201,8 @@ export default function BillingTab({
           total_billing: 0,
           distributor_earnings: 0,
           margin_at_transfer: 0,
-          adjustment: 0
+          adjustment: 0,
+          price_premium: 0
         }
       };
     }
@@ -210,6 +211,7 @@ export default function BillingTab({
     acc[accountId].totals.distributor_earnings += settlement.distributor_earnings || 0;
     acc[accountId].totals.margin_at_transfer += settlement.margin_at_transfer_price || 0;
     acc[accountId].totals.adjustment += settlement.adjustment_payable || 0;
+    acc[accountId].totals.price_premium += settlement.price_premium_payable || 0;
     return acc;
   }, {});
 
@@ -242,8 +244,9 @@ export default function BillingTab({
     total_billing: acc.total_billing + group.totals.total_billing,
     distributor_earnings: acc.distributor_earnings + group.totals.distributor_earnings,
     margin_at_transfer: acc.margin_at_transfer + group.totals.margin_at_transfer,
-    adjustment: acc.adjustment + group.totals.adjustment
-  }), { total_billing: 0, distributor_earnings: 0, margin_at_transfer: 0, adjustment: 0 });
+    adjustment: acc.adjustment + group.totals.adjustment,
+    price_premium: acc.price_premium + group.totals.price_premium
+  }), { total_billing: 0, distributor_earnings: 0, margin_at_transfer: 0, adjustment: 0, price_premium: 0 });
 
   const noteType = grandTotals.adjustment >= 0 ? 'credit' : 'debit';
   const existingNotes = monthlyData?.existing_notes || [];
@@ -390,6 +393,17 @@ export default function BillingTab({
                         </p>
                       </CardContent>
                     </Card>
+                    <Card className={grandTotals.price_premium > 0 ? 'bg-amber-50' : 'bg-muted/30'}>
+                      <CardContent className="p-4 text-center">
+                        <p className="text-sm text-muted-foreground">Price Premium</p>
+                        <p className={`text-xl font-bold ${grandTotals.price_premium > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                          ₹{grandTotals.price_premium.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Payable to Company
+                        </p>
+                      </CardContent>
+                    </Card>
                   </div>
 
                   {/* Unreconciled Settlements by Account */}
@@ -423,6 +437,12 @@ export default function BillingTab({
                                   {group.totals.adjustment >= 0 ? '+' : ''}₹{group.totals.adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                 </p>
                               </div>
+                              <div className="text-right">
+                                <p className="text-sm text-muted-foreground">Price Premium</p>
+                                <p className={`font-medium ${group.totals.price_premium > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                                  ₹{group.totals.price_premium.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </p>
+                              </div>
                               {expandedAccounts[group.account_id] ? (
                                 <ChevronUp className="h-5 w-5 text-muted-foreground" />
                               ) : (
@@ -441,6 +461,7 @@ export default function BillingTab({
                                     <th className="text-right p-2 font-medium">Billing</th>
                                     <th className="text-right p-2 font-medium">Earnings</th>
                                     <th className="text-right p-2 font-medium">Adjustment</th>
+                                    <th className="text-right p-2 font-medium">Price Premium</th>
                                     <th className="text-center p-2 font-medium">Status</th>
                                   </tr>
                                 </thead>
@@ -453,6 +474,9 @@ export default function BillingTab({
                                       <td className="p-2 text-right text-blue-600">₹{(settlement.distributor_earnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                       <td className={`p-2 text-right font-medium ${(settlement.adjustment_payable || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                         {(settlement.adjustment_payable || 0) >= 0 ? '+' : ''}₹{(settlement.adjustment_payable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                      </td>
+                                      <td className={`p-2 text-right font-medium ${(settlement.price_premium_payable || 0) > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                                        ₹{(settlement.price_premium_payable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                       </td>
                                       <td className="p-2 text-center">
                                         {getSettlementStatusBadge ? getSettlementStatusBadge(settlement.status) : (
