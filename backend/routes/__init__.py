@@ -31,6 +31,7 @@ from .invoices import router as invoices_router
 from .distributors import router as distributors_router
 from .task_management import router as task_management_router
 from .return_reasons import router as return_reasons_router
+from .customer_returns import router as customer_returns_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -69,5 +70,8 @@ routes_router.include_router(task_management_router, prefix="/task-management", 
 
 # Return Reasons Master
 routes_router.include_router(return_reasons_router, prefix="/return-reasons", tags=["Return Reasons"])
+
+# Customer Returns (under distributors)
+routes_router.include_router(customer_returns_router, prefix="/distributors", tags=["Customer Returns"])
 
 __all__ = ['routes_router']
