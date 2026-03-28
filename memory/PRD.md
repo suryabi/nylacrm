@@ -5,6 +5,28 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Latest Session - March 28, 2026 (Session 9)
 
+### Settlement Adjustment Formula Fixed ✅ (March 28 - COMPLETED)
+
+**Issue**: Settlement tab wasn't using the newly computed adjustment from Stock Out module.
+
+**Root Cause**: The settlement calculation was using the OLD formula which didn't match the Stock Out display.
+
+**Fix Applied:**
+- **OLD Formula**: `Adjustment = qty × margin% × (customer_price - base_price)`
+- **NEW Formula**: `Adjustment = Actual Billable - Billed to Dist = qty × (1 - margin%) × (customer_price - base_price)`
+
+**Example Comparison** (qty=1, base=₹146.25, customer=₹140, margin=2.5%):
+- OLD: 1 × 0.025 × (140 - 146.25) = **-₹0.16**
+- NEW: (1 × 140 × 0.975) - (1 × 146.25 × 0.975) = 136.50 - 142.59 = **-₹6.09**
+
+**Files Updated:**
+- `/app/backend/routes/distributors.py` - `calculate_delivery_item_amounts()` and `generate_monthly_settlements()`
+- `/app/frontend/src/components/distributor/SettlementsTab.jsx` - Preview table calculations and column headers
+
+**Testing (iteration_83.json):** 100% backend, 100% frontend. Verified Stock Out and Settlements now show consistent adjustment values.
+
+---
+
 ### Customer Invoice with GST - PDF Generation ✅ (March 28 - COMPLETED)
 
 **User Request**: Create customer invoices including GST from delivery, with PDF download from delivery detail view.
