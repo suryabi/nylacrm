@@ -88,6 +88,7 @@ export default function DeliveriesTab({
             const distributorEarnings = billingValue * (commissionPct / 100);
             const marginAtTransfer = qty * transferPrice * (commissionPct / 100);
             const adjustment = distributorEarnings - marginAtTransfer;
+            const pricePremium = customerPrice > transferPrice && transferPrice > 0 ? qty * (customerPrice - transferPrice) : 0;
             
             excelData.push({
               'Delivery #': delivery.delivery_number,
@@ -103,6 +104,7 @@ export default function DeliveriesTab({
               'Transfer Price (Per Unit)': transferPrice,
               'Distributor Margin at Transfer Price': marginAtTransfer,
               'Adjustment Payable': adjustment,
+              'Price Premium (Mfr Receives)': pricePremium,
               'Status': delivery.status
             });
           });
@@ -652,6 +654,7 @@ export default function DeliveriesTab({
                   <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Transfer Price</th>
                   <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Margin at Transfer</th>
                   <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Adjustment</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Price Premium</th>
                   <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Status</th>
                   <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actions</th>
                 </tr>
@@ -666,6 +669,7 @@ export default function DeliveriesTab({
                   let totalDistributorEarnings = 0;
                   let totalMarginAtTransfer = 0;
                   let totalAdjustment = 0;
+                  let totalPricePremium = 0;
                   
                   items.forEach(item => {
                     const qty = item.quantity || 0;
@@ -677,11 +681,13 @@ export default function DeliveriesTab({
                     const distributorEarnings = billingValue * (commissionPct / 100);
                     const marginAtTransfer = qty * transferPrice * (commissionPct / 100);
                     const adjustment = distributorEarnings - marginAtTransfer;
+                    const pricePremium = customerPrice > transferPrice && transferPrice > 0 ? qty * (customerPrice - transferPrice) : 0;
                     
                     totalBillingValue += billingValue;
                     totalDistributorEarnings += distributorEarnings;
                     totalMarginAtTransfer += marginAtTransfer;
                     totalAdjustment += adjustment;
+                    totalPricePremium += pricePremium;
                   });
                   
                   return (
@@ -696,6 +702,7 @@ export default function DeliveriesTab({
                         const distributorEarnings = billingValue * (commissionPct / 100);
                         const marginAtTransfer = qty * transferPrice * (commissionPct / 100);
                         const adjustment = distributorEarnings - marginAtTransfer;
+                        const pricePremium = customerPrice > transferPrice && transferPrice > 0 ? qty * (customerPrice - transferPrice) : 0;
                         
                         return (
                           <tr 
@@ -734,6 +741,9 @@ export default function DeliveriesTab({
                             <td className="p-4 text-right text-slate-700">₹{marginAtTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             <td className={`p-4 text-right font-medium ${adjustment >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                               {adjustment >= 0 ? '' : '-'}₹{Math.abs(adjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className={`p-4 text-right font-medium ${pricePremium > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                              ₹{pricePremium.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                             </td>
                             {itemIndex === 0 && (
                               <>
