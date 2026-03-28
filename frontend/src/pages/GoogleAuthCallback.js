@@ -38,7 +38,12 @@ export default function GoogleAuthCallback() {
           }
         );
 
-        // Success - user logged in, redirect without toast
+        // Store session token in localStorage for iPad/Safari compatibility
+        if (response.data.session_token) {
+          localStorage.setItem('token', response.data.session_token);
+        }
+
+        // Success - user logged in, redirect
         navigate('/home', { replace: true });
       } catch (error) {
         console.error('OAuth error:', error);

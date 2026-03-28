@@ -2156,7 +2156,7 @@ async def google_oauth_callback(request: Request, response: Response):
         
         user_doc = await get_tdb().users.find_one({'id': user_id}, {'_id': 0, 'password': 0})
         
-        return {'user': user_doc, 'message': 'Login successful'}
+        return {'user': user_doc, 'session_token': session_token, 'message': 'Login successful'}
         
     except HTTPException:
         raise

@@ -34,6 +34,11 @@ export default function AuthCallback() {
 
         const userData = response.data.user;
 
+        // Store session token in localStorage for iPad/Safari compatibility
+        if (response.data.session_token) {
+          localStorage.setItem('token', response.data.session_token);
+        }
+
         // Navigate to dashboard with user data
         navigate('/home', { state: { user: userData }, replace: true });
       } catch (error) {
