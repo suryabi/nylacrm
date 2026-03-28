@@ -5,7 +5,39 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Latest Session - March 28, 2026 (Session 9)
 
-### Restructured Delivery Columns with Color Coding ✅ (March 28 continued)
+### Final Delivery Columns Restructure ✅ (March 28 - COMPLETED)
+
+**User's exact column order** (fully implemented):
+| Column | Color | Formula |
+|--------|-------|---------|
+| Delivery # | Default | - |
+| SKU | Default | - |
+| Qty | Default | - |
+| Base Price | Blue | Raw base price |
+| Transfer Price | Blue | base × (1 - margin%) |
+| **Billed to Dist** | Blue | qty × transfer_price |
+| Customer Price | Emerald | Actual customer selling price |
+| New Transfer Price | Emerald | customer × (1 - margin%) |
+| **Actual Billable** | Emerald | qty × new_transfer_price |
+| **Adjustment** | Amber | Actual Billable - Billed to Dist |
+| **Customer Invoice** | Default | qty × customer_price |
+| Status | Default | - |
+| Actions | Default | - |
+
+**Key changes from previous version:**
+- Quantity moved to 3rd position (after SKU)
+- Added "Billed to Dist" = qty × initial transfer price
+- Added "Actual Billable" = qty × new transfer price (based on customer price)
+- "Adjustment" = Actual Billable - Billed to Dist (not the old margin-based formula)
+- Added "Customer Invoice" = qty × customer price
+- Subtotal row shows totals for Billed, Actual Billable, Adjustment, and Customer Invoice
+- Excel export includes all new columns
+
+**Testing (iteration_81.json):** 100% frontend (7/7 test cases passed)
+
+---
+
+### Restructured Delivery Columns with Color Coding ✅ (March 28 continued - Previous iteration)
 
 **New column order** (user-specified):
 - **Blue tint (theoretical)**: Base Price, Transfer Price (base × (1 - margin%))
