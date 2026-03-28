@@ -1334,7 +1334,7 @@ export default function DistributorDetail() {
 
   // ============ Delivery Handlers ============
 
-  const handleCreateDelivery = async () => {
+  const handleCreateDelivery = async (creditNotesToApply = []) => {
     if (!deliveryForm.account_id) {
       toast.error('Please select an account');
       return;
@@ -1373,7 +1373,9 @@ export default function DistributorDetail() {
           customer_selling_price: parseFloat(item.unit_price), // unit_price is the customer selling price
           discount_percent: parseFloat(item.discount_percent) || 0,
           tax_percent: parseFloat(item.tax_percent) || 0
-        }))
+        })),
+        // Include credit notes if any
+        credit_notes_to_apply: creditNotesToApply.length > 0 ? creditNotesToApply : null
       };
       
       const response = await axios.post(`${API_URL}/api/distributors/${id}/deliveries`, deliveryData, {
@@ -1381,7 +1383,13 @@ export default function DistributorDetail() {
         withCredentials: true
       });
       
-      toast.success(`Delivery ${response.data.delivery_number} created successfully`);
+      // Show success message with credit info if applicable
+      const creditApplied = response.data.total_credit_applied || 0;
+      if (creditApplied > 0) {
+        toast.success(`Delivery ${response.data.delivery_number} created with ₹${creditApplied.toLocaleString('en-IN')} in credit notes applied`);
+      } else {
+        toast.success(`Delivery ${response.data.delivery_number} created successfully`);
+      }
       setShowDeliveryDialog(false);
       resetDeliveryForm();
       fetchDeliveries();
@@ -2514,6 +2522,45 @@ export default function DistributorDetail() {
                   </tfoot>
                 </table>
               </div>
+
+              {/* Credit Notes Applied Section */}
+              {selectedDelivery.applied_credit_notes && selectedDelivery.applied_credit_notes.length > 0 && (
+                <div className="border rounded-lg p-4 bg-emerald-50/50" data-testid="applied-credit-notes-section">
+                  <h4 className="font-semibold text-sm mb-3 flex items-center gap-2 text-emerald-700">
+                    <CreditCard className="h-4 w-4" />
+                    Credit Notes Applied
+                  </h4>
+                  <div className="space-y-2 mb-3">
+                    {selectedDelivery.applied_credit_notes.map((cn, idx) => (
+                      <div key={cn.credit_note_id || idx} className="flex justify-between items-center text-sm">
+                        <div>
+                          <span className="font-medium">{cn.credit_note_number}</span>
+                          {cn.return_number && (
+                            <span className="text-muted-foreground ml-2">(Return: {cn.return_number})</span>
+                          )}
+                        </div>
+                        <span className="font-medium text-emerald-600">
+                          - ₹{cn.amount_applied?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="border-t pt-3 space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Delivery Total:</span>
+                      <span>₹{selectedDelivery.total_net_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-emerald-600">
+                      <span>Total Credits Applied:</span>
+                      <span>- ₹{selectedDelivery.total_credit_applied?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-base pt-1">
+                      <span>Net Customer Billing:</span>
+                      <span className="text-emerald-700">₹{selectedDelivery.net_customer_billing?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Actions */}
               <div className="flex justify-between items-center pt-4 border-t">

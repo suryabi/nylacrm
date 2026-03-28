@@ -3160,6 +3160,48 @@ async def create_delivery(
         "delivered_by": None
     }
     
+    # Handle credit notes if provided
+    applied_credit_notes = []
+    total_credit_applied = 0
+    
+    if data.credit_notes_to_apply:
+        from routes.credit_notes import apply_credit_note_to_delivery
+        
+        for cn_request in data.credit_notes_to_apply:
+            cn_id = cn_request.credit_note_id
+            amount = cn_request.amount_to_apply
+            
+            if not cn_id or amount <= 0:
+                continue
+            
+            try:
+                result = await apply_credit_note_to_delivery(
+                    tenant_id=tenant_id,
+                    credit_note_id=cn_id,
+                    delivery_id=delivery_id,
+                    delivery_number=delivery_number,
+                    amount_to_apply=amount,
+                    applied_by=current_user.get('id')
+                )
+                
+                applied_credit_notes.append({
+                    'credit_note_id': cn_id,
+                    'credit_note_number': result.get('credit_note_number'),
+                    'amount_applied': amount,
+                    'return_number': result.get('return_number')
+                })
+                total_credit_applied += amount
+            except HTTPException as e:
+                logger.warning(f"Failed to apply credit note {cn_id} during delivery creation: {e.detail}")
+    
+    # Calculate net customer billing
+    net_customer_billing = max(0, total_net_amount - total_credit_applied)
+    
+    # Add credit note fields to delivery doc
+    delivery_doc['applied_credit_notes'] = applied_credit_notes
+    delivery_doc['total_credit_applied'] = round(total_credit_applied, 2)
+    delivery_doc['net_customer_billing'] = round(net_customer_billing, 2)
+    
     # Insert delivery and items
     await db.distributor_deliveries.insert_one(delivery_doc)
     if items_to_insert:
@@ -3171,9 +3213,93 @@ async def create_delivery(
         for item in items_to_insert
     ]
     
-    logger.info(f"Delivery {delivery_number} created for account {data.account_id} by {current_user['email']}")
+    logger.info(f"Delivery {delivery_number} created for account {data.account_id} with ₹{total_credit_applied} in credit notes applied by {current_user['email']}")
     
     return delivery_doc
+
+
+@router.post("/{distributor_id}/deliveries/{delivery_id}/apply-credit-notes")
+async def apply_credit_notes_to_delivery(
+    distributor_id: str,
+    delivery_id: str,
+    credit_notes: List[dict],  # [{credit_note_id: str, amount_to_apply: float}]
+    current_user: dict = Depends(get_current_user)
+):
+    """Apply credit notes to a delivery"""
+    from routes.credit_notes import apply_credit_note_to_delivery
+    
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    
+    if delivery.get('status') not in ['draft', 'confirmed']:
+        raise HTTPException(status_code=400, detail="Can only apply credit notes to draft or confirmed deliveries")
+    
+    applied_credits = delivery.get('applied_credit_notes', []) or []
+    total_credit_applied = delivery.get('total_credit_applied', 0)
+    
+    # Apply each credit note
+    applications = []
+    for cn_request in credit_notes:
+        cn_id = cn_request.get('credit_note_id')
+        amount = cn_request.get('amount_to_apply', 0)
+        
+        if not cn_id or amount <= 0:
+            continue
+        
+        try:
+            result = await apply_credit_note_to_delivery(
+                tenant_id=tenant_id,
+                credit_note_id=cn_id,
+                delivery_id=delivery_id,
+                delivery_number=delivery.get('delivery_number'),
+                amount_to_apply=amount,
+                applied_by=current_user.get('id')
+            )
+            
+            applied_credits.append({
+                'credit_note_id': cn_id,
+                'credit_note_number': result.get('credit_note_number'),
+                'amount_applied': amount
+            })
+            total_credit_applied += amount
+            applications.append(result)
+        except HTTPException as e:
+            # Log but continue with other credit notes
+            logger.warning(f"Failed to apply credit note {cn_id}: {e.detail}")
+            applications.append({'error': e.detail, 'credit_note_id': cn_id})
+    
+    # Calculate net customer billing
+    total_net_amount = delivery.get('total_net_amount', 0)
+    net_customer_billing = max(0, total_net_amount - total_credit_applied)
+    
+    # Update delivery
+    await db.distributor_deliveries.update_one(
+        {"id": delivery_id, "tenant_id": tenant_id},
+        {"$set": {
+            "applied_credit_notes": applied_credits,
+            "total_credit_applied": round(total_credit_applied, 2),
+            "net_customer_billing": round(net_customer_billing, 2),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    logger.info(f"Applied ₹{total_credit_applied} in credit notes to delivery {delivery.get('delivery_number')}")
+    
+    return {
+        "message": f"Applied {len([a for a in applications if 'error' not in a])} credit notes",
+        "applications": applications,
+        "total_credit_applied": round(total_credit_applied, 2),
+        "net_customer_billing": round(net_customer_billing, 2)
+    }
 
 
 @router.put("/{distributor_id}/deliveries/{delivery_id}")

@@ -489,6 +489,12 @@ class DeliveryItem(BaseModel):
     remarks: Optional[str] = None
 
 
+class CreditNoteApplicationCreate(BaseModel):
+    """Credit note to apply during delivery creation"""
+    credit_note_id: str
+    amount_to_apply: float
+
+
 class AccountDeliveryCreate(BaseModel):
     distributor_id: str
     distributor_location_id: str
@@ -501,6 +507,8 @@ class AccountDeliveryCreate(BaseModel):
     delivery_address: Optional[str] = None
     remarks: Optional[str] = None
     items: List[DeliveryItemCreate]
+    # Credit notes to apply
+    credit_notes_to_apply: Optional[List[CreditNoteApplicationCreate]] = None
 
 
 class AccountDeliveryUpdate(BaseModel):
@@ -540,6 +548,12 @@ class AccountDelivery(BaseModel):
     total_tax_amount: float = 0
     total_net_amount: float = 0
     total_margin_amount: float = 0  # Total distributor earning from this delivery
+    
+    # Credit note application
+    applied_credit_notes: Optional[List[dict]] = None  # [{credit_note_id, credit_note_number, amount_applied, return_number}]
+    total_credit_applied: float = 0  # Total credit notes applied
+    net_customer_billing: float = 0  # total_net_amount - total_credit_applied
+    
     remarks: Optional[str] = None
     items: Optional[List[DeliveryItem]] = None
     created_at: str

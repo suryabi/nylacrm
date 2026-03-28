@@ -16,6 +16,7 @@ from models.customer_return import (
     CustomerReturnCreate, CustomerReturnUpdate,
     FactoryReturnUpdate
 )
+from routes.credit_notes import create_credit_note_from_return
 
 router = APIRouter(tags=["Customer Returns"])
 logger = logging.getLogger(__name__)
@@ -376,7 +377,7 @@ async def confirm_customer_return(
     return_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Confirm a customer return"""
+    """Confirm a customer return and auto-create credit note"""
     tenant_id = get_current_tenant_id()
     
     ret = await db.customer_returns.find_one(
@@ -397,9 +398,25 @@ async def confirm_customer_return(
         }}
     )
     
-    logger.info(f"Confirmed customer return {ret['return_number']}")
+    # Auto-create credit note for the confirmed return
+    credit_note = None
+    if ret.get('total_credit', 0) > 0:
+        try:
+            credit_note = await create_credit_note_from_return(
+                tenant_id=tenant_id,
+                distributor_id=distributor_id,
+                return_doc=ret,
+                created_by=current_user.get('id')
+            )
+            logger.info(f"Auto-created credit note {credit_note.get('credit_note_number')} for return {ret['return_number']}")
+        except Exception as e:
+            logger.error(f"Failed to create credit note for return {ret['return_number']}: {e}")
     
-    return {"message": "Return confirmed", "status": "confirmed"}
+    return {
+        "message": "Return confirmed",
+        "status": "confirmed",
+        "credit_note": credit_note
+    }
 
 
 @router.post("/{distributor_id}/returns/{return_id}/cancel")

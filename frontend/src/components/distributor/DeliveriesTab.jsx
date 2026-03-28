@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -7,7 +7,8 @@ import { Badge } from '../ui/badge';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
-import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+import { Checkbox } from '../ui/checkbox';
+import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2 } from 'lucide-react';
 
 const TIME_FILTERS = [
   { value: 'this_week', label: 'This Week' },
@@ -66,7 +67,123 @@ export default function DeliveriesTab({
 }) {
   const [downloading, setDownloading] = useState(false);
   
+  // Credit notes state
+  const [availableCreditNotes, setAvailableCreditNotes] = useState([]);
+  const [loadingCreditNotes, setLoadingCreditNotes] = useState(false);
+  const [selectedCreditNotes, setSelectedCreditNotes] = useState({}); // {credit_note_id: amount_to_apply}
+  
   const totalPages = Math.ceil((deliveriesTotal || 0) / (deliveriesPageSize || 20));
+  
+  // Fetch available credit notes when account is selected
+  useEffect(() => {
+    const fetchCreditNotes = async () => {
+      if (!selectedDeliveryAccount?.account_id && !selectedDeliveryAccount?.id) {
+        setAvailableCreditNotes([]);
+        setSelectedCreditNotes({});
+        return;
+      }
+      
+      setLoadingCreditNotes(true);
+      try {
+        const accountId = selectedDeliveryAccount.account_id || selectedDeliveryAccount.id;
+        const response = await fetch(
+          `${API_URL}/api/distributors/${distributor.id}/credit-notes/for-account/${accountId}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          setAvailableCreditNotes(data.credit_notes || []);
+        } else {
+          setAvailableCreditNotes([]);
+        }
+      } catch (error) {
+        console.error('Error fetching credit notes:', error);
+        setAvailableCreditNotes([]);
+      } finally {
+        setLoadingCreditNotes(false);
+      }
+    };
+    
+    fetchCreditNotes();
+  }, [selectedDeliveryAccount, distributor.id, API_URL, token]);
+  
+  // Reset credit notes when dialog closes
+  useEffect(() => {
+    if (!showDeliveryDialog) {
+      setSelectedCreditNotes({});
+    }
+  }, [showDeliveryDialog]);
+  
+  // Calculate total credit to be applied
+  const totalCreditToApply = Object.values(selectedCreditNotes).reduce((sum, amt) => sum + (parseFloat(amt) || 0), 0);
+  
+  // Calculate delivery total amount
+  const deliveryTotalAmount = deliveryItems.reduce((sum, item) => {
+    const gross = item.quantity * item.unit_price;
+    const afterDiscount = gross * (1 - (item.discount_percent || 0) / 100);
+    const withTax = afterDiscount * (1 + (item.tax_percent || 0) / 100);
+    return sum + withTax;
+  }, 0);
+  
+  // Calculate net billing amount
+  const netBillingAmount = Math.max(0, deliveryTotalAmount - totalCreditToApply);
+  
+  // Handle credit note selection toggle
+  const handleCreditNoteToggle = (creditNote, checked) => {
+    if (checked) {
+      // Add with full balance by default
+      setSelectedCreditNotes(prev => ({
+        ...prev,
+        [creditNote.id]: creditNote.balance_amount
+      }));
+    } else {
+      // Remove
+      setSelectedCreditNotes(prev => {
+        const updated = { ...prev };
+        delete updated[creditNote.id];
+        return updated;
+      });
+    }
+  };
+  
+  // Handle credit note amount change
+  const handleCreditNoteAmountChange = (creditNoteId, value, maxAmount) => {
+    const numValue = parseFloat(value) || 0;
+    const clampedValue = Math.min(Math.max(0, numValue), maxAmount);
+    
+    if (clampedValue > 0) {
+      setSelectedCreditNotes(prev => ({
+        ...prev,
+        [creditNoteId]: clampedValue
+      }));
+    } else {
+      setSelectedCreditNotes(prev => {
+        const updated = { ...prev };
+        delete updated[creditNoteId];
+        return updated;
+      });
+    }
+  };
+  
+  // Custom handler that wraps the original handleCreateDelivery
+  const handleCreateDeliveryWithCredits = async () => {
+    // Prepare credit notes for submission
+    const creditNotesToApply = Object.entries(selectedCreditNotes)
+      .filter(([_, amount]) => amount > 0)
+      .map(([credit_note_id, amount_to_apply]) => ({
+        credit_note_id,
+        amount_to_apply
+      }));
+    
+    // Pass credit notes to the parent handler
+    await handleCreateDelivery(creditNotesToApply);
+  };
   
   // Download as Excel
   const downloadExcel = async () => {
@@ -520,18 +637,138 @@ export default function DeliveriesTab({
                         <div className="text-right">
                           <span className="text-muted-foreground mr-4">Total Amount:</span>
                           <span className="text-lg font-bold">
-                            ₹{deliveryItems.reduce((sum, item) => {
-                              const gross = item.quantity * item.unit_price;
-                              const afterDiscount = gross * (1 - (item.discount_percent || 0) / 100);
-                              const withTax = afterDiscount * (1 + (item.tax_percent || 0) / 100);
-                              return sum + withTax;
-                            }, 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            ₹{deliveryTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         </div>
                       </div>
                     </div>
                   )}
                 </div>
+
+                {/* Credit Notes Section */}
+                {selectedDeliveryAccount && deliveryItems.length > 0 && (
+                  <div className="space-y-3 border-t pt-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="h-5 w-5 text-emerald-600" />
+                        <Label className="text-base font-semibold">Apply Credit Notes</Label>
+                      </div>
+                      {availableCreditNotes.length > 0 && (
+                        <Badge variant="outline" className="text-emerald-600 border-emerald-300 bg-emerald-50">
+                          {availableCreditNotes.length} credit note{availableCreditNotes.length !== 1 ? 's' : ''} available
+                        </Badge>
+                      )}
+                    </div>
+                    
+                    {loadingCreditNotes ? (
+                      <div className="flex items-center justify-center py-4">
+                        <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+                        <span className="ml-2 text-sm text-muted-foreground">Loading credit notes...</span>
+                      </div>
+                    ) : availableCreditNotes.length === 0 ? (
+                      <div className="text-center py-4 text-muted-foreground border rounded-md bg-muted/20">
+                        <Receipt className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">No credit notes available for this account</p>
+                        <p className="text-xs mt-1">Credit notes are generated when customer returns are confirmed</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">
+                          Select credit notes to offset the customer billing amount
+                        </p>
+                        <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
+                          {availableCreditNotes.map(cn => {
+                            const isSelected = selectedCreditNotes[cn.id] !== undefined;
+                            const selectedAmount = selectedCreditNotes[cn.id] || 0;
+                            
+                            return (
+                              <div 
+                                key={cn.id} 
+                                className={`p-3 transition-colors ${isSelected ? 'bg-emerald-50/50' : 'hover:bg-muted/30'}`}
+                                data-testid={`credit-note-row-${cn.id}`}
+                              >
+                                <div className="flex items-start gap-3">
+                                  <Checkbox
+                                    id={`cn-${cn.id}`}
+                                    checked={isSelected}
+                                    onCheckedChange={(checked) => handleCreditNoteToggle(cn, checked)}
+                                    className="mt-0.5"
+                                    data-testid={`credit-note-checkbox-${cn.id}`}
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between">
+                                      <label 
+                                        htmlFor={`cn-${cn.id}`} 
+                                        className="font-medium text-sm cursor-pointer"
+                                      >
+                                        {cn.credit_note_number}
+                                      </label>
+                                      <span className="text-sm font-semibold text-emerald-600">
+                                        ₹{cn.balance_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })} available
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                                      <span>Return: {cn.return_number || 'N/A'}</span>
+                                      <span>•</span>
+                                      <span>{cn.credit_note_date ? new Date(cn.credit_note_date).toLocaleDateString() : 'N/A'}</span>
+                                      <span>•</span>
+                                      <span>Original: ₹{cn.original_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                    </div>
+                                    
+                                    {isSelected && (
+                                      <div className="flex items-center gap-2 mt-2">
+                                        <span className="text-xs text-muted-foreground">Apply:</span>
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          max={cn.balance_amount}
+                                          step="0.01"
+                                          value={selectedAmount}
+                                          onChange={(e) => handleCreditNoteAmountChange(cn.id, e.target.value, cn.balance_amount)}
+                                          className="h-7 w-28 text-sm"
+                                          data-testid={`credit-note-amount-${cn.id}`}
+                                        />
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 px-2 text-xs"
+                                          onClick={() => handleCreditNoteAmountChange(cn.id, cn.balance_amount, cn.balance_amount)}
+                                        >
+                                          Max
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        
+                        {/* Credit Notes Summary */}
+                        {totalCreditToApply > 0 && (
+                          <div className="border rounded-md p-3 bg-emerald-50/50 space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Delivery Total:</span>
+                              <span className="font-medium">₹{deliveryTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex justify-between text-sm text-emerald-600">
+                              <span className="flex items-center gap-1">
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                Credit Notes Applied ({Object.keys(selectedCreditNotes).length}):
+                              </span>
+                              <span className="font-medium">- ₹{totalCreditToApply.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex justify-between text-base font-bold border-t pt-2">
+                              <span>Net Customer Billing:</span>
+                              <span className="text-emerald-700">₹{netBillingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Remarks */}
                 <div className="space-y-2">
@@ -547,7 +784,7 @@ export default function DeliveriesTab({
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShowDeliveryDialog(false)}>Cancel</Button>
                 <Button
-                  onClick={handleCreateDelivery}
+                  onClick={handleCreateDeliveryWithCredits}
                   disabled={savingDelivery || !deliveryForm.account_id || !deliveryForm.distributor_location_id || deliveryItems.length === 0}
                   data-testid="save-delivery-btn"
                 >
