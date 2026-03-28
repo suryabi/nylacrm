@@ -276,17 +276,21 @@ async def apply_credit_note_to_delivery(
     )
     
     # Update the related return status to "credit_issued" when credit note is fully applied
-    if new_status == "fully_applied" and credit_note.get("return_id"):
+    return_id = credit_note.get("return_id")
+    if new_status == "fully_applied" and return_id:
         await db.customer_returns.update_one(
-            {"id": credit_note.get("return_id"), "tenant_id": tenant_id},
+            {"id": return_id, "tenant_id": tenant_id},
             {"$set": {
                 "status": "credit_issued",
                 "credit_note_id": credit_note_id,
                 "credit_note_number": credit_note.get("credit_note_number"),
+                "credit_issued_to_delivery_id": delivery_id,
+                "credit_issued_to_delivery_number": delivery_number,
+                "credit_issued_at": datetime.now(timezone.utc).isoformat(),
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }}
         )
-        logger.info(f"Updated return {credit_note.get('return_number')} status to credit_issued")
+        logger.info(f"Updated return {credit_note.get('return_number')} status to credit_issued for delivery {delivery_number}")
     
     logger.info(f"Applied ₹{amount_to_apply} from credit note {credit_note.get('credit_note_number')} to delivery {delivery_number}")
     
@@ -362,6 +366,9 @@ async def revert_credit_note_application(
                         {"id": cn.get("return_id"), "tenant_id": tenant_id},
                         {"$set": {
                             "status": "approved",
+                            "credit_issued_to_delivery_id": None,
+                            "credit_issued_to_delivery_number": None,
+                            "credit_issued_at": None,
                             "updated_at": datetime.now(timezone.utc).isoformat()
                         }}
                     )

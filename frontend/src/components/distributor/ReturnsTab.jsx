@@ -556,9 +556,16 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                       </td>
                       <td className="p-4 text-center">
                         {ret.credit_note_number ? (
-                          <Badge variant="outline" className="text-emerald-600 border-emerald-300 bg-emerald-50">
-                            {ret.credit_note_number}
-                          </Badge>
+                          <div className="flex flex-col items-center gap-0.5">
+                            <Badge variant="outline" className="text-emerald-600 border-emerald-300 bg-emerald-50">
+                              {ret.credit_note_number}
+                            </Badge>
+                            {ret.credit_issued_to_delivery_number && (
+                              <span className="text-xs text-muted-foreground">
+                                → {ret.credit_issued_to_delivery_number}
+                              </span>
+                            )}
+                          </div>
                         ) : ret.status === 'approved' ? (
                           <span className="text-xs text-amber-600">Pending</span>
                         ) : (
@@ -853,6 +860,14 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         ₹{(selectedReturn.total_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </Badge>
                     </div>
+                    {selectedReturn.credit_issued_to_delivery_number && (
+                      <div className="mt-3 pt-3 border-t border-emerald-200 flex items-center justify-between">
+                        <span className="text-xs text-emerald-600">Applied to Delivery:</span>
+                        <span className="text-sm font-medium text-emerald-700">
+                          {selectedReturn.credit_issued_to_delivery_number}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
 
