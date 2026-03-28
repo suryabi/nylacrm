@@ -556,16 +556,9 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                       </td>
                       <td className="p-4 text-center">
                         {ret.credit_note_number ? (
-                          <div className="flex flex-col items-center gap-0.5">
-                            <Badge variant="outline" className="text-emerald-600 border-emerald-300 bg-emerald-50">
-                              {ret.credit_note_number}
-                            </Badge>
-                            {ret.credit_issued_to_delivery_number && (
-                              <span className="text-xs text-muted-foreground">
-                                → {ret.credit_issued_to_delivery_number}
-                              </span>
-                            )}
-                          </div>
+                          <Badge variant="outline" className="text-emerald-600 border-emerald-300 bg-emerald-50">
+                            {ret.credit_note_number}
+                          </Badge>
                         ) : ret.status === 'approved' ? (
                           <span className="text-xs text-amber-600">Pending</span>
                         ) : (
