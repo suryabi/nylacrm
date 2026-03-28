@@ -3,7 +3,45 @@
 ## Original Problem Statement
 Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. The application helps manage leads, accounts, invoices, COGS calculations, and sales team performance.
 
-## Latest Session - March 28, 2026 (Session 9)
+## Latest Session - March 28, 2026 (Session 10)
+
+### Credit Notes Application in Deliveries ✅ (March 28 - COMPLETED)
+
+**User Request**: When creating a Stock Out (delivery), if there are any approved and unpaid credit notes for the customer, system should provide an option to choose the credit notes that need to be applied to the invoice and accordingly customer billing need to be calculated.
+
+**Implementation:**
+1. **Backend Updates:**
+   - Added `CreditNoteApplicationCreate` model in `/app/backend/models/distributor.py`
+   - Modified `AccountDeliveryCreate` to accept `credit_notes_to_apply` parameter
+   - Updated `create_delivery` function in `/app/backend/routes/distributors.py` to process credit notes during creation
+   - Credit notes are applied via `apply_credit_note_to_delivery` function
+
+2. **Frontend Updates:**
+   - Added Credit Notes UI section in `/app/frontend/src/components/distributor/DeliveriesTab.jsx`
+   - Fetches available credit notes when account is selected
+   - Multi-select checkboxes to apply credit notes
+   - Amount input for partial credit application
+   - Real-time calculation of Net Customer Billing
+   - Updated `/app/frontend/src/pages/DistributorDetail.js` to pass credit notes to API
+   - Delivery detail dialog shows applied credit notes with breakdown
+
+**UI Features:**
+- Credit Notes section appears AFTER selecting account AND adding at least one item
+- Shows count of available credit notes as badge
+- Loading spinner while fetching
+- "No credit notes available" message when none exist
+- Checkbox + amount input per credit note
+- "Max" button to apply full balance
+- Summary showing: Delivery Total, Credits Applied, Net Customer Billing
+
+**Testing (iteration_86.json):** 100% backend (8/8 tests), 100% frontend verified
+- Credit Notes API endpoints working correctly
+- Delivery creation with credit notes parameter
+- UI renders correctly with proper styling
+
+---
+
+## Previous Session - March 28, 2026 (Session 9)
 
 ### Customer Returns Module - Phase 2 ✅ (March 28 - COMPLETED)
 
