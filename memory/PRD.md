@@ -5,6 +5,20 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Latest Session - March 28, 2026 (Session 9)
 
+### Price Premium Payable in Distribution Module ✅ (March 28 continued)
+
+**Business Logic**: When customer is charged more than the base/transfer price, the distributor collects extra on behalf of the company. The system now calculates:
+- `price_premium_payable` = qty × (customer_selling_price - base_price) when customer_price > base_price
+
+**Implementation:**
+- Backend: Added to `calculate_delivery_item_amounts()`, delivery creation (`total_price_premium`), and settlement generation
+- Frontend: Added "Price Premium" column/card in SettlementsTab + BillingTab + Excel export
+- Colored amber when > 0, slate when 0. Existing pre-feature data handled gracefully with || 0 fallback.
+
+**Testing (iteration_78.json):** 100% backend (11/11), 100% frontend
+
+---
+
 ### Task Metrics Filter Navigation Fix ✅ (March 28 continued)
 
 **Problem**: Home dashboard task tiles navigated to task page but filters weren't applied correctly (closed tasks showed when metric excluded them). Overdue was client-side only.
