@@ -3960,6 +3960,15 @@ async def create_settlement(
     total_delivery_amount = sum(d.get('total_net_amount', 0) for d in deliveries)
     total_margin_amount = sum(d.get('total_margin_amount', 0) for d in deliveries)
     
+    # Calculate total credit notes applied (factory owes distributor for customer returns)
+    total_credit_notes_applied = sum(d.get('total_credit_applied', 0) for d in deliveries)
+    
+    # Adjustment from distributor to factory (when customer price > base price)
+    total_dist_to_factory_adjustment = sum(d.get('total_adjustment_dist_to_factory', 0) for d in deliveries)
+    
+    # Net adjustments: Credit notes (factory pays distributor) - Price adjustments (distributor pays factory)
+    net_adjustments = total_credit_notes_applied - total_dist_to_factory_adjustment
+    
     # Create settlement items
     items_to_insert = []
     for delivery in deliveries:
@@ -3975,8 +3984,13 @@ async def create_settlement(
             "account_city": delivery.get('account_city'),
             "total_quantity": delivery.get('total_quantity', 0),
             "total_amount": delivery.get('total_net_amount', 0),
-            "margin_amount": delivery.get('total_margin_amount', 0)
+            "margin_amount": delivery.get('total_margin_amount', 0),
+            "credit_applied": delivery.get('total_credit_applied', 0),
+            "adjustment_dist_to_factory": delivery.get('total_adjustment_dist_to_factory', 0)
         })
+    
+    # Final payout = Margin + Net Adjustments
+    final_payout = total_margin_amount + net_adjustments
     
     # Create settlement document
     settlement_doc = {
@@ -3993,8 +4007,10 @@ async def create_settlement(
         "total_quantity": total_quantity,
         "total_delivery_amount": round(total_delivery_amount, 2),
         "total_margin_amount": round(total_margin_amount, 2),
-        "adjustments": 0,
-        "final_payout": round(total_margin_amount, 2),
+        "total_credit_notes_applied": round(total_credit_notes_applied, 2),
+        "total_dist_to_factory_adjustment": round(total_dist_to_factory_adjustment, 2),
+        "adjustments": round(net_adjustments, 2),
+        "final_payout": round(final_payout, 2),
         "status": "draft",
         "remarks": data.remarks,
         "created_at": now,
@@ -4113,6 +4129,7 @@ async def generate_monthly_settlements(
         total_quantity = 0
         total_price_premium = 0
         total_factory_adj = 0
+        total_credit_notes_applied = 0
         
         items_to_insert = []
         
@@ -4128,6 +4145,7 @@ async def generate_monthly_settlements(
             delivery_margin_at_transfer = 0
             delivery_price_premium = 0
             delivery_factory_adj = 0
+            delivery_credit_applied = delivery.get('total_credit_applied', 0)
             
             for item in items:
                 qty = item.get('quantity', 0)
@@ -4164,6 +4182,7 @@ async def generate_monthly_settlements(
             total_quantity += delivery.get('total_quantity', 0)
             total_price_premium += delivery_price_premium
             total_factory_adj += delivery_factory_adj
+            total_credit_notes_applied += delivery_credit_applied
             
             items_to_insert.append({
                 "id": str(uuid.uuid4()),
@@ -4180,7 +4199,8 @@ async def generate_monthly_settlements(
                 "margin_at_transfer_price": round(delivery_margin_at_transfer, 2),
                 "adjustment_payable": round(delivery_earnings - delivery_margin_at_transfer, 2),
                 "price_premium_payable": round(delivery_price_premium, 2),
-                "factory_distributor_adjustment": round(delivery_factory_adj, 2)
+                "factory_distributor_adjustment": round(delivery_factory_adj, 2),
+                "credit_notes_applied": round(delivery_credit_applied, 2)
             })
         
         # Generate settlement for this account
@@ -4192,6 +4212,9 @@ async def generate_monthly_settlements(
             item['settlement_id'] = settlement_id
         
         adjustment_payable = distributor_earnings - margin_at_transfer_price
+        
+        # Final payout includes credit notes (factory reimburses distributor for customer returns)
+        final_payout = distributor_earnings + total_credit_notes_applied
         
         settlement_doc = {
             "id": settlement_id,
@@ -4212,7 +4235,8 @@ async def generate_monthly_settlements(
             "adjustment_payable": round(adjustment_payable, 2),
             "price_premium_payable": round(total_price_premium, 2),
             "factory_distributor_adjustment": round(total_factory_adj, 2),
-            "final_payout": round(distributor_earnings, 2),
+            "credit_notes_applied": round(total_credit_notes_applied, 2),
+            "final_payout": round(final_payout, 2),
             "status": "draft",
             "remarks": remarks,
             "created_by": current_user['id'],
@@ -5681,10 +5705,12 @@ async def get_monthly_reconciliation_data(
     total_earnings = sum(s.get('distributor_earnings', 0) for s in unreconciled_settlements)
     total_margin_at_transfer = sum(s.get('margin_at_transfer_price', 0) for s in unreconciled_settlements)
     net_adjustment = sum(s.get('adjustment_payable', 0) for s in unreconciled_settlements)
+    total_credit_notes = sum(s.get('credit_notes_applied', 0) for s in unreconciled_settlements)
     
     # Calculate totals for already reconciled
     reconciled_billing = sum(s.get('total_billing_value', 0) for s in reconciled_settlements)
     reconciled_adjustment = sum(s.get('adjustment_payable', 0) for s in reconciled_settlements)
+    reconciled_credit_notes = sum(s.get('credit_notes_applied', 0) for s in reconciled_settlements)
     
     return {
         "unreconciled_settlements": unreconciled_settlements,
@@ -5695,8 +5721,10 @@ async def get_monthly_reconciliation_data(
         "total_distributor_earnings": round(total_earnings, 2),
         "total_margin_at_transfer": round(total_margin_at_transfer, 2),
         "net_adjustment": round(net_adjustment, 2),
+        "total_credit_notes_applied": round(total_credit_notes, 2),
         "reconciled_billing_value": round(reconciled_billing, 2),
         "reconciled_adjustment": round(reconciled_adjustment, 2),
+        "reconciled_credit_notes": round(reconciled_credit_notes, 2),
         "existing_notes": existing_notes,
         "total_notes": len(existing_notes)
     }

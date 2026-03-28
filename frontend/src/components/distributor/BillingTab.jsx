@@ -203,7 +203,8 @@ export default function BillingTab({
           margin_at_transfer: 0,
           adjustment: 0,
           price_premium: 0,
-          factory_adjustment: 0
+          factory_adjustment: 0,
+          credit_notes_applied: 0
         }
       };
     }
@@ -214,6 +215,7 @@ export default function BillingTab({
     acc[accountId].totals.adjustment += settlement.adjustment_payable || 0;
     acc[accountId].totals.price_premium += settlement.price_premium_payable || 0;
     acc[accountId].totals.factory_adjustment += settlement.factory_distributor_adjustment || 0;
+    acc[accountId].totals.credit_notes_applied += settlement.credit_notes_applied || 0;
     return acc;
   }, {});
 
@@ -248,8 +250,9 @@ export default function BillingTab({
     margin_at_transfer: acc.margin_at_transfer + group.totals.margin_at_transfer,
     adjustment: acc.adjustment + group.totals.adjustment,
     price_premium: acc.price_premium + group.totals.price_premium,
-    factory_adjustment: acc.factory_adjustment + group.totals.factory_adjustment
-  }), { total_billing: 0, distributor_earnings: 0, margin_at_transfer: 0, adjustment: 0, price_premium: 0, factory_adjustment: 0 });
+    factory_adjustment: acc.factory_adjustment + group.totals.factory_adjustment,
+    credit_notes_applied: acc.credit_notes_applied + group.totals.credit_notes_applied
+  }), { total_billing: 0, distributor_earnings: 0, margin_at_transfer: 0, adjustment: 0, price_premium: 0, factory_adjustment: 0, credit_notes_applied: 0 });
 
   const noteType = grandTotals.adjustment >= 0 ? 'credit' : 'debit';
   const existingNotes = monthlyData?.existing_notes || [];
@@ -396,6 +399,17 @@ export default function BillingTab({
                         </p>
                       </CardContent>
                     </Card>
+                    <Card className="bg-emerald-50">
+                      <CardContent className="p-4 text-center">
+                        <p className="text-sm text-muted-foreground">Return Credit Notes</p>
+                        <p className="text-xl font-bold text-emerald-600">
+                          +₹{(grandTotals.credit_notes_applied || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Factory Reimburses Distributor
+                        </p>
+                      </CardContent>
+                    </Card>
                   </div>
 
                   {/* Unreconciled Settlements by Account */}
@@ -424,6 +438,15 @@ export default function BillingTab({
                                 <p className="font-medium">₹{group.totals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                               </div>
                               <div className="text-right">
+                                <p className="text-sm text-muted-foreground">Credit Notes</p>
+                                <p className="font-medium text-emerald-600">
+                                  {group.totals.credit_notes_applied > 0 
+                                    ? `+₹${group.totals.credit_notes_applied.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                    : '-'
+                                  }
+                                </p>
+                              </div>
+                              <div className="text-right">
                                 <p className="text-sm text-muted-foreground">Dist → Factory Adj</p>
                                 <p className={`font-medium ${group.totals.factory_adjustment > 0 ? 'text-green-600' : group.totals.factory_adjustment < 0 ? 'text-red-600' : 'text-slate-400'}`}>
                                   {group.totals.factory_adjustment > 0 ? '+' : ''}₹{Math.abs(group.totals.factory_adjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -446,6 +469,7 @@ export default function BillingTab({
                                     <th className="text-right p-2 font-medium">Deliveries</th>
                                     <th className="text-right p-2 font-medium">Billing</th>
                                     <th className="text-right p-2 font-medium">Earnings</th>
+                                    <th className="text-right p-2 font-medium">Credit Notes</th>
                                     <th className="text-right p-2 font-medium">Dist → Factory Adj</th>
                                     <th className="text-center p-2 font-medium">Status</th>
                                   </tr>
@@ -457,6 +481,12 @@ export default function BillingTab({
                                       <td className="p-2 text-right">{settlement.total_deliveries || 0}</td>
                                       <td className="p-2 text-right">₹{(settlement.total_billing_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                       <td className="p-2 text-right text-blue-600">₹{(settlement.distributor_earnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                      <td className="p-2 text-right text-emerald-600">
+                                        {settlement.credit_notes_applied > 0 
+                                          ? `+₹${(settlement.credit_notes_applied || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                          : '-'
+                                        }
+                                      </td>
                                       <td className={`p-2 text-right font-medium ${(() => { const v = settlement.factory_distributor_adjustment || settlement.adjustment_payable || 0; return v > 0 ? 'text-green-600' : v < 0 ? 'text-red-600' : 'text-slate-400'; })()}`}>
                                         {(() => { const v = settlement.factory_distributor_adjustment || settlement.adjustment_payable || 0; return `${v > 0 ? '+' : ''}₹${Math.abs(v).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`; })()}
                                       </td>
