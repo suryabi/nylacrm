@@ -5,6 +5,40 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Latest Session - March 28, 2026 (Session 9)
 
+### Return Reasons Master - Phase 1 ✅ (March 28 - COMPLETED)
+
+**User Request**: Build a Returns module for tracking customer returns to distributors. 4 return reason types:
+1. **Empty Stock Return** - Credit from SKU return pricing
+2. **Expired Stock Return** - Full price refund
+3. **Damaged Stock Return** - Full price refund
+4. **FOC/Promotional Return** - No credit
+
+**Phase 1 Implementation - Return Reasons Master (Tenant Settings):**
+- New "Returns" tab in Tenant Settings with 7-tab layout
+- Full CRUD for return reasons with:
+  - Reason Code/Name/Description
+  - **Category**: empty_reusable, expired, damaged, promotional
+  - **Credit Type**: sku_return_credit, full_price, percentage, no_credit
+  - Color coding for UI
+  - Return to Factory flag
+  - Requires Inspection flag
+- "Initialize Defaults" creates 4 standard system reasons
+- Toggle activate/deactivate, Edit, Delete (non-system only)
+
+**Files Created:**
+- `/app/backend/routes/return_reasons.py` - Complete CRUD endpoints
+- `/app/backend/models/tenant.py` - Added ReturnReason model and DEFAULT_RETURN_REASONS
+
+**Files Modified:**
+- `/app/backend/routes/__init__.py` - Registered return_reasons_router
+- `/app/frontend/src/pages/TenantSettings.js` - Added Returns tab with full UI
+
+**Testing (iteration_84.json):** 100% backend (15/15 tests), 100% frontend
+
+**Phase 2 (Upcoming):** Customer Returns Tracking Module in Distribution
+
+---
+
 ### Settlement Adjustment Formula Fixed ✅ (March 28 - COMPLETED)
 
 **Issue**: Settlement tab wasn't using the newly computed adjustment from Stock Out module.
