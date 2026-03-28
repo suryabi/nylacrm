@@ -191,7 +191,7 @@ export default function SettlementsTab({
         'Distributor Earnings (On Selling Price)': s.distributor_earnings || 0,
         'Distributor Margin at Transfer Price': s.margin_at_transfer_price || 0,
         'Adjustment Payable': s.adjustment_payable || 0,
-        'Factory → Distributor Adjustment': s.factory_distributor_adjustment || 0,
+        'Adjustment (Dist → Factory)': s.factory_distributor_adjustment || 0,
         'Status': s.status
       }));
       
@@ -495,7 +495,7 @@ export default function SettlementsTab({
                         <p className="font-semibold text-emerald-600">₹{group.totals.distributor_earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs text-emerald-600/60 uppercase tracking-wider font-medium">Factory → Dist Adj</p>
+                        <p className="text-xs text-emerald-600/60 uppercase tracking-wider font-medium">Dist → Factory Adj</p>
                         <p className={`font-semibold ${group.totals.factory_adjustment > 0 ? 'text-emerald-600' : group.totals.factory_adjustment < 0 ? 'text-red-600' : 'text-slate-400'}`}>
                           {group.totals.factory_adjustment > 0 ? '+' : ''}₹{Math.abs(group.totals.factory_adjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </p>
@@ -522,7 +522,7 @@ export default function SettlementsTab({
                             <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Billing Value</th>
                             <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Earnings</th>
                             <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Margin at Transfer</th>
-                            <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Factory → Dist Adj</th>
+                            <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Dist → Factory Adj</th>
                             <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Status</th>
                             <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actions</th>
                           </tr>

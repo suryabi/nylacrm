@@ -387,7 +387,7 @@ export default function BillingTab({
                     </Card>
                     <Card className={grandTotals.factory_adjustment > 0 ? 'bg-green-50' : grandTotals.factory_adjustment < 0 ? 'bg-red-50' : 'bg-muted/30'}>
                       <CardContent className="p-4 text-center">
-                        <p className="text-sm text-muted-foreground">Factory → Dist Adjustment</p>
+                        <p className="text-sm text-muted-foreground">Dist → Factory Adjustment</p>
                         <p className={`text-xl font-bold ${grandTotals.factory_adjustment > 0 ? 'text-green-600' : grandTotals.factory_adjustment < 0 ? 'text-red-600' : 'text-slate-400'}`}>
                           {grandTotals.factory_adjustment > 0 ? '+' : ''}₹{Math.abs(grandTotals.factory_adjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </p>
@@ -424,7 +424,7 @@ export default function BillingTab({
                                 <p className="font-medium">₹{group.totals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                               </div>
                               <div className="text-right">
-                                <p className="text-sm text-muted-foreground">Factory → Dist Adj</p>
+                                <p className="text-sm text-muted-foreground">Dist → Factory Adj</p>
                                 <p className={`font-medium ${group.totals.factory_adjustment > 0 ? 'text-green-600' : group.totals.factory_adjustment < 0 ? 'text-red-600' : 'text-slate-400'}`}>
                                   {group.totals.factory_adjustment > 0 ? '+' : ''}₹{Math.abs(group.totals.factory_adjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                 </p>
@@ -446,7 +446,7 @@ export default function BillingTab({
                                     <th className="text-right p-2 font-medium">Deliveries</th>
                                     <th className="text-right p-2 font-medium">Billing</th>
                                     <th className="text-right p-2 font-medium">Earnings</th>
-                                    <th className="text-right p-2 font-medium">Factory → Dist Adj</th>
+                                    <th className="text-right p-2 font-medium">Dist → Factory Adj</th>
                                     <th className="text-center p-2 font-medium">Status</th>
                                   </tr>
                                 </thead>
