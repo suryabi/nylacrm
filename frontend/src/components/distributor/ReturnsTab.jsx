@@ -11,7 +11,7 @@ import { Textarea } from '../ui/textarea';
 import { toast } from 'sonner';
 import {
   RotateCcw, Plus, Download, RefreshCw, Search, Calendar, Trash2,
-  Check, X, Package, Truck, ShieldCheck, Eye, FileText, DollarSign
+  Check, X, Package, Truck, ShieldCheck, Eye, FileText, DollarSign, CreditCard
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -29,8 +29,9 @@ const CATEGORY_COLORS = {
 const STATUS_BADGES = {
   draft: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Draft' },
   approved: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Approved' },
+  credit_issued: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Credit Issued' },
   processed: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Processed' },
-  settled: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Settled' },
+  settled: { bg: 'bg-teal-100', text: 'text-teal-700', label: 'Settled' },
   cancelled: { bg: 'bg-red-100', text: 'text-red-700', label: 'Cancelled' }
 };
 
@@ -481,6 +482,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="draft">Draft</SelectItem>
               <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="credit_issued">Credit Issued</SelectItem>
               <SelectItem value="processed">Processed</SelectItem>
               <SelectItem value="settled">Settled</SelectItem>
               <SelectItem value="cancelled">Cancelled</SelectItem>
@@ -523,6 +525,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                   <th className="text-left p-4 font-medium">Date</th>
                   <th className="text-center p-4 font-medium">Items</th>
                   <th className="text-right p-4 font-medium">Credit</th>
+                  <th className="text-center p-4 font-medium">Credit Note</th>
                   <th className="text-center p-4 font-medium">Factory Return</th>
                   <th className="text-center p-4 font-medium">Status</th>
                   <th className="text-center p-4 font-medium">Actions</th>
@@ -550,6 +553,17 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                       </td>
                       <td className="p-4 text-right font-medium text-emerald-600">
                         ₹{(ret.total_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-4 text-center">
+                        {ret.credit_note_number ? (
+                          <Badge variant="outline" className="text-emerald-600 border-emerald-300 bg-emerald-50">
+                            {ret.credit_note_number}
+                          </Badge>
+                        ) : ret.status === 'approved' ? (
+                          <span className="text-xs text-amber-600">Pending</span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </td>
                       <td className="p-4 text-center">
                         <div className="flex items-center justify-center gap-1">
@@ -823,6 +837,24 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                     <p className="text-lg font-bold">{selectedReturn.received_by || '-'}</p>
                   </div>
                 </div>
+
+                {/* Credit Note Information */}
+                {selectedReturn.credit_note_number && (
+                  <div className="p-4 rounded-lg border border-emerald-200 bg-emerald-50/50">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="h-5 w-5 text-emerald-600" />
+                        <div>
+                          <p className="text-sm font-medium text-emerald-700">Credit Note Issued</p>
+                          <p className="text-xs text-emerald-600">{selectedReturn.credit_note_number}</p>
+                        </div>
+                      </div>
+                      <Badge className="bg-emerald-100 text-emerald-700">
+                        ₹{(selectedReturn.total_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </Badge>
+                    </div>
+                  </div>
+                )}
 
                 {/* Items Table */}
                 <div className="rounded-lg border overflow-hidden">

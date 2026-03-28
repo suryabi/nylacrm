@@ -3532,6 +3532,18 @@ async def cancel_delivery(
     if reason:
         remarks = f"{remarks}\nCancelled: {reason}".strip()
     
+    # Revert any applied credit notes
+    reverted_notes = []
+    if delivery.get('applied_credit_notes'):
+        from routes.credit_notes import revert_credit_note_application
+        reverted_notes = await revert_credit_note_application(
+            tenant_id=tenant_id,
+            delivery_id=delivery_id,
+            delivery_number=delivery.get('delivery_number')
+        )
+        if reverted_notes:
+            logger.info(f"Reverted {len(reverted_notes)} credit note(s) for cancelled delivery {delivery['delivery_number']}")
+    
     await db.distributor_deliveries.update_one(
         {"id": delivery_id, "tenant_id": tenant_id},
         {"$set": {
@@ -3543,7 +3555,11 @@ async def cancel_delivery(
     
     logger.info(f"Delivery {delivery['delivery_number']} cancelled by {current_user['email']}")
     
-    return {"message": f"Delivery {delivery['delivery_number']} cancelled", "status": "cancelled"}
+    return {
+        "message": f"Delivery {delivery['delivery_number']} cancelled", 
+        "status": "cancelled",
+        "reverted_credit_notes": reverted_notes
+    }
 
 
 @router.get("/{distributor_id}/deliveries/{delivery_id}/customer-invoice")

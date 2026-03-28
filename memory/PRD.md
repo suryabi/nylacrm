@@ -5,6 +5,45 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Latest Session - March 28, 2026 (Session 10)
 
+### Credit Notes & Return Status Tracking ✅ (March 28 - COMPLETED)
+
+**User Request**: 
+1. Show credit note reference in return list when created
+2. Change return status to "Credit Issued" when credit note is fully applied to a stock out
+3. Revert return status to "Approved" if stock out is cancelled
+
+**Implementation:**
+
+1. **Return Status Lifecycle:**
+   - `Draft` → `Approved` (when return is approved, credit note auto-generated)
+   - `Approved` → `Credit Issued` (when credit note is fully applied to a delivery)
+   - `Credit Issued` → `Approved` (if delivery with credit note is cancelled)
+
+2. **Backend Updates:**
+   - Added `credit_note_id`, `credit_note_number` fields to return document
+   - `apply_credit_note_to_delivery()` now updates return status to "credit_issued" when balance = 0
+   - Added `revert_credit_note_application()` function for delivery cancellation
+   - `cancel_delivery` endpoint now reverts credit notes and return status
+
+3. **Frontend Updates:**
+   - Added "Credit Note" column in Returns list table
+   - Shows credit note number (green badge) or "Pending" for approved returns
+   - Added "Credit Issued" status to STATUS_BADGES
+   - Added credit note info section in Return Detail dialog
+   - Added "Credit Issued" filter option
+
+4. **Changed Terminology:**
+   - "Confirmed" → "Approved" throughout Returns module
+   - Backend endpoint: `/confirm` → `/approve`
+
+**Files Modified:**
+- `/app/backend/routes/credit_notes.py` - Status tracking and revert functions
+- `/app/backend/routes/distributors.py` - Cancel delivery reverts credit notes
+- `/app/backend/routes/customer_returns.py` - Approve endpoint and status values
+- `/app/frontend/src/components/distributor/ReturnsTab.jsx` - Credit Note column and status
+
+---
+
 ### Credit Notes Application in Deliveries ✅ (March 28 - COMPLETED)
 
 **User Request**: When creating a Stock Out (delivery), if there are any approved and unpaid credit notes for the customer, system should provide an option to choose the credit notes that need to be applied to the invoice and accordingly customer billing need to be calculated.

@@ -77,6 +77,16 @@ async def create_credit_note_from_return(
     
     await db.credit_notes.insert_one(credit_note.model_dump())
     
+    # Update the return document with credit note reference
+    await db.customer_returns.update_one(
+        {"id": return_doc.get("id"), "tenant_id": tenant_id},
+        {"$set": {
+            "credit_note_id": credit_note.id,
+            "credit_note_number": credit_note_number,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
     logger.info(f"Created credit note {credit_note_number} for return {return_doc.get('return_number')} amount ₹{total_credit}")
     
     return credit_note.model_dump()
@@ -265,11 +275,107 @@ async def apply_credit_note_to_delivery(
         }
     )
     
+    # Update the related return status to "credit_issued" when credit note is fully applied
+    if new_status == "fully_applied" and credit_note.get("return_id"):
+        await db.customer_returns.update_one(
+            {"id": credit_note.get("return_id"), "tenant_id": tenant_id},
+            {"$set": {
+                "status": "credit_issued",
+                "credit_note_id": credit_note_id,
+                "credit_note_number": credit_note.get("credit_note_number"),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        logger.info(f"Updated return {credit_note.get('return_number')} status to credit_issued")
+    
     logger.info(f"Applied ₹{amount_to_apply} from credit note {credit_note.get('credit_note_number')} to delivery {delivery_number}")
     
     return {
         "credit_note_id": credit_note_id,
         "credit_note_number": credit_note.get("credit_note_number"),
+        "return_id": credit_note.get("return_id"),
+        "return_number": credit_note.get("return_number"),
         "amount_applied": amount_to_apply,
         "remaining_balance": round(max(0, new_balance), 2)
     }
+
+
+
+async def revert_credit_note_application(
+    tenant_id: str,
+    delivery_id: str,
+    delivery_number: str
+) -> list:
+    """
+    Revert all credit note applications for a cancelled delivery.
+    Returns the credit notes to their previous state and reverts return status to 'approved'.
+    """
+    reverted_notes = []
+    
+    # Find all credit notes that have applications for this delivery
+    credit_notes = await db.credit_notes.find(
+        {
+            "tenant_id": tenant_id,
+            "applications.delivery_id": delivery_id
+        }
+    ).to_list(100)
+    
+    for cn in credit_notes:
+        # Find the application for this delivery
+        applications = cn.get("applications", [])
+        delivery_applications = [app for app in applications if app.get("delivery_id") == delivery_id]
+        
+        total_reverted = sum(app.get("amount_applied", 0) for app in delivery_applications)
+        
+        if total_reverted > 0:
+            # Remove the application entries for this delivery
+            remaining_applications = [app for app in applications if app.get("delivery_id") != delivery_id]
+            
+            # Recalculate amounts
+            new_applied = cn.get("applied_amount", 0) - total_reverted
+            new_balance = cn.get("original_amount", 0) - new_applied
+            
+            # Determine new status
+            if new_applied <= 0:
+                new_status = "pending"
+            elif new_balance <= 0:
+                new_status = "fully_applied"
+            else:
+                new_status = "partially_applied"
+            
+            # Update credit note
+            await db.credit_notes.update_one(
+                {"id": cn.get("id"), "tenant_id": tenant_id},
+                {"$set": {
+                    "applied_amount": round(max(0, new_applied), 2),
+                    "balance_amount": round(max(0, new_balance), 2),
+                    "status": new_status,
+                    "applications": remaining_applications,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }}
+            )
+            
+            # If credit note status changed from fully_applied, revert return status to approved
+            if cn.get("status") == "fully_applied" and new_status != "fully_applied":
+                if cn.get("return_id"):
+                    await db.customer_returns.update_one(
+                        {"id": cn.get("return_id"), "tenant_id": tenant_id},
+                        {"$set": {
+                            "status": "approved",
+                            "updated_at": datetime.now(timezone.utc).isoformat()
+                        }}
+                    )
+                    logger.info(f"Reverted return {cn.get('return_number')} status to approved")
+            
+            reverted_notes.append({
+                "credit_note_id": cn.get("id"),
+                "credit_note_number": cn.get("credit_note_number"),
+                "return_id": cn.get("return_id"),
+                "return_number": cn.get("return_number"),
+                "amount_reverted": round(total_reverted, 2),
+                "new_balance": round(max(0, new_balance), 2)
+            })
+            
+            logger.info(f"Reverted ₹{total_reverted} from credit note {cn.get('credit_note_number')} for cancelled delivery {delivery_number}")
+    
+    return reverted_notes
