@@ -43,8 +43,8 @@ export default function GoogleAuthCallback() {
           localStorage.setItem('token', response.data.session_token);
         }
 
-        // Success - user logged in, redirect
-        navigate('/home', { replace: true });
+        // Force full page reload so AuthProvider re-initializes with the new token
+        window.location.href = '/home';
       } catch (error) {
         console.error('OAuth error:', error);
         const errorMsg = error.response?.data?.detail || 'Authentication failed';

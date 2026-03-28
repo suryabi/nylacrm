@@ -39,8 +39,8 @@ export default function AuthCallback() {
           localStorage.setItem('token', response.data.session_token);
         }
 
-        // Navigate to dashboard with user data
-        navigate('/home', { state: { user: userData }, replace: true });
+        // Force full page reload so AuthProvider re-initializes with the new token
+        window.location.href = '/home';
       } catch (error) {
         console.error('Auth error:', error);
         
