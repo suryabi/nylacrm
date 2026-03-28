@@ -17,7 +17,7 @@ import {
   Globe, Clock, DollarSign, Calendar, RefreshCw, MapPin,
   Users, Kanban, Target, CalendarDays, Contact, Plane, Wallet, FolderOpen,
   Wrench, Boxes, ShieldCheck, Box, Landmark, Phone, Mail, FileText,
-  Plus, Trash2, User, Shield, Edit2, Truck, Package
+  Plus, Trash2, User, Shield, Edit2, Truck, Package, Tag
 } from 'lucide-react';
 import axios from 'axios';
 import RoleManagement from '../components/RoleManagement';
@@ -99,7 +99,9 @@ const MODULE_CONFIG = {
     description: 'Team collaboration tools',
     modules: [
       { key: 'meetings', label: 'Meetings', icon: Calendar, description: 'Meeting scheduling & Zoom' },
-      { key: 'tasks', label: 'Tasks', icon: Calendar, description: 'Task assignment & tracking' },
+      { key: 'task_management', label: 'Tasks', icon: Calendar, description: 'Task assignment & tracking' },
+      { key: 'task_milestones', label: 'Milestones', icon: Target, description: 'Task milestones management' },
+      { key: 'task_labels', label: 'Labels', icon: Tag, description: 'Task label management' },
     ]
   },
   organization: {

@@ -76,6 +76,11 @@ DEFAULT_MODULE_PERMISSIONS = {
     "distributor_shipments": {"view": False, "create": False, "edit": False, "delete": False},
     "distributor_deliveries": {"view": False, "create": False, "edit": False, "delete": False},
     "distributor_stock": {"view": False, "create": False, "edit": False, "delete": False},
+    
+    # Task Management
+    "task_management": {"view": True, "create": True, "edit": True, "delete": False},
+    "task_milestones": {"view": True, "create": False, "edit": False, "delete": False},
+    "task_labels": {"view": True, "create": False, "edit": False, "delete": False},
 }
 
 # Full access permissions (for Admin role)
@@ -221,6 +226,7 @@ MODULE_CATEGORIES = {
     "Admin": ["tenant_settings"],
     "Distribution": ["distributors", "distributor_coverage", "distributor_locations", "distributor_margins", "distributor_assignments", "distributor_shipments", "distributor_deliveries", "distributor_stock"],
     "Production": ["maintenance", "inventory", "quality_control", "assets", "vendors"],
+    "Task Management": ["task_management", "task_milestones", "task_labels"],
 }
 
 MODULE_LABELS = {
@@ -271,4 +277,7 @@ MODULE_LABELS = {
     "quality_control": "Quality Control",
     "assets": "Assets",
     "vendors": "Vendors",
+    "task_management": "Tasks",
+    "task_milestones": "Milestones",
+    "task_labels": "Labels",
 }
