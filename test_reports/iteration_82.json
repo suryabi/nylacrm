@@ -1,0 +1,75 @@
+{
+  "summary": "Iteration 82 testing completed. All requested features verified successfully: 1) Column header renamed to 'Actual Billable to Dist', 2) Column header renamed to 'Adjustment (Dist→Factory)', 3) 'Download Invoice (GST)' button appears in delivery detail dialog for delivered status, 4) PDF invoice generation works correctly, 5) GST settings exist in Tenant Settings page under Settings tab.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_customer_invoice.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_customer_invoice.py"
+  ],
+  "success_rate": {
+    "backend": "100% - 2/2 tests passed",
+    "frontend": "100% - All 5 features verified"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123"
+  },
+  "seed_data_creation": "No new seed data created",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Customer invoice PDF generation feature is complete and working. GST settings are configurable at tenant level.",
+  "features_tested": {
+    "Column_Header_Actual_Billable_to_Dist": {
+      "status": "PASSED",
+      "location": "Stock Out table in Distributor Detail page",
+      "file": "/app/frontend/src/components/distributor/DeliveriesTab.jsx line 662"
+    },
+    "Column_Header_Adjustment_Dist_Factory": {
+      "status": "PASSED",
+      "location": "Stock Out table in Distributor Detail page",
+      "file": "/app/frontend/src/components/distributor/DeliveriesTab.jsx line 664"
+    },
+    "Download_Invoice_GST_Button": {
+      "status": "PASSED",
+      "location": "Delivery detail dialog for delivered/confirmed status",
+      "file": "/app/frontend/src/pages/DistributorDetail.js lines 2507-2518",
+      "data_testid": "download-customer-invoice-btn"
+    },
+    "PDF_Invoice_Generation": {
+      "status": "PASSED",
+      "endpoint": "GET /api/distributors/{distributor_id}/deliveries/{delivery_id}/customer-invoice",
+      "file": "/app/backend/routes/distributors.py lines 3412-3490",
+      "pdf_generator": "/app/backend/utils/pdf_generator.py lines 401-680",
+      "downloaded_file": "customer_invoice_INV-2026-0008.pdf"
+    },
+    "GST_Settings_Tenant_Level": {
+      "status": "PASSED",
+      "location": "Tenant Settings page -> Settings tab -> Distribution Settings section",
+      "file": "/app/frontend/src/pages/TenantSettings.js lines 1416-1432",
+      "data_testid": "input-default-gst",
+      "current_value": "5%"
+    }
+  },
+  "test_data_used": {
+    "distributor": "Brian (DIST-0003)",
+    "delivery": "DEL-2026-0008",
+    "delivery_status": "Delivered",
+    "account": "Empire Restaurant",
+    "city": "Bengaluru"
+  },
+  "api_tests": {
+    "test_customer_invoice_endpoint_exists": "PASSED - PDF generated successfully",
+    "test_customer_invoice_returns_404_for_invalid_delivery": "PASSED - Returns 404 for non-existent delivery"
+  }
+}

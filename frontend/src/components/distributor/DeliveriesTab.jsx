@@ -105,8 +105,8 @@ export default function DeliveriesTab({
               'Billed to Distributor': billedToDist,
               'Customer Price': customerPrice,
               'New Transfer Price': newTransferPrice,
-              'Actual Billable': actualBillable,
-              'Adjustment (Dist to Company)': adjustment,
+              'Actual Billable to Distributor': actualBillable,
+              'Adjustment (Dist to Factory)': adjustment,
               'Customer Invoice Amount': customerInvoice,
               'Status': delivery.status
             });
@@ -125,8 +125,8 @@ export default function DeliveriesTab({
             'Billed to Distributor': 0,
             'Customer Price': 0,
             'New Transfer Price': 0,
-            'Actual Billable': 0,
-            'Adjustment (Dist to Company)': 0,
+            'Actual Billable to Distributor': 0,
+            'Adjustment (Dist to Factory)': 0,
             'Customer Invoice Amount': 0,
             'Status': delivery.status
           });
@@ -659,9 +659,9 @@ export default function DeliveriesTab({
                   {/* Actual columns - Emerald tint */}
                   <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Customer Price</th>
                   <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>New Transfer Price</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actual Billable</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actual Billable to Dist</th>
                   {/* Derived columns */}
-                  <th className="text-right p-4 font-semibold text-amber-800/70 uppercase tracking-wider text-xs bg-amber-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Adjustment</th>
+                  <th className="text-right p-4 font-semibold text-amber-800/70 uppercase tracking-wider text-xs bg-amber-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Adjustment (Dist→Factory)</th>
                   <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Customer Invoice</th>
                   <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Status</th>
                   <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actions</th>

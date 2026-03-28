@@ -20,7 +20,7 @@ import {
   ArrowLeft, Building2, MapPin, Phone, Mail, Edit2, Trash2,
   RefreshCw, Plus, Package, Truck, CreditCard, Calendar,
   User, FileText, Check, X, Save, Percent, DollarSign, Copy,
-  Settings, Eye, Receipt, Calculator, Warehouse
+  Settings, Eye, Receipt, Calculator, Warehouse, Download
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -182,6 +182,7 @@ export default function DistributorDetail() {
   const [savingDelivery, setSavingDelivery] = useState(false);
   const [selectedDelivery, setSelectedDelivery] = useState(null);
   const [showDeliveryDetail, setShowDeliveryDetail] = useState(false);
+  const [downloadingInvoice, setDownloadingInvoice] = useState(false);
   
   // Settlement state
   const [settlements, setSettlements] = useState([]);
@@ -1500,6 +1501,48 @@ export default function DistributorDetail() {
     }
   };
 
+  const handleDownloadCustomerInvoice = async (deliveryId) => {
+    try {
+      setDownloadingInvoice(true);
+      const response = await axios.get(
+        `${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/customer-invoice`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true,
+          responseType: 'blob'
+        }
+      );
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Get filename from response headers or generate one
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `customer_invoice_${selectedDelivery?.delivery_number || deliveryId}.pdf`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Invoice downloaded successfully');
+    } catch (error) {
+      console.error('Invoice download error:', error);
+      toast.error(error.response?.data?.detail || 'Failed to download invoice');
+    } finally {
+      setDownloadingInvoice(false);
+    }
+  };
+
   const getDeliveryStatusBadge = (status) => {
     const statusConfig = {
       draft: { label: 'Draft', color: 'bg-gray-100 text-gray-800' },
@@ -2458,9 +2501,26 @@ export default function DistributorDetail() {
               </div>
 
               {/* Actions */}
-              {canManage && (
-                <div className="flex justify-end gap-2 pt-4 border-t">
-                  {selectedDelivery.status === 'draft' && (
+              <div className="flex justify-between items-center pt-4 border-t">
+                {/* Invoice Download - Available for delivered/confirmed deliveries */}
+                <div>
+                  {(selectedDelivery.status === 'delivered' || selectedDelivery.status === 'confirmed') && (
+                    <Button 
+                      variant="outline" 
+                      onClick={() => handleDownloadCustomerInvoice(selectedDelivery.id)}
+                      disabled={downloadingInvoice}
+                      className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                      data-testid="download-customer-invoice-btn"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      {downloadingInvoice ? 'Generating...' : 'Download Invoice (GST)'}
+                    </Button>
+                  )}
+                </div>
+                
+                {/* Status Actions */}
+                <div className="flex gap-2">
+                  {canManage && selectedDelivery.status === 'draft' && (
                     <>
                       <Button variant="outline" onClick={() => handleCancelDelivery(selectedDelivery.id)}>
                         Cancel Delivery
@@ -2471,7 +2531,7 @@ export default function DistributorDetail() {
                       </Button>
                     </>
                   )}
-                  {selectedDelivery.status === 'confirmed' && (
+                  {canManage && selectedDelivery.status === 'confirmed' && (
                     <>
                       <Button variant="outline" onClick={() => handleCancelDelivery(selectedDelivery.id)}>
                         Cancel
@@ -2482,14 +2542,14 @@ export default function DistributorDetail() {
                       </Button>
                     </>
                   )}
-                  {selectedDelivery.status === 'in_transit' && (
+                  {canManage && selectedDelivery.status === 'in_transit' && (
                     <Button onClick={() => handleCompleteDelivery(selectedDelivery.id)} className="bg-green-600 hover:bg-green-700">
                       <Check className="h-4 w-4 mr-2" />
                       Complete Delivery
                     </Button>
                   )}
                 </div>
-              )}
+              </div>
             </div>
           )}
         </DialogContent>

@@ -24,7 +24,7 @@ from models.distributor import (
     BillingConfigCreate, BillingConfigUpdate,
     ProvisionalInvoiceCreate, ReconciliationCreate, DebitCreditNoteCreate
 )
-from utils.pdf_generator import generate_debit_credit_note_pdf
+from utils.pdf_generator import generate_debit_credit_note_pdf, generate_customer_invoice_pdf
 from utils.object_storage import upload_pdf, download_pdf, init_storage
 
 router = APIRouter()
@@ -3407,6 +3407,88 @@ async def cancel_delivery(
     logger.info(f"Delivery {delivery['delivery_number']} cancelled by {current_user['email']}")
     
     return {"message": f"Delivery {delivery['delivery_number']} cancelled", "status": "cancelled"}
+
+
+@router.get("/{distributor_id}/deliveries/{delivery_id}/customer-invoice")
+async def generate_customer_invoice(
+    distributor_id: str,
+    delivery_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Generate a customer invoice PDF for a delivery with GST"""
+    tenant_id = get_current_tenant_id()
+    
+    # Check access
+    user_is_admin = is_distributor_admin(current_user)
+    user_is_distributor = is_distributor_user(current_user) and current_user.get('distributor_id') == distributor_id
+    
+    if not user_is_admin and not user_is_distributor:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get delivery
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    
+    # Get distributor
+    distributor = await db.distributors.find_one({"id": distributor_id, "tenant_id": tenant_id})
+    if not distributor:
+        raise HTTPException(status_code=404, detail="Distributor not found")
+    
+    # Get account (customer)
+    account = await db.accounts.find_one({"id": delivery.get('account_id'), "tenant_id": tenant_id})
+    if not account:
+        # Try getting minimal data from delivery
+        account = {
+            "account_name": delivery.get('account_name', 'Customer'),
+            "city": delivery.get('account_city', ''),
+            "state": "",
+            "address": "",
+            "gst_number": "",
+            "contact_name": "",
+            "contact_number": ""
+        }
+    
+    # Get tenant for company profile and GST rate
+    tenant = await db.tenants.find_one({"tenant_id": tenant_id}, {"_id": 0})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    company_profile = tenant.get('company_profile', {})
+    branding = tenant.get('branding', {})
+    settings = tenant.get('settings', {})
+    
+    # Get GST rate from tenant settings (default 18%)
+    gst_percent = settings.get('default_distributor_gst_percent', 18.0)
+    
+    # Generate PDF
+    try:
+        pdf_bytes = generate_customer_invoice_pdf(
+            delivery_data=delivery,
+            company_profile=company_profile,
+            account_data=account,
+            distributor_data=distributor,
+            gst_percent=gst_percent,
+            branding=branding
+        )
+        
+        # Generate filename
+        invoice_number = f"INV-{delivery.get('delivery_number', 'N-A').replace('DEL-', '')}"
+        filename = f"customer_invoice_{invoice_number}.pdf"
+        
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            }
+        )
+    except Exception as e:
+        logger.error(f"Failed to generate customer invoice PDF: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate invoice: {str(e)}")
 
 
 
