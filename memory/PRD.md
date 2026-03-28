@@ -5,6 +5,41 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Latest Session - March 28, 2026 (Session 9)
 
+### Customer Invoice with GST - PDF Generation ✅ (March 28 - COMPLETED)
+
+**User Request**: Create customer invoices including GST from delivery, with PDF download from delivery detail view.
+
+**Implementation:**
+- **GST Rate**: Configurable at tenant level (Tenant Settings → Settings → Default GST %)
+- **Invoice Generation**: "Download Invoice (GST)" button in delivery detail dialog (for delivered/confirmed status)
+- **PDF Format**: Professional tax invoice with:
+  - Company header with logo, address, GSTIN
+  - Bill To / Ship To customer details
+  - Itemized table with SKU, HSN, Qty, Rate, Taxable Value
+  - GST breakdown (CGST + SGST split)
+  - Grand total with GST
+  - Bank details for payment
+  - Signature blocks
+
+**Files Modified:**
+- `/app/backend/utils/pdf_generator.py` - Added `generate_customer_invoice_pdf()` function
+- `/app/backend/routes/distributors.py` - Added `GET /distributors/{id}/deliveries/{id}/customer-invoice` endpoint
+- `/app/frontend/src/pages/DistributorDetail.js` - Added download button and handler
+
+**Testing (iteration_82.json):** 100% backend (2/2), 100% frontend (5/5)
+
+---
+
+### Column Header Renaming ✅ (March 28 - COMPLETED)
+
+**Changes:**
+- "Actual Billable" → **"Actual Billable to Dist"**
+- "Adjustment" → **"Adjustment (Dist→Factory)"**
+
+Updated in both table headers and Excel export.
+
+---
+
 ### Final Delivery Columns Restructure ✅ (March 28 - COMPLETED)
 
 **User's exact column order** (fully implemented):
