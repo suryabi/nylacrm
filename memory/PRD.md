@@ -5,6 +5,23 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Latest Session - March 28, 2026 (Session 9)
 
+### Restructured Delivery Columns with Color Coding ✅ (March 28 continued)
+
+**New column order** (user-specified):
+- **Blue tint (theoretical)**: Base Price, Transfer Price (base × (1 - margin%))
+- **Emerald tint (actual)**: Customer Price, New Transfer Price (customer × (1 - margin%))
+- Quantity, Distributor → Customer Billing, Factory → Distributor Adjustment
+
+**Factory → Dist Adjustment** = qty × margin% × (customer_price - base_price)
+- Green (+) when customer > base (distributor pays factory extra margin)
+- Red (-) when customer < base (factory compensates distributor)
+
+Applied consistently across Deliveries, Settlements, and Billing tabs. Old separate "Adjustment" + "Price Premium" columns merged into single "Factory → Dist Adj".
+
+**Testing (iteration_80.json):** 100% backend (6/6), 100% frontend. Bug fixed: subtotal row undefined vars.
+
+---
+
 ### Price Premium in Stock Out (Deliveries Tab) ✅ (March 28 continued)
 
 Added "Price Premium" column to the **Deliveries/Stock Out** tab showing the additional amount the manufacturer receives when customer price > base price. Formula: `qty × (customer_price - transfer_price)`. Also in Excel export. Verified: DEL-2026-0009: 10 × (399.00 - 97.50) = ₹3,015.00
