@@ -363,7 +363,7 @@ export default function BillingTab({
                   </div>
 
                   {/* Summary Cards for Unreconciled */}
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                     <Card className="bg-muted/30">
                       <CardContent className="p-4 text-center">
                         <p className="text-sm text-muted-foreground">Accounts</p>
@@ -382,31 +382,36 @@ export default function BillingTab({
                         <p className="text-xl font-bold text-blue-600">₹{grandTotals.distributor_earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                       </CardContent>
                     </Card>
-                    <Card className="bg-slate-100">
+                    <Card className={grandTotals.factory_adjustment > 0 ? 'bg-amber-50 border-amber-200' : 'bg-muted/30'}>
                       <CardContent className="p-4 text-center">
-                        <p className="text-sm text-muted-foreground">Margin at Transfer</p>
-                        <p className="text-xl font-bold">₹{grandTotals.margin_at_transfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                      </CardContent>
-                    </Card>
-                    <Card className={grandTotals.factory_adjustment > 0 ? 'bg-green-50' : grandTotals.factory_adjustment < 0 ? 'bg-red-50' : 'bg-muted/30'}>
-                      <CardContent className="p-4 text-center">
-                        <p className="text-sm text-muted-foreground">Dist → Factory Adjustment</p>
-                        <p className={`text-xl font-bold ${grandTotals.factory_adjustment > 0 ? 'text-green-600' : grandTotals.factory_adjustment < 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                          {grandTotals.factory_adjustment > 0 ? '+' : ''}₹{Math.abs(grandTotals.factory_adjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        <p className="text-sm text-muted-foreground">① Price Adj (Dist → Factory)</p>
+                        <p className={`text-xl font-bold ${grandTotals.factory_adjustment > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                          {grandTotals.factory_adjustment > 0 ? '-' : ''}₹{Math.abs(grandTotals.factory_adjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {grandTotals.factory_adjustment > 0 ? 'Distributor Pays Factory' : grandTotals.factory_adjustment < 0 ? 'Factory Pays Distributor' : 'No Adjustment'}
+                          {grandTotals.factory_adjustment > 0 ? 'Deducted from Distributor' : 'No Price Adjustment'}
                         </p>
                       </CardContent>
                     </Card>
-                    <Card className="bg-emerald-50">
+                    <Card className="bg-emerald-50 border-emerald-200">
                       <CardContent className="p-4 text-center">
-                        <p className="text-sm text-muted-foreground">Return Credit Notes</p>
+                        <p className="text-sm text-muted-foreground">② Return Credits (Factory → Dist)</p>
                         <p className="text-xl font-bold text-emerald-600">
                           +₹{(grandTotals.credit_notes_applied || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Factory Reimburses Distributor
+                          Added to Distributor
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-indigo-50 border-indigo-200">
+                      <CardContent className="p-4 text-center">
+                        <p className="text-sm text-muted-foreground">Net Payout</p>
+                        <p className="text-xl font-bold text-indigo-600">
+                          ₹{(grandTotals.distributor_earnings - grandTotals.factory_adjustment + (grandTotals.credit_notes_applied || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Earnings - ① + ②
                         </p>
                       </CardContent>
                     </Card>
@@ -438,7 +443,13 @@ export default function BillingTab({
                                 <p className="font-medium">₹{group.totals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                               </div>
                               <div className="text-right">
-                                <p className="text-sm text-muted-foreground">Credit Notes</p>
+                                <p className="text-sm text-muted-foreground">① Price Adj</p>
+                                <p className={`font-medium ${group.totals.factory_adjustment > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                                  {group.totals.factory_adjustment > 0 ? '-' : ''}₹{Math.abs(group.totals.factory_adjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm text-muted-foreground">② Return Credits</p>
                                 <p className="font-medium text-emerald-600">
                                   {group.totals.credit_notes_applied > 0 
                                     ? `+₹${group.totals.credit_notes_applied.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
@@ -447,9 +458,9 @@ export default function BillingTab({
                                 </p>
                               </div>
                               <div className="text-right">
-                                <p className="text-sm text-muted-foreground">Dist → Factory Adj</p>
-                                <p className={`font-medium ${group.totals.factory_adjustment > 0 ? 'text-green-600' : group.totals.factory_adjustment < 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                                  {group.totals.factory_adjustment > 0 ? '+' : ''}₹{Math.abs(group.totals.factory_adjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                <p className="text-sm text-muted-foreground">Net Payout</p>
+                                <p className="font-medium text-indigo-600">
+                                  ₹{(group.totals.distributor_earnings - group.totals.factory_adjustment + group.totals.credit_notes_applied).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                 </p>
                               </div>
                               {expandedAccounts[group.account_id] ? (
@@ -469,34 +480,42 @@ export default function BillingTab({
                                     <th className="text-right p-2 font-medium">Deliveries</th>
                                     <th className="text-right p-2 font-medium">Billing</th>
                                     <th className="text-right p-2 font-medium">Earnings</th>
-                                    <th className="text-right p-2 font-medium">Credit Notes</th>
-                                    <th className="text-right p-2 font-medium">Dist → Factory Adj</th>
+                                    <th className="text-right p-2 font-medium">① Price Adj</th>
+                                    <th className="text-right p-2 font-medium">② Return Credits</th>
+                                    <th className="text-right p-2 font-medium">Net Payout</th>
                                     <th className="text-center p-2 font-medium">Status</th>
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {group.settlements.map(settlement => (
-                                    <tr key={settlement.id} className="border-b hover:bg-muted/30">
-                                      <td className="p-2 font-medium">{settlement.settlement_number}</td>
-                                      <td className="p-2 text-right">{settlement.total_deliveries || 0}</td>
-                                      <td className="p-2 text-right">₹{(settlement.total_billing_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                      <td className="p-2 text-right text-blue-600">₹{(settlement.distributor_earnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                      <td className="p-2 text-right text-emerald-600">
-                                        {settlement.credit_notes_applied > 0 
-                                          ? `+₹${(settlement.credit_notes_applied || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-                                          : '-'
-                                        }
-                                      </td>
-                                      <td className={`p-2 text-right font-medium ${(() => { const v = settlement.factory_distributor_adjustment || settlement.adjustment_payable || 0; return v > 0 ? 'text-green-600' : v < 0 ? 'text-red-600' : 'text-slate-400'; })()}`}>
-                                        {(() => { const v = settlement.factory_distributor_adjustment || settlement.adjustment_payable || 0; return `${v > 0 ? '+' : ''}₹${Math.abs(v).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`; })()}
-                                      </td>
-                                      <td className="p-2 text-center">
-                                        {getSettlementStatusBadge ? getSettlementStatusBadge(settlement.status) : (
-                                          <Badge variant="outline">{settlement.status}</Badge>
-                                        )}
-                                      </td>
-                                    </tr>
-                                  ))}
+                                  {group.settlements.map(settlement => {
+                                    const priceAdj = settlement.factory_distributor_adjustment || settlement.adjustment_payable || 0;
+                                    const creditNotes = settlement.credit_notes_applied || 0;
+                                    const earnings = settlement.distributor_earnings || 0;
+                                    const netPayout = earnings - priceAdj + creditNotes;
+                                    
+                                    return (
+                                      <tr key={settlement.id} className="border-b hover:bg-muted/30">
+                                        <td className="p-2 font-medium">{settlement.settlement_number}</td>
+                                        <td className="p-2 text-right">{settlement.total_deliveries || 0}</td>
+                                        <td className="p-2 text-right">₹{(settlement.total_billing_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                        <td className="p-2 text-right text-blue-600">₹{earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                        <td className={`p-2 text-right ${priceAdj > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                                          {priceAdj > 0 ? `-₹${priceAdj.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                        </td>
+                                        <td className="p-2 text-right text-emerald-600">
+                                          {creditNotes > 0 ? `+₹${creditNotes.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                        </td>
+                                        <td className="p-2 text-right font-medium text-indigo-600">
+                                          ₹{netPayout.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                        </td>
+                                        <td className="p-2 text-center">
+                                          {getSettlementStatusBadge ? getSettlementStatusBadge(settlement.status) : (
+                                            <Badge variant="outline">{settlement.status}</Badge>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
                                 </tbody>
                               </table>
                             </div>
