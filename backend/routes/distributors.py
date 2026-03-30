@@ -5787,6 +5787,254 @@ async def delete_debit_credit_note(
     return {"message": "Note deleted successfully", "note_number": note.get('note_number')}
 
 
+# ============ Stock Dashboard ============
+
+@router.get("/{distributor_id}/stock-dashboard")
+async def get_stock_dashboard(
+    distributor_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Real-time stock dashboard with complete inventory picture per SKU"""
+    tenant_id = get_current_tenant_id()
+    
+    distributor = await db.distributors.find_one(
+        {"id": distributor_id, "tenant_id": tenant_id},
+        {"_id": 0, "id": 1, "distributor_name": 1}
+    )
+    if not distributor:
+        raise HTTPException(status_code=404, detail="Distributor not found")
+    
+    # === 1. STOCK IN: Shipments received (only delivered shipments) ===
+    delivered_shipment_ids = await db.distributor_shipments.distinct(
+        "id",
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": "delivered"}
+    )
+    shipment_items = await db.distributor_shipment_items.find(
+        {"tenant_id": tenant_id, "shipment_id": {"$in": delivered_shipment_ids}},
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1}
+    ).to_list(50000)
+    
+    stock_in_by_sku = {}
+    for si in shipment_items:
+        sid = si.get('sku_id', '')
+        if sid not in stock_in_by_sku:
+            stock_in_by_sku[sid] = {"sku_id": sid, "sku_name": si.get('sku_name', 'Unknown'), "qty": 0}
+        stock_in_by_sku[sid]["qty"] += si.get('quantity', 0)
+    
+    # === 2. STOCK OUT: Deliveries to customers (delivered/completed) ===
+    delivered_delivery_ids = await db.distributor_deliveries.distinct(
+        "id",
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": {"$in": ["delivered", "completed"]}}
+    )
+    delivery_items = await db.distributor_delivery_items.find(
+        {"tenant_id": tenant_id, "delivery_id": {"$in": delivered_delivery_ids}},
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1}
+    ).to_list(50000)
+    
+    stock_out_by_sku = {}
+    for di in delivery_items:
+        sid = di.get('sku_id', '')
+        if sid not in stock_out_by_sku:
+            stock_out_by_sku[sid] = {"sku_id": sid, "sku_name": di.get('sku_name', 'Unknown'), "qty": 0}
+        stock_out_by_sku[sid]["qty"] += di.get('quantity', 0)
+    
+    # Weekly delivery data (last 12 weeks) for average calculation
+    from datetime import timedelta
+    import calendar as cal_mod
+    now = datetime.now(timezone.utc)
+    twelve_weeks_ago = (now - timedelta(weeks=12)).strftime('%Y-%m-%d')
+    
+    recent_deliveries = await db.distributor_deliveries.find(
+        {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "status": {"$in": ["delivered", "completed"]},
+            "delivery_date": {"$gte": twelve_weeks_ago}
+        },
+        {"_id": 0, "id": 1, "delivery_date": 1}
+    ).to_list(10000)
+    recent_delivery_ids = [d['id'] for d in recent_deliveries]
+    
+    recent_items = await db.distributor_delivery_items.find(
+        {"tenant_id": tenant_id, "delivery_id": {"$in": recent_delivery_ids}},
+        {"_id": 0, "sku_id": 1, "quantity": 1, "delivery_id": 1}
+    ).to_list(50000)
+    
+    # Map delivery_id -> delivery_date for weekly grouping
+    del_date_map = {d['id']: d.get('delivery_date', '') for d in recent_deliveries}
+    weekly_by_sku = {}
+    for ri in recent_items:
+        sid = ri.get('sku_id', '')
+        dd = del_date_map.get(ri.get('delivery_id', ''), '')
+        if not dd:
+            continue
+        # Get ISO week number
+        try:
+            dt = datetime.strptime(dd, '%Y-%m-%d')
+            week_key = dt.strftime('%Y-W%W')
+        except Exception:
+            continue
+        if sid not in weekly_by_sku:
+            weekly_by_sku[sid] = {}
+        if week_key not in weekly_by_sku[sid]:
+            weekly_by_sku[sid][week_key] = 0
+        weekly_by_sku[sid][week_key] += ri.get('quantity', 0)
+    
+    # === 3. CUSTOMER RETURNS (by category) ===
+    customer_returns = await db.customer_returns.find(
+        {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "status": {"$nin": ["cancelled", "draft"]}
+        },
+        {"_id": 0, "items": 1, "status": 1}
+    ).to_list(10000)
+    
+    cust_return_by_sku = {}  # {sku_id: {empty: X, damaged: X, expired: X, total: X}}
+    for cr in customer_returns:
+        for item in cr.get('items', []):
+            sid = item.get('sku_id', '')
+            qty = item.get('quantity', 0)
+            cat = item.get('reason_category', 'other')
+            if sid not in cust_return_by_sku:
+                cust_return_by_sku[sid] = {"empty_reusable": 0, "damaged": 0, "expired": 0, "promotional": 0, "other": 0, "total": 0, "pending_factory": 0, "returned_to_factory": 0}
+            bucket = cat if cat in cust_return_by_sku[sid] else "other"
+            cust_return_by_sku[sid][bucket] += qty
+            cust_return_by_sku[sid]["total"] += qty
+            if item.get('return_to_factory'):
+                if item.get('returned_to_factory'):
+                    cust_return_by_sku[sid]["returned_to_factory"] += qty
+                else:
+                    cust_return_by_sku[sid]["pending_factory"] += qty
+    
+    # === 4. FACTORY RETURNS (distributor -> factory) ===
+    factory_returns = await db.distributor_factory_returns.find(
+        {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "status": {"$nin": ["cancelled", "draft"]}
+        },
+        {"_id": 0, "items": 1, "reason": 1, "status": 1}
+    ).to_list(10000)
+    
+    factory_return_by_sku = {}  # {sku_id: {qty, reason_breakdown}}
+    for fr in factory_returns:
+        reason = fr.get('reason', 'other')
+        for item in fr.get('items', []):
+            sid = item.get('sku_id', '')
+            qty = item.get('quantity', 0)
+            if sid not in factory_return_by_sku:
+                factory_return_by_sku[sid] = {"total": 0, "empty_reusable": 0, "damaged": 0, "expired": 0, "other": 0, "sku_name": item.get('sku_name', 'Unknown')}
+            bucket = reason if reason in factory_return_by_sku[sid] else "other"
+            factory_return_by_sku[sid][bucket] += qty
+            factory_return_by_sku[sid]["total"] += qty
+    
+    # === BUILD PER-SKU SUMMARY ===
+    all_sku_ids = set(list(stock_in_by_sku.keys()) + list(stock_out_by_sku.keys()) + list(cust_return_by_sku.keys()) + list(factory_return_by_sku.keys()))
+    
+    sku_summaries = []
+    total_stock_in = 0
+    total_stock_out = 0
+    total_at_hand = 0
+    total_cust_returns = 0
+    total_factory_returns = 0
+    
+    for sid in all_sku_ids:
+        si = stock_in_by_sku.get(sid, {})
+        so = stock_out_by_sku.get(sid, {})
+        cr_data = cust_return_by_sku.get(sid, {})
+        fr_data = factory_return_by_sku.get(sid, {})
+        
+        qty_in = si.get('qty', 0)
+        qty_out = so.get('qty', 0)
+        qty_cust_returned = cr_data.get('total', 0)
+        qty_factory_returned = fr_data.get('total', 0)
+        
+        # Stock at hand = received - delivered to customers - returned to factory + customer returns back
+        # Customer returns come back to distributor, factory returns leave distributor
+        stock_at_hand = qty_in - qty_out - qty_factory_returned + qty_cust_returned
+        
+        # Weekly average (last 12 weeks)
+        weekly_data = weekly_by_sku.get(sid, {})
+        weeks_with_data = len(weekly_data)
+        total_recent_qty = sum(weekly_data.values())
+        weekly_avg = round(total_recent_qty / max(weeks_with_data, 1), 1) if weeks_with_data > 0 else 0
+        
+        # % stock at hand
+        pct_at_hand = round((stock_at_hand / qty_in * 100), 1) if qty_in > 0 else 0
+        
+        # Days of stock remaining
+        daily_avg = weekly_avg / 7 if weekly_avg > 0 else 0
+        days_remaining = round(stock_at_hand / daily_avg, 0) if daily_avg > 0 and stock_at_hand > 0 else None
+        
+        sku_name = si.get('sku_name') or so.get('sku_name') or fr_data.get('sku_name') or 'Unknown'
+        
+        sku_summaries.append({
+            "sku_id": sid,
+            "sku_name": sku_name,
+            "stock_received": qty_in,
+            "stock_delivered": qty_out,
+            "customer_returns": qty_cust_returned,
+            "customer_returns_breakdown": {
+                "empty_reusable": cr_data.get('empty_reusable', 0),
+                "damaged": cr_data.get('damaged', 0),
+                "expired": cr_data.get('expired', 0),
+                "promotional": cr_data.get('promotional', 0),
+            },
+            "factory_returns": qty_factory_returned,
+            "factory_returns_breakdown": {
+                "empty_reusable": fr_data.get('empty_reusable', 0),
+                "damaged": fr_data.get('damaged', 0),
+                "expired": fr_data.get('expired', 0),
+            },
+            "pending_factory_return": cr_data.get('pending_factory', 0),
+            "stock_at_hand": stock_at_hand,
+            "pct_stock_at_hand": pct_at_hand,
+            "weekly_avg_deliveries": weekly_avg,
+            "days_of_stock": days_remaining,
+            "weeks_analyzed": weeks_with_data,
+        })
+    
+    # Sort by stock_at_hand descending
+    sku_summaries.sort(key=lambda x: x['stock_at_hand'], reverse=True)
+    
+    for s in sku_summaries:
+        total_stock_in += s['stock_received']
+        total_stock_out += s['stock_delivered']
+        total_at_hand += s['stock_at_hand']
+        total_cust_returns += s['customer_returns']
+        total_factory_returns += s['factory_returns']
+    
+    # Aggregate bottle tracking
+    total_empty = sum(cr_data.get('empty_reusable', 0) for cr_data in cust_return_by_sku.values())
+    total_damaged = sum(cr_data.get('damaged', 0) for cr_data in cust_return_by_sku.values())
+    total_expired = sum(cr_data.get('expired', 0) for cr_data in cust_return_by_sku.values())
+    total_pending_factory = sum(cr_data.get('pending_factory', 0) for cr_data in cust_return_by_sku.values())
+    
+    return {
+        "distributor_id": distributor_id,
+        "distributor_name": distributor.get('distributor_name', ''),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "totals": {
+            "stock_received": total_stock_in,
+            "stock_delivered": total_stock_out,
+            "stock_at_hand": total_at_hand,
+            "customer_returns": total_cust_returns,
+            "factory_returns": total_factory_returns,
+            "pct_stock_at_hand": round((total_at_hand / total_stock_in * 100), 1) if total_stock_in > 0 else 0,
+        },
+        "bottle_tracking": {
+            "empty_reusable": total_empty,
+            "damaged": total_damaged,
+            "expired": total_expired,
+            "pending_factory_return": total_pending_factory,
+        },
+        "sku_count": len(sku_summaries),
+        "skus": sku_summaries,
+    }
+
+
+
 # ============ Real-time Reconciliation Status ============
 
 @router.get("/{distributor_id}/billing/summary")

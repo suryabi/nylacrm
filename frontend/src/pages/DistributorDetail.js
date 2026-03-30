@@ -20,7 +20,7 @@ import {
   ArrowLeft, Building2, MapPin, Phone, Mail, Edit2, Trash2,
   RefreshCw, Plus, Package, Truck, CreditCard, Calendar,
   User, FileText, Check, X, Save, Percent, DollarSign, Copy,
-  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw
+  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -35,6 +35,7 @@ import DeliveriesTab from '../components/distributor/DeliveriesTab';
 import ReturnsTab from '../components/distributor/ReturnsTab';
 import SettlementsTab from '../components/distributor/SettlementsTab';
 import BillingTab from '../components/distributor/BillingTab';
+import StockDashboardTab from '../components/distributor/StockDashboardTab';
 import { PAYMENT_TERMS, STATUS_OPTIONS, MARGIN_TYPES, formatMarginValue } from '../components/distributor/constants';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -2037,7 +2038,7 @@ export default function DistributorDetail() {
 
       {/* Tabs - Consolidated Structure */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-7 h-auto p-1">
+        <TabsList className="grid w-full grid-cols-8 h-auto p-1">
           <TabsTrigger value="profile" className="flex items-center gap-2 py-2.5" data-testid="profile-tab">
             <Building2 className="h-4 w-4" />
             <span className="hidden sm:inline">Profile</span>
@@ -2065,6 +2066,10 @@ export default function DistributorDetail() {
           <TabsTrigger value="billing" className="flex items-center gap-2 py-2.5" data-testid="billing-tab">
             <Calculator className="h-4 w-4" />
             <span className="hidden sm:inline">Billing</span>
+          </TabsTrigger>
+          <TabsTrigger value="stock-dashboard" className="flex items-center gap-2 py-2.5" data-testid="stock-dashboard-tab">
+            <BarChart3 className="h-4 w-4" />
+            <span className="hidden sm:inline">Stock</span>
           </TabsTrigger>
         </TabsList>
 
@@ -2343,6 +2348,14 @@ export default function DistributorDetail() {
             getSettlementStatusBadge={getSettlementStatusBadge}
             setActiveTab={setActiveTab}
             setDeleteTarget={setDeleteTarget}
+            API_URL={API_URL}
+            token={token}
+          />
+        </TabsContent>
+
+        <TabsContent value="stock-dashboard" className="space-y-4">
+          <StockDashboardTab
+            distributor={distributor}
             API_URL={API_URL}
             token={token}
           />
