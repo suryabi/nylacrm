@@ -891,7 +891,7 @@ export default function DeliveriesTab({
                   <th className="text-center p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Items</th>
                   <th className="text-right p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Customer Billing</th>
                   <th className="text-right p-4 font-semibold text-emerald-700 uppercase tracking-wider text-xs">Return Credit</th>
-                  <th className="text-right p-4 font-semibold text-indigo-700 uppercase tracking-wider text-xs">Net Billing</th>
+                  <th className="text-right p-4 font-semibold text-indigo-700 uppercase tracking-wider text-xs">Net Customer Billing</th>
                   <th className="text-right p-4 font-semibold text-purple-700 uppercase tracking-wider text-xs">Billable to Dist</th>
                   <th className="text-center p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Status</th>
                   <th className="text-center p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Actions</th>
