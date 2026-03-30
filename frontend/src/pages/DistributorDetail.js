@@ -2440,7 +2440,7 @@ export default function DistributorDetail() {
 
       {/* Delivery Detail Dialog */}
       <Dialog open={showDeliveryDetail} onOpenChange={setShowDeliveryDetail}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
               Delivery {selectedDelivery?.delivery_number}
@@ -2481,56 +2481,147 @@ export default function DistributorDetail() {
                 )}
               </div>
 
-              {/* Items */}
-              <div className="border rounded-md">
-                <table className="w-full text-sm">
+              {/* Detailed Items Table */}
+              <div className="border rounded-md overflow-x-auto">
+                <table className="w-full text-sm" data-testid="delivery-detail-items-table">
                   <thead>
                     <tr className="border-b bg-muted/50">
                       <th className="text-left p-2 font-medium">SKU</th>
                       <th className="text-right p-2 font-medium">Qty</th>
-                      <th className="text-right p-2 font-medium">Price</th>
-                      <th className="text-right p-2 font-medium">Amount</th>
-                      <th className="text-right p-2 font-medium">Margin</th>
+                      <th className="text-right p-2 font-medium text-blue-700">Base Price</th>
+                      <th className="text-right p-2 font-medium text-blue-700">Billed to Dist</th>
+                      <th className="text-right p-2 font-medium text-emerald-700">Cust. Price</th>
+                      <th className="text-right p-2 font-medium text-emerald-700">Actual Billable</th>
+                      <th className="text-right p-2 font-medium text-amber-700">Adjustment</th>
+                      <th className="text-right p-2 font-medium">Cust. Invoice</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(selectedDelivery.items || []).map((item, idx) => (
-                      <tr key={idx} className="border-b">
-                        <td className="p-2">{item.sku_name || item.sku_id}</td>
-                        <td className="p-2 text-right">{item.quantity}</td>
-                        <td className="p-2 text-right">₹{item.unit_price}</td>
-                        <td className="p-2 text-right">₹{item.net_amount?.toFixed(2)}</td>
-                        <td className="p-2 text-right">
-                          {item.distributor_earnings > 0 ? (
-                            <span className="text-green-600">₹{item.distributor_earnings?.toFixed(2)}</span>
-                          ) : '-'}
-                        </td>
-                      </tr>
-                    ))}
+                    {(selectedDelivery.items || []).map((item, idx) => {
+                      const qty = item.quantity || 0;
+                      const customerPrice = item.customer_selling_price || item.unit_price || 0;
+                      const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
+                      const basePrice = item.base_price || item.transfer_price || 0;
+                      const transferPrice = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
+                      const billedToDist = qty * transferPrice;
+                      const newTransferPrice = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
+                      const actualBillable = qty * newTransferPrice;
+                      const adjustment = actualBillable - billedToDist;
+                      const customerInvoice = qty * customerPrice;
+                      return (
+                        <tr key={idx} className="border-b">
+                          <td className="p-2">
+                            <span className="font-medium">{item.sku_name || item.sku_id}</span>
+                            <span className="text-xs text-muted-foreground ml-1">({commissionPct}%)</span>
+                          </td>
+                          <td className="p-2 text-right font-medium">{qty}</td>
+                          <td className="p-2 text-right text-blue-700">₹{basePrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className="p-2 text-right text-blue-800 font-medium">₹{billedToDist.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className="p-2 text-right text-emerald-700">₹{customerPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className="p-2 text-right text-emerald-800 font-medium">₹{actualBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className={`p-2 text-right font-semibold ${adjustment > 0 ? 'text-emerald-600' : adjustment < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                            {adjustment > 0 ? '+' : ''}₹{adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="p-2 text-right font-medium">₹{customerInvoice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <tfoot>
-                    <tr className="bg-muted/30">
-                      <td colSpan="3" className="p-2 text-right font-medium">Total:</td>
-                      <td className="p-2 text-right font-bold">₹{selectedDelivery.total_net_amount?.toLocaleString()}</td>
-                      <td className="p-2 text-right font-bold text-green-600">
-                        {(() => {
-                          const totalEarnings = (selectedDelivery.items || []).reduce((sum, item) => sum + (item.distributor_earnings || 0), 0);
-                          return totalEarnings > 0 ? `₹${totalEarnings.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-';
-                        })()}
-                      </td>
-                    </tr>
+                    {(() => {
+                      const items = selectedDelivery.items || [];
+                      let totBilled = 0, totActual = 0, totAdj = 0, totCustInv = 0;
+                      items.forEach(item => {
+                        const qty = item.quantity || 0;
+                        const customerPrice = item.customer_selling_price || item.unit_price || 0;
+                        const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
+                        const basePrice = item.base_price || item.transfer_price || 0;
+                        const transferPrice = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
+                        totBilled += qty * transferPrice;
+                        const newTP = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
+                        totActual += qty * newTP;
+                        totAdj += (qty * newTP) - (qty * transferPrice);
+                        totCustInv += qty * customerPrice;
+                      });
+                      return (
+                        <tr className="bg-muted/30 font-semibold">
+                          <td colSpan="2" className="p-2 text-right">Total:</td>
+                          <td className="p-2"></td>
+                          <td className="p-2 text-right text-blue-800">₹{totBilled.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className="p-2"></td>
+                          <td className="p-2 text-right text-emerald-800">₹{totActual.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className={`p-2 text-right ${totAdj > 0 ? 'text-emerald-600' : totAdj < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                            {totAdj > 0 ? '+' : ''}₹{totAdj.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="p-2 text-right">₹{totCustInv.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                        </tr>
+                      );
+                    })()}
                   </tfoot>
                 </table>
               </div>
 
-              {/* Credit Notes Applied Section */}
+              {/* Financial Summary */}
+              {(() => {
+                const items = selectedDelivery.items || [];
+                const totalCreditApplied = selectedDelivery.total_credit_applied || 0;
+                const hasCN = totalCreditApplied > 0;
+                let totActualCalc = 0, totCustInvCalc = 0;
+                items.forEach(item => {
+                  const qty = item.quantity || 0;
+                  const customerPrice = item.customer_selling_price || item.unit_price || 0;
+                  const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
+                  const newTP = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
+                  totActualCalc += qty * newTP;
+                  totCustInvCalc += qty * customerPrice;
+                });
+                const totCustInv = selectedDelivery.total_net_amount || totCustInvCalc;
+                const totActual = selectedDelivery.total_actual_billable || totActualCalc;
+                const finalBillable = totActual - totalCreditApplied;
+                const netBilling = selectedDelivery.net_customer_billing || (totCustInv - totalCreditApplied);
+                return (
+                  <div className="border rounded-lg p-4 bg-slate-50/80 space-y-2" data-testid="delivery-financial-summary">
+                    <h4 className="font-semibold text-sm mb-2 text-slate-700">Financial Summary</h4>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Customer Invoice:</span>
+                      <span className="font-medium">₹{totCustInv.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    {hasCN && (
+                      <div className="flex justify-between text-sm text-emerald-600">
+                        <span>Credit Notes Applied:</span>
+                        <span className="font-medium">- ₹{totalCreditApplied.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm border-t pt-2">
+                      <span className="font-semibold text-indigo-700">Net Customer Billing:</span>
+                      <span className="font-bold text-indigo-700">₹{(hasCN ? netBilling : totCustInv).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Actual Billable to Dist:</span>
+                      <span className="font-medium text-emerald-700">₹{totActual.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    {hasCN && (
+                      <div className="flex justify-between text-sm text-emerald-600">
+                        <span>Less: Credit Notes:</span>
+                        <span className="font-medium">- ₹{totalCreditApplied.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-base border-t pt-2">
+                      <span className="font-bold text-purple-700">Final Billable to Dist:</span>
+                      <span className="font-bold text-purple-700">₹{finalBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Credit Notes Applied Detail */}
               {selectedDelivery.applied_credit_notes && selectedDelivery.applied_credit_notes.length > 0 && (
                 <div className="border rounded-lg p-4 bg-emerald-50/50" data-testid="applied-credit-notes-section">
                   <h4 className="font-semibold text-sm mb-3 flex items-center gap-2 text-emerald-700">
                     <CreditCard className="h-4 w-4" />
-                    Credit Notes Applied
+                    Credit Notes Detail
                   </h4>
-                  <div className="space-y-2 mb-3">
+                  <div className="space-y-2">
                     {selectedDelivery.applied_credit_notes.map((cn, idx) => (
                       <div key={cn.credit_note_id || idx} className="flex justify-between items-center text-sm">
                         <div>
@@ -2544,20 +2635,6 @@ export default function DistributorDetail() {
                         </span>
                       </div>
                     ))}
-                  </div>
-                  <div className="border-t pt-3 space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Delivery Total:</span>
-                      <span>₹{selectedDelivery.total_net_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between text-sm text-emerald-600">
-                      <span>Total Credits Applied:</span>
-                      <span>- ₹{selectedDelivery.total_credit_applied?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between font-bold text-base pt-1">
-                      <span>Net Customer Billing:</span>
-                      <span className="text-emerald-700">₹{selectedDelivery.net_customer_billing?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
                   </div>
                 </div>
               )}
