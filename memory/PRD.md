@@ -5,6 +5,46 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Latest Session - March 30, 2026 (Session 11)
 
+### Factory Returns & Collapsible Stock Out Sections ✅ (March 30 - COMPLETED)
+
+**User Request**: (1) Fix font consistency in Net Customer Billing. (2) Split Stock Out into two collapsible sections: Distributor→Customer (expanded) and Distributor→Factory (collapsed). (3) Factory returns for expired/damaged stock with base price credit and warehouse stock deduction. (4) Factory return credits flow into Settlements.
+
+**Implementation:**
+
+1. **Font Fix**: Removed `text-lg` from Net Customer Billing to match column font sizes.
+
+2. **Collapsible Sections** (using shadcn Collapsible):
+   - **Distributor → Customer**: Expanded by default, contains existing deliveries table
+   - **Distributor → Factory**: Collapsed by default, contains new factory returns feature
+   - Chevron icon rotates on toggle, smooth animations
+
+3. **Factory Returns Backend** (`/app/backend/routes/factory_returns.py`):
+   - Full CRUD: List, Create, Get Detail, Confirm, Receive, Cancel, Delete
+   - Status flow: Draft → Confirmed (deducts stock) → Received
+   - Cancel restores stock if previously confirmed
+   - Source: warehouse stock OR customer returns
+   - Reason: Expired or Damaged
+   - Credit calculated at base price (factory reimburses distributor)
+
+4. **Settlement Integration**:
+   - `total_factory_return_credit` added to settlement math
+   - Factory return credits count as Factory → Distributor adjustment
+
+5. **Factory Returns UI**:
+   - Table: Return #, Location, Reason badge, Items count, Base Price Credit, Status, Actions
+   - Create dialog: Location, Reason, Date, Source, Items (SKU+Qty), Remarks
+   - Action buttons: Confirm, Receive, Cancel, Delete
+
+**Files Created/Modified:**
+- `/app/backend/routes/factory_returns.py` (NEW)
+- `/app/backend/routes/__init__.py` - Route registration
+- `/app/backend/routes/distributors.py` - Settlement integration
+- `/app/frontend/src/components/distributor/DeliveriesTab.jsx` - Collapsible sections + factory returns UI
+
+**Testing (iteration_89.json):** 100% (12/12 features, backend + frontend)
+
+---
+
 ### Stock Out Table Simplification & Detail Popup Enhancement ✅ (March 30 - COMPLETED)
 
 **User Request**: The Stock Out table was too cluttered with many columns (per-item rows with Base Price, Transfer Price, Billed to Dist, Customer Price, New Transfer Price, Actual Billable, Adjustment, Final Billable, etc.). Simplify the table and move detailed calculations to the delivery detail popup.
