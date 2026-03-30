@@ -1572,10 +1572,6 @@ export default function DistributorDetail() {
       toast.error('Please select month and year');
       return;
     }
-    if (unsettledDeliveries.length === 0) {
-      toast.error('No unsettled deliveries found for this period');
-      return;
-    }
     
     try {
       setSavingSettlement(true);

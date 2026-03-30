@@ -3959,14 +3959,18 @@ async def create_settlement(
     }, {"_id": 0}).sort("delivery_date", 1).to_list(500)
     
     # Get credit notes issued in the period (not yet settled)
+    # credit_notes.created_at is stored as datetime object, convert period dates
+    from datetime import datetime as dt_cls
+    period_start_dt = dt_cls.fromisoformat(data.period_start + "T00:00:00")
+    period_end_dt = dt_cls.fromisoformat(data.period_end + "T23:59:59")
     credit_notes = await db.credit_notes.find({
         "tenant_id": tenant_id,
         "distributor_id": distributor_id,
         "status": {"$in": ["pending", "partially_applied", "fully_applied"]},
-        "created_at": {"$gte": data.period_start, "$lte": data.period_end + "T23:59:59"},
+        "created_at": {"$gte": period_start_dt, "$lte": period_end_dt},
         "id": {"$nin": settled_cn_ids}
     }, {"_id": 0}).to_list(500)
-    total_credit_notes_issued = sum(cn.get('total_amount', 0) or cn.get('amount', 0) for cn in credit_notes)
+    total_credit_notes_issued = sum(cn.get('original_amount', 0) or cn.get('total_amount', 0) or cn.get('amount', 0) or 0 for cn in credit_notes)
     
     # Get adjustable factory returns in the period (not yet settled)
     factory_returns = await db.distributor_factory_returns.find({
@@ -3991,9 +3995,6 @@ async def create_settlement(
     total_quantity = sum(d.get('total_quantity', 0) for d in deliveries)
     total_delivery_amount = sum(d.get('total_net_amount', 0) for d in deliveries)
     total_margin_amount = sum(d.get('total_margin_amount', 0) for d in deliveries)
-    
-    # Credit notes applied to deliveries (subset — for reference, stored in settlement doc)
-    total_credit_on_deliveries = sum(d.get('total_credit_applied', 0) for d in deliveries)
     
     # Adjustment from distributor to factory (when customer price > base price)
     total_dist_to_factory_adjustment = sum(d.get('total_adjustment_dist_to_factory', 0) for d in deliveries)
@@ -4133,8 +4134,44 @@ async def generate_monthly_settlements(
     
     deliveries = await db.distributor_deliveries.find(query, {"_id": 0}).to_list(1000)
     
-    if not deliveries:
-        raise HTTPException(status_code=400, detail="No unsettled deliveries found for this period")
+    # --- Independently query credit notes for the period ---
+    from datetime import datetime as dt_cls_monthly
+    period_start_dt = dt_cls_monthly.fromisoformat(start_date + "T00:00:00")
+    period_end_dt = dt_cls_monthly.fromisoformat(end_date + "T00:00:00")  # end_date is already 1st of next month
+    
+    # Get already-settled credit note IDs and factory return IDs from existing settlements
+    existing_monthly_settlements = await db.distributor_settlements.find(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0, "credit_note_ids": 1, "factory_return_ids": 1}
+    ).to_list(10000)
+    settled_cn_ids = []
+    settled_fr_ids = []
+    for es in existing_monthly_settlements:
+        settled_cn_ids.extend(es.get('credit_note_ids') or [])
+        settled_fr_ids.extend(es.get('factory_return_ids') or [])
+    
+    all_credit_notes = await db.credit_notes.find({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": {"$in": ["pending", "partially_applied", "fully_applied"]},
+        "created_at": {"$gte": period_start_dt, "$lt": period_end_dt},
+        "id": {"$nin": settled_cn_ids}
+    }, {"_id": 0}).to_list(500)
+    
+    # Get adjustable factory returns in the period (warehouse-sourced, not yet settled)
+    all_factory_returns = await db.distributor_factory_returns.find({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": {"$in": ["confirmed", "received"]},
+        "return_date": {"$gte": start_date, "$lt": end_date},
+        "$or": [{"requires_settlement": True}, {"source": "warehouse"}],
+        "id": {"$nin": settled_fr_ids}
+    }, {"_id": 0}).to_list(500)
+    
+    total_independent_factory_return_credit = sum(fr.get('total_credit_amount', 0) for fr in all_factory_returns)
+    
+    if not deliveries and not all_credit_notes and not all_factory_returns:
+        raise HTTPException(status_code=400, detail="No unsettled deliveries, credit notes, or factory returns found for this period")
     
     # Group deliveries by account
     accounts = {}
@@ -4154,7 +4191,39 @@ async def generate_monthly_settlements(
             }
         accounts[account_id]['deliveries'].append(delivery)
     
+    # Group credit notes by account_id for per-account distribution
+    credit_notes_by_account = {}
+    for cn in all_credit_notes:
+        cn_account = cn.get('account_id', 'unknown')
+        if cn_account not in credit_notes_by_account:
+            credit_notes_by_account[cn_account] = []
+        credit_notes_by_account[cn_account].append(cn)
+    
+    # Ensure accounts with credit notes (but no deliveries) are also represented
+    for cn_acct_id in credit_notes_by_account:
+        if cn_acct_id not in accounts:
+            # Fetch account name
+            cn_acct_name = 'Unknown'
+            if cn_acct_id != 'unknown':
+                acct_doc = await db.accounts.find_one({"id": cn_acct_id}, {"_id": 0, "account_name": 1, "company": 1, "name": 1})
+                if acct_doc:
+                    cn_acct_name = acct_doc.get('account_name') or acct_doc.get('company') or acct_doc.get('name') or 'Unknown'
+            accounts[cn_acct_id] = {
+                'account_id': cn_acct_id,
+                'account_name': cn_acct_name,
+                'deliveries': []
+            }
+    
+    # If still no accounts but we have factory returns, create a placeholder account
+    if not accounts and all_factory_returns:
+        accounts['_factory_returns_'] = {
+            'account_id': '_factory_returns_',
+            'account_name': 'Factory Returns Adjustment',
+            'deliveries': []
+        }
+    
     settlements_created = []
+    factory_returns_assigned = False  # Track if factory returns have been assigned to a settlement
     
     for account_id, account_data in accounts.items():
         account_deliveries = account_data['deliveries']
@@ -4250,8 +4319,20 @@ async def generate_monthly_settlements(
         
         adjustment_payable = distributor_earnings - margin_at_transfer_price
         
-        # Final payout includes credit notes (factory reimburses distributor for customer returns)
-        final_payout = distributor_earnings + total_credit_notes_applied
+        # Per-account credit notes (independently queried)
+        account_credit_notes = credit_notes_by_account.get(account_id, [])
+        account_cn_total = sum(cn.get('original_amount', 0) or cn.get('total_amount', 0) or cn.get('amount', 0) or 0 for cn in account_credit_notes)
+        
+        # Factory returns: assign to first settlement only (they're distributor-level, not per-account)
+        account_fr_total = 0
+        account_factory_returns = []
+        if not factory_returns_assigned and all_factory_returns:
+            account_fr_total = total_independent_factory_return_credit
+            account_factory_returns = all_factory_returns
+            factory_returns_assigned = True
+        
+        # Net Payout = Earnings - ① Price Adj (Dist→Factory) + ② Credit Notes (Factory→Dist) + ③ Factory Returns (Factory→Dist)
+        final_payout = distributor_earnings - total_factory_adj + account_cn_total + account_fr_total
         
         settlement_doc = {
             "id": settlement_id,
@@ -4273,6 +4354,10 @@ async def generate_monthly_settlements(
             "price_premium_payable": round(total_price_premium, 2),
             "factory_distributor_adjustment": round(total_factory_adj, 2),
             "credit_notes_applied": round(total_credit_notes_applied, 2),
+            "total_credit_notes_issued": round(account_cn_total, 2),
+            "total_factory_return_credit": round(account_fr_total, 2),
+            "credit_note_ids": [cn.get('id') for cn in account_credit_notes],
+            "factory_return_ids": [fr.get('id') for fr in account_factory_returns],
             "final_payout": round(final_payout, 2),
             "status": "draft",
             "remarks": remarks,

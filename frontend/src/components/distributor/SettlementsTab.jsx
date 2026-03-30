@@ -376,7 +376,7 @@ export default function SettlementsTab({
                     <Button variant="outline" onClick={() => setShowSettlementDialog(false)}>Cancel</Button>
                     <Button
                       onClick={handleCreateSettlement}
-                      disabled={savingSettlement || accountGroups.length === 0}
+                      disabled={savingSettlement}
                       data-testid="save-settlement-btn"
                     >
                       {savingSettlement ? 'Creating...' : `Generate ${accountGroups.length} Settlement(s)`}
