@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -8,7 +8,8 @@ import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Checkbox } from '../ui/checkbox';
-import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2 } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
+import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2, ChevronDown, AlertTriangle, Factory } from 'lucide-react';
 
 const TIME_FILTERS = [
   { value: 'this_week', label: 'This Week' },
@@ -66,6 +67,111 @@ export default function DeliveriesTab({
   token
 }) {
   const [downloading, setDownloading] = useState(false);
+  
+  // Collapsible section state
+  const [custSectionOpen, setCustSectionOpen] = useState(true);
+  const [factorySectionOpen, setFactorySectionOpen] = useState(false);
+  
+  // Factory returns state
+  const [factoryReturns, setFactoryReturns] = useState([]);
+  const [factoryReturnsLoading, setFactoryReturnsLoading] = useState(false);
+  const [factoryReturnsTotal, setFactoryReturnsTotal] = useState(0);
+  const [factoryReturnsPage, setFactoryReturnsPage] = useState(1);
+  const [factoryTimeFilter, setFactoryTimeFilter] = useState('this_month');
+  const [showFactoryDialog, setShowFactoryDialog] = useState(false);
+  const [factoryForm, setFactoryForm] = useState({ distributor_location_id: '', reason: 'expired', source: 'warehouse', customer_return_id: '', return_date: new Date().toISOString().split('T')[0], remarks: '' });
+  const [factoryItems, setFactoryItems] = useState([{ sku_id: '', quantity: 1 }]);
+  const [savingFactory, setSavingFactory] = useState(false);
+  
+  // Fetch factory returns
+  const fetchFactoryReturns = useCallback(async () => {
+    if (!distributor?.id) return;
+    setFactoryReturnsLoading(true);
+    try {
+      const res = await fetch(
+        `${API_URL}/api/distributors/${distributor.id}/factory-returns?page=${factoryReturnsPage}&page_size=20&time_filter=${factoryTimeFilter}`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setFactoryReturns(data.factory_returns || []);
+        setFactoryReturnsTotal(data.total || 0);
+      }
+    } catch (err) {
+      console.error('Error fetching factory returns:', err);
+    } finally {
+      setFactoryReturnsLoading(false);
+    }
+  }, [distributor?.id, factoryReturnsPage, factoryTimeFilter, API_URL, token]);
+  
+  useEffect(() => {
+    if (factorySectionOpen) fetchFactoryReturns();
+  }, [factorySectionOpen, fetchFactoryReturns]);
+  
+  // Get distributor locations from distributor object
+  const distributorLocations = distributor?.locations || [];
+  
+  const handleCreateFactoryReturn = async () => {
+    if (!factoryForm.distributor_location_id || factoryItems.some(i => !i.sku_id || !i.quantity)) return;
+    setSavingFactory(true);
+    try {
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/factory-returns`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...factoryForm,
+          items: factoryItems.filter(i => i.sku_id && i.quantity > 0)
+        })
+      });
+      if (res.ok) {
+        setShowFactoryDialog(false);
+        setFactoryForm({ distributor_location_id: '', reason: 'expired', source: 'warehouse', customer_return_id: '', return_date: new Date().toISOString().split('T')[0], remarks: '' });
+        setFactoryItems([{ sku_id: '', quantity: 1 }]);
+        fetchFactoryReturns();
+      }
+    } catch (err) {
+      console.error('Error creating factory return:', err);
+    } finally {
+      setSavingFactory(false);
+    }
+  };
+  
+  const handleFactoryAction = async (returnId, action) => {
+    try {
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/factory-returns/${returnId}/${action}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      if (res.ok) fetchFactoryReturns();
+    } catch (err) {
+      console.error(`Error ${action} factory return:`, err);
+    }
+  };
+  
+  const handleDeleteFactoryReturn = async (returnId) => {
+    if (!window.confirm('Delete this factory return?')) return;
+    try {
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/factory-returns/${returnId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) fetchFactoryReturns();
+    } catch (err) {
+      console.error('Error deleting factory return:', err);
+    }
+  };
+  
+  const getFactoryStatusBadge = (status) => {
+    const map = {
+      draft: { label: 'Draft', className: 'bg-slate-100 text-slate-700' },
+      confirmed: { label: 'Confirmed', className: 'bg-blue-100 text-blue-700' },
+      received: { label: 'Received', className: 'bg-emerald-100 text-emerald-700' },
+      cancelled: { label: 'Cancelled', className: 'bg-red-100 text-red-700' }
+    };
+    const s = map[status] || map.draft;
+    return <Badge className={s.className}>{s.label}</Badge>;
+  };
   
   // Credit notes state
   const [availableCreditNotes, setAvailableCreditNotes] = useState([]);
@@ -287,13 +393,21 @@ export default function DeliveriesTab({
   };
   
   return (
+    <div className="space-y-6">
+    {/* Section 1: Distributor → Customer */}
+    <Collapsible open={custSectionOpen} onOpenChange={setCustSectionOpen}>
     <Card>
       <CardHeader className="flex flex-col gap-4">
         <div className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-lg">Stock Out (Distributor → Customer)</CardTitle>
-            <CardDescription>Deliveries from this distributor to assigned accounts</CardDescription>
-          </div>
+          <CollapsibleTrigger asChild>
+            <button className="flex items-center gap-2 text-left hover:text-emerald-700 transition-colors" data-testid="cust-section-trigger">
+              <ChevronDown className={`h-5 w-5 shrink-0 transition-transform duration-200 ${custSectionOpen ? '' : '-rotate-90'}`} />
+              <div>
+                <CardTitle className="text-lg">Stock Out (Distributor → Customer)</CardTitle>
+                <CardDescription>Deliveries from this distributor to assigned accounts</CardDescription>
+              </div>
+            </button>
+          </CollapsibleTrigger>
           <div className="flex items-center gap-2">
             {/* Excel Download */}
             <Button 
@@ -797,6 +911,7 @@ export default function DeliveriesTab({
           </div>
         </div>
       </CardHeader>
+      <CollapsibleContent>
       <CardContent>
         {/* Filters Row */}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4 pb-4 border-b">
@@ -987,7 +1102,7 @@ export default function DeliveriesTab({
                       
                       {/* Net Billing (pre-tax, after credit) */}
                       <td className="p-4 text-right">
-                        <span className={`font-bold text-lg ${hasCreditNotes ? 'text-indigo-600' : 'text-slate-700'}`}>
+                        <span className={`font-bold ${hasCreditNotes ? 'text-indigo-600' : 'text-slate-700'}`}>
                           ₹{netCustomerBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
                       </td>
@@ -1115,6 +1230,269 @@ export default function DeliveriesTab({
         </>
         )}
       </CardContent>
+      </CollapsibleContent>
     </Card>
+    </Collapsible>
+
+    {/* Section 2: Distributor → Factory */}
+    <Collapsible open={factorySectionOpen} onOpenChange={setFactorySectionOpen}>
+    <Card>
+      <CardHeader className="flex flex-col gap-4">
+        <div className="flex flex-row items-center justify-between">
+          <CollapsibleTrigger asChild>
+            <button className="flex items-center gap-2 text-left hover:text-amber-700 transition-colors" data-testid="factory-section-trigger">
+              <ChevronDown className={`h-5 w-5 shrink-0 transition-transform duration-200 ${factorySectionOpen ? '' : '-rotate-90'}`} />
+              <div>
+                <CardTitle className="text-lg">Stock Out (Distributor → Factory)</CardTitle>
+                <CardDescription>Return expired or damaged stock to factory for base price credit</CardDescription>
+              </div>
+            </button>
+          </CollapsibleTrigger>
+          <div className="flex items-center gap-2">
+            {canManage && (
+              <Dialog open={showFactoryDialog} onOpenChange={setShowFactoryDialog}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" data-testid="create-factory-return-btn">
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Factory Return
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>New Factory Return</DialogTitle>
+                    <DialogDescription>Return expired or damaged stock from warehouse to factory</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Warehouse Location *</Label>
+                        <select
+                          value={factoryForm.distributor_location_id}
+                          onChange={(e) => setFactoryForm(f => ({ ...f, distributor_location_id: e.target.value }))}
+                          className="w-full text-sm border rounded-md px-3 py-2 bg-background"
+                          data-testid="factory-location-select"
+                        >
+                          <option value="">Select Location</option>
+                          {distributorLocations.map(loc => (
+                            <option key={loc.id} value={loc.id}>{loc.location_name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Reason *</Label>
+                        <select
+                          value={factoryForm.reason}
+                          onChange={(e) => setFactoryForm(f => ({ ...f, reason: e.target.value }))}
+                          className="w-full text-sm border rounded-md px-3 py-2 bg-background"
+                          data-testid="factory-reason-select"
+                        >
+                          <option value="expired">Expired Stock</option>
+                          <option value="damaged">Damaged Stock</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Return Date</Label>
+                        <Input
+                          type="date"
+                          value={factoryForm.return_date}
+                          onChange={(e) => setFactoryForm(f => ({ ...f, return_date: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Source</Label>
+                        <select
+                          value={factoryForm.source}
+                          onChange={(e) => setFactoryForm(f => ({ ...f, source: e.target.value }))}
+                          className="w-full text-sm border rounded-md px-3 py-2 bg-background"
+                          data-testid="factory-source-select"
+                        >
+                          <option value="warehouse">Warehouse Stock</option>
+                          <option value="customer_return">From Customer Return</option>
+                        </select>
+                      </div>
+                    </div>
+                    
+                    {/* Items */}
+                    <div className="space-y-2">
+                      <Label>Items *</Label>
+                      <div className="space-y-2">
+                        {factoryItems.map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <select
+                              value={item.sku_id}
+                              onChange={(e) => {
+                                const updated = [...factoryItems];
+                                updated[idx].sku_id = e.target.value;
+                                setFactoryItems(updated);
+                              }}
+                              className="flex-1 text-sm border rounded-md px-3 py-2 bg-background"
+                              data-testid={`factory-sku-select-${idx}`}
+                            >
+                              <option value="">Select SKU</option>
+                              {skus.map(sku => (
+                                <option key={sku.id} value={sku.id}>{sku.name} ({sku.sku_code})</option>
+                              ))}
+                            </select>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const updated = [...factoryItems];
+                                updated[idx].quantity = parseInt(e.target.value) || 1;
+                                setFactoryItems(updated);
+                              }}
+                              className="w-24"
+                              placeholder="Qty"
+                              data-testid={`factory-qty-input-${idx}`}
+                            />
+                            {factoryItems.length > 1 && (
+                              <Button variant="ghost" size="sm" onClick={() => setFactoryItems(factoryItems.filter((_, i) => i !== idx))}>
+                                <Trash2 className="h-4 w-4 text-red-500" />
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                        <Button variant="outline" size="sm" onClick={() => setFactoryItems([...factoryItems, { sku_id: '', quantity: 1 }])}>
+                          <Plus className="h-4 w-4 mr-1" /> Add Item
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label>Remarks</Label>
+                      <Textarea
+                        value={factoryForm.remarks}
+                        onChange={(e) => setFactoryForm(f => ({ ...f, remarks: e.target.value }))}
+                        placeholder="Additional notes..."
+                        rows={2}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setShowFactoryDialog(false)}>Cancel</Button>
+                    <Button
+                      onClick={handleCreateFactoryReturn}
+                      disabled={savingFactory || !factoryForm.distributor_location_id || factoryItems.every(i => !i.sku_id)}
+                      data-testid="save-factory-return-btn"
+                    >
+                      {savingFactory ? 'Saving...' : 'Create Factory Return'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      <CollapsibleContent>
+      <CardContent>
+        {/* Factory Returns Filters */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <select
+              value={factoryTimeFilter}
+              onChange={(e) => { setFactoryTimeFilter(e.target.value); setFactoryReturnsPage(1); }}
+              className="text-sm border rounded-md px-3 py-1.5 bg-background"
+              data-testid="factory-time-filter"
+            >
+              {TIME_FILTERS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Total: <span className="font-medium">{factoryReturnsTotal}</span> returns</span>
+            <Button variant="ghost" size="sm" onClick={fetchFactoryReturns}>
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+        
+        {factoryReturnsLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : factoryReturns.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <Factory className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>No factory returns recorded</p>
+            <p className="text-sm">Return expired or damaged stock to factory for base price credit</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm" data-testid="factory-returns-table">
+              <thead>
+                <tr className="border-b-2 border-amber-200 bg-gradient-to-r from-amber-50 to-slate-50">
+                  <th className="text-left p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Return #</th>
+                  <th className="text-left p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Location</th>
+                  <th className="text-center p-3 font-semibold text-amber-700 uppercase tracking-wider text-xs">Reason</th>
+                  <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Items</th>
+                  <th className="text-right p-3 font-semibold text-blue-700 uppercase tracking-wider text-xs">Base Price Credit</th>
+                  <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Status</th>
+                  <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {factoryReturns.map((fr) => (
+                  <tr key={fr.id} className="border-b border-slate-100 hover:bg-amber-50/40 transition-colors" data-testid={`factory-return-row-${fr.id}`}>
+                    <td className="p-3">
+                      <span className="font-semibold text-amber-700">{fr.return_number}</span>
+                      <p className="text-xs text-slate-500 mt-0.5">{new Date(fr.return_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                    </td>
+                    <td className="p-3 text-slate-700">{fr.distributor_location_name}</td>
+                    <td className="p-3 text-center">
+                      <Badge className={fr.reason === 'expired' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'}>
+                        {fr.reason === 'expired' ? 'Expired' : 'Damaged'}
+                      </Badge>
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className="inline-flex items-center justify-center bg-slate-100 text-slate-700 text-sm font-medium px-2 py-0.5 rounded-full">
+                        {fr.total_quantity || (fr.items || []).reduce((s, i) => s + i.quantity, 0)}
+                      </span>
+                    </td>
+                    <td className="p-3 text-right font-bold text-blue-700">
+                      ₹{(fr.total_credit_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="p-3 text-center">{getFactoryStatusBadge(fr.status)}</td>
+                    <td className="p-3 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        {fr.status === 'draft' && canManage && (
+                          <>
+                            <Button variant="outline" size="sm" onClick={() => handleFactoryAction(fr.id, 'confirm')} data-testid={`confirm-factory-${fr.id}`}>
+                              <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Confirm
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteFactoryReturn(fr.id)}>
+                              <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                            </Button>
+                          </>
+                        )}
+                        {fr.status === 'confirmed' && canManage && (
+                          <>
+                            <Button variant="outline" size="sm" onClick={() => handleFactoryAction(fr.id, 'receive')} data-testid={`receive-factory-${fr.id}`}>
+                              Received
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleFactoryAction(fr.id, 'cancel')}>
+                              <X className="h-3.5 w-3.5 text-red-500" />
+                            </Button>
+                          </>
+                        )}
+                        {(fr.status === 'received' || fr.status === 'cancelled') && (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+      </CollapsibleContent>
+    </Card>
+    </Collapsible>
+    </div>
   );
 }

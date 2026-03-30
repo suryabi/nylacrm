@@ -1,0 +1,107 @@
+{
+  "summary": "Stock Out screen collapsible sections and Factory Returns feature tested successfully. All 12 features verified: (1) Font consistency fixed - Net Customer Billing no longer has text-lg, (2) Customer section expanded by default with chevron, (3) Factory section collapsed by default with chevron, (4) Section toggle works with smooth transitions, (5) Factory section shows time filter, total count, refresh button, (6) Factory returns table shows correct headers, (7) New Factory Return dialog has all required fields, (8) Factory returns API CRUD operations work, (9) Confirm action deducts stock, (10) Status flow draft→confirm→receive works, (11) Cancel and delete operations work, (12) Invalid reason validation works.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_factory_returns.py",
+    "/app/test_reports/pytest/factory_returns_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/routes/factory_returns.py - Fixed SKU lookup to use master_skus collection instead of skus",
+    "/app/frontend/src/components/distributor/DeliveriesTab.jsx - Added data-testid for factory SKU and quantity inputs"
+  ],
+  "success_rate": {
+    "backend": "100% - 12/12 tests passed",
+    "frontend": "100% - All UI features verified"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123"
+  },
+  "seed_data_creation": "Factory returns created during testing (FR-2026-xxxx series)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Stock Out screen now has two collapsible sections: (1) Distributor → Customer (expanded by default) and (2) Distributor → Factory (collapsed by default). Factory returns API is at /api/distributors/{id}/factory-returns. Factory returns table shows: Return #, Location, Reason badge (Expired/Damaged), Items count, Base Price Credit, Status, Actions. Status flow: draft → confirm (deducts stock) → receive. Cancel restores stock if confirmed.",
+  "features_tested": {
+    "Font_Consistency": {
+      "status": "PASSED",
+      "verified": "Net Customer Billing column font matches other columns (no text-lg class)"
+    },
+    "Collapsible_Section_Customer": {
+      "status": "PASSED",
+      "verified": [
+        "Section title: 'Stock Out (Distributor → Customer)'",
+        "Expanded by default",
+        "Has chevron icon that rotates on toggle"
+      ]
+    },
+    "Collapsible_Section_Factory": {
+      "status": "PASSED",
+      "verified": [
+        "Section title: 'Stock Out (Distributor → Factory)'",
+        "Collapsed by default",
+        "Has chevron icon that rotates on toggle"
+      ]
+    },
+    "Section_Toggle": {
+      "status": "PASSED",
+      "verified": "Clicking section headers toggles expand/collapse with smooth transition"
+    },
+    "Factory_Section_UI": {
+      "status": "PASSED",
+      "verified": [
+        "Time filter dropdown (this_month default)",
+        "Total count display: 'Total: X returns'",
+        "Refresh button"
+      ]
+    },
+    "Factory_Returns_Table": {
+      "status": "PASSED",
+      "headers": ["Return #", "Location", "Reason", "Items", "Base Price Credit", "Status", "Actions"]
+    },
+    "New_Factory_Return_Dialog": {
+      "status": "PASSED",
+      "fields": [
+        "Warehouse Location (select)",
+        "Reason (Expired/Damaged)",
+        "Return Date (date input)",
+        "Source (Warehouse Stock/Customer Return)",
+        "Items (SKU + Quantity)",
+        "Remarks (textarea)"
+      ]
+    },
+    "Factory_Returns_API": {
+      "status": "PASSED",
+      "endpoints_tested": [
+        "GET /api/distributors/{id}/factory-returns - List with time filter",
+        "POST /api/distributors/{id}/factory-returns - Create",
+        "GET /api/distributors/{id}/factory-returns/{rid} - Get detail",
+        "PUT /api/distributors/{id}/factory-returns/{rid}/confirm - Confirm (deducts stock)",
+        "PUT /api/distributors/{id}/factory-returns/{rid}/receive - Mark received",
+        "PUT /api/distributors/{id}/factory-returns/{rid}/cancel - Cancel (restores stock if confirmed)",
+        "DELETE /api/distributors/{id}/factory-returns/{rid} - Delete draft"
+      ]
+    },
+    "Status_Flow": {
+      "status": "PASSED",
+      "flow": "draft → confirm → receive",
+      "cancel_option": "Available for draft and confirmed status"
+    }
+  },
+  "bug_fixes_applied": {
+    "factory_returns_sku_lookup": {
+      "file": "/app/backend/routes/factory_returns.py",
+      "issue": "SKU lookup was using db.skus collection which doesn't exist",
+      "fix": "Changed to db.master_skus collection (global catalog)"
+    }
+  }
+}

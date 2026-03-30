@@ -3963,11 +3963,23 @@ async def create_settlement(
     # Calculate total credit notes applied (factory owes distributor for customer returns)
     total_credit_notes_applied = sum(d.get('total_credit_applied', 0) for d in deliveries)
     
+    # Calculate factory return credits (factory reimburses distributor for expired/damaged stock)
+    factory_returns_query = {
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": {"$in": ["confirmed", "received"]},
+        "return_date": {"$gte": data.period_start, "$lte": data.period_end}
+    }
+    factory_returns = await db.distributor_factory_returns.find(
+        factory_returns_query, {"_id": 0}
+    ).to_list(1000)
+    total_factory_return_credit = sum(fr.get('total_credit_amount', 0) for fr in factory_returns)
+    
     # Adjustment from distributor to factory (when customer price > base price)
     total_dist_to_factory_adjustment = sum(d.get('total_adjustment_dist_to_factory', 0) for d in deliveries)
     
-    # Net adjustments: Credit notes (factory pays distributor) - Price adjustments (distributor pays factory)
-    net_adjustments = total_credit_notes_applied - total_dist_to_factory_adjustment
+    # Net adjustments: Credit notes + Factory return credits (factory pays distributor) - Price adjustments (distributor pays factory)
+    net_adjustments = total_credit_notes_applied + total_factory_return_credit - total_dist_to_factory_adjustment
     
     # Create settlement items
     items_to_insert = []
@@ -4008,6 +4020,7 @@ async def create_settlement(
         "total_delivery_amount": round(total_delivery_amount, 2),
         "total_margin_amount": round(total_margin_amount, 2),
         "total_credit_notes_applied": round(total_credit_notes_applied, 2),
+        "total_factory_return_credit": round(total_factory_return_credit, 2),
         "total_dist_to_factory_adjustment": round(total_dist_to_factory_adjustment, 2),
         "adjustments": round(net_adjustments, 2),
         "final_payout": round(final_payout, 2),
