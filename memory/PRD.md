@@ -14,22 +14,18 @@
 
 ### Billing Reconciliation - Two Entry System
 - [x] **Entry 1: Monthly Billing** = qty x transfer_price (from margin matrix per SKU)
-  - **Weekly line items**: Week 1 (1-7), Week 2 (8-14), Week 3 (15-21), Week 4 (22-28), Week 5 (29-end)
-  - Based on delivery date, 4-5 weeks depending on month
-  - Direct field `total_at_transfer_price` stored in settlement
-  - **Expandable weekly rows**: Click to show deliveries grouped by customer, date, delivery number, amount (at transfer price)
+  - Weekly line items with expandable delivery details (customer, date, delivery #, amount at transfer price)
 - [x] **Entry 2: Monthly Settlement** = All adjustments -> Debit/Credit Note
-  - Selling Price Adjustments (customer price vs base price)
-  - Return Credits (credit notes from customer returns)
-  - Factory Returns (warehouse stock returned to factory at transfer price)
-  - Net: positive = Debit Note, negative = Credit Note
-- [x] **Reconciled Two-Entry View**: After reconciliation, full Entry 1 + Entry 2 data remains visible with expandable weekly details, adjustment breakdown, and per-account summary (2026-03-30)
+  - Selling Price Adjustments, Return Credits, Factory Returns, Net Debit/Credit Note
+- [x] **Reconciled Two-Entry View**: Full Entry 1 + Entry 2 data visible after reconciliation with expandable weekly details
+- [x] **Draft Note Deletion Reverts Reconciliation**: Deleting a draft/pending note reverts linked settlements to unreconciled, allowing user to re-reconcile (2026-03-30)
 
 ## Key API Endpoints
 - `POST /api/distributors/{id}/settlements/generate-monthly`
 - `GET /api/distributors/{id}/settlement-preview?month=X&year=Y`
-- `GET /api/distributors/{id}/monthly-reconciliation?month=X&year=Y` (returns weekly_billing + reconciled_weekly_billing with expandable details)
+- `GET /api/distributors/{id}/monthly-reconciliation?month=X&year=Y`
 - `POST /api/distributors/{id}/generate-monthly-note`
+- `DELETE /api/distributors/{id}/notes/{note_id}` (reverts reconciliation for draft/pending notes)
 
 ## Upcoming Tasks (P1)
 - Auto-generate Provisional Invoice (on shipment -> "delivered")

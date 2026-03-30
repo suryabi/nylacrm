@@ -5756,6 +5756,17 @@ async def delete_debit_credit_note(
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
     
+    # Revert linked settlements back to unreconciled (for draft/pending notes)
+    note_status = note.get('status', 'draft')
+    if note_status in ['draft', 'pending']:
+        settlement_ids = note.get('settlement_ids', [])
+        if settlement_ids:
+            await db.distributor_settlements.update_many(
+                {"id": {"$in": settlement_ids}, "tenant_id": tenant_id},
+                {"$set": {"reconciled": False}, "$unset": {"note_id": "", "note_number": ""}}
+            )
+            logger.info(f"Reverted {len(settlement_ids)} settlement(s) to unreconciled after deleting draft note {note.get('note_number')}")
+    
     # Delete the note
     await db.distributor_debit_credit_notes.delete_one({
         "id": note_id,
