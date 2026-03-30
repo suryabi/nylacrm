@@ -134,6 +134,16 @@ export default function BillingTab({
   const hasUnreconciled = unreconciledGroups.length > 0;
   const periodLabel = `${MONTHS.find(m => m.value === selectedMonth)?.label} ${selectedYear}`;
 
+  // Reconciled Two-Entry data
+  const recBillingAtTP = monthlyData?.reconciled_at_transfer_price || 0;
+  const recWeeklyBilling = monthlyData?.reconciled_weekly_billing || [];
+  const recSellingPriceAdj = monthlyData?.reconciled_selling_price_adj || 0;
+  const recTotalCN = monthlyData?.reconciled_credit_notes || 0;
+  const recTotalFR = monthlyData?.reconciled_factory_return_credit || 0;
+  const recNetAdj = monthlyData?.reconciled_net_adjustment || 0;
+  const recNoteType = monthlyData?.reconciled_note_type || 'none';
+  const hasReconciled = reconciledGroups.length > 0;
+
   return (
     <div className="space-y-6">
       {/* Pricing Config */}
@@ -464,37 +474,211 @@ export default function BillingTab({
                 </div>
               </>)}
 
-              {/* Already Reconciled */}
-              {reconciledGroups.length > 0 && (
+              {/* Already Reconciled - Full Two-Entry View */}
+              {hasReconciled && (
                 <>
                   <div className="border-l-4 border-green-500 pl-4 mt-6">
-                    <h3 className="font-semibold text-base flex items-center gap-2"><CheckCircle className="h-5 w-5 text-green-500" />Already Reconciled</h3>
+                    <h3 className="font-semibold text-base flex items-center gap-2">
+                      <CheckCircle className="h-5 w-5 text-green-500" />Already Reconciled
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 ml-2">Completed</Badge>
+                    </h3>
                     <p className="text-sm text-muted-foreground">{reconciledGroups.length} account(s) with {monthlyData?.total_reconciled || 0} settlement(s)</p>
                   </div>
-                  <div className="border rounded-lg divide-y">
-                    {reconciledGroups.map(group => (
-                      <div key={group.account_id} className="flex items-center justify-between p-4">
-                        <div className="flex items-center gap-3">
-                          <Building2 className="h-5 w-5 text-muted-foreground" />
-                          <div><p className="font-medium text-sm">{group.account_name}</p><p className="text-xs text-muted-foreground">{group.settlements.length} settlement(s)</p></div>
+
+                  {/* Reconciled Two-Entry Cards */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" data-testid="reconciled-two-entries">
+                    {/* Reconciled Entry 1: Billing at Transfer Price */}
+                    <div className="border-2 border-green-200 rounded-xl overflow-hidden" data-testid="reconciled-entry-billing">
+                      <div className="p-4 bg-green-700 text-white">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Package className="h-4 w-4" />
+                          <span className="font-semibold text-sm uppercase tracking-wider">Entry 1: Monthly Billing</span>
+                          <Badge className="bg-green-500/30 text-green-100 border-green-400/40 text-[10px] ml-auto">Reconciled</Badge>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-right"><p className="text-xs text-slate-400">Billing (TP)</p><p className="font-medium text-sm">₹{fmt(group.totals.billing_tp)}</p></div>
-                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Reconciled</Badge>
+                        <p className="text-xs text-green-200">Distributor paid factory at agreed transfer price (from margin matrix)</p>
+                      </div>
+                      <div className="p-5">
+                        <div className="text-center pb-4 border-b">
+                          <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Total Billing at Transfer Price</p>
+                          <p className="text-3xl font-bold text-green-700" data-testid="reconciled-billing-amount">₹{fmt(recBillingAtTP)}</p>
+                        </div>
+                        <div className="pt-3 space-y-0" data-testid="reconciled-weekly-billing">
+                          <p className="text-xs text-slate-400 uppercase tracking-wider font-medium mb-2">Weekly Breakdown (by delivery date)</p>
+                          {recWeeklyBilling.length > 0 ? recWeeklyBilling.map(week => {
+                            const isExpanded = expandedWeeks[`rec-${week.week}`];
+                            const details = week.details || [];
+                            const hasDetails = details.length > 0;
+                            const byCustomer = details.reduce((acc, d) => {
+                              const key = d.account_name || 'Unknown';
+                              if (!acc[key]) acc[key] = [];
+                              acc[key].push(d);
+                              return acc;
+                            }, {});
+                            return (
+                              <div key={week.week} className={week.week > 1 ? 'border-t border-slate-100' : ''}>
+                                <div
+                                  className={`flex items-center justify-between py-2.5 ${hasDetails ? 'cursor-pointer hover:bg-green-50/50 rounded-md px-1 -mx-1 transition-colors' : ''}`}
+                                  onClick={() => hasDetails && toggleWeek(`rec-${week.week}`)}
+                                  data-testid={`reconciled-week-${week.week}-row`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    {hasDetails ? (
+                                      isExpanded
+                                        ? <ChevronDown className="w-4 h-4 text-green-500" />
+                                        : <ChevronRight className="w-4 h-4 text-green-400" />
+                                    ) : (
+                                      <div className="w-4" />
+                                    )}
+                                    <div className="w-6 h-6 rounded bg-green-100 flex items-center justify-center text-xs font-bold text-green-600">{week.week}</div>
+                                    <div>
+                                      <p className="text-sm font-medium text-slate-700">{week.label}</p>
+                                      <p className="text-xs text-slate-400">{week.deliveries} delivery(s){hasDetails ? ' — click to expand' : ''}</p>
+                                    </div>
+                                  </div>
+                                  <span className={`text-sm font-semibold ${week.amount > 0 ? 'text-green-700' : 'text-slate-300'}`}>
+                                    ₹{fmt(week.amount)}
+                                  </span>
+                                </div>
+                                {isExpanded && hasDetails && (
+                                  <div className="ml-6 mb-3 mt-1 border border-green-100 rounded-lg overflow-hidden bg-green-50/30" data-testid={`reconciled-week-${week.week}-details`}>
+                                    {Object.entries(byCustomer).map(([customer, deliveries]) => (
+                                      <div key={customer}>
+                                        <div className="px-3 py-1.5 bg-green-100/60 flex items-center gap-2 border-b border-green-100">
+                                          <User className="h-3 w-3 text-green-600" />
+                                          <span className="text-xs font-semibold text-green-800">{customer}</span>
+                                          <span className="text-[10px] text-green-500 ml-auto">{deliveries.length} delivery(s) · ₹{fmt(deliveries.reduce((s, d) => s + (d.amount_at_transfer_price || 0), 0))}</span>
+                                        </div>
+                                        <table className="w-full text-xs">
+                                          <thead>
+                                            <tr className="text-[10px] uppercase text-slate-400 border-b border-green-50">
+                                              <th className="text-left px-3 py-1.5">Date</th>
+                                              <th className="text-left px-3 py-1.5">Delivery #</th>
+                                              <th className="text-right px-3 py-1.5">Amount (at transfer price)</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {deliveries.map(d => (
+                                              <tr key={d.delivery_id} className="border-b border-green-50/60 last:border-0 hover:bg-white/50">
+                                                <td className="px-3 py-1.5 text-slate-600">{d.delivery_date}</td>
+                                                <td className="px-3 py-1.5 text-slate-700 font-medium">{d.delivery_number || d.delivery_id?.slice(0, 8)}</td>
+                                                <td className="px-3 py-1.5 text-right font-semibold text-green-700">₹{fmt(d.amount_at_transfer_price)}</td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }) : (
+                            <p className="text-sm text-slate-400 py-2">No delivery data available</p>
+                          )}
+                          <div className="flex justify-between font-semibold text-green-700 border-t-2 border-green-200 pt-2 mt-1 text-sm">
+                            <span>Total</span>
+                            <span>₹{fmt(recBillingAtTP)}</span>
+                          </div>
                         </div>
                       </div>
-                    ))}
-                    <div className="p-4 bg-green-50 border-t">
-                      <div className="flex justify-between"><span className="font-semibold text-green-700 text-sm">Total Reconciled</span><span className="font-bold text-sm">₹{fmt(monthlyData?.reconciled_at_transfer_price)}</span></div>
+                    </div>
+
+                    {/* Reconciled Entry 2: Settlement */}
+                    <div className={`border-2 rounded-xl overflow-hidden ${recNoteType === 'debit' ? 'border-amber-200' : recNoteType === 'credit' ? 'border-emerald-200' : 'border-green-200'}`} data-testid="reconciled-entry-settlement">
+                      <div className={`p-4 text-white ${recNoteType === 'debit' ? 'bg-amber-700' : recNoteType === 'credit' ? 'bg-emerald-700' : 'bg-green-700'}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Receipt className="h-4 w-4" />
+                          <span className="font-semibold text-sm uppercase tracking-wider">Entry 2: Monthly Settlement</span>
+                          <Badge className="bg-white/20 text-white/90 border-white/30 text-[10px] ml-auto">Reconciled</Badge>
+                        </div>
+                        <p className={`text-xs ${recNoteType === 'debit' ? 'text-amber-200' : recNoteType === 'credit' ? 'text-emerald-200' : 'text-green-200'}`}>
+                          All adjustments → {recNoteType === 'debit' ? 'Debit Note' : recNoteType === 'credit' ? 'Credit Note' : 'No Adjustment'}
+                        </p>
+                      </div>
+                      <div className="p-5 space-y-4">
+                        <div className="text-center pb-2">
+                          <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">
+                            {recNoteType === 'debit' ? 'Debit Note (Distributor Owed)' : recNoteType === 'credit' ? 'Credit Note (Factory Owed)' : 'No Adjustment Required'}
+                          </p>
+                          <p className={`text-3xl font-bold ${recNoteType === 'debit' ? 'text-amber-600' : recNoteType === 'credit' ? 'text-emerald-600' : 'text-slate-400'}`} data-testid="reconciled-settlement-amount">
+                            ₹{fmt(Math.abs(recNetAdj))}
+                          </p>
+                        </div>
+                        <div className="border-t pt-3 space-y-2.5 text-sm">
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2 text-slate-600">
+                              <TrendingUp className="h-3.5 w-3.5 text-amber-500" />
+                              <span>Selling Price Adjustments</span>
+                            </div>
+                            <span className={`font-medium ${recSellingPriceAdj > 0 ? 'text-amber-600' : recSellingPriceAdj < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                              {recSellingPriceAdj > 0 ? '+' : recSellingPriceAdj < 0 ? '-' : ''}₹{fmt(Math.abs(recSellingPriceAdj))}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 -mt-1 ml-6">Difference between customer selling price and base price</p>
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2 text-slate-600">
+                              <CreditCard className="h-3.5 w-3.5 text-emerald-500" />
+                              <span>Return Credits (Credit Notes)</span>
+                            </div>
+                            <span className={`font-medium ${recTotalCN > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                              {recTotalCN > 0 ? '-' : ''}₹{fmt(recTotalCN)}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 -mt-1 ml-6">Credit notes issued for customer returns</p>
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2 text-slate-600">
+                              <Factory className="h-3.5 w-3.5 text-purple-500" />
+                              <span>Factory Returns</span>
+                            </div>
+                            <span className={`font-medium ${recTotalFR > 0 ? 'text-purple-600' : 'text-slate-400'}`}>
+                              {recTotalFR > 0 ? '-' : ''}₹{fmt(recTotalFR)}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 -mt-1 ml-6">Warehouse stock returned to factory at transfer price</p>
+                          <div className={`flex justify-between font-semibold border-t pt-2 mt-1 ${recNoteType === 'debit' ? 'text-amber-700' : recNoteType === 'credit' ? 'text-emerald-700' : 'text-slate-500'}`}>
+                            <span>Net {recNoteType === 'debit' ? '(Debit Note)' : recNoteType === 'credit' ? '(Credit Note)' : ''}</span>
+                            <span>₹{fmt(Math.abs(recNetAdj))}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Reconciled Account Breakdown */}
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="p-3 bg-green-50 border-b font-medium flex items-center gap-2 text-sm">
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                      <span>Reconciled Accounts</span>
+                      <Badge variant="secondary" className="ml-auto">{monthlyData?.total_reconciled || 0} settlement(s)</Badge>
+                    </div>
+                    <div className="divide-y">
+                      {reconciledGroups.map(group => (
+                        <div key={group.account_id} className="flex items-center justify-between p-4 hover:bg-slate-50/50">
+                          <div className="flex items-center gap-3">
+                            <Building2 className="h-5 w-5 text-green-400" />
+                            <div>
+                              <p className="font-medium text-sm">{group.account_name}</p>
+                              <p className="text-xs text-muted-foreground">{group.settlements.length} settlement(s)</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <div className="text-right">
+                              <p className="text-xs text-slate-400">Billing (TP)</p>
+                              <p className="font-medium text-sm text-green-700">₹{fmt(group.totals.billing_tp)}</p>
+                            </div>
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Reconciled</Badge>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </>
               )}
 
-              {!hasUnreconciled && reconciledGroups.length > 0 && (
-                <div className="text-center py-6 text-muted-foreground bg-muted/30 rounded-lg">
-                  <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
-                  <p>All settlements for {periodLabel} have been reconciled</p>
+              {!hasUnreconciled && hasReconciled && (
+                <div className="text-center py-4 text-muted-foreground bg-green-50/50 rounded-lg border border-green-100">
+                  <CheckCircle className="h-6 w-6 mx-auto mb-2 text-green-500" />
+                  <p className="text-sm">All settlements for {periodLabel} have been reconciled — view details above</p>
                 </div>
               )}
             </div>

@@ -6025,7 +6025,7 @@ async def get_monthly_reconciliation_data(
     net_adjustment_amount = settlement_selling_price_adj - settlement_credits
     settlement_note_type = "debit" if net_adjustment_amount > 0 else "credit" if net_adjustment_amount < 0 else "none"
     
-    # Calculate totals for already reconciled
+    # === Calculate totals for already reconciled ===
     reconciled_at_tp = sum(s.get('total_at_transfer_price', 0) for s in reconciled_settlements)
     reconciled_billing = sum(s.get('total_billing_value', 0) for s in reconciled_settlements)
     reconciled_earnings = sum(s.get('distributor_earnings', 0) for s in reconciled_settlements)
@@ -6034,6 +6034,74 @@ async def get_monthly_reconciliation_data(
         reconciled_at_tp = reconciled_billing - reconciled_earnings - reconciled_factory_adj
     reconciled_credit_notes = sum(s.get('total_credit_notes_issued', 0) or s.get('credit_notes_applied', 0) for s in reconciled_settlements)
     reconciled_factory_return_credit = sum(s.get('total_factory_return_credit', 0) for s in reconciled_settlements)
+    
+    # --- Reconciled: Weekly billing breakdown ---
+    reconciled_weekly_billing = []
+    if reconciled_settlements:
+        rec_settlement_ids = [s['id'] for s in reconciled_settlements]
+        rec_settled_items = await db.distributor_settlement_items.find(
+            {"tenant_id": tenant_id, "settlement_id": {"$in": rec_settlement_ids}},
+            {"_id": 0, "delivery_id": 1}
+        ).to_list(10000)
+        rec_delivery_ids = list(set(si['delivery_id'] for si in rec_settled_items))
+        
+        if rec_delivery_ids:
+            rec_deliveries = await db.distributor_deliveries.find(
+                {"tenant_id": tenant_id, "id": {"$in": rec_delivery_ids}},
+                {"_id": 0, "id": 1, "delivery_date": 1, "account_name": 1, "delivery_number": 1}
+            ).to_list(10000)
+            rec_all_items = await db.distributor_delivery_items.find(
+                {"tenant_id": tenant_id, "delivery_id": {"$in": rec_delivery_ids}},
+                {"_id": 0}
+            ).to_list(50000)
+            rec_items_by_delivery = {}
+            for di in rec_all_items:
+                did = di.get('delivery_id')
+                if did not in rec_items_by_delivery:
+                    rec_items_by_delivery[did] = []
+                rec_items_by_delivery[did].append(di)
+            
+            for wr in week_ranges:
+                start_str = f"{year}-{month:02d}-{wr['start_day']:02d}"
+                end_str = f"{year}-{month:02d}-{wr['end_day']:02d}"
+                week_amount = 0
+                week_deliveries = 0
+                delivery_details = []
+                for d in rec_deliveries:
+                    dd = d.get('delivery_date', '')
+                    if dd >= start_str and dd <= end_str:
+                        week_deliveries += 1
+                        del_tp_amount = 0
+                        for item in rec_items_by_delivery.get(d['id'], []):
+                            qty = item.get('quantity', 0)
+                            base_p = item.get('base_price') or item.get('transfer_price') or 0
+                            comm = item.get('distributor_commission_percent') or item.get('margin_percent') or 0
+                            tp = base_p * (1 - comm / 100)
+                            del_tp_amount += qty * tp
+                        week_amount += del_tp_amount
+                        delivery_details.append({
+                            "delivery_id": d['id'],
+                            "delivery_number": d.get('delivery_number', ''),
+                            "account_name": d.get('account_name', 'Unknown'),
+                            "delivery_date": dd,
+                            "amount_at_transfer_price": round(del_tp_amount, 2)
+                        })
+                reconciled_weekly_billing.append({
+                    "week": wr['week'], "start_day": wr['start_day'], "end_day": wr['end_day'],
+                    "label": wr['label'], "amount": round(week_amount, 2),
+                    "deliveries": week_deliveries, "details": delivery_details
+                })
+        else:
+            for wr in week_ranges:
+                reconciled_weekly_billing.append({
+                    "week": wr['week'], "start_day": wr['start_day'], "end_day": wr['end_day'],
+                    "label": wr['label'], "amount": 0, "deliveries": 0
+                })
+    
+    # Reconciled Entry 2 adjustment details
+    reconciled_selling_price_adj = reconciled_factory_adj
+    reconciled_net_adj = reconciled_selling_price_adj - reconciled_credit_notes - reconciled_factory_return_credit
+    reconciled_note_type = "debit" if reconciled_net_adj > 0 else "credit" if reconciled_net_adj < 0 else "none"
     
     return {
         "unreconciled_settlements": unreconciled_settlements,
@@ -6054,10 +6122,14 @@ async def get_monthly_reconciliation_data(
         "settlement_credits": round(settlement_credits, 2),
         "net_adjustment_amount": round(net_adjustment_amount, 2),
         "settlement_note_type": settlement_note_type,
-        # Reconciled
+        # Reconciled - full Two-Entry data
         "reconciled_at_transfer_price": round(reconciled_at_tp, 2),
+        "reconciled_weekly_billing": reconciled_weekly_billing,
+        "reconciled_selling_price_adj": round(reconciled_selling_price_adj, 2),
         "reconciled_credit_notes": round(reconciled_credit_notes, 2),
         "reconciled_factory_return_credit": round(reconciled_factory_return_credit, 2),
+        "reconciled_net_adjustment": round(reconciled_net_adj, 2),
+        "reconciled_note_type": reconciled_note_type,
         "existing_notes": existing_notes,
         "total_notes": len(existing_notes)
     }
