@@ -33,6 +33,11 @@ dist
 # Environment files
 *.env
 *.env.*
+!backend/.env
+!frontend/.env
+
+# Test credentials
+memory/test_credentials.md
 *token.json*
 *credentials.json*
 
