@@ -192,8 +192,8 @@ async def create_factory_return(
         items.append({
             "id": str(uuid.uuid4()),
             "sku_id": item_data.sku_id,
-            "sku_name": sku.get('name', ''),
-            "sku_code": sku.get('sku_code', ''),
+            "sku_name": sku.get('sku_name', '') or sku.get('name', ''),
+            "sku_code": sku.get('sku', '') or sku.get('sku_code', ''),
             "quantity": item_data.quantity,
             "base_price": base_price,
             "credit_amount": credit_amount,

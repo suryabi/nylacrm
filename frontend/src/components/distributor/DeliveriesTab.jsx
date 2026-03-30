@@ -1332,7 +1332,7 @@ export default function DeliveriesTab({
                             >
                               <option value="">Select SKU</option>
                               {skus.map(sku => (
-                                <option key={sku.id} value={sku.id}>{sku.name} ({sku.sku_code})</option>
+                                <option key={sku.id} value={sku.id}>{sku.sku_name || sku.name}{sku.sku && sku.sku !== sku.sku_name ? ` (${sku.sku})` : ''}</option>
                               ))}
                             </select>
                             <Input
