@@ -28,8 +28,8 @@ class FactoryReturnItemCreate(BaseModel):
 
 class FactoryReturnCreate(BaseModel):
     distributor_location_id: str
-    reason: str = Field(pattern="^(expired|damaged)$")
-    source: str = Field(default="warehouse", pattern="^(customer_return|warehouse)$")
+    source: str = Field(pattern="^(customer_return|warehouse)$")
+    reason: str = Field(pattern="^(expired|damaged|empty_reusable)$")
     customer_return_id: Optional[str] = None
     return_date: Optional[str] = None
     items: List[FactoryReturnItemCreate]
@@ -140,6 +140,13 @@ async def create_factory_return(
     tenant_id = get_current_tenant_id()
     now = datetime.now(timezone.utc).isoformat()
 
+    # Validate reason based on source
+    if data.source == "warehouse" and data.reason == "empty_reusable":
+        raise HTTPException(status_code=400, detail="Empty/Reusable is only valid for customer return source")
+
+    # Settlement adjustment only for warehouse-sourced returns
+    requires_settlement = data.source == "warehouse"
+
     # Validate distributor
     distributor = await db.distributors.find_one(
         {"id": distributor_id, "tenant_id": tenant_id}, {"_id": 0}
@@ -218,6 +225,7 @@ async def create_factory_return(
         "items": items,
         "total_quantity": total_qty,
         "total_credit_amount": round(total_credit, 2),
+        "requires_settlement": requires_settlement,
         "status": "draft",
         "remarks": data.remarks,
         "created_at": now,

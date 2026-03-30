@@ -3963,12 +3963,13 @@ async def create_settlement(
     # Calculate total credit notes applied (factory owes distributor for customer returns)
     total_credit_notes_applied = sum(d.get('total_credit_applied', 0) for d in deliveries)
     
-    # Calculate factory return credits (factory reimburses distributor for expired/damaged stock)
+    # Calculate factory return credits (only warehouse-sourced returns need settlement adjustment)
     factory_returns_query = {
         "tenant_id": tenant_id,
         "distributor_id": distributor_id,
         "status": {"$in": ["confirmed", "received"]},
-        "return_date": {"$gte": data.period_start, "$lte": data.period_end}
+        "return_date": {"$gte": data.period_start, "$lte": data.period_end},
+        "$or": [{"requires_settlement": True}, {"source": "warehouse"}]
     }
     factory_returns = await db.distributor_factory_returns.find(
         factory_returns_query, {"_id": 0}
