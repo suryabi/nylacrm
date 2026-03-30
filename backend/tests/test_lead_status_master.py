@@ -7,7 +7,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://credit-notes-app.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://stock-out-simple.preview.emergentagent.com')
 
 class TestLeadStatusMasterAPI:
     """Tests for /api/master/lead-statuses endpoints"""

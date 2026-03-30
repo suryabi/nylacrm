@@ -1,70 +1,77 @@
 <analysis>**original_problem_statement**: 
-The user requested a series of UI and functional enhancements across the Task Management and Distribution modules:
-1.  **Home Dashboard & Tasks**: Replace old metric tiles with Task Metrics (Assigned/Created by me), remove the legacy Action Items module/task creation completely, ensure dashboard metric tiles click through to a properly filtered Task Management list, and fix an OAuth login loop on iPad/Chrome. Ensure Task Management is assignable in Tenant Settings RBAC.
-2.  **Auto-Approval Tasks**: Travel and Budget requests must auto-create tasks assigned to the requester's manager.
-3.  **Distribution Module Pricing**: Enhance the Stock Out (Deliveries) and Settlements flows to calculate and display the additional amounts (adjustments/price premiums) the manufacturer is owed when a distributor sells to a customer at a price higher than the base price.
+The user requested UI and functional enhancements across the Task Management and Distribution modules, specifically focusing on distribution accounting and reverse logistics. Key requirements included:
+1. Allow users to select and apply auto-generated Credit Notes during the creation of a Stock Out (Delivery) to offset customer billing.
+2. Change Returns terminology from Confirmed to Approved.
+3. Track the lifecycle of a Return: show the Credit Note reference, change the Return status to Credit Issued when the CN is fully applied, and revert if the delivery is cancelled.
+4. Update Settlement math so the Factory reimburses the Distributor for Return Credits given to customers.
+5. Display detailed calculations (Net Customer Billing, Final Billable to Dist) on the Stock Out screen, but ultimately move this complexity to a popup modal to keep the main list clean.
 
 **PRODUCT REQUIREMENTS**:
--   **Task Dashboard**: Tiles must filter the Tasks page directly (e.g., clicking Overdue applies the overdue filter). 
--   **OAuth Login**: Fix the session loop caused by missing local storage persistence for Google auth callbacks.
--   **RBAC**: Task Management (Tasks, Milestones, Labels) must exist in Tenant Settings.
--   **Distribution Columns**: The Deliveries/Stock Out table must follow a very specific column structure and calculation: SKU, Quantity, Base Price, Transfer Price, *Billed amount to Distributor (qty × transfer price)*, Customer Price, New Transfer Price, *Actual billable amount to Distributor (qty × new transfer price)*, *Adjustment (Actual billable - already billed)*, and *Customer invoice amount (qty × customer price)*.
+- **Credit Notes**: Stock Out form must allow applying valid credit notes to calculate  and .
+- **Returns Lifecycle**: Return status flows Draft -> Approved (generates CN) -> Credit Issued (when CN is fully applied to a delivery).
+- **Settlements**: Adjustments must visually and mathematically split into two parts: Price adjustments (Dist -> Factory) and Return credits (Factory -> Dist).
 
 **User's preferred language**: English
 *(INSTRUCT next agent to respond in English only)*
 
 **what currently exists?** 
-A functional Sales CRM with robust Task Management and Distribution modules. The Task Management module is now fully integrated into the Home Dashboard (metrics tiles with click-through filtering), RBAC, and auto-approval workflows for Travel/Budget requests. The old Action Items widget is deleted. A critical OAuth redirect loop affecting iPads has been resolved. The Distribution module has been updated to calculate Manufacturer-Distributor adjustments for price premiums, but the exact UI column layout for Deliveries/Stock Out is currently being refined to match the user's specific mathematical breakdown.
+A robust Sales CRM with a highly refined Distribution module. The Reverse Logistics and Credit Note loop is fully functional backend-to-frontend. Approving a return auto-generates a Credit Note. Creating a Delivery allows users to apply these Credit Notes. Applying them updates the delivery totals and the original Return's status to Credit Issued. Settlements now correctly factor in Return Credits as a reimbursement from Factory to Distributor, split visually in the UI. 
 
 **Last working item**:
-- **Last item agent was working**: Restructuring the columns and calculations in the Deliveries/Stock Out table () based on the user's latest specific mathematical definitions.
+- **Last item agent was working**: Simplifying the Stock Out table in . The user found the main list too cluttered after adding Net Billing and Final Billable to Dist columns. The agent was actively replacing the complex table code to move detailed calculations into the delivery detail popup.
 - **Status**: IN PROGRESS
 - **Agent Testing Done**: N
-- **Which testing method agent to use?** Frontend testing agent (to verify column rendering, math totals, and export functionality in the Deliveries tab).
+- **Which testing method agent to use?** Frontend testing agent / Screenshot tool
 - **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
-Issue 1: Finalize column layout and math in DeliveriesTab.jsx (P0)
-- **Attempted fixes**: The agent started editing the table headers in  to reflect the new requested order (Quantity after SKU, adding Billed amount to Distributor, Actual billable amount, Adjustment, and Customer invoice amount). The context limit was reached before finishing the row rendering, sub-totals, grand totals, and Excel export updates.
+Issue 1: Complete UI simplification of DeliveriesTab.jsx (P0)
+- **Attempted fixes**: The agent successfully executed a  to replace the complex table with a simplified one, but the session ended before verifying the UI and ensuring the detailed calculations were properly added to the  popup modal.
 - **Next debug checklist**: 
-  - Complete the restructuring in .
-  - Ensure the Excel export array () matches the new columns exactly.
-  - Ensure the subtotals and grand totals at the bottom of the table sum up the new calculated fields correctly without referencing undefined variables.
-- **Why fix this issue and what will be achieved with the fix?** Fulfills the user's explicit request for financial clarity on manufacturer-distributor margins during stock outs.
+  - Review  to ensure the table rendering is intact and free of JSX syntax errors.
+  - Check the  dialog within  (or  depending on where it lives) and ensure it displays: Customer Invoice, Net Billing, Actual Billable to Dist, Adjustment, and Final Billable to Dist.
+- **Why fix this issue and what will be achieved with the fix?** Fulfills user request for a cleaner UI while preserving data transparency.
 - **Status**: IN PROGRESS
 - **Is recurring issue?** N
-- **Should Test frontend/backend/both after fix?** Frontend
+- **Should Test frontend/backend/both after fix?** frontend
+- **Blocked on other issue**: None
 
 **In progress Task List**:
-*(None active other than the Issue 1 above)*
+Task 1: Simplify Deliveries Table & Update Detail Popup
+- **Where to resume**:  and potentially  (where delivery detail popup might reside).
+- **What will be achieved with this?** A clean stock-out list with rich details available on click.
+- **Status**: IN PROGRESS
+- **Should Test frontend/backend/both after fix?** frontend
+- **Blocked on something**: None.
 
 **Upcoming and Future Tasks**
 Upcoming Tasks:
 - **P1**: Auto-generate Provisional Invoice (Trigger automatically when a primary shipment's status is updated to delivered).
 - **P1**: Build Reporting Module (Comprehensive reports for stock balance, deliveries, settlements, and distributor performance).
-- **P2**: Task email notifications (Notify users via Resend on assignment or due dates).
-- **P2**: First-login Force Password Change Modal (Backend flag already implemented, needs frontend modal).
 
 Future Tasks:
+- **P2**: Task email notifications (Notify users via Resend on assignment or due dates).
+- **P2**: First-login Force Password Change Modal (Backend flag already implemented, needs frontend modal).
+- **P2**: Email Invoice Sharing (Currently deferred by user, backend Resend infrastructure is in place).
 - **P2**: Settlement Period Auto-scheduling (Automate the generation of monthly settlements).
 - **P2**: Dashboard analytics for distribution module.
 - **P2**: Refactor  (Modularize routes into separate files).
 
 **Completed work in this session**
-- Added  and  backend endpoints (DONE)
-- Replaced Home Dashboard metric tiles with Task Metrics & removed ActionItems widget (DONE)
-- Fixed Google OAuth iPad/Chrome login redirect loop by storing  in  and forcing a full page reload (DONE)
-- Added , ,  to RBAC  and TenantSettings (DONE)
-- Updated  in  to write into the  collection for Travel and Budget requests (DONE)
-- Implemented clickable filter sync between Home Dashboard Task tiles and  with correct  and  parameters (DONE)
-- Added Price Premium/Factory-Distributor Adjustment calculations to  and displayed them in Settlements and Billing tabs (DONE)
+- Implemented Credit Notes application UI in  creation flow (DONE)
+- Changed Confirmed status to Approved for customer returns globally (DONE)
+- Auto-updated return status to Credit Issued upon CN application, and revert on delivery cancellation (DONE)
+- Added Credit Note reference column to Returns list and details dialog (DONE)
+- Updated Settlement backend/frontend to include  as a Factory -> Dist adjustment (DONE)
+- Split Billing tab UI to show two adjustments: Price Diff (Dist->Factory) and CNs (Factory->Dist) (DONE)
+- Cleared all testing data and provided user with JS browser scripts for data export/import/mocking (DONE)
 
 **Earlier issues found/mentioned but not fixed**
 None.
 
 **Known issue recurrence from previous fork**
 - Issue recurrence in previous fork:  monolith refactoring.
-- Recurrence count: 7
+- Recurrence count: 9
 - Status: NOT STARTED
 
 **Code Architecture**
@@ -72,20 +79,20 @@ None.
 
 **Key Technical Concepts**
 - React, FastAPI, MongoDB.
-- OAuth Token persistence (handling Safari ITP restrictions via  +  resets).
-- Cross-component URL parameter filtering.
-- Complex table math and real-time frontend calculations for distributor adjustments.
+- Complex table math and dynamically derived sub-totals for Distributor Adjustments.
+- Cross-collection state synchronizations (Returns <-> Credit Notes <-> Deliveries <-> Settlements).
 
 **key DB schema**
-- : New central task collection.
-- : Tracks items, base prices, transfer prices, customer selling prices, and factory-distributor adjustments.
+- : Fields  (draft, approved, credit_issued, cancelled), .
+- : Status tracks available balance (, , ).
+- : , , .
+- : .
 
 **changes in tech stack**
 None.
 
 **All files of reference**
--  (CURRENTLY BEING EDITED)
-- 
+-  (Crucial - Mid Edit)
 - 
 - 
 - 
@@ -93,46 +100,36 @@ None.
 - 
 
 **Areas that need refactoring**:
--  (Monolith requires breaking down, particularly the lingering approval task and auth logic).
+-  (Monolith requires breaking down).
 
 **key api endpoints**
-- 
-- 
+-  (Updates CN and Return status)
 - 
 
 **Critical Info for New Agent**
-- **Distribution Columns**: The user has requested a highly specific, color-coded set of columns in . You MUST finish the math properly:
-  - Billed Amount to Distributor = 
-  - Actual Billable Amount =  (where new_transfer_price = customer_price * (1 - margin%))
-  - Adjustment (Dist to Company) = 
-  - Customer Invoice Amount = 
-- **Task Module Migration**: Task creation now officially flows to the  collection. Do not revert to the legacy  collection.
-- **Login Loop Fix**: Ensure any further auth changes do not break the iPad/Safari fix (which relies on manually placing  into  during the callback and triggering a hard refresh).
+- **Mid-Edit File**: The previous agent ended the session immediately after executing a  on  to simplify the table. Your FIRST step must be to verify this file runs properly, check the UI, and ensure the detailed column data (Net Billing, Final Billable to Dist, Adjustments) has been successfully ported over to the Delivery Details popup modal.
+- The user's system relies heavily on the state syncing between Returns, Credit Notes, and Stock Outs. Always test end-to-end if modifying this flow.
 
 **documents and test reports created in this job**
 - 
--  (Task Metrics UI test)
--  (Action Items removal & Auto-tasks test)
--  (Home dashboard tile filter routing test)
--  (Price Premium backend calculations test)
--  (Distribution pricing UI test)
--  (Initial column restructure test - fixed a bug here)
+- 
+- 
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1. : I am not able to login
-2. : In production, on ipad after loggin in using google, it keeps going to the login page again
-3. : I am using chrome
-4. : In the tenant settings it is not showing up as a module to assign RBAC.
-5. : The task module is not showing up in the tenant settings under RBAC
-6. : Delete action item module completely. When any travel or budget requests are made, the system should automatically create a task and assign it approver.
-7. : The task metrics on the home page, upon clicking on each time, it should filter the data correctly on the task list screen, so, these filters also need to be applied on shown on the task list scrren
-8. : Coming to distribution module, in addition to the adjustment margin during the stock out, the system should also calcualte the additional amount that the distributor need to pay in cases where we charge customer more than the base price...
-9. : Its confusing. I think we should show columns in the order . Also highlight initial transfer price related columns in a different color and actual columns in a different color...
-10. : Ordered quantity - keep it after the SKU, include Billed amount to Distributor (quanity x initial transfer price). Then Customer price... Adjustment (Distirbutor to customer) Actual billable - already billed amount. Customer invoice amount...
-*(No pending human messages. Proceed to finish the P0 column restructuring in  as defined in message 10).*
+1. : I dont see option to chekc into github from my ipad, why
+2. : give me a script to generate sample data using browser console
+3. : The resource at “...beacon.min.js...” was blocked... Failed to load data toast message is also coming.
+4. : Home page
+5. : issue is resolved after refresh
+6. : Since the return bottle credit is given by distributor... the adjustment should have two parts (one the adjustment based on the pricing... and the return credit that we need to give distributor...). Can you do this change
+7. : There is a return approved, however, the return bottle credit is not applied when the stock out is done to the same customer. Can you check what is the issue
+8. : Net customer billing should be displayed on the main screen , along with the details about the credit note...
+9. : in the stock out section there should be additional column that will compute the final billable amount to the distributor which is Actual Billable to Dist - Credit note amount.
+10. : The entire row looks very confusing with multiple values / columns. can we keep importnat colunms and provide an option for the user to see the details in the popup
+*(No pending human messages. Proceed directly to verifying the  simplification and ensuring the popup has the detailed information).*
 
 **Project Health Check:**
-- Broken:  is currently in a state of partial edit.
+- Broken:  might be in an unstable state as the session ended mid-refactor.
 - Mocked: None.
 
 **3rd Party Integrations**
@@ -147,13 +144,13 @@ None.
 - Claude Sonnet 4.5 (via Emergent LLM Key)
 
 **Testing status**
-- Testing agent used after significant changes: YES (iterations 75 through 80)
+- Testing agent used after significant changes: YES (iteration_86.json)
 - Troubleshoot agent used after agent stuck in loop: NO
-- Test files created:  to 
-- Known regressions: None, but  table is partially edited and needs completion.
+- Test files created: 
+- Known regressions: Pending verification of the  UI simplification.
 
 **Credentials to test flow:**
 - Admin Email:  | Password: 
 
 **What agent forgot to execute**
-- The agent ran out of context while making the final requested column changes to  (specifically renaming and mathematically recalculating the row items, subtotals, grand totals, and the Excel export variables). The new agent MUST pick this up immediately.</analysis>
+The agent replaced the main table code in  to make it simpler, but forgot to ensure the removed columns (Net Billing, Final Billable to Dist, Adjustments) were properly added to the detailed popup modal before finishing the job.</analysis>

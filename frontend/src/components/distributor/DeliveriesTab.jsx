@@ -885,37 +885,21 @@ export default function DeliveriesTab({
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm" data-testid="deliveries-table">
               <thead>
-                <tr className="border-b border-emerald-100/60">
-                  <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Delivery #</th>
-                  <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>SKU</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Qty</th>
-                  {/* Initial / Theoretical columns - Blue tint */}
-                  <th className="text-right p-4 font-semibold text-blue-800/70 uppercase tracking-wider text-xs bg-blue-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Base Price</th>
-                  <th className="text-right p-4 font-semibold text-blue-800/70 uppercase tracking-wider text-xs bg-blue-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Transfer Price</th>
-                  <th className="text-right p-4 font-semibold text-blue-800/70 uppercase tracking-wider text-xs bg-blue-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Billed to Dist</th>
-                  {/* Actual columns - Emerald tint */}
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Customer Price</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>New Transfer Price</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actual Billable to Dist</th>
-                  {/* Derived columns */}
-                  <th className="text-right p-4 font-semibold text-amber-800/70 uppercase tracking-wider text-xs bg-amber-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Adjustment (Dist→Factory)</th>
-                  <th className="text-right p-4 font-semibold text-purple-800/70 uppercase tracking-wider text-xs bg-purple-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Final Billable to Dist</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Customer Invoice</th>
-                  <th className="text-right p-4 font-semibold text-indigo-800/70 uppercase tracking-wider text-xs bg-indigo-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Net Billing</th>
-                  <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Status</th>
-                  <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actions</th>
+                <tr className="border-b-2 border-emerald-200 bg-gradient-to-r from-emerald-50 to-slate-50">
+                  <th className="text-left p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Delivery</th>
+                  <th className="text-left p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Account</th>
+                  <th className="text-center p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Items</th>
+                  <th className="text-right p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Customer Invoice</th>
+                  <th className="text-right p-4 font-semibold text-emerald-700 uppercase tracking-wider text-xs">Credit Notes</th>
+                  <th className="text-right p-4 font-semibold text-indigo-700 uppercase tracking-wider text-xs">Net Billing</th>
+                  <th className="text-right p-4 font-semibold text-purple-700 uppercase tracking-wider text-xs">Billable to Dist</th>
+                  <th className="text-center p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Status</th>
+                  <th className="text-center p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {deliveries.map((delivery) => {
                   const items = delivery.items || [];
-                  const rowSpan = Math.max(items.length, 1);
-                  
-                  // Calculate totals for the delivery
-                  let totalBilledToDist = 0;
-                  let totalActualBillable = 0;
-                  let totalAdjustment = 0;
-                  let totalCustomerInvoice = 0;
                   
                   // Credit notes info
                   const appliedCreditNotes = delivery.applied_credit_notes || [];
@@ -923,21 +907,141 @@ export default function DeliveriesTab({
                   const netCustomerBilling = delivery.net_customer_billing || (delivery.total_net_amount - totalCreditApplied);
                   const hasCreditNotes = appliedCreditNotes.length > 0 || totalCreditApplied > 0;
                   
-                  // Final Billable to Dist = Actual Billable - Credit Notes
-                  const finalBillableToDist = (delivery.total_actual_billable || 0) - totalCreditApplied;
+                  // Calculate totals
+                  const totalCustomerInvoice = delivery.total_net_amount || items.reduce((sum, item) => {
+                    return sum + (item.quantity || 0) * (item.customer_selling_price || item.unit_price || 0);
+                  }, 0);
                   
-                  items.forEach(item => {
+                  // Final Billable to Dist = Actual Billable - Credit Notes
+                  const totalActualBillable = delivery.total_actual_billable || items.reduce((sum, item) => {
                     const qty = item.quantity || 0;
                     const customerPrice = item.customer_selling_price || item.unit_price || 0;
                     const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
-                    const basePrice = item.base_price || item.transfer_price || 0;
-                    
-                    const transferPrice = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
                     const newTransferPrice = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
-                    const billedToDist = qty * transferPrice;
-                    const actualBillable = qty * newTransferPrice;
-                    const adjustment = actualBillable - billedToDist;
-                    const customerInvoice = qty * customerPrice;
+                    return sum + (qty * newTransferPrice);
+                  }, 0);
+                  const finalBillableToDist = totalActualBillable - totalCreditApplied;
+                  
+                  return (
+                    <tr 
+                      key={delivery.id} 
+                      className="border-b border-slate-100 hover:bg-emerald-50/40 cursor-pointer transition-colors"
+                      onClick={() => viewDeliveryDetail(delivery.id)}
+                      data-testid={`delivery-row-${delivery.id}`}
+                    >
+                      {/* Delivery # and Date */}
+                      <td className="p-4">
+                        <button 
+                          className="font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
+                          onClick={(e) => { e.stopPropagation(); viewDeliveryDetail(delivery.id); }}
+                        >
+                          {delivery.delivery_number}
+                        </button>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {new Date(delivery.delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </p>
+                      </td>
+                      
+                      {/* Account */}
+                      <td className="p-4">
+                        <p className="font-medium text-slate-700">{delivery.account_name}</p>
+                        <p className="text-xs text-slate-500">{delivery.account_city || ''}</p>
+                      </td>
+                      
+                      {/* Items Count */}
+                      <td className="p-4 text-center">
+                        <span className="inline-flex items-center justify-center bg-slate-100 text-slate-700 text-sm font-medium px-2.5 py-1 rounded-full">
+                          {items.length} {items.length === 1 ? 'item' : 'items'}
+                        </span>
+                      </td>
+                      
+                      {/* Customer Invoice */}
+                      <td className="p-4 text-right">
+                        <span className="font-medium text-slate-800">
+                          ₹{totalCustomerInvoice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </td>
+                      
+                      {/* Credit Notes */}
+                      <td className="p-4 text-right">
+                        {hasCreditNotes ? (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className="inline-flex items-center bg-emerald-100 text-emerald-700 text-xs font-medium px-2 py-0.5 rounded-full">
+                              {appliedCreditNotes.length} CN
+                            </span>
+                            <span className="text-emerald-600 font-medium">
+                              -₹{totalCreditApplied.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-sm">—</span>
+                        )}
+                      </td>
+                      
+                      {/* Net Billing */}
+                      <td className="p-4 text-right">
+                        <span className={`font-bold text-lg ${hasCreditNotes ? 'text-indigo-600' : 'text-slate-700'}`}>
+                          ₹{(netCustomerBilling || totalCustomerInvoice).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </td>
+                      
+                      {/* Billable to Dist (Final) */}
+                      <td className="p-4 text-right">
+                        <span className="font-bold text-purple-700">
+                          ₹{finalBillableToDist.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                        {hasCreditNotes && (
+                          <p className="text-xs text-purple-500 mt-0.5">
+                            (after CN)
+                          </p>
+                        )}
+                      </td>
+                      
+                      {/* Status */}
+                      <td className="p-4 text-center">
+                        {getDeliveryStatusBadge(delivery.status)}
+                      </td>
+                      
+                      {/* Actions */}
+                      <td className="p-4 text-center">
+                        <div className="flex justify-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 hover:bg-emerald-100"
+                            onClick={(e) => { e.stopPropagation(); viewDeliveryDetail(delivery.id); }}
+                            data-testid={`view-delivery-${delivery.id}`}
+                            title="View Details"
+                          >
+                            <FileText className="h-4 w-4 text-emerald-700" />
+                          </Button>
+                          {(canDelete || (canManage && delivery.status === 'draft')) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-destructive hover:bg-red-50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteTarget({
+                                  type: 'delivery',
+                                  id: delivery.id,
+                                  name: delivery.delivery_number
+                                });
+                              }}
+                              data-testid={`delete-delivery-${delivery.id}`}
+                              title="Delete"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
                     
                     totalBilledToDist += billedToDist;
                     totalActualBillable += actualBillable;
