@@ -900,6 +900,7 @@ export default function DeliveriesTab({
                   {/* Derived columns */}
                   <th className="text-right p-4 font-semibold text-amber-800/70 uppercase tracking-wider text-xs bg-amber-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Adjustment (Dist→Factory)</th>
                   <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Customer Invoice</th>
+                  <th className="text-right p-4 font-semibold text-indigo-800/70 uppercase tracking-wider text-xs bg-indigo-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Net Billing</th>
                   <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Status</th>
                   <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actions</th>
                 </tr>
@@ -914,6 +915,12 @@ export default function DeliveriesTab({
                   let totalActualBillable = 0;
                   let totalAdjustment = 0;
                   let totalCustomerInvoice = 0;
+                  
+                  // Credit notes info
+                  const appliedCreditNotes = delivery.applied_credit_notes || [];
+                  const totalCreditApplied = delivery.total_credit_applied || 0;
+                  const netCustomerBilling = delivery.net_customer_billing || (delivery.total_net_amount - totalCreditApplied);
+                  const hasCreditNotes = appliedCreditNotes.length > 0 || totalCreditApplied > 0;
                   
                   items.forEach(item => {
                     const qty = item.quantity || 0;
@@ -998,6 +1005,21 @@ export default function DeliveriesTab({
                             <td className="p-4 text-right font-medium text-slate-800">₹{customerInvoice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             {itemIndex === 0 && (
                               <>
+                                {/* Net Billing - show credit notes info */}
+                                <td className="p-4 text-right align-top bg-indigo-50/30" rowSpan={rowSpan}>
+                                  {hasCreditNotes ? (
+                                    <div className="flex flex-col items-end gap-1">
+                                      <div className="text-xs text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                                        {appliedCreditNotes.length} CN: -₹{totalCreditApplied.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                      </div>
+                                      <span className="text-indigo-700 font-bold text-lg">
+                                        ₹{(netCustomerBilling || (delivery.total_net_amount - totalCreditApplied)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-slate-400 text-sm">No CN</span>
+                                  )}
+                                </td>
                                 <td className="p-4 text-center align-top" rowSpan={rowSpan}>
                                   {getDeliveryStatusBadge(delivery.status)}
                                 </td>
@@ -1051,7 +1073,7 @@ export default function DeliveriesTab({
                             </p>
                             <p className="text-xs font-medium mt-1 text-slate-700">{delivery.account_name}</p>
                           </td>
-                          <td className="p-4 text-emerald-600/60" colSpan={8}>No line items</td>
+                          <td className="p-4 text-emerald-600/60" colSpan={9}>No line items</td>
                           <td className="p-4 text-center">
                             {getDeliveryStatusBadge(delivery.status)}
                           </td>
@@ -1104,6 +1126,21 @@ export default function DeliveriesTab({
                           </td>
                           {/* Customer invoice total */}
                           <td className="p-4 text-right text-slate-800">₹{totalCustomerInvoice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          {/* Net Billing - show credit notes info */}
+                          <td className="p-4 text-right bg-indigo-50/50">
+                            {hasCreditNotes ? (
+                              <div className="flex flex-col items-end gap-0.5">
+                                <span className="text-xs text-emerald-600">
+                                  -{appliedCreditNotes.length} CN (₹{totalCreditApplied.toLocaleString('en-IN', { minimumFractionDigits: 2 })})
+                                </span>
+                                <span className="text-indigo-700 font-bold">
+                                  ₹{(netCustomerBilling || (totalCustomerInvoice - totalCreditApplied)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-400">-</span>
+                            )}
+                          </td>
                           <td colSpan={2}></td>
                         </tr>
                       )}
