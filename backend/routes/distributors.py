@@ -4325,6 +4325,7 @@ async def generate_monthly_settlements(
         total_price_premium = 0
         total_factory_adj = 0
         total_credit_notes_applied = 0
+        total_at_transfer_price = 0
         
         items_to_insert = []
         
@@ -4341,6 +4342,7 @@ async def generate_monthly_settlements(
             delivery_price_premium = 0
             delivery_factory_adj = 0
             delivery_credit_applied = delivery.get('total_credit_applied', 0)
+            delivery_at_transfer_price = 0
             
             for item in items:
                 qty = item.get('quantity', 0)
@@ -4370,6 +4372,7 @@ async def generate_monthly_settlements(
                 delivery_margin_at_transfer += margin_transfer
                 delivery_price_premium += price_premium
                 delivery_factory_adj += factory_adj
+                delivery_at_transfer_price += billed_to_dist
             
             total_billing_value += delivery_billing
             distributor_earnings += delivery_earnings
@@ -4378,6 +4381,7 @@ async def generate_monthly_settlements(
             total_price_premium += delivery_price_premium
             total_factory_adj += delivery_factory_adj
             total_credit_notes_applied += delivery_credit_applied
+            total_at_transfer_price += delivery_at_transfer_price
             
             items_to_insert.append({
                 "id": str(uuid.uuid4()),
@@ -4437,6 +4441,7 @@ async def generate_monthly_settlements(
             "total_deliveries": len(account_deliveries),
             "total_quantity": total_quantity,
             "total_billing_value": round(total_billing_value, 2),
+            "total_at_transfer_price": round(total_at_transfer_price, 2),
             "distributor_earnings": round(distributor_earnings, 2),
             "margin_at_transfer_price": round(margin_at_transfer_price, 2),
             "adjustment_payable": round(adjustment_payable, 2),
@@ -5914,31 +5919,35 @@ async def get_monthly_reconciliation_data(
     # Calculate totals for unreconciled settlements only
     total_billing = sum(s.get('total_billing_value', 0) for s in unreconciled_settlements)
     total_earnings = sum(s.get('distributor_earnings', 0) for s in unreconciled_settlements)
-    total_margin_at_transfer = sum(s.get('margin_at_transfer_price', 0) for s in unreconciled_settlements)
     total_factory_adj = sum(s.get('factory_distributor_adjustment', 0) for s in unreconciled_settlements)
     total_credit_notes = sum(s.get('total_credit_notes_issued', 0) or s.get('credit_notes_applied', 0) for s in unreconciled_settlements)
     total_factory_return_credit = sum(s.get('total_factory_return_credit', 0) for s in unreconciled_settlements)
     
-    # === ENTRY 1: Monthly Billing (Invoice) ===
-    # Amount distributor pays Nyla for stock sold = qty × transfer_price
-    total_payable_to_nyla = total_billing - total_earnings - total_factory_adj
+    # === ENTRY 1: Monthly Billing (at Margin Matrix Transfer Price) ===
+    # Direct sum of (qty × transfer_price) from margin matrix, stored per settlement
+    total_at_transfer_price = sum(s.get('total_at_transfer_price', 0) for s in unreconciled_settlements)
+    # Fallback for older settlements that don't have this field
+    if total_at_transfer_price == 0 and total_billing > 0:
+        total_at_transfer_price = total_billing - total_earnings - total_factory_adj
     
-    # === ENTRY 2: Monthly Settlement (Adjustments) ===
-    # Debits: Price adjustments (distributor → factory, when customer price > base price)
-    settlement_debits = total_factory_adj  # Price adj is a debit to distributor
-    # Credits: Credit notes + factory returns (factory → distributor)
+    # === ENTRY 2: Monthly Settlement (All Adjustments → Debit/Credit Note) ===
+    # Selling price adjustments (when customer price ≠ base price)
+    settlement_selling_price_adj = total_factory_adj
+    # Credit notes (customer return reimbursements) + factory returns (warehouse stock return credit)
     settlement_credits = total_credit_notes + total_factory_return_credit
-    # Net adjustment: positive = distributor owes more (debit note), negative = Nyla owes (credit note)
-    net_adjustment_amount = settlement_debits - settlement_credits
+    # Net: positive = distributor owes more (debit note), negative = factory owes (credit note)
+    net_adjustment_amount = settlement_selling_price_adj - settlement_credits
     settlement_note_type = "debit" if net_adjustment_amount > 0 else "credit" if net_adjustment_amount < 0 else "none"
     
     # Calculate totals for already reconciled
+    reconciled_at_tp = sum(s.get('total_at_transfer_price', 0) for s in reconciled_settlements)
     reconciled_billing = sum(s.get('total_billing_value', 0) for s in reconciled_settlements)
     reconciled_earnings = sum(s.get('distributor_earnings', 0) for s in reconciled_settlements)
     reconciled_factory_adj = sum(s.get('factory_distributor_adjustment', 0) for s in reconciled_settlements)
+    if reconciled_at_tp == 0 and reconciled_billing > 0:
+        reconciled_at_tp = reconciled_billing - reconciled_earnings - reconciled_factory_adj
     reconciled_credit_notes = sum(s.get('total_credit_notes_issued', 0) or s.get('credit_notes_applied', 0) for s in reconciled_settlements)
     reconciled_factory_return_credit = sum(s.get('total_factory_return_credit', 0) for s in reconciled_settlements)
-    reconciled_payable = reconciled_billing - reconciled_earnings - reconciled_factory_adj
     
     return {
         "unreconciled_settlements": unreconciled_settlements,
@@ -5948,20 +5957,18 @@ async def get_monthly_reconciliation_data(
         # Raw totals
         "total_billing_value": round(total_billing, 2),
         "total_distributor_earnings": round(total_earnings, 2),
-        "total_margin_at_transfer": round(total_margin_at_transfer, 2),
         "total_factory_adjustment": round(total_factory_adj, 2),
         "total_credit_notes_applied": round(total_credit_notes, 2),
         "total_factory_return_credit": round(total_factory_return_credit, 2),
-        # Entry 1: Billing
-        "total_payable_to_nyla": round(total_payable_to_nyla, 2),
+        # Entry 1: Billing at margin matrix transfer price
+        "total_at_transfer_price": round(total_at_transfer_price, 2),
         # Entry 2: Settlement adjustments
-        "settlement_debits": round(settlement_debits, 2),
+        "settlement_selling_price_adj": round(settlement_selling_price_adj, 2),
         "settlement_credits": round(settlement_credits, 2),
         "net_adjustment_amount": round(net_adjustment_amount, 2),
         "settlement_note_type": settlement_note_type,
         # Reconciled
-        "reconciled_billing_value": round(reconciled_billing, 2),
-        "reconciled_payable_to_nyla": round(reconciled_payable, 2),
+        "reconciled_at_transfer_price": round(reconciled_at_tp, 2),
         "reconciled_credit_notes": round(reconciled_credit_notes, 2),
         "reconciled_factory_return_credit": round(reconciled_factory_return_credit, 2),
         "existing_notes": existing_notes,
@@ -6012,13 +6019,15 @@ async def generate_monthly_note(
     total_credit_notes = sum(s.get('total_credit_notes_issued', 0) or s.get('credit_notes_applied', 0) for s in settlements)
     total_factory_return_credit = sum(s.get('total_factory_return_credit', 0) for s in settlements)
     
-    # Entry 1: Billing = qty × transfer_price (tracked separately)
-    total_payable_to_nyla = total_billing - total_earnings - total_factory_adj
+    # Entry 1: Billing at margin matrix transfer price
+    total_at_transfer_price = sum(s.get('total_at_transfer_price', 0) for s in settlements)
+    if total_at_transfer_price == 0 and total_billing > 0:
+        total_at_transfer_price = total_billing - total_earnings - total_factory_adj
     
-    # Entry 2: Settlement = Debits (price adj) - Credits (CN + FR)
-    settlement_debits = total_factory_adj
+    # Entry 2: All adjustments → Debit/Credit Note
+    settlement_selling_price_adj = total_factory_adj
     settlement_credits = total_credit_notes + total_factory_return_credit
-    net_adjustment_amount = settlement_debits - settlement_credits
+    net_adjustment_amount = settlement_selling_price_adj - settlement_credits
     
     if net_adjustment_amount == 0:
         raise HTTPException(status_code=400, detail="Net adjustment is zero - no note required")
@@ -6064,12 +6073,12 @@ async def generate_monthly_note(
         "balance_amount": round(amount, 2),
         "settlement_ids": [s['id'] for s in settlements],
         "total_settlements": len(settlements),
-        # Entry 1: Billing
+        # Entry 1: Billing at margin matrix transfer price
         "total_billing_value": round(total_billing, 2),
+        "total_at_transfer_price": round(total_at_transfer_price, 2),
         "total_distributor_earnings": round(total_earnings, 2),
-        "total_payable_to_nyla": round(total_payable_to_nyla, 2),
         # Entry 2: Settlement adjustments
-        "settlement_debits": round(settlement_debits, 2),
+        "settlement_selling_price_adj": round(settlement_selling_price_adj, 2),
         "settlement_credits": round(settlement_credits, 2),
         "total_credit_notes": round(total_credit_notes, 2),
         "total_factory_return_credit": round(total_factory_return_credit, 2),

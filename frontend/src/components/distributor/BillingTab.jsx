@@ -5,7 +5,7 @@ import { Badge } from '../ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
-import { RefreshCw, FileText, Receipt, Eye, Settings, Trash2, Calendar, Building2, ChevronDown, ChevronUp, Clock, CheckCircle, FileDown, Loader2, ArrowDown, Minus, Plus, CreditCard, Factory, Truck, TrendingUp, TrendingDown } from 'lucide-react';
+import { RefreshCw, FileText, Receipt, Eye, Settings, Trash2, Calendar, Building2, Clock, CheckCircle, FileDown, Loader2, ArrowDown, CreditCard, Factory, Truck, TrendingUp, TrendingDown, Package } from 'lucide-react';
 
 const MONTHS = [
   { value: 1, label: 'January' }, { value: 2, label: 'February' }, { value: 3, label: 'March' },
@@ -55,7 +55,7 @@ export default function BillingTab({
     }
   };
 
-  const toggleAccountExpand = (id) => setExpandedAccounts(prev => ({ ...prev, [id]: !prev[id] }));
+  const toggleAccount = (id) => setExpandedAccounts(prev => ({ ...prev, [id]: !prev[id] }));
 
   const handleGenerateNote = async () => {
     if (!monthlyData || (monthlyData.net_adjustment_amount || 0) === 0) return;
@@ -97,18 +97,16 @@ export default function BillingTab({
     } catch (error) { alert('Failed to download PDF'); } finally { setDownloadingPdf(null); }
   };
 
-  // Compute per-settlement transfer-price payable
-  const computePayable = (s) => (s.total_billing_value || 0) - (s.distributor_earnings || 0) - (s.factory_distributor_adjustment || 0);
+  // Per-settlement: billing at margin matrix transfer price
+  const computeTP = (s) => s.total_at_transfer_price || ((s.total_billing_value || 0) - (s.distributor_earnings || 0) - (s.factory_distributor_adjustment || 0));
 
   // Group unreconciled settlements by account
   const unreconciledByAccount = (monthlyData?.unreconciled_settlements || []).reduce((acc, s) => {
     const aid = s.account_id || 'unknown';
-    if (!acc[aid]) acc[aid] = { account_id: aid, account_name: s.account_name || 'Unknown', settlements: [], totals: { payable: 0, billing: 0, earnings: 0, factory_adj: 0, credit_notes: 0, factory_returns: 0 } };
+    if (!acc[aid]) acc[aid] = { account_id: aid, account_name: s.account_name || 'Unknown', settlements: [], totals: { billing_tp: 0, selling_price_adj: 0, credit_notes: 0, factory_returns: 0 } };
     acc[aid].settlements.push(s);
-    acc[aid].totals.payable += computePayable(s);
-    acc[aid].totals.billing += s.total_billing_value || 0;
-    acc[aid].totals.earnings += s.distributor_earnings || 0;
-    acc[aid].totals.factory_adj += s.factory_distributor_adjustment || 0;
+    acc[aid].totals.billing_tp += computeTP(s);
+    acc[aid].totals.selling_price_adj += s.factory_distributor_adjustment || 0;
     acc[aid].totals.credit_notes += s.total_credit_notes_issued || s.credit_notes_applied || 0;
     acc[aid].totals.factory_returns += s.total_factory_return_credit || 0;
     return acc;
@@ -117,16 +115,14 @@ export default function BillingTab({
 
   const reconciledGroups = Object.values((monthlyData?.reconciled_settlements || []).reduce((acc, s) => {
     const aid = s.account_id || 'unknown';
-    if (!acc[aid]) acc[aid] = { account_id: aid, account_name: s.account_name || 'Unknown', settlements: [], totals: { payable: 0 } };
+    if (!acc[aid]) acc[aid] = { account_id: aid, account_name: s.account_name || 'Unknown', settlements: [], totals: { billing_tp: 0 } };
     acc[aid].settlements.push(s);
-    acc[aid].totals.payable += computePayable(s);
+    acc[aid].totals.billing_tp += computeTP(s);
     return acc;
   }, {}));
 
-  // From backend
-  const payableToNyla = monthlyData?.total_payable_to_nyla || 0;
-  const settlementDebits = monthlyData?.settlement_debits || 0;
-  const settlementCredits = monthlyData?.settlement_credits || 0;
+  const billingAtTP = monthlyData?.total_at_transfer_price || 0;
+  const sellingPriceAdj = monthlyData?.settlement_selling_price_adj || monthlyData?.total_factory_adjustment || 0;
   const totalCN = monthlyData?.total_credit_notes_applied || 0;
   const totalFR = monthlyData?.total_factory_return_credit || 0;
   const netAdj = monthlyData?.net_adjustment_amount || 0;
@@ -143,20 +139,20 @@ export default function BillingTab({
             <Settings className="h-5 w-5 text-blue-600 mt-0.5" />
             <div>
               <p className="font-medium text-blue-800">Base Prices & Margins</p>
-              <p className="text-sm text-blue-700 mt-1">Configured in the <strong>Margins</strong> tab.</p>
+              <p className="text-sm text-blue-700 mt-1">Transfer prices and margin percentages are configured in the <strong>Margins</strong> tab.</p>
               <Button variant="outline" size="sm" className="mt-2 border-blue-300 text-blue-700 hover:bg-blue-100" onClick={() => setActiveTab('margins')}>Go to Margins Tab</Button>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Month/Year Selection Card */}
+      {/* Month/Year Selection */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-lg flex items-center gap-2"><FileText className="h-5 w-5" />Monthly Billing & Reconciliation</CardTitle>
-              <CardDescription>Two entries: Billing (at transfer price) and Settlement (adjustments)</CardDescription>
+              <CardDescription>Billing at transfer price + Settlement adjustments (Debit/Credit Note)</CardDescription>
             </div>
           </div>
           <div className="flex items-center gap-4 mt-4 p-4 bg-muted/30 rounded-lg">
@@ -191,46 +187,31 @@ export default function BillingTab({
           ) : (
             <div className="space-y-6">
               {hasUnreconciled && (<>
-                {/* ============ TWO ENTRIES SIDE BY SIDE ============ */}
+                {/* ============ TWO ENTRIES ============ */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" data-testid="billing-two-entries">
 
-                  {/* ── ENTRY 1: BILLING (Invoice at Transfer Price) ── */}
+                  {/* ── ENTRY 1: BILLING AT TRANSFER PRICE ── */}
                   <div className="border-2 border-blue-200 rounded-xl overflow-hidden" data-testid="entry-billing">
                     <div className="p-4 bg-blue-600 text-white">
                       <div className="flex items-center gap-2 mb-1">
-                        <Truck className="h-4 w-4" />
+                        <Package className="h-4 w-4" />
                         <span className="font-semibold text-sm uppercase tracking-wider">Entry 1: Monthly Billing</span>
                       </div>
-                      <p className="text-xs text-blue-200">Distributor pays factory for stock sold to customers</p>
+                      <p className="text-xs text-blue-200">Distributor pays factory at agreed transfer price (from margin matrix)</p>
                     </div>
-                    <div className="p-5 space-y-4">
-                      <div className="text-center">
-                        <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Amount at Transfer Price</p>
-                        <p className="text-3xl font-bold text-blue-700" data-testid="billing-amount">₹{fmt(payableToNyla)}</p>
-                        <p className="text-xs text-slate-500 mt-2">Sum of (qty x transfer price) for all deliveries</p>
+                    <div className="p-5">
+                      <div className="text-center pb-4">
+                        <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Total Billing at Transfer Price</p>
+                        <p className="text-3xl font-bold text-blue-700" data-testid="billing-amount">₹{fmt(billingAtTP)}</p>
+                        <p className="text-xs text-slate-500 mt-2">qty x transfer price (from margin matrix) for all customer deliveries</p>
                       </div>
-                      <div className="border-t pt-3 space-y-2 text-sm">
-                        <div className="flex justify-between text-slate-500">
-                          <span>Customer Billing (MRP)</span>
-                          <span>₹{fmt(monthlyData?.total_billing_value)}</span>
-                        </div>
-                        <div className="flex justify-between text-slate-500">
-                          <span>Distributor Margin</span>
-                          <span>-₹{fmt(monthlyData?.total_distributor_earnings)}</span>
-                        </div>
-                        <div className="flex justify-between text-slate-500">
-                          <span>Price Adjustment</span>
-                          <span>-₹{fmt(monthlyData?.total_factory_adjustment)}</span>
-                        </div>
-                        <div className="flex justify-between font-semibold text-blue-700 border-t pt-2">
-                          <span>Payable to Factory</span>
-                          <span>₹{fmt(payableToNyla)}</span>
-                        </div>
+                      <div className="border-t pt-3 text-sm text-slate-500 space-y-1">
+                        <div className="flex justify-between"><span>Total settlements</span><span className="font-medium text-slate-700">{monthlyData?.total_unreconciled || 0}</span></div>
                       </div>
                     </div>
                   </div>
 
-                  {/* ── ENTRY 2: SETTLEMENT (Adjustments → Debit/Credit Note) ── */}
+                  {/* ── ENTRY 2: SETTLEMENT (All Adjustments → Debit/Credit Note) ── */}
                   <div className={`border-2 rounded-xl overflow-hidden ${noteType === 'debit' ? 'border-amber-200' : noteType === 'credit' ? 'border-emerald-200' : 'border-slate-200'}`} data-testid="entry-settlement">
                     <div className={`p-4 text-white ${noteType === 'debit' ? 'bg-amber-600' : noteType === 'credit' ? 'bg-emerald-600' : 'bg-slate-600'}`}>
                       <div className="flex items-center gap-2 mb-1">
@@ -238,11 +219,11 @@ export default function BillingTab({
                         <span className="font-semibold text-sm uppercase tracking-wider">Entry 2: Monthly Settlement</span>
                       </div>
                       <p className={`text-xs ${noteType === 'debit' ? 'text-amber-200' : noteType === 'credit' ? 'text-emerald-200' : 'text-slate-300'}`}>
-                        Adjustments for the month → {noteType === 'debit' ? 'Debit Note' : noteType === 'credit' ? 'Credit Note' : 'No Adjustment'}
+                        All adjustments → {noteType === 'debit' ? 'Debit Note' : noteType === 'credit' ? 'Credit Note' : 'No Adjustment'}
                       </p>
                     </div>
                     <div className="p-5 space-y-4">
-                      <div className="text-center">
+                      <div className="text-center pb-2">
                         <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">
                           {noteType === 'debit' ? 'Debit Note (Distributor Owes)' : noteType === 'credit' ? 'Credit Note (Factory Owes)' : 'No Adjustment Required'}
                         </p>
@@ -250,30 +231,43 @@ export default function BillingTab({
                           ₹{fmt(Math.abs(netAdj))}
                         </p>
                       </div>
-                      <div className="border-t pt-3 space-y-2 text-sm">
+                      <div className="border-t pt-3 space-y-2.5 text-sm">
+                        {/* Selling price adjustment */}
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-2 text-slate-600">
                             <TrendingUp className="h-3.5 w-3.5 text-amber-500" />
-                            <span>Price Adjustments (Dist → Factory)</span>
+                            <span>Selling Price Adjustments</span>
                           </div>
-                          <span className={`font-medium ${settlementDebits > 0 ? 'text-amber-600' : 'text-slate-400'}`}>+₹{fmt(settlementDebits)}</span>
+                          <span className={`font-medium ${sellingPriceAdj > 0 ? 'text-amber-600' : sellingPriceAdj < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {sellingPriceAdj > 0 ? '+' : sellingPriceAdj < 0 ? '-' : ''}₹{fmt(Math.abs(sellingPriceAdj))}
+                          </span>
                         </div>
+                        <p className="text-[11px] text-slate-400 -mt-1 ml-6">Difference between customer selling price and base price</p>
+                        {/* Credit Notes */}
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-2 text-slate-600">
                             <CreditCard className="h-3.5 w-3.5 text-emerald-500" />
-                            <span>Credit Notes (Factory → Dist)</span>
+                            <span>Return Credits (Credit Notes)</span>
                           </div>
-                          <span className={`font-medium ${totalCN > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{totalCN > 0 ? '-' : ''}₹{fmt(totalCN)}</span>
+                          <span className={`font-medium ${totalCN > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {totalCN > 0 ? '-' : ''}₹{fmt(totalCN)}
+                          </span>
                         </div>
+                        <p className="text-[11px] text-slate-400 -mt-1 ml-6">Credit notes issued for customer returns</p>
+                        {/* Factory Returns */}
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-2 text-slate-600">
                             <Factory className="h-3.5 w-3.5 text-purple-500" />
-                            <span>Factory Returns (Factory → Dist)</span>
+                            <span>Factory Returns</span>
                           </div>
-                          <span className={`font-medium ${totalFR > 0 ? 'text-purple-600' : 'text-slate-400'}`}>{totalFR > 0 ? '-' : ''}₹{fmt(totalFR)}</span>
+                          <span className={`font-medium ${totalFR > 0 ? 'text-purple-600' : 'text-slate-400'}`}>
+                            {totalFR > 0 ? '-' : ''}₹{fmt(totalFR)}
+                          </span>
                         </div>
-                        <div className={`flex justify-between font-semibold border-t pt-2 ${noteType === 'debit' ? 'text-amber-700' : noteType === 'credit' ? 'text-emerald-700' : 'text-slate-500'}`}>
-                          <span>Net {noteType === 'debit' ? '(Debit)' : noteType === 'credit' ? '(Credit)' : ''}</span>
+                        <p className="text-[11px] text-slate-400 -mt-1 ml-6">Warehouse stock returned to factory at transfer price</p>
+                        {/* Net */}
+                        <div className={`flex justify-between font-semibold border-t pt-2 mt-1 ${noteType === 'debit' ? 'text-amber-700' : noteType === 'credit' ? 'text-emerald-700' : 'text-slate-500'}`}>
+                          <span>Net {noteType === 'debit' ? '(Debit Note)' : noteType === 'credit' ? '(Credit Note)' : ''}</span>
                           <span>₹{fmt(Math.abs(netAdj))}</span>
                         </div>
                       </div>
@@ -285,15 +279,16 @@ export default function BillingTab({
                 <div className="border rounded-lg overflow-hidden">
                   <div className="p-3 bg-slate-100 border-b font-medium flex items-center gap-2 text-sm">
                     <Clock className="h-4 w-4 text-amber-500" />
-                    <span>Settlement Breakdown by Account</span>
+                    <span>Breakdown by Account</span>
                     <Badge variant="secondary" className="ml-auto">{monthlyData?.total_unreconciled || 0} settlement(s)</Badge>
                   </div>
                   <div className="divide-y">
                     {unreconciledGroups.map(group => {
-                      const adjNet = group.totals.factory_adj - group.totals.credit_notes - group.totals.factory_returns;
+                      const adjNet = group.totals.selling_price_adj - group.totals.credit_notes - group.totals.factory_returns;
+                      const adjType = adjNet > 0 ? 'debit' : adjNet < 0 ? 'credit' : 'none';
                       return (
                         <div key={group.account_id}>
-                          <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => toggleAccountExpand(group.account_id)}>
+                          <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => toggleAccount(group.account_id)}>
                             <div className="flex items-center gap-3">
                               <Building2 className="h-5 w-5 text-slate-400" />
                               <div>
@@ -302,10 +297,28 @@ export default function BillingTab({
                               </div>
                             </div>
                             <div className="flex items-center gap-4 text-right">
-                              <div><p className="text-[10px] text-slate-400 uppercase">Billing</p><p className="text-sm font-semibold text-blue-600">₹{fmt(group.totals.payable)}</p></div>
-                              <div><p className="text-[10px] text-slate-400 uppercase">Price Adj</p><p className={`text-sm font-semibold ${group.totals.factory_adj > 0 ? 'text-amber-600' : 'text-slate-300'}`}>+₹{fmt(group.totals.factory_adj)}</p></div>
-                              <div><p className="text-[10px] text-slate-400 uppercase">Credits</p><p className={`text-sm font-semibold ${(group.totals.credit_notes + group.totals.factory_returns) > 0 ? 'text-emerald-600' : 'text-slate-300'}`}>-₹{fmt(group.totals.credit_notes + group.totals.factory_returns)}</p></div>
-                              <div className="border-l pl-3"><p className="text-[10px] text-slate-400 uppercase">Adj Net</p><p className={`text-sm font-bold ${adjNet > 0 ? 'text-amber-600' : adjNet < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>₹{fmt(Math.abs(adjNet))}</p></div>
+                              <div>
+                                <p className="text-[10px] text-blue-500 uppercase font-medium">Billing (TP)</p>
+                                <p className="text-sm font-semibold text-blue-600">₹{fmt(group.totals.billing_tp)}</p>
+                              </div>
+                              <div className="border-l pl-3">
+                                <p className="text-[10px] text-slate-400 uppercase font-medium">Selling Price Adj</p>
+                                <p className={`text-sm font-semibold ${group.totals.selling_price_adj > 0 ? 'text-amber-600' : group.totals.selling_price_adj < 0 ? 'text-emerald-600' : 'text-slate-300'}`}>
+                                  {group.totals.selling_price_adj > 0 ? '+' : ''}₹{fmt(group.totals.selling_price_adj)}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-slate-400 uppercase font-medium">Returns & Credits</p>
+                                <p className={`text-sm font-semibold ${(group.totals.credit_notes + group.totals.factory_returns) > 0 ? 'text-emerald-600' : 'text-slate-300'}`}>
+                                  -₹{fmt(group.totals.credit_notes + group.totals.factory_returns)}
+                                </p>
+                              </div>
+                              <div className="border-l pl-3">
+                                <p className="text-[10px] text-slate-400 uppercase font-medium">Settlement Net</p>
+                                <p className={`text-sm font-bold ${adjType === 'debit' ? 'text-amber-600' : adjType === 'credit' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                  ₹{fmt(Math.abs(adjNet))} {adjType !== 'none' ? `(${adjType === 'debit' ? 'DR' : 'CR'})` : ''}
+                                </p>
+                              </div>
                               <div className={`w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center transition-transform ${expandedAccounts[group.account_id] ? 'rotate-180' : ''}`}>
                                 <ArrowDown className="h-3 w-3 text-slate-500" />
                               </div>
@@ -318,28 +331,32 @@ export default function BillingTab({
                                   <th className="text-left p-2">Settlement #</th>
                                   <th className="text-right p-2">Deliveries</th>
                                   <th className="text-right p-2 text-blue-600">Billing (TP)</th>
-                                  <th className="text-right p-2 text-amber-600">Price Adj</th>
-                                  <th className="text-right p-2 text-emerald-600">Credit Notes</th>
+                                  <th className="text-right p-2 text-amber-600">Selling Adj</th>
+                                  <th className="text-right p-2 text-emerald-600">Return Credits</th>
                                   <th className="text-right p-2 text-purple-600">Factory Ret.</th>
-                                  <th className="text-right p-2 font-bold">Adj Net</th>
+                                  <th className="text-right p-2 font-bold">Net</th>
                                   <th className="text-center p-2">Status</th>
                                 </tr></thead>
                                 <tbody>
                                   {group.settlements.map(s => {
-                                    const p = computePayable(s);
-                                    const fa = s.factory_distributor_adjustment || 0;
+                                    const tp = computeTP(s);
+                                    const spa = s.factory_distributor_adjustment || 0;
                                     const cn = s.total_credit_notes_issued || s.credit_notes_applied || 0;
                                     const fr = s.total_factory_return_credit || 0;
-                                    const net = fa - cn - fr;
+                                    const net = spa - cn - fr;
                                     return (
                                       <tr key={s.id} className="border-b hover:bg-white/60">
                                         <td className="p-2 font-medium">{s.settlement_number}</td>
                                         <td className="p-2 text-right">{s.total_deliveries || 0}</td>
-                                        <td className="p-2 text-right text-blue-600 font-medium">₹{fmt(p)}</td>
-                                        <td className={`p-2 text-right ${fa > 0 ? 'text-amber-600' : 'text-slate-300'}`}>{fa > 0 ? `+₹${fmt(fa)}` : '-'}</td>
+                                        <td className="p-2 text-right text-blue-600 font-medium">₹{fmt(tp)}</td>
+                                        <td className={`p-2 text-right ${spa > 0 ? 'text-amber-600' : spa < 0 ? 'text-emerald-600' : 'text-slate-300'}`}>
+                                          {spa !== 0 ? `${spa > 0 ? '+' : ''}₹${fmt(spa)}` : '-'}
+                                        </td>
                                         <td className={`p-2 text-right ${cn > 0 ? 'text-emerald-600' : 'text-slate-300'}`}>{cn > 0 ? `-₹${fmt(cn)}` : '-'}</td>
                                         <td className={`p-2 text-right ${fr > 0 ? 'text-purple-600' : 'text-slate-300'}`}>{fr > 0 ? `-₹${fmt(fr)}` : '-'}</td>
-                                        <td className={`p-2 text-right font-bold ${net > 0 ? 'text-amber-600' : net < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>₹{fmt(Math.abs(net))}</td>
+                                        <td className={`p-2 text-right font-bold ${net > 0 ? 'text-amber-600' : net < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                          ₹{fmt(Math.abs(net))} {net !== 0 ? `(${net > 0 ? 'DR' : 'CR'})` : ''}
+                                        </td>
                                         <td className="p-2 text-center">{getSettlementStatusBadge ? getSettlementStatusBadge(s.status) : <Badge variant="outline">{s.status}</Badge>}</td>
                                       </tr>
                                     );
@@ -362,7 +379,7 @@ export default function BillingTab({
                       Generate {noteType === 'debit' ? 'Debit' : 'Credit'} Note (₹{fmt(Math.abs(netAdj))})
                     </Button>
                   ) : (
-                    <div className="text-muted-foreground text-sm">Net adjustment is ₹0 — no note required</div>
+                    <div className="text-muted-foreground text-sm">No adjustments for this period — no note required</div>
                   )}
                 </div>
               </>)}
@@ -382,13 +399,13 @@ export default function BillingTab({
                           <div><p className="font-medium text-sm">{group.account_name}</p><p className="text-xs text-muted-foreground">{group.settlements.length} settlement(s)</p></div>
                         </div>
                         <div className="flex items-center gap-4">
-                          <div className="text-right"><p className="text-xs text-slate-400">Billing</p><p className="font-medium text-sm">₹{fmt(group.totals.payable)}</p></div>
+                          <div className="text-right"><p className="text-xs text-slate-400">Billing (TP)</p><p className="font-medium text-sm">₹{fmt(group.totals.billing_tp)}</p></div>
                           <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Reconciled</Badge>
                         </div>
                       </div>
                     ))}
                     <div className="p-4 bg-green-50 border-t">
-                      <div className="flex justify-between"><span className="font-semibold text-green-700 text-sm">Total Reconciled</span><span className="font-bold text-sm">₹{fmt(monthlyData?.reconciled_payable_to_nyla)}</span></div>
+                      <div className="flex justify-between"><span className="font-semibold text-green-700 text-sm">Total Reconciled</span><span className="font-bold text-sm">₹{fmt(monthlyData?.reconciled_at_transfer_price)}</span></div>
                     </div>
                   </div>
                 </>
@@ -479,18 +496,40 @@ export default function BillingTab({
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-3 text-sm">
-              {/* Debits */}
-              <div className="flex items-center justify-between p-3 bg-amber-50 rounded-lg border border-amber-100">
-                <div className="flex items-center gap-2"><TrendingUp className="h-4 w-4 text-amber-600" /><span className="text-amber-800">Price Adjustments (Dist → Factory)</span></div>
-                <span className="font-bold text-amber-700">+₹{fmt(settlementDebits)}</span>
+              <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Adjustment Components</p>
+              {/* Selling Price Adj */}
+              <div className={`flex items-center justify-between p-3 rounded-lg border ${sellingPriceAdj > 0 ? 'bg-amber-50 border-amber-100' : sellingPriceAdj < 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
+                <div className="flex items-center gap-2">
+                  <TrendingUp className={`h-4 w-4 ${sellingPriceAdj > 0 ? 'text-amber-600' : 'text-emerald-600'}`} />
+                  <div>
+                    <span className="text-slate-800">Selling Price Adjustments</span>
+                    <p className="text-[11px] text-slate-400">Customer price vs base price difference</p>
+                  </div>
+                </div>
+                <span className={`font-bold ${sellingPriceAdj > 0 ? 'text-amber-700' : sellingPriceAdj < 0 ? 'text-emerald-700' : 'text-slate-400'}`}>
+                  {sellingPriceAdj > 0 ? '+' : ''}₹{fmt(sellingPriceAdj)}
+                </span>
               </div>
-              {/* Credits */}
+              {/* Credit Notes */}
               <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg border border-emerald-100">
-                <div className="flex items-center gap-2"><CreditCard className="h-4 w-4 text-emerald-600" /><span className="text-emerald-800">Credit Notes (Factory → Dist)</span></div>
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-emerald-600" />
+                  <div>
+                    <span className="text-emerald-800">Return Credits (Credit Notes)</span>
+                    <p className="text-[11px] text-slate-400">Customer return reimbursements</p>
+                  </div>
+                </div>
                 <span className="font-bold text-emerald-700">-₹{fmt(totalCN)}</span>
               </div>
+              {/* Factory Returns */}
               <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-100">
-                <div className="flex items-center gap-2"><Factory className="h-4 w-4 text-purple-600" /><span className="text-purple-800">Factory Returns (Factory → Dist)</span></div>
+                <div className="flex items-center gap-2">
+                  <Factory className="h-4 w-4 text-purple-600" />
+                  <div>
+                    <span className="text-purple-800">Factory Returns</span>
+                    <p className="text-[11px] text-slate-400">Warehouse stock returned at transfer price</p>
+                  </div>
+                </div>
                 <span className="font-bold text-purple-700">-₹{fmt(totalFR)}</span>
               </div>
               {/* Net */}
