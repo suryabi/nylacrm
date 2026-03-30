@@ -8,29 +8,30 @@
 ## Completed Features
 
 ### Distribution Module
-- [x] Stock Out: GST handling, collapsible sections (Dist→Customer, Dist→Factory)
+- [x] Stock Out: GST handling, collapsible sections (Dist->Customer, Dist->Factory)
 - [x] Factory Return: Source-first selection, SKU from margin matrix, credit at transfer_price
 - [x] Settlement: Independently queries Credit Notes + Factory Returns, stores all fields including `total_at_transfer_price`
 
 ### Billing Reconciliation - Two Entry System
-- [x] **Entry 1: Monthly Billing** = qty × transfer_price (from margin matrix per SKU)
+- [x] **Entry 1: Monthly Billing** = qty x transfer_price (from margin matrix per SKU)
   - **Weekly line items**: Week 1 (1-7), Week 2 (8-14), Week 3 (15-21), Week 4 (22-28), Week 5 (29-end)
   - Based on delivery date, 4-5 weeks depending on month
   - Direct field `total_at_transfer_price` stored in settlement
-- [x] **Entry 2: Monthly Settlement** = All adjustments → Debit/Credit Note
+  - **Expandable weekly rows**: Clicking a week expands to show deliveries grouped by customer, with date, delivery number, and amount (at transfer price) - COMPLETED 2026-03-30
+- [x] **Entry 2: Monthly Settlement** = All adjustments -> Debit/Credit Note
   - Selling Price Adjustments (customer price vs base price)
   - Return Credits (credit notes from customer returns)
-  - Factory Returns (warehouse stock at transfer price)
+  - Factory Returns (warehouse stock returned to factory at transfer price)
   - Net: positive = Debit Note, negative = Credit Note
 
 ## Key API Endpoints
 - `POST /api/distributors/{id}/settlements/generate-monthly`
 - `GET /api/distributors/{id}/settlement-preview?month=X&year=Y`
-- `GET /api/distributors/{id}/monthly-reconciliation?month=X&year=Y` (returns weekly_billing array)
+- `GET /api/distributors/{id}/monthly-reconciliation?month=X&year=Y` (returns weekly_billing array with expandable details)
 - `POST /api/distributors/{id}/generate-monthly-note`
 
 ## Upcoming Tasks (P1)
-- Auto-generate Provisional Invoice (on shipment → "delivered")
+- Auto-generate Provisional Invoice (on shipment -> "delivered")
 - Build Reporting Module
 
 ## Backlog (P2)

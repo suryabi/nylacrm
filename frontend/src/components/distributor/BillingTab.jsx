@@ -5,7 +5,7 @@ import { Badge } from '../ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
-import { RefreshCw, FileText, Receipt, Eye, Settings, Trash2, Calendar, Building2, Clock, CheckCircle, FileDown, Loader2, ArrowDown, CreditCard, Factory, Truck, TrendingUp, TrendingDown, Package } from 'lucide-react';
+import { RefreshCw, FileText, Receipt, Eye, Settings, Trash2, Calendar, Building2, Clock, CheckCircle, FileDown, Loader2, ArrowDown, CreditCard, Factory, Truck, TrendingUp, TrendingDown, Package, ChevronRight, ChevronDown, User } from 'lucide-react';
 
 const MONTHS = [
   { value: 1, label: 'January' }, { value: 2, label: 'February' }, { value: 3, label: 'March' },
@@ -32,6 +32,9 @@ export default function BillingTab({
   const [monthlyData, setMonthlyData] = useState(null);
   const [loadingMonthlyData, setLoadingMonthlyData] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(null);
+  const [expandedWeeks, setExpandedWeeks] = useState({});
+
+  const toggleWeek = (weekNum) => setExpandedWeeks(prev => ({ ...prev, [weekNum]: !prev[weekNum] }));
 
   useEffect(() => {
     if (distributor?.id) fetchMonthlyReconciliationData();
@@ -208,20 +211,76 @@ export default function BillingTab({
                       {/* Weekly Line Items */}
                       <div className="pt-3 space-y-0" data-testid="weekly-billing">
                         <p className="text-xs text-slate-400 uppercase tracking-wider font-medium mb-2">Weekly Breakdown (by delivery date)</p>
-                        {weeklyBilling.length > 0 ? weeklyBilling.map(week => (
-                          <div key={week.week} className={`flex items-center justify-between py-2.5 ${week.week > 1 ? 'border-t border-slate-100' : ''}`}>
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-600">{week.week}</div>
-                              <div>
-                                <p className="text-sm font-medium text-slate-700">{week.label}</p>
-                                <p className="text-xs text-slate-400">{week.deliveries} delivery(s)</p>
+                        {weeklyBilling.length > 0 ? weeklyBilling.map(week => {
+                          const isExpanded = expandedWeeks[week.week];
+                          const details = week.details || [];
+                          const hasDetails = details.length > 0;
+                          // Group deliveries by customer
+                          const byCustomer = details.reduce((acc, d) => {
+                            const key = d.account_name || 'Unknown';
+                            if (!acc[key]) acc[key] = [];
+                            acc[key].push(d);
+                            return acc;
+                          }, {});
+                          return (
+                            <div key={week.week} className={week.week > 1 ? 'border-t border-slate-100' : ''}>
+                              <div
+                                className={`flex items-center justify-between py-2.5 ${hasDetails ? 'cursor-pointer hover:bg-blue-50/50 rounded-md px-1 -mx-1 transition-colors' : ''}`}
+                                onClick={() => hasDetails && toggleWeek(week.week)}
+                                data-testid={`week-${week.week}-row`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  {hasDetails ? (
+                                    isExpanded
+                                      ? <ChevronDown className="w-4 h-4 text-blue-500" />
+                                      : <ChevronRight className="w-4 h-4 text-blue-400" />
+                                  ) : (
+                                    <div className="w-4" />
+                                  )}
+                                  <div className="w-6 h-6 rounded bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-600">{week.week}</div>
+                                  <div>
+                                    <p className="text-sm font-medium text-slate-700">{week.label}</p>
+                                    <p className="text-xs text-slate-400">{week.deliveries} delivery(s){hasDetails ? ' — click to expand' : ''}</p>
+                                  </div>
+                                </div>
+                                <span className={`text-sm font-semibold ${week.amount > 0 ? 'text-blue-700' : 'text-slate-300'}`}>
+                                  ₹{fmt(week.amount)}
+                                </span>
                               </div>
+                              {isExpanded && hasDetails && (
+                                <div className="ml-6 mb-3 mt-1 border border-blue-100 rounded-lg overflow-hidden bg-blue-50/30" data-testid={`week-${week.week}-details`}>
+                                  {Object.entries(byCustomer).map(([customer, deliveries]) => (
+                                    <div key={customer}>
+                                      <div className="px-3 py-1.5 bg-blue-100/60 flex items-center gap-2 border-b border-blue-100">
+                                        <User className="h-3 w-3 text-blue-600" />
+                                        <span className="text-xs font-semibold text-blue-800">{customer}</span>
+                                        <span className="text-[10px] text-blue-500 ml-auto">{deliveries.length} delivery(s) · ₹{fmt(deliveries.reduce((s, d) => s + (d.amount_at_transfer_price || 0), 0))}</span>
+                                      </div>
+                                      <table className="w-full text-xs">
+                                        <thead>
+                                          <tr className="text-[10px] uppercase text-slate-400 border-b border-blue-50">
+                                            <th className="text-left px-3 py-1.5">Date</th>
+                                            <th className="text-left px-3 py-1.5">Delivery #</th>
+                                            <th className="text-right px-3 py-1.5">Amount (at transfer price)</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {deliveries.map(d => (
+                                            <tr key={d.delivery_id} className="border-b border-blue-50/60 last:border-0 hover:bg-white/50">
+                                              <td className="px-3 py-1.5 text-slate-600">{d.delivery_date}</td>
+                                              <td className="px-3 py-1.5 text-slate-700 font-medium">{d.delivery_number || d.delivery_id?.slice(0, 8)}</td>
+                                              <td className="px-3 py-1.5 text-right font-semibold text-blue-700">₹{fmt(d.amount_at_transfer_price)}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                            <span className={`text-sm font-semibold ${week.amount > 0 ? 'text-blue-700' : 'text-slate-300'}`}>
-                              ₹{fmt(week.amount)}
-                            </span>
-                          </div>
-                        )) : (
+                          );
+                        }) : (
                           <p className="text-sm text-slate-400 py-2">No delivery data available</p>
                         )}
                         <div className="flex justify-between font-semibold text-blue-700 border-t-2 border-blue-200 pt-2 mt-1 text-sm">

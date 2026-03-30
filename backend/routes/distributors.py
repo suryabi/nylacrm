@@ -5955,7 +5955,7 @@ async def get_monthly_reconciliation_data(
     if settled_delivery_ids:
         settled_deliveries = await db.distributor_deliveries.find(
             {"tenant_id": tenant_id, "id": {"$in": settled_delivery_ids}},
-            {"_id": 0, "id": 1, "delivery_date": 1, "account_name": 1}
+            {"_id": 0, "id": 1, "delivery_date": 1, "account_name": 1, "delivery_number": 1}
         ).to_list(10000)
         
         # Get delivery items for transfer price calculation
