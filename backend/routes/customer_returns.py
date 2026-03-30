@@ -513,8 +513,10 @@ async def delete_customer_return(
     return_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Delete a customer return (draft only)"""
+    """Delete a customer return - CEO/Admin can delete any status, others only draft"""
     tenant_id = get_current_tenant_id()
+    user_role = current_user.get('role', '').lower()
+    is_ceo_or_admin = user_role in ['ceo', 'admin', 'system admin']
     
     ret = await db.customer_returns.find_one(
         {"id": return_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
@@ -523,14 +525,22 @@ async def delete_customer_return(
     if not ret:
         raise HTTPException(status_code=404, detail="Return not found")
     
-    if ret.get('status') != 'draft':
-        raise HTTPException(status_code=400, detail="Can only delete draft returns")
+    if not is_ceo_or_admin and ret.get('status') != 'draft':
+        raise HTTPException(status_code=400, detail="Only draft returns can be deleted. Contact CEO/Admin to delete non-draft returns.")
+    
+    # If credit note was issued for this return, also handle cleanup
+    if ret.get('credit_note_id'):
+        await db.credit_notes.update_one(
+            {"id": ret['credit_note_id'], "tenant_id": tenant_id},
+            {"$set": {"status": "cancelled", "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        logger.info(f"Cancelled linked credit note {ret.get('credit_note_id')} for deleted return {ret['return_number']}")
     
     await db.customer_returns.delete_one({"id": return_id, "tenant_id": tenant_id})
     
-    logger.info(f"Deleted customer return {ret['return_number']}")
+    logger.info(f"Deleted customer return {ret['return_number']} (status: {ret.get('status')}) by {current_user['email']} (role: {user_role})")
     
-    return {"message": "Return deleted"}
+    return {"message": f"Return {ret['return_number']} deleted"}
 
 
 @router.get("/{distributor_id}/returns-summary")

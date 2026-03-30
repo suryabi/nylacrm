@@ -2280,6 +2280,7 @@ export default function DistributorDetail() {
             accounts={assignedAccounts}
             skus={skus}
             canManage={canManage}
+            canDelete={canDelete}
           />
         </TabsContent>
 

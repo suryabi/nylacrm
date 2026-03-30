@@ -423,6 +423,8 @@ async def delete_factory_return(
         raise HTTPException(status_code=403, detail="Admin access required")
 
     tenant_id = get_current_tenant_id()
+    user_role = current_user.get('role', '').lower()
+    is_ceo_or_admin = user_role in ['ceo', 'admin', 'system admin']
 
     fr = await db.distributor_factory_returns.find_one(
         {"id": return_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
@@ -430,11 +432,14 @@ async def delete_factory_return(
     )
     if not fr:
         raise HTTPException(status_code=404, detail="Factory return not found")
-    if fr.get('status') != 'draft':
-        raise HTTPException(status_code=400, detail="Only draft factory returns can be deleted")
+    
+    if not is_ceo_or_admin and fr.get('status') != 'draft':
+        raise HTTPException(status_code=400, detail="Only draft factory returns can be deleted. Contact CEO/Admin to delete non-draft returns.")
 
     await db.distributor_factory_returns.delete_one(
         {"id": return_id, "tenant_id": tenant_id}
     )
+
+    logger.info(f"Factory return {fr['return_number']} (status: {fr.get('status')}) deleted by {current_user.get('email')} (role: {user_role})")
 
     return {"message": f"Factory return {fr['return_number']} deleted"}

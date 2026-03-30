@@ -35,7 +35,7 @@ const STATUS_BADGES = {
   cancelled: { bg: 'bg-red-100', text: 'text-red-700', label: 'Cancelled' }
 };
 
-export default function ReturnsTab({ distributorId, accounts = [], skus = [], canManage = false }) {
+export default function ReturnsTab({ distributorId, accounts = [], skus = [], canManage = false, canDelete = false }) {
   const { token } = useAuth();
   const [loading, setLoading] = useState(true);
   const [returns, setReturns] = useState([]);
@@ -303,7 +303,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
 
   // Delete return
   const deleteReturn = async (returnId) => {
-    if (!window.confirm('Are you sure you want to delete this draft return?')) return;
+    if (!window.confirm('Are you sure you want to delete this return? This action cannot be undone.')) return;
     try {
       await axios.delete(
         `${API_URL}/api/distributors/${distributorId}/returns/${returnId}`,
@@ -580,8 +580,8 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                           <Button variant="ghost" size="sm" onClick={() => viewReturnDetail(ret.id)}>
                             <Eye className="h-4 w-4" />
                           </Button>
-                          {canManage && ret.status === 'draft' && (
-                            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deleteReturn(ret.id)}>
+                          {(canDelete || (canManage && ret.status === 'draft')) && (
+                            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deleteReturn(ret.id)} data-testid={`delete-return-${ret.id}`} title="Delete">
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           )}
@@ -957,6 +957,12 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                       Approve Return
                     </Button>
                   </>
+                )}
+                {canDelete && selectedReturn.status !== 'draft' && (
+                  <Button variant="destructive" onClick={() => deleteReturn(selectedReturn.id)} data-testid="delete-return-detail-btn">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Return
+                  </Button>
                 )}
               </DialogFooter>
             </>

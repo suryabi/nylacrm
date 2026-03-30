@@ -1553,7 +1553,7 @@ export default function DeliveriesTab({
                             <Button variant="outline" size="sm" onClick={() => handleFactoryAction(fr.id, 'confirm')} data-testid={`confirm-factory-${fr.id}`}>
                               <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Confirm
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDeleteFactoryReturn(fr.id)}>
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteFactoryReturn(fr.id)} data-testid={`delete-factory-${fr.id}`}>
                               <Trash2 className="h-3.5 w-3.5 text-red-500" />
                             </Button>
                           </>
@@ -1568,8 +1568,13 @@ export default function DeliveriesTab({
                             </Button>
                           </>
                         )}
-                        {(fr.status === 'received' || fr.status === 'cancelled') && (
+                        {(fr.status === 'received' || fr.status === 'cancelled') && !canDelete && (
                           <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                        {canDelete && fr.status !== 'draft' && (
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteFactoryReturn(fr.id)} data-testid={`delete-factory-${fr.id}`} title="Delete">
+                            <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                          </Button>
                         )}
                       </div>
                     </td>

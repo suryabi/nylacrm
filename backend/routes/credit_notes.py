@@ -216,6 +216,37 @@ async def cancel_credit_note(
     return {"message": "Credit note cancelled", "status": "cancelled"}
 
 
+@router.delete("/{distributor_id}/credit-notes/{credit_note_id}")
+async def delete_credit_note(
+    distributor_id: str,
+    credit_note_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a credit note - CEO/Admin only"""
+    tenant_id = get_current_tenant_id()
+    user_role = current_user.get('role', '').lower()
+    
+    if user_role not in ['ceo', 'admin', 'system admin']:
+        raise HTTPException(status_code=403, detail="Only CEO and Admin can delete credit notes")
+    
+    credit_note = await db.credit_notes.find_one(
+        {"id": credit_note_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    
+    if not credit_note:
+        raise HTTPException(status_code=404, detail="Credit note not found")
+    
+    if credit_note.get("applied_amount", 0) > 0:
+        raise HTTPException(status_code=400, detail="Cannot delete: Credit note has been partially or fully applied to deliveries")
+    
+    await db.credit_notes.delete_one({"id": credit_note_id, "tenant_id": tenant_id})
+    
+    logger.info(f"Deleted credit note {credit_note.get('credit_note_number')} (status: {credit_note.get('status')}) by {current_user['email']}")
+    
+    return {"message": f"Credit note {credit_note.get('credit_note_number')} deleted"}
+
+
+
 async def apply_credit_note_to_delivery(
     tenant_id: str,
     credit_note_id: str,
