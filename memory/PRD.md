@@ -15,7 +15,7 @@ A comprehensive Sales CRM and Distribution Management platform built with React 
 3. **Product & SKU**: Master SKUs, COGS Calculator, Transport Calculator
 4. **Sales Operations**: Lead Discovery, Target Planning, Daily Status, Status Summary
 
-## Completed Features (as of March 2026)
+## Completed Features
 
 ### Distribution Module - Stock Out & Settlement Overhaul
 - [x] Stock Out UI with GST handling (pre-tax main table, post-tax popup summaries)
@@ -23,14 +23,23 @@ A comprehensive Sales CRM and Distribution Management platform built with React 
 - [x] Factory Return dialog with Source-first selection (Warehouse vs Customer)
 - [x] Factory Return SKU dropdown from `distributor_margin_matrix` only
 - [x] Factory Return credit formula uses `transfer_price` (not `base_price`)
-- [x] **Settlement generation independently queries Credit Notes and Factory Returns** (Fixed 2026-03-30)
-- [x] **Settlement stores `total_credit_notes_issued` and `total_factory_return_credit`** (Fixed 2026-03-30)
-- [x] **Net Payout formula: Earnings - Price Adj + Credit Notes + Factory Returns** (Fixed 2026-03-30)
-- [x] **BillingTab 7 summary cards with correct formula** (Verified 2026-03-30)
-- [x] **Monthly Reconciliation API returns credit notes and factory return totals** (Verified 2026-03-30)
+- [x] Settlement generation independently queries Credit Notes and Factory Returns (Fixed 2026-03-30)
+- [x] Settlement stores `total_credit_notes_issued` and `total_factory_return_credit` (Fixed 2026-03-30)
+- [x] Net Payout formula: Earnings - Price Adj + Credit Notes + Factory Returns (Fixed 2026-03-30)
+- [x] BillingTab 7 summary cards with correct formula (Verified 2026-03-30)
+- [x] Monthly Reconciliation API returns credit notes and factory return totals (Verified 2026-03-30)
+- [x] **Settlements Tab Redesign** (2026-03-30):
+  - New `GET /api/distributors/{id}/settlement-preview` endpoint
+  - Generate dialog shows 3 summary cards (Deliveries, Credit Notes, Factory Returns)
+  - Payout formula visualization bar (dark background)
+  - 3 separate detail tables for each settlement component
+  - Settlement list shows all components: Earnings, Price Adj, Credit Notes, Factory Returns, Net Payout
+  - Grand totals summary bar with all 6 columns
+  - Account-level grouping with expand/collapse
 
 ## Key API Endpoints (Distribution)
 - `POST /api/distributors/{id}/settlements/generate-monthly` - Generate monthly settlements per account
+- `GET /api/distributors/{id}/settlement-preview?month=X&year=Y` - Preview all settlement components
 - `GET /api/distributors/{id}/monthly-reconciliation?month=X&year=Y` - Get reconciliation data
 - `POST /api/distributors/{id}/factory-returns` - Create factory return
 - `GET /api/distributors/{id}/credit-notes` - List credit notes
