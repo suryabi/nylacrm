@@ -13,24 +13,24 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 1. **Simplified Main Table** (9 clean columns):
    - Delivery # (with date), Account (with city), Items (count badge)
-   - Customer Invoice, Credit Notes (CN count + amount), Net Billing
-   - Billable to Dist (with "after CN" note), Status, Actions
+   - Customer Billing (pre-tax), Return Credit (CN count + amount), Net Billing (pre-tax)
+   - Billable to Dist (pre-tax, with "after CN" note), Status, Actions
 
 2. **Enhanced Delivery Detail Popup** (`DistributorDetail.js`):
    - Wider dialog (max-w-4xl) for better readability
-   - **Detailed Items Table**: SKU (margin%), Qty, Base Price, Billed to Dist, Cust. Price, Actual Billable, Adjustment, Cust. Invoice + totals row
-   - **Financial Summary Section**: Customer Invoice, Credit Notes Applied, Net Customer Billing, Actual Billable to Dist, Less: Credit Notes, Final Billable to Dist
+   - **Detailed Items Table**: SKU (margin%), Qty, Base Price, Billed to Dist, Cust. Price, Actual Billable, Adj. (Cust. Price), Net Adj. (After Credit) — with totals row
+   - **Customer Summary**: Customer Billing → Less Return Bottle Credit → Total Billable → GST (%) → Customer Invoice Value (Incl. GST)
+   - **Distributor Summary**: Distributor Billing → Adjustment (Customer Price + Return Credit) → Total Billable → GST (%) → Distributor Invoice Value (Incl. GST)
    - **Credit Notes Detail**: Individual CN numbers with return references and amounts
    - Download Invoice (GST) button for delivered/confirmed status
 
-3. **Bug Fix**: Removed orphaned old table code (236 lines) left from mid-session refactor
-4. **Consistency Fix**: Financial Summary uses stored `total_net_amount` for Customer Invoice to match main table
+3. **GST Handling**: Main table shows all amounts pre-tax (without GST). GST is calculated separately in popup summaries on the post-credit Total Billable amount using effective rate from item-level tax_percent.
 
 **Files Modified:**
-- `/app/frontend/src/components/distributor/DeliveriesTab.jsx` - Removed orphaned code, clean simplified table
-- `/app/frontend/src/pages/DistributorDetail.js` - Enhanced delivery detail popup with financial breakdown
+- `/app/frontend/src/components/distributor/DeliveriesTab.jsx` - Pre-tax amounts, renamed columns
+- `/app/frontend/src/pages/DistributorDetail.js` - New grid columns, split Customer & Distributor summaries with GST
 
-**Testing (iteration_87.json):** 100% frontend (8/8 features verified)
+**Testing (iteration_87.json + iteration_88.json):** 100% frontend (18/18 features verified across both iterations)
 
 ---
 
