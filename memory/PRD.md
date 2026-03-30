@@ -5,6 +5,23 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Latest Session - March 30, 2026 (Session 11)
 
+### Settlement Integration: Credit Notes + Factory Returns ✅ (March 30 - COMPLETED)
+
+**User Request**: Settlement should independently consider: (1) deliveries, (2) credit notes issued to customers, (3) adjustable factory returns — not just deliveries.
+
+**Implementation:**
+- Settlement now fetches credit notes from `credit_notes` collection independently (not just delivery.total_credit_applied)
+- Factory returns (warehouse-sourced, adjustable) are fetched and included as separate line items
+- Settlement creation works even WITHOUT deliveries if there are credit notes or factory returns
+- Settlement doc stores `credit_note_ids`, `factory_return_ids` arrays for traceability
+- BillingTab shows 7 summary cards: Accounts, Billing, Earnings, ① Price Adj, ② Return Credits, ③ Factory Returns, Net Payout
+- Net Payout = Earnings - ① + ② + ③
+- Monthly reconciliation returns `total_factory_return_credit`
+
+**Testing (iteration_91.json):** 100% (9/9 features, backend + frontend)
+
+---
+
 ### Factory Returns Source-First Selection ✅ (March 30 - COMPLETED)
 
 **User Request**: Source should be the PRIMARY selection in factory returns. Warehouse source = expired/damaged, adjusted in settlement. Customer source = expired/damaged/empty_reusable, no settlement adjustment (tracking only).
