@@ -100,7 +100,7 @@ export default function DeliveriesTab({
         margins.forEach(m => {
           if (m.sku_id && !seen.has(m.sku_id)) {
             seen.add(m.sku_id);
-            uniqueSkus.push({ id: m.sku_id, sku_name: m.sku_name, base_price: m.base_price });
+            uniqueSkus.push({ id: m.sku_id, sku_name: m.sku_name, base_price: m.base_price, transfer_price: m.transfer_price });
           }
         });
         setMarginSkus(uniqueSkus);
@@ -1375,7 +1375,7 @@ export default function DeliveriesTab({
                     {factoryForm.source === 'warehouse' ? (
                       <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm">
                         <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                        <p className="text-amber-800">This return will be <strong>adjusted in settlement</strong> — factory reimburses distributor at base price.</p>
+                        <p className="text-amber-800">This return will be <strong>adjusted in settlement</strong> — factory reimburses distributor at transfer price (billed price).</p>
                       </div>
                     ) : (
                       <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm">
@@ -1402,7 +1402,7 @@ export default function DeliveriesTab({
                             >
                               <option value="">Select SKU</option>
                               {marginSkus.map(sku => (
-                                <option key={sku.id} value={sku.id}>{sku.sku_name}{sku.base_price ? ` (₹${sku.base_price})` : ''}</option>
+                                <option key={sku.id} value={sku.id}>{sku.sku_name}{sku.transfer_price ? ` (TP: ₹${sku.transfer_price})` : ''}</option>
                               ))}
                             </select>
                             <Input
@@ -1500,7 +1500,7 @@ export default function DeliveriesTab({
                   <th className="text-left p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Location</th>
                   <th className="text-center p-3 font-semibold text-amber-700 uppercase tracking-wider text-xs">Reason</th>
                   <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Items</th>
-                  <th className="text-right p-3 font-semibold text-blue-700 uppercase tracking-wider text-xs">Base Price Credit</th>
+                  <th className="text-right p-3 font-semibold text-blue-700 uppercase tracking-wider text-xs">Transfer Price Credit</th>
                   <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Settlement</th>
                   <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Status</th>
                   <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Actions</th>

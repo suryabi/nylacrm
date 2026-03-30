@@ -175,7 +175,7 @@ async def create_factory_return(
     return_number = await generate_factory_return_number(tenant_id)
     return_date = data.return_date or now[:10]
 
-    # Build items with base price lookup
+    # Build items with transfer price lookup (price at which distributor was billed)
     items = []
     total_credit = 0
     total_qty = 0
@@ -188,13 +188,14 @@ async def create_factory_return(
         if not sku:
             raise HTTPException(status_code=404, detail=f"SKU {item_data.sku_id} not found")
 
-        # Get base price from distributor margin matrix
+        # Get transfer price from distributor margin matrix
         margin = await db.distributor_margin_matrix.find_one(
             {"distributor_id": distributor_id, "sku_id": item_data.sku_id, "tenant_id": tenant_id},
             {"_id": 0}
         )
-        base_price = (margin.get('base_price') if margin else None) or sku.get('base_price', 0) or sku.get('price', 0)
-        credit_amount = round(item_data.quantity * base_price, 2)
+        base_price = (margin.get('base_price') if margin else None) or 0
+        transfer_price = (margin.get('transfer_price') if margin else None) or 0
+        credit_amount = round(item_data.quantity * transfer_price, 2)
 
         items.append({
             "id": str(uuid.uuid4()),
@@ -203,6 +204,7 @@ async def create_factory_return(
             "sku_code": sku.get('sku', '') or sku.get('sku_code', ''),
             "quantity": item_data.quantity,
             "base_price": base_price,
+            "transfer_price": transfer_price,
             "credit_amount": credit_amount,
             "remarks": item_data.remarks
         })
