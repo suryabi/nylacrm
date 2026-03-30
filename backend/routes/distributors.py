@@ -3909,6 +3909,95 @@ async def get_unsettled_deliveries(
     }
 
 
+@router.get("/{distributor_id}/settlement-preview")
+async def get_settlement_preview(
+    distributor_id: str,
+    month: int,
+    year: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a complete preview of all settlement components for a given month:
+    deliveries, credit notes, and factory returns."""
+    tenant_id = get_current_tenant_id()
+
+    start_date = f"{year}-{month:02d}-01"
+    end_date = f"{year + 1}-01-01" if month == 12 else f"{year}-{month + 1:02d}-01"
+
+    # --- Settled IDs ---
+    settled_items = await db.distributor_settlement_items.find(
+        {"tenant_id": tenant_id}, {"delivery_id": 1}
+    ).to_list(10000)
+    settled_delivery_ids = [item['delivery_id'] for item in settled_items]
+
+    existing_settlements = await db.distributor_settlements.find(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0, "credit_note_ids": 1, "factory_return_ids": 1}
+    ).to_list(10000)
+    settled_cn_ids = []
+    settled_fr_ids = []
+    for es in existing_settlements:
+        settled_cn_ids.extend(es.get('credit_note_ids') or [])
+        settled_fr_ids.extend(es.get('factory_return_ids') or [])
+
+    # --- Deliveries ---
+    deliveries = await db.distributor_deliveries.find({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": "delivered",
+        "id": {"$nin": settled_delivery_ids},
+        "delivery_date": {"$gte": start_date, "$lt": end_date}
+    }, {"_id": 0}).sort("delivery_date", 1).to_list(500)
+    for d in deliveries:
+        d['items'] = await db.distributor_delivery_items.find(
+            {"delivery_id": d['id'], "tenant_id": tenant_id}, {"_id": 0}
+        ).to_list(500)
+
+    # --- Credit Notes ---
+    from datetime import datetime as dt_cls_prev
+    period_start_dt = dt_cls_prev.fromisoformat(start_date + "T00:00:00")
+    period_end_dt = dt_cls_prev.fromisoformat(end_date + "T00:00:00")
+    credit_notes = await db.credit_notes.find({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": {"$in": ["pending", "partially_applied", "fully_applied"]},
+        "created_at": {"$gte": period_start_dt, "$lt": period_end_dt},
+        "id": {"$nin": settled_cn_ids}
+    }, {"_id": 0}).to_list(500)
+    # Serialize datetime fields
+    for cn in credit_notes:
+        for k in ['created_at', 'updated_at']:
+            if hasattr(cn.get(k), 'isoformat'):
+                cn[k] = cn[k].isoformat()
+
+    # --- Factory Returns ---
+    factory_returns = await db.distributor_factory_returns.find({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": {"$in": ["confirmed", "received"]},
+        "return_date": {"$gte": start_date, "$lt": end_date},
+        "$or": [{"requires_settlement": True}, {"source": "warehouse"}],
+        "id": {"$nin": settled_fr_ids}
+    }, {"_id": 0}).to_list(500)
+
+    total_delivery_amount = sum(d.get('total_net_amount', 0) for d in deliveries)
+    total_cn_amount = sum(cn.get('original_amount', 0) or cn.get('total_amount', 0) or 0 for cn in credit_notes)
+    total_fr_amount = sum(fr.get('total_credit_amount', 0) for fr in factory_returns)
+
+    return {
+        "deliveries": deliveries,
+        "credit_notes": credit_notes,
+        "factory_returns": factory_returns,
+        "summary": {
+            "total_deliveries": len(deliveries),
+            "total_delivery_amount": round(total_delivery_amount, 2),
+            "total_credit_notes": len(credit_notes),
+            "total_credit_note_amount": round(total_cn_amount, 2),
+            "total_factory_returns": len(factory_returns),
+            "total_factory_return_amount": round(total_fr_amount, 2)
+        }
+    }
+
+
 @router.post("/{distributor_id}/settlements")
 async def create_settlement(
     distributor_id: str,

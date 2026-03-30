@@ -196,6 +196,8 @@ export default function DistributorDetail() {
   const [showSettlementDialog, setShowSettlementDialog] = useState(false);
   const [unsettledDeliveries, setUnsettledDeliveries] = useState([]);
   const [unsettledLoading, setUnsettledLoading] = useState(false);
+  const [settlementPreview, setSettlementPreview] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [settlementForm, setSettlementForm] = useState({
     settlement_month: new Date().getMonth() + 1,
     settlement_year: new Date().getFullYear(),
@@ -488,6 +490,23 @@ export default function DistributorDetail() {
       setUnsettledDeliveries([]);
     } finally {
       setUnsettledLoading(false);
+    }
+  }, [id, token]);
+
+  const fetchSettlementPreview = useCallback(async (month, year) => {
+    if (!month || !year) return;
+    try {
+      setPreviewLoading(true);
+      const response = await axios.get(
+        `${API_URL}/api/distributors/${id}/settlement-preview?month=${month}&year=${year}`,
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      setSettlementPreview(response.data);
+    } catch (error) {
+      console.error('Failed to fetch settlement preview:', error);
+      setSettlementPreview(null);
+    } finally {
+      setPreviewLoading(false);
     }
   }, [id, token]);
 
@@ -1607,6 +1626,7 @@ export default function DistributorDetail() {
       remarks: ''
     });
     setUnsettledDeliveries([]);
+    setSettlementPreview(null);
   };
 
   const handleSubmitSettlement = async (settlementId) => {
@@ -2290,6 +2310,9 @@ export default function DistributorDetail() {
             unsettledDeliveries={unsettledDeliveries}
             unsettledLoading={unsettledLoading}
             fetchUnsettledDeliveries={fetchUnsettledDeliveries}
+            settlementPreview={settlementPreview}
+            previewLoading={previewLoading}
+            fetchSettlementPreview={fetchSettlementPreview}
             handleCreateSettlement={handleCreateSettlement}
             handleSubmitSettlement={handleSubmitSettlement}
             handleApproveSettlement={handleApproveSettlement}
