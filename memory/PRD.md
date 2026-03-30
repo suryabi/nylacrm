@@ -9,12 +9,6 @@ A comprehensive Sales CRM and Distribution Management platform built with React 
 - **Database**: MongoDB
 - **Integrations**: Amazon MQ, Emergent Object Storage, Gemini LLM, Zoom API, Resend, Google Places, Google Workspace OAuth, Claude Sonnet 4.5
 
-## Key Modules
-1. **CRM Core**: Leads, Accounts, Pipeline, Invoices, Dashboard
-2. **Distribution Module**: Distributors, Stock-In, Stock-Out (Deliveries), Customer Returns, Factory Returns, Credit Notes, Settlements, Billing/Reconciliation
-3. **Product & SKU**: Master SKUs, COGS Calculator, Transport Calculator
-4. **Sales Operations**: Lead Discovery, Target Planning, Daily Status, Status Summary
-
 ## Completed Features
 
 ### Distribution Module - Stock Out & Settlement Overhaul
@@ -23,32 +17,37 @@ A comprehensive Sales CRM and Distribution Management platform built with React 
 - [x] Factory Return dialog with Source-first selection (Warehouse vs Customer)
 - [x] Factory Return SKU dropdown from `distributor_margin_matrix` only
 - [x] Factory Return credit formula uses `transfer_price` (not `base_price`)
-- [x] Settlement generation independently queries Credit Notes and Factory Returns (Fixed 2026-03-30)
-- [x] Settlement stores `total_credit_notes_issued` and `total_factory_return_credit` (Fixed 2026-03-30)
-- [x] Net Payout formula: Earnings - Price Adj + Credit Notes + Factory Returns (Fixed 2026-03-30)
-- [x] BillingTab 7 summary cards with correct formula (Verified 2026-03-30)
-- [x] Monthly Reconciliation API returns credit notes and factory return totals (Verified 2026-03-30)
-- [x] **Settlements Tab Redesign** (2026-03-30):
-  - New `GET /api/distributors/{id}/settlement-preview` endpoint
-  - Generate dialog shows 3 summary cards (Deliveries, Credit Notes, Factory Returns)
-  - Payout formula visualization bar (dark background)
-  - 3 separate detail tables for each settlement component
-  - Settlement list shows all components: Earnings, Price Adj, Credit Notes, Factory Returns, Net Payout
-  - Grand totals summary bar with all 6 columns
-  - Account-level grouping with expand/collapse
+
+### Settlement Generation (Fixed 2026-03-30)
+- [x] Settlement independently queries Credit Notes and Factory Returns
+- [x] Settlement stores `total_credit_notes_issued` and `total_factory_return_credit`
+- [x] Net Payout formula: Earnings - Price Adj + Credit Notes + Factory Returns
+- [x] Settlement Preview endpoint (`GET /api/distributors/{id}/settlement-preview`)
+- [x] Redesigned Settlements tab with 3 summary cards, payout formula bar, 3 detail tables
+- [x] Account-level grouping with expand/collapse and grand totals
+
+### Billing Reconciliation - Transfer Price Based (Redesigned 2026-03-30)
+- [x] **Core Logic**: Distributor pays Nyla at transfer price for stock sold to customers
+- [x] **Formula**: Amount Payable (at Transfer Price) - Credit Notes - Factory Returns = Net Settlement
+- [x] **Debit/Credit Note**: Positive net = Debit Note (dist owes), Negative = Credit Note (Nyla owes)
+- [x] Reconciliation flow visualization (4-step: Stock → Less CN → Less FR → Net)
+- [x] Formula bar showing calculation breakdown
+- [x] Settlement breakdown by account with "At Transfer Price" column
+- [x] Generate Note dialog with complete flow summary
+- [x] Backend returns `total_payable_to_nyla`, `net_settlement`, `settlement_note_type`
 
 ## Key API Endpoints (Distribution)
-- `POST /api/distributors/{id}/settlements/generate-monthly` - Generate monthly settlements per account
-- `GET /api/distributors/{id}/settlement-preview?month=X&year=Y` - Preview all settlement components
-- `GET /api/distributors/{id}/monthly-reconciliation?month=X&year=Y` - Get reconciliation data
+- `POST /api/distributors/{id}/settlements/generate-monthly` - Generate monthly settlements
+- `GET /api/distributors/{id}/settlement-preview?month=X&year=Y` - Preview settlement components
+- `GET /api/distributors/{id}/monthly-reconciliation?month=X&year=Y` - Transfer-price reconciliation
+- `POST /api/distributors/{id}/generate-monthly-note` - Generate Debit/Credit Note
 - `POST /api/distributors/{id}/factory-returns` - Create factory return
-- `GET /api/distributors/{id}/credit-notes` - List credit notes
 
 ## Key DB Collections
-- `distributor_settlements`: `{total_billing_value, distributor_earnings, factory_distributor_adjustment, total_credit_notes_issued, total_factory_return_credit, final_payout, settlement_month, settlement_year, credit_note_ids, factory_return_ids}`
-- `credit_notes`: `{original_amount, created_at (datetime), status, account_id, distributor_id}`
+- `distributor_settlements`: `{total_billing_value, distributor_earnings, factory_distributor_adjustment, total_credit_notes_issued, total_factory_return_credit, final_payout, settlement_month, settlement_year}`
+- `distributor_debit_credit_notes`: `{note_type, amount, total_payable_to_nyla, total_credit_notes, total_factory_return_credit, net_settlement}`
+- `credit_notes`: `{original_amount, created_at (datetime), status, account_id}`
 - `distributor_factory_returns`: `{source, reason, requires_settlement, total_credit_amount, return_date (string)}`
-- `distributor_margin_matrix`: `{distributor_id, sku_id, sku_name, base_price, transfer_price, margin_type, margin_value}`
 
 ## Upcoming Tasks (P1)
 - Auto-generate Provisional Invoice (trigger on shipment status -> "delivered")
