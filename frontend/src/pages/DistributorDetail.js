@@ -59,7 +59,7 @@ export default function DistributorDetail() {
   
   const [loading, setLoading] = useState(true);
   const [distributor, setDistributor] = useState(null);
-  const [activeTab, setActiveTab] = useState('profile');
+  const [activeTab, setActiveTab] = useState('stock-dashboard');
   
   // Edit mode
   const [isEditing, setIsEditing] = useState(false);
@@ -2039,6 +2039,10 @@ export default function DistributorDetail() {
       {/* Tabs - Consolidated Structure */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="grid w-full grid-cols-8 h-auto p-1">
+          <TabsTrigger value="stock-dashboard" className="flex items-center gap-2 py-2.5" data-testid="stock-dashboard-tab">
+            <BarChart3 className="h-4 w-4" />
+            <span className="hidden sm:inline">Stock</span>
+          </TabsTrigger>
           <TabsTrigger value="profile" className="flex items-center gap-2 py-2.5" data-testid="profile-tab">
             <Building2 className="h-4 w-4" />
             <span className="hidden sm:inline">Profile</span>
@@ -2066,10 +2070,6 @@ export default function DistributorDetail() {
           <TabsTrigger value="billing" className="flex items-center gap-2 py-2.5" data-testid="billing-tab">
             <Calculator className="h-4 w-4" />
             <span className="hidden sm:inline">Billing</span>
-          </TabsTrigger>
-          <TabsTrigger value="stock-dashboard" className="flex items-center gap-2 py-2.5" data-testid="stock-dashboard-tab">
-            <BarChart3 className="h-4 w-4" />
-            <span className="hidden sm:inline">Stock</span>
           </TabsTrigger>
         </TabsList>
 
