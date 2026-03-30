@@ -82,6 +82,37 @@ export default function DeliveriesTab({
   const [factoryForm, setFactoryForm] = useState({ distributor_location_id: '', reason: 'expired', source: 'warehouse', customer_return_id: '', return_date: new Date().toISOString().split('T')[0], remarks: '' });
   const [factoryItems, setFactoryItems] = useState([{ sku_id: '', quantity: 1 }]);
   const [savingFactory, setSavingFactory] = useState(false);
+  const [marginSkus, setMarginSkus] = useState([]);
+  
+  // Fetch margin matrix SKUs for this distributor (only assigned SKUs)
+  const fetchMarginSkus = useCallback(async () => {
+    if (!distributor?.id) return;
+    try {
+      const res = await fetch(
+        `${API_URL}/api/distributors/${distributor.id}/margins`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const margins = data.margins || data || [];
+        const uniqueSkus = [];
+        const seen = new Set();
+        margins.forEach(m => {
+          if (m.sku_id && !seen.has(m.sku_id)) {
+            seen.add(m.sku_id);
+            uniqueSkus.push({ id: m.sku_id, sku_name: m.sku_name, base_price: m.base_price });
+          }
+        });
+        setMarginSkus(uniqueSkus);
+      }
+    } catch (err) {
+      console.error('Error fetching margin SKUs:', err);
+    }
+  }, [distributor?.id, API_URL, token]);
+  
+  useEffect(() => {
+    if (factorySectionOpen) fetchMarginSkus();
+  }, [factorySectionOpen, fetchMarginSkus]);
   
   // Fetch factory returns
   const fetchFactoryReturns = useCallback(async () => {
@@ -1370,8 +1401,8 @@ export default function DeliveriesTab({
                               data-testid={`factory-sku-select-${idx}`}
                             >
                               <option value="">Select SKU</option>
-                              {skus.map(sku => (
-                                <option key={sku.id} value={sku.id}>{sku.sku_name || sku.name}{sku.sku && sku.sku !== sku.sku_name ? ` (${sku.sku})` : ''}</option>
+                              {marginSkus.map(sku => (
+                                <option key={sku.id} value={sku.id}>{sku.sku_name}{sku.base_price ? ` (₹${sku.base_price})` : ''}</option>
                               ))}
                             </select>
                             <Input

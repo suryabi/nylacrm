@@ -188,8 +188,8 @@ async def create_factory_return(
         if not sku:
             raise HTTPException(status_code=404, detail=f"SKU {item_data.sku_id} not found")
 
-        # Get base price from distributor margin or SKU
-        margin = await db.distributor_margins.find_one(
+        # Get base price from distributor margin matrix
+        margin = await db.distributor_margin_matrix.find_one(
             {"distributor_id": distributor_id, "sku_id": item_data.sku_id, "tenant_id": tenant_id},
             {"_id": 0}
         )
