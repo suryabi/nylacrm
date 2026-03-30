@@ -5915,15 +5915,28 @@ async def get_monthly_reconciliation_data(
     total_billing = sum(s.get('total_billing_value', 0) for s in unreconciled_settlements)
     total_earnings = sum(s.get('distributor_earnings', 0) for s in unreconciled_settlements)
     total_margin_at_transfer = sum(s.get('margin_at_transfer_price', 0) for s in unreconciled_settlements)
+    total_factory_adj = sum(s.get('factory_distributor_adjustment', 0) for s in unreconciled_settlements)
     net_adjustment = sum(s.get('adjustment_payable', 0) for s in unreconciled_settlements)
     total_credit_notes = sum(s.get('total_credit_notes_issued', 0) or s.get('credit_notes_applied', 0) for s in unreconciled_settlements)
     total_factory_return_credit = sum(s.get('total_factory_return_credit', 0) for s in unreconciled_settlements)
     
+    # Transfer-price based reconciliation:
+    # Amount distributor owes Nyla = qty × transfer_price = billing - earnings - factory_adj
+    total_payable_to_nyla = total_billing - total_earnings - total_factory_adj
+    # Adjustments in distributor's favour
+    total_adjustments_for_dist = total_credit_notes + total_factory_return_credit
+    # Net: positive = dist owes Nyla (debit note), negative = Nyla owes dist (credit note)
+    net_settlement = total_payable_to_nyla - total_adjustments_for_dist
+    settlement_note_type = "debit" if net_settlement > 0 else "credit" if net_settlement < 0 else "none"
+    
     # Calculate totals for already reconciled
     reconciled_billing = sum(s.get('total_billing_value', 0) for s in reconciled_settlements)
+    reconciled_earnings = sum(s.get('distributor_earnings', 0) for s in reconciled_settlements)
+    reconciled_factory_adj = sum(s.get('factory_distributor_adjustment', 0) for s in reconciled_settlements)
     reconciled_adjustment = sum(s.get('adjustment_payable', 0) for s in reconciled_settlements)
     reconciled_credit_notes = sum(s.get('total_credit_notes_issued', 0) or s.get('credit_notes_applied', 0) for s in reconciled_settlements)
     reconciled_factory_return_credit = sum(s.get('total_factory_return_credit', 0) for s in reconciled_settlements)
+    reconciled_payable = reconciled_billing - reconciled_earnings - reconciled_factory_adj
     
     return {
         "unreconciled_settlements": unreconciled_settlements,
@@ -5933,13 +5946,21 @@ async def get_monthly_reconciliation_data(
         "total_billing_value": round(total_billing, 2),
         "total_distributor_earnings": round(total_earnings, 2),
         "total_margin_at_transfer": round(total_margin_at_transfer, 2),
+        "total_factory_adjustment": round(total_factory_adj, 2),
         "net_adjustment": round(net_adjustment, 2),
         "total_credit_notes_applied": round(total_credit_notes, 2),
         "total_factory_return_credit": round(total_factory_return_credit, 2),
+        # Transfer-price based reconciliation
+        "total_payable_to_nyla": round(total_payable_to_nyla, 2),
+        "total_adjustments_for_dist": round(total_adjustments_for_dist, 2),
+        "net_settlement": round(net_settlement, 2),
+        "settlement_note_type": settlement_note_type,
+        # Reconciled
         "reconciled_billing_value": round(reconciled_billing, 2),
         "reconciled_adjustment": round(reconciled_adjustment, 2),
         "reconciled_credit_notes": round(reconciled_credit_notes, 2),
         "reconciled_factory_return_credit": round(reconciled_factory_return_credit, 2),
+        "reconciled_payable_to_nyla": round(reconciled_payable, 2),
         "existing_notes": existing_notes,
         "total_notes": len(existing_notes)
     }
@@ -5981,11 +6002,20 @@ async def generate_monthly_note(
     if not settlements:
         raise HTTPException(status_code=400, detail="No approved unreconciled settlements found for this month")
     
-    # Calculate net adjustment for these settlements
-    net_adjustment = sum(s.get('adjustment_payable', 0) for s in settlements)
+    # Calculate transfer-price based net settlement
+    total_billing = sum(s.get('total_billing_value', 0) for s in settlements)
+    total_earnings = sum(s.get('distributor_earnings', 0) for s in settlements)
+    total_factory_adj = sum(s.get('factory_distributor_adjustment', 0) for s in settlements)
+    total_credit_notes = sum(s.get('total_credit_notes_issued', 0) or s.get('credit_notes_applied', 0) for s in settlements)
+    total_factory_return_credit = sum(s.get('total_factory_return_credit', 0) for s in settlements)
     
-    if net_adjustment == 0:
-        raise HTTPException(status_code=400, detail="Net adjustment is zero - no note required")
+    # Amount distributor owes Nyla = qty × transfer_price
+    total_payable_to_nyla = total_billing - total_earnings - total_factory_adj
+    # Net: positive = dist owes (debit note), negative = Nyla owes (credit note)
+    net_settlement = total_payable_to_nyla - total_credit_notes - total_factory_return_credit
+    
+    if net_settlement == 0:
+        raise HTTPException(status_code=400, detail="Net settlement is zero - no note required")
     
     # Get distributor full info for PDF
     distributor = await db.distributors.find_one(
@@ -6001,9 +6031,9 @@ async def generate_monthly_note(
     company_profile = tenant.get('company_profile', {}) if tenant else {}
     branding = tenant.get('branding', {}) if tenant else {}
     
-    # Determine note type
-    note_type = "credit" if net_adjustment >= 0 else "debit"
-    amount = abs(net_adjustment)
+    # Determine note type: positive net = distributor owes = debit note
+    note_type = "debit" if net_settlement > 0 else "credit"
+    amount = abs(net_settlement)
     
     # Generate note number
     count = await db.distributor_debit_credit_notes.count_documents({"tenant_id": tenant_id})
@@ -6028,9 +6058,13 @@ async def generate_monthly_note(
         "balance_amount": round(amount, 2),
         "settlement_ids": [s['id'] for s in settlements],
         "total_settlements": len(settlements),
-        "total_billing_value": round(sum(s.get('total_billing_value', 0) for s in settlements), 2),
-        "total_distributor_earnings": round(sum(s.get('distributor_earnings', 0) for s in settlements), 2),
+        "total_billing_value": round(total_billing, 2),
+        "total_distributor_earnings": round(total_earnings, 2),
         "total_margin_at_transfer": round(sum(s.get('margin_at_transfer_price', 0) for s in settlements), 2),
+        "total_payable_to_nyla": round(total_payable_to_nyla, 2),
+        "total_credit_notes": round(total_credit_notes, 2),
+        "total_factory_return_credit": round(total_factory_return_credit, 2),
+        "net_settlement": round(net_settlement, 2),
         "remarks": remarks,
         "status": "pending",
         "created_by": current_user['id'],
