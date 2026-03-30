@@ -3936,7 +3936,18 @@ async def create_settlement(
         {"delivery_id": 1}
     ).to_list(10000)
     
-    settled_delivery_ids = [item['delivery_id'] for item in settled_items]
+    settled_delivery_ids = [item['delivery_id'] for item in settled_items if item.get('delivery_id')]
+    
+    # Get already-settled credit note IDs and factory return IDs from existing settlements
+    existing_settlements = await db.distributor_settlements.find(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0, "credit_note_ids": 1, "factory_return_ids": 1}
+    ).to_list(10000)
+    settled_cn_ids = []
+    settled_fr_ids = []
+    for s in existing_settlements:
+        settled_cn_ids.extend(s.get('credit_note_ids') or [])
+        settled_fr_ids.extend(s.get('factory_return_ids') or [])
     
     # Get completed deliveries for the period that haven't been settled
     deliveries = await db.distributor_deliveries.find({
@@ -3947,8 +3958,29 @@ async def create_settlement(
         "id": {"$nin": settled_delivery_ids}
     }, {"_id": 0}).sort("delivery_date", 1).to_list(500)
     
-    if not deliveries:
-        raise HTTPException(status_code=400, detail="No unsettled deliveries found for this period")
+    # Get credit notes issued in the period (not yet settled)
+    credit_notes = await db.credit_notes.find({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": {"$in": ["pending", "partially_applied", "fully_applied"]},
+        "created_at": {"$gte": data.period_start, "$lte": data.period_end + "T23:59:59"},
+        "id": {"$nin": settled_cn_ids}
+    }, {"_id": 0}).to_list(500)
+    total_credit_notes_issued = sum(cn.get('total_amount', 0) or cn.get('amount', 0) for cn in credit_notes)
+    
+    # Get adjustable factory returns in the period (not yet settled)
+    factory_returns = await db.distributor_factory_returns.find({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": {"$in": ["confirmed", "received"]},
+        "return_date": {"$gte": data.period_start, "$lte": data.period_end},
+        "$or": [{"requires_settlement": True}, {"source": "warehouse"}],
+        "id": {"$nin": settled_fr_ids}
+    }, {"_id": 0}).to_list(500)
+    total_factory_return_credit = sum(fr.get('total_credit_amount', 0) for fr in factory_returns)
+    
+    if not deliveries and not credit_notes and not factory_returns:
+        raise HTTPException(status_code=400, detail="No unsettled deliveries, credit notes, or factory returns found for this period")
     
     # Generate settlement
     settlement_number = await generate_settlement_number(tenant_id)
@@ -3960,27 +3992,14 @@ async def create_settlement(
     total_delivery_amount = sum(d.get('total_net_amount', 0) for d in deliveries)
     total_margin_amount = sum(d.get('total_margin_amount', 0) for d in deliveries)
     
-    # Calculate total credit notes applied (factory owes distributor for customer returns)
-    total_credit_notes_applied = sum(d.get('total_credit_applied', 0) for d in deliveries)
-    
-    # Calculate factory return credits (only warehouse-sourced returns need settlement adjustment)
-    factory_returns_query = {
-        "tenant_id": tenant_id,
-        "distributor_id": distributor_id,
-        "status": {"$in": ["confirmed", "received"]},
-        "return_date": {"$gte": data.period_start, "$lte": data.period_end},
-        "$or": [{"requires_settlement": True}, {"source": "warehouse"}]
-    }
-    factory_returns = await db.distributor_factory_returns.find(
-        factory_returns_query, {"_id": 0}
-    ).to_list(1000)
-    total_factory_return_credit = sum(fr.get('total_credit_amount', 0) for fr in factory_returns)
+    # Credit notes applied to deliveries (subset — for reference, stored in settlement doc)
+    total_credit_on_deliveries = sum(d.get('total_credit_applied', 0) for d in deliveries)
     
     # Adjustment from distributor to factory (when customer price > base price)
     total_dist_to_factory_adjustment = sum(d.get('total_adjustment_dist_to_factory', 0) for d in deliveries)
     
-    # Net adjustments: Credit notes + Factory return credits (factory pays distributor) - Price adjustments (distributor pays factory)
-    net_adjustments = total_credit_notes_applied + total_factory_return_credit - total_dist_to_factory_adjustment
+    # Net adjustments: Credit notes issued + Factory return credits (factory pays distributor) - Price adjustments (distributor pays factory)
+    net_adjustments = total_credit_notes_issued + total_factory_return_credit - total_dist_to_factory_adjustment
     
     # Create settlement items
     items_to_insert = []
@@ -4020,9 +4039,13 @@ async def create_settlement(
         "total_quantity": total_quantity,
         "total_delivery_amount": round(total_delivery_amount, 2),
         "total_margin_amount": round(total_margin_amount, 2),
-        "total_credit_notes_applied": round(total_credit_notes_applied, 2),
+        "total_credit_notes_issued": round(total_credit_notes_issued, 2),
         "total_factory_return_credit": round(total_factory_return_credit, 2),
         "total_dist_to_factory_adjustment": round(total_dist_to_factory_adjustment, 2),
+        "credit_note_ids": [cn.get('id') for cn in credit_notes],
+        "factory_return_ids": [fr.get('id') for fr in factory_returns],
+        "total_credit_notes": len(credit_notes),
+        "total_factory_returns": len(factory_returns),
         "adjustments": round(net_adjustments, 2),
         "final_payout": round(final_payout, 2),
         "status": "draft",
@@ -5719,12 +5742,14 @@ async def get_monthly_reconciliation_data(
     total_earnings = sum(s.get('distributor_earnings', 0) for s in unreconciled_settlements)
     total_margin_at_transfer = sum(s.get('margin_at_transfer_price', 0) for s in unreconciled_settlements)
     net_adjustment = sum(s.get('adjustment_payable', 0) for s in unreconciled_settlements)
-    total_credit_notes = sum(s.get('credit_notes_applied', 0) for s in unreconciled_settlements)
+    total_credit_notes = sum(s.get('total_credit_notes_issued', 0) or s.get('credit_notes_applied', 0) for s in unreconciled_settlements)
+    total_factory_return_credit = sum(s.get('total_factory_return_credit', 0) for s in unreconciled_settlements)
     
     # Calculate totals for already reconciled
     reconciled_billing = sum(s.get('total_billing_value', 0) for s in reconciled_settlements)
     reconciled_adjustment = sum(s.get('adjustment_payable', 0) for s in reconciled_settlements)
-    reconciled_credit_notes = sum(s.get('credit_notes_applied', 0) for s in reconciled_settlements)
+    reconciled_credit_notes = sum(s.get('total_credit_notes_issued', 0) or s.get('credit_notes_applied', 0) for s in reconciled_settlements)
+    reconciled_factory_return_credit = sum(s.get('total_factory_return_credit', 0) for s in reconciled_settlements)
     
     return {
         "unreconciled_settlements": unreconciled_settlements,
@@ -5736,9 +5761,11 @@ async def get_monthly_reconciliation_data(
         "total_margin_at_transfer": round(total_margin_at_transfer, 2),
         "net_adjustment": round(net_adjustment, 2),
         "total_credit_notes_applied": round(total_credit_notes, 2),
+        "total_factory_return_credit": round(total_factory_return_credit, 2),
         "reconciled_billing_value": round(reconciled_billing, 2),
         "reconciled_adjustment": round(reconciled_adjustment, 2),
         "reconciled_credit_notes": round(reconciled_credit_notes, 2),
+        "reconciled_factory_return_credit": round(reconciled_factory_return_credit, 2),
         "existing_notes": existing_notes,
         "total_notes": len(existing_notes)
     }

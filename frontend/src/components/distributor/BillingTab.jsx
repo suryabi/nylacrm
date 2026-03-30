@@ -204,7 +204,8 @@ export default function BillingTab({
           adjustment: 0,
           price_premium: 0,
           factory_adjustment: 0,
-          credit_notes_applied: 0
+          credit_notes_applied: 0,
+          factory_return_credit: 0
         }
       };
     }
@@ -215,7 +216,8 @@ export default function BillingTab({
     acc[accountId].totals.adjustment += settlement.adjustment_payable || 0;
     acc[accountId].totals.price_premium += settlement.price_premium_payable || 0;
     acc[accountId].totals.factory_adjustment += settlement.factory_distributor_adjustment || 0;
-    acc[accountId].totals.credit_notes_applied += settlement.credit_notes_applied || 0;
+    acc[accountId].totals.credit_notes_applied += settlement.total_credit_notes_issued || settlement.credit_notes_applied || 0;
+    acc[accountId].totals.factory_return_credit += settlement.total_factory_return_credit || 0;
     return acc;
   }, {});
 
@@ -251,8 +253,9 @@ export default function BillingTab({
     adjustment: acc.adjustment + group.totals.adjustment,
     price_premium: acc.price_premium + group.totals.price_premium,
     factory_adjustment: acc.factory_adjustment + group.totals.factory_adjustment,
-    credit_notes_applied: acc.credit_notes_applied + group.totals.credit_notes_applied
-  }), { total_billing: 0, distributor_earnings: 0, margin_at_transfer: 0, adjustment: 0, price_premium: 0, factory_adjustment: 0, credit_notes_applied: 0 });
+    credit_notes_applied: acc.credit_notes_applied + group.totals.credit_notes_applied,
+    factory_return_credit: acc.factory_return_credit + group.totals.factory_return_credit
+  }), { total_billing: 0, distributor_earnings: 0, margin_at_transfer: 0, adjustment: 0, price_premium: 0, factory_adjustment: 0, credit_notes_applied: 0, factory_return_credit: 0 });
 
   const noteType = grandTotals.adjustment >= 0 ? 'credit' : 'debit';
   const existingNotes = monthlyData?.existing_notes || [];
@@ -363,7 +366,7 @@ export default function BillingTab({
                   </div>
 
                   {/* Summary Cards for Unreconciled */}
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                     <Card className="bg-muted/30">
                       <CardContent className="p-4 text-center">
                         <p className="text-sm text-muted-foreground">Accounts</p>
@@ -400,7 +403,18 @@ export default function BillingTab({
                           +₹{(grandTotals.credit_notes_applied || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Added to Distributor
+                          Customer credit reimbursement
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card className={grandTotals.factory_return_credit > 0 ? 'bg-purple-50 border-purple-200' : 'bg-muted/30'}>
+                      <CardContent className="p-4 text-center">
+                        <p className="text-sm text-muted-foreground">③ Factory Returns (Factory → Dist)</p>
+                        <p className={`text-xl font-bold ${grandTotals.factory_return_credit > 0 ? 'text-purple-600' : 'text-slate-400'}`}>
+                          +₹{(grandTotals.factory_return_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {grandTotals.factory_return_credit > 0 ? 'Expired/damaged stock credit' : 'No factory returns'}
                         </p>
                       </CardContent>
                     </Card>
@@ -408,10 +422,10 @@ export default function BillingTab({
                       <CardContent className="p-4 text-center">
                         <p className="text-sm text-muted-foreground">Net Payout</p>
                         <p className="text-xl font-bold text-indigo-600">
-                          ₹{(grandTotals.distributor_earnings - grandTotals.factory_adjustment + (grandTotals.credit_notes_applied || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          ₹{(grandTotals.distributor_earnings - grandTotals.factory_adjustment + (grandTotals.credit_notes_applied || 0) + (grandTotals.factory_return_credit || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Earnings - ① + ②
+                          Earnings - ① + ② + ③
                         </p>
                       </CardContent>
                     </Card>
@@ -458,9 +472,18 @@ export default function BillingTab({
                                 </p>
                               </div>
                               <div className="text-right">
+                                <p className="text-sm text-muted-foreground">③ Factory Returns</p>
+                                <p className="font-medium text-purple-600">
+                                  {group.totals.factory_return_credit > 0 
+                                    ? `+₹${group.totals.factory_return_credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                    : '-'
+                                  }
+                                </p>
+                              </div>
+                              <div className="text-right">
                                 <p className="text-sm text-muted-foreground">Net Payout</p>
                                 <p className="font-medium text-indigo-600">
-                                  ₹{(group.totals.distributor_earnings - group.totals.factory_adjustment + group.totals.credit_notes_applied).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                  ₹{(group.totals.distributor_earnings - group.totals.factory_adjustment + group.totals.credit_notes_applied + group.totals.factory_return_credit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                 </p>
                               </div>
                               {expandedAccounts[group.account_id] ? (
@@ -482,6 +505,7 @@ export default function BillingTab({
                                     <th className="text-right p-2 font-medium">Earnings</th>
                                     <th className="text-right p-2 font-medium">① Price Adj</th>
                                     <th className="text-right p-2 font-medium">② Return Credits</th>
+                                    <th className="text-right p-2 font-medium">③ Factory Returns</th>
                                     <th className="text-right p-2 font-medium">Net Payout</th>
                                     <th className="text-center p-2 font-medium">Status</th>
                                   </tr>
@@ -489,9 +513,10 @@ export default function BillingTab({
                                 <tbody>
                                   {group.settlements.map(settlement => {
                                     const priceAdj = settlement.factory_distributor_adjustment || settlement.adjustment_payable || 0;
-                                    const creditNotes = settlement.credit_notes_applied || 0;
+                                    const creditNotes = settlement.total_credit_notes_issued || settlement.credit_notes_applied || 0;
+                                    const factoryReturnCredit = settlement.total_factory_return_credit || 0;
                                     const earnings = settlement.distributor_earnings || 0;
-                                    const netPayout = earnings - priceAdj + creditNotes;
+                                    const netPayout = earnings - priceAdj + creditNotes + factoryReturnCredit;
                                     
                                     return (
                                       <tr key={settlement.id} className="border-b hover:bg-muted/30">
@@ -504,6 +529,9 @@ export default function BillingTab({
                                         </td>
                                         <td className="p-2 text-right text-emerald-600">
                                           {creditNotes > 0 ? `+₹${creditNotes.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
+                                        </td>
+                                        <td className="p-2 text-right text-purple-600">
+                                          {factoryReturnCredit > 0 ? `+₹${factoryReturnCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '-'}
                                         </td>
                                         <td className="p-2 text-right font-medium text-indigo-600">
                                           ₹{netPayout.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
