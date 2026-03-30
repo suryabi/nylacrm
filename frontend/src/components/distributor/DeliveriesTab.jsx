@@ -899,6 +899,7 @@ export default function DeliveriesTab({
                   <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actual Billable to Dist</th>
                   {/* Derived columns */}
                   <th className="text-right p-4 font-semibold text-amber-800/70 uppercase tracking-wider text-xs bg-amber-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Adjustment (Dist→Factory)</th>
+                  <th className="text-right p-4 font-semibold text-purple-800/70 uppercase tracking-wider text-xs bg-purple-50/40" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Final Billable to Dist</th>
                   <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Customer Invoice</th>
                   <th className="text-right p-4 font-semibold text-indigo-800/70 uppercase tracking-wider text-xs bg-indigo-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Net Billing</th>
                   <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs bg-emerald-50/30" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Status</th>
@@ -921,6 +922,9 @@ export default function DeliveriesTab({
                   const totalCreditApplied = delivery.total_credit_applied || 0;
                   const netCustomerBilling = delivery.net_customer_billing || (delivery.total_net_amount - totalCreditApplied);
                   const hasCreditNotes = appliedCreditNotes.length > 0 || totalCreditApplied > 0;
+                  
+                  // Final Billable to Dist = Actual Billable - Credit Notes
+                  const finalBillableToDist = (delivery.total_actual_billable || 0) - totalCreditApplied;
                   
                   items.forEach(item => {
                     const qty = item.quantity || 0;
@@ -1001,6 +1005,21 @@ export default function DeliveriesTab({
                             <td className={`p-4 text-right font-semibold bg-amber-50/40 ${adjustment > 0 ? 'text-emerald-600' : adjustment < 0 ? 'text-red-600' : 'text-slate-400'}`}>
                               {adjustment > 0 ? '+' : ''}₹{adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                             </td>
+                            {/* Final Billable to Dist - show only on first row with rowSpan */}
+                            {itemIndex === 0 && (
+                              <td className="p-4 text-right align-top bg-purple-50/40" rowSpan={rowSpan}>
+                                <div className="flex flex-col items-end gap-0.5">
+                                  <span className="text-purple-700 font-bold">
+                                    ₹{(totalActualBillable - totalCreditApplied).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                  </span>
+                                  {hasCreditNotes && (
+                                    <span className="text-xs text-purple-500">
+                                      ({totalActualBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })} - {totalCreditApplied.toLocaleString('en-IN', { minimumFractionDigits: 2 })})
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                            )}
                             {/* Customer Invoice */}
                             <td className="p-4 text-right font-medium text-slate-800">₹{customerInvoice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             {itemIndex === 0 && (
@@ -1073,7 +1092,7 @@ export default function DeliveriesTab({
                             </p>
                             <p className="text-xs font-medium mt-1 text-slate-700">{delivery.account_name}</p>
                           </td>
-                          <td className="p-4 text-emerald-600/60" colSpan={9}>No line items</td>
+                          <td className="p-4 text-emerald-600/60" colSpan={10}>No line items</td>
                           <td className="p-4 text-center">
                             {getDeliveryStatusBadge(delivery.status)}
                           </td>
@@ -1123,6 +1142,10 @@ export default function DeliveriesTab({
                           {/* Adjustment total */}
                           <td className={`p-4 text-right bg-amber-50/50 ${totalAdjustment > 0 ? 'text-emerald-600' : totalAdjustment < 0 ? 'text-red-600' : 'text-slate-400'}`}>
                             {totalAdjustment > 0 ? '+' : ''}₹{totalAdjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          {/* Final Billable to Dist total */}
+                          <td className="p-4 text-right bg-purple-50/50 text-purple-700 font-bold">
+                            ₹{(totalActualBillable - totalCreditApplied).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                           </td>
                           {/* Customer invoice total */}
                           <td className="p-4 text-right text-slate-800">₹{totalCustomerInvoice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
