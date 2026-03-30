@@ -5930,6 +5930,81 @@ async def get_monthly_reconciliation_data(
     if total_at_transfer_price == 0 and total_billing > 0:
         total_at_transfer_price = total_billing - total_earnings - total_factory_adj
     
+    # --- Weekly billing breakdown (based on delivery_date) ---
+    import calendar
+    month_abbrevs = {1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec'}
+    days_in_month = calendar.monthrange(year, month)[1]
+    week_ranges = []
+    day = 1
+    w = 1
+    while day <= days_in_month:
+        end_day = min(day + 6, days_in_month)
+        week_ranges.append({"week": w, "start_day": day, "end_day": end_day, "label": f"Week {w} ({day}-{end_day} {month_abbrevs.get(month, '')})"})
+        day = end_day + 1
+        w += 1
+    
+    # Get all delivered deliveries (settled in unreconciled settlements) with their items
+    all_settlement_ids = [s['id'] for s in unreconciled_settlements]
+    settled_items = await db.distributor_settlement_items.find(
+        {"tenant_id": tenant_id, "settlement_id": {"$in": all_settlement_ids}},
+        {"_id": 0, "delivery_id": 1}
+    ).to_list(10000)
+    settled_delivery_ids = [si['delivery_id'] for si in settled_items]
+    
+    weekly_billing = []
+    if settled_delivery_ids:
+        settled_deliveries = await db.distributor_deliveries.find(
+            {"tenant_id": tenant_id, "id": {"$in": settled_delivery_ids}},
+            {"_id": 0, "id": 1, "delivery_date": 1, "account_name": 1}
+        ).to_list(10000)
+        
+        # Get delivery items for transfer price calculation
+        all_delivery_items = await db.distributor_delivery_items.find(
+            {"tenant_id": tenant_id, "delivery_id": {"$in": settled_delivery_ids}},
+            {"_id": 0}
+        ).to_list(50000)
+        items_by_delivery = {}
+        for di in all_delivery_items:
+            did = di.get('delivery_id')
+            if did not in items_by_delivery:
+                items_by_delivery[did] = []
+            items_by_delivery[did].append(di)
+        
+        for wr in week_ranges:
+            start_str = f"{year}-{month:02d}-{wr['start_day']:02d}"
+            end_str = f"{year}-{month:02d}-{wr['end_day']:02d}"
+            week_amount = 0
+            week_deliveries = 0
+            for d in settled_deliveries:
+                dd = d.get('delivery_date', '')
+                if dd >= start_str and dd <= end_str:
+                    week_deliveries += 1
+                    for item in items_by_delivery.get(d['id'], []):
+                        qty = item.get('quantity', 0)
+                        base_p = item.get('base_price') or item.get('transfer_price') or 0
+                        comm = item.get('distributor_commission_percent') or item.get('margin_percent') or 0
+                        tp = base_p * (1 - comm / 100)
+                        week_amount += qty * tp
+            weekly_billing.append({
+                "week": wr['week'],
+                "start_day": wr['start_day'],
+                "end_day": wr['end_day'],
+                "label": wr['label'],
+                "amount": round(week_amount, 2),
+                "deliveries": week_deliveries
+            })
+    else:
+        # No settled deliveries, return empty weeks
+        for wr in week_ranges:
+            weekly_billing.append({
+                "week": wr['week'],
+                "start_day": wr['start_day'],
+                "end_day": wr['end_day'],
+                "label": wr['label'],
+                "amount": 0,
+                "deliveries": 0
+            })
+    
     # === ENTRY 2: Monthly Settlement (All Adjustments → Debit/Credit Note) ===
     # Selling price adjustments (when customer price ≠ base price)
     settlement_selling_price_adj = total_factory_adj
@@ -5962,6 +6037,7 @@ async def get_monthly_reconciliation_data(
         "total_factory_return_credit": round(total_factory_return_credit, 2),
         # Entry 1: Billing at margin matrix transfer price
         "total_at_transfer_price": round(total_at_transfer_price, 2),
+        "weekly_billing": weekly_billing,
         # Entry 2: Settlement adjustments
         "settlement_selling_price_adj": round(settlement_selling_price_adj, 2),
         "settlement_credits": round(settlement_credits, 2),

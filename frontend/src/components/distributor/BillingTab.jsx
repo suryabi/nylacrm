@@ -122,6 +122,7 @@ export default function BillingTab({
   }, {}));
 
   const billingAtTP = monthlyData?.total_at_transfer_price || 0;
+  const weeklyBilling = monthlyData?.weekly_billing || [];
   const sellingPriceAdj = monthlyData?.settlement_selling_price_adj || monthlyData?.total_factory_adjustment || 0;
   const totalCN = monthlyData?.total_credit_notes_applied || 0;
   const totalFR = monthlyData?.total_factory_return_credit || 0;
@@ -200,13 +201,33 @@ export default function BillingTab({
                       <p className="text-xs text-blue-200">Distributor pays factory at agreed transfer price (from margin matrix)</p>
                     </div>
                     <div className="p-5">
-                      <div className="text-center pb-4">
+                      <div className="text-center pb-4 border-b">
                         <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Total Billing at Transfer Price</p>
                         <p className="text-3xl font-bold text-blue-700" data-testid="billing-amount">₹{fmt(billingAtTP)}</p>
-                        <p className="text-xs text-slate-500 mt-2">qty x transfer price (from margin matrix) for all customer deliveries</p>
                       </div>
-                      <div className="border-t pt-3 text-sm text-slate-500 space-y-1">
-                        <div className="flex justify-between"><span>Total settlements</span><span className="font-medium text-slate-700">{monthlyData?.total_unreconciled || 0}</span></div>
+                      {/* Weekly Line Items */}
+                      <div className="pt-3 space-y-0" data-testid="weekly-billing">
+                        <p className="text-xs text-slate-400 uppercase tracking-wider font-medium mb-2">Weekly Breakdown (by delivery date)</p>
+                        {weeklyBilling.length > 0 ? weeklyBilling.map(week => (
+                          <div key={week.week} className={`flex items-center justify-between py-2.5 ${week.week > 1 ? 'border-t border-slate-100' : ''}`}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-600">{week.week}</div>
+                              <div>
+                                <p className="text-sm font-medium text-slate-700">{week.label}</p>
+                                <p className="text-xs text-slate-400">{week.deliveries} delivery(s)</p>
+                              </div>
+                            </div>
+                            <span className={`text-sm font-semibold ${week.amount > 0 ? 'text-blue-700' : 'text-slate-300'}`}>
+                              ₹{fmt(week.amount)}
+                            </span>
+                          </div>
+                        )) : (
+                          <p className="text-sm text-slate-400 py-2">No delivery data available</p>
+                        )}
+                        <div className="flex justify-between font-semibold text-blue-700 border-t-2 border-blue-200 pt-2 mt-1 text-sm">
+                          <span>Total</span>
+                          <span>₹{fmt(billingAtTP)}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
