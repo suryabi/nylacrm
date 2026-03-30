@@ -889,8 +889,8 @@ export default function DeliveriesTab({
                   <th className="text-left p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Delivery</th>
                   <th className="text-left p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Account</th>
                   <th className="text-center p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Items</th>
-                  <th className="text-right p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Customer Invoice</th>
-                  <th className="text-right p-4 font-semibold text-emerald-700 uppercase tracking-wider text-xs">Credit Notes</th>
+                  <th className="text-right p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Customer Billing</th>
+                  <th className="text-right p-4 font-semibold text-emerald-700 uppercase tracking-wider text-xs">Return Credit</th>
                   <th className="text-right p-4 font-semibold text-indigo-700 uppercase tracking-wider text-xs">Net Billing</th>
                   <th className="text-right p-4 font-semibold text-purple-700 uppercase tracking-wider text-xs">Billable to Dist</th>
                   <th className="text-center p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Status</th>
@@ -904,22 +904,29 @@ export default function DeliveriesTab({
                   // Credit notes info
                   const appliedCreditNotes = delivery.applied_credit_notes || [];
                   const totalCreditApplied = delivery.total_credit_applied || 0;
-                  const netCustomerBilling = delivery.net_customer_billing || (delivery.total_net_amount - totalCreditApplied);
                   const hasCreditNotes = appliedCreditNotes.length > 0 || totalCreditApplied > 0;
                   
-                  // Calculate totals
-                  const totalCustomerInvoice = delivery.total_net_amount || items.reduce((sum, item) => {
-                    return sum + (item.quantity || 0) * (item.customer_selling_price || item.unit_price || 0);
+                  // Pre-tax Customer Billing (without GST)
+                  const customerBilling = items.reduce((sum, item) => {
+                    const qty = item.quantity || 0;
+                    const price = item.customer_selling_price || item.unit_price || 0;
+                    const disc = item.discount_percent || 0;
+                    return sum + qty * price * (1 - disc / 100);
                   }, 0);
                   
-                  // Final Billable to Dist = Actual Billable - Credit Notes
-                  const totalActualBillable = delivery.total_actual_billable || items.reduce((sum, item) => {
+                  // Net Customer Billing (pre-tax, after credit)
+                  const netCustomerBilling = Math.max(0, customerBilling - totalCreditApplied);
+                  
+                  // Actual Billable to Dist (pre-tax, without GST)
+                  const totalActualBillable = items.reduce((sum, item) => {
                     const qty = item.quantity || 0;
                     const customerPrice = item.customer_selling_price || item.unit_price || 0;
                     const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
                     const newTransferPrice = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
                     return sum + (qty * newTransferPrice);
                   }, 0);
+                  
+                  // Final Billable to Dist (pre-tax, after credit)
                   const finalBillableToDist = totalActualBillable - totalCreditApplied;
                   
                   return (
@@ -955,14 +962,14 @@ export default function DeliveriesTab({
                         </span>
                       </td>
                       
-                      {/* Customer Invoice */}
+                      {/* Customer Billing (pre-tax) */}
                       <td className="p-4 text-right">
                         <span className="font-medium text-slate-800">
-                          ₹{totalCustomerInvoice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          ₹{customerBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
                       </td>
                       
-                      {/* Credit Notes */}
+                      {/* Return Credit */}
                       <td className="p-4 text-right">
                         {hasCreditNotes ? (
                           <div className="flex flex-col items-end gap-0.5">
@@ -978,14 +985,14 @@ export default function DeliveriesTab({
                         )}
                       </td>
                       
-                      {/* Net Billing */}
+                      {/* Net Billing (pre-tax, after credit) */}
                       <td className="p-4 text-right">
                         <span className={`font-bold text-lg ${hasCreditNotes ? 'text-indigo-600' : 'text-slate-700'}`}>
-                          ₹{(netCustomerBilling || totalCustomerInvoice).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          ₹{netCustomerBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
                       </td>
                       
-                      {/* Billable to Dist (Final) */}
+                      {/* Billable to Dist (pre-tax, after credit) */}
                       <td className="p-4 text-right">
                         <span className="font-bold text-purple-700">
                           ₹{finalBillableToDist.toLocaleString('en-IN', { minimumFractionDigits: 2 })}

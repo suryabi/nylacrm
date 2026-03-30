@@ -2492,8 +2492,8 @@ export default function DistributorDetail() {
                       <th className="text-right p-2 font-medium text-blue-700">Billed to Dist</th>
                       <th className="text-right p-2 font-medium text-emerald-700">Cust. Price</th>
                       <th className="text-right p-2 font-medium text-emerald-700">Actual Billable</th>
-                      <th className="text-right p-2 font-medium text-amber-700">Adjustment</th>
-                      <th className="text-right p-2 font-medium">Cust. Invoice</th>
+                      <th className="text-right p-2 font-medium text-amber-700">Adj. (Cust. Price)</th>
+                      <th className="text-right p-2 font-medium text-purple-700">Net Adj. (After Credit)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2507,7 +2507,6 @@ export default function DistributorDetail() {
                       const newTransferPrice = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
                       const actualBillable = qty * newTransferPrice;
                       const adjustment = actualBillable - billedToDist;
-                      const customerInvoice = qty * customerPrice;
                       return (
                         <tr key={idx} className="border-b">
                           <td className="p-2">
@@ -2522,7 +2521,7 @@ export default function DistributorDetail() {
                           <td className={`p-2 text-right font-semibold ${adjustment > 0 ? 'text-emerald-600' : adjustment < 0 ? 'text-red-600' : 'text-slate-400'}`}>
                             {adjustment > 0 ? '+' : ''}₹{adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                           </td>
-                          <td className="p-2 text-right font-medium">₹{customerInvoice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className="p-2 text-right text-slate-400">—</td>
                         </tr>
                       );
                     })}
@@ -2530,7 +2529,8 @@ export default function DistributorDetail() {
                   <tfoot>
                     {(() => {
                       const items = selectedDelivery.items || [];
-                      let totBilled = 0, totActual = 0, totAdj = 0, totCustInv = 0;
+                      const totalCreditApplied = selectedDelivery.total_credit_applied || 0;
+                      let totBilled = 0, totActual = 0, totAdj = 0;
                       items.forEach(item => {
                         const qty = item.quantity || 0;
                         const customerPrice = item.customer_selling_price || item.unit_price || 0;
@@ -2541,8 +2541,8 @@ export default function DistributorDetail() {
                         const newTP = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
                         totActual += qty * newTP;
                         totAdj += (qty * newTP) - (qty * transferPrice);
-                        totCustInv += qty * customerPrice;
                       });
+                      const netAdj = totAdj - totalCreditApplied;
                       return (
                         <tr className="bg-muted/30 font-semibold">
                           <td colSpan="2" className="p-2 text-right">Total:</td>
@@ -2553,7 +2553,9 @@ export default function DistributorDetail() {
                           <td className={`p-2 text-right ${totAdj > 0 ? 'text-emerald-600' : totAdj < 0 ? 'text-red-600' : 'text-slate-400'}`}>
                             {totAdj > 0 ? '+' : ''}₹{totAdj.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                           </td>
-                          <td className="p-2 text-right">₹{totCustInv.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className={`p-2 text-right ${netAdj > 0 ? 'text-emerald-600' : netAdj < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                            {netAdj > 0 ? '+' : ''}₹{netAdj.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
                         </tr>
                       );
                     })()}
@@ -2561,54 +2563,106 @@ export default function DistributorDetail() {
                 </table>
               </div>
 
-              {/* Financial Summary */}
+              {/* Financial Summary - Customer */}
               {(() => {
                 const items = selectedDelivery.items || [];
                 const totalCreditApplied = selectedDelivery.total_credit_applied || 0;
                 const hasCN = totalCreditApplied > 0;
-                let totActualCalc = 0, totCustInvCalc = 0;
+                let custBilling = 0, totalTax = 0;
                 items.forEach(item => {
                   const qty = item.quantity || 0;
-                  const customerPrice = item.customer_selling_price || item.unit_price || 0;
-                  const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
-                  const newTP = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
-                  totActualCalc += qty * newTP;
-                  totCustInvCalc += qty * customerPrice;
+                  const price = item.customer_selling_price || item.unit_price || 0;
+                  const disc = item.discount_percent || 0;
+                  const taxPct = item.tax_percent || 0;
+                  const preTax = qty * price * (1 - disc / 100);
+                  custBilling += preTax;
+                  totalTax += preTax * taxPct / 100;
                 });
-                const totCustInv = selectedDelivery.total_net_amount || totCustInvCalc;
-                const totActual = selectedDelivery.total_actual_billable || totActualCalc;
-                const finalBillable = totActual - totalCreditApplied;
-                const netBilling = selectedDelivery.net_customer_billing || (totCustInv - totalCreditApplied);
+                const effectiveGstRate = custBilling > 0 ? totalTax / custBilling : 0;
+                const totalBillable = Math.max(0, custBilling - totalCreditApplied);
+                const gstAmount = totalBillable * effectiveGstRate;
+                const invoiceValue = totalBillable + gstAmount;
+                const gstPctDisplay = (effectiveGstRate * 100).toFixed(1);
                 return (
-                  <div className="border rounded-lg p-4 bg-slate-50/80 space-y-2" data-testid="delivery-financial-summary">
-                    <h4 className="font-semibold text-sm mb-2 text-slate-700">Financial Summary</h4>
+                  <div className="border rounded-lg p-4 bg-blue-50/40 space-y-2" data-testid="delivery-customer-summary">
+                    <h4 className="font-semibold text-sm mb-2 text-blue-800">Customer Summary</h4>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Customer Invoice:</span>
-                      <span className="font-medium">₹{totCustInv.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      <span className="text-muted-foreground">Customer Billing Amount:</span>
+                      <span className="font-medium">₹{custBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </div>
                     {hasCN && (
                       <div className="flex justify-between text-sm text-emerald-600">
-                        <span>Credit Notes Applied:</span>
+                        <span>Less: Return Bottle Credit:</span>
                         <span className="font-medium">- ₹{totalCreditApplied.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-sm border-t pt-2">
-                      <span className="font-semibold text-indigo-700">Net Customer Billing:</span>
-                      <span className="font-bold text-indigo-700">₹{(hasCN ? netBilling : totCustInv).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      <span className="font-semibold">Total Billable Amount:</span>
+                      <span className="font-bold">₹{totalBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-slate-600">
+                      <span>GST ({gstPctDisplay}%):</span>
+                      <span className="font-medium">₹{gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-base border-t pt-2">
+                      <span className="font-bold text-blue-800">Customer Invoice Value (Incl. GST):</span>
+                      <span className="font-bold text-blue-800">₹{invoiceValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Financial Summary - Distributor */}
+              {(() => {
+                const items = selectedDelivery.items || [];
+                const totalCreditApplied = selectedDelivery.total_credit_applied || 0;
+                let distBilling = 0, totActual = 0, custBilling = 0, totalTax = 0;
+                items.forEach(item => {
+                  const qty = item.quantity || 0;
+                  const price = item.customer_selling_price || item.unit_price || 0;
+                  const disc = item.discount_percent || 0;
+                  const taxPct = item.tax_percent || 0;
+                  const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
+                  const basePrice = item.base_price || item.transfer_price || 0;
+                  const transferPrice = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
+                  distBilling += qty * transferPrice;
+                  const newTP = price > 0 ? price * (1 - commissionPct / 100) : 0;
+                  totActual += qty * newTP;
+                  const preTax = qty * price * (1 - disc / 100);
+                  custBilling += preTax;
+                  totalTax += preTax * taxPct / 100;
+                });
+                const priceAdj = totActual - distBilling;
+                const combinedAdj = priceAdj - totalCreditApplied;
+                const totalBillable = distBilling + combinedAdj;
+                const effectiveGstRate = custBilling > 0 ? totalTax / custBilling : 0;
+                const gstAmount = totalBillable * effectiveGstRate;
+                const invoiceValue = totalBillable + gstAmount;
+                const gstPctDisplay = (effectiveGstRate * 100).toFixed(1);
+                return (
+                  <div className="border rounded-lg p-4 bg-purple-50/40 space-y-2" data-testid="delivery-distributor-summary">
+                    <h4 className="font-semibold text-sm mb-2 text-purple-800">Distributor Summary</h4>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Distributor Billing Amount:</span>
+                      <span className="font-medium">₹{distBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Actual Billable to Dist:</span>
-                      <span className="font-medium text-emerald-700">₹{totActual.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      <span className="text-muted-foreground">Adjustment (Customer Price + Return Credit):</span>
+                      <span className={`font-medium ${combinedAdj > 0 ? 'text-emerald-600' : combinedAdj < 0 ? 'text-red-600' : 'text-slate-500'}`}>
+                        {combinedAdj > 0 ? '+' : ''}₹{combinedAdj.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </span>
                     </div>
-                    {hasCN && (
-                      <div className="flex justify-between text-sm text-emerald-600">
-                        <span>Less: Credit Notes:</span>
-                        <span className="font-medium">- ₹{totalCreditApplied.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                      </div>
-                    )}
+                    <div className="flex justify-between text-sm border-t pt-2">
+                      <span className="font-semibold">Total Billable Amount:</span>
+                      <span className="font-bold">₹{totalBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-slate-600">
+                      <span>GST ({gstPctDisplay}%):</span>
+                      <span className="font-medium">₹{gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
                     <div className="flex justify-between text-base border-t pt-2">
-                      <span className="font-bold text-purple-700">Final Billable to Dist:</span>
-                      <span className="font-bold text-purple-700">₹{finalBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      <span className="font-bold text-purple-800">Distributor Invoice Value (Incl. GST):</span>
+                      <span className="font-bold text-purple-800">₹{invoiceValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </div>
                   </div>
                 );

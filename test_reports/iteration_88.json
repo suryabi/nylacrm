@@ -1,0 +1,121 @@
+{
+  "summary": "GST handling changes for Stock Out screen and delivery detail popup tested successfully. All 10 features verified: (1) Main table headers renamed correctly, (2) Pre-tax amounts displayed, (3) Net Billing calculation correct, (4) Popup items table has correct columns, (5) No 'Cust. Invoice' column in popup, (6) Net Adj shows dash for items with calculated total, (7) Customer Summary section with all required fields, (8) Distributor Summary section with all required fields, (9) Credit Notes Detail section present, (10) Delivery without credit notes correctly hides 'Less: Return Bottle Credit' line.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_88.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A - Frontend only testing",
+    "frontend": "100% - All 10 features verified"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123"
+  },
+  "seed_data_creation": "None - used existing data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "GST handling changes fully implemented and working. DEL-2026-0003 has 2 credit notes (₹60 total, 5% tax). Customer Summary: ₹100 billing - ₹60 credit = ₹40 billable + ₹2 GST = ₹42 invoice. Distributor Summary: ₹97.50 billing + (-₹60) adjustment = ₹37.50 billable + ₹1.875 GST = ₹39.375 invoice. DEL-2026-0005 has no credit notes and correctly shows no 'Less: Return Bottle Credit' line.",
+  "features_tested": {
+    "Main_Table_Headers": {
+      "status": "PASSED",
+      "verified_headers": [
+        "Delivery",
+        "Account",
+        "Items",
+        "Customer Billing (NOT 'Customer Invoice')",
+        "Return Credit (NOT 'Credit Notes')",
+        "Net Billing",
+        "Billable to Dist",
+        "Status",
+        "Actions"
+      ]
+    },
+    "Pre_Tax_Amounts": {
+      "status": "PASSED",
+      "verified": "DEL-2026-0003 shows Customer Billing = ₹100.00 (pre-tax, not ₹105.00 with GST)"
+    },
+    "Net_Billing_Calculation": {
+      "status": "PASSED",
+      "verified": "Net Billing = Customer Billing - Return Credit (₹100 - ₹60 = ₹40)"
+    },
+    "Popup_Items_Table_Columns": {
+      "status": "PASSED",
+      "columns_verified": [
+        "SKU",
+        "Qty",
+        "Base Price",
+        "Billed to Dist",
+        "Cust. Price",
+        "Actual Billable",
+        "Adj. (Cust. Price)",
+        "Net Adj. (After Credit)"
+      ],
+      "removed_column": "'Cust. Invoice' correctly NOT present"
+    },
+    "Net_Adj_Column": {
+      "status": "PASSED",
+      "individual_items": "Shows dash (—) for all individual items",
+      "totals_row": "Shows calculated total: Net Adj = Total Adj - Total Credit Applied (₹0 - ₹60 = -₹60)"
+    },
+    "Customer_Summary_Section": {
+      "status": "PASSED",
+      "fields_verified": [
+        "Customer Billing Amount: ₹100.00",
+        "Less: Return Bottle Credit: -₹60.00",
+        "Total Billable Amount: ₹40.00",
+        "GST (5.0%): ₹2.00",
+        "Customer Invoice Value (Incl. GST): ₹42.00"
+      ]
+    },
+    "Distributor_Summary_Section": {
+      "status": "PASSED",
+      "fields_verified": [
+        "Distributor Billing Amount: ₹97.50",
+        "Adjustment (Customer Price + Return Credit): -₹60.00",
+        "Total Billable Amount: ₹37.50",
+        "GST (5.0%): ₹1.875",
+        "Distributor Invoice Value (Incl. GST): ₹39.375"
+      ]
+    },
+    "Credit_Notes_Detail_Section": {
+      "status": "PASSED",
+      "verified": [
+        "Section present for DEL-2026-0003",
+        "Shows CN-2026-0001 (Return: RET-2026-0001) - ₹30.00",
+        "Shows CN-2026-0002 (Return: RET-2026-0002) - ₹30.00"
+      ]
+    },
+    "Delivery_Without_Credit_Notes": {
+      "status": "PASSED",
+      "delivery_tested": "DEL-2026-0005",
+      "verified": [
+        "'Less: Return Bottle Credit' line correctly NOT present",
+        "Credit Notes Detail section correctly NOT present"
+      ]
+    }
+  },
+  "code_review_notes": {
+    "DeliveriesTab.jsx": [
+      "Lines 886-898: Main table headers correctly renamed to 'Customer Billing', 'Return Credit', 'Net Billing', 'Billable to Dist'",
+      "Lines 909-930: Pre-tax calculations correctly implemented (no GST in main table amounts)"
+    ],
+    "DistributorDetail.js": [
+      "Lines 2486-2563: Popup items table with correct columns, 'Cust. Invoice' removed, 'Adj. (Cust. Price)' and 'Net Adj. (After Credit)' added",
+      "Lines 2567-2613: Customer Summary section with GST calculation",
+      "Lines 2615-2669: Distributor Summary section with GST calculation",
+      "Lines 2672-2693: Credit Notes Detail section conditionally rendered"
+    ]
+  }
+}
