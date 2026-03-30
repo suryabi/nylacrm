@@ -5,6 +5,22 @@ Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. Th
 
 ## Latest Session - March 30, 2026 (Session 11)
 
+### Factory Returns Source-First Selection ✅ (March 30 - COMPLETED)
+
+**User Request**: Source should be the PRIMARY selection in factory returns. Warehouse source = expired/damaged, adjusted in settlement. Customer source = expired/damaged/empty_reusable, no settlement adjustment (tracking only).
+
+**Implementation:**
+- Source selection via card-style buttons (Warehouse Stock | Customer Return) as primary UI
+- Reason options change based on source: Warehouse → Expired/Damaged; Customer → Empty/Reusable + Expired/Damaged
+- Settlement banners: amber "adjusted in settlement" for warehouse, blue "no additional settlement" for customer
+- Backend: `requires_settlement` flag (true for warehouse, false for customer), reason validation (empty_reusable rejected for warehouse)
+- Settlement query filters: only warehouse-sourced returns count toward settlement adjustments
+- Table columns: Source badge, Settlement indicator ("Adjustable" vs "Tracking only")
+
+**Testing (iteration_90.json):** 100% (13/13 features, backend + frontend)
+
+---
+
 ### Factory Returns & Collapsible Stock Out Sections ✅ (March 30 - COMPLETED)
 
 **User Request**: (1) Fix font consistency in Net Customer Billing. (2) Split Stock Out into two collapsible sections: Distributor→Customer (expanded) and Distributor→Factory (collapsed). (3) Factory returns for expired/damaged stock with base price credit and warehouse stock deduction. (4) Factory return credits flow into Settlements.
