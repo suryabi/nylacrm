@@ -5975,23 +5975,34 @@ async def get_monthly_reconciliation_data(
             end_str = f"{year}-{month:02d}-{wr['end_day']:02d}"
             week_amount = 0
             week_deliveries = 0
+            delivery_details = []  # Per-delivery detail for expansion
             for d in settled_deliveries:
                 dd = d.get('delivery_date', '')
                 if dd >= start_str and dd <= end_str:
                     week_deliveries += 1
+                    del_tp_amount = 0
                     for item in items_by_delivery.get(d['id'], []):
                         qty = item.get('quantity', 0)
                         base_p = item.get('base_price') or item.get('transfer_price') or 0
                         comm = item.get('distributor_commission_percent') or item.get('margin_percent') or 0
                         tp = base_p * (1 - comm / 100)
-                        week_amount += qty * tp
+                        del_tp_amount += qty * tp
+                    week_amount += del_tp_amount
+                    delivery_details.append({
+                        "delivery_id": d['id'],
+                        "delivery_number": d.get('delivery_number', ''),
+                        "account_name": d.get('account_name', 'Unknown'),
+                        "delivery_date": dd,
+                        "amount_at_transfer_price": round(del_tp_amount, 2)
+                    })
             weekly_billing.append({
                 "week": wr['week'],
                 "start_day": wr['start_day'],
                 "end_day": wr['end_day'],
                 "label": wr['label'],
                 "amount": round(week_amount, 2),
-                "deliveries": week_deliveries
+                "deliveries": week_deliveries,
+                "details": delivery_details
             })
     else:
         # No settled deliveries, return empty weeks
