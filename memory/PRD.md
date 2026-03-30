@@ -3,7 +3,38 @@
 ## Original Problem Statement
 Build a comprehensive, mobile-ready Sales CRM application for Nyla Air Water. The application helps manage leads, accounts, invoices, COGS calculations, and sales team performance.
 
-## Latest Session - March 28, 2026 (Session 10)
+## Latest Session - March 30, 2026 (Session 11)
+
+### Stock Out Table Simplification & Detail Popup Enhancement ✅ (March 30 - COMPLETED)
+
+**User Request**: The Stock Out table was too cluttered with many columns (per-item rows with Base Price, Transfer Price, Billed to Dist, Customer Price, New Transfer Price, Actual Billable, Adjustment, Final Billable, etc.). Simplify the table and move detailed calculations to the delivery detail popup.
+
+**Implementation:**
+
+1. **Simplified Main Table** (9 clean columns):
+   - Delivery # (with date), Account (with city), Items (count badge)
+   - Customer Invoice, Credit Notes (CN count + amount), Net Billing
+   - Billable to Dist (with "after CN" note), Status, Actions
+
+2. **Enhanced Delivery Detail Popup** (`DistributorDetail.js`):
+   - Wider dialog (max-w-4xl) for better readability
+   - **Detailed Items Table**: SKU (margin%), Qty, Base Price, Billed to Dist, Cust. Price, Actual Billable, Adjustment, Cust. Invoice + totals row
+   - **Financial Summary Section**: Customer Invoice, Credit Notes Applied, Net Customer Billing, Actual Billable to Dist, Less: Credit Notes, Final Billable to Dist
+   - **Credit Notes Detail**: Individual CN numbers with return references and amounts
+   - Download Invoice (GST) button for delivered/confirmed status
+
+3. **Bug Fix**: Removed orphaned old table code (236 lines) left from mid-session refactor
+4. **Consistency Fix**: Financial Summary uses stored `total_net_amount` for Customer Invoice to match main table
+
+**Files Modified:**
+- `/app/frontend/src/components/distributor/DeliveriesTab.jsx` - Removed orphaned code, clean simplified table
+- `/app/frontend/src/pages/DistributorDetail.js` - Enhanced delivery detail popup with financial breakdown
+
+**Testing (iteration_87.json):** 100% frontend (8/8 features verified)
+
+---
+
+## Previous Session - March 28, 2026 (Session 10)
 
 ### Credit Notes & Return Status Tracking ✅ (March 28 - COMPLETED)
 
