@@ -21,7 +21,7 @@
 - [x] **Activity Metrics**: Visits, Calls, Follow-ups, Visit/Call Productivity (auto-populated, no manual overrides)
 - [x] **Support Metrics**: Category badges (Pricing, Logistics, Marketing, Collections, Management, Product), Remarks
 - [x] **Approval Workflow**: Draft → Submitted → Approved/Returned, locked once approved
-- [x] **Month-on-Month Comparison**: Last 3 months table with trend arrows
+- [x] **Month-on-Month Comparison**: Last 3 months table with trend arrows, editable Revenue & Outstanding rows with row-level save, reset to auto-computed values
 - [x] **Performance KPIs**: Achievement %, Pipeline Coverage, Outstanding Ratio, Visit/Call Productivity, Conversion Rate
 - [x] **Integration**: Linked to Target Setup Module for monthly targets per resource
 
