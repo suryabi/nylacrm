@@ -102,8 +102,15 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
             "assigned_to": resource_id,
             "status": {"$nin": excluded_statuses}
         },
-        {"_id": 0, "id": 1, "company": 1, "name": 1, "city": 1, "status": 1, "expected_value": 1, "estimated_value": 1, "target_closure_month": 1, "target_closure_year": 1}
+        {"_id": 0, "id": 1, "company": 1, "name": 1, "city": 1, "status": 1, "expected_value": 1, "estimated_value": 1, "opportunity_estimation": 1, "target_closure_month": 1, "target_closure_year": 1}
     ).to_list(5000)
+    
+    def get_pipeline_value(lead):
+        """Get estimated revenue in INR from opportunity_estimation, fallback to expected_value."""
+        opp = lead.get("opportunity_estimation")
+        if opp and opp.get("estimated_monthly_revenue"):
+            return opp["estimated_monthly_revenue"]
+        return lead.get("expected_value") or 0
     
     # Group by status
     status_groups = {}
@@ -112,7 +119,7 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
         if status not in status_groups:
             status_groups[status] = {"status": status, "count": 0, "value": 0}
         status_groups[status]["count"] += 1
-        status_groups[status]["value"] += lead.get("expected_value") or lead.get("estimated_value") or 0
+        status_groups[status]["value"] += get_pipeline_value(lead)
     
     pipeline_by_status = sorted(status_groups.values(), key=lambda x: x["value"], reverse=True)
     pipeline_total_value = sum(s["value"] for s in pipeline_by_status)
@@ -126,7 +133,7 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
         lead for lead in pipeline_leads
         if lead.get("target_closure_month") == next_month and lead.get("target_closure_year") == next_year
     ]
-    next_month_pipeline_value = sum(lead.get("expected_value") or lead.get("estimated_value") or 0 for lead in next_month_leads)
+    next_month_pipeline_value = sum(get_pipeline_value(lead) for lead in next_month_leads)
     
     # === D. OUTSTANDING METRICS ===
     outstanding_invoices = await db.invoices.find(

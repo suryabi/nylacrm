@@ -37,6 +37,7 @@ export default function PerformanceTracker() {
   const [comparison, setComparison] = useState(null);
   const [expandedSections, setExpandedSections] = useState({ accounts: false, pipeline: false, outstanding: false });
   const [accountsDialog, setAccountsDialog] = useState({ open: false, type: '', title: '', list: [] });
+  const [expandedAccountList, setExpandedAccountList] = useState({ existing: false, new: false });
   // Editable fields
   const [supportNeeded, setSupportNeeded] = useState([]);
   const [remarks, setRemarks] = useState('');
@@ -326,24 +327,69 @@ export default function PerformanceTracker() {
                   <Users className="h-4 w-4 text-emerald-600" />Account Metrics
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-3">
-                  <div
-                    className="flex justify-between items-center py-2 px-3 border border-dashed border-emerald-200 rounded-lg cursor-pointer hover:bg-emerald-50 transition-colors"
-                    onClick={() => setAccountsDialog({ open: true, type: 'existing', title: `All Accounts (Lifetime)`, list: data.accounts?.existing_accounts || [] })}
-                    data-testid="existing-accounts-tile"
-                  >
-                    <span className="text-xs text-slate-500">Existing (Lifetime)</span>
+              <CardContent className="space-y-4">
+                {/* Existing Accounts */}
+                <div data-testid="existing-accounts-tile">
+                  <div className="flex justify-between items-center py-2 px-3 border border-dashed border-emerald-200 rounded-lg bg-emerald-50/30">
+                    <span className="text-xs text-slate-500">Existing Accounts (Lifetime)</span>
                     <span className="text-sm font-bold text-emerald-700">{data.accounts?.existing_count}</span>
                   </div>
-                  <div
-                    className={`flex justify-between items-center py-2 px-3 border border-dashed rounded-lg cursor-pointer transition-colors ${data.accounts?.new_onboarded > 0 ? 'border-teal-200 hover:bg-teal-50' : 'border-red-200 hover:bg-red-50'}`}
-                    onClick={() => setAccountsDialog({ open: true, type: 'new', title: `New Accounts Onboarded This Month`, list: data.accounts?.new_accounts || [] })}
-                    data-testid="new-accounts-tile"
-                  >
-                    <span className="text-xs text-slate-500">New This Month</span>
+                  {(data.accounts?.existing_accounts || []).length > 0 && (
+                    <div className="mt-1.5 space-y-1">
+                      {(expandedAccountList.existing
+                        ? data.accounts.existing_accounts
+                        : data.accounts.existing_accounts.slice(0, 3)
+                      ).map((acc, idx) => (
+                        <div key={acc.id || idx} className="flex items-center justify-between py-1 px-3 text-xs rounded bg-slate-50 border border-slate-100">
+                          <span className="font-medium text-slate-700">{acc.name || 'Unknown'}</span>
+                          <div className="flex items-center gap-2">
+                            {acc.city && <span className="text-slate-400">{acc.city}</span>}
+                            {acc.status && <Badge variant="outline" className="text-[10px] capitalize py-0 h-4">{acc.status.replace(/_/g, ' ')}</Badge>}
+                          </div>
+                        </div>
+                      ))}
+                      {data.accounts.existing_accounts.length > 3 && (
+                        <button
+                          onClick={() => setExpandedAccountList(p => ({ ...p, existing: !p.existing }))}
+                          className="text-xs text-blue-600 hover:text-blue-800 px-3 py-0.5 flex items-center gap-1"
+                          data-testid="expand-existing-accounts"
+                        >
+                          {expandedAccountList.existing ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                          {expandedAccountList.existing ? 'Show less' : `Show all ${data.accounts.existing_accounts.length} accounts`}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {/* New Accounts This Month */}
+                <div data-testid="new-accounts-tile">
+                  <div className={`flex justify-between items-center py-2 px-3 border border-dashed rounded-lg ${data.accounts?.new_onboarded > 0 ? 'border-teal-200 bg-teal-50/30' : 'border-red-200 bg-red-50/30'}`}>
+                    <span className="text-xs text-slate-500">New Accounts Onboarded This Month</span>
                     <span className={`text-sm font-bold ${data.accounts?.new_onboarded > 0 ? 'text-teal-700' : 'text-red-600'}`}>{data.accounts?.new_onboarded}</span>
                   </div>
+                  {(data.accounts?.new_accounts || []).length > 0 && (
+                    <div className="mt-1.5 space-y-1">
+                      {(expandedAccountList.new
+                        ? data.accounts.new_accounts
+                        : data.accounts.new_accounts.slice(0, 3)
+                      ).map((acc, idx) => (
+                        <div key={acc.id || idx} className="flex items-center justify-between py-1 px-3 text-xs rounded bg-slate-50 border border-slate-100">
+                          <span className="font-medium text-slate-700">{acc.name || 'Unknown'}</span>
+                          {acc.city && <span className="text-slate-400">{acc.city}</span>}
+                        </div>
+                      ))}
+                      {data.accounts.new_accounts.length > 3 && (
+                        <button
+                          onClick={() => setExpandedAccountList(p => ({ ...p, new: !p.new }))}
+                          className="text-xs text-blue-600 hover:text-blue-800 px-3 py-0.5 flex items-center gap-1"
+                          data-testid="expand-new-accounts"
+                        >
+                          {expandedAccountList.new ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                          {expandedAccountList.new ? 'Show less' : `Show all ${data.accounts.new_accounts.length} accounts`}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

@@ -113,3 +113,4 @@ frontend/node_modules/.cache/default-development/3.pack
 *.env
 *.env.*
 frontend/node_modules/.cache/default-development/6.pack
+frontend/node_modules/.cache/default-development/11.pack
