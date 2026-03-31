@@ -5,7 +5,6 @@ import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { Input } from '../components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import {
   Target, TrendingUp, TrendingDown, Users, Phone, MapPin, DollarSign,
   BarChart3, RefreshCw, Save, Send, Check, RotateCcw, AlertTriangle,
@@ -36,7 +35,6 @@ export default function PerformanceTracker() {
   const [saving, setSaving] = useState(false);
   const [comparison, setComparison] = useState(null);
   const [expandedSections, setExpandedSections] = useState({ accounts: false, pipeline: false, outstanding: false });
-  const [accountsDialog, setAccountsDialog] = useState({ open: false, type: '', title: '', list: [] });
   const [expandedAccountList, setExpandedAccountList] = useState({ existing: false, new: false });
   // Editable fields
   const [supportNeeded, setSupportNeeded] = useState([]);
@@ -558,32 +556,6 @@ export default function PerformanceTracker() {
           <p>Click "Generate" to compute performance metrics</p>
         </div>
       )}
-
-      {/* Accounts Dialog Popup */}
-      <Dialog open={accountsDialog.open} onOpenChange={(open) => setAccountsDialog(prev => ({ ...prev, open }))}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto" data-testid="accounts-dialog">
-          <DialogHeader>
-            <DialogTitle className="text-base font-semibold">{accountsDialog.title}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2 mt-2">
-            {accountsDialog.list.length > 0 ? (
-              accountsDialog.list.map((acc, idx) => (
-                <div key={acc.id || idx} className="flex items-center justify-between py-2 px-3 rounded-lg border bg-slate-50 hover:bg-slate-100 transition-colors">
-                  <div>
-                    <p className="text-sm font-medium text-slate-800">{acc.name || 'Unknown'}</p>
-                    {acc.city && <p className="text-xs text-slate-500">{acc.city}</p>}
-                  </div>
-                  {acc.status && (
-                    <Badge variant="outline" className="text-xs capitalize">{acc.status.replace(/_/g, ' ')}</Badge>
-                  )}
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">No accounts found</p>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

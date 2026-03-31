@@ -15,8 +15,8 @@
 
 ### Monthly Performance Tracking Module (NEW - 2026-03-31)
 - [x] **Revenue Metrics**: Target (from Target Setup Module), Achievement %, Revenue Lifetime (as-on-date), Revenue This Month (all accounts), Revenue from New Accounts This Month — each with manual override & reset
-- [x] **Account Metrics (from Accounts collection)**: Existing accounts lifetime count, New accounts onboarded this month (by onboarded_month/year at account level), Clickable tiles open Dialog popup
-- [x] **Pipeline Metrics (from Leads)**: Status-wise breakdown table (Status | No of Leads | Pipeline Value) excluding won/active_customer/not_qualified/lost. Leads targeting next month (by target_closure_month/year), Coverage ratio
+- [x] **Account Metrics (from Accounts collection)**: Existing accounts lifetime count, New accounts onboarded this month (by onboarded_month/year at account level), Inline account list with expand/collapse (show 3, expand to see all)
+- [x] **Pipeline Metrics (from Leads)**: Status-wise breakdown table (Status | No of Leads | Pipeline Value) using `opportunity_estimation.estimated_monthly_revenue` (INR, not bottle count), excluding won/active_customer/not_qualified/lost. Leads targeting next month (by target_closure_month/year), Coverage ratio
 - [x] **Collections/Outstanding**: Total outstanding, Aging buckets (0-30, 31-60, 61-90, 90+), Account-level details (expandable)
 - [x] **Activity Metrics**: Visits, Calls, Follow-ups, Visit/Call Productivity (auto-populated, no manual overrides)
 - [x] **Support Metrics**: Category badges (Pricing, Logistics, Marketing, Collections, Management, Product), Remarks
