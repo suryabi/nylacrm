@@ -63,6 +63,8 @@ class Lead(BaseModel):
     last_invoice_no: Optional[str] = None
     onboarded_month: Optional[int] = None
     onboarded_year: Optional[int] = None
+    target_closure_month: Optional[int] = None
+    target_closure_year: Optional[int] = None
 
     class Config:
         extra = "allow"
@@ -93,6 +95,8 @@ class LeadCreate(BaseModel):
     estimated_value: Optional[float] = None
     onboarded_month: Optional[int] = None
     onboarded_year: Optional[int] = None
+    target_closure_month: Optional[int] = None
+    target_closure_year: Optional[int] = None
 
 
 class LeadUpdate(BaseModel):
@@ -125,6 +129,8 @@ class LeadUpdate(BaseModel):
     updated_at: Optional[str] = None  # Admin can set custom date for status changes
     onboarded_month: Optional[int] = None
     onboarded_year: Optional[int] = None
+    target_closure_month: Optional[int] = None
+    target_closure_year: Optional[int] = None
 
 
 class PaginatedLeadsResponse(BaseModel):

@@ -718,6 +718,8 @@ class Lead(BaseModel):
     # Onboarding tracking
     onboarded_month: Optional[int] = None
     onboarded_year: Optional[int] = None
+    target_closure_month: Optional[int] = None
+    target_closure_year: Optional[int] = None
 
 class LeadCreate(BaseModel):
     company: str
@@ -744,6 +746,8 @@ class LeadCreate(BaseModel):
     estimated_value: Optional[float] = None
     onboarded_month: Optional[int] = None
     onboarded_year: Optional[int] = None
+    target_closure_month: Optional[int] = None
+    target_closure_year: Optional[int] = None
 
 class LeadUpdate(BaseModel):
     company: Optional[str] = None
@@ -776,6 +780,8 @@ class LeadUpdate(BaseModel):
     account_id: Optional[str] = None
     onboarded_month: Optional[int] = None
     onboarded_year: Optional[int] = None
+    target_closure_month: Optional[int] = None
+    target_closure_year: Optional[int] = None
 
 # ============= ACCOUNT MODELS =============
 

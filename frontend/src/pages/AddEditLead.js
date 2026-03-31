@@ -90,7 +90,9 @@ export default function AddEditLead() {
     interested_skus: [],
     notes: '',
     onboarded_month: '',
-    onboarded_year: ''
+    onboarded_year: '',
+    target_closure_month: '',
+    target_closure_year: ''
   });
   
   // Set initial region when user or masterTerritories change
@@ -149,7 +151,9 @@ export default function AddEditLead() {
         interested_skus: lead.interested_skus || [],
         notes: lead.notes || '',
         onboarded_month: lead.onboarded_month || '',
-        onboarded_year: lead.onboarded_year || ''
+        onboarded_year: lead.onboarded_year || '',
+        target_closure_month: lead.target_closure_month || '',
+        target_closure_year: lead.target_closure_year || ''
       });
     } catch (error) {
       toast.error('Failed to load lead');
@@ -203,6 +207,8 @@ export default function AddEditLead() {
         current_selling_price: formData.current_selling_price ? parseFloat(formData.current_selling_price) : null,
         onboarded_month: formData.onboarded_month ? parseInt(formData.onboarded_month) : null,
         onboarded_year: formData.onboarded_year ? parseInt(formData.onboarded_year) : null,
+        target_closure_month: formData.target_closure_month ? parseInt(formData.target_closure_month) : null,
+        target_closure_year: formData.target_closure_year ? parseInt(formData.target_closure_year) : null,
         name: formData.contact_person || formData.company
       };
       
@@ -481,6 +487,32 @@ export default function AddEditLead() {
               <Label htmlFor="onboarded_year">Actual Onboarded Year</Label>
               <Select value={formData.onboarded_year ? String(formData.onboarded_year) : ''} onValueChange={(v) => updateField('onboarded_year', v)}>
                 <SelectTrigger data-testid="lead-onboarded-year-select">
+                  <SelectValue placeholder="Select year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {[2024, 2025, 2026, 2027].map(y => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="target_closure_month">Target Closure Month</Label>
+              <Select value={formData.target_closure_month ? String(formData.target_closure_month) : ''} onValueChange={(v) => updateField('target_closure_month', v)}>
+                <SelectTrigger data-testid="lead-target-closure-month-select">
+                  <SelectValue placeholder="Select month" />
+                </SelectTrigger>
+                <SelectContent>
+                  {[{v:'1',l:'January'},{v:'2',l:'February'},{v:'3',l:'March'},{v:'4',l:'April'},{v:'5',l:'May'},{v:'6',l:'June'},{v:'7',l:'July'},{v:'8',l:'August'},{v:'9',l:'September'},{v:'10',l:'October'},{v:'11',l:'November'},{v:'12',l:'December'}].map(m => (
+                    <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="target_closure_year">Target Closure Year</Label>
+              <Select value={formData.target_closure_year ? String(formData.target_closure_year) : ''} onValueChange={(v) => updateField('target_closure_year', v)}>
+                <SelectTrigger data-testid="lead-target-closure-year-select">
                   <SelectValue placeholder="Select year" />
                 </SelectTrigger>
                 <SelectContent>

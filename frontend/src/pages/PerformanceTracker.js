@@ -41,8 +41,9 @@ export default function PerformanceTracker() {
   const [supportNeeded, setSupportNeeded] = useState([]);
   const [remarks, setRemarks] = useState('');
   const [manualRevenue, setManualRevenue] = useState('');
-  const [manualVisits, setManualVisits] = useState('');
-  const [manualCalls, setManualCalls] = useState('');
+  // Revenue overrides
+  const [revenueOverrides, setRevenueOverrides] = useState({ lifetime: '', this_month: '', new_accounts: '' });
+  const [revenueEditing, setRevenueEditing] = useState({ lifetime: false, this_month: false, new_accounts: false });
 
   const token = localStorage.getItem('token');
   const tenantId = localStorage.getItem('selectedTenant') || localStorage.getItem('tenant_id') || 'nyla-air-water';
@@ -74,11 +75,16 @@ export default function PerformanceTracker() {
         setSupportNeeded(d.support_needed || []);
         setRemarks(d.remarks || '');
         setManualRevenue(d.manual_revenue ?? '');
-        setManualVisits(d.manual_visits ?? '');
-        setManualCalls(d.manual_calls ?? '');
+        setRevenueOverrides({
+          lifetime: d.saved_record.revenue_lifetime_override ?? '',
+          this_month: d.saved_record.revenue_this_month_override ?? '',
+          new_accounts: d.saved_record.revenue_new_accounts_override ?? '',
+        });
       } else {
-        setSupportNeeded([]); setRemarks(''); setManualRevenue(''); setManualVisits(''); setManualCalls('');
+        setSupportNeeded([]); setRemarks(''); setManualRevenue('');
+        setRevenueOverrides({ lifetime: '', this_month: '', new_accounts: '' });
       }
+      setRevenueEditing({ lifetime: false, this_month: false, new_accounts: false });
       // Fetch comparison
       const compRes = await fetch(
         `${API_URL}/api/performance/comparison?resource_id=${selectedResource}&plan_id=${selectedPlan}&months=3`,
@@ -104,14 +110,15 @@ export default function PerformanceTracker() {
         status: submitAfter ? 'submitted' : 'draft',
         support_needed: supportNeeded, remarks,
         manual_revenue: manualRevenue ? parseFloat(manualRevenue) : null,
-        manual_visits: manualVisits ? parseInt(manualVisits) : null,
-        manual_calls: manualCalls ? parseInt(manualCalls) : null,
-        revenue_achieved: data.revenue?.achieved || 0,
+        revenue_lifetime_override: revenueOverrides.lifetime !== '' ? parseFloat(revenueOverrides.lifetime) : null,
+        revenue_this_month_override: revenueOverrides.this_month !== '' ? parseFloat(revenueOverrides.this_month) : null,
+        revenue_new_accounts_override: revenueOverrides.new_accounts !== '' ? parseFloat(revenueOverrides.new_accounts) : null,
+        revenue_achieved: data.revenue?.this_month || 0,
         monthly_target: data.revenue?.target || 0,
         achievement_pct: data.revenue?.achievement_pct || 0,
         existing_accounts: data.accounts?.existing_count || 0,
         new_accounts: data.accounts?.new_onboarded || 0,
-        pipeline_value: data.pipeline?.current_value || 0,
+        pipeline_value: data.pipeline?.total_value || 0,
         total_outstanding: data.collections?.total_outstanding || 0,
         visits: data.activities?.visits || 0,
         calls: data.activities?.calls || 0,
@@ -251,12 +258,12 @@ export default function PerformanceTracker() {
           {/* Summary Cards Row */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3" data-testid="summary-cards">
             <MetricCard label="Target" value={`₹${fmt(data.revenue?.target)}`} icon={<Target className="h-4 w-4" />} color="slate" testId="metric-target" />
-            <MetricCard label="Achieved" value={`₹${fmt(manualRevenue || data.revenue?.achieved)}`} icon={<DollarSign className="h-4 w-4" />} color="blue" sub={fmtPct(data.revenue?.achievement_pct)} testId="metric-achieved" />
+            <MetricCard label="Revenue (Month)" value={`₹${fmt(data.revenue?.this_month)}`} icon={<DollarSign className="h-4 w-4" />} color="blue" sub={fmtPct(data.revenue?.achievement_pct)} testId="metric-achieved" />
             <MetricCard label="Existing Accounts" value={data.accounts?.existing_count} icon={<Users className="h-4 w-4" />} color="emerald" testId="metric-existing" />
             <MetricCard label="New Accounts" value={data.accounts?.new_onboarded} icon={<Building2 className="h-4 w-4" />} color="teal" testId="metric-new" />
-            <MetricCard label="Pipeline" value={`₹${fmt(data.pipeline?.current_value)}`} icon={<TrendingUp className="h-4 w-4" />} color="amber" sub={`${data.pipeline?.current_count} accounts`} testId="metric-pipeline" />
+            <MetricCard label="Pipeline" value={`₹${fmt(data.pipeline?.total_value)}`} icon={<TrendingUp className="h-4 w-4" />} color="amber" sub={`${data.pipeline?.total_count} leads`} testId="metric-pipeline" />
             <MetricCard label="Outstanding" value={`₹${fmt(data.collections?.total_outstanding)}`} icon={<AlertTriangle className="h-4 w-4" />} color="red" testId="metric-outstanding" />
-            <MetricCard label="Visits / Calls" value={`${manualVisits || data.activities?.visits} / ${manualCalls || data.activities?.calls}`} icon={<Phone className="h-4 w-4" />} color="purple" testId="metric-activity" />
+            <MetricCard label="Visits / Calls" value={`${data.activities?.visits} / ${data.activities?.calls}`} icon={<Phone className="h-4 w-4" />} color="purple" testId="metric-activity" />
           </div>
 
           {/* Main Content Grid */}
@@ -269,21 +276,50 @@ export default function PerformanceTracker() {
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <InfoRow label="Monthly Target" value={`₹${fmt(data.revenue?.target)}`} />
-                  <InfoRow label="Achieved" value={`₹${fmt(data.revenue?.achieved)}`} highlight={data.revenue?.achievement_pct < 50 ? 'red' : data.revenue?.achievement_pct >= 100 ? 'green' : 'amber'} />
-                  <InfoRow label="Achievement %" value={fmtPct(data.revenue?.achievement_pct)} />
-                  <InfoRow label="From New Accounts" value={`₹${fmt(data.revenue?.from_new_accounts)}`} />
-                  <InfoRow label="From Existing" value={`₹${fmt(data.revenue?.from_existing_accounts)}`} />
+                  <InfoRow label="Achievement %" value={fmtPct(data.revenue?.achievement_pct)} highlight={data.revenue?.achievement_pct < 50 ? 'red' : data.revenue?.achievement_pct >= 100 ? 'green' : 'amber'} />
                 </div>
-                {!isLocked && (
-                  <div className="border-t pt-2">
-                    <label className="text-xs text-slate-500">Manual Revenue Override (if billing not integrated)</label>
-                    <Input type="number" value={manualRevenue} onChange={e => setManualRevenue(e.target.value)} placeholder="Enter manual revenue" className="mt-1" data-testid="manual-revenue" />
-                  </div>
-                )}
+                <div className="space-y-2 border-t pt-2">
+                  <OverridableRow
+                    label="Revenue Lifetime (As-on-date)"
+                    autoValue={data.revenue?.lifetime}
+                    overrideValue={revenueOverrides.lifetime}
+                    editing={revenueEditing.lifetime}
+                    locked={isLocked}
+                    onEdit={() => setRevenueEditing(p => ({ ...p, lifetime: true }))}
+                    onChange={(v) => setRevenueOverrides(p => ({ ...p, lifetime: v }))}
+                    onSave={() => setRevenueEditing(p => ({ ...p, lifetime: false }))}
+                    onReset={() => { setRevenueOverrides(p => ({ ...p, lifetime: '' })); setRevenueEditing(p => ({ ...p, lifetime: false })); }}
+                    testId="revenue-lifetime"
+                  />
+                  <OverridableRow
+                    label="Revenue This Month (All Accounts)"
+                    autoValue={data.revenue?.this_month}
+                    overrideValue={revenueOverrides.this_month}
+                    editing={revenueEditing.this_month}
+                    locked={isLocked}
+                    onEdit={() => setRevenueEditing(p => ({ ...p, this_month: true }))}
+                    onChange={(v) => setRevenueOverrides(p => ({ ...p, this_month: v }))}
+                    onSave={() => setRevenueEditing(p => ({ ...p, this_month: false }))}
+                    onReset={() => { setRevenueOverrides(p => ({ ...p, this_month: '' })); setRevenueEditing(p => ({ ...p, this_month: false })); }}
+                    testId="revenue-this-month"
+                  />
+                  <OverridableRow
+                    label="Revenue from New Accounts This Month"
+                    autoValue={data.revenue?.from_new_accounts}
+                    overrideValue={revenueOverrides.new_accounts}
+                    editing={revenueEditing.new_accounts}
+                    locked={isLocked}
+                    onEdit={() => setRevenueEditing(p => ({ ...p, new_accounts: true }))}
+                    onChange={(v) => setRevenueOverrides(p => ({ ...p, new_accounts: v }))}
+                    onSave={() => setRevenueEditing(p => ({ ...p, new_accounts: false }))}
+                    onReset={() => { setRevenueOverrides(p => ({ ...p, new_accounts: '' })); setRevenueEditing(p => ({ ...p, new_accounts: false })); }}
+                    testId="revenue-new-accounts"
+                  />
+                </div>
               </CardContent>
             </Card>
 
-            {/* Accounts Section */}
+            {/* Accounts Section (from Accounts collection) */}
             <Card data-testid="accounts-section">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -294,10 +330,10 @@ export default function PerformanceTracker() {
                 <div className="grid grid-cols-2 gap-3">
                   <div
                     className="flex justify-between items-center py-2 px-3 border border-dashed border-emerald-200 rounded-lg cursor-pointer hover:bg-emerald-50 transition-colors"
-                    onClick={() => setAccountsDialog({ open: true, type: 'existing', title: `Existing Accounts (Won/Active)`, list: data.accounts?.existing_accounts || [] })}
+                    onClick={() => setAccountsDialog({ open: true, type: 'existing', title: `All Accounts (Lifetime)`, list: data.accounts?.existing_accounts || [] })}
                     data-testid="existing-accounts-tile"
                   >
-                    <span className="text-xs text-slate-500">Existing (Won/Active)</span>
+                    <span className="text-xs text-slate-500">Existing (Lifetime)</span>
                     <span className="text-sm font-bold text-emerald-700">{data.accounts?.existing_count}</span>
                   </div>
                   <div
@@ -312,7 +348,7 @@ export default function PerformanceTracker() {
               </CardContent>
             </Card>
 
-            {/* Pipeline Section */}
+            {/* Pipeline Section (from leads, status-wise breakdown) */}
             <Card data-testid="pipeline-section">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -320,10 +356,37 @@ export default function PerformanceTracker() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-3">
-                  <InfoRow label="Current Pipeline" value={`₹${fmt(data.pipeline?.current_value)}`} />
-                  <InfoRow label="Pipeline Accounts" value={data.pipeline?.current_count} />
-                  <InfoRow label="Next Month Value" value={`₹${fmt(data.pipeline?.next_month_value)}`} />
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm" data-testid="pipeline-status-table">
+                    <thead>
+                      <tr className="bg-slate-50 border-b text-xs text-slate-500 uppercase">
+                        <th className="text-left p-2">Status</th>
+                        <th className="text-right p-2">No of Leads</th>
+                        <th className="text-right p-2">Pipeline Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(data.pipeline?.by_status || []).map((row) => (
+                        <tr key={row.status} className="border-b hover:bg-slate-50/50">
+                          <td className="p-2 text-xs font-medium text-slate-600 capitalize">{row.status.replace(/_/g, ' ')}</td>
+                          <td className="p-2 text-right text-sm font-medium">{row.count}</td>
+                          <td className="p-2 text-right text-sm font-medium">₹{fmt(row.value)}</td>
+                        </tr>
+                      ))}
+                      {(data.pipeline?.by_status || []).length === 0 && (
+                        <tr><td colSpan={3} className="text-center py-3 text-xs text-muted-foreground">No active pipeline leads</td></tr>
+                      )}
+                      <tr className="bg-slate-50 font-semibold border-t">
+                        <td className="p-2 text-xs text-slate-700">Total</td>
+                        <td className="p-2 text-right text-sm">{data.pipeline?.total_count || 0}</td>
+                        <td className="p-2 text-right text-sm">₹{fmt(data.pipeline?.total_value)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-3 pt-2 border-t grid grid-cols-2 gap-3">
+                  <InfoRow label="Leads Targeting Next Month" value={data.pipeline?.next_month_leads_count || 0} />
+                  <InfoRow label="Next Month Pipeline Value" value={`₹${fmt(data.pipeline?.next_month_pipeline_value)}`} />
                   <InfoRow label="Coverage Ratio" value={fmtPct(data.pipeline?.coverage_ratio)} highlight={data.pipeline?.coverage_ratio < 50 ? 'red' : 'green'} />
                 </div>
               </CardContent>
@@ -478,6 +541,51 @@ export default function PerformanceTracker() {
     </div>
   );
 }
+
+function OverridableRow({ label, autoValue, overrideValue, editing, locked, onEdit, onChange, onSave, onReset, testId }) {
+  const displayValue = overrideValue !== '' ? parseFloat(overrideValue) : autoValue;
+  const hasOverride = overrideValue !== '' && overrideValue !== null && overrideValue !== undefined;
+  return (
+    <div className={`flex items-center justify-between py-1.5 px-2 rounded ${hasOverride ? 'bg-amber-50/60' : ''}`} data-testid={testId}>
+      <span className="text-xs text-slate-500 flex items-center gap-1">
+        {label}
+        {hasOverride && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" title="Manual override" />}
+      </span>
+      <div className="flex items-center gap-1.5">
+        {editing ? (
+          <>
+            <input
+              type="number"
+              className="w-28 text-right text-sm font-medium border rounded px-2 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+              value={overrideValue}
+              onChange={e => onChange(e.target.value)}
+              autoFocus
+              data-testid={`${testId}-input`}
+            />
+            <button onClick={onSave} className="p-0.5 rounded hover:bg-blue-100 text-blue-600" title="Done" data-testid={`${testId}-save`}>
+              <Check className="h-3.5 w-3.5" />
+            </button>
+          </>
+        ) : (
+          <>
+            <span className={`text-sm font-semibold ${hasOverride ? 'text-amber-700' : 'text-slate-700'}`}>₹{fmt(displayValue)}</span>
+            {!locked && (
+              <button onClick={() => { onChange(String(autoValue || 0)); onEdit(); }} className="p-0.5 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600" title="Override" data-testid={`${testId}-edit`}>
+                <Pencil className="h-3 w-3" />
+              </button>
+            )}
+            {hasOverride && !locked && (
+              <button onClick={onReset} className="p-0.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-600" title="Reset to auto" data-testid={`${testId}-reset`}>
+                <RotateCcw className="h-3 w-3" />
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 // --- Sub-components ---
 

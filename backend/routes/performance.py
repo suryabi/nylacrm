@@ -28,7 +28,7 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
     else:
         month_end = f"{year}-{month + 1:02d}-01"
     
-    # === A. REVENUE METRICS ===
+    # === A. REVENUE METRICS (from accounts/invoices) ===
     # Get target from plan
     target_alloc = await db.target_allocations_v2.find_one(
         {"plan_id": plan_id, "resource_id": resource_id, "level": "resource"},
@@ -38,8 +38,8 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
     resource_name = target_alloc.get("resource_name", "") if target_alloc else ""
     resource_city = target_alloc.get("city", "") if target_alloc else ""
     
-    # Revenue from invoices for this month
-    invoices = await db.invoices.find(
+    # All invoices this month for this resource
+    invoices_this_month = await db.invoices.find(
         {
             "tenant_id": tenant_id,
             "assigned_to": resource_id,
@@ -48,105 +48,87 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
         {"_id": 0, "net_invoice_value": 1, "gross_invoice_value": 1, "outstanding": 1, "account_uuid": 1, "account_id": 1, "invoice_date": 1}
     ).to_list(10000)
     
-    revenue_achieved = sum(inv.get("net_invoice_value") or inv.get("gross_invoice_value") or 0 for inv in invoices)
-    achievement_pct = round((revenue_achieved / monthly_target * 100), 1) if monthly_target > 0 else 0
-    
-    # === B. ACCOUNT METRICS ===
-    # Won/Active accounts owned by this resource
-    existing_accounts = await db.leads.find(
+    # All invoices ever (lifetime) for this resource
+    all_invoices = await db.invoices.find(
         {
             "tenant_id": tenant_id,
             "assigned_to": resource_id,
-            "status": {"$in": ["won", "active_customer"]}
         },
-        {"_id": 0, "id": 1, "company": 1, "name": 1, "status": 1, "city": 1, "onboarded_month": 1, "onboarded_year": 1}
+        {"_id": 0, "net_invoice_value": 1, "gross_invoice_value": 1, "account_uuid": 1}
+    ).to_list(50000)
+    
+    revenue_this_month = sum(inv.get("net_invoice_value") or inv.get("gross_invoice_value") or 0 for inv in invoices_this_month)
+    revenue_lifetime = sum(inv.get("net_invoice_value") or inv.get("gross_invoice_value") or 0 for inv in all_invoices)
+    achievement_pct = round((revenue_this_month / monthly_target * 100), 1) if monthly_target > 0 else 0
+    
+    # === B. ACCOUNT METRICS (from accounts collection, NOT leads) ===
+    # All accounts for this resource (lifetime)
+    all_accounts = await db.accounts.find(
+        {
+            "tenant_id": tenant_id,
+            "assigned_to": resource_id,
+        },
+        {"_id": 0, "id": 1, "account_name": 1, "city": 1, "account_type": 1, "onboarded_month": 1, "onboarded_year": 1, "created_at": 1}
     ).to_list(1000)
     
-    # New accounts onboarded this month
-    # Priority: 1) onboarded_month/year field, 2) won_date, 3) activity status_change
-    new_accounts_by_onboarded = [
-        a for a in existing_accounts
-        if a.get("onboarded_month") == month and a.get("onboarded_year") == year
+    existing_accounts_count = len(all_accounts)
+    existing_accounts_list = [
+        {"id": a["id"], "name": a.get("account_name", "Unknown"), "city": a.get("city", ""), "status": a.get("account_type", "")}
+        for a in all_accounts
     ]
     
-    # Also check leads with won_date in this month (that don't have onboarded_month set)
-    onboarded_ids = set(a.get("id") for a in new_accounts_by_onboarded)
-    new_accounts_by_won_date = await db.leads.find(
-        {
-            "tenant_id": tenant_id,
-            "assigned_to": resource_id,
-            "status": "won",
-            "won_date": {"$gte": month_start, "$lt": month_end},
-            "id": {"$nin": list(onboarded_ids)},
-            "$or": [{"onboarded_month": None}, {"onboarded_month": {"$exists": False}}]
-        },
-        {"_id": 0, "id": 1, "company": 1, "name": 1, "city": 1, "won_date": 1}
-    ).to_list(100)
-    
-    new_accounts = new_accounts_by_onboarded + new_accounts_by_won_date
-    
-    # If still no results, check activities for status_change to won in this month
-    if not new_accounts:
-        won_activities = await db.activities.find(
-            {
-                "tenant_id": tenant_id,
-                "activity_type": "status_change",
-                "description": {"$regex": "won", "$options": "i"},
-                "created_at": {"$gte": month_start, "$lt": month_end}
-            },
-            {"_id": 0, "lead_id": 1}
-        ).to_list(1000)
-        won_lead_ids = [a["lead_id"] for a in won_activities]
-        if won_lead_ids:
-            new_accounts = await db.leads.find(
-                {
-                    "tenant_id": tenant_id,
-                    "id": {"$in": won_lead_ids},
-                    "assigned_to": resource_id,
-                    "$or": [{"onboarded_month": None}, {"onboarded_month": {"$exists": False}}]
-                },
-                {"_id": 0, "id": 1, "company": 1, "name": 1, "city": 1}
-            ).to_list(100)
-    
-    # Revenue from new vs existing
+    # New accounts onboarded this month (by onboarded_month/year at account level)
+    new_accounts = [
+        a for a in all_accounts
+        if a.get("onboarded_month") == month and a.get("onboarded_year") == year
+    ]
+    new_accounts_list = [
+        {"id": a["id"], "name": a.get("account_name", "Unknown"), "city": a.get("city", "")}
+        for a in new_accounts
+    ]
     new_account_ids = set(a.get("id") for a in new_accounts)
     
-    revenue_new = sum(
+    # Revenue from accounts onboarded this month
+    revenue_new_accounts = sum(
         inv.get("net_invoice_value") or inv.get("gross_invoice_value") or 0
-        for inv in invoices if inv.get("account_uuid") in new_account_ids
+        for inv in invoices_this_month if inv.get("account_uuid") in new_account_ids
     )
-    revenue_existing = revenue_achieved - revenue_new
     
-    # === C. PIPELINE METRICS ===
-    pipeline_statuses = ["qualified", "proposal_shared_with_customer", "proposal_internal_review", "contacted"]
+    # === C. PIPELINE METRICS (from leads, excluding won/active_customer/not_qualified/lost) ===
+    excluded_statuses = ["won", "active_customer", "not_qualified", "lost"]
     pipeline_leads = await db.leads.find(
         {
             "tenant_id": tenant_id,
             "assigned_to": resource_id,
-            "status": {"$in": pipeline_statuses}
+            "status": {"$nin": excluded_statuses}
         },
-        {"_id": 0, "id": 1, "company": 1, "name": 1, "city": 1, "status": 1, "expected_value": 1, "expected_close_date": 1}
-    ).to_list(1000)
+        {"_id": 0, "id": 1, "company": 1, "name": 1, "city": 1, "status": 1, "expected_value": 1, "estimated_value": 1, "target_closure_month": 1, "target_closure_year": 1}
+    ).to_list(5000)
     
-    pipeline_value = sum(lead.get("expected_value", 0) or 0 for lead in pipeline_leads)
+    # Group by status
+    status_groups = {}
+    for lead in pipeline_leads:
+        status = lead.get("status", "unknown")
+        if status not in status_groups:
+            status_groups[status] = {"status": status, "count": 0, "value": 0}
+        status_groups[status]["count"] += 1
+        status_groups[status]["value"] += lead.get("expected_value") or lead.get("estimated_value") or 0
     
-    # Next month pipeline
+    pipeline_by_status = sorted(status_groups.values(), key=lambda x: x["value"], reverse=True)
+    pipeline_total_value = sum(s["value"] for s in pipeline_by_status)
+    pipeline_total_count = sum(s["count"] for s in pipeline_by_status)
+    
+    # Leads targeting next month (based on target_closure_month/year)
     next_month = month + 1 if month < 12 else 1
     next_year = year if month < 12 else year + 1
-    next_month_start = f"{next_year}-{next_month:02d}-01"
-    if next_month == 12:
-        next_month_end_str = f"{next_year + 1}-01-01"
-    else:
-        next_month_end_str = f"{next_year}-{next_month + 1:02d}-01"
     
-    next_month_pipeline = [
+    next_month_leads = [
         lead for lead in pipeline_leads
-        if lead.get("expected_close_date", "") >= next_month_start and lead.get("expected_close_date", "") < next_month_end_str
+        if lead.get("target_closure_month") == next_month and lead.get("target_closure_year") == next_year
     ]
-    next_month_pipeline_value = sum(lead.get("expected_value", 0) or 0 for lead in next_month_pipeline)
+    next_month_pipeline_value = sum(lead.get("expected_value") or lead.get("estimated_value") or 0 for lead in next_month_leads)
     
     # === D. OUTSTANDING METRICS ===
-    # Outstanding from existing accounts (won/active_customer)
     outstanding_invoices = await db.invoices.find(
         {
             "tenant_id": tenant_id,
@@ -187,7 +169,6 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
             aging["0_30"] += outstanding_amt
     
     # === E. ACTIVITY METRICS ===
-    # Visits
     visits = await db.activities.count_documents({
         "tenant_id": tenant_id,
         "created_by": resource_id,
@@ -195,7 +176,6 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
         "created_at": {"$gte": month_start, "$lt": month_end}
     })
     
-    # Calls
     calls = await db.activities.count_documents({
         "tenant_id": tenant_id,
         "created_by": resource_id,
@@ -203,7 +183,6 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
         "created_at": {"$gte": month_start, "$lt": month_end}
     })
     
-    # Follow-ups
     follow_ups = await db.activities.count_documents({
         "tenant_id": tenant_id,
         "created_by": resource_id,
@@ -213,10 +192,10 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
     
     # === F. CALCULATED METRICS ===
     pipeline_coverage = round((next_month_pipeline_value / monthly_target * 100), 1) if monthly_target > 0 else 0
-    outstanding_ratio = round((total_outstanding / revenue_achieved * 100), 1) if revenue_achieved > 0 else 0
-    visit_productivity = round(revenue_achieved / visits, 0) if visits > 0 else 0
-    call_productivity = round(revenue_achieved / calls, 0) if calls > 0 else 0
-    account_conversion_rate = round((len(new_accounts) / len(pipeline_leads) * 100), 1) if len(pipeline_leads) > 0 else 0
+    outstanding_ratio = round((total_outstanding / revenue_this_month * 100), 1) if revenue_this_month > 0 else 0
+    visit_productivity = round(revenue_this_month / visits, 0) if visits > 0 else 0
+    call_productivity = round(revenue_this_month / calls, 0) if calls > 0 else 0
+    account_conversion_rate = round((len(new_accounts) / pipeline_total_count * 100), 1) if pipeline_total_count > 0 else 0
     
     return {
         "resource_id": resource_id,
@@ -227,25 +206,24 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
         "plan_id": plan_id,
         "monthly_target": monthly_target,
         "revenue": {
-            "achieved": round(revenue_achieved, 2),
             "target": monthly_target,
+            "lifetime": round(revenue_lifetime, 2),
+            "this_month": round(revenue_this_month, 2),
+            "from_new_accounts": round(revenue_new_accounts, 2),
             "achievement_pct": achievement_pct,
-            "from_new_accounts": round(revenue_new, 2),
-            "from_existing_accounts": round(revenue_existing, 2),
         },
         "accounts": {
-            "existing_count": len(existing_accounts),
-            "existing_accounts": [{"id": a["id"], "name": a.get("company") or a.get("name", "Unknown"), "city": a.get("city", ""), "status": a.get("status", "")} for a in existing_accounts],
+            "existing_count": existing_accounts_count,
+            "existing_accounts": existing_accounts_list,
             "new_onboarded": len(new_accounts),
-            "new_accounts": [{"id": a["id"], "name": a.get("company") or a.get("name", "Unknown"), "city": a.get("city", "")} for a in new_accounts],
+            "new_accounts": new_accounts_list,
         },
         "pipeline": {
-            "current_value": round(pipeline_value, 2),
-            "current_count": len(pipeline_leads),
-            "current_accounts": [{"id": lead["id"], "name": lead.get("company") or lead.get("name", "Unknown"), "status": lead.get("status", ""), "value": lead.get("expected_value", 0)} for lead in pipeline_leads],
-            "next_month_value": round(next_month_pipeline_value, 2),
-            "next_month_count": len(next_month_pipeline),
-            "next_month_accounts": [{"id": lead["id"], "name": lead.get("company") or lead.get("name", "Unknown"), "value": lead.get("expected_value", 0)} for lead in next_month_pipeline],
+            "by_status": pipeline_by_status,
+            "total_value": round(pipeline_total_value, 2),
+            "total_count": pipeline_total_count,
+            "next_month_leads_count": len(next_month_leads),
+            "next_month_pipeline_value": round(next_month_pipeline_value, 2),
             "coverage_ratio": pipeline_coverage,
         },
         "collections": {
@@ -505,20 +483,20 @@ async def get_comparison(
             "month": m,
             "year": y,
             "label": f"{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1]} {y}",
-            "revenue_achieved": metrics["revenue"]["achieved"],
+            "revenue_achieved": metrics["revenue"]["this_month"],
             "monthly_target": metrics["revenue"]["target"],
             "achievement_pct": metrics["revenue"]["achievement_pct"],
             "new_accounts": metrics["accounts"]["new_onboarded"],
             "existing_accounts": metrics["accounts"]["existing_count"],
-            "pipeline_value": metrics["pipeline"]["current_value"],
-            "pipeline_count": metrics["pipeline"]["current_count"],
+            "pipeline_value": metrics["pipeline"]["total_value"],
+            "pipeline_count": metrics["pipeline"]["total_count"],
             "total_outstanding": metrics["collections"]["total_outstanding"],
             "visits": metrics["activities"]["visits"],
             "calls": metrics["activities"]["calls"],
             "status": saved.get("status") if saved else "not_created",
             "support_count": len(saved.get("support_needed", [])) if saved else 0,
             # Auto-computed originals (always available for reset)
-            "auto_revenue": metrics["revenue"]["achieved"],
+            "auto_revenue": metrics["revenue"]["this_month"],
             "auto_outstanding": metrics["collections"]["total_outstanding"],
             # Override flags
             "has_revenue_override": False,
