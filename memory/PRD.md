@@ -15,10 +15,10 @@
 
 ### Monthly Performance Tracking Module (NEW - 2026-03-31)
 - [x] **Revenue Metrics**: Target (from Target Setup Module), Achieved, Achievement %, New vs Existing account revenue, Manual override
-- [x] **Account Metrics**: Existing (Won/Active) count, New accounts onboarded, Expandable account lists
-- [x] **Pipeline Metrics**: Current value & count, Next month pipeline, Coverage ratio, Stage-wise breakdown
-- [x] **Collections/Outstanding**: Total outstanding, Aging buckets (0-30, 31-60, 61-90, 90+), Account-level details
-- [x] **Activity Metrics**: Visits, Calls, Follow-ups, Visit/Call Productivity, Manual overrides
+- [x] **Account Metrics**: Existing (Won/Active) count with company names, New accounts onboarded, Clickable tiles open Dialog popup with leads list
+- [x] **Pipeline Metrics**: Current value & count, Next month pipeline, Coverage ratio (no expansion toggle)
+- [x] **Collections/Outstanding**: Total outstanding, Aging buckets (0-30, 31-60, 61-90, 90+), Account-level details (expandable)
+- [x] **Activity Metrics**: Visits, Calls, Follow-ups, Visit/Call Productivity (auto-populated, no manual overrides)
 - [x] **Support Metrics**: Category badges (Pricing, Logistics, Marketing, Collections, Management, Product), Remarks
 - [x] **Approval Workflow**: Draft → Submitted → Approved/Returned, locked once approved
 - [x] **Month-on-Month Comparison**: Last 3 months table with trend arrows
