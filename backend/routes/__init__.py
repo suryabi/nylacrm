@@ -34,6 +34,7 @@ from .return_reasons import router as return_reasons_router
 from .customer_returns import router as customer_returns_router
 from .credit_notes import router as credit_notes_router
 from .factory_returns import router as factory_returns_router
+from .performance import router as performance_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -80,5 +81,8 @@ routes_router.include_router(customer_returns_router, prefix="/distributors", ta
 routes_router.include_router(credit_notes_router, prefix="/distributors", tags=["Credit Notes"])
 
 routes_router.include_router(factory_returns_router, prefix="/distributors", tags=["Factory Returns"])
+
+# Performance Tracking
+routes_router.include_router(performance_router, prefix="/performance", tags=["Performance Tracking"])
 
 __all__ = ['routes_router']

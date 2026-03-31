@@ -107,6 +107,7 @@ export const MODULE_ROUTE_MAP = {
   // Lead & Sales Operations
   lead_discovery: ['/lead-discovery'],
   target_planning: ['/target-planning'],
+  performance_tracker: ['/performance'],
   daily_status: ['/daily-status'],
   status_summary: ['/status-summary'],
   
