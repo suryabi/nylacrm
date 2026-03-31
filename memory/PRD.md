@@ -25,6 +25,13 @@
 - [x] **Performance KPIs**: Achievement %, Pipeline Coverage, Outstanding Ratio, Visit/Call Productivity, Conversion Rate
 - [x] **Integration**: Linked to Target Setup Module for monthly targets per resource
 
+### Actual Onboarded Month/Year Feature (NEW - 2026-03-31)
+- [x] Lead edit form: Actual Onboarded Month & Year dropdowns in Lead Information section
+- [x] Account edit form: Actual Onboarded Month & Year dropdowns
+- [x] Account read-only view: Displays formatted "Actual Onboarded" (e.g., "Mar 2026")
+- [x] Lead-to-account conversion propagates onboarded_month/year
+- [x] Performance Tracker uses onboarded_month/year (priority) for "New Accounts This Month" calculation
+
 ## Key API Endpoints
 ### Performance Tracking
 - `GET /api/performance/target-plans`
