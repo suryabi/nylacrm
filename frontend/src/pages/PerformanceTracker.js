@@ -10,7 +10,7 @@ import {
   Target, TrendingUp, TrendingDown, Users, Phone, MapPin, DollarSign,
   BarChart3, RefreshCw, Save, Send, Check, RotateCcw, AlertTriangle,
   ChevronDown, ChevronRight, Building2, Clock, ArrowUp, ArrowDown, Minus,
-  Pencil, X
+  Pencil, X, MessageSquare, Mail
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -264,7 +264,7 @@ export default function PerformanceTracker() {
             <MetricCard label="New Accounts" value={data.accounts?.new_onboarded} icon={<Building2 className="h-4 w-4" />} color="teal" testId="metric-new" />
             <MetricCard label="Pipeline" value={`₹${fmt(data.pipeline?.total_value)}`} icon={<TrendingUp className="h-4 w-4" />} color="amber" sub={`${data.pipeline?.total_count} leads`} testId="metric-pipeline" />
             <MetricCard label="Outstanding" value={`₹${fmt(data.collections?.total_outstanding)}`} icon={<AlertTriangle className="h-4 w-4" />} color="red" testId="metric-outstanding" />
-            <MetricCard label="Visits / Calls" value={`${data.activities?.visits} / ${data.activities?.calls}`} icon={<Phone className="h-4 w-4" />} color="purple" testId="metric-activity" />
+            <MetricCard label="Activities" value={data.activities?.total || 0} icon={<Phone className="h-4 w-4" />} color="purple" sub={`${data.activities?.unique_visits || 0} unique visits`} testId="metric-activity" />
           </div>
 
           {/* Main Content Grid */}
@@ -483,11 +483,53 @@ export default function PerformanceTracker() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2"><Phone className="h-4 w-4 text-purple-600" />Activity Metrics</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <InfoRow label="Visits" value={data.activities?.visits} />
-                  <InfoRow label="Calls" value={data.activities?.calls} />
-                  <InfoRow label="Follow-ups" value={data.activities?.follow_ups} />
+              <CardContent className="space-y-4">
+                {/* Section 1: Total Activity Counts */}
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Total Activities</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex items-center justify-between py-1.5 px-3 rounded bg-purple-50/40 border border-purple-100">
+                      <span className="text-xs text-slate-600 flex items-center gap-1.5"><MessageSquare className="h-3 w-3 text-purple-500" />Messages</span>
+                      <span className="text-sm font-bold text-slate-700">{data.activities?.messages || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1.5 px-3 rounded bg-blue-50/40 border border-blue-100">
+                      <span className="text-xs text-slate-600 flex items-center gap-1.5"><Phone className="h-3 w-3 text-blue-500" />Calls</span>
+                      <span className="text-sm font-bold text-slate-700">{data.activities?.calls || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1.5 px-3 rounded bg-emerald-50/40 border border-emerald-100">
+                      <span className="text-xs text-slate-600 flex items-center gap-1.5"><MapPin className="h-3 w-3 text-emerald-500" />Customer Visits</span>
+                      <span className="text-sm font-bold text-slate-700">{data.activities?.visits || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1.5 px-3 rounded bg-amber-50/40 border border-amber-100">
+                      <span className="text-xs text-slate-600 flex items-center gap-1.5"><Mail className="h-3 w-3 text-amber-500" />Emails</span>
+                      <span className="text-sm font-bold text-slate-700">{data.activities?.emails || 0}</span>
+                    </div>
+                  </div>
+                </div>
+                {/* Section 2: Unique Customer Counts */}
+                <div className="border-t pt-3">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Unique Customers Reached</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex items-center justify-between py-1.5 px-3 rounded bg-slate-50 border border-slate-100">
+                      <span className="text-xs text-slate-600">Unique Visits</span>
+                      <span className="text-sm font-bold text-slate-700">{data.activities?.unique_visits || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1.5 px-3 rounded bg-slate-50 border border-slate-100">
+                      <span className="text-xs text-slate-600">Unique Messages</span>
+                      <span className="text-sm font-bold text-slate-700">{data.activities?.unique_messages || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1.5 px-3 rounded bg-slate-50 border border-slate-100">
+                      <span className="text-xs text-slate-600">Unique Calls</span>
+                      <span className="text-sm font-bold text-slate-700">{data.activities?.unique_calls || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1.5 px-3 rounded bg-slate-50 border border-slate-100">
+                      <span className="text-xs text-slate-600">Unique Emails</span>
+                      <span className="text-sm font-bold text-slate-700">{data.activities?.unique_emails || 0}</span>
+                    </div>
+                  </div>
+                </div>
+                {/* Productivity */}
+                <div className="border-t pt-3 grid grid-cols-2 gap-3">
                   <InfoRow label="Visit Productivity" value={data.activities?.visit_productivity > 0 ? `₹${fmt(data.activities?.visit_productivity)}/visit` : '-'} />
                   <InfoRow label="Call Productivity" value={data.activities?.call_productivity > 0 ? `₹${fmt(data.activities?.call_productivity)}/call` : '-'} />
                 </div>

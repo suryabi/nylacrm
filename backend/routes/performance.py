@@ -176,32 +176,31 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
             aging["0_30"] += outstanding_amt
     
     # === E. ACTIVITY METRICS ===
-    visits = await db.activities.count_documents({
+    activity_filter = {
         "tenant_id": tenant_id,
         "created_by": resource_id,
-        "activity_type": {"$in": ["visit", "customer_visit"]},
         "created_at": {"$gte": month_start, "$lt": month_end}
-    })
+    }
     
-    calls = await db.activities.count_documents({
-        "tenant_id": tenant_id,
-        "created_by": resource_id,
-        "activity_type": "call",
-        "created_at": {"$gte": month_start, "$lt": month_end}
-    })
+    # Total counts per activity type
+    messages_count = await db.lead_activities.count_documents({**activity_filter, "activity_type": "messaging"})
+    calls_count = await db.lead_activities.count_documents({**activity_filter, "activity_type": "call"})
+    visits_count = await db.lead_activities.count_documents({**activity_filter, "activity_type": {"$in": ["visit", "meeting"]}})
+    emails_count = await db.lead_activities.count_documents({**activity_filter, "activity_type": "email"})
     
-    follow_ups = await db.activities.count_documents({
-        "tenant_id": tenant_id,
-        "created_by": resource_id,
-        "activity_type": {"$in": ["follow_up", "meeting"]},
-        "created_at": {"$gte": month_start, "$lt": month_end}
-    })
+    # Unique customer counts (distinct lead_ids per activity type)
+    unique_messages = len(await db.lead_activities.distinct("lead_id", {**activity_filter, "activity_type": "messaging"}))
+    unique_calls = len(await db.lead_activities.distinct("lead_id", {**activity_filter, "activity_type": "call"}))
+    unique_visits = len(await db.lead_activities.distinct("lead_id", {**activity_filter, "activity_type": {"$in": ["visit", "meeting"]}}))
+    unique_emails = len(await db.lead_activities.distinct("lead_id", {**activity_filter, "activity_type": "email"}))
+    
+    total_activities = messages_count + calls_count + visits_count + emails_count
     
     # === F. CALCULATED METRICS ===
     pipeline_coverage = round((next_month_pipeline_value / monthly_target * 100), 1) if monthly_target > 0 else 0
     outstanding_ratio = round((total_outstanding / revenue_this_month * 100), 1) if revenue_this_month > 0 else 0
-    visit_productivity = round(revenue_this_month / visits, 0) if visits > 0 else 0
-    call_productivity = round(revenue_this_month / calls, 0) if calls > 0 else 0
+    visit_productivity = round(revenue_this_month / visits_count, 0) if visits_count > 0 else 0
+    call_productivity = round(revenue_this_month / calls_count, 0) if calls_count > 0 else 0
     account_conversion_rate = round((len(new_accounts) / pipeline_total_count * 100), 1) if pipeline_total_count > 0 else 0
     
     return {
@@ -240,9 +239,15 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
             "outstanding_ratio": outstanding_ratio,
         },
         "activities": {
-            "visits": visits,
-            "calls": calls,
-            "follow_ups": follow_ups,
+            "messages": messages_count,
+            "calls": calls_count,
+            "visits": visits_count,
+            "emails": emails_count,
+            "total": total_activities,
+            "unique_messages": unique_messages,
+            "unique_calls": unique_calls,
+            "unique_visits": unique_visits,
+            "unique_emails": unique_emails,
             "visit_productivity": visit_productivity,
             "call_productivity": call_productivity,
         },
@@ -534,6 +539,8 @@ async def get_comparison(
             "total_outstanding": metrics["collections"]["total_outstanding"],
             "visits": metrics["activities"]["visits"],
             "calls": metrics["activities"]["calls"],
+            "messages": metrics["activities"]["messages"],
+            "emails": metrics["activities"]["emails"],
             "status": saved.get("status") if saved else "not_created",
             "support_count": len(saved.get("support_needed", [])) if saved else 0,
             # Auto-computed originals (always available for reset)
