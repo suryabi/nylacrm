@@ -14,9 +14,9 @@
 - [x] Stock Dashboard — real-time inventory per SKU with bottle tracking, weekly averages, days remaining
 
 ### Monthly Performance Tracking Module (NEW - 2026-03-31)
-- [x] **Revenue Metrics**: Target (from Target Setup Module), Achieved, Achievement %, New vs Existing account revenue, Manual override
-- [x] **Account Metrics**: Existing (Won/Active) count with company names, New accounts onboarded, Clickable tiles open Dialog popup with leads list
-- [x] **Pipeline Metrics**: Current value & count, Next month pipeline, Coverage ratio (no expansion toggle)
+- [x] **Revenue Metrics**: Target (from Target Setup Module), Achievement %, Revenue Lifetime (as-on-date), Revenue This Month (all accounts), Revenue from New Accounts This Month — each with manual override & reset
+- [x] **Account Metrics (from Accounts collection)**: Existing accounts lifetime count, New accounts onboarded this month (by onboarded_month/year at account level), Clickable tiles open Dialog popup
+- [x] **Pipeline Metrics (from Leads)**: Status-wise breakdown table (Status | No of Leads | Pipeline Value) excluding won/active_customer/not_qualified/lost. Leads targeting next month (by target_closure_month/year), Coverage ratio
 - [x] **Collections/Outstanding**: Total outstanding, Aging buckets (0-30, 31-60, 61-90, 90+), Account-level details (expandable)
 - [x] **Activity Metrics**: Visits, Calls, Follow-ups, Visit/Call Productivity (auto-populated, no manual overrides)
 - [x] **Support Metrics**: Category badges (Pricing, Logistics, Marketing, Collections, Management, Product), Remarks
@@ -25,12 +25,10 @@
 - [x] **Performance KPIs**: Achievement %, Pipeline Coverage, Outstanding Ratio, Visit/Call Productivity, Conversion Rate
 - [x] **Integration**: Linked to Target Setup Module for monthly targets per resource
 
-### Actual Onboarded Month/Year Feature (NEW - 2026-03-31)
-- [x] Lead edit form: Actual Onboarded Month & Year dropdowns in Lead Information section
-- [x] Account edit form: Actual Onboarded Month & Year dropdowns
-- [x] Account read-only view: Displays formatted "Actual Onboarded" (e.g., "Mar 2026")
+### Lead & Account Enhancements (2026-03-31)
+- [x] Lead edit form: Actual Onboarded Month & Year, Target Closure Month & Year dropdowns
+- [x] Account edit form: Actual Onboarded Month & Year dropdowns + read-only display
 - [x] Lead-to-account conversion propagates onboarded_month/year
-- [x] Performance Tracker uses onboarded_month/year (priority) for "New Accounts This Month" calculation
 
 ## Key API Endpoints
 ### Performance Tracking
