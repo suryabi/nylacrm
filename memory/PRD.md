@@ -8,37 +8,45 @@
 ## Completed Features
 
 ### Distribution Module
-- [x] Stock Out: GST handling, collapsible sections (Dist->Customer, Dist->Factory)
-- [x] Factory Return: Source-first selection, SKU from margin matrix, credit at transfer_price
-- [x] Settlement: Independently queries Credit Notes + Factory Returns, stores all fields including `total_at_transfer_price`
-- [x] CEO/Admin can delete any transaction regardless of status (deliveries, customer returns, factory returns, credit notes)
+- [x] Stock Out, Factory Return, Settlement, CEO/Admin Delete
+- [x] Billing Reconciliation Two-Entry System with expandable weekly details
+- [x] Reconciled Two-Entry View, Draft Note Deletion reverts reconciliation
+- [x] Stock Dashboard — real-time inventory per SKU with bottle tracking, weekly averages, days remaining
 
-### Billing Reconciliation - Two Entry System
-- [x] Entry 1: Monthly Billing at transfer price with expandable weekly details
-- [x] Entry 2: Monthly Settlement (Debit/Credit Note) with full adjustment breakdown
-- [x] Reconciled Two-Entry View: Full data visible after reconciliation
-- [x] Draft Note Deletion reverts reconciliation status
-
-### Stock Dashboard (NEW - 2026-03-30)
-- [x] New "Stock" tab on distributor page — real-time inventory dashboard
-- [x] **Summary Cards**: Stock Received, Delivered to Customers, Customer Returns, Factory Returns, Stock at Hand (with %), SKUs Tracked
-- [x] **Bottle Tracking**: Empty/Reusable, Damaged, Expired, Pending Factory Return counts
-- [x] **SKU Table**: Per-SKU breakdown with all metrics, expandable rows showing return category breakdowns
-- [x] **Performance Metrics**: Weekly average deliveries, % stock at hand, days of stock remaining
-- [x] Visual indicators: negative stock in red, low stock days highlighted, progress bars for % at hand
+### Monthly Performance Tracking Module (NEW - 2026-03-31)
+- [x] **Revenue Metrics**: Target (from Target Setup Module), Achieved, Achievement %, New vs Existing account revenue, Manual override
+- [x] **Account Metrics**: Existing (Won/Active) count, New accounts onboarded, Expandable account lists
+- [x] **Pipeline Metrics**: Current value & count, Next month pipeline, Coverage ratio, Stage-wise breakdown
+- [x] **Collections/Outstanding**: Total outstanding, Aging buckets (0-30, 31-60, 61-90, 90+), Account-level details
+- [x] **Activity Metrics**: Visits, Calls, Follow-ups, Visit/Call Productivity, Manual overrides
+- [x] **Support Metrics**: Category badges (Pricing, Logistics, Marketing, Collections, Management, Product), Remarks
+- [x] **Approval Workflow**: Draft → Submitted → Approved/Returned, locked once approved
+- [x] **Month-on-Month Comparison**: Last 3 months table with trend arrows
+- [x] **Performance KPIs**: Achievement %, Pipeline Coverage, Outstanding Ratio, Visit/Call Productivity, Conversion Rate
+- [x] **Integration**: Linked to Target Setup Module for monthly targets per resource
 
 ## Key API Endpoints
-- `GET /api/distributors/{id}/stock-dashboard` — Real-time stock aggregation
-- `GET /api/distributors/{id}/monthly-reconciliation?month=X&year=Y`
-- `DELETE /api/distributors/{id}/deliveries/{delivery_id}` (CEO/Admin: any status)
-- `DELETE /api/distributors/{id}/returns/{return_id}` (CEO/Admin: any status)
-- `DELETE /api/distributors/{id}/factory-returns/{return_id}` (CEO/Admin: any status)
-- `DELETE /api/distributors/{id}/credit-notes/{credit_note_id}` (CEO/Admin only)
+### Performance Tracking
+- `GET /api/performance/target-plans`
+- `GET /api/performance/resources-for-plan/{plan_id}`
+- `GET /api/performance/generate?plan_id=X&resource_id=Y&month=M&year=Y`
+- `POST /api/performance/save`
+- `POST /api/performance/{id}/submit`
+- `POST /api/performance/{id}/approve`
+- `POST /api/performance/{id}/return`
+- `GET /api/performance/comparison`
+
+### Distribution
+- `GET /api/distributors/{id}/stock-dashboard`
+- `GET /api/distributors/{id}/monthly-reconciliation`
 
 ## Upcoming Tasks (P1)
 - Auto-generate Provisional Invoice (on shipment -> "delivered")
 - Build Reporting Module
+- Manager Dashboard (team-wise comparison, activity vs outcome)
+- Leadership Dashboard (territory trends, pipeline health)
 
 ## Backlog (P2)
 - Task email notifications, First-login Password Change, Email Invoice Sharing
 - Settlement Auto-scheduling, Dashboard analytics, server.py refactoring
+- Alerts: low achievement, high outstanding, activity drops, no new accounts
