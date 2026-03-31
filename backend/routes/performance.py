@@ -59,21 +59,33 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
             "assigned_to": resource_id,
             "status": {"$in": ["won", "active_customer"]}
         },
-        {"_id": 0, "id": 1, "company": 1, "name": 1, "status": 1, "city": 1}
+        {"_id": 0, "id": 1, "company": 1, "name": 1, "status": 1, "city": 1, "onboarded_month": 1, "onboarded_year": 1}
     ).to_list(1000)
     
-    # New accounts onboarded this month (status changed to won in this month)
-    new_accounts = await db.leads.find(
+    # New accounts onboarded this month
+    # Priority: 1) onboarded_month/year field, 2) won_date, 3) activity status_change
+    new_accounts_by_onboarded = [
+        a for a in existing_accounts
+        if a.get("onboarded_month") == month and a.get("onboarded_year") == year
+    ]
+    
+    # Also check leads with won_date in this month (that don't have onboarded_month set)
+    onboarded_ids = set(a.get("id") for a in new_accounts_by_onboarded)
+    new_accounts_by_won_date = await db.leads.find(
         {
             "tenant_id": tenant_id,
             "assigned_to": resource_id,
             "status": "won",
-            "won_date": {"$gte": month_start, "$lt": month_end}
+            "won_date": {"$gte": month_start, "$lt": month_end},
+            "id": {"$nin": list(onboarded_ids)},
+            "$or": [{"onboarded_month": None}, {"onboarded_month": {"$exists": False}}]
         },
         {"_id": 0, "id": 1, "company": 1, "name": 1, "city": 1, "won_date": 1}
     ).to_list(100)
     
-    # If won_date not available, check activities for status_change to won in this month
+    new_accounts = new_accounts_by_onboarded + new_accounts_by_won_date
+    
+    # If still no results, check activities for status_change to won in this month
     if not new_accounts:
         won_activities = await db.activities.find(
             {
@@ -87,7 +99,12 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
         won_lead_ids = [a["lead_id"] for a in won_activities]
         if won_lead_ids:
             new_accounts = await db.leads.find(
-                {"tenant_id": tenant_id, "id": {"$in": won_lead_ids}, "assigned_to": resource_id},
+                {
+                    "tenant_id": tenant_id,
+                    "id": {"$in": won_lead_ids},
+                    "assigned_to": resource_id,
+                    "$or": [{"onboarded_month": None}, {"onboarded_month": {"$exists": False}}]
+                },
                 {"_id": 0, "id": 1, "company": 1, "name": 1, "city": 1}
             ).to_list(100)
     

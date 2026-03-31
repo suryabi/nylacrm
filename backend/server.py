@@ -714,6 +714,10 @@ class Lead(BaseModel):
     invoice_count: Optional[int] = None
     last_invoice_date: Optional[str] = None
     last_invoice_no: Optional[str] = None
+    
+    # Onboarding tracking
+    onboarded_month: Optional[int] = None
+    onboarded_year: Optional[int] = None
 
 class LeadCreate(BaseModel):
     company: str
@@ -738,6 +742,8 @@ class LeadCreate(BaseModel):
     interested_skus: Optional[List[str]] = []
     notes: Optional[str] = None
     estimated_value: Optional[float] = None
+    onboarded_month: Optional[int] = None
+    onboarded_year: Optional[int] = None
 
 class LeadUpdate(BaseModel):
     company: Optional[str] = None
@@ -768,6 +774,8 @@ class LeadUpdate(BaseModel):
     # Account conversion flag
     converted_to_account: Optional[bool] = False
     account_id: Optional[str] = None
+    onboarded_month: Optional[int] = None
+    onboarded_year: Optional[int] = None
 
 # ============= ACCOUNT MODELS =============
 
@@ -811,6 +819,10 @@ class Account(BaseModel):
     last_payment_date: Optional[str] = None
     last_payment_amount: float = 0.0
     
+    # Onboarding tracking
+    onboarded_month: Optional[int] = None
+    onboarded_year: Optional[int] = None
+    
     # Timestamps
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -836,6 +848,8 @@ class AccountUpdate(BaseModel):
     next_follow_up: Optional[str] = None  # YYYY-MM-DD
     sku_pricing: Optional[List[AccountSKUPricing]] = None
     delivery_address: Optional[DeliveryAddress] = None
+    onboarded_month: Optional[int] = None
+    onboarded_year: Optional[int] = None
 
 class PaginatedAccountsResponse(BaseModel):
     """Paginated response for accounts list"""
@@ -4877,7 +4891,9 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
         assigned_to=lead.get('assigned_to'),
         contact_name=lead.get('contact_person') or lead.get('name'),
         contact_number=lead.get('phone'),
-        sku_pricing=sku_pricing_list
+        sku_pricing=sku_pricing_list,
+        onboarded_month=lead.get('onboarded_month'),
+        onboarded_year=lead.get('onboarded_year')
     )
     
     doc = account.model_dump()

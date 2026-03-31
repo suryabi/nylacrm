@@ -55,6 +55,8 @@ class Account(BaseModel):
     overdue_amount: float = 0.0
     last_payment_date: Optional[str] = None
     last_payment_amount: float = 0.0
+    onboarded_month: Optional[int] = None
+    onboarded_year: Optional[int] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -75,6 +77,8 @@ class AccountUpdate(BaseModel):
     next_follow_up: Optional[str] = None
     sku_pricing: Optional[List[AccountSKUPricing]] = None
     delivery_address: Optional[DeliveryAddress] = None
+    onboarded_month: Optional[int] = None
+    onboarded_year: Optional[int] = None
 
 
 class PaginatedAccountsResponse(BaseModel):
@@ -163,6 +167,8 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
         'sku_pricing': sku_pricing,
         'outstanding_balance': 0.0,
         'overdue_amount': 0.0,
+        'onboarded_month': lead.get('onboarded_month'),
+        'onboarded_year': lead.get('onboarded_year'),
         'created_at': datetime.now(timezone.utc).isoformat(),
         'updated_at': datetime.now(timezone.utc).isoformat()
     }

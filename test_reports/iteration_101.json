@@ -1,0 +1,82 @@
+{
+  "summary": "Tested 'Actual Onboarded Month & Year' fields feature. All 9 features verified: Lead edit form shows dropdowns, Lead API accepts/returns onboarded fields, Account edit form shows dropdowns, Account API accepts/returns onboarded fields, Account read-only displays formatted month/year, Performance Tracker uses onboarded_month/year for new accounts, Lead-to-account conversion propagates fields.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_onboarded_fields.py",
+    "/app/test_reports/pytest/onboarded_fields_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_onboarded_fields.py"
+  ],
+  "success_rate": {
+    "backend": "100% - 8/8 tests passed",
+    "frontend": "100% - All UI elements verified"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_id": "nyla-air-water"
+  },
+  "seed_data_creation": "No seed data created - used existing test lead ID: 2a3ca2de-8e26-406a-8be0-d9a28adfc0fb",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Onboarded Month/Year feature fully tested. Backend models (Lead, LeadUpdate, Account, AccountUpdate) include onboarded_month/year fields. Frontend AddEditLead.js has dropdowns with data-testid='lead-onboarded-month-select' and 'lead-onboarded-year-select'. AccountDetail.js has edit dropdowns with data-testid='edit-onboarded-month' and 'edit-onboarded-year', and read-only display with data-testid='account-onboarded-display'. Performance Tracker at /api/performance/generate uses onboarded_month/year for new accounts calculation (priority over won_date).",
+  "features_tested": {
+    "Lead_Edit_Form_Dropdowns": {
+      "status": "VERIFIED",
+      "details": "AddEditLead.js shows 'Actual Onboarded Month' and 'Actual Onboarded Year' dropdowns in Lead Information section with data-testid='lead-onboarded-month-select' and 'lead-onboarded-year-select'"
+    },
+    "Lead_Update_API": {
+      "status": "VERIFIED",
+      "details": "PUT /api/leads/{id} accepts and persists onboarded_month and onboarded_year. Tested updating from month=3 to month=4 and back."
+    },
+    "Lead_GET_API": {
+      "status": "VERIFIED",
+      "details": "GET /api/leads/{id} returns onboarded_month and onboarded_year fields. Test lead has onboarded_month=3, onboarded_year=2026"
+    },
+    "Account_Edit_Form_Dropdowns": {
+      "status": "VERIFIED",
+      "details": "AccountDetail.js edit mode shows 'Actual Onboarded Month' and 'Actual Onboarded Year' dropdowns with data-testid='edit-onboarded-month' and 'edit-onboarded-year'"
+    },
+    "Account_Update_API": {
+      "status": "VERIFIED",
+      "details": "PUT /api/accounts/{id} accepts and persists onboarded_month and onboarded_year"
+    },
+    "Account_GET_API": {
+      "status": "VERIFIED",
+      "details": "GET /api/accounts and GET /api/accounts/{id} return onboarded_month and onboarded_year fields"
+    },
+    "Account_ReadOnly_Display": {
+      "status": "VERIFIED",
+      "details": "AccountDetail.js read-only view shows 'Actual Onboarded' with formatted month/year (e.g., 'Feb 2026') with data-testid='account-onboarded-display'"
+    },
+    "Performance_Tracker_Uses_Onboarded_Fields": {
+      "status": "VERIFIED",
+      "details": "GET /api/performance/generate returns accounts.new_accounts based on onboarded_month/year matching the requested month/year. Falls back to won_date if onboarded fields not set."
+    },
+    "Lead_To_Account_Conversion_Propagates_Fields": {
+      "status": "VERIFIED",
+      "details": "POST /api/accounts/convert-lead at server.py line 4895-4896 propagates onboarded_month and onboarded_year from lead to account"
+    }
+  },
+  "api_endpoints_tested": [
+    "GET /api/leads/{id}",
+    "PUT /api/leads/{id}",
+    "GET /api/accounts",
+    "GET /api/accounts/{id}",
+    "PUT /api/accounts/{id}",
+    "GET /api/performance/target-plans",
+    "GET /api/performance/resources-for-plan/{plan_id}",
+    "GET /api/performance/generate"
+  ]
+}
