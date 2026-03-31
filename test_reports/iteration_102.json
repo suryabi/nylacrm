@@ -1,0 +1,116 @@
+{
+  "summary": "Tested Month-on-Month Comparison Table Editable Feature. All 18 features verified: Backend APIs (POST/DELETE override, GET comparison with flags) and Frontend UI (edit icons, edit mode, save, reset, cancel) working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_comparison_override.py",
+    "/app/test_reports/pytest/comparison_override_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_comparison_override.py"
+  ],
+  "success_rate": {
+    "backend": "100% - 8/8 tests passed",
+    "frontend": "100% - All UI elements verified"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_id": "nyla-air-water"
+  },
+  "seed_data_creation": "No seed data created - used existing plan and resource from target-plans API",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Editable Comparison Table feature fully tested. Backend endpoints: POST /api/performance/comparison/override (saves manual_revenue or manual_outstanding), DELETE /api/performance/comparison/override (resets override), GET /api/performance/comparison (returns has_revenue_override, has_outstanding_override, auto_revenue, auto_outstanding flags). Frontend: ComparisonTable component at PerformanceTracker.js lines 562-671, EditableCompRow component at lines 674-741. Data-testids: edit-btn-revenue, edit-btn-outstanding, save-revenue, save-outstanding, cancel-revenue, cancel-outstanding, reset-revenue, reset-outstanding, edit-revenue-{month}-{year}, edit-outstanding-{month}-{year}, comp-row-revenue, comp-row-outstanding.",
+  "features_tested": {
+    "Comparison_Table_Actions_Column": {
+      "status": "VERIFIED",
+      "details": "Table renders with ACTIONS column header visible"
+    },
+    "Revenue_Row_Edit_Icon": {
+      "status": "VERIFIED",
+      "details": "Revenue row has pencil edit icon with data-testid='edit-btn-revenue'"
+    },
+    "Outstanding_Row_Edit_Icon": {
+      "status": "VERIFIED",
+      "details": "Outstanding row has pencil edit icon with data-testid='edit-btn-outstanding'"
+    },
+    "Non_Editable_Rows_No_Icons": {
+      "status": "VERIFIED",
+      "details": "Target, Achievement %, New Accounts, Existing Accounts, Pipeline Value, Pipeline Accounts, Visits, Calls rows have NO edit icons"
+    },
+    "Revenue_Edit_Mode_Inputs": {
+      "status": "VERIFIED",
+      "details": "Clicking Revenue pencil icon turns cells into editable inputs (3 inputs for 3 months)"
+    },
+    "Outstanding_Edit_Mode_Inputs": {
+      "status": "VERIFIED",
+      "details": "Clicking Outstanding pencil icon turns cells into editable inputs (3 inputs for 3 months)"
+    },
+    "Edit_Mode_Save_Cancel_Buttons": {
+      "status": "VERIFIED",
+      "details": "Edit mode shows Save (disk icon) and Cancel (X icon) buttons with data-testid='save-revenue/outstanding' and 'cancel-revenue/outstanding'"
+    },
+    "Save_Override_Via_POST": {
+      "status": "VERIFIED",
+      "details": "Entering values and clicking Save persists override via POST /api/performance/comparison/override"
+    },
+    "Override_Amber_Indicator": {
+      "status": "VERIFIED",
+      "details": "After save, row shows amber indicator dot (bg-amber-400) indicating manual override"
+    },
+    "Reset_Icon_Appears": {
+      "status": "VERIFIED",
+      "details": "After save, Reset icon (rotate arrow) appears with data-testid='reset-revenue/outstanding'"
+    },
+    "Reset_Clears_Override": {
+      "status": "VERIFIED",
+      "details": "Clicking Reset clears the override via DELETE /api/performance/comparison/override"
+    },
+    "Reset_Restores_Auto_Values": {
+      "status": "VERIFIED",
+      "details": "After reset, auto-computed values are restored (revenue_achieved equals auto_revenue)"
+    },
+    "Cancel_Exits_Without_Saving": {
+      "status": "VERIFIED",
+      "details": "Cancel button exits edit mode without saving changes"
+    },
+    "Backend_POST_Revenue_Override": {
+      "status": "VERIFIED",
+      "details": "POST /api/performance/comparison/override saves manual_revenue correctly"
+    },
+    "Backend_POST_Outstanding_Override": {
+      "status": "VERIFIED",
+      "details": "POST /api/performance/comparison/override saves manual_outstanding correctly"
+    },
+    "Backend_DELETE_Override": {
+      "status": "VERIFIED",
+      "details": "DELETE /api/performance/comparison/override resets override"
+    },
+    "Backend_GET_Override_Flags": {
+      "status": "VERIFIED",
+      "details": "GET /api/performance/comparison returns has_revenue_override and has_outstanding_override flags"
+    },
+    "Backend_GET_Auto_Values": {
+      "status": "VERIFIED",
+      "details": "GET /api/performance/comparison returns auto_revenue and auto_outstanding original values for reset reference"
+    }
+  },
+  "api_endpoints_tested": [
+    "POST /api/auth/login",
+    "GET /api/performance/target-plans",
+    "GET /api/performance/resources-for-plan/{plan_id}",
+    "GET /api/performance/comparison",
+    "POST /api/performance/comparison/override",
+    "DELETE /api/performance/comparison/override"
+  ]
+}

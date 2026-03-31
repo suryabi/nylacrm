@@ -495,7 +495,13 @@ async def get_comparison(
             {"_id": 0, "status": 1, "support_needed": 1, "remarks": 1}
         )
         
-        comparison_data.append({
+        # Check for manual overrides
+        override = await db.comparison_overrides.find_one(
+            {"tenant_id": tenant_id, "resource_id": resource_id, "plan_id": plan_id, "month": m, "year": y},
+            {"_id": 0}
+        )
+        
+        row = {
             "month": m,
             "year": y,
             "label": f"{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1]} {y}",
@@ -511,7 +517,98 @@ async def get_comparison(
             "calls": metrics["activities"]["calls"],
             "status": saved.get("status") if saved else "not_created",
             "support_count": len(saved.get("support_needed", [])) if saved else 0,
-        })
+            # Auto-computed originals (always available for reset)
+            "auto_revenue": metrics["revenue"]["achieved"],
+            "auto_outstanding": metrics["collections"]["total_outstanding"],
+            # Override flags
+            "has_revenue_override": False,
+            "has_outstanding_override": False,
+        }
+        
+        if override:
+            if override.get("manual_revenue") is not None:
+                row["revenue_achieved"] = override["manual_revenue"]
+                row["has_revenue_override"] = True
+            if override.get("manual_outstanding") is not None:
+                row["total_outstanding"] = override["manual_outstanding"]
+                row["has_outstanding_override"] = True
+        
+        comparison_data.append(row)
     
     comparison_data.reverse()
     return {"resource_id": resource_id, "months": comparison_data}
+
+
+@router.post("/comparison/override")
+async def save_comparison_override(
+    data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Save a manual override for a comparison row (revenue or outstanding)."""
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+    
+    resource_id = data.get("resource_id")
+    plan_id = data.get("plan_id")
+    month = data.get("month")
+    year = data.get("year")
+    field = data.get("field")  # 'revenue' or 'outstanding'
+    value = data.get("value")
+    
+    if not all([resource_id, plan_id, month, year, field]):
+        raise HTTPException(status_code=400, detail="resource_id, plan_id, month, year, field are required")
+    
+    if field not in ("revenue", "outstanding"):
+        raise HTTPException(status_code=400, detail="field must be 'revenue' or 'outstanding'")
+    
+    db_field = "manual_revenue" if field == "revenue" else "manual_outstanding"
+    
+    existing = await db.comparison_overrides.find_one(
+        {"tenant_id": tenant_id, "resource_id": resource_id, "plan_id": plan_id, "month": month, "year": year}
+    )
+    
+    if existing:
+        await db.comparison_overrides.update_one(
+            {"_id": existing["_id"]},
+            {"$set": {db_field: float(value), "updated_at": now, "updated_by": current_user.get("id")}}
+        )
+    else:
+        await db.comparison_overrides.insert_one({
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "resource_id": resource_id,
+            "plan_id": plan_id,
+            "month": month,
+            "year": year,
+            db_field: float(value),
+            "created_at": now,
+            "updated_at": now,
+            "updated_by": current_user.get("id"),
+        })
+    
+    return {"message": f"{field} override saved for {month}/{year}"}
+
+
+@router.delete("/comparison/override")
+async def reset_comparison_override(
+    resource_id: str,
+    plan_id: str,
+    month: int,
+    year: int,
+    field: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Reset a manual override for a comparison row back to auto-computed."""
+    tenant_id = get_current_tenant_id()
+    
+    if field not in ("revenue", "outstanding"):
+        raise HTTPException(status_code=400, detail="field must be 'revenue' or 'outstanding'")
+    
+    db_field = "manual_revenue" if field == "revenue" else "manual_outstanding"
+    
+    await db.comparison_overrides.update_one(
+        {"tenant_id": tenant_id, "resource_id": resource_id, "plan_id": plan_id, "month": month, "year": year},
+        {"$unset": {db_field: ""}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"message": f"{field} override reset for {month}/{year}"}

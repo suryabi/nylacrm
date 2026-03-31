@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/
 import {
   Target, TrendingUp, TrendingDown, Users, Phone, MapPin, DollarSign,
   BarChart3, RefreshCw, Save, Send, Check, RotateCcw, AlertTriangle,
-  ChevronDown, ChevronRight, Building2, Clock, ArrowUp, ArrowDown, Minus
+  ChevronDown, ChevronRight, Building2, Clock, ArrowUp, ArrowDown, Minus,
+  Pencil, X
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -414,38 +415,13 @@ export default function PerformanceTracker() {
 
           {/* Month-on-Month Comparison */}
           {comparison?.months?.length > 0 && (
-            <Card data-testid="comparison-section">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2"><BarChart3 className="h-4 w-4 text-indigo-600" />Month-on-Month Comparison (Last 3 Months)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-slate-50 border-b text-xs text-slate-500 uppercase">
-                        <th className="text-left p-2.5">Metric</th>
-                        {comparison.months.map(m => (
-                          <th key={`${m.month}-${m.year}`} className="text-right p-2.5">{m.label}</th>
-                        ))}
-                        <th className="text-right p-2.5">Trend</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <CompRow label="Revenue" months={comparison.months} field="revenue_achieved" prefix="₹" />
-                      <CompRow label="Target" months={comparison.months} field="monthly_target" prefix="₹" />
-                      <CompRow label="Achievement %" months={comparison.months} field="achievement_pct" suffix="%" />
-                      <CompRow label="New Accounts" months={comparison.months} field="new_accounts" />
-                      <CompRow label="Existing Accounts" months={comparison.months} field="existing_accounts" />
-                      <CompRow label="Pipeline Value" months={comparison.months} field="pipeline_value" prefix="₹" />
-                      <CompRow label="Pipeline Accounts" months={comparison.months} field="pipeline_count" />
-                      <CompRow label="Outstanding" months={comparison.months} field="total_outstanding" prefix="₹" />
-                      <CompRow label="Visits" months={comparison.months} field="visits" />
-                      <CompRow label="Calls" months={comparison.months} field="calls" />
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
+            <ComparisonTable
+              comparison={comparison}
+              selectedResource={selectedResource}
+              selectedPlan={selectedPlan}
+              headers={headers}
+              onRefresh={generate}
+            />
           )}
 
           {/* Calculated KPIs */}
@@ -577,6 +553,188 @@ function CompRow({ label, months, field, prefix = '', suffix = '' }) {
             {Math.abs(change).toFixed(1)}%
           </span>
         ) : <Minus className="h-3 w-3 text-slate-300 ml-auto" />}
+      </td>
+      <td className="p-2.5"></td>
+    </tr>
+  );
+}
+
+
+function ComparisonTable({ comparison, selectedResource, selectedPlan, headers, onRefresh }) {
+  const [editValues, setEditValues] = useState({});
+  const [editingRow, setEditingRow] = useState(null);
+  const [savingRow, setSavingRow] = useState(null);
+
+  const startEdit = (field) => {
+    const initial = {};
+    comparison.months.forEach(m => {
+      const key = `${m.month}_${m.year}`;
+      initial[key] = m[field === 'revenue' ? 'revenue_achieved' : 'total_outstanding'];
+    });
+    setEditValues(initial);
+    setEditingRow(field);
+  };
+
+  const cancelEdit = () => {
+    setEditingRow(null);
+    setEditValues({});
+  };
+
+  const saveRow = async (field) => {
+    setSavingRow(field);
+    try {
+      for (const m of comparison.months) {
+        const key = `${m.month}_${m.year}`;
+        const val = parseFloat(editValues[key]);
+        if (isNaN(val)) continue;
+        const autoVal = field === 'revenue' ? m.auto_revenue : m.auto_outstanding;
+        if (val === autoVal) continue;
+        await fetch(`${API_URL}/api/performance/comparison/override`, {
+          method: 'POST', headers,
+          body: JSON.stringify({ resource_id: selectedResource, plan_id: selectedPlan, month: m.month, year: m.year, field, value: val })
+        });
+      }
+      setEditingRow(null);
+      setEditValues({});
+      onRefresh();
+    } catch (e) { console.error(e); }
+    finally { setSavingRow(null); }
+  };
+
+  const resetRow = async (field) => {
+    setSavingRow(field);
+    try {
+      for (const m of comparison.months) {
+        await fetch(
+          `${API_URL}/api/performance/comparison/override?resource_id=${selectedResource}&plan_id=${selectedPlan}&month=${m.month}&year=${m.year}&field=${field}`,
+          { method: 'DELETE', headers }
+        );
+      }
+      setEditingRow(null);
+      setEditValues({});
+      onRefresh();
+    } catch (e) { console.error(e); }
+    finally { setSavingRow(null); }
+  };
+
+  const hasOverride = (field) => {
+    const flag = field === 'revenue' ? 'has_revenue_override' : 'has_outstanding_override';
+    return comparison.months.some(m => m[flag]);
+  };
+
+  return (
+    <Card data-testid="comparison-section">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2"><BarChart3 className="h-4 w-4 text-indigo-600" />Month-on-Month Comparison (Last 3 Months)</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 border-b text-xs text-slate-500 uppercase">
+                <th className="text-left p-2.5">Metric</th>
+                {comparison.months.map(m => (
+                  <th key={`${m.month}-${m.year}`} className="text-right p-2.5">{m.label}</th>
+                ))}
+                <th className="text-right p-2.5">Trend</th>
+                <th className="text-center p-2.5 w-24">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <EditableCompRow
+                label="Revenue" months={comparison.months} field="revenue_achieved" autoField="auto_revenue"
+                overrideFlag="has_revenue_override" prefix="₹" editingRow={editingRow} editValues={editValues}
+                setEditValues={setEditValues} savingRow={savingRow} rowKey="revenue"
+                onEdit={() => startEdit('revenue')} onSave={() => saveRow('revenue')}
+                onCancel={cancelEdit} onReset={() => resetRow('revenue')} hasOverride={hasOverride('revenue')}
+              />
+              <CompRow label="Target" months={comparison.months} field="monthly_target" prefix="₹" />
+              <CompRow label="Achievement %" months={comparison.months} field="achievement_pct" suffix="%" />
+              <CompRow label="New Accounts" months={comparison.months} field="new_accounts" />
+              <CompRow label="Existing Accounts" months={comparison.months} field="existing_accounts" />
+              <CompRow label="Pipeline Value" months={comparison.months} field="pipeline_value" prefix="₹" />
+              <CompRow label="Pipeline Accounts" months={comparison.months} field="pipeline_count" />
+              <EditableCompRow
+                label="Outstanding" months={comparison.months} field="total_outstanding" autoField="auto_outstanding"
+                overrideFlag="has_outstanding_override" prefix="₹" editingRow={editingRow} editValues={editValues}
+                setEditValues={setEditValues} savingRow={savingRow} rowKey="outstanding"
+                onEdit={() => startEdit('outstanding')} onSave={() => saveRow('outstanding')}
+                onCancel={cancelEdit} onReset={() => resetRow('outstanding')} hasOverride={hasOverride('outstanding')}
+              />
+              <CompRow label="Visits" months={comparison.months} field="visits" />
+              <CompRow label="Calls" months={comparison.months} field="calls" />
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function EditableCompRow({ label, months, field, autoField, overrideFlag, prefix = '', editingRow, editValues, setEditValues, savingRow, rowKey, onEdit, onSave, onCancel, onReset, hasOverride }) {
+  const isEditing = editingRow === rowKey;
+  const isSaving = savingRow === rowKey;
+  const values = months.map(m => m[field] || 0);
+  const last = values[values.length - 1];
+  const prev = values.length > 1 ? values[values.length - 2] : 0;
+  const change = prev > 0 ? ((last - prev) / prev * 100) : 0;
+
+  return (
+    <tr className={`border-b ${isEditing ? 'bg-blue-50/50' : hasOverride ? 'bg-amber-50/30' : 'hover:bg-slate-50/50'}`} data-testid={`comp-row-${rowKey}`}>
+      <td className="p-2.5 text-xs font-medium text-slate-600 flex items-center gap-1.5">
+        {label}
+        {hasOverride && !isEditing && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" title="Manual override applied" />}
+      </td>
+      {months.map((m, i) => {
+        const key = `${m.month}_${m.year}`;
+        return (
+          <td key={i} className="p-2.5 text-right">
+            {isEditing ? (
+              <input
+                type="number"
+                className="w-28 ml-auto text-right text-sm font-medium border rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+                value={editValues[key] ?? ''}
+                onChange={e => setEditValues(prev => ({ ...prev, [key]: e.target.value }))}
+                data-testid={`edit-${rowKey}-${m.month}-${m.year}`}
+              />
+            ) : (
+              <span className={`text-sm font-medium ${m[overrideFlag] ? 'text-amber-700' : ''}`}>
+                {prefix}{fmt(values[i])}
+              </span>
+            )}
+          </td>
+        );
+      })}
+      <td className="p-2.5 text-right">
+        {change !== 0 ? (
+          <span className={`text-xs font-semibold flex items-center justify-end gap-0.5 ${change > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+            {change > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+            {Math.abs(change).toFixed(1)}%
+          </span>
+        ) : <Minus className="h-3 w-3 text-slate-300 ml-auto" />}
+      </td>
+      <td className="p-2.5 text-center">
+        {isEditing ? (
+          <div className="flex items-center justify-center gap-1">
+            <button onClick={onSave} disabled={isSaving} className="p-1 rounded hover:bg-blue-100 text-blue-600" title="Save" data-testid={`save-${rowKey}`}>
+              {isSaving ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            </button>
+            <button onClick={onCancel} className="p-1 rounded hover:bg-slate-100 text-slate-500" title="Cancel" data-testid={`cancel-${rowKey}`}>
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center gap-1">
+            <button onClick={onEdit} className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600" title="Edit" data-testid={`edit-btn-${rowKey}`}>
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            {hasOverride && (
+              <button onClick={onReset} disabled={isSaving} className="p-1 rounded hover:bg-red-50 text-slate-400 hover:text-red-600" title="Reset to auto-computed" data-testid={`reset-${rowKey}`}>
+                {isSaving ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+              </button>
+            )}
+          </div>
+        )}
       </td>
     </tr>
   );
