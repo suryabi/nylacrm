@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { Input } from '../components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import {
   Target, TrendingUp, TrendingDown, Users, Phone, MapPin, DollarSign,
   BarChart3, RefreshCw, Save, Send, Check, RotateCcw, AlertTriangle,
@@ -34,6 +35,7 @@ export default function PerformanceTracker() {
   const [saving, setSaving] = useState(false);
   const [comparison, setComparison] = useState(null);
   const [expandedSections, setExpandedSections] = useState({ accounts: false, pipeline: false, outstanding: false });
+  const [accountsDialog, setAccountsDialog] = useState({ open: false, type: '', title: '', list: [] });
   // Editable fields
   const [supportNeeded, setSupportNeeded] = useState([]);
   const [remarks, setRemarks] = useState('');
@@ -282,51 +284,38 @@ export default function PerformanceTracker() {
 
             {/* Accounts Section */}
             <Card data-testid="accounts-section">
-              <CardHeader className="pb-2 cursor-pointer" onClick={() => toggleSection('accounts')}>
+              <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Users className="h-4 w-4 text-emerald-600" />Account Metrics
-                  {expandedSections.accounts ? <ChevronDown className="h-4 w-4 ml-auto" /> : <ChevronRight className="h-4 w-4 ml-auto" />}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-3">
-                  <InfoRow label="Existing (Won/Active)" value={data.accounts?.existing_count} />
-                  <InfoRow label="New This Month" value={data.accounts?.new_onboarded} highlight={data.accounts?.new_onboarded > 0 ? 'green' : 'red'} />
-                </div>
-                {expandedSections.accounts && (
-                  <div className="mt-3 border-t pt-2 space-y-2">
-                    {data.accounts?.new_accounts?.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold text-teal-600 uppercase mb-1">New Accounts Onboarded</p>
-                        {data.accounts.new_accounts.map(a => (
-                          <div key={a.id} className="text-xs flex items-center gap-2 py-0.5">
-                            <Building2 className="h-3 w-3 text-teal-500" /><span>{a.name}</span><Badge variant="outline" className="text-[10px]">{a.city}</Badge>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {data.accounts?.existing_accounts?.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold text-emerald-600 uppercase mb-1">Existing Accounts ({data.accounts.existing_count})</p>
-                        {data.accounts.existing_accounts.slice(0, 10).map(a => (
-                          <div key={a.id} className="text-xs flex items-center gap-2 py-0.5">
-                            <Building2 className="h-3 w-3 text-emerald-500" /><span>{a.name}</span>
-                          </div>
-                        ))}
-                        {data.accounts.existing_accounts.length > 10 && <p className="text-xs text-slate-400">+{data.accounts.existing_accounts.length - 10} more</p>}
-                      </div>
-                    )}
+                  <div
+                    className="flex justify-between items-center py-2 px-3 border border-dashed border-emerald-200 rounded-lg cursor-pointer hover:bg-emerald-50 transition-colors"
+                    onClick={() => setAccountsDialog({ open: true, type: 'existing', title: `Existing Accounts (Won/Active)`, list: data.accounts?.existing_accounts || [] })}
+                    data-testid="existing-accounts-tile"
+                  >
+                    <span className="text-xs text-slate-500">Existing (Won/Active)</span>
+                    <span className="text-sm font-bold text-emerald-700">{data.accounts?.existing_count}</span>
                   </div>
-                )}
+                  <div
+                    className={`flex justify-between items-center py-2 px-3 border border-dashed rounded-lg cursor-pointer transition-colors ${data.accounts?.new_onboarded > 0 ? 'border-teal-200 hover:bg-teal-50' : 'border-red-200 hover:bg-red-50'}`}
+                    onClick={() => setAccountsDialog({ open: true, type: 'new', title: `New Accounts Onboarded This Month`, list: data.accounts?.new_accounts || [] })}
+                    data-testid="new-accounts-tile"
+                  >
+                    <span className="text-xs text-slate-500">New This Month</span>
+                    <span className={`text-sm font-bold ${data.accounts?.new_onboarded > 0 ? 'text-teal-700' : 'text-red-600'}`}>{data.accounts?.new_onboarded}</span>
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
             {/* Pipeline Section */}
             <Card data-testid="pipeline-section">
-              <CardHeader className="pb-2 cursor-pointer" onClick={() => toggleSection('pipeline')}>
+              <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
                   <TrendingUp className="h-4 w-4 text-amber-600" />Pipeline Metrics
-                  {expandedSections.pipeline ? <ChevronDown className="h-4 w-4 ml-auto" /> : <ChevronRight className="h-4 w-4 ml-auto" />}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -336,20 +325,6 @@ export default function PerformanceTracker() {
                   <InfoRow label="Next Month Value" value={`₹${fmt(data.pipeline?.next_month_value)}`} />
                   <InfoRow label="Coverage Ratio" value={fmtPct(data.pipeline?.coverage_ratio)} highlight={data.pipeline?.coverage_ratio < 50 ? 'red' : 'green'} />
                 </div>
-                {expandedSections.pipeline && data.pipeline?.current_accounts?.length > 0 && (
-                  <div className="mt-3 border-t pt-2">
-                    <p className="text-xs font-semibold text-amber-600 uppercase mb-1">Pipeline Accounts</p>
-                    {data.pipeline.current_accounts.map(a => (
-                      <div key={a.id} className="text-xs flex items-center justify-between py-0.5">
-                        <div className="flex items-center gap-2"><Building2 className="h-3 w-3 text-amber-500" /><span>{a.name}</span></div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-[10px]">{a.status}</Badge>
-                          <span className="font-medium">₹{fmt(a.value)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </CardContent>
             </Card>
 
@@ -401,18 +376,6 @@ export default function PerformanceTracker() {
                   <InfoRow label="Visit Productivity" value={data.activities?.visit_productivity > 0 ? `₹${fmt(data.activities?.visit_productivity)}/visit` : '-'} />
                   <InfoRow label="Call Productivity" value={data.activities?.call_productivity > 0 ? `₹${fmt(data.activities?.call_productivity)}/call` : '-'} />
                 </div>
-                {!isLocked && (
-                  <div className="border-t pt-2 grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs text-slate-500">Manual Visits</label>
-                      <Input type="number" value={manualVisits} onChange={e => setManualVisits(e.target.value)} placeholder="Override" className="mt-1" data-testid="manual-visits" />
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-500">Manual Calls</label>
-                      <Input type="number" value={manualCalls} onChange={e => setManualCalls(e.target.value)} placeholder="Override" className="mt-1" data-testid="manual-calls" />
-                    </div>
-                  </div>
-                )}
               </CardContent>
             </Card>
 
@@ -510,6 +473,32 @@ export default function PerformanceTracker() {
           <p>Click "Generate" to compute performance metrics</p>
         </div>
       )}
+
+      {/* Accounts Dialog Popup */}
+      <Dialog open={accountsDialog.open} onOpenChange={(open) => setAccountsDialog(prev => ({ ...prev, open }))}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto" data-testid="accounts-dialog">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold">{accountsDialog.title}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 mt-2">
+            {accountsDialog.list.length > 0 ? (
+              accountsDialog.list.map((acc, idx) => (
+                <div key={acc.id || idx} className="flex items-center justify-between py-2 px-3 rounded-lg border bg-slate-50 hover:bg-slate-100 transition-colors">
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">{acc.name || 'Unknown'}</p>
+                    {acc.city && <p className="text-xs text-slate-500">{acc.city}</p>}
+                  </div>
+                  {acc.status && (
+                    <Badge variant="outline" className="text-xs capitalize">{acc.status.replace(/_/g, ' ')}</Badge>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">No accounts found</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

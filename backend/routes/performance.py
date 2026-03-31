@@ -59,7 +59,7 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
             "assigned_to": resource_id,
             "status": {"$in": ["won", "active_customer"]}
         },
-        {"_id": 0, "id": 1, "company_name": 1, "status": 1, "city": 1}
+        {"_id": 0, "id": 1, "company": 1, "name": 1, "status": 1, "city": 1}
     ).to_list(1000)
     
     # New accounts onboarded this month (status changed to won in this month)
@@ -70,7 +70,7 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
             "status": "won",
             "won_date": {"$gte": month_start, "$lt": month_end}
         },
-        {"_id": 0, "id": 1, "company_name": 1, "city": 1, "won_date": 1}
+        {"_id": 0, "id": 1, "company": 1, "name": 1, "city": 1, "won_date": 1}
     ).to_list(100)
     
     # If won_date not available, check activities for status_change to won in this month
@@ -88,7 +88,7 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
         if won_lead_ids:
             new_accounts = await db.leads.find(
                 {"tenant_id": tenant_id, "id": {"$in": won_lead_ids}, "assigned_to": resource_id},
-                {"_id": 0, "id": 1, "company_name": 1, "city": 1}
+                {"_id": 0, "id": 1, "company": 1, "name": 1, "city": 1}
             ).to_list(100)
     
     # Revenue from new vs existing
@@ -108,7 +108,7 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
             "assigned_to": resource_id,
             "status": {"$in": pipeline_statuses}
         },
-        {"_id": 0, "id": 1, "company_name": 1, "city": 1, "status": 1, "expected_value": 1, "expected_close_date": 1}
+        {"_id": 0, "id": 1, "company": 1, "name": 1, "city": 1, "status": 1, "expected_value": 1, "expected_close_date": 1}
     ).to_list(1000)
     
     pipeline_value = sum(lead.get("expected_value", 0) or 0 for lead in pipeline_leads)
@@ -218,17 +218,17 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
         },
         "accounts": {
             "existing_count": len(existing_accounts),
-            "existing_accounts": [{"id": a["id"], "name": a.get("company_name", ""), "city": a.get("city", "")} for a in existing_accounts],
+            "existing_accounts": [{"id": a["id"], "name": a.get("company") or a.get("name", "Unknown"), "city": a.get("city", ""), "status": a.get("status", "")} for a in existing_accounts],
             "new_onboarded": len(new_accounts),
-            "new_accounts": [{"id": a["id"], "name": a.get("company_name", ""), "city": a.get("city", "")} for a in new_accounts],
+            "new_accounts": [{"id": a["id"], "name": a.get("company") or a.get("name", "Unknown"), "city": a.get("city", "")} for a in new_accounts],
         },
         "pipeline": {
             "current_value": round(pipeline_value, 2),
             "current_count": len(pipeline_leads),
-            "current_accounts": [{"id": lead["id"], "name": lead.get("company_name", ""), "status": lead.get("status", ""), "value": lead.get("expected_value", 0)} for lead in pipeline_leads],
+            "current_accounts": [{"id": lead["id"], "name": lead.get("company") or lead.get("name", "Unknown"), "status": lead.get("status", ""), "value": lead.get("expected_value", 0)} for lead in pipeline_leads],
             "next_month_value": round(next_month_pipeline_value, 2),
             "next_month_count": len(next_month_pipeline),
-            "next_month_accounts": [{"id": lead["id"], "name": lead.get("company_name", ""), "value": lead.get("expected_value", 0)} for lead in next_month_pipeline],
+            "next_month_accounts": [{"id": lead["id"], "name": lead.get("company") or lead.get("name", "Unknown"), "value": lead.get("expected_value", 0)} for lead in next_month_pipeline],
             "coverage_ratio": pipeline_coverage,
         },
         "collections": {
