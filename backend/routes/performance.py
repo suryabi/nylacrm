@@ -475,6 +475,40 @@ async def get_comparison(
         
         metrics = await compute_metrics(tenant_id, resource_id, plan_id, m, y)
         
+        # Compute cumulative existing accounts up to this month
+        if m == 12:
+            cumulative_end_next = f"{y + 1}-01-01"
+        else:
+            cumulative_end_next = f"{y}-{m + 1:02d}-01"
+        
+        # Count accounts that existed by end of this month:
+        # accounts created before month_end OR onboarded in/before this month
+        all_accs = await db.accounts.find(
+            {"tenant_id": tenant_id, "assigned_to": resource_id},
+            {"_id": 0, "id": 1, "onboarded_month": 1, "onboarded_year": 1, "created_at": 1}
+        ).to_list(5000)
+        
+        cumulative_existing = 0
+        for acc in all_accs:
+            ob_m = acc.get("onboarded_month")
+            ob_y = acc.get("onboarded_year")
+            if ob_m and ob_y:
+                if (ob_y < y) or (ob_y == y and ob_m <= m):
+                    cumulative_existing += 1
+            else:
+                # Fallback: use created_at
+                created = acc.get("created_at", "")
+                if isinstance(created, str) and created < cumulative_end_next:
+                    cumulative_existing += 1
+                elif hasattr(created, 'isoformat') and created.isoformat() < cumulative_end_next:
+                    cumulative_existing += 1
+        
+        # New accounts onboarded specifically in this month
+        new_onboarded_this_month = len([
+            acc for acc in all_accs
+            if acc.get("onboarded_month") == m and acc.get("onboarded_year") == y
+        ])
+        
         saved = await db.monthly_performance.find_one(
             {"tenant_id": tenant_id, "resource_id": resource_id, "plan_id": plan_id, "month": m, "year": y},
             {"_id": 0, "status": 1, "support_needed": 1, "remarks": 1}
@@ -493,8 +527,8 @@ async def get_comparison(
             "revenue_achieved": metrics["revenue"]["this_month"],
             "monthly_target": metrics["revenue"]["target"],
             "achievement_pct": metrics["revenue"]["achievement_pct"],
-            "new_accounts": metrics["accounts"]["new_onboarded"],
-            "existing_accounts": metrics["accounts"]["existing_count"],
+            "new_accounts": new_onboarded_this_month,
+            "existing_accounts": cumulative_existing,
             "pipeline_value": metrics["pipeline"]["total_value"],
             "pipeline_count": metrics["pipeline"]["total_count"],
             "total_outstanding": metrics["collections"]["total_outstanding"],

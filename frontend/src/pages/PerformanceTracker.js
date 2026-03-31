@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -24,6 +25,7 @@ const MONTHS = [
 const SUPPORT_CATEGORIES = ['Pricing', 'Logistics', 'Marketing', 'Collections', 'Management Intervention', 'Product / Supply Support'];
 
 export default function PerformanceTracker() {
+  const navigate = useNavigate();
   const [plans, setPlans] = useState([]);
   const [selectedPlan, setSelectedPlan] = useState('');
   const [resources, setResources] = useState([]);
@@ -411,8 +413,13 @@ export default function PerformanceTracker() {
                     </thead>
                     <tbody>
                       {(data.pipeline?.by_status || []).map((row) => (
-                        <tr key={row.status} className="border-b hover:bg-slate-50/50">
-                          <td className="p-2 text-xs font-medium text-slate-600 capitalize">{row.status.replace(/_/g, ' ')}</td>
+                        <tr
+                          key={row.status}
+                          className="border-b hover:bg-slate-100/70 cursor-pointer transition-colors"
+                          onClick={() => navigate(`/leads?status=${row.status}`)}
+                          data-testid={`pipeline-row-${row.status}`}
+                        >
+                          <td className="p-2 text-xs font-medium text-blue-600 capitalize underline decoration-dotted underline-offset-2">{row.status.replace(/_/g, ' ')}</td>
                           <td className="p-2 text-right text-sm font-medium">{row.count}</td>
                           <td className="p-2 text-right text-sm font-medium">₹{fmt(row.value)}</td>
                         </tr>
