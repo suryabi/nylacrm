@@ -260,14 +260,14 @@ export default function PerformanceTracker() {
           </div>
 
           {/* Summary Cards Row - TaskMetricsWidget Style */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-4" data-testid="summary-cards">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3" data-testid="summary-cards">
             <SummaryTile label="Target" value={`₹${fmt(data.revenue?.target)}`} icon={Target} gradient="from-slate-500 to-slate-700" bgGradient="from-slate-50 to-gray-50 dark:from-slate-950/30 dark:to-gray-950/20" iconBg="bg-slate-100 dark:bg-slate-900/50" textColor="text-slate-700 dark:text-slate-300" testId="metric-target" />
-            <SummaryTile label="Revenue (Month)" value={`₹${fmt(data.revenue?.this_month)}`} icon={DollarSign} gradient="from-blue-500 to-indigo-600" bgGradient="from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20" iconBg="bg-blue-100 dark:bg-blue-900/50" textColor="text-blue-700 dark:text-blue-300" sub={fmtPct(data.revenue?.achievement_pct)} testId="metric-achieved" />
-            <SummaryTile label="Existing Accounts" value={data.accounts?.existing_count} icon={Users} gradient="from-emerald-500 to-teal-600" bgGradient="from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20" iconBg="bg-emerald-100 dark:bg-emerald-900/50" textColor="text-emerald-700 dark:text-emerald-300" testId="metric-existing" />
-            <SummaryTile label="New Accounts" value={data.accounts?.new_onboarded} icon={Building2} gradient="from-teal-500 to-cyan-600" bgGradient="from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/20" iconBg="bg-teal-100 dark:bg-teal-900/50" textColor="text-teal-700 dark:text-teal-300" testId="metric-new" />
+            <SummaryTile label="Revenue" value={`₹${fmt(data.revenue?.this_month)}`} icon={DollarSign} gradient="from-blue-500 to-indigo-600" bgGradient="from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20" iconBg="bg-blue-100 dark:bg-blue-900/50" textColor="text-blue-700 dark:text-blue-300" sub={fmtPct(data.revenue?.achievement_pct)} testId="metric-achieved" />
+            <SummaryTile label="Existing A/C" value={data.accounts?.existing_count} icon={Users} gradient="from-emerald-500 to-teal-600" bgGradient="from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20" iconBg="bg-emerald-100 dark:bg-emerald-900/50" textColor="text-emerald-700 dark:text-emerald-300" testId="metric-existing" />
+            <SummaryTile label="New A/C" value={data.accounts?.new_onboarded} icon={Building2} gradient="from-teal-500 to-cyan-600" bgGradient="from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/20" iconBg="bg-teal-100 dark:bg-teal-900/50" textColor="text-teal-700 dark:text-teal-300" testId="metric-new" />
             <SummaryTile label="Pipeline" value={`₹${fmt(data.pipeline?.total_value)}`} icon={TrendingUp} gradient="from-amber-500 to-orange-600" bgGradient="from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20" iconBg="bg-amber-100 dark:bg-amber-900/50" textColor="text-amber-700 dark:text-amber-300" sub={`${data.pipeline?.total_count} leads`} testId="metric-pipeline" />
             <SummaryTile label="Outstanding" value={`₹${fmt(data.collections?.total_outstanding)}`} icon={AlertTriangle} gradient="from-red-500 to-rose-600" bgGradient="from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/20" iconBg="bg-red-100 dark:bg-red-900/50" textColor="text-red-700 dark:text-red-300" testId="metric-outstanding" />
-            <SummaryTile label="Activities" value={data.activities?.total || 0} icon={Phone} gradient="from-violet-500 to-purple-600" bgGradient="from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/20" iconBg="bg-violet-100 dark:bg-violet-900/50" textColor="text-violet-700 dark:text-violet-300" sub={`${data.activities?.unique_visits || 0} unique visits`} testId="metric-activity" />
+            <SummaryTile label="Activities" value={data.activities?.total || 0} icon={Phone} gradient="from-violet-500 to-purple-600" bgGradient="from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/20" iconBg="bg-violet-100 dark:bg-violet-900/50" textColor="text-violet-700 dark:text-violet-300" sub={`${data.activities?.unique_visits || 0} visits`} testId="metric-activity" />
           </div>
 
           {/* Main Content Grid */}
@@ -384,7 +384,7 @@ export default function PerformanceTracker() {
                   </div>
                   <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Pipeline Metrics</h3>
                 </div>
-              <CardContent>
+              <div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm" data-testid="pipeline-status-table">
                     <thead>
@@ -427,7 +427,7 @@ export default function PerformanceTracker() {
                   <InfoRow label="Next Month Pipeline Value" value={`₹${fmt(data.pipeline?.next_month_pipeline_value)}`} />
                   <InfoRow label="Coverage Ratio" value={fmtPct(data.pipeline?.coverage_ratio)} highlight={data.pipeline?.coverage_ratio < 50 ? 'red' : 'green'} />
                 </div>
-              </CardContent>
+              </div>
               </div>
             </Card>
 
@@ -659,6 +659,26 @@ function OverridableRow({ label, autoValue, overrideValue, editing, locked, onEd
 
 // --- Sub-components ---
 
+function SummaryTile({ label, value, icon: Icon, gradient, bgGradient, iconBg, textColor, sub, testId }) {
+  return (
+    <Card className={`relative overflow-hidden border-0 bg-gradient-to-br ${bgGradient} backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5 group`} data-testid={testId}>
+      <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${gradient}`} />
+      <div className="p-3 sm:p-4">
+        <div className="flex items-start justify-between">
+          <div className="space-y-1">
+            <p className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider line-clamp-1">{label}</p>
+            <p className={`text-lg sm:text-xl font-bold ${textColor} tabular-nums`}>{value}</p>
+            {sub && <p className="text-[10px] sm:text-xs text-muted-foreground">{sub}</p>}
+          </div>
+          <div className={`p-1.5 rounded-lg ${iconBg} group-hover:scale-110 transition-transform duration-300`}>
+            <Icon className={`h-4 w-4 ${textColor}`} />
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function StatusBadge({ status }) {
   const map = {
     not_created: { label: 'Not Created', cls: 'bg-slate-100 text-slate-600' },
@@ -684,19 +704,24 @@ function MetricCard({ label, value, icon, color, sub, testId }) {
 }
 
 function InfoRow({ label, value, highlight }) {
-  const hlMap = { red: 'text-red-600', green: 'text-emerald-600', amber: 'text-amber-600' };
+  const hlMap = { red: 'text-red-600 dark:text-red-400', green: 'text-emerald-600 dark:text-emerald-400', amber: 'text-amber-600 dark:text-amber-400' };
   return (
-    <div className="flex justify-between items-center py-1.5 border-b border-dashed border-slate-100">
-      <span className="text-xs text-slate-500">{label}</span>
-      <span className={`text-sm font-semibold ${highlight ? hlMap[highlight] : 'text-slate-700'}`}>{value}</span>
+    <div className="flex justify-between items-center py-1.5 border-b border-dashed border-slate-100 dark:border-slate-800">
+      <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
+      <span className={`text-sm font-semibold ${highlight ? hlMap[highlight] : 'text-slate-700 dark:text-slate-300'}`}>{value}</span>
     </div>
   );
 }
 
 function AgingBucket({ label, value, color }) {
-  const bg = { emerald: 'bg-emerald-50 text-emerald-700', amber: 'bg-amber-50 text-amber-700', orange: 'bg-orange-50 text-orange-700', red: 'bg-red-50 text-red-700' };
+  const styles = {
+    emerald: 'bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/10 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30',
+    amber: 'bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/20 dark:to-yellow-950/10 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900/30',
+    orange: 'bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/10 text-orange-700 dark:text-orange-400 border border-orange-100 dark:border-orange-900/30',
+    red: 'bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/20 dark:to-rose-950/10 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-900/30'
+  };
   return (
-    <div className={`rounded-lg p-2 text-center ${bg[color]}`}>
+    <div className={`rounded-lg p-2 text-center ${styles[color]}`}>
       <p className="text-[10px] font-medium uppercase">{label}</p>
       <p className="text-sm font-bold">₹{fmt(value)}</p>
     </div>
@@ -704,11 +729,17 @@ function AgingBucket({ label, value, color }) {
 }
 
 function KPICard({ label, value, good, bad, invert }) {
-  const color = invert ? (bad ? 'bg-red-50 border-red-200 text-red-700' : good ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-700') : (good ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : bad ? 'bg-red-50 border-red-200 text-red-700' : 'bg-slate-50 border-slate-200 text-slate-700');
+  const isGood = invert ? bad : good;
+  const isBad = invert ? good : bad;
+  const gradient = isGood ? 'from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/10' : isBad ? 'from-red-50 to-rose-50 dark:from-red-950/20 dark:to-rose-950/10' : 'from-slate-50 to-gray-50 dark:from-slate-950/20 dark:to-gray-950/10';
+  const border = isGood ? 'border-emerald-200 dark:border-emerald-900/30' : isBad ? 'border-red-200 dark:border-red-900/30' : 'border-slate-200 dark:border-slate-800';
+  const text = isGood ? 'text-emerald-700 dark:text-emerald-400' : isBad ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300';
+  const topGrad = isGood ? 'from-emerald-500 to-teal-500' : isBad ? 'from-red-500 to-rose-500' : 'from-slate-400 to-gray-500';
   return (
-    <div className={`rounded-xl border p-3 text-center ${color}`}>
-      <p className="text-[10px] uppercase tracking-wider font-medium mb-1">{label}</p>
-      <p className="text-xl font-bold">{value}</p>
+    <div className={`relative overflow-hidden rounded-xl border bg-gradient-to-br ${gradient} ${border} p-3 text-center`}>
+      <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${topGrad}`} />
+      <p className="text-[10px] uppercase tracking-wider font-medium mb-1 text-muted-foreground">{label}</p>
+      <p className={`text-xl font-bold ${text}`}>{value}</p>
     </div>
   );
 }
@@ -719,10 +750,10 @@ function CompRow({ label, months, field, prefix = '', suffix = '' }) {
   const prev = values.length > 1 ? values[values.length - 2] : 0;
   const change = prev > 0 ? ((last - prev) / prev * 100) : 0;
   return (
-    <tr className="border-b hover:bg-slate-50/50">
-      <td className="p-2.5 text-xs font-medium text-slate-600">{label}</td>
+    <tr className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
+      <td className="p-2.5 text-xs font-medium text-slate-600 dark:text-slate-400">{label}</td>
       {values.map((v, i) => (
-        <td key={i} className="p-2.5 text-right text-sm font-medium">{prefix}{fmt(v)}{suffix}</td>
+        <td key={i} className="p-2.5 text-right text-sm font-medium text-slate-700 dark:text-slate-300">{prefix}{fmt(v)}{suffix}</td>
       ))}
       <td className="p-2.5 text-right">
         {change !== 0 ? (
@@ -730,7 +761,7 @@ function CompRow({ label, months, field, prefix = '', suffix = '' }) {
             {change > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
             {Math.abs(change).toFixed(1)}%
           </span>
-        ) : <Minus className="h-3 w-3 text-slate-300 ml-auto" />}
+        ) : <Minus className="h-3 w-3 text-slate-300 dark:text-slate-600 ml-auto" />}
       </td>
       <td className="p-2.5"></td>
     </tr>
@@ -801,15 +832,19 @@ function ComparisonTable({ comparison, selectedResource, selectedPlan, headers, 
   };
 
   return (
-    <Card data-testid="comparison-section">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base flex items-center gap-2"><BarChart3 className="h-4 w-4 text-indigo-600" />Month-on-Month Comparison (Last 3 Months)</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="comparison-section">
+      <div className="h-1 bg-gradient-to-r from-indigo-500 to-violet-500" />
+      <div className="p-4 sm:p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="p-1.5 rounded-lg bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-900/50 dark:to-violet-900/30">
+            <BarChart3 className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+          </div>
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Month-on-Month Comparison (Last 3 Months)</h3>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-slate-50 border-b text-xs text-slate-500 uppercase">
+              <tr className="bg-gradient-to-r from-indigo-50/80 to-violet-50/80 dark:from-indigo-950/20 dark:to-violet-950/10 border-b border-indigo-100 dark:border-indigo-900/30 text-xs text-slate-500 dark:text-slate-400 uppercase">
                 <th className="text-left p-2.5">Metric</th>
                 {comparison.months.map(m => (
                   <th key={`${m.month}-${m.year}`} className="text-right p-2.5">{m.label}</th>
@@ -844,7 +879,7 @@ function ComparisonTable({ comparison, selectedResource, selectedPlan, headers, 
             </tbody>
           </table>
         </div>
-      </CardContent>
+      </div>
     </Card>
   );
 }
