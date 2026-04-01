@@ -11549,10 +11549,8 @@ async def get_resources_by_location(
     """Get sales resources filtered by territory or city"""
     query = {'is_active': True}
     
-    # Include all sales-related roles
-    sales_roles = ['National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Head of Business', 
-                   'Business Development Executive', 'Sales Executive', 'Area Sales Manager']
-    query['role'] = {'$in': sales_roles}
+    # Filter for sales or admin department
+    query['department'] = {'$in': ['Sales', 'Admin', 'sales', 'admin']}
     
     if city:
         query['city'] = city
@@ -11561,7 +11559,7 @@ async def get_resources_by_location(
     
     users = await get_tdb().users.find(
         query,
-        {'_id': 0, 'id': 1, 'name': 1, 'email': 1, 'role': 1, 'city': 1, 'state': 1, 'territory': 1}
+        {'_id': 0, 'id': 1, 'name': 1, 'email': 1, 'role': 1, 'department': 1, 'city': 1, 'state': 1, 'territory': 1}
     ).to_list(200)
     return users
 
@@ -11971,10 +11969,10 @@ SALES_ROLES_V2 = ['National Sales Head', 'Regional Sales Manager', 'Partner - Sa
 async def get_sales_resources_v2(
     current_user: dict = Depends(get_current_user)
 ):
-    """Get all sales team members for target allocation"""
+    """Get all sales and admin department members for target allocation"""
     users = await get_tdb().users.find(
-        {'role': {'$in': SALES_ROLES_V2}},
-        {'_id': 0, 'id': 1, 'name': 1, 'email': 1, 'role': 1, 'city': 1, 'territory': 1}
+        {'is_active': True, 'department': {'$in': ['Sales', 'Admin', 'sales', 'admin']}},
+        {'_id': 0, 'id': 1, 'name': 1, 'email': 1, 'role': 1, 'department': 1, 'city': 1, 'territory': 1}
     ).to_list(200)
     return users
 
