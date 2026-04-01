@@ -288,6 +288,46 @@ async def get_resources_for_plan(plan_id: str, current_user: dict = Depends(get_
     return allocations
 
 
+@router.get("/territories-for-plan/{plan_id}")
+async def get_territories_for_plan(plan_id: str, current_user: dict = Depends(get_current_user)):
+    """Get all territories allocated under a target plan."""
+    allocations = await db.target_allocations_v2.find(
+        {"plan_id": plan_id, "level": "territory"},
+        {"_id": 0, "id": 1, "territory_id": 1, "territory_name": 1, "amount": 1}
+    ).to_list(100)
+    return allocations
+
+
+@router.get("/cities-for-plan/{plan_id}")
+async def get_cities_for_plan(plan_id: str, current_user: dict = Depends(get_current_user)):
+    """Get all cities allocated under a target plan."""
+    allocations = await db.target_allocations_v2.find(
+        {"plan_id": plan_id, "level": "city"},
+        {"_id": 0, "id": 1, "territory_id": 1, "territory_name": 1, "city": 1, "state": 1, "amount": 1}
+    ).to_list(100)
+    return allocations
+
+
+@router.get("/resources-by-territory/{plan_id}/{territory_id}")
+async def get_resources_by_territory(plan_id: str, territory_id: str, current_user: dict = Depends(get_current_user)):
+    """Get all resource IDs under a territory for a plan."""
+    resources = await db.target_allocations_v2.find(
+        {"plan_id": plan_id, "territory_id": territory_id, "level": "resource"},
+        {"_id": 0, "resource_id": 1}
+    ).to_list(100)
+    return [r["resource_id"] for r in resources if r.get("resource_id")]
+
+
+@router.get("/resources-by-city/{plan_id}/{city}")
+async def get_resources_by_city(plan_id: str, city: str, current_user: dict = Depends(get_current_user)):
+    """Get all resource IDs under a city for a plan."""
+    resources = await db.target_allocations_v2.find(
+        {"plan_id": plan_id, "city": city, "level": "resource"},
+        {"_id": 0, "resource_id": 1}
+    ).to_list(100)
+    return [r["resource_id"] for r in resources if r.get("resource_id")]
+
+
 @router.get("/generate")
 async def generate_performance(
     plan_id: str,

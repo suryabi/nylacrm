@@ -32,7 +32,12 @@ export default function PerformanceTracker() {
   const [plans, setPlans] = useState([]);
   const [selectedPlan, setSelectedPlan] = useState('');
   const [resources, setResources] = useState([]);
+  const [territories, setTerritories] = useState([]);
+  const [cities, setCities] = useState([]);
+  const [viewBy, setViewBy] = useState('resource');
   const [selectedResource, setSelectedResource] = useState([]);
+  const [selectedTerritories, setSelectedTerritories] = useState([]);
+  const [selectedCities, setSelectedCities] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [data, setData] = useState(null);
@@ -60,15 +65,55 @@ export default function PerformanceTracker() {
 
   useEffect(() => {
     if (!selectedPlan) return;
-    fetch(`${API_URL}/api/performance/resources-for-plan/${selectedPlan}`, { headers })
-      .then(r => r.json()).then(setResources).catch(() => {});
+    // Fetch resources, territories, and cities in parallel
+    Promise.all([
+      fetch(`${API_URL}/api/performance/resources-for-plan/${selectedPlan}`, { headers }).then(r => r.json()),
+      fetch(`${API_URL}/api/performance/territories-for-plan/${selectedPlan}`, { headers }).then(r => r.json()),
+      fetch(`${API_URL}/api/performance/cities-for-plan/${selectedPlan}`, { headers }).then(r => r.json()),
+    ]).then(([res, terr, cit]) => {
+      setResources(res);
+      setTerritories(terr);
+      setCities(cit);
+    }).catch(() => {});
+    // Reset selections when plan changes
+    setSelectedResource([]);
+    setSelectedTerritories([]);
+    setSelectedCities([]);
+    setData(null);
   }, [selectedPlan]);
 
+  // Resolve current selection to resource_ids based on viewBy
+  const getSelectedResourceIds = useCallback(() => {
+    if (viewBy === 'resource') return selectedResource;
+    if (viewBy === 'territory') {
+      return resources
+        .filter(r => selectedTerritories.includes(r.territory_id))
+        .map(r => r.resource_id)
+        .filter(Boolean);
+    }
+    if (viewBy === 'city') {
+      return resources
+        .filter(r => selectedCities.includes(r.city))
+        .map(r => r.resource_id)
+        .filter(Boolean);
+    }
+    return [];
+  }, [viewBy, selectedResource, selectedTerritories, selectedCities, resources]);
+
+  const hasSelection = viewBy === 'resource' ? selectedResource.length > 0
+    : viewBy === 'territory' ? selectedTerritories.length > 0
+    : selectedCities.length > 0;
+
   const generate = useCallback(async () => {
-    if (!selectedPlan || selectedResource.length === 0) return;
+    if (!selectedPlan || !hasSelection) return;
     setLoading(true);
     try {
-      const resourceParam = selectedResource.join(',');
+      const resourceIds = getSelectedResourceIds();
+      if (resourceIds.length === 0) {
+        setLoading(false);
+        return;
+      }
+      const resourceParam = resourceIds.join(',');
       const res = await fetch(
         `${API_URL}/api/performance/generate?plan_id=${selectedPlan}&resource_id=${resourceParam}&month=${selectedMonth}&year=${selectedYear}`,
         { headers }
@@ -101,7 +146,7 @@ export default function PerformanceTracker() {
     } finally {
       setLoading(false);
     }
-  }, [selectedPlan, selectedResource, selectedMonth, selectedYear]);
+  }, [selectedPlan, selectedMonth, selectedYear, hasSelection, getSelectedResourceIds]);
 
   useEffect(() => { generate(); }, [generate]);
 
@@ -176,7 +221,7 @@ export default function PerformanceTracker() {
       {/* Selectors */}
       <Card className="border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="performance-selectors">
         <CardContent className="p-4 sm:p-5">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
             <div>
               <label className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Target Plan</label>
               <Select value={selectedPlan} onValueChange={setSelectedPlan}>
@@ -187,14 +232,47 @@ export default function PerformanceTracker() {
               </Select>
             </div>
             <div>
-              <label className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Sales Resource</label>
-              <MultiSelect
-                options={resources.map(r => ({ value: r.resource_id, label: `${r.resource_name} (${r.city})` }))}
-                selected={selectedResource}
-                onChange={setSelectedResource}
-                placeholder="Select resource(s)"
-                data-testid="select-resource"
-              />
+              <label className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">View By</label>
+              <Select value={viewBy} onValueChange={(v) => { setViewBy(v); setSelectedResource([]); setSelectedTerritories([]); setSelectedCities([]); setData(null); }}>
+                <SelectTrigger data-testid="select-view-by"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="territory">Territory</SelectItem>
+                  <SelectItem value="city">City</SelectItem>
+                  <SelectItem value="resource">Resource</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">
+                {viewBy === 'territory' ? 'Territory' : viewBy === 'city' ? 'City' : 'Sales Resource'}
+              </label>
+              {viewBy === 'resource' && (
+                <MultiSelect
+                  options={resources.map(r => ({ value: r.resource_id, label: `${r.resource_name} (${r.city})` }))}
+                  selected={selectedResource}
+                  onChange={setSelectedResource}
+                  placeholder="Select resource(s)"
+                  data-testid="select-resource"
+                />
+              )}
+              {viewBy === 'territory' && (
+                <MultiSelect
+                  options={territories.map(t => ({ value: t.territory_id, label: t.territory_name }))}
+                  selected={selectedTerritories}
+                  onChange={setSelectedTerritories}
+                  placeholder="Select territory(s)"
+                  data-testid="select-territory"
+                />
+              )}
+              {viewBy === 'city' && (
+                <MultiSelect
+                  options={cities.map(c => ({ value: c.city, label: `${c.city} (${c.territory_name})` }))}
+                  selected={selectedCities}
+                  onChange={setSelectedCities}
+                  placeholder="Select city(s)"
+                  data-testid="select-city"
+                />
+              )}
             </div>
             <div>
               <label className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Month</label>
@@ -215,7 +293,7 @@ export default function PerformanceTracker() {
               </Select>
             </div>
             <div className="flex items-end">
-              <Button onClick={generate} disabled={loading || !selectedPlan || selectedResource.length === 0} className="w-full bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white shadow-sm border-0" data-testid="generate-btn">
+              <Button onClick={generate} disabled={loading || !selectedPlan || !hasSelection} className="w-full bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white shadow-sm border-0" data-testid="generate-btn">
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Generate
               </Button>
@@ -238,11 +316,16 @@ export default function PerformanceTracker() {
               <span className="text-sm font-semibold text-slate-800 dark:text-white">{data.resource_name}</span>
               {data.resource_city && <Badge variant="outline" className="bg-slate-50 dark:bg-slate-800 text-xs">{data.resource_city}</Badge>}
               <Badge variant="outline" className="bg-slate-50 dark:bg-slate-800 text-xs">{data.plan_name}</Badge>
-              {selectedResource.length === 1 && <StatusBadge status={data.status} />}
-              {selectedResource.length > 1 && <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-xs border-indigo-200">{selectedResource.length} resources combined</Badge>}
+              {viewBy !== 'resource' && (
+                <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-xs border-indigo-200">
+                  {viewBy === 'territory' ? `${selectedTerritories.length} territor${selectedTerritories.length === 1 ? 'y' : 'ies'}` : `${selectedCities.length} cit${selectedCities.length === 1 ? 'y' : 'ies'}`}
+                </Badge>
+              )}
+              {viewBy === 'resource' && getSelectedResourceIds().length === 1 && <StatusBadge status={data.status} />}
+              {viewBy === 'resource' && getSelectedResourceIds().length > 1 && <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-xs border-indigo-200">{selectedResource.length} resources combined</Badge>}
             </div>
             <div className="flex items-center gap-2">
-              {selectedResource.length === 1 && !isLocked && data.status !== 'submitted' && (
+              {viewBy === 'resource' && selectedResource.length === 1 && !isLocked && data.status !== 'submitted' && (
                 <>
                   <Button variant="outline" size="sm" onClick={() => saveRecord(false)} disabled={saving} data-testid="save-draft-btn">
                     <Save className="h-4 w-4 mr-1" />{saving ? 'Saving...' : 'Save Draft'}
@@ -252,7 +335,7 @@ export default function PerformanceTracker() {
                   </Button>
                 </>
               )}
-              {selectedResource.length === 1 && data.status === 'submitted' && (
+              {viewBy === 'resource' && selectedResource.length === 1 && data.status === 'submitted' && (
                 <>
                   <Button variant="outline" size="sm" onClick={returnRecord} data-testid="return-btn">
                     <RotateCcw className="h-4 w-4 mr-1" />Return
