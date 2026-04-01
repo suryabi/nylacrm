@@ -10,10 +10,15 @@ from fastapi.security import HTTPBearer
 from config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS
 from database import db
 
+# Setup detailed logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger('deps')
+logger.setLevel(logging.INFO)
 
 security = HTTPBearer()
-
-logger = logging.getLogger(__name__)
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
