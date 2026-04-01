@@ -1,0 +1,57 @@
+[
+  {
+    "id": "87b09da0-7fde-4805-b459-d76c385b4190",
+    "name": "Restaurant",
+    "description": "Restaurants and cafes",
+    "icon": "restaurant",
+    "color": "orange",
+    "order": 1,
+    "is_active": true,
+    "created_at": "2026-03-03T16:44:23.347923+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "73f09907-0394-4d44-a0de-6cbf4d036542",
+    "name": "Star Hotel",
+    "description": "3-star to 5-star hotels",
+    "icon": "hotel",
+    "color": "purple",
+    "order": 2,
+    "is_active": true,
+    "created_at": "2026-03-03T16:44:30.082486+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "997b2ab1-9348-4bba-a621-eb11f7240faf",
+    "name": "Hospital",
+    "description": "Hospitals and clinics",
+    "icon": "hospital",
+    "color": "red",
+    "order": 3,
+    "is_active": true,
+    "created_at": "2026-03-03T16:44:30.200251+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "f8e5544f-1a40-43d4-a689-6be172e83ad9",
+    "name": "Corporate Office",
+    "description": "Corporate offices and IT parks",
+    "icon": "office",
+    "color": "blue",
+    "order": 4,
+    "is_active": true,
+    "created_at": "2026-03-03T16:44:30.319307+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "8bcfc0f7-bace-465f-b451-4369a5fce096",
+    "name": "Educational Institution",
+    "description": "Schools and colleges",
+    "icon": "education",
+    "color": "green",
+    "order": 5,
+    "is_active": true,
+    "created_at": "2026-03-03T16:44:30.470234+00:00",
+    "tenant_id": "nyla-air-water"
+  }
+]

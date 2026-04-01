@@ -1,0 +1,42 @@
+[
+  {
+    "id": "8cb28c48-b5e4-4461-ab2a-8ece0d7f6cf2",
+    "name": "North India",
+    "code": "north_india",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.412248+00:00",
+    "updated_at": "2026-02-24T18:06:25.412258+00:00"
+  },
+  {
+    "id": "51e8efbd-26eb-49b8-a310-b6f324af232b",
+    "name": "South India",
+    "code": "south_india",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.421960+00:00",
+    "updated_at": "2026-02-24T18:06:25.421968+00:00"
+  },
+  {
+    "id": "c48c4919-f211-4464-81cf-e82bdc531c6f",
+    "name": "West India",
+    "code": "west_india",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.422460+00:00",
+    "updated_at": "2026-02-24T18:06:25.422465+00:00"
+  },
+  {
+    "id": "194378a0-c80e-41c1-8876-c0a4da67437d",
+    "name": "East India",
+    "code": "east_india",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.422865+00:00",
+    "updated_at": "2026-02-24T18:06:25.422870+00:00"
+  },
+  {
+    "id": "6a7515a9-125e-4569-ae5a-badb8c1aa458",
+    "name": "Central India",
+    "code": "central_india",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.423215+00:00",
+    "updated_at": "2026-02-24T18:06:25.423220+00:00"
+  }
+]

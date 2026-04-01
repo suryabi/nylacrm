@@ -1,0 +1,46 @@
+[
+  {
+    "id": "d86c31d5-5060-4a50-8569-d65bad4723a9",
+    "tenant_id": "nyla-air-water",
+    "resource_id": "test-res",
+    "plan_id": "test-plan",
+    "month": 3,
+    "year": 2026,
+    "created_at": "2026-03-31T18:35:49.902095+00:00",
+    "updated_at": "2026-03-31T18:35:50.090656+00:00",
+    "updated_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+  },
+  {
+    "id": "b091a59d-246d-4302-8f70-6999adda5e4b",
+    "tenant_id": "nyla-air-water",
+    "resource_id": "cf4b8ac2-459d-4089-a2ba-de599f7f7407",
+    "plan_id": "2c224a54-8977-4e4a-9943-92e7da8b1b9e",
+    "month": 3,
+    "year": 2026,
+    "created_at": "2026-03-31T18:38:47.219628+00:00",
+    "updated_at": "2026-03-31T18:39:49.025230+00:00",
+    "updated_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+  },
+  {
+    "id": "b0fe66fb-b0e9-4eb3-b4c4-eaac0ff4e42f",
+    "tenant_id": "nyla-air-water",
+    "resource_id": "cf4b8ac2-459d-4089-a2ba-de599f7f7407",
+    "plan_id": "2c224a54-8977-4e4a-9943-92e7da8b1b9e",
+    "month": 1,
+    "year": 2026,
+    "created_at": "2026-03-31T18:39:45.791568+00:00",
+    "updated_at": "2026-03-31T18:39:48.885630+00:00",
+    "updated_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+  },
+  {
+    "id": "b84ac3ab-5dc6-4064-8c3d-96e4bd8ecc8c",
+    "tenant_id": "nyla-air-water",
+    "resource_id": "a4abf0ac-3dd3-432e-b5d5-af08e5bf8da1",
+    "plan_id": "813fbe91-8434-4bd6-bc7b-49bd1ebca9b5",
+    "month": 3,
+    "year": 2026,
+    "created_at": "2026-03-31T23:26:47.135295+00:00",
+    "updated_at": "2026-03-31T23:26:47.368783+00:00",
+    "updated_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+  }
+]

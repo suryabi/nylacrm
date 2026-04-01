@@ -1,0 +1,19 @@
+[
+  {
+    "id": "54f66d16-8b2c-44cd-9ef2-6c653fd79df6",
+    "tenant_id": "nyla-air-water",
+    "distributor_id": "99fb55dc-532c-4e85-b618-6b8a5e552c04",
+    "sku_id": "b39203a7-4067-458b-a316-5831a98be946",
+    "sku_name": "Nyla \u2013 330 ml / Silver",
+    "base_price": 100.0,
+    "margin_percent": 2.5,
+    "transfer_price": 97.5,
+    "effective_from": "2026-03-19",
+    "effective_to": null,
+    "remarks": null,
+    "status": "active",
+    "created_at": "2026-03-19T11:37:20.165365+00:00",
+    "updated_at": "2026-03-19T11:37:20.165365+00:00",
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+  }
+]

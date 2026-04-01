@@ -1,0 +1,81 @@
+[
+  {
+    "id": "21595b15-37eb-423d-a30b-6d0f1606afbf",
+    "tenant_id": "nyla-air-water",
+    "distributor_id": "d091204f-e04f-46f2-b9a9-d92d9f89b528",
+    "credit_note_number": "CN-2026-0001",
+    "return_id": "c54002b9-9292-4ef7-942b-d39b60491439",
+    "return_number": "RET-2026-0001",
+    "account_id": "feaaaec8-fbd3-4c78-9b88-5dabc9ba2630",
+    "account_name": "Patni Plaza",
+    "original_amount": 150.0,
+    "applied_amount": 150.0,
+    "balance_amount": 0,
+    "status": "fully_applied",
+    "applications": [
+      {
+        "delivery_id": "a41bb0d2-1f99-40f7-8fb2-f760423796eb",
+        "delivery_number": "DEL-2026-0002",
+        "amount_applied": 150.0,
+        "applied_at": "2026-03-30T05:26:26.584818+00:00",
+        "applied_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+      }
+    ],
+    "credit_note_date": "2026-03-30",
+    "expiry_date": null,
+    "notes": null,
+    "created_at": "2026-03-30T05:25:42.756000",
+    "updated_at": "2026-03-30T05:26:26.584843+00:00",
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+  },
+  {
+    "id": "e64d858d-41e3-42f4-9d39-dbf41800371e",
+    "tenant_id": "nyla-air-water",
+    "distributor_id": "d091204f-e04f-46f2-b9a9-d92d9f89b528",
+    "credit_note_number": "CN-2026-0002",
+    "return_id": "3b5799f3-0a1d-4aae-84d3-e5b660f34050",
+    "return_number": "RET-2026-0002",
+    "account_id": "feaaaec8-fbd3-4c78-9b88-5dabc9ba2630",
+    "account_name": "Patni Plaza",
+    "original_amount": 1500.0,
+    "applied_amount": 1500.0,
+    "balance_amount": 0,
+    "status": "fully_applied",
+    "applications": [
+      {
+        "delivery_id": "089fbcd7-2472-47a5-bca7-3f58886a3fbe",
+        "delivery_number": "DEL-2026-0004",
+        "amount_applied": 1500.0,
+        "applied_at": "2026-03-30T11:33:59.682914+00:00",
+        "applied_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+      }
+    ],
+    "credit_note_date": "2026-03-30",
+    "expiry_date": null,
+    "notes": null,
+    "created_at": "2026-03-30T11:33:19.762000",
+    "updated_at": "2026-03-30T11:33:59.682941+00:00",
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+  },
+  {
+    "id": "ac584d7d-8f05-4c4b-8422-161f965fa755",
+    "tenant_id": "nyla-air-water",
+    "distributor_id": "d091204f-e04f-46f2-b9a9-d92d9f89b528",
+    "credit_note_number": "CN-2026-0003",
+    "return_id": "f4bf1361-8d20-46c4-ae27-2c5359934739",
+    "return_number": "RET-2026-0003",
+    "account_id": "feaaaec8-fbd3-4c78-9b88-5dabc9ba2630",
+    "account_name": "Patni Plaza",
+    "original_amount": 3000.0,
+    "applied_amount": 0.0,
+    "balance_amount": 3000.0,
+    "status": "cancelled",
+    "applications": [],
+    "credit_note_date": "2026-03-30",
+    "expiry_date": null,
+    "notes": null,
+    "created_at": "2026-03-30T11:45:19.436000",
+    "updated_at": "2026-03-30T15:04:00.496093+00:00",
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+  }
+]

@@ -1,0 +1,526 @@
+[
+  {
+    "id": "8139bcc0-88ae-423f-83ff-666afbbfc017",
+    "name": "Default Scoring Model",
+    "description": "Account scoring based on volume, margin, prestige, influence, and sustainability",
+    "categories": [
+      {
+        "id": "b7d771ae-510d-461d-a995-52cf3ebf8ad3",
+        "name": "Volume Potential",
+        "description": "Updated description at 1644f5ef",
+        "weight": 25,
+        "is_numeric": true,
+        "order": 0,
+        "tiers": [
+          {
+            "id": "5b9878d7-8c66-4e91-b876-270557506ebf",
+            "label": ">5000",
+            "description": "Updated tier description 26c6ff6f",
+            "score": 25,
+            "min_value": 5000,
+            "max_value": null,
+            "order": 0
+          },
+          {
+            "id": "b959f6fe-6b08-459f-a4f6-143710cb8d7d",
+            "label": "3000-5000",
+            "description": "Units per month",
+            "score": 20,
+            "min_value": 3000,
+            "max_value": 5000,
+            "order": 1
+          },
+          {
+            "id": "9fca7072-6e6b-423f-981c-23aa4ce4cc29",
+            "label": "1500-3000",
+            "description": "Units per month",
+            "score": 15,
+            "min_value": 1500,
+            "max_value": 3000,
+            "order": 2
+          },
+          {
+            "id": "d83f8ea7-9492-4e32-8737-b3a9ed8bc4ea",
+            "label": "500-1500",
+            "description": "Units per month",
+            "score": 10,
+            "min_value": 500,
+            "max_value": 1500,
+            "order": 3
+          },
+          {
+            "id": "37d7258b-e567-4273-a065-af9fe2115cd7",
+            "label": "<500",
+            "description": "Units per month",
+            "score": 5,
+            "min_value": 0,
+            "max_value": 500,
+            "order": 4
+          },
+          {
+            "id": "f6e65b3f-3cfe-41c7-b4fe-0363fbed36b7",
+            "label": "TEST_Tier_3487541b",
+            "description": "Test tier for automated testing",
+            "score": 5,
+            "min_value": null,
+            "max_value": null,
+            "order": 5
+          }
+        ]
+      },
+      {
+        "id": "73c50da5-302f-443a-952f-461b36397a5b",
+        "name": "Margin Potential",
+        "description": "Profitability assessment",
+        "weight": 20,
+        "is_numeric": true,
+        "order": 1,
+        "tiers": [
+          {
+            "id": "5a305b11-afed-4c1c-923c-bacbcdb3c81d",
+            "label": ">40%",
+            "description": "Margin percentage",
+            "score": 20,
+            "min_value": 40,
+            "max_value": null,
+            "order": 0
+          },
+          {
+            "id": "1e1ba725-0d85-4fad-b592-0944597dfc01",
+            "label": "30-40%",
+            "description": "Margin percentage",
+            "score": 15,
+            "min_value": 30,
+            "max_value": 40,
+            "order": 1
+          },
+          {
+            "id": "6257212e-93bc-42d7-9a49-5f78172384d7",
+            "label": "20-30%",
+            "description": "Margin percentage",
+            "score": 10,
+            "min_value": 20,
+            "max_value": 30,
+            "order": 2
+          },
+          {
+            "id": "0bd05cbf-2433-414a-a23f-26212b1c98a3",
+            "label": "10-20%",
+            "description": "Margin percentage",
+            "score": 5,
+            "min_value": 10,
+            "max_value": 20,
+            "order": 3
+          },
+          {
+            "id": "11c28499-f517-486e-a273-ecde7779ea16",
+            "label": "<10%",
+            "description": "Margin percentage",
+            "score": 0,
+            "min_value": 0,
+            "max_value": 10,
+            "order": 4
+          }
+        ]
+      },
+      {
+        "id": "e9d58953-70c5-4d27-b254-86d16a497917",
+        "name": "Brand Prestige",
+        "description": "Luxury association and brand value",
+        "weight": 20,
+        "is_numeric": false,
+        "order": 2,
+        "tiers": [
+          {
+            "id": "e6b984cb-c9b4-4ae7-9aa1-d8111a88ab4d",
+            "label": "5-Star Global Hotel",
+            "description": "JW Marriott, Taj, Four Seasons",
+            "score": 20,
+            "order": 0
+          },
+          {
+            "id": "0b6283b2-f371-495f-8a7b-d777d6dd2c63",
+            "label": "Iconic Luxury Restaurant",
+            "description": "High-end fine dining",
+            "score": 18,
+            "order": 1
+          },
+          {
+            "id": "f9fbf05e-312b-4192-a3e0-2361b225cb6e",
+            "label": "Premium Restaurant",
+            "description": "Upscale dining establishment",
+            "score": 15,
+            "order": 2
+          },
+          {
+            "id": "0eedd391-9940-4538-9631-1f4f597aa209",
+            "label": "Popular Cafe / Lounge",
+            "description": "Trendy casual venue",
+            "score": 10,
+            "order": 3
+          },
+          {
+            "id": "e201cded-2acd-4378-8534-ab0d9222f49a",
+            "label": "Local Restaurant",
+            "description": "Neighborhood establishment",
+            "score": 5,
+            "order": 4
+          }
+        ]
+      },
+      {
+        "id": "15cb2c86-5eac-4af0-a24e-de93e9d5ce34",
+        "name": "Guest Influence",
+        "description": "Brand visibility through guest profile",
+        "weight": 20,
+        "is_numeric": false,
+        "order": 3,
+        "tiers": [
+          {
+            "id": "0e7d709a-24e0-4833-bdde-21cfac852591",
+            "label": "International Luxury Travellers",
+            "description": "Global high-net-worth individuals",
+            "score": 20,
+            "order": 0
+          },
+          {
+            "id": "9201af14-6b6f-4c10-b530-0aaff52f5f55",
+            "label": "HNIs / Business Leaders",
+            "description": "Domestic high-net-worth and executives",
+            "score": 18,
+            "order": 1
+          },
+          {
+            "id": "1fd0610a-ab61-4c3a-824d-dd543d089fbf",
+            "label": "Affluent City Crowd",
+            "description": "Urban professionals",
+            "score": 15,
+            "order": 2
+          },
+          {
+            "id": "e69865a9-8487-4fd2-9dc4-a9f175835fc4",
+            "label": "Mass Premium",
+            "description": "Aspirational consumers",
+            "score": 10,
+            "order": 3
+          },
+          {
+            "id": "c8d9a8a9-a21f-4ce2-99f3-1819d18fdc65",
+            "label": "Local Casual Dining",
+            "description": "General public",
+            "score": 5,
+            "order": 4
+          }
+        ]
+      },
+      {
+        "id": "16525d30-34e7-42dd-9a03-0c9b5d42e163",
+        "name": "Sustainability Alignment",
+        "description": "Strategic brand fit with sustainability values",
+        "weight": 15,
+        "is_numeric": false,
+        "order": 4,
+        "tiers": [
+          {
+            "id": "b60c5c0b-f1f7-45bb-92f3-f2871bc35abf",
+            "label": "Strong ESG / Eco Luxury",
+            "description": "Strong ESG/eco luxury positioning",
+            "score": 15,
+            "order": 0
+          },
+          {
+            "id": "96b009c6-6fc4-46f5-9b47-73fa1584cc93",
+            "label": "Sustainability Conscious",
+            "description": "Sustainability conscious brand",
+            "score": 12,
+            "order": 1
+          },
+          {
+            "id": "ba29c13f-306f-4571-bac8-4122648c857d",
+            "label": "Moderate Alignment",
+            "description": "Some sustainability initiatives",
+            "score": 8,
+            "order": 2
+          },
+          {
+            "id": "12ee5785-1fd4-4611-8c4a-416418ca1959",
+            "label": "Low Emphasis",
+            "description": "Limited sustainability focus",
+            "score": 4,
+            "order": 3
+          },
+          {
+            "id": "98770306-c9d7-4562-b12b-237c6d1fd999",
+            "label": "No Focus",
+            "description": "No sustainability initiatives",
+            "score": 0,
+            "order": 4
+          }
+        ]
+      }
+    ],
+    "total_weight": 100,
+    "is_active": true,
+    "created_at": "2026-03-13T19:39:42.023176+00:00",
+    "updated_at": "2026-03-13T19:43:51.099017+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "375ed3a1-b479-41be-bf81-dc2a65ded2f9",
+    "city": "default",
+    "name": "Default Scoring Model",
+    "description": "Default scoring model - applies to all cities without specific configuration",
+    "categories": [
+      {
+        "id": "a120da0f-4ce8-4703-a388-488a16ceb673",
+        "name": "Volume Potential",
+        "description": "Revenue scale based on estimated volume",
+        "weight": 25,
+        "is_numeric": true,
+        "order": 0,
+        "tiers": [
+          {
+            "id": "acedef0f-339e-4feb-9e72-671ed579aa8e",
+            "label": ">5000",
+            "description": "Units per month",
+            "score": 25,
+            "min_value": 5000,
+            "max_value": null,
+            "order": 0
+          },
+          {
+            "id": "c793b126-31d8-49ab-a3f6-cb19098923ed",
+            "label": "3000-5000",
+            "description": "Units per month",
+            "score": 20,
+            "min_value": 3000,
+            "max_value": 5000,
+            "order": 1
+          },
+          {
+            "id": "f3d126f2-3f57-4d2f-83ec-3ba7c43015b9",
+            "label": "1500-3000",
+            "description": "Units per month",
+            "score": 15,
+            "min_value": 1500,
+            "max_value": 3000,
+            "order": 2
+          },
+          {
+            "id": "e11a25b5-7ffc-4cf1-990c-82d1f431eed2",
+            "label": "500-1500",
+            "description": "Units per month",
+            "score": 10,
+            "min_value": 500,
+            "max_value": 1500,
+            "order": 3
+          },
+          {
+            "id": "746fe4a2-f813-422a-8d5e-ba4faa38e0bd",
+            "label": "<500",
+            "description": "Units per month",
+            "score": 5,
+            "min_value": 0,
+            "max_value": 500,
+            "order": 4
+          }
+        ]
+      },
+      {
+        "id": "de90274c-894e-43e8-9dd2-8ea63d244759",
+        "name": "Margin Potential",
+        "description": "Profitability assessment",
+        "weight": 20,
+        "is_numeric": true,
+        "order": 1,
+        "tiers": [
+          {
+            "id": "511cdb9c-8b72-4ffb-b60e-12a7ac422079",
+            "label": ">40%",
+            "description": "Margin percentage",
+            "score": 20,
+            "min_value": 40,
+            "max_value": null,
+            "order": 0
+          },
+          {
+            "id": "187230cd-a8e0-4de7-b778-d9b2d2f3dc32",
+            "label": "30-40%",
+            "description": "Margin percentage",
+            "score": 15,
+            "min_value": 30,
+            "max_value": 40,
+            "order": 1
+          },
+          {
+            "id": "46848e4c-7b57-4e0a-b9a9-7d866e886124",
+            "label": "20-30%",
+            "description": "Margin percentage",
+            "score": 10,
+            "min_value": 20,
+            "max_value": 30,
+            "order": 2
+          },
+          {
+            "id": "b33c71b4-5ec1-4edb-8553-68c2901ea307",
+            "label": "10-20%",
+            "description": "Margin percentage",
+            "score": 5,
+            "min_value": 10,
+            "max_value": 20,
+            "order": 3
+          },
+          {
+            "id": "49d551c8-b23a-4f21-b682-83fe6980c462",
+            "label": "<10%",
+            "description": "Margin percentage",
+            "score": 0,
+            "min_value": 0,
+            "max_value": 10,
+            "order": 4
+          }
+        ]
+      },
+      {
+        "id": "132bc22e-86b2-4de8-842c-9309751821c5",
+        "name": "Brand Prestige",
+        "description": "Luxury association and brand value",
+        "weight": 20,
+        "is_numeric": false,
+        "order": 2,
+        "tiers": [
+          {
+            "id": "90029339-12a1-4525-80e6-187afbaecb6e",
+            "label": "5-Star Global Hotel",
+            "description": "JW Marriott, Taj, Four Seasons",
+            "score": 20,
+            "order": 0
+          },
+          {
+            "id": "2289297f-8508-4b36-a42b-88d71a85b3a8",
+            "label": "Iconic Luxury Restaurant",
+            "description": "High-end fine dining",
+            "score": 18,
+            "order": 1
+          },
+          {
+            "id": "fc567e3f-c777-4787-a2dd-a299cbdd3111",
+            "label": "Premium Restaurant",
+            "description": "Upscale dining establishment",
+            "score": 15,
+            "order": 2
+          },
+          {
+            "id": "809dc9a9-63aa-4a28-8284-933b17625274",
+            "label": "Popular Cafe / Lounge",
+            "description": "Trendy casual venue",
+            "score": 10,
+            "order": 3
+          },
+          {
+            "id": "82dc129e-3fca-446c-a18e-704fdb136f03",
+            "label": "Local Restaurant",
+            "description": "Neighborhood establishment",
+            "score": 5,
+            "order": 4
+          }
+        ]
+      },
+      {
+        "id": "4d230901-ca31-41f8-928d-27385a188fbe",
+        "name": "Guest Influence",
+        "description": "Brand visibility through guest profile",
+        "weight": 20,
+        "is_numeric": false,
+        "order": 3,
+        "tiers": [
+          {
+            "id": "7ea49182-ede9-4d45-b9c4-2d265f478445",
+            "label": "International Luxury Travellers",
+            "description": "Global high-net-worth individuals",
+            "score": 20,
+            "order": 0
+          },
+          {
+            "id": "51c2e36b-1627-4e3a-a638-4a2f24b71043",
+            "label": "HNIs / Business Leaders",
+            "description": "Domestic high-net-worth and executives",
+            "score": 18,
+            "order": 1
+          },
+          {
+            "id": "ba373cd6-6fec-4969-b158-ad8cb8332c4a",
+            "label": "Affluent City Crowd",
+            "description": "Urban professionals",
+            "score": 15,
+            "order": 2
+          },
+          {
+            "id": "0f2a20f2-ec2e-496f-b13a-92da3cbcac71",
+            "label": "Mass Premium",
+            "description": "Aspirational consumers",
+            "score": 10,
+            "order": 3
+          },
+          {
+            "id": "8d07fd57-1a89-4088-a669-2d8c3f5580e6",
+            "label": "Local Casual Dining",
+            "description": "General public",
+            "score": 5,
+            "order": 4
+          }
+        ]
+      },
+      {
+        "id": "c8e8dc6e-a9c8-48d2-9f59-f87c651126ed",
+        "name": "Sustainability Alignment",
+        "description": "Strategic brand fit with sustainability values",
+        "weight": 15,
+        "is_numeric": false,
+        "order": 4,
+        "tiers": [
+          {
+            "id": "22d0612f-818a-4bfd-aef6-235845fccfc3",
+            "label": "Strong ESG / Eco Luxury",
+            "description": "Strong ESG/eco luxury positioning",
+            "score": 15,
+            "order": 0
+          },
+          {
+            "id": "e69f4b41-dd88-4285-be37-f7c7d4d943ad",
+            "label": "Sustainability Conscious",
+            "description": "Sustainability conscious brand",
+            "score": 12,
+            "order": 1
+          },
+          {
+            "id": "bb5b60f5-f43e-4af2-beea-c0d40d93f621",
+            "label": "Moderate Alignment",
+            "description": "Some sustainability initiatives",
+            "score": 8,
+            "order": 2
+          },
+          {
+            "id": "e665a908-55aa-4380-9f79-f1cb5f381195",
+            "label": "Low Emphasis",
+            "description": "Limited sustainability focus",
+            "score": 4,
+            "order": 3
+          },
+          {
+            "id": "d840826a-6579-4fed-a078-618c2ae0048e",
+            "label": "No Focus",
+            "description": "No sustainability initiatives",
+            "score": 0,
+            "order": 4
+          }
+        ]
+      }
+    ],
+    "total_weight": 100,
+    "is_active": true,
+    "created_at": "2026-03-14T11:06:42.590094+00:00",
+    "updated_at": "2026-03-14T11:13:14.216832+00:00",
+    "tenant_id": "nyla-air-water"
+  }
+]

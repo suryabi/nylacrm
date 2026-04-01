@@ -1,0 +1,34 @@
+[
+  {
+    "id": "813fbe91-8434-4bd6-bc7b-49bd1ebca9b5",
+    "name": "H2 2026 Sales Target",
+    "start_date": "2026-03-01",
+    "end_date": "2026-08-31",
+    "target_type": "revenue",
+    "total_amount": 12000000.0,
+    "milestones": 6,
+    "allocated_amount": 12000000.0,
+    "description": "",
+    "status": "draft",
+    "created_by": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "created_by_name": "System Admin",
+    "created_at": "2026-03-05T03:38:50.769846+00:00",
+    "updated_at": "2026-03-08T15:29:03.477065+00:00"
+  },
+  {
+    "id": "2c224a54-8977-4e4a-9943-92e7da8b1b9e",
+    "name": "Hyderabad - March",
+    "start_date": "2026-03-01",
+    "end_date": "2026-03-31",
+    "goal_type": "cumulative",
+    "total_amount": 700000.0,
+    "milestones": 2,
+    "allocated_amount": 700000.0,
+    "description": "",
+    "status": "draft",
+    "created_by": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "created_by_name": "System Admin",
+    "created_at": "2026-03-05T18:07:42.674172+00:00",
+    "updated_at": "2026-03-08T15:22:00.362875+00:00"
+  }
+]

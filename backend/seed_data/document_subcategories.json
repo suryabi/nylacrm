@@ -1,0 +1,29 @@
+[
+  {
+    "id": "bb6a2b0a-a84b-4be8-a811-2c2e1db99a8f",
+    "category_id": "5f2fbf63-e6c4-49ca-8933-0d598d400e84",
+    "name": "Brochures",
+    "description": "Product brochures",
+    "created_by": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "created_at": "2026-02-22T20:37:23.609247+00:00",
+    "updated_at": "2026-02-22T20:37:23.609250+00:00"
+  },
+  {
+    "id": "97700d32-8562-4cd7-9f9d-66721c584109",
+    "category_id": "96abdd21-b04b-43b9-9a4f-34fe6475c1fc",
+    "name": "Cafes",
+    "description": "",
+    "created_by": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "created_at": "2026-02-22T20:50:29.529987+00:00",
+    "updated_at": "2026-02-22T20:50:29.529990+00:00"
+  },
+  {
+    "id": "425beda5-752c-43d4-8f28-bfa8d61c7f78",
+    "category_id": "96abdd21-b04b-43b9-9a4f-34fe6475c1fc",
+    "name": "Restaurants",
+    "description": "",
+    "created_by": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "created_at": "2026-02-22T20:50:40.949129+00:00",
+    "updated_at": "2026-02-22T20:50:40.949132+00:00"
+  }
+]

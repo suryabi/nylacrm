@@ -1,0 +1,200 @@
+[
+  {
+    "id": "522b0325-f323-4d64-99d2-aa6b070409d2",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "e221e5dc-f985-4c9a-901d-db4e7e916296",
+    "sku_name": "660 ml Silver",
+    "allocation_percentage": 10.0,
+    "target_revenue": 200000.0,
+    "created_at": "2026-02-06T12:00:45.394907+00:00"
+  },
+  {
+    "id": "08327f4a-9f32-4464-aba7-d6bdb8640906",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "e221e5dc-f985-4c9a-901d-db4e7e916296",
+    "sku_name": "660 ml Gold",
+    "allocation_percentage": 10.0,
+    "target_revenue": 200000.0,
+    "created_at": "2026-02-06T12:00:45.407496+00:00"
+  },
+  {
+    "id": "33dae669-99d0-49c0-b995-ff6a398e3b48",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "e221e5dc-f985-4c9a-901d-db4e7e916296",
+    "sku_name": "330 ml Silver",
+    "allocation_percentage": 20.0,
+    "target_revenue": 400000.0,
+    "created_at": "2026-02-06T12:00:45.408141+00:00"
+  },
+  {
+    "id": "a717f9a8-ae08-4d5a-b2ff-dd71b01199ca",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "e221e5dc-f985-4c9a-901d-db4e7e916296",
+    "sku_name": "330 ml Gold",
+    "allocation_percentage": 20.0,
+    "target_revenue": 400000.0,
+    "created_at": "2026-02-06T12:00:45.408636+00:00"
+  },
+  {
+    "id": "56a81a2d-22a6-419e-83d5-6da91fcc2e37",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "e221e5dc-f985-4c9a-901d-db4e7e916296",
+    "sku_name": "660 Sparkling",
+    "allocation_percentage": 10.0,
+    "target_revenue": 200000.0,
+    "created_at": "2026-02-06T12:00:45.409046+00:00"
+  },
+  {
+    "id": "fcddc797-8316-4ce2-bbc1-c28392d82106",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "e221e5dc-f985-4c9a-901d-db4e7e916296",
+    "sku_name": "330 Sparkling",
+    "allocation_percentage": 10.0,
+    "target_revenue": 200000.0,
+    "created_at": "2026-02-06T12:00:45.409449+00:00"
+  },
+  {
+    "id": "96cd9a90-2d52-429a-9c55-7d5ceca71314",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "e221e5dc-f985-4c9a-901d-db4e7e916296",
+    "sku_name": "24 Brand",
+    "allocation_percentage": 20.0,
+    "target_revenue": 400000.0,
+    "created_at": "2026-02-06T12:00:45.409945+00:00"
+  },
+  {
+    "id": "86d397f4-a6d6-40d9-9bcf-f184f98e08df",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "0a29ddcc-d12c-4c5e-a248-fb55d91a05a7",
+    "sku_name": "660 ml Silver",
+    "allocation_percentage": 50.0,
+    "target_revenue": 2000000.0,
+    "created_at": "2026-02-06T12:18:32.397625+00:00"
+  },
+  {
+    "id": "a49a0470-c093-47e9-89be-fd256d080ad3",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "0a29ddcc-d12c-4c5e-a248-fb55d91a05a7",
+    "sku_name": "330 ml Gold",
+    "allocation_percentage": 50.0,
+    "target_revenue": 2000000.0,
+    "created_at": "2026-02-06T12:18:32.398170+00:00"
+  },
+  {
+    "id": "aa0ad445-87fa-49e3-b4ba-fe0b4d5939bb",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "e1cd61de-f9f1-4e84-825a-ffc24bcd65ca",
+    "sku_name": "660 ml Silver",
+    "allocation_percentage": 5.0,
+    "target_revenue": 200000.0,
+    "created_at": "2026-02-06T12:18:57.592868+00:00"
+  },
+  {
+    "id": "a87b2aed-4010-4d9d-818a-afc7fe736e55",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "e1cd61de-f9f1-4e84-825a-ffc24bcd65ca",
+    "sku_name": "660 ml Gold",
+    "allocation_percentage": 5.0,
+    "target_revenue": 200000.0,
+    "created_at": "2026-02-06T12:18:57.593368+00:00"
+  },
+  {
+    "id": "bde53673-1bcd-4977-8c70-3f8f6c0215ea",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "e1cd61de-f9f1-4e84-825a-ffc24bcd65ca",
+    "sku_name": "330 ml Silver",
+    "allocation_percentage": 80.0,
+    "target_revenue": 3200000.0,
+    "created_at": "2026-02-06T12:18:57.593853+00:00"
+  },
+  {
+    "id": "334e0ce7-de7e-4c17-986f-194d7a147a39",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "e1cd61de-f9f1-4e84-825a-ffc24bcd65ca",
+    "sku_name": "330 ml Gold",
+    "allocation_percentage": 10.0,
+    "target_revenue": 400000.0,
+    "created_at": "2026-02-06T12:18:57.594232+00:00"
+  },
+  {
+    "id": "f2993a50-88d6-49f9-88ea-19154eebf945",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "d9fd0ca6-2f5b-4f60-b5ea-811bcf894845",
+    "sku_name": "660 ml Silver",
+    "allocation_percentage": 100.0,
+    "target_revenue": 3000000.0,
+    "created_at": "2026-02-06T16:37:07.640791+00:00"
+  },
+  {
+    "id": "a695878e-248f-43d6-8951-4a2b0b0f3dda",
+    "plan_id": "31a01732-bfa0-4b4f-9507-d4e4cce20c04",
+    "city_id": "c505e443-90de-4908-88a1-07e12fcdf831",
+    "sku_name": "660 ml Silver",
+    "allocation_percentage": 100.0,
+    "target_revenue": 3125000.0,
+    "created_at": "2026-02-06T18:10:11.379423+00:00"
+  },
+  {
+    "id": "194b5a37-c582-45a4-bbba-634420af026a",
+    "plan_id": "31a01732-bfa0-4b4f-9507-d4e4cce20c04",
+    "city_id": "dd87f735-43d6-4502-94cf-a0d0b59b0b9e",
+    "sku_name": "660 ml Silver",
+    "allocation_percentage": 100.0,
+    "target_revenue": 6250000.0,
+    "created_at": "2026-02-06T18:10:22.936490+00:00"
+  },
+  {
+    "id": "c77338ec-5781-4b98-93d2-986965ef3a11",
+    "plan_id": "31a01732-bfa0-4b4f-9507-d4e4cce20c04",
+    "city_id": "c593c5f2-38ec-48da-9192-8609a53da55b",
+    "sku_name": "660 ml Silver",
+    "allocation_percentage": 100.0,
+    "target_revenue": 6250000.0,
+    "created_at": "2026-02-06T18:10:34.426985+00:00"
+  },
+  {
+    "id": "4ba96da3-af05-4287-bf85-c27a9b7dff33",
+    "plan_id": "31a01732-bfa0-4b4f-9507-d4e4cce20c04",
+    "city_id": "6666c560-c52d-43bb-b6fb-f09ea2c8d11f",
+    "sku_name": "660 ml Silver",
+    "allocation_percentage": 100.0,
+    "target_revenue": 4375000.0,
+    "created_at": "2026-02-06T18:10:45.720896+00:00"
+  },
+  {
+    "id": "9c5d50db-b751-4227-bc18-80e5c2760d26",
+    "plan_id": "31a01732-bfa0-4b4f-9507-d4e4cce20c04",
+    "city_id": "f571ba8a-dfa7-46c7-a03b-2cc14ffa9fb6",
+    "sku_name": "660 ml Silver",
+    "allocation_percentage": 100.0,
+    "target_revenue": 5000000.0,
+    "created_at": "2026-02-06T18:10:54.342681+00:00"
+  },
+  {
+    "id": "af902aa4-2279-4693-bdef-f4585d959f13",
+    "plan_id": "31a01732-bfa0-4b4f-9507-d4e4cce20c04",
+    "city_id": "67f8a298-7615-420b-9ed6-3389cca8b221",
+    "sku_name": "660 ml Silver",
+    "allocation_percentage": 100.0,
+    "target_revenue": 6250000.0,
+    "created_at": "2026-02-06T18:11:02.832799+00:00"
+  },
+  {
+    "id": "1e46dec3-da3a-4356-915e-6f17ac6b5015",
+    "plan_id": "31a01732-bfa0-4b4f-9507-d4e4cce20c04",
+    "city_id": "d6787a22-e74c-45cd-b283-8f411f0a0935",
+    "sku_name": "660 ml Silver",
+    "allocation_percentage": 100.0,
+    "target_revenue": 6250000.0,
+    "created_at": "2026-02-06T18:11:11.116588+00:00"
+  },
+  {
+    "id": "7f252313-09f5-4c1c-b3ff-a426918a86ae",
+    "plan_id": "31a01732-bfa0-4b4f-9507-d4e4cce20c04",
+    "city_id": "022b4c1f-db78-4541-9399-ac7de37ff914",
+    "sku_name": "660 ml Silver",
+    "allocation_percentage": 100.0,
+    "target_revenue": 12500000.0,
+    "created_at": "2026-02-06T18:11:19.582365+00:00"
+  }
+]

@@ -1,0 +1,36 @@
+[
+  {
+    "id": "31a01732-bfa0-4b4f-9507-d4e4cce20c04",
+    "plan_name": "Q1 2026 Revenue Target",
+    "time_period": "quarterly",
+    "start_date": "2026-01-01",
+    "end_date": "2026-03-31",
+    "country": "India",
+    "country_target": 50000000.0,
+    "currency": "INR",
+    "status": "draft",
+    "created_by": "77d8163f-7a11-46ef-9afb-c1596e5624ec",
+    "locked_by": null,
+    "locked_at": null,
+    "created_at": "2026-02-05T11:26:10.633252+00:00",
+    "updated_at": "2026-02-05T11:26:10.633254+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "plan_name": "Q1 2026 Target",
+    "time_period": "quarterly",
+    "start_date": "2026-01-01",
+    "end_date": "2026-03-31",
+    "country": "India",
+    "country_target": 60000000,
+    "currency": "INR",
+    "status": "draft",
+    "created_by": "77d8163f-7a11-46ef-9afb-c1596e5624ec",
+    "locked_by": null,
+    "locked_at": null,
+    "created_at": "2026-02-05T11:36:41.205110+00:00",
+    "updated_at": "2026-02-06T18:06:05.032895+00:00",
+    "tenant_id": "nyla-air-water"
+  }
+]

@@ -1,0 +1,732 @@
+[
+  {
+    "id": "b7bd1386-ebd1-4ee4-9205-5e22d0b24cd7",
+    "invoice_no": "INV-TEST-001",
+    "invoice_date": "2026-03-17",
+    "gross_invoice_value": 16829.0,
+    "net_invoice_value": 22681.0,
+    "credit_note_value": 5852.0,
+    "outstanding": 286672.0,
+    "c_lead_id": null,
+    "ca_lead_id": "TOOP-HYD-A26-001",
+    "items": [
+      {
+        "itemId": "B660",
+        "quantity": 240,
+        "rate": "112.0",
+        "discount": "19.64%"
+      }
+    ],
+    "received_at": "2026-03-17T11:58:54.462042+00:00",
+    "account_uuid": "81263309-2118-4d51-b1d9-fe9549da07b7",
+    "account_id": "TOOP-HYD-A26-001",
+    "assigned_to": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "status": "matched"
+  },
+  {
+    "id": "4f03e88e-653a-437b-8ba1-eed2f791e6d7",
+    "invoice_no": "INV-NEW-FORMAT-001",
+    "invoice_date": "2026-03-17",
+    "gross_invoice_value": 16829.0,
+    "net_invoice_value": 22681.0,
+    "credit_note_value": 5852.0,
+    "outstanding": 286672.0,
+    "account_id_from_mq": "TOOP-HYD-A26-001",
+    "c_lead_id": null,
+    "ca_lead_id": null,
+    "items": [
+      {
+        "itemId": "B660",
+        "quantity": 240,
+        "rate": "112.0",
+        "discount": "19.64%"
+      }
+    ],
+    "received_at": "2026-03-17T12:01:35.093176+00:00",
+    "account_uuid": "81263309-2118-4d51-b1d9-fe9549da07b7",
+    "account_id": "TOOP-HYD-A26-001",
+    "assigned_to": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "status": "matched"
+  },
+  {
+    "invoice_no": "INV-SURYA",
+    "invoice_date": "2026-03-17",
+    "gross_invoice_value": 16829,
+    "net_invoice_value": 22681,
+    "credit_note_value": 5852,
+    "outstanding": 286672,
+    "account_id_from_mq": "ORLO-HYD-A26-001",
+    "account_id": "ORLO-HYD-A26-001",
+    "account_uuid": "5b939dbe-ccc2-4615-8f4c-6d337aad0fdc",
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B660",
+        "quantity": 240
+      }
+    ]
+  },
+  {
+    "invoice_no": "INV-NARAYANA",
+    "invoice_date": "2026-03-15",
+    "gross_invoice_value": 16829.0,
+    "net_invoice_value": 22681.0,
+    "credit_note_value": 5852.0,
+    "outstanding": 286672.0,
+    "account_id_from_mq": "ORLO-HYD-A26-001",
+    "c_lead_id": null,
+    "ca_lead_id": null,
+    "items": [
+      {
+        "itemId": "B660",
+        "quantity": 240,
+        "rate": "112.0",
+        "discount": "19.64%",
+        "batchNumber": null,
+        "expiryDate": null
+      }
+    ],
+    "received_at": "2026-03-17T12:29:31.461559+00:00",
+    "account_uuid": "5b939dbe-ccc2-4615-8f4c-6d337aad0fdc",
+    "account_id": "ORLO-HYD-A26-001",
+    "assigned_to": null,
+    "status": "matched"
+  },
+  {
+    "id": "316295e1-d279-4b84-aa58-7f85bdbaa03f",
+    "invoice_no": "INV-TOOP-0001",
+    "invoice_date": "2026-03-16",
+    "gross_invoice_value": 48280,
+    "net_invoice_value": 42567,
+    "credit_note_value": 5713,
+    "outstanding": 12171,
+    "account_id_from_mq": "TOOP-HYD-A26-001",
+    "account_id": "TOOP-HYD-A26-001",
+    "account_uuid": "81263309-2118-4d51-b1d9-fe9549da07b7",
+    "assigned_to": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B1000",
+        "quantity": 50,
+        "rate": "150.0",
+        "discount": "5%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.331648+00:00",
+    "created_at": "2026-03-17T13:07:31.331654+00:00"
+  },
+  {
+    "id": "67015531-8180-4fda-a4e3-849aa00330d6",
+    "invoice_no": "INV-TOOP-0002",
+    "invoice_date": "2026-02-18",
+    "gross_invoice_value": 38314,
+    "net_invoice_value": 37695,
+    "credit_note_value": 619,
+    "outstanding": 16121,
+    "account_id_from_mq": "TOOP-HYD-A26-001",
+    "account_id": "TOOP-HYD-A26-001",
+    "account_uuid": "81263309-2118-4d51-b1d9-fe9549da07b7",
+    "assigned_to": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B1000",
+        "quantity": 50,
+        "rate": "150.0",
+        "discount": "5%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.332240+00:00",
+    "created_at": "2026-03-17T13:07:31.332242+00:00"
+  },
+  {
+    "id": "4ec827ba-f394-46c7-a54d-8c1833417848",
+    "invoice_no": "INV-TOOP-0003",
+    "invoice_date": "2026-02-15",
+    "gross_invoice_value": 12885,
+    "net_invoice_value": 11017,
+    "credit_note_value": 1868,
+    "outstanding": 5040,
+    "account_id_from_mq": "TOOP-HYD-A26-001",
+    "account_id": "TOOP-HYD-A26-001",
+    "account_uuid": "81263309-2118-4d51-b1d9-fe9549da07b7",
+    "assigned_to": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B1000",
+        "quantity": 80,
+        "rate": "150.0",
+        "discount": "8%"
+      },
+      {
+        "itemId": "B500",
+        "quantity": 200,
+        "rate": "85.0",
+        "discount": "15%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.332581+00:00",
+    "created_at": "2026-03-17T13:07:31.332583+00:00"
+  },
+  {
+    "id": "d531ea8b-d5b1-41a5-ad07-30acae078d25",
+    "invoice_no": "INV-LEAD-0004",
+    "invoice_date": "2026-03-08",
+    "gross_invoice_value": 12021,
+    "net_invoice_value": 11784,
+    "credit_note_value": 237,
+    "outstanding": 817,
+    "account_id_from_mq": "LEAD-HYD-A26-001",
+    "account_id": "LEAD-HYD-A26-001",
+    "account_uuid": "fafad845-4809-4597-ab2d-74b7cabe4412",
+    "assigned_to": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B500",
+        "quantity": 100,
+        "rate": "85.0",
+        "discount": "10%"
+      },
+      {
+        "itemId": "B660",
+        "quantity": 120,
+        "rate": "112.0",
+        "discount": "12%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.333809+00:00",
+    "created_at": "2026-03-17T13:07:31.333812+00:00"
+  },
+  {
+    "id": "59289880-9629-4eb7-913f-e146fa24379c",
+    "invoice_no": "INV-LEAD-0005",
+    "invoice_date": "2026-02-25",
+    "gross_invoice_value": 28694,
+    "net_invoice_value": 23795,
+    "credit_note_value": 4899,
+    "outstanding": 7548,
+    "account_id_from_mq": "LEAD-HYD-A26-001",
+    "account_id": "LEAD-HYD-A26-001",
+    "account_uuid": "fafad845-4809-4597-ab2d-74b7cabe4412",
+    "assigned_to": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B500",
+        "quantity": 100,
+        "rate": "85.0",
+        "discount": "10%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.334111+00:00",
+    "created_at": "2026-03-17T13:07:31.334114+00:00"
+  },
+  {
+    "id": "1f668894-2167-426f-a69e-02b59dd6cbd8",
+    "invoice_no": "INV-EMPI-0006",
+    "invoice_date": "2025-12-29",
+    "gross_invoice_value": 33348,
+    "net_invoice_value": 31901,
+    "credit_note_value": 1447,
+    "outstanding": 8776,
+    "account_id_from_mq": "EMPI-BEN-A26-001",
+    "account_id": "EMPI-BEN-A26-001",
+    "account_uuid": "d4e2187a-5e7d-4847-902b-b6699ae910fc",
+    "assigned_to": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B660",
+        "quantity": 240,
+        "rate": "112.0",
+        "discount": "15%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.335212+00:00",
+    "created_at": "2026-03-17T13:07:31.335214+00:00"
+  },
+  {
+    "id": "a14d1353-d136-4582-82f1-e018dfe38801",
+    "invoice_no": "INV-EMPI-0007",
+    "invoice_date": "2025-12-21",
+    "gross_invoice_value": 18318,
+    "net_invoice_value": 16841,
+    "credit_note_value": 1477,
+    "outstanding": 3464,
+    "account_id_from_mq": "EMPI-BEN-A26-001",
+    "account_id": "EMPI-BEN-A26-001",
+    "account_uuid": "d4e2187a-5e7d-4847-902b-b6699ae910fc",
+    "assigned_to": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B500",
+        "quantity": 100,
+        "rate": "85.0",
+        "discount": "10%"
+      },
+      {
+        "itemId": "B660",
+        "quantity": 120,
+        "rate": "112.0",
+        "discount": "12%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.335503+00:00",
+    "created_at": "2026-03-17T13:07:31.335505+00:00"
+  },
+  {
+    "id": "8584892a-403f-452f-81f4-ba0ffaee62ab",
+    "invoice_no": "INV-EMPI-0008",
+    "invoice_date": "2026-02-06",
+    "gross_invoice_value": 21659,
+    "net_invoice_value": 21649,
+    "credit_note_value": 10,
+    "outstanding": 2834,
+    "account_id_from_mq": "EMPI-BEN-A26-001",
+    "account_id": "EMPI-BEN-A26-001",
+    "account_uuid": "d4e2187a-5e7d-4847-902b-b6699ae910fc",
+    "assigned_to": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B1000",
+        "quantity": 80,
+        "rate": "150.0",
+        "discount": "8%"
+      },
+      {
+        "itemId": "B500",
+        "quantity": 200,
+        "rate": "85.0",
+        "discount": "15%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.335752+00:00",
+    "created_at": "2026-03-17T13:07:31.335754+00:00"
+  },
+  {
+    "id": "ab82f8e0-cd97-4cab-894f-2b9b9ad2ef4d",
+    "invoice_no": "INV-TEST-0009",
+    "invoice_date": "2026-02-02",
+    "gross_invoice_value": 43547,
+    "net_invoice_value": 42224,
+    "credit_note_value": 1323,
+    "outstanding": 3472,
+    "account_id_from_mq": "TEST-DEL-A26-001",
+    "account_id": "TEST-DEL-A26-001",
+    "account_uuid": "fc96dab4-7c1b-4746-bfb4-d78a1083aedb",
+    "assigned_to": null,
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B1000",
+        "quantity": 50,
+        "rate": "150.0",
+        "discount": "5%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.336770+00:00",
+    "created_at": "2026-03-17T13:07:31.336774+00:00"
+  },
+  {
+    "id": "3da628db-37e3-460d-81fb-f508858ac642",
+    "invoice_no": "INV-TEST-0010",
+    "invoice_date": "2026-01-23",
+    "gross_invoice_value": 46051,
+    "net_invoice_value": 43023,
+    "credit_note_value": 3028,
+    "outstanding": 5476,
+    "account_id_from_mq": "TEST-DEL-A26-001",
+    "account_id": "TEST-DEL-A26-001",
+    "account_uuid": "fc96dab4-7c1b-4746-bfb4-d78a1083aedb",
+    "assigned_to": null,
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B500",
+        "quantity": 100,
+        "rate": "85.0",
+        "discount": "10%"
+      },
+      {
+        "itemId": "B660",
+        "quantity": 120,
+        "rate": "112.0",
+        "discount": "12%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.337137+00:00",
+    "created_at": "2026-03-17T13:07:31.337139+00:00"
+  },
+  {
+    "id": "32369cfa-ad82-4a72-8291-6f3224dff53d",
+    "invoice_no": "INV-TEST-0011",
+    "invoice_date": "2025-12-31",
+    "gross_invoice_value": 18500,
+    "net_invoice_value": 18214,
+    "credit_note_value": 286,
+    "outstanding": 3998,
+    "account_id_from_mq": "TEST-DEL-A26-001",
+    "account_id": "TEST-DEL-A26-001",
+    "account_uuid": "fc96dab4-7c1b-4746-bfb4-d78a1083aedb",
+    "assigned_to": null,
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B660",
+        "quantity": 240,
+        "rate": "112.0",
+        "discount": "15%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.337405+00:00",
+    "created_at": "2026-03-17T13:07:31.337407+00:00"
+  },
+  {
+    "id": "ec66626c-2418-49a9-87a2-5f1e560e07ce",
+    "invoice_no": "INV-OCEA-0012",
+    "invoice_date": "2026-01-30",
+    "gross_invoice_value": 32129,
+    "net_invoice_value": 27158,
+    "credit_note_value": 4971,
+    "outstanding": 1307,
+    "account_id_from_mq": "OCEA-HYD-A26-001",
+    "account_id": "OCEA-HYD-A26-001",
+    "account_uuid": "82e80890-e390-4d54-a64b-378316b1918d",
+    "assigned_to": "c368292a-c134-4d6f-ab0d-e8345a72c610",
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B660",
+        "quantity": 240,
+        "rate": "112.0",
+        "discount": "15%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.338339+00:00",
+    "created_at": "2026-03-17T13:07:31.338340+00:00"
+  },
+  {
+    "id": "9d70e90f-e671-4062-8e38-65cfbb6d62ec",
+    "invoice_no": "INV-OCEA-0013",
+    "invoice_date": "2026-03-09",
+    "gross_invoice_value": 21992,
+    "net_invoice_value": 19356,
+    "credit_note_value": 2636,
+    "outstanding": 4919,
+    "account_id_from_mq": "OCEA-HYD-A26-001",
+    "account_id": "OCEA-HYD-A26-001",
+    "account_uuid": "82e80890-e390-4d54-a64b-378316b1918d",
+    "assigned_to": "c368292a-c134-4d6f-ab0d-e8345a72c610",
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B500",
+        "quantity": 100,
+        "rate": "85.0",
+        "discount": "10%"
+      },
+      {
+        "itemId": "B660",
+        "quantity": 120,
+        "rate": "112.0",
+        "discount": "12%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.338586+00:00",
+    "created_at": "2026-03-17T13:07:31.338588+00:00"
+  },
+  {
+    "id": "eda0568f-7d8d-40d3-b815-c016c16a7a4c",
+    "invoice_no": "INV-OCEA-0014",
+    "invoice_date": "2026-03-10",
+    "gross_invoice_value": 13907,
+    "net_invoice_value": 11478,
+    "credit_note_value": 2429,
+    "outstanding": 2620,
+    "account_id_from_mq": "OCEA-HYD-A26-001",
+    "account_id": "OCEA-HYD-A26-001",
+    "account_uuid": "82e80890-e390-4d54-a64b-378316b1918d",
+    "assigned_to": "c368292a-c134-4d6f-ab0d-e8345a72c610",
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B500",
+        "quantity": 100,
+        "rate": "85.0",
+        "discount": "10%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.338808+00:00",
+    "created_at": "2026-03-17T13:07:31.338811+00:00"
+  },
+  {
+    "id": "5edfe931-eab1-4c4b-82a2-cd837422a4e8",
+    "invoice_no": "INV-OCEA-0015",
+    "invoice_date": "2026-03-10",
+    "gross_invoice_value": 16812,
+    "net_invoice_value": 14772,
+    "credit_note_value": 2040,
+    "outstanding": 3987,
+    "account_id_from_mq": "OCEA-HYD-A26-001",
+    "account_id": "OCEA-HYD-A26-001",
+    "account_uuid": "82e80890-e390-4d54-a64b-378316b1918d",
+    "assigned_to": "c368292a-c134-4d6f-ab0d-e8345a72c610",
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B500",
+        "quantity": 100,
+        "rate": "85.0",
+        "discount": "10%"
+      },
+      {
+        "itemId": "B660",
+        "quantity": 120,
+        "rate": "112.0",
+        "discount": "12%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.339110+00:00",
+    "created_at": "2026-03-17T13:07:31.339113+00:00"
+  },
+  {
+    "id": "bfc0f0ee-5f1b-45bf-b07a-95270f27f723",
+    "invoice_no": "INV-TAJS-0016",
+    "invoice_date": "2026-03-04",
+    "gross_invoice_value": 12603,
+    "net_invoice_value": 12586,
+    "credit_note_value": 17,
+    "outstanding": 639,
+    "account_id_from_mq": "TAJS-AMB-A26-001",
+    "account_id": "TAJS-AMB-A26-001",
+    "account_uuid": "2a03a944-2b5b-419a-94f0-859f35693c3e",
+    "assigned_to": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B500",
+        "quantity": 100,
+        "rate": "85.0",
+        "discount": "10%"
+      },
+      {
+        "itemId": "B660",
+        "quantity": 120,
+        "rate": "112.0",
+        "discount": "12%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.340064+00:00",
+    "created_at": "2026-03-17T13:07:31.340066+00:00"
+  },
+  {
+    "id": "c0c0000d-45b4-4946-b43c-33c4b1e7edb0",
+    "invoice_no": "INV-TAJS-0017",
+    "invoice_date": "2026-01-25",
+    "gross_invoice_value": 12823,
+    "net_invoice_value": 12258,
+    "credit_note_value": 565,
+    "outstanding": 3414,
+    "account_id_from_mq": "TAJS-AMB-A26-001",
+    "account_id": "TAJS-AMB-A26-001",
+    "account_uuid": "2a03a944-2b5b-419a-94f0-859f35693c3e",
+    "assigned_to": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B660",
+        "quantity": 240,
+        "rate": "112.0",
+        "discount": "15%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.340296+00:00",
+    "created_at": "2026-03-17T13:07:31.340298+00:00"
+  },
+  {
+    "id": "19644fbc-7ed1-423a-ba5f-3d97e9314829",
+    "invoice_no": "INV-TAJS-0018",
+    "invoice_date": "2026-03-16",
+    "gross_invoice_value": 33540,
+    "net_invoice_value": 28583,
+    "credit_note_value": 4957,
+    "outstanding": 11377,
+    "account_id_from_mq": "TAJS-AMB-A26-001",
+    "account_id": "TAJS-AMB-A26-001",
+    "account_uuid": "2a03a944-2b5b-419a-94f0-859f35693c3e",
+    "assigned_to": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B500",
+        "quantity": 100,
+        "rate": "85.0",
+        "discount": "10%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.340513+00:00",
+    "created_at": "2026-03-17T13:07:31.340515+00:00"
+  },
+  {
+    "id": "0d43d328-dd0c-4ffa-b4ec-8e95c255460b",
+    "invoice_no": "INV-TAJS-0019",
+    "invoice_date": "2026-01-20",
+    "gross_invoice_value": 41558,
+    "net_invoice_value": 35615,
+    "credit_note_value": 5943,
+    "outstanding": 12051,
+    "account_id_from_mq": "TAJS-AMB-A26-001",
+    "account_id": "TAJS-AMB-A26-001",
+    "account_uuid": "2a03a944-2b5b-419a-94f0-859f35693c3e",
+    "assigned_to": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B500",
+        "quantity": 100,
+        "rate": "85.0",
+        "discount": "10%"
+      },
+      {
+        "itemId": "B660",
+        "quantity": 120,
+        "rate": "112.0",
+        "discount": "12%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.340783+00:00",
+    "created_at": "2026-03-17T13:07:31.340785+00:00"
+  },
+  {
+    "id": "77315767-1e70-4bdb-8f8e-92c33af97bde",
+    "invoice_no": "INV-ORLO-0020",
+    "invoice_date": "2026-01-27",
+    "gross_invoice_value": 17358,
+    "net_invoice_value": 14668,
+    "credit_note_value": 2690,
+    "outstanding": 307,
+    "account_id_from_mq": "ORLO-HYD-A26-001",
+    "account_id": "ORLO-HYD-A26-001",
+    "account_uuid": "5b939dbe-ccc2-4615-8f4c-6d337aad0fdc",
+    "assigned_to": null,
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B500",
+        "quantity": 100,
+        "rate": "85.0",
+        "discount": "10%"
+      },
+      {
+        "itemId": "B660",
+        "quantity": 120,
+        "rate": "112.0",
+        "discount": "12%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.341752+00:00",
+    "created_at": "2026-03-17T13:07:31.341754+00:00"
+  },
+  {
+    "id": "465e42e4-acdd-4b54-b308-18d3c2d4412c",
+    "invoice_no": "INV-ORLO-0021",
+    "invoice_date": "2026-03-02",
+    "gross_invoice_value": 20718,
+    "net_invoice_value": 17371,
+    "credit_note_value": 3347,
+    "outstanding": 703,
+    "account_id_from_mq": "ORLO-HYD-A26-001",
+    "account_id": "ORLO-HYD-A26-001",
+    "account_uuid": "5b939dbe-ccc2-4615-8f4c-6d337aad0fdc",
+    "assigned_to": null,
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B660",
+        "quantity": 240,
+        "rate": "112.0",
+        "discount": "15%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.342015+00:00",
+    "created_at": "2026-03-17T13:07:31.342017+00:00"
+  },
+  {
+    "id": "41d72e80-885a-41a9-b076-2f66a6e162f4",
+    "invoice_no": "INV-ORLO-0022",
+    "invoice_date": "2026-02-13",
+    "gross_invoice_value": 41920,
+    "net_invoice_value": 35940,
+    "credit_note_value": 5980,
+    "outstanding": 17393,
+    "account_id_from_mq": "ORLO-HYD-A26-001",
+    "account_id": "ORLO-HYD-A26-001",
+    "account_uuid": "5b939dbe-ccc2-4615-8f4c-6d337aad0fdc",
+    "assigned_to": null,
+    "status": "matched",
+    "items": [
+      {
+        "itemId": "B500",
+        "quantity": 100,
+        "rate": "85.0",
+        "discount": "10%"
+      },
+      {
+        "itemId": "B660",
+        "quantity": 120,
+        "rate": "112.0",
+        "discount": "12%"
+      }
+    ],
+    "received_at": "2026-03-17T13:07:31.342237+00:00",
+    "created_at": "2026-03-17T13:07:31.342238+00:00"
+  },
+  {
+    "invoice_no": "INV-009083",
+    "invoice_date": "2026-01-21",
+    "gross_invoice_value": 7227.7,
+    "net_invoice_value": 11766.6,
+    "credit_note_value": 4538.9,
+    "outstanding": 107765.0,
+    "account_id_from_mq": "ORLO-HYD-A26-001",
+    "c_lead_id": null,
+    "ca_lead_id": null,
+    "items": [
+      {
+        "itemId": "A660",
+        "quantity": 415,
+        "rate": "225",
+        "discount": "15.34%",
+        "batchNumber": "BT-002",
+        "expiryDate": null
+      },
+      {
+        "itemId": "B660",
+        "quantity": 143,
+        "rate": "262.1",
+        "discount": "15.28%",
+        "batchNumber": null,
+        "expiryDate": null
+      },
+      {
+        "itemId": "B330",
+        "quantity": 441,
+        "rate": "125.2",
+        "discount": "22.14%",
+        "batchNumber": "BT-001",
+        "expiryDate": null
+      }
+    ],
+    "received_at": "2026-03-18T06:35:27.840799+00:00",
+    "account_uuid": "5b939dbe-ccc2-4615-8f4c-6d337aad0fdc",
+    "account_id": "ORLO-HYD-A26-001",
+    "assigned_to": null,
+    "tenant_id": "nyla-air-water",
+    "status": "matched"
+  }
+]
