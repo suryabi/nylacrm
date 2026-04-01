@@ -8,6 +8,8 @@ import { MultiSelect } from '../components/ui/multi-select';
 import { Textarea } from '../components/ui/textarea';
 import { Input } from '../components/ui/input';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
+import { useAuth } from '../context/AuthContext';
+import AppBreadcrumb from '../components/AppBreadcrumb';
 import {
   Target, TrendingUp, TrendingDown, Users, Phone, MapPin, DollarSign,
   BarChart3, RefreshCw, Save, Send, Check, RotateCcw, AlertTriangle,
@@ -28,17 +30,33 @@ const SUPPORT_CATEGORIES = ['Pricing', 'Logistics', 'Marketing', 'Collections', 
 
 const MONTH_NAMES = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+// Default to last month
+const getLastMonth = () => {
+  const now = new Date();
+  const m = now.getMonth(); // 0-indexed, so getMonth() gives last month number in 1-indexed
+  return m === 0 ? 12 : m;
+};
+const getLastMonthYear = () => {
+  const now = new Date();
+  return now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+};
+
+// Session storage helpers for filter persistence
+const ssGet = (key, fallback) => { try { const v = sessionStorage.getItem(`perf_${key}`); return v !== null ? JSON.parse(v) : fallback; } catch { return fallback; } };
+const ssSet = (key, val) => { sessionStorage.setItem(`perf_${key}`, JSON.stringify(val)); };
+
 export default function PerformanceTracker() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { statuses: leadStatuses, getStatusLabel, getStatusById } = useLeadStatuses();
   const [plans, setPlans] = useState([]);
-  const [selectedPlan, setSelectedPlan] = useState('');
+  const [selectedPlan, setSelectedPlan] = useState(() => ssGet('plan', ''));
   const [resources, setResources] = useState([]);
-  const [territoryFilter, setTerritoryFilter] = useState('all');
-  const [cityFilter, setCityFilter] = useState('all');
-  const [selectedResource, setSelectedResource] = useState([]);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [territoryFilter, setTerritoryFilter] = useState(() => ssGet('territory', 'all'));
+  const [cityFilter, setCityFilter] = useState(() => ssGet('city', 'all'));
+  const [selectedResource, setSelectedResource] = useState(() => ssGet('resource', []));
+  const [selectedMonth, setSelectedMonth] = useState(() => ssGet('month', getLastMonth()));
+  const [selectedYear, setSelectedYear] = useState(() => ssGet('year', getLastMonthYear()));
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -52,10 +70,19 @@ export default function PerformanceTracker() {
   // Revenue overrides
   const [revenueOverrides, setRevenueOverrides] = useState({ lifetime: '', this_month: '', new_accounts: '' });
   const [revenueEditing, setRevenueEditing] = useState({ lifetime: false, this_month: false, new_accounts: false });
+  const [defaultsApplied, setDefaultsApplied] = useState(false);
 
   const token = localStorage.getItem('token');
   const tenantId = localStorage.getItem('selectedTenant') || localStorage.getItem('tenant_id') || 'nyla-air-water';
   const headers = { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId, 'Content-Type': 'application/json' };
+
+  // Persist filters to sessionStorage on change
+  useEffect(() => { ssSet('plan', selectedPlan); }, [selectedPlan]);
+  useEffect(() => { ssSet('territory', territoryFilter); }, [territoryFilter]);
+  useEffect(() => { ssSet('city', cityFilter); }, [cityFilter]);
+  useEffect(() => { ssSet('resource', selectedResource); }, [selectedResource]);
+  useEffect(() => { ssSet('month', selectedMonth); }, [selectedMonth]);
+  useEffect(() => { ssSet('year', selectedYear); }, [selectedYear]);
 
   // Load all sales resources on mount (independent of plan)
   useEffect(() => {
@@ -64,6 +91,20 @@ export default function PerformanceTracker() {
     fetch(`${API_URL}/api/performance/target-plans`, { headers })
       .then(r => r.json()).then(setPlans).catch(() => {});
   }, []);
+
+  // Auto-select the logged-in user as default resource (only once, when resources load and no session state exists)
+  useEffect(() => {
+    if (defaultsApplied || !user?.id || resources.length === 0) return;
+    // Only apply defaults if no resource was restored from session
+    const savedResource = ssGet('resource', []);
+    if (savedResource.length === 0) {
+      const match = resources.find(r => r.resource_id === user.id);
+      if (match) {
+        setSelectedResource([match.resource_id]);
+      }
+    }
+    setDefaultsApplied(true);
+  }, [resources, user, defaultsApplied]);
 
   // When plan changes, reload plan-specific resources if plan is selected (for target amounts)
   useEffect(() => {
@@ -212,6 +253,7 @@ export default function PerformanceTracker() {
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-5 sm:space-y-6" data-testid="performance-tracker">
+      <AppBreadcrumb />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
