@@ -16,7 +16,7 @@ import {
 } from '../components/ui/select';
 import { Card } from '../components/ui/card';
 import { toast } from 'sonner';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '../context/NavigationContext';
 import { useMasterLocations } from '../hooks/useMasterLocations';
@@ -83,10 +83,7 @@ export default function AddEditLead() {
     source: '',
     assigned_to: '',
     priority: 'medium',
-    current_water_brand: '',
-    current_landing_price: '',
-    current_volume: '',
-    current_selling_price: '',
+    current_brands: [],
     interested_skus: [],
     notes: '',
     onboarded_month: '',
@@ -130,6 +127,17 @@ export default function AddEditLead() {
       const response = await leadsAPI.getById(id);
       const lead = response.data;
       
+      // Migrate old single brand fields to current_brands array
+      let brands = lead.current_brands || [];
+      if (brands.length === 0 && lead.current_water_brand) {
+        brands = [{
+          brand_name: lead.current_water_brand || '',
+          volume: lead.current_volume || '',
+          landing_price: lead.current_landing_price || '',
+          selling_price: lead.current_selling_price || ''
+        }];
+      }
+
       setFormData({
         company: lead.company || '',
         contact_person: lead.contact_person || '',
@@ -144,10 +152,7 @@ export default function AddEditLead() {
         source: lead.source || '',
         assigned_to: lead.assigned_to || '',
         priority: lead.priority || 'medium',
-        current_water_brand: lead.current_water_brand || '',
-        current_landing_price: lead.current_landing_price || '',
-        current_volume: lead.current_volume || '',
-        current_selling_price: lead.current_selling_price || '',
+        current_brands: brands,
         interested_skus: lead.interested_skus || [],
         notes: lead.notes || '',
         onboarded_month: lead.onboarded_month || '',
@@ -201,10 +206,12 @@ export default function AddEditLead() {
         phone: formData.phone || null,
         source: formData.source || null,
         category: formData.category || null,
-        current_water_brand: formData.current_water_brand || null,
-        current_volume: formData.current_volume || null,
-        current_landing_price: formData.current_landing_price ? parseFloat(formData.current_landing_price) : null,
-        current_selling_price: formData.current_selling_price ? parseFloat(formData.current_selling_price) : null,
+        // Keep legacy fields from first brand entry for backward compatibility
+        current_water_brand: formData.current_brands?.[0]?.brand_name || null,
+        current_volume: formData.current_brands?.[0]?.volume || null,
+        current_landing_price: formData.current_brands?.[0]?.landing_price ? parseFloat(formData.current_brands[0].landing_price) : null,
+        current_selling_price: formData.current_brands?.[0]?.selling_price ? parseFloat(formData.current_brands[0].selling_price) : null,
+        current_brands: (formData.current_brands || []).filter(b => b.brand_name),
         onboarded_month: formData.onboarded_month ? parseInt(formData.onboarded_month) : null,
         onboarded_year: formData.onboarded_year ? parseInt(formData.onboarded_year) : null,
         target_closure_month: formData.target_closure_month ? parseInt(formData.target_closure_month) : null,
@@ -526,51 +533,110 @@ export default function AddEditLead() {
         </Card>
 
         <Card className="p-6">
-          <h2 className="text-lg font-semibold mb-4">Current Brand Details</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="current_water_brand">Current Water Brand</Label>
-              <Input
-                id="current_water_brand"
-                placeholder="e.g., Bisleri, Kinley"
-                value={formData.current_water_brand}
-                onChange={(e) => updateField('current_water_brand', e.target.value)}
-                data-testid="current-brand-input"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="current_volume">Current Volume</Label>
-              <Input
-                id="current_volume"
-                placeholder="e.g., 1000 bottles/month"
-                value={formData.current_volume}
-                onChange={(e) => updateField('current_volume', e.target.value)}
-                data-testid="current-volume-input"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="current_landing_price">Current Landing Price (₹)</Label>
-              <Input
-                id="current_landing_price"
-                type="number"
-                placeholder="15"
-                value={formData.current_landing_price}
-                onChange={(e) => updateField('current_landing_price', e.target.value)}
-                data-testid="current-landing-price-input"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="current_selling_price">Current Selling Price (₹)</Label>
-              <Input
-                id="current_selling_price"
-                type="number"
-                placeholder="20"
-                value={formData.current_selling_price}
-                onChange={(e) => updateField('current_selling_price', e.target.value)}
-                data-testid="current-selling-price-input"
-              />
-            </div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Current Brand Details</h2>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => updateField('current_brands', [...(formData.current_brands || []), { brand_name: '', volume: '', landing_price: '', selling_price: '' }])}
+              data-testid="add-brand-btn"
+            >
+              <Plus className="h-4 w-4 mr-1" /> Add Brand
+            </Button>
           </div>
+          {(!formData.current_brands || formData.current_brands.length === 0) ? (
+            <p className="text-sm text-muted-foreground text-center py-6">No brands added yet. Click "Add Brand" to capture competitor brand details.</p>
+          ) : (
+            <div className="border rounded-lg overflow-hidden" data-testid="brands-grid">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b text-xs text-slate-500 uppercase">
+                    <th className="p-2.5 text-left font-medium">Brand Name</th>
+                    <th className="p-2.5 text-left font-medium">Volume</th>
+                    <th className="p-2.5 text-left font-medium">Landing Price (₹)</th>
+                    <th className="p-2.5 text-left font-medium">Selling Price (₹)</th>
+                    <th className="p-2.5 w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {formData.current_brands.map((brand, idx) => (
+                    <tr key={idx} className={`border-b last:border-b-0 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`} data-testid={`brand-row-${idx}`}>
+                      <td className="p-1.5">
+                        <Input
+                          placeholder="e.g., Bisleri"
+                          value={brand.brand_name}
+                          onChange={(e) => {
+                            const updated = [...formData.current_brands];
+                            updated[idx] = { ...updated[idx], brand_name: e.target.value };
+                            updateField('current_brands', updated);
+                          }}
+                          className="h-8 text-sm"
+                          data-testid={`brand-name-${idx}`}
+                        />
+                      </td>
+                      <td className="p-1.5">
+                        <Input
+                          placeholder="e.g., 1000 bottles/month"
+                          value={brand.volume}
+                          onChange={(e) => {
+                            const updated = [...formData.current_brands];
+                            updated[idx] = { ...updated[idx], volume: e.target.value };
+                            updateField('current_brands', updated);
+                          }}
+                          className="h-8 text-sm"
+                          data-testid={`brand-volume-${idx}`}
+                        />
+                      </td>
+                      <td className="p-1.5">
+                        <Input
+                          type="number"
+                          placeholder="15"
+                          value={brand.landing_price}
+                          onChange={(e) => {
+                            const updated = [...formData.current_brands];
+                            updated[idx] = { ...updated[idx], landing_price: e.target.value };
+                            updateField('current_brands', updated);
+                          }}
+                          className="h-8 text-sm"
+                          data-testid={`brand-landing-${idx}`}
+                        />
+                      </td>
+                      <td className="p-1.5">
+                        <Input
+                          type="number"
+                          placeholder="20"
+                          value={brand.selling_price}
+                          onChange={(e) => {
+                            const updated = [...formData.current_brands];
+                            updated[idx] = { ...updated[idx], selling_price: e.target.value };
+                            updateField('current_brands', updated);
+                          }}
+                          className="h-8 text-sm"
+                          data-testid={`brand-selling-${idx}`}
+                        />
+                      </td>
+                      <td className="p-1.5 text-center">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => {
+                            const updated = formData.current_brands.filter((_, i) => i !== idx);
+                            updateField('current_brands', updated);
+                          }}
+                          data-testid={`brand-delete-${idx}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
 
         <Card className="p-6">

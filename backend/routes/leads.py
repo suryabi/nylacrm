@@ -45,6 +45,7 @@ class Lead(BaseModel):
     current_landing_price: Optional[float] = None
     current_volume: Optional[str] = None
     current_selling_price: Optional[float] = None
+    current_brands: Optional[List[dict]] = []
     interested_skus: Optional[List[str]] = []
     proposed_sku_pricing: Optional[List[dict]] = []
     notes: Optional[str] = None
@@ -90,6 +91,7 @@ class LeadCreate(BaseModel):
     current_landing_price: Optional[float] = None
     current_volume: Optional[str] = None
     current_selling_price: Optional[float] = None
+    current_brands: Optional[List[dict]] = []
     interested_skus: Optional[List[str]] = []
     notes: Optional[str] = None
     estimated_value: Optional[float] = None
@@ -119,6 +121,7 @@ class LeadUpdate(BaseModel):
     current_landing_price: Optional[float] = None
     current_volume: Optional[str] = None
     current_selling_price: Optional[float] = None
+    current_brands: Optional[List[dict]] = None
     interested_skus: Optional[List[str]] = None
     proposed_sku_pricing: Optional[List[dict]] = None
     notes: Optional[str] = None
