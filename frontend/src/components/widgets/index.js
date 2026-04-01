@@ -1,6 +1,7 @@
 // Dashboard Widgets - Export all components from single entry point
 export { WeatherTimeWidget } from './WeatherTimeWidget';
 export { TodaySummaryWidget } from './TodaySummaryWidget';
+export { TaskMetricsWidget } from './TaskMetricsWidget';
 export { ActionItemsWidget } from './ActionItemsWidget';
 export { UpcomingFollowupsWidget } from './UpcomingFollowupsWidget';
 export { UpcomingMeetingsWidget } from './UpcomingMeetingsWidget';

@@ -1,0 +1,677 @@
+[
+  {
+    "id": "eb6e258a-0515-4016-8b04-c205fa26fe7a",
+    "task_number": "TASK-00001",
+    "title": "Fix invoice calculation bug",
+    "description": "The invoice total is not calculating correctly",
+    "severity": "high",
+    "status": "closed",
+    "department_id": "Sales",
+    "assignees": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+    ],
+    "assignees_data": [
+      {
+        "id": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+        "name": "Surya Yadavalli"
+      }
+    ],
+    "milestone_id": "647c1ddf-2142-4c04-9815-5e2e73a45854",
+    "labels": [
+      "addf6385-eebc-4fc9-97ad-04693267bcb0"
+    ],
+    "due_date": "2026-03-28",
+    "due_time": null,
+    "reminder_date": null,
+    "linked_entity_type": null,
+    "linked_entity_id": null,
+    "watchers": [],
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "created_by_name": "Surya Yadavalli",
+    "created_at": "2026-03-25T13:05:24.976722+00:00",
+    "updated_at": "2026-03-25T17:33:16.915886+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "38b001f8-f6a6-4e53-8a89-49e6f18037b3",
+    "task_number": "TASK-00002",
+    "title": "Testing",
+    "description": "kdjfskg",
+    "severity": "medium",
+    "status": "closed",
+    "department_id": "Sales",
+    "assignees": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+    ],
+    "assignees_data": [
+      {
+        "id": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+        "name": "Surya Yadavalli"
+      }
+    ],
+    "milestone_id": "",
+    "labels": [],
+    "due_date": "2026-03-25",
+    "due_time": null,
+    "reminder_date": "2026-03-25",
+    "linked_entity_type": "",
+    "linked_entity_id": "",
+    "watchers": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+    ],
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "created_by_name": "Surya Yadavalli",
+    "created_at": "2026-03-25T17:32:09.037262+00:00",
+    "updated_at": "2026-03-25T17:37:41.635009+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "7d99aa15-f62a-4d68-ba20-38275715f3bd",
+    "task_number": "TASK-00003",
+    "title": "Sdfgjdkgds",
+    "description": "",
+    "severity": "high",
+    "status": "open",
+    "department_id": "Sales",
+    "assignees": [
+      "77d8163f-7a11-46ef-9afb-c1596e5624ec"
+    ],
+    "assignees_data": [
+      {
+        "id": "77d8163f-7a11-46ef-9afb-c1596e5624ec",
+        "name": "Karanabir Singh Gulati"
+      }
+    ],
+    "milestone_id": "",
+    "labels": [],
+    "due_date": "2026-03-26",
+    "due_time": "00:42",
+    "reminder_date": "",
+    "linked_entity_type": "",
+    "linked_entity_id": "",
+    "watchers": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+    ],
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "created_by_name": "Surya Yadavalli",
+    "created_at": "2026-03-25T19:12:10.270922+00:00",
+    "updated_at": "2026-03-25T19:12:43.291882+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "dff1d541-95cc-429b-930a-dacda7107ab5",
+    "task_number": "TASK-00004",
+    "title": "Travel Approval: Surya Yadavalli - TEST_Hyderabad to TEST_Mumbai (2026-04-17)",
+    "description": "Travel request from Surya Yadavalli:\n\nFrom: TEST_Hyderabad\nTo: TEST_Mumbai\nDeparture: 2026-04-17\nReturn: 2026-04-20\nPurpose: lead_customer_visits\nBudget: \u20b925,000\n\n\n\nReference: travel_request #d95d4818-9e6d-46a2-80fd-b6c9dfa96518",
+    "severity": "high",
+    "status": "closed",
+    "department_id": "Sales",
+    "assignees": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+    ],
+    "assignees_data": [
+      {
+        "id": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+        "name": "Surya Yadavalli"
+      }
+    ],
+    "milestone_id": null,
+    "labels": [],
+    "due_date": "2026-03-30",
+    "due_time": null,
+    "reminder_date": null,
+    "linked_entity_type": "travel_request",
+    "linked_entity_id": "d95d4818-9e6d-46a2-80fd-b6c9dfa96518",
+    "watchers": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+    ],
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "created_by_name": "Surya Yadavalli",
+    "is_approval_task": true,
+    "approval_type": "travel_request",
+    "created_at": "2026-03-28T08:26:57.690605+00:00",
+    "updated_at": "2026-03-28T08:26:57.857921+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "b9cea290-d5fa-45bf-a89c-a33785477f0c",
+    "task_number": "TASK-00005",
+    "title": "Travel Approval: Surya Yadavalli - TEST_Hyderabad to TEST_Mumbai (2026-04-17)",
+    "description": "Travel request from Surya Yadavalli:\n\nFrom: TEST_Hyderabad\nTo: TEST_Mumbai\nDeparture: 2026-04-17\nReturn: 2026-04-20\nPurpose: lead_customer_visits\nBudget: \u20b925,000\n\n\n\nReference: travel_request #d95d4818-9e6d-46a2-80fd-b6c9dfa96518",
+    "severity": "high",
+    "status": "closed",
+    "department_id": "Marketing",
+    "assignees": [
+      "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd"
+    ],
+    "assignees_data": [
+      {
+        "id": "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd",
+        "name": "Vamsi Bommena"
+      }
+    ],
+    "milestone_id": null,
+    "labels": [],
+    "due_date": "2026-03-30",
+    "due_time": null,
+    "reminder_date": null,
+    "linked_entity_type": "travel_request",
+    "linked_entity_id": "d95d4818-9e6d-46a2-80fd-b6c9dfa96518",
+    "watchers": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+      "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd"
+    ],
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "created_by_name": "Surya Yadavalli",
+    "is_approval_task": true,
+    "approval_type": "travel_request",
+    "created_at": "2026-03-28T08:26:57.698089+00:00",
+    "updated_at": "2026-03-28T08:26:57.857921+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "730d50e2-4364-481b-80ec-a2d1da7403cc",
+    "task_number": "TASK-00006",
+    "title": "Travel Approval: Surya Yadavalli - TEST_Hyderabad to TEST_Mumbai (2026-04-17)",
+    "description": "Travel request from Surya Yadavalli:\n\nFrom: TEST_Hyderabad\nTo: TEST_Mumbai\nDeparture: 2026-04-17\nReturn: 2026-04-20\nPurpose: lead_customer_visits\nBudget: \u20b925,000\n\n\n\nReference: travel_request #d95d4818-9e6d-46a2-80fd-b6c9dfa96518",
+    "severity": "high",
+    "status": "closed",
+    "department_id": "Sales",
+    "assignees": [
+      "38a4c602-8f1f-47fc-99fb-a56eea37fcd9"
+    ],
+    "assignees_data": [
+      {
+        "id": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+        "name": "System Admin"
+      }
+    ],
+    "milestone_id": null,
+    "labels": [],
+    "due_date": "2026-03-30",
+    "due_time": null,
+    "reminder_date": null,
+    "linked_entity_type": "travel_request",
+    "linked_entity_id": "d95d4818-9e6d-46a2-80fd-b6c9dfa96518",
+    "watchers": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+      "38a4c602-8f1f-47fc-99fb-a56eea37fcd9"
+    ],
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "created_by_name": "Surya Yadavalli",
+    "is_approval_task": true,
+    "approval_type": "travel_request",
+    "created_at": "2026-03-28T08:26:57.700262+00:00",
+    "updated_at": "2026-03-28T08:26:57.857921+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "abd832a3-a7ba-4aba-ab29-5ac60beacfae",
+    "task_number": "TASK-00007",
+    "title": "Travel Approval: Surya Yadavalli - TEST_Hyderabad to TEST_Mumbai (2026-04-17)",
+    "description": "Travel request from Surya Yadavalli:\n\nFrom: TEST_Hyderabad\nTo: TEST_Mumbai\nDeparture: 2026-04-17\nReturn: 2026-04-20\nPurpose: lead_customer_visits\nBudget: \u20b925,000\n\n\n\nReference: travel_request #d95d4818-9e6d-46a2-80fd-b6c9dfa96518",
+    "severity": "high",
+    "status": "closed",
+    "department_id": "Sales",
+    "assignees": [
+      "f1b5645d-6e49-4ed7-a488-22c1ed086fee"
+    ],
+    "assignees_data": [
+      {
+        "id": "f1b5645d-6e49-4ed7-a488-22c1ed086fee",
+        "name": "Test User"
+      }
+    ],
+    "milestone_id": null,
+    "labels": [],
+    "due_date": "2026-03-30",
+    "due_time": null,
+    "reminder_date": null,
+    "linked_entity_type": "travel_request",
+    "linked_entity_id": "d95d4818-9e6d-46a2-80fd-b6c9dfa96518",
+    "watchers": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+      "f1b5645d-6e49-4ed7-a488-22c1ed086fee"
+    ],
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "created_by_name": "Surya Yadavalli",
+    "is_approval_task": true,
+    "approval_type": "travel_request",
+    "created_at": "2026-03-28T08:26:57.702223+00:00",
+    "updated_at": "2026-03-28T08:26:57.857921+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "da50ada6-bab3-4425-893c-5b2c6fac8593",
+    "task_number": "TASK-00008",
+    "title": "Budget Approval: Surya Yadavalli - TEST_Marketing Event Budget - \u20b975,000",
+    "description": "Budget request from Surya Yadavalli:\n\nTitle: TEST_Marketing Event Budget\nTotal Amount: \u20b975,000\nCategories: 2 items\n\nBudget for Q1 marketing event\n\nReference: budget_request #8fd1a28f-68b6-4b27-a6da-12f3570ae786",
+    "severity": "high",
+    "status": "closed",
+    "department_id": "Marketing",
+    "assignees": [
+      "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd"
+    ],
+    "assignees_data": [
+      {
+        "id": "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd",
+        "name": "Vamsi Bommena"
+      }
+    ],
+    "milestone_id": null,
+    "labels": [],
+    "due_date": "2026-03-30",
+    "due_time": null,
+    "reminder_date": null,
+    "linked_entity_type": "budget_request",
+    "linked_entity_id": "8fd1a28f-68b6-4b27-a6da-12f3570ae786",
+    "watchers": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+      "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd"
+    ],
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "created_by_name": "Surya Yadavalli",
+    "is_approval_task": true,
+    "approval_type": "budget_request",
+    "created_at": "2026-03-28T08:27:02.417904+00:00",
+    "updated_at": "2026-03-28T08:27:02.949024+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "230e5072-1d60-4a58-a109-122bd3350eec",
+    "task_number": "TASK-00009",
+    "title": "Travel Approval: Surya Yadavalli - TEST_Hyderabad to TEST_Mumbai (2026-04-17)",
+    "description": "Travel request from Surya Yadavalli:\n\nFrom: TEST_Hyderabad\nTo: TEST_Mumbai\nDeparture: 2026-04-17\nReturn: 2026-04-20\nPurpose: lead_customer_visits\nBudget: \u20b925,000\n\n\n\nReference: travel_request #0a7cb4dd-f7cc-4390-9bfd-e6aba22d229d",
+    "severity": "high",
+    "status": "closed",
+    "department_id": "Sales",
+    "assignees": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+    ],
+    "assignees_data": [
+      {
+        "id": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+        "name": "Surya Yadavalli"
+      }
+    ],
+    "milestone_id": null,
+    "labels": [],
+    "due_date": "2026-03-30",
+    "due_time": null,
+    "reminder_date": null,
+    "linked_entity_type": "travel_request",
+    "linked_entity_id": "0a7cb4dd-f7cc-4390-9bfd-e6aba22d229d",
+    "watchers": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+    ],
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "created_by_name": "Surya Yadavalli",
+    "is_approval_task": true,
+    "approval_type": "travel_request",
+    "created_at": "2026-03-28T08:27:44.193151+00:00",
+    "updated_at": "2026-03-28T08:27:44.362312+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "979b79ea-f331-4d3d-b79e-264c1fff7cd9",
+    "task_number": "TASK-00010",
+    "title": "Travel Approval: Surya Yadavalli - TEST_Hyderabad to TEST_Mumbai (2026-04-17)",
+    "description": "Travel request from Surya Yadavalli:\n\nFrom: TEST_Hyderabad\nTo: TEST_Mumbai\nDeparture: 2026-04-17\nReturn: 2026-04-20\nPurpose: lead_customer_visits\nBudget: \u20b925,000\n\n\n\nReference: travel_request #0a7cb4dd-f7cc-4390-9bfd-e6aba22d229d",
+    "severity": "high",
+    "status": "closed",
+    "department_id": "Marketing",
+    "assignees": [
+      "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd"
+    ],
+    "assignees_data": [
+      {
+        "id": "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd",
+        "name": "Vamsi Bommena"
+      }
+    ],
+    "milestone_id": null,
+    "labels": [],
+    "due_date": "2026-03-30",
+    "due_time": null,
+    "reminder_date": null,
+    "linked_entity_type": "travel_request",
+    "linked_entity_id": "0a7cb4dd-f7cc-4390-9bfd-e6aba22d229d",
+    "watchers": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+      "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd"
+    ],
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "created_by_name": "Surya Yadavalli",
+    "is_approval_task": true,
+    "approval_type": "travel_request",
+    "created_at": "2026-03-28T08:27:44.195410+00:00",
+    "updated_at": "2026-03-28T08:27:44.362312+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "f22d26e5-8901-4156-882f-0628ed6f82d7",
+    "task_number": "TASK-00011",
+    "title": "Travel Approval: Surya Yadavalli - TEST_Hyderabad to TEST_Mumbai (2026-04-17)",
+    "description": "Travel request from Surya Yadavalli:\n\nFrom: TEST_Hyderabad\nTo: TEST_Mumbai\nDeparture: 2026-04-17\nReturn: 2026-04-20\nPurpose: lead_customer_visits\nBudget: \u20b925,000\n\n\n\nReference: travel_request #0a7cb4dd-f7cc-4390-9bfd-e6aba22d229d",
+    "severity": "high",
+    "status": "closed",
+    "department_id": "Sales",
+    "assignees": [
+      "38a4c602-8f1f-47fc-99fb-a56eea37fcd9"
+    ],
+    "assignees_data": [
+      {
+        "id": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+        "name": "System Admin"
+      }
+    ],
+    "milestone_id": null,
+    "labels": [],
+    "due_date": "2026-03-30",
+    "due_time": null,
+    "reminder_date": null,
+    "linked_entity_type": "travel_request",
+    "linked_entity_id": "0a7cb4dd-f7cc-4390-9bfd-e6aba22d229d",
+    "watchers": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+      "38a4c602-8f1f-47fc-99fb-a56eea37fcd9"
+    ],
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "created_by_name": "Surya Yadavalli",
+    "is_approval_task": true,
+    "approval_type": "travel_request",
+    "created_at": "2026-03-28T08:27:44.197666+00:00",
+    "updated_at": "2026-03-28T08:27:44.362312+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "f79efc6f-ab2a-4d42-99d4-0a04496e9562",
+    "task_number": "TASK-00012",
+    "title": "Travel Approval: Surya Yadavalli - TEST_Hyderabad to TEST_Mumbai (2026-04-17)",
+    "description": "Travel request from Surya Yadavalli:\n\nFrom: TEST_Hyderabad\nTo: TEST_Mumbai\nDeparture: 2026-04-17\nReturn: 2026-04-20\nPurpose: lead_customer_visits\nBudget: \u20b925,000\n\n\n\nReference: travel_request #0a7cb4dd-f7cc-4390-9bfd-e6aba22d229d",
+    "severity": "high",
+    "status": "closed",
+    "department_id": "Sales",
+    "assignees": [
+      "f1b5645d-6e49-4ed7-a488-22c1ed086fee"
+    ],
+    "assignees_data": [
+      {
+        "id": "f1b5645d-6e49-4ed7-a488-22c1ed086fee",
+        "name": "Test User"
+      }
+    ],
+    "milestone_id": null,
+    "labels": [],
+    "due_date": "2026-03-30",
+    "due_time": null,
+    "reminder_date": null,
+    "linked_entity_type": "travel_request",
+    "linked_entity_id": "0a7cb4dd-f7cc-4390-9bfd-e6aba22d229d",
+    "watchers": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+      "f1b5645d-6e49-4ed7-a488-22c1ed086fee"
+    ],
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "created_by_name": "Surya Yadavalli",
+    "is_approval_task": true,
+    "approval_type": "travel_request",
+    "created_at": "2026-03-28T08:27:44.199802+00:00",
+    "updated_at": "2026-03-28T08:27:44.362312+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "70bbe4f9-5c91-4f6e-b728-8c3c60aa00e2",
+    "task_number": "TASK-00013",
+    "title": "Budget Approval: Surya Yadavalli - TEST_Marketing Event Budget - \u20b975,000",
+    "description": "Budget request from Surya Yadavalli:\n\nTitle: TEST_Marketing Event Budget\nTotal Amount: \u20b975,000\nCategories: 2 items\n\nBudget for Q1 marketing event\n\nReference: budget_request #3233e862-aba5-4dfd-b0cd-a0cc272d823e",
+    "severity": "high",
+    "status": "closed",
+    "department_id": "Marketing",
+    "assignees": [
+      "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd"
+    ],
+    "assignees_data": [
+      {
+        "id": "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd",
+        "name": "Vamsi Bommena"
+      }
+    ],
+    "milestone_id": null,
+    "labels": [],
+    "due_date": "2026-03-30",
+    "due_time": null,
+    "reminder_date": null,
+    "linked_entity_type": "budget_request",
+    "linked_entity_id": "3233e862-aba5-4dfd-b0cd-a0cc272d823e",
+    "watchers": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+      "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd"
+    ],
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "created_by_name": "Surya Yadavalli",
+    "is_approval_task": true,
+    "approval_type": "budget_request",
+    "created_at": "2026-03-28T08:27:49.061352+00:00",
+    "updated_at": "2026-03-28T08:27:49.686689+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "6aafcabf-d324-4253-8295-efcdedc8e09d",
+    "task_number": "TASK-00014",
+    "title": "Travel Approval: Surya Yadavalli - TEST_Hyderabad to TEST_Mumbai (2026-04-17)",
+    "description": "Travel request from Surya Yadavalli:\n\nFrom: TEST_Hyderabad\nTo: TEST_Mumbai\nDeparture: 2026-04-17\nReturn: 2026-04-20\nPurpose: lead_customer_visits\nBudget: \u20b925,000\n\n\n\nReference: travel_request #7da6bac4-c85b-4923-af08-1e081839dd50",
+    "severity": "high",
+    "status": "closed",
+    "department_id": "Sales",
+    "assignees": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+    ],
+    "assignees_data": [
+      {
+        "id": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+        "name": "Surya Yadavalli"
+      }
+    ],
+    "milestone_id": null,
+    "labels": [],
+    "due_date": "2026-03-30",
+    "due_time": null,
+    "reminder_date": null,
+    "linked_entity_type": "travel_request",
+    "linked_entity_id": "7da6bac4-c85b-4923-af08-1e081839dd50",
+    "watchers": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+    ],
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "created_by_name": "Surya Yadavalli",
+    "is_approval_task": true,
+    "approval_type": "travel_request",
+    "created_at": "2026-03-28T08:28:48.850954+00:00",
+    "updated_at": "2026-03-28T08:28:49.010187+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "efd0b639-e723-4dc7-82a4-238857076e2a",
+    "task_number": "TASK-00015",
+    "title": "Travel Approval: Surya Yadavalli - TEST_Hyderabad to TEST_Mumbai (2026-04-17)",
+    "description": "Travel request from Surya Yadavalli:\n\nFrom: TEST_Hyderabad\nTo: TEST_Mumbai\nDeparture: 2026-04-17\nReturn: 2026-04-20\nPurpose: lead_customer_visits\nBudget: \u20b925,000\n\n\n\nReference: travel_request #7da6bac4-c85b-4923-af08-1e081839dd50",
+    "severity": "high",
+    "status": "closed",
+    "department_id": "Marketing",
+    "assignees": [
+      "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd"
+    ],
+    "assignees_data": [
+      {
+        "id": "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd",
+        "name": "Vamsi Bommena"
+      }
+    ],
+    "milestone_id": null,
+    "labels": [],
+    "due_date": "2026-03-30",
+    "due_time": null,
+    "reminder_date": null,
+    "linked_entity_type": "travel_request",
+    "linked_entity_id": "7da6bac4-c85b-4923-af08-1e081839dd50",
+    "watchers": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+      "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd"
+    ],
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "created_by_name": "Surya Yadavalli",
+    "is_approval_task": true,
+    "approval_type": "travel_request",
+    "created_at": "2026-03-28T08:28:48.853073+00:00",
+    "updated_at": "2026-03-28T08:28:49.010187+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "4ceeae96-d507-469b-a786-0816abe581f8",
+    "task_number": "TASK-00016",
+    "title": "Travel Approval: Surya Yadavalli - TEST_Hyderabad to TEST_Mumbai (2026-04-17)",
+    "description": "Travel request from Surya Yadavalli:\n\nFrom: TEST_Hyderabad\nTo: TEST_Mumbai\nDeparture: 2026-04-17\nReturn: 2026-04-20\nPurpose: lead_customer_visits\nBudget: \u20b925,000\n\n\n\nReference: travel_request #7da6bac4-c85b-4923-af08-1e081839dd50",
+    "severity": "high",
+    "status": "closed",
+    "department_id": "Sales",
+    "assignees": [
+      "38a4c602-8f1f-47fc-99fb-a56eea37fcd9"
+    ],
+    "assignees_data": [
+      {
+        "id": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+        "name": "System Admin"
+      }
+    ],
+    "milestone_id": null,
+    "labels": [],
+    "due_date": "2026-03-30",
+    "due_time": null,
+    "reminder_date": null,
+    "linked_entity_type": "travel_request",
+    "linked_entity_id": "7da6bac4-c85b-4923-af08-1e081839dd50",
+    "watchers": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+      "38a4c602-8f1f-47fc-99fb-a56eea37fcd9"
+    ],
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "created_by_name": "Surya Yadavalli",
+    "is_approval_task": true,
+    "approval_type": "travel_request",
+    "created_at": "2026-03-28T08:28:48.854904+00:00",
+    "updated_at": "2026-03-28T08:28:49.010187+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "2c65a2f6-ff40-4ca4-b919-d55c57bc22b9",
+    "task_number": "TASK-00017",
+    "title": "Travel Approval: Surya Yadavalli - TEST_Hyderabad to TEST_Mumbai (2026-04-17)",
+    "description": "Travel request from Surya Yadavalli:\n\nFrom: TEST_Hyderabad\nTo: TEST_Mumbai\nDeparture: 2026-04-17\nReturn: 2026-04-20\nPurpose: lead_customer_visits\nBudget: \u20b925,000\n\n\n\nReference: travel_request #7da6bac4-c85b-4923-af08-1e081839dd50",
+    "severity": "high",
+    "status": "closed",
+    "department_id": "Sales",
+    "assignees": [
+      "f1b5645d-6e49-4ed7-a488-22c1ed086fee"
+    ],
+    "assignees_data": [
+      {
+        "id": "f1b5645d-6e49-4ed7-a488-22c1ed086fee",
+        "name": "Test User"
+      }
+    ],
+    "milestone_id": null,
+    "labels": [],
+    "due_date": "2026-03-30",
+    "due_time": null,
+    "reminder_date": null,
+    "linked_entity_type": "travel_request",
+    "linked_entity_id": "7da6bac4-c85b-4923-af08-1e081839dd50",
+    "watchers": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+      "f1b5645d-6e49-4ed7-a488-22c1ed086fee"
+    ],
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "created_by_name": "Surya Yadavalli",
+    "is_approval_task": true,
+    "approval_type": "travel_request",
+    "created_at": "2026-03-28T08:28:48.856714+00:00",
+    "updated_at": "2026-03-28T08:28:49.010187+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "88152e10-afdd-4b5d-b67d-de48d1817fea",
+    "task_number": "TASK-00018",
+    "title": "Budget Approval: Surya Yadavalli - TEST_Marketing Event Budget - \u20b975,000",
+    "description": "Budget request from Surya Yadavalli:\n\nTitle: TEST_Marketing Event Budget\nTotal Amount: \u20b975,000\nCategories: 2 items\n\nBudget for Q1 marketing event\n\nReference: budget_request #71f3fa52-63fb-47f7-bf4e-c21b891dac19",
+    "severity": "high",
+    "status": "closed",
+    "department_id": "Marketing",
+    "assignees": [
+      "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd"
+    ],
+    "assignees_data": [
+      {
+        "id": "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd",
+        "name": "Vamsi Bommena"
+      }
+    ],
+    "milestone_id": null,
+    "labels": [],
+    "due_date": "2026-03-30",
+    "due_time": null,
+    "reminder_date": null,
+    "linked_entity_type": "budget_request",
+    "linked_entity_id": "71f3fa52-63fb-47f7-bf4e-c21b891dac19",
+    "watchers": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+      "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd"
+    ],
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "created_by_name": "Surya Yadavalli",
+    "is_approval_task": true,
+    "approval_type": "budget_request",
+    "created_at": "2026-03-28T08:28:54.435818+00:00",
+    "updated_at": "2026-03-28T08:28:55.191957+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "1fe9f61e-b47f-4f29-b080-15c9933d71df",
+    "task_number": "TASK-00019",
+    "title": "Budget Approval: Surya Yadavalli - Test - \u20b92,000",
+    "description": "Budget request from Surya Yadavalli:\n\nTitle: Test\nTotal Amount: \u20b92,000\nCategories: 1 items\n\n\n\nReference: budget_request #7dbd5b8d-3110-4a75-b6b3-77b3393b3957",
+    "severity": "high",
+    "status": "open",
+    "department_id": "Marketing",
+    "assignees": [
+      "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd"
+    ],
+    "assignees_data": [
+      {
+        "id": "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd",
+        "name": "Vamsi Bommena"
+      }
+    ],
+    "milestone_id": null,
+    "labels": [],
+    "due_date": "2026-03-30",
+    "due_time": null,
+    "reminder_date": null,
+    "linked_entity_type": "budget_request",
+    "linked_entity_id": "7dbd5b8d-3110-4a75-b6b3-77b3393b3957",
+    "watchers": [
+      "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+      "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd"
+    ],
+    "created_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "created_by_name": "Surya Yadavalli",
+    "is_approval_task": true,
+    "approval_type": "budget_request",
+    "created_at": "2026-03-28T08:44:16.004597+00:00",
+    "updated_at": "2026-03-28T08:44:16.004597+00:00",
+    "tenant_id": "nyla-air-water"
+  }
+]

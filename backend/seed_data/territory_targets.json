@@ -1,0 +1,74 @@
+[
+  {
+    "id": "34e030bf-316c-42f7-9efc-5603bf7bda0a",
+    "plan_id": "31a01732-bfa0-4b4f-9507-d4e4cce20c04",
+    "territory": "North India",
+    "allocation_percentage": 25.0,
+    "target_revenue": 12500000.0,
+    "allocated_revenue": 12500000.0,
+    "created_at": "2026-02-06T11:25:19.552410+00:00"
+  },
+  {
+    "id": "e0a3fb1f-5fdc-4336-805d-7d7cbb0f2b9e",
+    "plan_id": "31a01732-bfa0-4b4f-9507-d4e4cce20c04",
+    "territory": "South India",
+    "allocation_percentage": 25.0,
+    "target_revenue": 12500000.0,
+    "allocated_revenue": 12500000.0,
+    "created_at": "2026-02-06T11:25:19.552808+00:00"
+  },
+  {
+    "id": "1108b544-f2f6-4560-ae3f-bf017b3dc1b8",
+    "plan_id": "31a01732-bfa0-4b4f-9507-d4e4cce20c04",
+    "territory": "West India",
+    "allocation_percentage": 25.0,
+    "target_revenue": 12500000.0,
+    "allocated_revenue": 12500000.0,
+    "created_at": "2026-02-06T11:25:19.553105+00:00"
+  },
+  {
+    "id": "577d7879-24d2-4d7f-9eca-a38cc57c1785",
+    "plan_id": "31a01732-bfa0-4b4f-9507-d4e4cce20c04",
+    "territory": "East India",
+    "allocation_percentage": 25.0,
+    "target_revenue": 12500000.0,
+    "allocated_revenue": 12500000.0,
+    "created_at": "2026-02-06T11:25:19.553346+00:00"
+  },
+  {
+    "id": "3b236bf7-89e4-4462-ab67-cd7f5fd72bc6",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "territory": "North India",
+    "allocation_percentage": 10.0,
+    "target_revenue": 6000000.0,
+    "allocated_revenue": 0,
+    "created_at": "2026-02-10T08:08:42.646275+00:00"
+  },
+  {
+    "id": "de0bf60d-b129-4ee7-ad98-be7c62005ccc",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "territory": "South India",
+    "allocation_percentage": 20.0,
+    "target_revenue": 12000000.0,
+    "allocated_revenue": 0,
+    "created_at": "2026-02-10T08:08:42.646765+00:00"
+  },
+  {
+    "id": "b799a4a8-ca70-456a-ad28-1bf24ec0117e",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "territory": "West India",
+    "allocation_percentage": 30.0,
+    "target_revenue": 18000000.0,
+    "allocated_revenue": 0,
+    "created_at": "2026-02-10T08:08:42.647202+00:00"
+  },
+  {
+    "id": "b536e6b2-97c2-447c-a92e-ead950f3ab17",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "territory": "East India",
+    "allocation_percentage": 40.0,
+    "target_revenue": 24000000.0,
+    "allocated_revenue": 0,
+    "created_at": "2026-02-10T08:08:42.647534+00:00"
+  }
+]

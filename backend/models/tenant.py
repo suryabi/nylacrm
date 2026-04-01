@@ -409,3 +409,144 @@ DEFAULT_TENANT = Tenant(
         google_maps_enabled=True
     )
 )
+
+
+# ============================================
+# RETURN REASONS MASTER
+# ============================================
+
+class ReturnReasonCreditType(str):
+    """Credit calculation types for return reasons"""
+    SKU_RETURN_CREDIT = "sku_return_credit"  # Uses return_credit_per_unit from Account SKU Pricing
+    FULL_PRICE = "full_price"  # 100% of original selling price
+    PERCENTAGE = "percentage"  # X% of selling price (configurable)
+    NO_CREDIT = "no_credit"  # No credit given (₹0)
+
+
+class ReturnReasonCategory(str):
+    """Categories for return reasons - affects factory return handling"""
+    EMPTY_REUSABLE = "empty_reusable"  # Empty bottles to be returned to factory for reuse
+    EXPIRED = "expired"  # Expired stock to be returned to factory for disposal
+    DAMAGED = "damaged"  # Damaged stock to be returned to factory
+    PROMOTIONAL = "promotional"  # FOC/Promo items - may or may not return to factory
+
+
+class ReturnReason(BaseModel):
+    """Return reason master - tenant configurable"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    tenant_id: str
+    
+    # Identification
+    reason_code: str  # e.g., "EMPTY_RETURN", "EXPIRED", "DAMAGED", "FOC_PROMO"
+    reason_name: str  # Display name
+    description: Optional[str] = None
+    
+    # Category for grouping and factory return handling
+    category: str = "empty_reusable"  # empty_reusable, expired, damaged, promotional
+    
+    # Credit calculation
+    credit_type: str = "sku_return_credit"  # sku_return_credit, full_price, percentage, no_credit
+    credit_percentage: Optional[float] = None  # Used when credit_type is "percentage"
+    
+    # Factory return configuration
+    return_to_factory: bool = True  # Whether this type needs to be returned to factory
+    requires_inspection: bool = False  # Whether quality inspection is required
+    
+    # Status
+    is_active: bool = True
+    is_system: bool = False  # System-created reasons cannot be deleted
+    
+    # Display
+    display_order: int = 0
+    color: Optional[str] = None  # For UI display (e.g., "#EF4444" for damaged)
+    
+    # Metadata
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_by: Optional[str] = None
+    
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+
+class ReturnReasonCreate(BaseModel):
+    """Schema for creating a return reason"""
+    reason_code: str
+    reason_name: str
+    description: Optional[str] = None
+    category: str = "empty_reusable"
+    credit_type: str = "sku_return_credit"
+    credit_percentage: Optional[float] = None
+    return_to_factory: bool = True
+    requires_inspection: bool = False
+    display_order: int = 0
+    color: Optional[str] = None
+
+
+class ReturnReasonUpdate(BaseModel):
+    """Schema for updating a return reason"""
+    reason_name: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    credit_type: Optional[str] = None
+    credit_percentage: Optional[float] = None
+    return_to_factory: Optional[bool] = None
+    requires_inspection: Optional[bool] = None
+    is_active: Optional[bool] = None
+    display_order: Optional[int] = None
+    color: Optional[str] = None
+
+
+# Default return reasons for new tenants
+DEFAULT_RETURN_REASONS = [
+    {
+        "reason_code": "EMPTY_RETURN",
+        "reason_name": "Empty Bottle Return",
+        "description": "Customer returns empty bottles for credit",
+        "category": "empty_reusable",
+        "credit_type": "sku_return_credit",
+        "return_to_factory": True,
+        "requires_inspection": False,
+        "is_system": True,
+        "display_order": 1,
+        "color": "#10B981"  # Emerald
+    },
+    {
+        "reason_code": "EXPIRED",
+        "reason_name": "Expired Stock Return",
+        "description": "Customer returns expired products - full price refund",
+        "category": "expired",
+        "credit_type": "full_price",
+        "return_to_factory": True,
+        "requires_inspection": True,
+        "is_system": True,
+        "display_order": 2,
+        "color": "#F59E0B"  # Amber
+    },
+    {
+        "reason_code": "DAMAGED",
+        "reason_name": "Damaged Stock Return",
+        "description": "Customer returns damaged products - full price refund",
+        "category": "damaged",
+        "credit_type": "full_price",
+        "return_to_factory": True,
+        "requires_inspection": True,
+        "is_system": True,
+        "display_order": 3,
+        "color": "#EF4444"  # Red
+    },
+    {
+        "reason_code": "FOC_PROMO",
+        "reason_name": "FOC/Promotional Empty Return",
+        "description": "Return of promotional/free items - no credit",
+        "category": "promotional",
+        "credit_type": "no_credit",
+        "return_to_factory": True,
+        "requires_inspection": False,
+        "is_system": True,
+        "display_order": 4,
+        "color": "#6B7280"  # Gray
+    }
+]

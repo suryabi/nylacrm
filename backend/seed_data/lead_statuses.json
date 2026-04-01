@@ -1,0 +1,426 @@
+[
+  {
+    "id": "new",
+    "label": "New",
+    "color": "blue",
+    "order": 1,
+    "is_active": true,
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "qualified",
+    "label": "Qualified",
+    "color": "green",
+    "order": 2,
+    "is_active": true,
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "contacted",
+    "label": "Contacted",
+    "color": "yellow",
+    "order": 3,
+    "is_active": true,
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "proposal_internal_review",
+    "label": "Proposal - Internal Review",
+    "color": "purple",
+    "order": 4,
+    "is_active": true,
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "ready_to_share_proposal",
+    "label": "Ready to Share Proposal",
+    "color": "cyan",
+    "order": 5,
+    "is_active": true,
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "proposal_shared_with_customer",
+    "label": "Proposal - Shared with Customer",
+    "color": "orange",
+    "order": 6,
+    "is_active": true,
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "trial_in_progress",
+    "label": "Trial in Progress",
+    "color": "indigo",
+    "order": 7,
+    "is_active": true,
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "won",
+    "label": "Won (Under Assessment)",
+    "color": "emerald",
+    "order": 8,
+    "is_active": true,
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "lost",
+    "label": "Lost",
+    "color": "red",
+    "order": 9,
+    "is_active": true,
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "not_qualified",
+    "label": "Not Qualified",
+    "color": "gray",
+    "order": 10,
+    "is_active": true,
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "proposal_approved_by_customer",
+    "label": "Proposal Approved By Customer",
+    "color": "gray",
+    "order": 11,
+    "is_active": true,
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "18ea60f7-132a-4a2d-afb1-33ca552da116",
+    "tenant_id": "test-reg-0c0c30d3",
+    "name": "New",
+    "color": "#3b82f6",
+    "order": 1
+  },
+  {
+    "id": "27c3beba-081f-4008-9f69-5e992be2d150",
+    "tenant_id": "test-reg-0c0c30d3",
+    "name": "Contacted",
+    "color": "#eab308",
+    "order": 2
+  },
+  {
+    "id": "dbc3dfe1-42f8-4118-a7f8-fdb7ce8289ae",
+    "tenant_id": "test-reg-0c0c30d3",
+    "name": "Qualified",
+    "color": "#22c55e",
+    "order": 3
+  },
+  {
+    "id": "5ba0fe62-ff79-4915-bd6e-19cde8f8e028",
+    "tenant_id": "test-reg-0c0c30d3",
+    "name": "Proposal Sent",
+    "color": "#a855f7",
+    "order": 4
+  },
+  {
+    "id": "c45d2873-41b1-4dc2-9e78-6add6c36bb01",
+    "tenant_id": "test-reg-0c0c30d3",
+    "name": "Won",
+    "color": "#10b981",
+    "order": 5
+  },
+  {
+    "id": "4e280b88-f1f1-4646-9d63-4d6c0a6a6324",
+    "tenant_id": "test-reg-0c0c30d3",
+    "name": "Lost",
+    "color": "#ef4444",
+    "order": 6
+  },
+  {
+    "id": "0c308c50-2a63-4bbe-a897-3d47d859a459",
+    "tenant_id": "test-info-5f69db37",
+    "name": "New",
+    "color": "#3b82f6",
+    "order": 1
+  },
+  {
+    "id": "b580fdc6-c8a8-42ec-b95e-ace0a28d45cc",
+    "tenant_id": "test-info-5f69db37",
+    "name": "Contacted",
+    "color": "#eab308",
+    "order": 2
+  },
+  {
+    "id": "59c8b6b9-623a-4305-b654-6c4efddad8be",
+    "tenant_id": "test-info-5f69db37",
+    "name": "Qualified",
+    "color": "#22c55e",
+    "order": 3
+  },
+  {
+    "id": "92c617d0-d7dd-4b1d-b24e-983b9c331f5f",
+    "tenant_id": "test-info-5f69db37",
+    "name": "Proposal Sent",
+    "color": "#a855f7",
+    "order": 4
+  },
+  {
+    "id": "caf7fe81-8876-4df0-a385-e07ef0b20431",
+    "tenant_id": "test-info-5f69db37",
+    "name": "Won",
+    "color": "#10b981",
+    "order": 5
+  },
+  {
+    "id": "34f8a7e9-6878-45f3-8389-0f95f6972387",
+    "tenant_id": "test-info-5f69db37",
+    "name": "Lost",
+    "color": "#ef4444",
+    "order": 6
+  },
+  {
+    "id": "bc3e8c1a-883c-438d-b578-2a5bf64aaed6",
+    "tenant_id": "test-login-74478ef9",
+    "name": "New",
+    "color": "#3b82f6",
+    "order": 1
+  },
+  {
+    "id": "b826c2b2-8165-42ea-823f-78481cfe7a9c",
+    "tenant_id": "test-login-74478ef9",
+    "name": "Contacted",
+    "color": "#eab308",
+    "order": 2
+  },
+  {
+    "id": "b2866c35-8a32-4b5c-be66-fcbcd47a1a45",
+    "tenant_id": "test-login-74478ef9",
+    "name": "Qualified",
+    "color": "#22c55e",
+    "order": 3
+  },
+  {
+    "id": "1eb95a4c-b79f-4533-aec4-2cb7babaad2a",
+    "tenant_id": "test-login-74478ef9",
+    "name": "Proposal Sent",
+    "color": "#a855f7",
+    "order": 4
+  },
+  {
+    "id": "06424614-5991-4b87-a2e6-63cc309a2048",
+    "tenant_id": "test-login-74478ef9",
+    "name": "Won",
+    "color": "#10b981",
+    "order": 5
+  },
+  {
+    "id": "dad1dc3e-63fc-4ed4-86be-c848191dae6f",
+    "tenant_id": "test-login-74478ef9",
+    "name": "Lost",
+    "color": "#ef4444",
+    "order": 6
+  },
+  {
+    "id": "f863754f-5aa9-4691-bce9-80a2b040fa9d",
+    "tenant_id": "test-gws-fab471fb",
+    "name": "New",
+    "color": "#3b82f6",
+    "order": 1
+  },
+  {
+    "id": "e7200ebc-ed44-46e3-a401-ae48c124675a",
+    "tenant_id": "test-gws-fab471fb",
+    "name": "Contacted",
+    "color": "#eab308",
+    "order": 2
+  },
+  {
+    "id": "13a43c74-4cf4-4a30-b05f-7411d7858e36",
+    "tenant_id": "test-gws-fab471fb",
+    "name": "Qualified",
+    "color": "#22c55e",
+    "order": 3
+  },
+  {
+    "id": "4b4d71d9-7711-4e03-a2ab-0710604a1fd0",
+    "tenant_id": "test-gws-fab471fb",
+    "name": "Proposal Sent",
+    "color": "#a855f7",
+    "order": 4
+  },
+  {
+    "id": "af420b1f-4979-41b7-8487-d709285ff608",
+    "tenant_id": "test-gws-fab471fb",
+    "name": "Won",
+    "color": "#10b981",
+    "order": 5
+  },
+  {
+    "id": "d99e3b8c-16e9-4469-8194-b85c3f11e9d3",
+    "tenant_id": "test-gws-fab471fb",
+    "name": "Lost",
+    "color": "#ef4444",
+    "order": 6
+  },
+  {
+    "id": "312f9c9f-f5c6-49f4-a7e3-daa9e8592935",
+    "tenant_id": "test-reg-86797123",
+    "name": "New",
+    "color": "#3b82f6",
+    "order": 1
+  },
+  {
+    "id": "802fe801-7b41-4d22-a0ad-579c18715dd4",
+    "tenant_id": "test-reg-86797123",
+    "name": "Contacted",
+    "color": "#eab308",
+    "order": 2
+  },
+  {
+    "id": "6dfa9e38-ca44-4da1-aeda-553b3fe87027",
+    "tenant_id": "test-reg-86797123",
+    "name": "Qualified",
+    "color": "#22c55e",
+    "order": 3
+  },
+  {
+    "id": "c649ab13-8b24-4d5b-afe7-3bcbff49c3b2",
+    "tenant_id": "test-reg-86797123",
+    "name": "Proposal Sent",
+    "color": "#a855f7",
+    "order": 4
+  },
+  {
+    "id": "9d183449-6a6b-445a-9c0c-b7aaa36b0bfd",
+    "tenant_id": "test-reg-86797123",
+    "name": "Won",
+    "color": "#10b981",
+    "order": 5
+  },
+  {
+    "id": "e94cdbe4-398a-498a-b156-b02a19dfb79a",
+    "tenant_id": "test-reg-86797123",
+    "name": "Lost",
+    "color": "#ef4444",
+    "order": 6
+  },
+  {
+    "id": "2b0eb134-0fd3-484e-9ee5-6f49237d51be",
+    "tenant_id": "test-info-9b4866f8",
+    "name": "New",
+    "color": "#3b82f6",
+    "order": 1
+  },
+  {
+    "id": "af8991cf-40e2-4418-96aa-63e00170778f",
+    "tenant_id": "test-info-9b4866f8",
+    "name": "Contacted",
+    "color": "#eab308",
+    "order": 2
+  },
+  {
+    "id": "772d9ce1-41d1-4a71-aacd-ae9d1ac0d4d1",
+    "tenant_id": "test-info-9b4866f8",
+    "name": "Qualified",
+    "color": "#22c55e",
+    "order": 3
+  },
+  {
+    "id": "344fbe5c-b060-4ae0-8fbc-0a5e56653c51",
+    "tenant_id": "test-info-9b4866f8",
+    "name": "Proposal Sent",
+    "color": "#a855f7",
+    "order": 4
+  },
+  {
+    "id": "959f2827-5dd2-4d4a-b31a-1d23d45908df",
+    "tenant_id": "test-info-9b4866f8",
+    "name": "Won",
+    "color": "#10b981",
+    "order": 5
+  },
+  {
+    "id": "cf388469-7d38-40bf-8594-a0e5efb73010",
+    "tenant_id": "test-info-9b4866f8",
+    "name": "Lost",
+    "color": "#ef4444",
+    "order": 6
+  },
+  {
+    "id": "9b398cd4-aecc-4af8-98bf-a18f82a8c0df",
+    "tenant_id": "test-login-828e1ffd",
+    "name": "New",
+    "color": "#3b82f6",
+    "order": 1
+  },
+  {
+    "id": "d97e1ed2-5be2-439d-8cdc-a32c92e3b06e",
+    "tenant_id": "test-login-828e1ffd",
+    "name": "Contacted",
+    "color": "#eab308",
+    "order": 2
+  },
+  {
+    "id": "a0d7b454-43d4-4c35-aa11-16069b14b6d9",
+    "tenant_id": "test-login-828e1ffd",
+    "name": "Qualified",
+    "color": "#22c55e",
+    "order": 3
+  },
+  {
+    "id": "6c23bbf4-02da-4d70-87c3-7231b761c1a7",
+    "tenant_id": "test-login-828e1ffd",
+    "name": "Proposal Sent",
+    "color": "#a855f7",
+    "order": 4
+  },
+  {
+    "id": "8a372d4b-31b3-4511-9fe0-7707a5744017",
+    "tenant_id": "test-login-828e1ffd",
+    "name": "Won",
+    "color": "#10b981",
+    "order": 5
+  },
+  {
+    "id": "45018831-6b5a-4b94-99cb-7bac4f0df3c6",
+    "tenant_id": "test-login-828e1ffd",
+    "name": "Lost",
+    "color": "#ef4444",
+    "order": 6
+  },
+  {
+    "id": "82e85044-5378-4b96-a65a-60d3374a0120",
+    "tenant_id": "test-gws-92276844",
+    "name": "New",
+    "color": "#3b82f6",
+    "order": 1
+  },
+  {
+    "id": "d4c1d0cc-5376-47e3-988a-7fde31e0689a",
+    "tenant_id": "test-gws-92276844",
+    "name": "Contacted",
+    "color": "#eab308",
+    "order": 2
+  },
+  {
+    "id": "74016e43-faf2-40f8-9d30-8b139d4a6d31",
+    "tenant_id": "test-gws-92276844",
+    "name": "Qualified",
+    "color": "#22c55e",
+    "order": 3
+  },
+  {
+    "id": "30d75648-eb83-467e-b54e-86c16ab973b7",
+    "tenant_id": "test-gws-92276844",
+    "name": "Proposal Sent",
+    "color": "#a855f7",
+    "order": 4
+  },
+  {
+    "id": "31f61e34-e4a8-4601-b5d4-619a9007d6ec",
+    "tenant_id": "test-gws-92276844",
+    "name": "Won",
+    "color": "#10b981",
+    "order": 5
+  },
+  {
+    "id": "b1e4a388-dbba-4be6-9443-c6105ce1d7cb",
+    "tenant_id": "test-gws-92276844",
+    "name": "Lost",
+    "color": "#ef4444",
+    "order": 6
+  }
+]

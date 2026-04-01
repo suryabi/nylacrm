@@ -1,0 +1,821 @@
+[
+  {
+    "id": "b343324e-4f96-4ed6-9397-bd41edac8c21",
+    "name": "New Delhi",
+    "code": "new_delhi",
+    "state_id": "849b0b36-2eee-459c-88c0-6aaeea81273c",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.437156+00:00",
+    "updated_at": "2026-02-24T18:06:25.437162+00:00"
+  },
+  {
+    "id": "5841ad08-b46b-4c7f-ad11-31331d91688f",
+    "name": "Gurugram",
+    "code": "gurugram",
+    "state_id": "849b0b36-2eee-459c-88c0-6aaeea81273c",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.445855+00:00",
+    "updated_at": "2026-02-24T18:06:25.445865+00:00"
+  },
+  {
+    "id": "cf2f76a6-18af-4599-953b-6ebd7a4c9058",
+    "name": "Noida",
+    "code": "noida",
+    "state_id": "849b0b36-2eee-459c-88c0-6aaeea81273c",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.446255+00:00",
+    "updated_at": "2026-02-24T18:06:25.446258+00:00"
+  },
+  {
+    "id": "be319d48-5596-42fe-9c17-40625ab12095",
+    "name": "Faridabad",
+    "code": "faridabad",
+    "state_id": "849b0b36-2eee-459c-88c0-6aaeea81273c",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.446483+00:00",
+    "updated_at": "2026-02-25T17:40:25.852477+00:00"
+  },
+  {
+    "id": "c2c5a1cb-fd71-4c43-9bf7-fc8b0039d88a",
+    "name": "Ghaziabad",
+    "code": "ghaziabad",
+    "state_id": "849b0b36-2eee-459c-88c0-6aaeea81273c",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.446684+00:00",
+    "updated_at": "2026-02-25T17:40:31.603590+00:00"
+  },
+  {
+    "id": "867028dd-7145-4793-beb3-d972b867de28",
+    "name": "Lucknow",
+    "code": "lucknow",
+    "state_id": "5886430d-5828-4cbc-9c65-9e3fe3d7f4c8",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.446865+00:00",
+    "updated_at": "2026-02-24T18:06:25.446867+00:00"
+  },
+  {
+    "id": "c166d245-6451-4f91-b6df-cb2ba05a4cc3",
+    "name": "Kanpur",
+    "code": "kanpur",
+    "state_id": "5886430d-5828-4cbc-9c65-9e3fe3d7f4c8",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.447039+00:00",
+    "updated_at": "2026-02-24T18:06:25.447041+00:00"
+  },
+  {
+    "id": "36fc550d-88da-436c-824c-271a6aec380e",
+    "name": "Agra",
+    "code": "agra",
+    "state_id": "5886430d-5828-4cbc-9c65-9e3fe3d7f4c8",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.447220+00:00",
+    "updated_at": "2026-02-24T18:06:25.447221+00:00"
+  },
+  {
+    "id": "8a884f4f-2d85-4c6c-a0b0-b56bc6f51d38",
+    "name": "Varanasi",
+    "code": "varanasi",
+    "state_id": "5886430d-5828-4cbc-9c65-9e3fe3d7f4c8",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.447400+00:00",
+    "updated_at": "2026-02-24T18:06:25.447402+00:00"
+  },
+  {
+    "id": "352fc720-202b-436b-8ebd-9151f2b66225",
+    "name": "Prayagraj",
+    "code": "prayagraj",
+    "state_id": "5886430d-5828-4cbc-9c65-9e3fe3d7f4c8",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.447573+00:00",
+    "updated_at": "2026-02-24T18:06:25.447575+00:00"
+  },
+  {
+    "id": "69f3771f-b28e-4dfe-a492-887e081d8705",
+    "name": "Meerut",
+    "code": "meerut",
+    "state_id": "5886430d-5828-4cbc-9c65-9e3fe3d7f4c8",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.447753+00:00",
+    "updated_at": "2026-02-24T18:06:25.447755+00:00"
+  },
+  {
+    "id": "d283572b-2799-40ef-8b9d-a8d131b17f4c",
+    "name": "Chandigarh",
+    "code": "chandigarh",
+    "state_id": "fe1fc543-a558-47e3-bb2f-26b4b59b7365",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.448126+00:00",
+    "updated_at": "2026-02-24T18:06:25.448128+00:00"
+  },
+  {
+    "id": "78081cd9-4905-4ce4-a30d-01e5c265b493",
+    "name": "Ludhiana",
+    "code": "ludhiana",
+    "state_id": "fe1fc543-a558-47e3-bb2f-26b4b59b7365",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.448317+00:00",
+    "updated_at": "2026-02-24T18:06:25.448318+00:00"
+  },
+  {
+    "id": "5b3458a5-de20-490e-8734-3be0c431c49d",
+    "name": "Amritsar",
+    "code": "amritsar",
+    "state_id": "fe1fc543-a558-47e3-bb2f-26b4b59b7365",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.448491+00:00",
+    "updated_at": "2026-02-24T18:06:25.448493+00:00"
+  },
+  {
+    "id": "75872d14-6a42-4244-8930-7d9ea8c3e710",
+    "name": "Jalandhar",
+    "code": "jalandhar",
+    "state_id": "fe1fc543-a558-47e3-bb2f-26b4b59b7365",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.448677+00:00",
+    "updated_at": "2026-02-24T18:06:25.448679+00:00"
+  },
+  {
+    "id": "19390334-83e7-46e8-9617-0a5716f46134",
+    "name": "Patiala",
+    "code": "patiala",
+    "state_id": "fe1fc543-a558-47e3-bb2f-26b4b59b7365",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.448849+00:00",
+    "updated_at": "2026-02-24T18:06:25.448850+00:00"
+  },
+  {
+    "id": "9dcaf451-a173-48a1-a783-7a3b4a2a6c24",
+    "name": "Gurugram",
+    "code": "gurugram",
+    "state_id": "ebdeca7a-1733-4e08-8d55-565afde661fb",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.449017+00:00",
+    "updated_at": "2026-02-24T18:06:25.449019+00:00"
+  },
+  {
+    "id": "99706f3a-f58d-4a02-b2b4-c247e6db7508",
+    "name": "Faridabad",
+    "code": "faridabad",
+    "state_id": "ebdeca7a-1733-4e08-8d55-565afde661fb",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.449184+00:00",
+    "updated_at": "2026-02-24T18:06:25.449185+00:00"
+  },
+  {
+    "id": "e7956fe0-acbe-492e-96f0-38e412c5871e",
+    "name": "Panipat",
+    "code": "panipat",
+    "state_id": "ebdeca7a-1733-4e08-8d55-565afde661fb",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.449354+00:00",
+    "updated_at": "2026-02-24T18:06:25.449356+00:00"
+  },
+  {
+    "id": "de9ff3f5-7f52-4fe4-a9b0-ebcb7b61ee2b",
+    "name": "Ambala",
+    "code": "ambala",
+    "state_id": "ebdeca7a-1733-4e08-8d55-565afde661fb",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.449517+00:00",
+    "updated_at": "2026-02-24T18:06:25.449519+00:00"
+  },
+  {
+    "id": "18a25961-894a-4f42-8e9a-c4e92e1c4963",
+    "name": "Karnal",
+    "code": "karnal",
+    "state_id": "ebdeca7a-1733-4e08-8d55-565afde661fb",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.449688+00:00",
+    "updated_at": "2026-02-24T18:06:25.449690+00:00"
+  },
+  {
+    "id": "f6ca5d38-6b17-42f8-98b5-4450447783ff",
+    "name": "Jaipur",
+    "code": "jaipur",
+    "state_id": "70083fe3-8833-49fd-b786-de895eea3fd6",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.449856+00:00",
+    "updated_at": "2026-02-24T18:06:25.449858+00:00"
+  },
+  {
+    "id": "51b108c1-5ff4-4b44-827a-e886c5faec46",
+    "name": "Jodhpur",
+    "code": "jodhpur",
+    "state_id": "70083fe3-8833-49fd-b786-de895eea3fd6",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.450016+00:00",
+    "updated_at": "2026-02-24T18:06:25.450018+00:00"
+  },
+  {
+    "id": "2fcbf040-4145-4748-af9f-6eb59f05377a",
+    "name": "Udaipur",
+    "code": "udaipur",
+    "state_id": "70083fe3-8833-49fd-b786-de895eea3fd6",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.450177+00:00",
+    "updated_at": "2026-02-24T18:06:25.450178+00:00"
+  },
+  {
+    "id": "8a06776a-64b0-4df0-b83a-0fe0cc4b4853",
+    "name": "Kota",
+    "code": "kota",
+    "state_id": "70083fe3-8833-49fd-b786-de895eea3fd6",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.450344+00:00",
+    "updated_at": "2026-02-24T18:06:25.450346+00:00"
+  },
+  {
+    "id": "7c483ff1-02b3-4078-b2cb-140de8106d17",
+    "name": "Ajmer",
+    "code": "ajmer",
+    "state_id": "70083fe3-8833-49fd-b786-de895eea3fd6",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.450513+00:00",
+    "updated_at": "2026-02-24T18:06:25.450514+00:00"
+  },
+  {
+    "id": "c8f53283-4fd2-4998-b259-6ad31730fe12",
+    "name": "Bengaluru",
+    "code": "bengaluru",
+    "state_id": "70b3ae00-0da2-48b9-9c2f-2dc6c7c18580",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.450684+00:00",
+    "updated_at": "2026-02-24T18:06:25.450686+00:00"
+  },
+  {
+    "id": "ae58bb1f-7daa-4376-af0a-6826244b0635",
+    "name": "Mysuru",
+    "code": "mysuru",
+    "state_id": "70b3ae00-0da2-48b9-9c2f-2dc6c7c18580",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.450934+00:00",
+    "updated_at": "2026-02-25T17:57:22.038873+00:00"
+  },
+  {
+    "id": "ebc26c54-b322-4974-a303-518168bc670e",
+    "name": "Hubli",
+    "code": "hubli",
+    "state_id": "70b3ae00-0da2-48b9-9c2f-2dc6c7c18580",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.451239+00:00",
+    "updated_at": "2026-02-25T17:57:31.751951+00:00"
+  },
+  {
+    "id": "20e38502-d2de-4f70-9363-695fae5a1920",
+    "name": "Mangaluru",
+    "code": "mangaluru",
+    "state_id": "70b3ae00-0da2-48b9-9c2f-2dc6c7c18580",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.451531+00:00",
+    "updated_at": "2026-02-25T17:57:26.517922+00:00"
+  },
+  {
+    "id": "8ae051d0-918b-402c-893f-add733c96b3c",
+    "name": "Belgaum",
+    "code": "belgaum",
+    "state_id": "70b3ae00-0da2-48b9-9c2f-2dc6c7c18580",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.451810+00:00",
+    "updated_at": "2026-02-25T17:41:01.341871+00:00"
+  },
+  {
+    "id": "b2fcd0a0-137e-4715-8e2d-9d9666c3b44b",
+    "name": "Chennai",
+    "code": "chennai",
+    "state_id": "905d061b-363d-4c57-acb1-5aa31fc8c766",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.452090+00:00",
+    "updated_at": "2026-02-24T18:06:25.452095+00:00"
+  },
+  {
+    "id": "b07940c9-2b49-48c5-bffd-08eac1e5d2c4",
+    "name": "Coimbatore",
+    "code": "coimbatore",
+    "state_id": "905d061b-363d-4c57-acb1-5aa31fc8c766",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.452438+00:00",
+    "updated_at": "2026-02-25T17:57:00.443923+00:00"
+  },
+  {
+    "id": "74b1f5d9-64ea-47d9-b7b4-66ed808756ab",
+    "name": "Madurai",
+    "code": "madurai",
+    "state_id": "905d061b-363d-4c57-acb1-5aa31fc8c766",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.452971+00:00",
+    "updated_at": "2026-02-25T17:57:06.245864+00:00"
+  },
+  {
+    "id": "8f487fa7-b344-4761-b379-9351c458f238",
+    "name": "Tiruchirappalli",
+    "code": "tiruchirappalli",
+    "state_id": "905d061b-363d-4c57-acb1-5aa31fc8c766",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.453488+00:00",
+    "updated_at": "2026-02-25T17:57:14.796651+00:00"
+  },
+  {
+    "id": "812696f5-820e-4467-a52d-571dc3ac02a8",
+    "name": "Salem",
+    "code": "salem",
+    "state_id": "905d061b-363d-4c57-acb1-5aa31fc8c766",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.453991+00:00",
+    "updated_at": "2026-02-25T17:57:10.727502+00:00"
+  },
+  {
+    "id": "0154f0b6-9d20-4698-b8bb-de64f3af5b1d",
+    "name": "Thiruvananthapuram",
+    "code": "thiruvananthapuram",
+    "state_id": "1718558c-dc61-42ee-aed2-798ba7a75af1",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.454524+00:00",
+    "updated_at": "2026-02-24T18:06:25.454530+00:00"
+  },
+  {
+    "id": "85b954f4-81ca-4262-8582-f33403d376db",
+    "name": "Kochi",
+    "code": "kochi",
+    "state_id": "1718558c-dc61-42ee-aed2-798ba7a75af1",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.455013+00:00",
+    "updated_at": "2026-02-24T18:06:25.455019+00:00"
+  },
+  {
+    "id": "d9ee692b-9782-4981-81bc-fe48c1bab767",
+    "name": "Kozhikode",
+    "code": "kozhikode",
+    "state_id": "1718558c-dc61-42ee-aed2-798ba7a75af1",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.455562+00:00",
+    "updated_at": "2026-02-24T18:06:25.455568+00:00"
+  },
+  {
+    "id": "3b91a2e0-a8ce-4d2e-92dd-b35f7c3c1541",
+    "name": "Thrissur",
+    "code": "thrissur",
+    "state_id": "1718558c-dc61-42ee-aed2-798ba7a75af1",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.456030+00:00",
+    "updated_at": "2026-02-24T18:06:25.456035+00:00"
+  },
+  {
+    "id": "9f2f7f98-3287-41a1-ba8d-afadcc1b1514",
+    "name": "Kollam",
+    "code": "kollam",
+    "state_id": "1718558c-dc61-42ee-aed2-798ba7a75af1",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.456472+00:00",
+    "updated_at": "2026-02-24T18:06:25.456477+00:00"
+  },
+  {
+    "id": "e4500888-aa93-4246-88c8-a347dc3df5e8",
+    "name": "Visakhapatnam",
+    "code": "visakhapatnam",
+    "state_id": "4e7b69ea-04b7-4580-93cd-a977adadfedd",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.457037+00:00",
+    "updated_at": "2026-02-24T18:06:25.457044+00:00"
+  },
+  {
+    "id": "6d369066-2341-440b-a2ce-1d97a3c4098f",
+    "name": "Vijayawada",
+    "code": "vijayawada",
+    "state_id": "4e7b69ea-04b7-4580-93cd-a977adadfedd",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.457666+00:00",
+    "updated_at": "2026-02-24T18:06:25.457672+00:00"
+  },
+  {
+    "id": "3277774e-ffc6-403e-84b4-958035c44f7c",
+    "name": "Guntur",
+    "code": "guntur",
+    "state_id": "4e7b69ea-04b7-4580-93cd-a977adadfedd",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.458149+00:00",
+    "updated_at": "2026-02-24T18:06:25.458155+00:00"
+  },
+  {
+    "id": "8e8a7b18-e6c0-46b2-82d5-72adfa35f75a",
+    "name": "Nellore",
+    "code": "nellore",
+    "state_id": "4e7b69ea-04b7-4580-93cd-a977adadfedd",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.458694+00:00",
+    "updated_at": "2026-02-24T18:06:25.458706+00:00"
+  },
+  {
+    "id": "0a2b74fb-41de-4afe-b731-96931b0fe3cf",
+    "name": "Tirupati",
+    "code": "tirupati",
+    "state_id": "4e7b69ea-04b7-4580-93cd-a977adadfedd",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.459249+00:00",
+    "updated_at": "2026-02-24T18:06:25.459255+00:00"
+  },
+  {
+    "id": "73e5b957-bb09-4b10-9677-2e8c5b9ffc26",
+    "name": "Hyderabad",
+    "code": "hyderabad",
+    "state_id": "0ac5940f-0b21-4dd9-9cd4-06df4685e3b4",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.459710+00:00",
+    "updated_at": "2026-02-24T18:06:25.459717+00:00"
+  },
+  {
+    "id": "19da3c57-f229-4a07-9162-558a40a72ac1",
+    "name": "Warangal",
+    "code": "warangal",
+    "state_id": "0ac5940f-0b21-4dd9-9cd4-06df4685e3b4",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.460266+00:00",
+    "updated_at": "2026-02-25T17:56:20.705737+00:00"
+  },
+  {
+    "id": "96baa2e2-2abb-4133-8944-9609977ec548",
+    "name": "Nizamabad",
+    "code": "nizamabad",
+    "state_id": "0ac5940f-0b21-4dd9-9cd4-06df4685e3b4",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.460709+00:00",
+    "updated_at": "2026-02-25T17:56:24.929014+00:00"
+  },
+  {
+    "id": "04eae151-5e02-4b29-a847-9481b2b56e83",
+    "name": "Karimnagar",
+    "code": "karimnagar",
+    "state_id": "0ac5940f-0b21-4dd9-9cd4-06df4685e3b4",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.461154+00:00",
+    "updated_at": "2026-02-25T17:56:34.140113+00:00"
+  },
+  {
+    "id": "306ef178-4c09-4c07-9f55-2b950b005cda",
+    "name": "Khammam",
+    "code": "khammam",
+    "state_id": "0ac5940f-0b21-4dd9-9cd4-06df4685e3b4",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.461655+00:00",
+    "updated_at": "2026-02-25T17:56:29.376220+00:00"
+  },
+  {
+    "id": "aa69a5e1-c341-42aa-8731-337e55b763c4",
+    "name": "Mumbai",
+    "code": "mumbai",
+    "state_id": "708c77c9-3f36-4459-876a-b4b682a4ea7a",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.462116+00:00",
+    "updated_at": "2026-02-24T18:06:25.462122+00:00"
+  },
+  {
+    "id": "af072cb4-aade-4792-b57f-ccf48c33204e",
+    "name": "Pune",
+    "code": "pune",
+    "state_id": "708c77c9-3f36-4459-876a-b4b682a4ea7a",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.462630+00:00",
+    "updated_at": "2026-02-24T18:06:25.462634+00:00"
+  },
+  {
+    "id": "af761260-a4df-4a7f-ae38-d898627e0850",
+    "name": "Nagpur",
+    "code": "nagpur",
+    "state_id": "708c77c9-3f36-4459-876a-b4b682a4ea7a",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.463083+00:00",
+    "updated_at": "2026-02-25T17:55:47.975001+00:00"
+  },
+  {
+    "id": "41e52fcd-9d1e-4245-a7bd-90bbfdfcb54f",
+    "name": "Nashik",
+    "code": "nashik",
+    "state_id": "708c77c9-3f36-4459-876a-b4b682a4ea7a",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.463563+00:00",
+    "updated_at": "2026-02-25T17:55:56.681421+00:00"
+  },
+  {
+    "id": "03ad7236-138b-4df3-9bdc-adbca16c1691",
+    "name": "Aurangabad",
+    "code": "aurangabad",
+    "state_id": "708c77c9-3f36-4459-876a-b4b682a4ea7a",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.464032+00:00",
+    "updated_at": "2026-02-25T17:55:52.245115+00:00"
+  },
+  {
+    "id": "0c16a9f1-bc1e-478f-aa8c-47321995f1dd",
+    "name": "Thane",
+    "code": "thane",
+    "state_id": "708c77c9-3f36-4459-876a-b4b682a4ea7a",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.464579+00:00",
+    "updated_at": "2026-02-25T17:55:43.470069+00:00"
+  },
+  {
+    "id": "0554bba0-5d6e-44b3-a90a-d47380943833",
+    "name": "Ahmedabad",
+    "code": "ahmedabad",
+    "state_id": "45655395-95a4-4611-a7f8-5c0c9c05fa42",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.465036+00:00",
+    "updated_at": "2026-02-25T17:55:36.309048+00:00"
+  },
+  {
+    "id": "3458d63f-491d-4425-a20e-0860d75d8ef1",
+    "name": "Surat",
+    "code": "surat",
+    "state_id": "45655395-95a4-4611-a7f8-5c0c9c05fa42",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.465564+00:00",
+    "updated_at": "2026-02-25T17:55:36.309048+00:00"
+  },
+  {
+    "id": "554209c7-cf96-4807-8527-45f942859183",
+    "name": "Vadodara",
+    "code": "vadodara",
+    "state_id": "45655395-95a4-4611-a7f8-5c0c9c05fa42",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.466100+00:00",
+    "updated_at": "2026-02-25T17:55:36.309048+00:00"
+  },
+  {
+    "id": "14ab136c-f90f-4844-9f85-a76d09cd1664",
+    "name": "Rajkot",
+    "code": "rajkot",
+    "state_id": "45655395-95a4-4611-a7f8-5c0c9c05fa42",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.466542+00:00",
+    "updated_at": "2026-02-25T17:55:36.309048+00:00"
+  },
+  {
+    "id": "ecb418c9-74b6-4d6c-ae1d-8f16e3716676",
+    "name": "Gandhinagar",
+    "code": "gandhinagar",
+    "state_id": "45655395-95a4-4611-a7f8-5c0c9c05fa42",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.467173+00:00",
+    "updated_at": "2026-02-25T17:55:36.309048+00:00"
+  },
+  {
+    "id": "040753df-93d7-413b-b5f1-602b98c6a3ea",
+    "name": "Panaji",
+    "code": "panaji",
+    "state_id": "1f621cd2-d75a-4ce6-9e41-8ba47da3a390",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.467579+00:00",
+    "updated_at": "2026-02-24T18:06:25.467582+00:00"
+  },
+  {
+    "id": "5d9a4f1d-44ab-432d-be36-4e0e394031ca",
+    "name": "Margao",
+    "code": "margao",
+    "state_id": "1f621cd2-d75a-4ce6-9e41-8ba47da3a390",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.468055+00:00",
+    "updated_at": "2026-02-24T18:06:25.468062+00:00"
+  },
+  {
+    "id": "387fe97e-1a7a-489f-8230-cd8a8ea4619e",
+    "name": "Vasco da Gama",
+    "code": "vasco_da_gama",
+    "state_id": "1f621cd2-d75a-4ce6-9e41-8ba47da3a390",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.468563+00:00",
+    "updated_at": "2026-02-24T18:06:25.468568+00:00"
+  },
+  {
+    "id": "30f76fe0-d9d6-49f6-a7de-78d284c821c2",
+    "name": "Kolkata",
+    "code": "kolkata",
+    "state_id": "6cd4ec5a-3224-4fdf-b359-77bc9d6725ba",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.469023+00:00",
+    "updated_at": "2026-02-24T18:06:25.469031+00:00"
+  },
+  {
+    "id": "2e541f3b-0ae0-4e0b-a029-94fca2b84e05",
+    "name": "Howrah",
+    "code": "howrah",
+    "state_id": "6cd4ec5a-3224-4fdf-b359-77bc9d6725ba",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.469501+00:00",
+    "updated_at": "2026-02-25T17:39:52.072149+00:00"
+  },
+  {
+    "id": "1f83cca8-35b7-4893-a664-b0401b77d252",
+    "name": "Durgapur",
+    "code": "durgapur",
+    "state_id": "6cd4ec5a-3224-4fdf-b359-77bc9d6725ba",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.469905+00:00",
+    "updated_at": "2026-02-25T17:39:43.913650+00:00"
+  },
+  {
+    "id": "ebc553dd-e098-4cb7-b680-374c70f6b351",
+    "name": "Asansol",
+    "code": "asansol",
+    "state_id": "6cd4ec5a-3224-4fdf-b359-77bc9d6725ba",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.470390+00:00",
+    "updated_at": "2026-02-25T17:39:39.801786+00:00"
+  },
+  {
+    "id": "eefacaf0-d307-4c54-bee4-1597c43eae43",
+    "name": "Siliguri",
+    "code": "siliguri",
+    "state_id": "6cd4ec5a-3224-4fdf-b359-77bc9d6725ba",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.471015+00:00",
+    "updated_at": "2026-02-25T17:39:48.161075+00:00"
+  },
+  {
+    "id": "94e75384-2bc8-40d5-b1fc-11aa0bb63696",
+    "name": "Patna",
+    "code": "patna",
+    "state_id": "f9a3b227-233a-4605-b450-559f45a277bf",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.471945+00:00",
+    "updated_at": "2026-02-24T18:06:25.471952+00:00"
+  },
+  {
+    "id": "d863f331-eb50-4697-8e89-2f6900371ac5",
+    "name": "Gaya",
+    "code": "gaya",
+    "state_id": "f9a3b227-233a-4605-b450-559f45a277bf",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.472528+00:00",
+    "updated_at": "2026-02-24T18:06:25.472534+00:00"
+  },
+  {
+    "id": "71ad2cff-5ad0-4f30-9c88-bd5331f1c057",
+    "name": "Bhagalpur",
+    "code": "bhagalpur",
+    "state_id": "f9a3b227-233a-4605-b450-559f45a277bf",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.472946+00:00",
+    "updated_at": "2026-02-24T18:06:25.472951+00:00"
+  },
+  {
+    "id": "44ed3aa7-6978-4c08-ae1a-6bd12e3e2766",
+    "name": "Muzaffarpur",
+    "code": "muzaffarpur",
+    "state_id": "f9a3b227-233a-4605-b450-559f45a277bf",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.473496+00:00",
+    "updated_at": "2026-02-24T18:06:25.473502+00:00"
+  },
+  {
+    "id": "29caf74f-f824-4baa-8bac-949abc175d86",
+    "name": "Darbhanga",
+    "code": "darbhanga",
+    "state_id": "f9a3b227-233a-4605-b450-559f45a277bf",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.474017+00:00",
+    "updated_at": "2026-02-24T18:06:25.474025+00:00"
+  },
+  {
+    "id": "0d31a115-abdb-49de-8d92-6ceb100989fd",
+    "name": "Bhubaneswar",
+    "code": "bhubaneswar",
+    "state_id": "2604fa66-39b2-499c-babf-1b031757c7fe",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.474445+00:00",
+    "updated_at": "2026-02-24T18:06:25.474450+00:00"
+  },
+  {
+    "id": "9ffcba80-6526-4e0a-acaa-47d1217b9306",
+    "name": "Cuttack",
+    "code": "cuttack",
+    "state_id": "2604fa66-39b2-499c-babf-1b031757c7fe",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.474789+00:00",
+    "updated_at": "2026-02-24T18:06:25.474795+00:00"
+  },
+  {
+    "id": "a6e948ba-b329-4a66-bf27-0e2395c84b31",
+    "name": "Rourkela",
+    "code": "rourkela",
+    "state_id": "2604fa66-39b2-499c-babf-1b031757c7fe",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.475196+00:00",
+    "updated_at": "2026-02-24T18:06:25.475201+00:00"
+  },
+  {
+    "id": "b6f1216d-d762-4498-8ef8-cf66fc19ab64",
+    "name": "Berhampur",
+    "code": "berhampur",
+    "state_id": "2604fa66-39b2-499c-babf-1b031757c7fe",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.475675+00:00",
+    "updated_at": "2026-02-24T18:06:25.475681+00:00"
+  },
+  {
+    "id": "8eebff1f-861f-4eb6-9c44-70ddfa27a431",
+    "name": "Sambalpur",
+    "code": "sambalpur",
+    "state_id": "2604fa66-39b2-499c-babf-1b031757c7fe",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.476130+00:00",
+    "updated_at": "2026-02-24T18:06:25.476137+00:00"
+  },
+  {
+    "id": "cf18a98f-8e6f-4f78-9086-bcb1df688043",
+    "name": "Bhopal",
+    "code": "bhopal",
+    "state_id": "724b24a8-b940-4439-8697-f96ab0bdb84e",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.476518+00:00",
+    "updated_at": "2026-02-24T18:06:25.476525+00:00"
+  },
+  {
+    "id": "8601b513-b73d-430d-83d3-e7a78c75e67f",
+    "name": "Indore",
+    "code": "indore",
+    "state_id": "724b24a8-b940-4439-8697-f96ab0bdb84e",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.476970+00:00",
+    "updated_at": "2026-02-24T18:06:25.476976+00:00"
+  },
+  {
+    "id": "15839d6c-9f03-4522-9d74-9f846f6cb3e1",
+    "name": "Jabalpur",
+    "code": "jabalpur",
+    "state_id": "724b24a8-b940-4439-8697-f96ab0bdb84e",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.477384+00:00",
+    "updated_at": "2026-02-24T18:06:25.477390+00:00"
+  },
+  {
+    "id": "24daeb65-c724-4aec-95a5-c0996310e6e0",
+    "name": "Gwalior",
+    "code": "gwalior",
+    "state_id": "724b24a8-b940-4439-8697-f96ab0bdb84e",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.477890+00:00",
+    "updated_at": "2026-02-24T18:06:25.477896+00:00"
+  },
+  {
+    "id": "54245475-c8ad-4b22-b2d6-6c09d122062a",
+    "name": "Ujjain",
+    "code": "ujjain",
+    "state_id": "724b24a8-b940-4439-8697-f96ab0bdb84e",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.478480+00:00",
+    "updated_at": "2026-02-24T18:06:25.478486+00:00"
+  },
+  {
+    "id": "6578868a-d660-4afc-b2b3-3375698c4ae6",
+    "name": "Raipur",
+    "code": "raipur",
+    "state_id": "f0f492b7-a539-44fb-b8f2-481e847bf8af",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.479052+00:00",
+    "updated_at": "2026-02-24T18:06:25.479058+00:00"
+  },
+  {
+    "id": "31697481-adac-4045-9fff-608373351b6d",
+    "name": "Bhilai",
+    "code": "bhilai",
+    "state_id": "f0f492b7-a539-44fb-b8f2-481e847bf8af",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.479649+00:00",
+    "updated_at": "2026-02-24T18:06:25.479656+00:00"
+  },
+  {
+    "id": "bb58ff3c-19a7-4b5c-85ad-2a34fd2ad02f",
+    "name": "Bilaspur",
+    "code": "bilaspur",
+    "state_id": "f0f492b7-a539-44fb-b8f2-481e847bf8af",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.480138+00:00",
+    "updated_at": "2026-02-24T18:06:25.480145+00:00"
+  },
+  {
+    "id": "96135c1d-2da1-4dc7-8ee2-d0cc6021e36a",
+    "name": "Korba",
+    "code": "korba",
+    "state_id": "f0f492b7-a539-44fb-b8f2-481e847bf8af",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.480628+00:00",
+    "updated_at": "2026-02-24T18:06:25.480641+00:00"
+  },
+  {
+    "id": "f82681a3-7fcb-4b48-be4a-738f8d722dac",
+    "name": "Durg",
+    "code": "durg",
+    "state_id": "f0f492b7-a539-44fb-b8f2-481e847bf8af",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.481096+00:00",
+    "updated_at": "2026-02-24T18:06:25.481101+00:00"
+  },
+  {
+    "id": "b3100214-292d-4fc3-9cdf-9fae995db034",
+    "name": "Kochi",
+    "code": "kochi",
+    "state_id": "70b3ae00-0da2-48b9-9c2f-2dc6c7c18580",
+    "is_active": true,
+    "created_at": "2026-02-28T10:02:23.196400+00:00",
+    "updated_at": "2026-02-28T10:02:23.196408+00:00"
+  }
+]

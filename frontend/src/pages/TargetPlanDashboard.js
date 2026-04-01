@@ -775,7 +775,9 @@ function CityAllocationDetailDialog({ open, onOpenChange, city, parentTerritory,
   const cityAmount = city?.amount || 0;
 
   const getAvailableBudget = () => {
-    const totalAllocated = [...resourceAllocations, ...skuAllocations].reduce((sum, a) => sum + (a.amount || 0), 0);
+    // Resource and SKU allocations are independent — each gets the full city budget
+    const currentAllocations = activeTab === 'resources' ? resourceAllocations : skuAllocations;
+    const totalAllocated = currentAllocations.reduce((sum, a) => sum + (a.amount || 0), 0);
     return cityAmount - totalAllocated;
   };
 
@@ -895,22 +897,20 @@ function CityAllocationDetailDialog({ open, onOpenChange, city, parentTerritory,
         <div className="py-4 space-y-4">
           {/* City Budget Summary */}
           <div className="bg-gradient-to-r from-slate-100 to-slate-50 rounded-lg p-4">
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div>
-                <p className="text-xs text-muted-foreground">City Target</p>
-                <p className="text-lg font-bold text-slate-700">{formatCurrency(city?.amount, true)}</p>
+            <div className="text-center mb-3">
+              <p className="text-xs text-muted-foreground">City Target</p>
+              <p className="text-lg font-bold text-slate-700">{formatCurrency(city?.amount, true)}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white/80 rounded-lg p-2.5 text-center border border-blue-100">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Resource Allocated</p>
+                <p className="text-sm font-bold text-blue-600">{formatCurrency(totalResourceAllocated, true)}</p>
+                <p className="text-[10px] text-muted-foreground">{resourcePercent}% of target</p>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Allocated</p>
-                <p className="text-lg font-bold text-blue-600">
-                  {formatCurrency(totalResourceAllocated + totalSKUAllocated, true)}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Available</p>
-                <p className={cn("text-lg font-bold", getAvailableBudget() > 0 ? "text-amber-600" : "text-green-600")}>
-                  {formatCurrency(getAvailableBudget(), true)}
-                </p>
+              <div className="bg-white/80 rounded-lg p-2.5 text-center border border-purple-100">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">SKU Allocated</p>
+                <p className="text-sm font-bold text-purple-600">{formatCurrency(totalSKUAllocated, true)}</p>
+                <p className="text-[10px] text-muted-foreground">{skuPercent}% of target</p>
               </div>
             </div>
           </div>

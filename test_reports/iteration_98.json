@@ -1,0 +1,79 @@
+{
+  "summary": "Stock Dashboard Tab testing completed successfully. Backend API returns complete stock data with totals, bottle_tracking, and skus array. Frontend displays all required components: summary cards, bottle tracking card, SKU table with expandable rows, and refresh button. Negative stock values are correctly shown in red.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_stock_dashboard.py",
+    "/app/test_reports/pytest/stock_dashboard_v2_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_stock_dashboard.py - Updated test file for Stock Dashboard API"
+  ],
+  "success_rate": {
+    "backend": "100% - 10/10 tests passed",
+    "frontend": "100% - All UI components verified"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "role": "CEO",
+    "distributor_id": "d091204f-e04f-46f2-b9a9-d92d9f89b528",
+    "tenant_id": "nyla-air-water"
+  },
+  "seed_data_creation": "No seed data created - used existing data in distributor d091204f",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Stock Dashboard Tab is fully functional. Backend endpoint GET /api/distributors/{id}/stock-dashboard returns complete stock data. Frontend StockDashboardTab.jsx renders all components correctly. The distributor d091204f-e04f-46f2-b9a9-d92d9f89b528 has 3 SKUs with test data including negative stock scenario.",
+  "features_tested": {
+    "Backend_Stock_Dashboard_API": {
+      "status": "PASSED",
+      "verified": [
+        "GET /api/distributors/{id}/stock-dashboard returns 200",
+        "Response has required fields: distributor_id, distributor_name, generated_at, totals, bottle_tracking, sku_count, skus",
+        "Totals object has: stock_received, stock_delivered, stock_at_hand, customer_returns, factory_returns, pct_stock_at_hand",
+        "Bottle tracking has: empty_reusable, damaged, expired, pending_factory_return",
+        "Each SKU has: sku_id, sku_name, stock_received, stock_delivered, customer_returns, factory_returns, stock_at_hand, pct_stock_at_hand, weekly_avg_deliveries, days_of_stock",
+        "SKUs have customer_returns_breakdown and factory_returns_breakdown",
+        "Totals are consistent with sum of SKU values",
+        "Invalid distributor returns 404",
+        "Unauthenticated request returns 401"
+      ]
+    },
+    "Frontend_Stock_Dashboard_Tab": {
+      "status": "PASSED",
+      "verified": [
+        "Stock Dashboard tab appears in distributor detail page (8th tab labeled 'Stock')",
+        "Tab has data-testid='stock-dashboard-tab'",
+        "Summary cards show: Stock Received (2,000), Delivered (110), Customer Returns (60), Factory Returns (10), Stock at Hand (1,940, 97.0%), SKUs Tracked (3)",
+        "Bottle tracking card displays: Empty/Reusable (60), Damaged (0), Expired (0), Pending Factory Return (60)",
+        "SKU table renders with all columns: SKU, Received, Delivered, Cust. Returns, Factory Ret., At Hand, % At Hand, Wkly Avg, Days Left",
+        "Negative stock values shown in red (-50 for Nyla 600ml Silver)",
+        "Pending factory return notes shown under SKU names",
+        "Refresh button works to reload data",
+        "Weekly average deliveries shown with weeks analyzed (e.g., '10/1w')",
+        "Days of stock shown (e.g., '700d')"
+      ]
+    },
+    "Data_Validation": {
+      "status": "PASSED",
+      "verified": [
+        "Nyla 330ml Silver: Received=1000, Delivered=10, Customer Returns=10, At Hand=1000",
+        "Nyla 330ml Gold: Received=1000, Delivered=0, Factory Returns=10, At Hand=990",
+        "Nyla 600ml Silver: Received=0, Delivered=100, Customer Returns=50, At Hand=-50 (negative stock scenario)",
+        "All 60 customer return bottles are empty_reusable category as expected"
+      ]
+    }
+  },
+  "api_endpoints_tested": [
+    "GET /api/distributors/{id}/stock-dashboard - Returns complete stock dashboard data"
+  ]
+}

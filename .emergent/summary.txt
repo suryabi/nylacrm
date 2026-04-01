@@ -1,124 +1,135 @@
 <analysis>**original_problem_statement**: 
-The user's ongoing goal is to build out a robust Distributor Management module and manage internal organizational requests. Recent requests focused on generating downloadable PDF Credit/Debit Notes for monthly reconciliations, fixing visibility permissions for internal requests (Leave, Travel, Budget, Expense) so approvers can see their team's requests, and completely redesigning the Distribution module UI to be more contemporary (elegant tiles, sparklines, alternate row colors, pagination, clickable rows, and an Emerald green theme).
+The user originally requested extensive fixes to distribution accounting, which evolved into building a comprehensive Monthly Performance Tracking Module for the sales team. Over this session, the user provided highly specific requirements for this tracker:
+1. Capture Actual Onboarded Month/Year at the Lead/Account level and Target Closure Month at the Lead level.
+2. Build an editable Month-on-Month (Last 3 Months) comparison grid where Revenue and Outstanding rows can be manually overridden and saved/reset.
+3. Restructure metrics: Account metrics should exclusively track cumulative existing accounts and monthly new accounts. Pipeline metrics must show INR value () broken down by status, and rows must be clickable to navigate to pre-filtered lead lists.
+4. Split Activity Metrics into Total Activities (Visits, Calls, Emails, Messages) and Unique Customers Reached.
+5. Completely redesign the Performance Tracker page to match the contemporary, gradient-heavy, glass-morphism aesthetic of the existing Home Dashboard.
 
-**PRODUCT REQUIREMENTS:**
-- **PDF Generation**: Monthly Debit/Credit notes must be generated as actual PDF files containing tenant/distributor company details, itemized settlements, and signature blocks. Stored in object storage.
-- **Request Visibility**: Requestors must see their own requests (any status). Approvers must see requests pending their approval PLUS requests they have already acted on from their reportees.
-- **UI Redesign (Distribution Module)**: Minimalist but interesting design. Emerald brand color tint. Elegant KPI tiles. Tables must have alternate row colors (even:bg-emerald-50/40), default sorting, 50-item pagination, and clickable rows. Fonts: Manrope (headings), IBM Plex Sans (body).
+**PRODUCT REQUIREMENTS**:
+- **Monthly Performance Tracker**: Must capture revenue vs target (with manual overrides), cumulative vs new account metrics, pipeline metrics (status-wise with INR values, clickable to Leads page), outstanding collections, and unique vs total activity metrics. 
+- **Lead/Account Management**: Must explicitly track actual onboarded dates and target closure dates, propagating from Lead conversion to Account.
 
 **User's preferred language**: English
 *(INSTRUCT next agent to respond in English only)*
 
 **what currently exists?** 
-A fully functional Sales CRM with a top-level Distribution Module. PDF generation via  is fully implemented and hooked up to object storage, with working download buttons in the UI. Internal request visibility (Leave/Travel/Budget/Expense) is completely fixed via newly added  backend endpoints. The UI redesign has been successfully applied to the  page and the  (Commercial Tab) using a newly created reusable  component.
+The Monthly Performance Tracking Module is highly functional. The backend () has been rigorously restructured to support cumulative calculations, unique activity counts, manual revenue overrides, and INR pipeline valuations. The Lead and Account schemas (, , ) successfully capture and propagate onboarding/closure dates. The frontend reflects all functional changes. Currently, the module is undergoing a massive styling overhaul to match the app's modern  aesthetic.
 
 **Last working item**:
-- **Last item agent was working**: Applying the modern UI table styling (alternate rows, pagination, sorting, clickable rows) to the remaining 4 tabs in the Distributor Detail view: Stock In (), Stock Out (), Settlements (), and Billing ().
+- **Last item agent was working**: Overhauling the UI/UX design of . The agent was applying bulk  edits to inject gradient backgrounds, backdrop-blur effects, and modern card styling consistent with the Home Dashboard.
 - **Status**: IN PROGRESS
-- **Agent Testing Done**: N
-- **Which testing method agent to use?** Frontend testing agent (to verify visual consistency and functionality across all 4 updated tabs) + Screenshot tool.
+- **Agent Testing Done**: N (Context ended right after applying the code edits).
+- **Which testing method agent to use?** screenshot tool -> testing_agent_v3_fork
 - **User Testing Done**: N
 
-**All Pending/In progress Issue list**:
-Issue 1: Redesign remaining Distribution Tabs (P0)
-- **Attempted fixes**: The agent successfully updated the  and . The agent just bulk-viewed , , , and  to begin applying the same design but was cut off.
-- **Next debug checklist**: 
-  - Update tables in , , , and  to use the new modern styling (uppercase headers, alternate row colors, pagination, sorting).
-  - Utilize the reusable components from  where applicable.
-- **Why fix this issue and what will be achieved with the fix?** User explicitly requested visual consistency across the entire Distribution module based on the newly approved contemporary design.
-- **Status**: IN PROGRESS
-- **Is recurring issue?** N
-- **Should Test frontend/backend/both after fix?** Frontend
-- **Blocked on other issue**: None
+**All Pending/In progress Issue list**: 
+  Issue 1: Complete and Verify Performance Tracker Contemporary Redesign (P0)
+     - **Attempted fixes**: Applied bulk  edits to  to update the Summary Cards, Revenue, Accounts, Pipeline, Collections, Activity, and Support sections with new Tailwind classes (e.g., , ).
+     - **Next debug checklist**: 
+        - Run  on  immediately to ensure the bulk edits didn't break syntax.
+        - Verify backend is running (backend                          RUNNING   pid 46, uptime 0:00:04
+code-server                      STOPPED   Not started
+frontend                         STOPPING  
+mongodb                          RUNNING   pid 49, uptime 0:00:04
+nginx-code-proxy                 RUNNING   pid 45, uptime 0:00:04).
+        - Use the  to visually inspect the Performance Tracker page. Ensure all components render cleanly without layout breaks and match the Home Dashboard vibe.
+        - Run  strictly for frontend flows to ensure interactivity (expand/collapse, edit overrides, clickable pipeline rows) survived the redesign.
+     - **Why fix this issue and what will be achieved with the fix?** Fulfills the user's explicit request to make the module feel like the same application rather than a disjointed add-on.
+     - **Status**: IN PROGRESS
+     - **Is recurring issue?** N
+     - **Should Test frontend/backend/both after fix?** Frontend (via screenshot then testing agent).
+     - **Blocked on other issue**: None
 
 **In progress Task List**:
-Task 1: Complete UI Modernization for Distribution Module
-- **Where to resume**: Edit , , , and  to incorporate the new table designs.
-- **What will be achieved with this?** A fully modernized, cohesive Distribution CRM interface.
-- **Status**: IN PROGRESS
-- **Should Test frontend/backend/both after fix?** Frontend
-- **Blocked on something**: None
+None.
 
 **Upcoming and Future Tasks**
-Upcoming Tasks:
-- **P1**: Auto-generate Provisional Invoice (Trigger automatically when a primary shipment's status is updated to delivered).
-- **P1**: Build Reporting Module (Comprehensive reports for stock balance, deliveries, settlements, and distributor performance).
-- **P2**: First-login Force Password Change Modal (Backend flag already implemented, needs frontend modal).
-
-Future Tasks:
-- **P2**: Settlement Period Auto-scheduling (Automate the generation of monthly settlements).
-- **P2**: Dashboard analytics for distribution module.
-- **P2**: Refactor  (Modularize routes into separate files).
+  Upcoming Tasks:
+  - **P1**: Auto-generate Provisional Invoice (Trigger automatically when a primary shipment's status is updated to delivered).
+  - **P1**: Build Reporting Module (Comprehensive reports for stock balance, deliveries, settlements, and distributor performance).
+  
+  Future Tasks:
+  - **P2**: Task email notifications (Notify users via Resend on assignment or due dates).
+  - **P2**: First-login Force Password Change Modal.
+  - **P2**: Email Invoice Sharing.
+  - **P2**: Settlement Period Auto-scheduling.
+  - **P2**: Dashboard analytics for distribution module.
+  - **P2**: Refactor  (Modularize routes into separate files).
 
 **Completed work in this session**
-- Implemented PDF Credit/Debit Note generation using  with itemized tables and signatures (DONE)
-- Integrated Object Storage to save and serve generated PDFs (DONE)
-- Added PDF download buttons to the Billing Tab frontend (DONE)
-- Fixed Organizational Request visibility by adding  endpoints for Leave, Travel, Budget, and Expense requests (DONE)
-- Fixed FastAPI route collision bugs (static vs dynamic routes) in  (DONE)
-- Created  via design subagent (DONE)
-- Redesigned  with KPI sparkline tiles, Phosphor icons, and modern tables (DONE)
-- Redesigned  to use the new modern table styling (DONE)
+- Tested Performance Tracker initial UX Fixes (Dialog popup, proper company names) (DONE)
+- Added  and  to Lead/Account schemas & UIs (DONE)
+- Built Editable Month-on-Month Comparison Grid (Revenue/Outstanding manual overrides) (DONE)
+- Restructured Pipeline Metrics to use  (INR) instead of bottle counts (DONE)
+- Implemented clickable Pipeline status rows routing to pre-filtered  (DONE)
+- Converted Account Metrics to show cumulative existing accounts and an inline expandable list (DONE)
+- Split Activity Metrics into Total Activities and Unique Customers Reached (DONE)
 
 **Earlier issues found/mentioned but not fixed**
 None.
 
 **Known issue recurrence from previous fork**
-- Issue recurrence in previous fork:  monolith refactoring.
-- Recurrence count: 6
-- Status: NOT STARTED
+  - Issue recurrence in previous fork:  monolith refactoring.
+  - Recurrence count: 12
+  - Status: NOT STARTED
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- React, FastAPI, MongoDB.
--  for PDF generation.
-- Emergent Object Storage integration.
-- UI Libraries: , , , .
+- React frontend, FastAPI backend, MongoDB.
+- Cross-collection Aggregation: Heavy use of MongoDB aggregation in  bridging , , , and .
+- Schema Synchronization: The application currently maintains duplicate Pydantic models in  and modular route files (, ). When updating models, both locations must be updated.
 
 **key DB schema**
-- : Now includes  to reference stored documents.
+- : 
+- : Added , , , .
+- : Added , .
+- : Collection parsed for unique/total activity tracking.
 
 **changes in tech stack**
-- Added  and  to frontend dependencies.
-- Added Google Fonts (Manrope, IBM Plex Sans) to frontend .
+None.
 
 **All files of reference**
--  & 
--  (Updated with route ordering fixes)
--  (Reference for new UI design)
--  (Source of truth for the redesign)
--  (Files pending redesign)
+-  (Heavily modified, redesign pending verification)
+-  (Heavily modified with new aggregations)
+-  (Updated schemas)
+-  &  (Updated schemas)
+-  &  (Updated forms)
+-  (Reference for the new design aesthetic)
 
 **Areas that need refactoring**:
--  (Monolith)
+-  (Monolith requires breaking down, specifically duplicate Pydantic models).
 
 **key api endpoints**
--  (New pattern applied to all request types)
--  (Generates & uploads PDF)
+-  &  (Manage metric manual overrides)
+-  (Returns cumulative MoM data)
+-  (Computes all live monthly stats)
 
 **Critical Info for New Agent**
-- **FastAPI Route Ordering**: In , the agent had to fix an issue where  was masking  and . If you add new static endpoints, ensure they are placed *above* dynamic parameter endpoints.
-- **Design Guidelines**: Refer strictly to . The new aesthetic uses an Emerald tint ( for alternate rows), Phosphor duotone icons, and Manrope/IBM Plex Sans fonts. Use the newly created  as a pattern if helpful.
-- **Object Storage**: The app now successfully utilizes Emergent internal Object storage for PDF notes. No direct storage URLs are exposed; the backend handles serving/references.
+- **Immediate Next Step**: The previous agent ended context while halfway through a massive UI redesign of . **You MUST run  on  immediately** to ensure no syntax errors were introduced. Then use the screenshot tool to evaluate the UI, fix any broken layouts, and run  (Frontend focus).
+- **Data Model Alert**: If you ever modify schemas for Leads, Accounts, or Activities, you MUST update both the modular route file (e.g., ) AND the monolith file (), as  routes currently take precedence.
+- Do NOT test on older preview URLs. Always grab the latest URL from the  or bash execution.
 
 **documents and test reports created in this job**
--  (Updated)
+-  thru 
 - 
--  (Tests PDF generation and Request Visibilty)
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1. : Company logos? Itemized line breakdown? Signature blocks? PDF be stored in object storage... (Requests robust PDF features)
-2. : The requests should be avilable for both requestor and approver all the time (Bug report regarding internal request visibility)
-3. : All the above, Appover do not see, Both of the above (Clarifying visibility expectations)
-4. : All the components in distribution modules, can you re design to make them more contemporary... (Requests UI redesign)
-5. : 1. Minimalist but also add more interest 2. All the above 50 default A. First distribution 5. Very light brand color tint (Provides specific UI parameters - Emerald theme)
-6. : yes apply the same modern styling to stock in , stock out, settlments and billing (Confirmation to finish the redesign across all distributor tabs)
-*(No pending human messages. Proceed directly to implementing the UI changes on the remaining tabs.)*
+*(Showing latest user requests)*
+1. : For the accounts, in the edit account option, provide an option to capture actual month and year the account is on boarded... (DONE)
+2. : Month-on-Month Comparison (Last 3 Months) It should be an editable grid... (DONE)
+3. : Only the following should be editable at a row level: Revenue, Outstanding... (DONE)
+4. : At the lead level, capture Target Closure Month. Changes in Account metrics... Changes in pipeline metrics... (DONE)
+5. : wake up servers (DONE)
+6. : Next Month Pipeline Value is showing the monthly bottle opportunity, it should show the estimated opportunity in INR... Account Metrics inline list instead of popup... (DONE)
+7. : Existing accounts value for each month should be cumulative... status rows should be clickable... (DONE)
+8. : Activity Metrics should have two sections... total vs unique customers reached. (DONE)
+9. : Also, completely make this page with contemporary design consistent with the home page, with pipeline colors and tiles design etc. otherwise it feels like a different application (IN PROGRESS)
 
 **Project Health Check:**
-- Broken: None.
+- Broken: None currently, but  has untested, large-scale UI edits applied.
 - Mocked: None.
 
 **3rd Party Integrations**
@@ -133,13 +144,25 @@ None.
 - Claude Sonnet 4.5 (via Emergent LLM Key)
 
 **Testing status**
-- Testing agent used after significant changes: YES (iteration_72.json)
+- Testing agent used after significant changes: YES (iterations 100, 101, 102, 103, 104, 105, 106)
 - Troubleshoot agent used after agent stuck in loop: NO
-- Test files created: 
-- Known regressions: None
+- Test files created:  (latest)
+- Known regressions: None currently.
 
 **Credentials to test flow:**
-- Admin Email:  | Password: 
+- Admin Email: 
+- Password: 
+- Tenant ID: 
+- Note: To see data in Performance Tracker, use Plan:  and Resource: .
 
 **What agent forgot to execute**
-- The agent was in the process of applying the approved modern UI styling to , , , and  but ran out of context exactly after viewing the files.</analysis>
+The agent successfully applied the file edits to redesign the Performance Tracker but ran out of context before running , verifying the layout via screenshots, and executing the .
+
+**Debugging checklist for current issue**
+    Issue: Verification and completion of Performance Tracker UI Redesign.
+
+    Frontend files to check: 
+    -  (Check if JSX tags match up, ensure , , and Lucide icons are properly imported and utilized. Check custom  and  components at the bottom of the file).
+    
+    Backend files to check:
+    - None required for this step. The UI logic relies on existing endpoints that were verified in Iteration 106.</analysis>

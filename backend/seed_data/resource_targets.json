@@ -1,0 +1,74 @@
+[
+  {
+    "id": "e11112f3-d4ee-4415-bdb2-32ec5b3c80b9",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "0a29ddcc-d12c-4c5e-a248-fb55d91a05a7",
+    "resource_id": "019c536c-9b37-4764-93d6-11706d31916d",
+    "allocation_percentage": 20.0,
+    "target_revenue": 800000.0,
+    "created_at": "2026-02-06T14:19:01.081886+00:00"
+  },
+  {
+    "id": "d5e88373-6786-4764-9cca-f43361baf6e8",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "0a29ddcc-d12c-4c5e-a248-fb55d91a05a7",
+    "resource_id": "d6ff6bf4-8cc4-49d4-a54e-64cbca30c221",
+    "allocation_percentage": 30.0,
+    "target_revenue": 1200000.0,
+    "created_at": "2026-02-06T14:19:01.082323+00:00"
+  },
+  {
+    "id": "53bf7342-3de3-437a-8820-367b11d47352",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "c8499df0-af45-4400-8409-3d7c03511878",
+    "resource_id": "019c536c-9b37-4764-93d6-11706d31916d",
+    "allocation_percentage": 35.0,
+    "target_revenue": 2100000.0,
+    "created_at": "2026-02-06T14:19:35.912590+00:00"
+  },
+  {
+    "id": "1de0bda7-cc67-49d2-b2ce-a132be37a68e",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "c8499df0-af45-4400-8409-3d7c03511878",
+    "resource_id": "d6ff6bf4-8cc4-49d4-a54e-64cbca30c221",
+    "allocation_percentage": 20.0,
+    "target_revenue": 1200000.0,
+    "created_at": "2026-02-06T14:19:35.912814+00:00"
+  },
+  {
+    "id": "9ed5123b-5677-435a-bcb1-7fb123c25388",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "e1cd61de-f9f1-4e84-825a-ffc24bcd65ca",
+    "resource_id": "d6ff6bf4-8cc4-49d4-a54e-64cbca30c221",
+    "allocation_percentage": 5.0,
+    "target_revenue": 200000.0,
+    "created_at": "2026-02-06T14:21:01.117273+00:00"
+  },
+  {
+    "id": "92bba62d-1233-4909-84aa-fd306e543377",
+    "plan_id": "31a01732-bfa0-4b4f-9507-d4e4cce20c04",
+    "city_id": "c505e443-90de-4908-88a1-07e12fcdf831",
+    "resource_id": "019c536c-9b37-4764-93d6-11706d31916d",
+    "allocation_percentage": 11.0,
+    "target_revenue": 343750.0,
+    "created_at": "2026-02-06T18:07:46.584757+00:00"
+  },
+  {
+    "id": "045b8c8c-aca8-42ae-90e9-c13be2595dd2",
+    "plan_id": "31a01732-bfa0-4b4f-9507-d4e4cce20c04",
+    "city_id": "c505e443-90de-4908-88a1-07e12fcdf831",
+    "resource_id": "d6ff6bf4-8cc4-49d4-a54e-64cbca30c221",
+    "allocation_percentage": 11.0,
+    "target_revenue": 343750.0,
+    "created_at": "2026-02-06T18:07:46.585170+00:00"
+  },
+  {
+    "id": "8176c64b-aa05-48af-ab95-742833b82dd6",
+    "plan_id": "ffa51e40-3ab8-4729-a941-cdda5ac51abf",
+    "city_id": "e221e5dc-f985-4c9a-901d-db4e7e916296",
+    "resource_id": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "allocation_percentage": 100.0,
+    "target_revenue": 2000000.0,
+    "created_at": "2026-02-17T11:42:08.517703+00:00"
+  }
+]

@@ -4,213 +4,142 @@ import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
-import { Plus, Trash2, DollarSign, RefreshCw, FileText, Calendar, Download, Building2, ChevronLeft, ChevronRight, Send, Check, X } from 'lucide-react';
+import { Badge } from '../ui/badge';
+import { Plus, Trash2, DollarSign, RefreshCw, FileText, Calendar, Download, Building2, ChevronLeft, ChevronRight, Send, Check, X, Truck, CreditCard, Factory, ArrowRight, ArrowDown, Package, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 const MONTHS = [
-  { value: 1, label: 'January' },
-  { value: 2, label: 'February' },
-  { value: 3, label: 'March' },
-  { value: 4, label: 'April' },
-  { value: 5, label: 'May' },
-  { value: 6, label: 'June' },
-  { value: 7, label: 'July' },
-  { value: 8, label: 'August' },
-  { value: 9, label: 'September' },
-  { value: 10, label: 'October' },
-  { value: 11, label: 'November' },
-  { value: 12, label: 'December' }
+  { value: 1, label: 'January' }, { value: 2, label: 'February' }, { value: 3, label: 'March' },
+  { value: 4, label: 'April' }, { value: 5, label: 'May' }, { value: 6, label: 'June' },
+  { value: 7, label: 'July' }, { value: 8, label: 'August' }, { value: 9, label: 'September' },
+  { value: 10, label: 'October' }, { value: 11, label: 'November' }, { value: 12, label: 'December' }
 ];
-
-// Generate years (current year and 2 years back)
 const currentYear = new Date().getFullYear();
 const YEARS = [currentYear, currentYear - 1, currentYear - 2];
 
+const fmt = (v) => (v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+
 export default function SettlementsTab({
-  distributor,
-  canManage,
-  canDelete,
-  canApprove,
-  settlements,
-  settlementsLoading,
-  settlementsTotal,
-  settlementsPage,
-  settlementsPageSize,
-  setSettlementsPage,
-  setSettlementsPageSize,
-  settlementsMonthFilter,
-  setSettlementsMonthFilter,
-  settlementsYearFilter,
-  setSettlementsYearFilter,
+  distributor, canManage, canDelete, canApprove,
+  settlements, settlementsLoading, settlementsTotal,
+  settlementsPage, settlementsPageSize, setSettlementsPage, setSettlementsPageSize,
+  settlementsMonthFilter, setSettlementsMonthFilter,
+  settlementsYearFilter, setSettlementsYearFilter,
   fetchSettlements,
-  // Dialog state
-  showSettlementDialog,
-  setShowSettlementDialog,
-  // Form
-  settlementForm,
-  setSettlementForm,
-  resetSettlementForm,
-  // Unsettled deliveries preview
-  unsettledDeliveries,
-  unsettledLoading,
-  fetchUnsettledDeliveries,
-  // Handlers
-  handleCreateSettlement,
-  handleSubmitSettlement,
-  handleApproveSettlement,
-  handleRejectSettlement,
-  savingSettlement,
-  viewSettlementDetail,
-  setDeleteTarget,
-  getSettlementStatusBadge,
+  showSettlementDialog, setShowSettlementDialog,
+  settlementForm, setSettlementForm, resetSettlementForm,
+  unsettledDeliveries, unsettledLoading, fetchUnsettledDeliveries,
+  settlementPreview, previewLoading, fetchSettlementPreview,
+  handleCreateSettlement, handleSubmitSettlement, handleApproveSettlement, handleRejectSettlement,
+  savingSettlement, viewSettlementDetail, setDeleteTarget, getSettlementStatusBadge,
   assignedAccounts
 }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [downloading, setDownloading] = useState(false);
-  const [expandedSettlementAccounts, setExpandedSettlementAccounts] = useState({});
-  
+  const [expandedIds, setExpandedIds] = useState({});
   const totalPages = Math.ceil((settlementsTotal || 0) / (settlementsPageSize || 20));
 
-  // Toggle expanded state for settlement account groups
-  const toggleSettlementAccount = (accountId) => {
-    setExpandedSettlementAccounts(prev => ({
-      ...prev,
-      [accountId]: !prev[accountId]
-    }));
-  };
+  const toggle = (id) => setExpandedIds(prev => ({ ...prev, [id]: !prev[id] }));
 
-  // Group settlements by account
-  const settlementsByAccount = React.useMemo(() => {
-    return settlements.reduce((acc, settlement) => {
-      const accountId = settlement.account_id || 'unknown';
-      if (!acc[accountId]) {
-        acc[accountId] = {
-          account_id: accountId,
-          account_name: settlement.account_name || 'Unknown Account',
-          settlements: [],
-          totals: {
-            total_deliveries: 0,
-            total_billing: 0,
-            distributor_earnings: 0,
-            margin_at_transfer: 0,
-            adjustment: 0
-          }
-        };
-      }
-      acc[accountId].settlements.push(settlement);
-      acc[accountId].totals.total_deliveries += settlement.total_deliveries || 0;
-      acc[accountId].totals.total_billing += settlement.total_billing_value || 0;
-      acc[accountId].totals.distributor_earnings += settlement.distributor_earnings || 0;
-      acc[accountId].totals.margin_at_transfer += settlement.margin_at_transfer_price || 0;
-      acc[accountId].totals.adjustment += settlement.adjustment_payable || 0;
-      return acc;
-    }, {});
-  }, [settlements]);
-
-  const settlementAccountGroups = Object.values(settlementsByAccount);
-
-  // When dialog opens, set the month/year for settlement generation
   useEffect(() => {
     if (showSettlementDialog) {
-      setSettlementForm(prev => ({
-        ...prev,
-        settlement_month: selectedMonth,
-        settlement_year: selectedYear
-      }));
-      // Fetch unsettled deliveries for this month
-      if (fetchUnsettledDeliveries) {
-        fetchUnsettledDeliveries(selectedMonth, selectedYear);
-      }
+      setSettlementForm(prev => ({ ...prev, settlement_month: selectedMonth, settlement_year: selectedYear }));
+      if (fetchUnsettledDeliveries) fetchUnsettledDeliveries(selectedMonth, selectedYear);
+      if (fetchSettlementPreview) fetchSettlementPreview(selectedMonth, selectedYear);
     }
-  }, [showSettlementDialog, selectedMonth, selectedYear, setSettlementForm, fetchUnsettledDeliveries]);
+  }, [showSettlementDialog, selectedMonth, selectedYear, setSettlementForm, fetchUnsettledDeliveries, fetchSettlementPreview]);
+
+  const refreshPreview = () => {
+    if (fetchUnsettledDeliveries) fetchUnsettledDeliveries(selectedMonth, selectedYear);
+    if (fetchSettlementPreview) fetchSettlementPreview(selectedMonth, selectedYear);
+  };
+
+  // --- Preview data ---
+  const previewSummary = settlementPreview?.summary || {};
+  const previewCreditNotes = settlementPreview?.credit_notes || [];
+  const previewFactoryReturns = settlementPreview?.factory_returns || [];
 
   // Group unsettled deliveries by account
   const groupedByAccount = unsettledDeliveries.reduce((acc, del) => {
     const accountId = del.account_id || 'unknown';
     if (!acc[accountId]) {
-      acc[accountId] = {
-        account_id: accountId,
-        account_name: del.account_name || 'Unknown Account',
-        deliveries: [],
-        total_billing: 0,
-        distributor_earnings: 0,
-        margin_at_transfer: 0,
-        adjustment: 0
-      };
+      acc[accountId] = { account_id: accountId, account_name: del.account_name || 'Unknown', deliveries: [], total_billing: 0, total_earnings: 0, factory_adj: 0 };
     }
     acc[accountId].deliveries.push(del);
-    
-    // Calculate totals from delivery items
     const items = del.items || [];
     items.forEach(item => {
       const qty = item.quantity || 0;
-      const customerPrice = item.customer_selling_price || item.unit_price || 0;
-      const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
-      const transferPrice = item.transfer_price || item.base_price || 0;
-      
-      const billingValue = qty * customerPrice;
-      const distributorEarnings = billingValue * (commissionPct / 100);
-      const marginAtTransfer = qty * transferPrice * (commissionPct / 100);
-      const adjustment = distributorEarnings - marginAtTransfer;
-      
-      acc[accountId].total_billing += billingValue;
-      acc[accountId].distributor_earnings += distributorEarnings;
-      acc[accountId].margin_at_transfer += marginAtTransfer;
-      acc[accountId].adjustment += adjustment;
+      const cp = item.customer_selling_price || item.unit_price || 0;
+      const comm = item.distributor_commission_percent || item.margin_percent || 2.5;
+      const bp = item.base_price || item.transfer_price || 0;
+      const transferPrice = bp > 0 ? bp * (1 - comm / 100) : 0;
+      const newTP = cp > 0 ? cp * (1 - comm / 100) : 0;
+      acc[accountId].total_billing += qty * cp;
+      acc[accountId].total_earnings += qty * cp * (comm / 100);
+      acc[accountId].factory_adj += (qty * newTP) - (qty * transferPrice);
     });
-    
     return acc;
   }, {});
-
   const accountGroups = Object.values(groupedByAccount);
+  const totalDeliveryBilling = accountGroups.reduce((s, g) => s + g.total_billing, 0);
+  const totalEarnings = accountGroups.reduce((s, g) => s + g.total_earnings, 0);
+  const totalFactoryAdj = accountGroups.reduce((s, g) => s + g.factory_adj, 0);
 
-  // Download as Excel
+  // --- Settlement list grouping ---
+  const settlementsByAccount = settlements.reduce((acc, s) => {
+    const aid = s.account_id || 'unknown';
+    if (!acc[aid]) {
+      acc[aid] = {
+        account_id: aid, account_name: s.account_name || 'Unknown',
+        settlements: [],
+        totals: { billing: 0, earnings: 0, factory_adj: 0, cn_issued: 0, fr_credit: 0, final_payout: 0 }
+      };
+    }
+    acc[aid].settlements.push(s);
+    acc[aid].totals.billing += s.total_billing_value || 0;
+    acc[aid].totals.earnings += s.distributor_earnings || 0;
+    acc[aid].totals.factory_adj += s.factory_distributor_adjustment || 0;
+    acc[aid].totals.cn_issued += s.total_credit_notes_issued || s.credit_notes_applied || 0;
+    acc[aid].totals.fr_credit += s.total_factory_return_credit || 0;
+    acc[aid].totals.final_payout += s.final_payout || 0;
+    return acc;
+  }, {});
+  const settlementGroups = Object.values(settlementsByAccount);
+  const grandTotals = settlementGroups.reduce((a, g) => ({
+    billing: a.billing + g.totals.billing,
+    earnings: a.earnings + g.totals.earnings,
+    factory_adj: a.factory_adj + g.totals.factory_adj,
+    cn_issued: a.cn_issued + g.totals.cn_issued,
+    fr_credit: a.fr_credit + g.totals.fr_credit,
+    final_payout: a.final_payout + g.totals.final_payout
+  }), { billing: 0, earnings: 0, factory_adj: 0, cn_issued: 0, fr_credit: 0, final_payout: 0 });
+
   const downloadExcel = async () => {
     setDownloading(true);
     try {
-      const excelData = settlements.map(s => ({
+      const rows = settlements.map(s => ({
         'Settlement #': s.settlement_number,
         'Month': s.settlement_month ? MONTHS.find(m => m.value === s.settlement_month)?.label : '-',
         'Year': s.settlement_year || '-',
-        'Account Name': s.account_name || '-',
-        'No of Deliveries': s.total_deliveries || 0,
-        'Total Customer Billing Value': s.total_billing_value || 0,
-        'Distributor Earnings (On Selling Price)': s.distributor_earnings || 0,
-        'Distributor Margin at Transfer Price': s.margin_at_transfer_price || 0,
-        'Adjustment Payable': s.adjustment_payable || 0,
+        'Account': s.account_name || '-',
+        'Deliveries': s.total_deliveries || 0,
+        'Customer Billing': s.total_billing_value || 0,
+        'Dist Earnings': s.distributor_earnings || 0,
+        'Price Adj (Dist->Factory)': s.factory_distributor_adjustment || 0,
+        'Credit Notes': s.total_credit_notes_issued || s.credit_notes_applied || 0,
+        'Factory Returns': s.total_factory_return_credit || 0,
+        'Net Payout': s.final_payout || 0,
         'Status': s.status
       }));
-      
-      if (excelData.length === 0) {
-        alert('No data to download');
-        return;
-      }
-      
-      const headers = Object.keys(excelData[0]);
-      const csvContent = [
-        headers.join(','),
-        ...excelData.map(row => 
-          headers.map(header => {
-            const value = row[header];
-            if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
-              return `"${value.replace(/"/g, '""')}"`;
-            }
-            return value;
-          }).join(',')
-        )
-      ].join('\n');
-      
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      if (!rows.length) return;
+      const h = Object.keys(rows[0]);
+      const csv = [h.join(','), ...rows.map(r => h.map(k => { const v = r[k]; return typeof v === 'string' && (v.includes(',') || v.includes('"')) ? `"${v.replace(/"/g, '""')}"` : v; }).join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `settlements_${distributor?.name || 'distributor'}_${new Date().toISOString().split('T')[0]}.csv`;
+      link.download = `settlements_${distributor?.name || 'dist'}_${new Date().toISOString().split('T')[0]}.csv`;
       link.click();
-      URL.revokeObjectURL(link.href);
-    } catch (error) {
-      console.error('Download failed:', error);
-    } finally {
-      setDownloading(false);
-    }
+    } finally { setDownloading(false); }
   };
 
   return (
@@ -219,153 +148,209 @@ export default function SettlementsTab({
         <div className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-lg">Monthly Settlements</CardTitle>
-            <CardDescription>Account-level settlements by month</CardDescription>
+            <CardDescription>Deliveries + Credit Notes + Factory Returns = Net Payout</CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              onClick={downloadExcel} 
-              disabled={downloading || settlements.length === 0}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              {downloading ? 'Downloading...' : 'Download Excel'}
+            <Button variant="outline" onClick={downloadExcel} disabled={downloading || !settlements.length} data-testid="download-settlements-btn">
+              <Download className="h-4 w-4 mr-2" />{downloading ? 'Downloading...' : 'Export'}
             </Button>
-            
             {canManage && (
-              <Dialog open={showSettlementDialog} onOpenChange={(open) => {
-                setShowSettlementDialog(open);
-                if (!open) resetSettlementForm();
-              }}>
+              <Dialog open={showSettlementDialog} onOpenChange={(open) => { setShowSettlementDialog(open); if (!open) resetSettlementForm(); }}>
                 <DialogTrigger asChild>
-                  <Button data-testid="create-settlement-btn">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Generate Settlement
-                  </Button>
+                  <Button data-testid="create-settlement-btn"><Plus className="h-4 w-4 mr-2" />Generate Settlement</Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Generate Monthly Settlement</DialogTitle>
-                    <DialogDescription>
-                      Create settlements for each account for the selected month
-                    </DialogDescription>
+                    <DialogDescription>Review all settlement components before generating</DialogDescription>
                   </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    {/* Month/Year Selection */}
-                    <div className="flex items-center gap-4 p-4 bg-muted/30 rounded-lg">
-                      <Calendar className="h-5 w-5 text-muted-foreground" />
+                  <div className="space-y-5 py-4">
+                    {/* Month/Year Selector */}
+                    <div className="flex items-center gap-4 p-3 bg-slate-50 rounded-lg border">
+                      <Calendar className="h-5 w-5 text-slate-500" />
                       <div className="flex items-center gap-2">
-                        <Label>Month:</Label>
-                        <select
-                          value={selectedMonth}
-                          onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                          className="border rounded-md px-3 py-1.5 bg-background"
-                        >
-                          {MONTHS.map(m => (
-                            <option key={m.value} value={m.value}>{m.label}</option>
-                          ))}
+                        <Label className="text-sm font-medium">Period:</Label>
+                        <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))} className="border rounded-md px-3 py-1.5 bg-white text-sm">
+                          {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                        </select>
+                        <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className="border rounded-md px-3 py-1.5 bg-white text-sm">
+                          {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
                         </select>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Label>Year:</Label>
-                        <select
-                          value={selectedYear}
-                          onChange={(e) => setSelectedYear(Number(e.target.value))}
-                          className="border rounded-md px-3 py-1.5 bg-background"
-                        >
-                          {YEARS.map(y => (
-                            <option key={y} value={y}>{y}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => fetchUnsettledDeliveries && fetchUnsettledDeliveries(selectedMonth, selectedYear)}
-                        disabled={unsettledLoading}
-                      >
-                        {unsettledLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Refresh'}
+                      <Button variant="outline" size="sm" onClick={refreshPreview} disabled={unsettledLoading || previewLoading}>
+                        {(unsettledLoading || previewLoading) ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Refresh'}
                       </Button>
                     </div>
 
-                    {/* Preview by Account */}
-                    <div className="border rounded-lg">
-                      <div className="p-3 bg-muted/50 border-b">
-                        <Label className="text-base font-semibold">
-                          Deliveries for {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}
-                        </Label>
+                    {/* === FLOW VISUALIZATION === */}
+                    <div className="grid grid-cols-3 gap-3" data-testid="settlement-preview-summary">
+                      {/* A: Deliveries */}
+                      <div className="border rounded-lg p-4 bg-blue-50/60 border-blue-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Truck className="h-4 w-4 text-blue-600" />
+                          <span className="font-semibold text-sm text-blue-800">Deliveries (Dist to Customer)</span>
+                        </div>
+                        <p className="text-2xl font-bold text-blue-700">{accountGroups.reduce((s, g) => s + g.deliveries.length, 0)}</p>
+                        <p className="text-xs text-blue-600 mt-1">Customer Billing: <span className="font-semibold">₹{fmt(totalDeliveryBilling)}</span></p>
+                        <p className="text-xs text-blue-600">Earnings: <span className="font-semibold">₹{fmt(totalEarnings)}</span></p>
                       </div>
-                      
+                      {/* B: Credit Notes */}
+                      <div className="border rounded-lg p-4 bg-emerald-50/60 border-emerald-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <CreditCard className="h-4 w-4 text-emerald-600" />
+                          <span className="font-semibold text-sm text-emerald-800">Credit Notes (Factory to Dist)</span>
+                        </div>
+                        <p className="text-2xl font-bold text-emerald-700">{previewSummary.total_credit_notes || 0}</p>
+                        <p className="text-xs text-emerald-600 mt-1">Total Credit: <span className="font-semibold">+₹{fmt(previewSummary.total_credit_note_amount)}</span></p>
+                        <p className="text-xs text-emerald-500">Customer return reimbursement</p>
+                      </div>
+                      {/* C: Factory Returns */}
+                      <div className="border rounded-lg p-4 bg-purple-50/60 border-purple-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Factory className="h-4 w-4 text-purple-600" />
+                          <span className="font-semibold text-sm text-purple-800">Factory Returns (Factory to Dist)</span>
+                        </div>
+                        <p className="text-2xl font-bold text-purple-700">{previewSummary.total_factory_returns || 0}</p>
+                        <p className="text-xs text-purple-600 mt-1">Total Credit: <span className="font-semibold">+₹{fmt(previewSummary.total_factory_return_amount)}</span></p>
+                        <p className="text-xs text-purple-500">Warehouse stock return credit</p>
+                      </div>
+                    </div>
+
+                    {/* === PAYOUT FORMULA === */}
+                    <div className="border rounded-lg p-4 bg-slate-900 text-white" data-testid="settlement-payout-formula">
+                      <p className="text-xs text-slate-400 uppercase tracking-wider font-medium mb-2">Net Payout Calculation</p>
+                      <div className="flex items-center gap-2 flex-wrap text-sm">
+                        <span className="bg-blue-600/20 text-blue-300 px-2 py-1 rounded font-mono">Earnings ₹{fmt(totalEarnings)}</span>
+                        <Minus className="h-3 w-3 text-amber-400 flex-shrink-0" />
+                        <span className="bg-amber-600/20 text-amber-300 px-2 py-1 rounded font-mono">Price Adj ₹{fmt(Math.abs(totalFactoryAdj))}</span>
+                        <Plus className="h-3 w-3 text-emerald-400 flex-shrink-0" />
+                        <span className="bg-emerald-600/20 text-emerald-300 px-2 py-1 rounded font-mono">Credit Notes ₹{fmt(previewSummary.total_credit_note_amount)}</span>
+                        <Plus className="h-3 w-3 text-purple-400 flex-shrink-0" />
+                        <span className="bg-purple-600/20 text-purple-300 px-2 py-1 rounded font-mono">Factory Returns ₹{fmt(previewSummary.total_factory_return_amount)}</span>
+                        <span className="text-slate-500 mx-1">=</span>
+                        <span className="bg-white/10 text-white px-3 py-1 rounded font-bold font-mono">
+                          ₹{fmt(totalEarnings - Math.abs(totalFactoryAdj) + (previewSummary.total_credit_note_amount || 0) + (previewSummary.total_factory_return_amount || 0))}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* === DELIVERY DETAILS === */}
+                    <div className="border rounded-lg overflow-hidden">
+                      <div className="p-3 bg-blue-50 border-b border-blue-100 flex items-center gap-2">
+                        <Truck className="h-4 w-4 text-blue-600" />
+                        <span className="font-semibold text-sm text-blue-800">Deliveries by Account</span>
+                        <Badge variant="secondary" className="ml-auto">{unsettledDeliveries.length} deliveries</Badge>
+                      </div>
                       {unsettledLoading ? (
-                        <div className="flex items-center justify-center py-8">
-                          <RefreshCw className="h-6 w-6 animate-spin" />
-                        </div>
+                        <div className="flex items-center justify-center py-6"><RefreshCw className="h-5 w-5 animate-spin text-blue-400" /></div>
                       ) : accountGroups.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <p className="text-sm">No unsettled deliveries found for this month</p>
-                        </div>
+                        <div className="text-center py-6 text-slate-400 text-sm">No unsettled deliveries for this period</div>
                       ) : (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm">
-                            <thead className="bg-muted/30">
-                              <tr>
-                                <th className="text-left p-3 font-medium">Account Name</th>
-                                <th className="text-right p-3 font-medium">Deliveries</th>
-                                <th className="text-right p-3 font-medium">Total Customer Billing</th>
-                                <th className="text-right p-3 font-medium">Distributor Earnings</th>
-                                <th className="text-right p-3 font-medium">Margin at Transfer</th>
-                                <th className="text-right p-3 font-medium">Adjustment</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {accountGroups.map(group => (
-                                <tr key={group.account_id} className="border-t hover:bg-muted/20">
-                                  <td className="p-3 font-medium">{group.account_name}</td>
-                                  <td className="p-3 text-right">{group.deliveries.length}</td>
-                                  <td className="p-3 text-right">₹{group.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                  <td className="p-3 text-right text-green-600">₹{group.distributor_earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                  <td className="p-3 text-right">₹{group.margin_at_transfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                  <td className={`p-3 text-right font-medium ${group.adjustment >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {group.adjustment >= 0 ? '+' : ''}₹{group.adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                            <tfoot className="bg-slate-100 dark:bg-slate-800 font-semibold">
-                              <tr>
-                                <td className="p-3">Total ({accountGroups.length} accounts)</td>
-                                <td className="p-3 text-right">{unsettledDeliveries.length}</td>
-                                <td className="p-3 text-right">₹{accountGroups.reduce((s, g) => s + g.total_billing, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                <td className="p-3 text-right text-green-600">₹{accountGroups.reduce((s, g) => s + g.distributor_earnings, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                <td className="p-3 text-right">₹{accountGroups.reduce((s, g) => s + g.margin_at_transfer, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                <td className={`p-3 text-right ${accountGroups.reduce((s, g) => s + g.adjustment, 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {accountGroups.reduce((s, g) => s + g.adjustment, 0) >= 0 ? '+' : ''}₹{accountGroups.reduce((s, g) => s + g.adjustment, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        <table className="w-full text-sm">
+                          <thead className="bg-slate-50"><tr>
+                            <th className="text-left p-3 font-medium text-slate-600">Account</th>
+                            <th className="text-right p-3 font-medium text-slate-600">Deliveries</th>
+                            <th className="text-right p-3 font-medium text-slate-600">Customer Billing</th>
+                            <th className="text-right p-3 font-medium text-blue-600">Dist Earnings</th>
+                            <th className="text-right p-3 font-medium text-amber-600">Price Adj (D→F)</th>
+                          </tr></thead>
+                          <tbody>
+                            {accountGroups.map(g => (
+                              <tr key={g.account_id} className="border-t hover:bg-slate-50/50">
+                                <td className="p-3 font-medium">{g.account_name}</td>
+                                <td className="p-3 text-right">{g.deliveries.length}</td>
+                                <td className="p-3 text-right">₹{fmt(g.total_billing)}</td>
+                                <td className="p-3 text-right text-blue-600 font-medium">₹{fmt(g.total_earnings)}</td>
+                                <td className={`p-3 text-right font-medium ${g.factory_adj > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                                  {g.factory_adj > 0 ? '-' : ''}₹{fmt(Math.abs(g.factory_adj))}
                                 </td>
                               </tr>
-                            </tfoot>
-                          </table>
-                        </div>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+
+                    {/* === CREDIT NOTES === */}
+                    <div className="border rounded-lg overflow-hidden">
+                      <div className="p-3 bg-emerald-50 border-b border-emerald-100 flex items-center gap-2">
+                        <CreditCard className="h-4 w-4 text-emerald-600" />
+                        <span className="font-semibold text-sm text-emerald-800">Credit Notes (Customer Returns Reimbursement)</span>
+                        <Badge variant="secondary" className="ml-auto bg-emerald-100 text-emerald-700">{previewCreditNotes.length} notes</Badge>
+                      </div>
+                      {previewLoading ? (
+                        <div className="flex items-center justify-center py-6"><RefreshCw className="h-5 w-5 animate-spin text-emerald-400" /></div>
+                      ) : previewCreditNotes.length === 0 ? (
+                        <div className="text-center py-6 text-slate-400 text-sm">No unsettled credit notes for this period</div>
+                      ) : (
+                        <table className="w-full text-sm">
+                          <thead className="bg-slate-50"><tr>
+                            <th className="text-left p-3 font-medium text-slate-600">CN Number</th>
+                            <th className="text-left p-3 font-medium text-slate-600">Account</th>
+                            <th className="text-left p-3 font-medium text-slate-600">Return #</th>
+                            <th className="text-left p-3 font-medium text-slate-600">Status</th>
+                            <th className="text-right p-3 font-medium text-emerald-600">Credit Amount</th>
+                          </tr></thead>
+                          <tbody>
+                            {previewCreditNotes.map(cn => (
+                              <tr key={cn.id} className="border-t hover:bg-slate-50/50">
+                                <td className="p-3 font-medium text-emerald-700">{cn.credit_note_number}</td>
+                                <td className="p-3">{cn.account_name || '-'}</td>
+                                <td className="p-3 text-slate-500">{cn.return_number || '-'}</td>
+                                <td className="p-3"><Badge variant="outline" className="text-xs">{cn.status}</Badge></td>
+                                <td className="p-3 text-right font-medium text-emerald-600">+₹{fmt(cn.original_amount || cn.total_amount || cn.amount)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+
+                    {/* === FACTORY RETURNS === */}
+                    <div className="border rounded-lg overflow-hidden">
+                      <div className="p-3 bg-purple-50 border-b border-purple-100 flex items-center gap-2">
+                        <Factory className="h-4 w-4 text-purple-600" />
+                        <span className="font-semibold text-sm text-purple-800">Factory Returns (Warehouse Stock Return Credit)</span>
+                        <Badge variant="secondary" className="ml-auto bg-purple-100 text-purple-700">{previewFactoryReturns.length} returns</Badge>
+                      </div>
+                      {previewLoading ? (
+                        <div className="flex items-center justify-center py-6"><RefreshCw className="h-5 w-5 animate-spin text-purple-400" /></div>
+                      ) : previewFactoryReturns.length === 0 ? (
+                        <div className="text-center py-6 text-slate-400 text-sm">No unsettled factory returns for this period</div>
+                      ) : (
+                        <table className="w-full text-sm">
+                          <thead className="bg-slate-50"><tr>
+                            <th className="text-left p-3 font-medium text-slate-600">Return #</th>
+                            <th className="text-left p-3 font-medium text-slate-600">Source</th>
+                            <th className="text-left p-3 font-medium text-slate-600">Reason</th>
+                            <th className="text-left p-3 font-medium text-slate-600">Date</th>
+                            <th className="text-right p-3 font-medium text-purple-600">Credit Amount</th>
+                          </tr></thead>
+                          <tbody>
+                            {previewFactoryReturns.map(fr => (
+                              <tr key={fr.id} className="border-t hover:bg-slate-50/50">
+                                <td className="p-3 font-medium text-purple-700">{fr.return_number}</td>
+                                <td className="p-3 capitalize">{fr.source || '-'}</td>
+                                <td className="p-3 capitalize">{(fr.reason || '-').replace(/_/g, ' ')}</td>
+                                <td className="p-3 text-slate-500">{fr.return_date || '-'}</td>
+                                <td className="p-3 text-right font-medium text-purple-600">+₹{fmt(fr.total_credit_amount)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       )}
                     </div>
 
                     {/* Remarks */}
                     <div className="space-y-2">
                       <Label>Remarks</Label>
-                      <Textarea
-                        placeholder="Any notes for this settlement..."
-                        value={settlementForm.remarks}
-                        onChange={(e) => setSettlementForm(prev => ({ ...prev, remarks: e.target.value }))}
-                        rows={2}
-                      />
+                      <Textarea placeholder="Notes for this settlement..." value={settlementForm.remarks} onChange={(e) => setSettlementForm(prev => ({ ...prev, remarks: e.target.value }))} rows={2} />
                     </div>
                   </div>
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setShowSettlementDialog(false)}>Cancel</Button>
-                    <Button
-                      onClick={handleCreateSettlement}
-                      disabled={savingSettlement || accountGroups.length === 0}
-                      data-testid="save-settlement-btn"
-                    >
-                      {savingSettlement ? 'Creating...' : `Generate ${accountGroups.length} Settlement(s)`}
+                    <Button onClick={handleCreateSettlement} disabled={savingSettlement || (accountGroups.length === 0 && previewCreditNotes.length === 0 && previewFactoryReturns.length === 0)} data-testid="save-settlement-btn">
+                      {savingSettlement ? 'Creating...' : 'Generate Settlement'}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -373,345 +358,167 @@ export default function SettlementsTab({
             )}
           </div>
         </div>
-        
-        {/* Filters Row */}
+        {/* Filters */}
         <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Month:</span>
-            </div>
-            <select
-              value={settlementsMonthFilter || 'all'}
-              onChange={(e) => {
-                setSettlementsMonthFilter(e.target.value);
-                setSettlementsPage(1);
-              }}
-              className="text-sm border rounded-md px-3 py-1.5 bg-background"
-            >
+          <div className="flex items-center gap-3">
+            <Calendar className="h-4 w-4 text-slate-400" />
+            <select value={settlementsMonthFilter || 'all'} onChange={(e) => { setSettlementsMonthFilter(e.target.value); setSettlementsPage(1); }} className="text-sm border rounded-md px-3 py-1.5 bg-background">
               <option value="all">All Months</option>
-              {MONTHS.map(m => (
-                <option key={m.value} value={m.value}>{m.label}</option>
-              ))}
+              {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
             </select>
-            
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">Year:</span>
-            </div>
-            <select
-              value={settlementsYearFilter || 'all'}
-              onChange={(e) => {
-                setSettlementsYearFilter(e.target.value);
-                setSettlementsPage(1);
-              }}
-              className="text-sm border rounded-md px-3 py-1.5 bg-background"
-            >
+            <select value={settlementsYearFilter || 'all'} onChange={(e) => { setSettlementsYearFilter(e.target.value); setSettlementsPage(1); }} className="text-sm border rounded-md px-3 py-1.5 bg-background">
               <option value="all">All Years</option>
-              {YEARS.map(y => (
-                <option key={y} value={y}>{y}</option>
-              ))}
+              {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
-          
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Show:</span>
-              <select
-                value={settlementsPageSize || 20}
-                onChange={(e) => {
-                  setSettlementsPageSize(Number(e.target.value));
-                  setSettlementsPage(1);
-                }}
-                className="text-sm border rounded-md px-2 py-1.5 bg-background"
-              >
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-              <span className="text-sm text-muted-foreground">per page</span>
-            </div>
-            
-            <div className="text-sm text-muted-foreground">
-              Total: <span className="font-medium">{settlementsTotal || 0}</span> settlements
-            </div>
+          <div className="flex items-center gap-3 text-sm text-slate-500">
+            <select value={settlementsPageSize || 20} onChange={(e) => { setSettlementsPageSize(Number(e.target.value)); setSettlementsPage(1); }} className="border rounded-md px-2 py-1.5 bg-background text-sm">
+              <option value={10}>10</option><option value={20}>20</option><option value={50}>50</option>
+            </select>
+            <span>per page</span>
+            <span className="font-medium text-slate-700">{settlementsTotal || 0} total</span>
           </div>
         </div>
       </CardHeader>
-      
+
       <CardContent>
         {settlementsLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
+          <div className="flex items-center justify-center py-12"><RefreshCw className="h-6 w-6 animate-spin text-slate-400" /></div>
         ) : settlements.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>No settlements generated</p>
-            <p className="text-sm">Generate a settlement for a month to calculate distributor payout per account</p>
+          <div className="text-center py-12 text-slate-400">
+            <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-40" />
+            <p className="font-medium">No settlements yet</p>
+            <p className="text-sm mt-1">Generate a settlement to calculate distributor payout</p>
           </div>
         ) : (
-          <>
-            {/* Settlements grouped by customer/account */}
-            <div className="space-y-4">
-              {settlementAccountGroups.map((group) => (
-                <div key={group.account_id} className="border border-emerald-100 rounded-xl overflow-hidden shadow-[0_2px_8px_rgba(6,95,70,0.04)] hover:shadow-[0_8px_24px_rgba(6,95,70,0.08)] transition-[transform,box-shadow] duration-300">
-                  {/* Account Header - Clickable */}
-                  <div 
-                    className="flex items-center justify-between p-5 bg-white cursor-pointer hover:bg-emerald-50/30 transition-colors duration-200"
-                    onClick={() => toggleSettlementAccount(group.account_id)}
-                    data-testid={`settlement-account-${group.account_id}`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-                        <Building2 className="h-5 w-5 text-emerald-700" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-base text-emerald-900" style={{ fontFamily: 'Manrope, sans-serif' }}>{group.account_name}</p>
-                        <p className="text-sm text-emerald-600/60">{group.settlements.length} settlement(s)</p>
-                      </div>
+          <div className="space-y-4">
+            {/* === GRAND TOTAL PAYOUT FLOW === */}
+            <div className="border rounded-xl p-5 bg-gradient-to-r from-slate-900 to-slate-800 text-white" data-testid="settlement-grand-totals">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm text-slate-400 font-medium uppercase tracking-wider">Settlement Summary ({settlements.length} settlements)</p>
+                <p className="text-xs text-slate-500">Net Payout = Earnings - Price Adj + Credit Notes + Factory Returns</p>
+              </div>
+              <div className="grid grid-cols-6 gap-3">
+                <div className="text-center">
+                  <p className="text-xs text-slate-400">Customer Billing</p>
+                  <p className="text-lg font-bold text-slate-200">₹{fmt(grandTotals.billing)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-blue-400">Dist Earnings</p>
+                  <p className="text-lg font-bold text-blue-300">₹{fmt(grandTotals.earnings)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-amber-400">Price Adj (D→F)</p>
+                  <p className="text-lg font-bold text-amber-300">{grandTotals.factory_adj > 0 ? '-' : ''}₹{fmt(Math.abs(grandTotals.factory_adj))}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-emerald-400">Credit Notes</p>
+                  <p className="text-lg font-bold text-emerald-300">+₹{fmt(grandTotals.cn_issued)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-purple-400">Factory Returns</p>
+                  <p className="text-lg font-bold text-purple-300">+₹{fmt(grandTotals.fr_credit)}</p>
+                </div>
+                <div className="text-center border-l border-slate-700 pl-3">
+                  <p className="text-xs text-white/60">Net Payout</p>
+                  <p className="text-xl font-bold text-white">₹{fmt(grandTotals.final_payout)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* === SETTLEMENTS BY ACCOUNT === */}
+            {settlementGroups.map(group => (
+              <div key={group.account_id} className="border rounded-xl overflow-hidden hover:shadow-md transition-shadow" data-testid={`settlement-account-${group.account_id}`}>
+                <div className="flex items-center justify-between p-4 bg-white cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => toggle(group.account_id)}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center">
+                      <Building2 className="h-4 w-4 text-slate-600" />
                     </div>
-                    <div className="flex items-center gap-8">
-                      <div className="text-right">
-                        <p className="text-xs text-emerald-600/60 uppercase tracking-wider font-medium">Billing Value</p>
-                        <p className="font-semibold text-slate-800">₹{group.totals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-emerald-600/60 uppercase tracking-wider font-medium">Earnings</p>
-                        <p className="font-semibold text-emerald-600">₹{group.totals.distributor_earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-emerald-600/60 uppercase tracking-wider font-medium">Adjustment</p>
-                        <p className={`font-semibold ${group.totals.adjustment >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {group.totals.adjustment >= 0 ? '+' : ''}₹{group.totals.adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </p>
-                      </div>
-                      <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center">
-                        {expandedSettlementAccounts[group.account_id] ? (
-                          <ChevronLeft className="h-5 w-5 text-emerald-700 rotate-90" />
-                        ) : (
-                          <ChevronLeft className="h-5 w-5 text-emerald-700 -rotate-90" />
-                        )}
-                      </div>
+                    <div>
+                      <p className="font-semibold text-sm">{group.account_name}</p>
+                      <p className="text-xs text-slate-400">{group.settlements.length} settlement(s)</p>
                     </div>
                   </div>
-                  
-                  {/* Expanded Settlements Table */}
-                  {expandedSettlementAccounts[group.account_id] && (
-                    <div className="border-t border-emerald-100">
-                      <table className="w-full border-collapse text-sm">
-                        <thead>
-                          <tr className="bg-emerald-50/30 border-b border-emerald-100/60">
-                            <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Settlement #</th>
-                            <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Month/Year</th>
-                            <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Deliveries</th>
-                            <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Billing Value</th>
-                            <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Earnings</th>
-                            <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Margin at Transfer</th>
-                            <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Adjustment</th>
-                            <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Status</th>
-                            <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {group.settlements.map((settlement, index) => (
-                            <tr 
-                              key={settlement.id} 
-                              className={`border-b border-emerald-50 transition-colors duration-200 cursor-pointer
-                                ${index % 2 === 1 ? 'bg-emerald-50/40' : 'bg-white'}
-                                hover:bg-emerald-50/60`}
-                              onClick={() => viewSettlementDetail(settlement.id)}
-                            >
-                              <td className="p-4">
-                                <button 
-                                  className="font-medium text-emerald-700 hover:text-emerald-800 hover:underline"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    viewSettlementDetail(settlement.id);
-                                  }}
-                                >
-                                  {settlement.settlement_number}
-                                </button>
-                              </td>
-                              <td className="p-4 text-slate-700">
-                                {settlement.settlement_month ? MONTHS.find(m => m.value === settlement.settlement_month)?.label : '-'} {settlement.settlement_year}
-                              </td>
-                              <td className="p-4 text-right text-slate-800">{settlement.total_deliveries || 0}</td>
-                              <td className="p-4 text-right font-medium text-slate-800">₹{(settlement.total_billing_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                              <td className="p-4 text-right text-emerald-600 font-medium">₹{(settlement.distributor_earnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                              <td className="p-4 text-right text-slate-700">₹{(settlement.margin_at_transfer_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                              <td className={`p-4 text-right font-medium ${(settlement.adjustment_payable || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                {(settlement.adjustment_payable || 0) >= 0 ? '+' : ''}₹{(settlement.adjustment_payable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                              </td>
-                              <td className="p-4 text-center">
-                                {getSettlementStatusBadge(settlement.status)}
-                              </td>
-                              <td className="p-4 text-center">
+                  <div className="flex items-center gap-5 text-right">
+                    <div><p className="text-[10px] text-slate-400 uppercase">Earnings</p><p className="text-sm font-semibold text-blue-600">₹{fmt(group.totals.earnings)}</p></div>
+                    <div><p className="text-[10px] text-slate-400 uppercase">Price Adj</p><p className="text-sm font-semibold text-amber-600">{group.totals.factory_adj > 0 ? '-' : ''}₹{fmt(Math.abs(group.totals.factory_adj))}</p></div>
+                    <div><p className="text-[10px] text-slate-400 uppercase">Credit Notes</p><p className="text-sm font-semibold text-emerald-600">+₹{fmt(group.totals.cn_issued)}</p></div>
+                    <div><p className="text-[10px] text-slate-400 uppercase">Factory Ret.</p><p className="text-sm font-semibold text-purple-600">+₹{fmt(group.totals.fr_credit)}</p></div>
+                    <div className="border-l pl-4"><p className="text-[10px] text-slate-400 uppercase">Net Payout</p><p className="text-sm font-bold">₹{fmt(group.totals.final_payout)}</p></div>
+                    <div className={`w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center transition-transform ${expandedIds[group.account_id] ? 'rotate-180' : ''}`}>
+                      <ArrowDown className="h-4 w-4 text-slate-500" />
+                    </div>
+                  </div>
+                </div>
+                {expandedIds[group.account_id] && (
+                  <div className="border-t">
+                    <table className="w-full text-sm">
+                      <thead><tr className="bg-slate-50 text-xs text-slate-500 uppercase">
+                        <th className="text-left p-3">Settlement #</th>
+                        <th className="text-left p-3">Period</th>
+                        <th className="text-right p-3">Billing</th>
+                        <th className="text-right p-3 text-blue-600">Earnings</th>
+                        <th className="text-right p-3 text-amber-600">Price Adj</th>
+                        <th className="text-right p-3 text-emerald-600">Credit Notes</th>
+                        <th className="text-right p-3 text-purple-600">Factory Ret.</th>
+                        <th className="text-right p-3 font-bold">Net Payout</th>
+                        <th className="text-center p-3">Status</th>
+                        <th className="text-center p-3">Actions</th>
+                      </tr></thead>
+                      <tbody>
+                        {group.settlements.map((s, i) => {
+                          const cnVal = s.total_credit_notes_issued || s.credit_notes_applied || 0;
+                          const frVal = s.total_factory_return_credit || 0;
+                          const adjVal = s.factory_distributor_adjustment || 0;
+                          return (
+                            <tr key={s.id} className={`border-t hover:bg-slate-50 cursor-pointer ${i % 2 === 1 ? 'bg-slate-50/40' : ''}`} onClick={() => viewSettlementDetail(s.id)}>
+                              <td className="p-3"><button className="font-medium text-blue-600 hover:underline" onClick={(e) => { e.stopPropagation(); viewSettlementDetail(s.id); }}>{s.settlement_number}</button></td>
+                              <td className="p-3 text-slate-600">{MONTHS.find(m => m.value === s.settlement_month)?.label} {s.settlement_year}</td>
+                              <td className="p-3 text-right">₹{fmt(s.total_billing_value)}</td>
+                              <td className="p-3 text-right text-blue-600 font-medium">₹{fmt(s.distributor_earnings)}</td>
+                              <td className={`p-3 text-right font-medium ${adjVal > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{adjVal > 0 ? '-' : ''}₹{fmt(Math.abs(adjVal))}</td>
+                              <td className={`p-3 text-right font-medium ${cnVal > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{cnVal > 0 ? '+' : ''}₹{fmt(cnVal)}</td>
+                              <td className={`p-3 text-right font-medium ${frVal > 0 ? 'text-purple-600' : 'text-slate-400'}`}>{frVal > 0 ? '+' : ''}₹{fmt(frVal)}</td>
+                              <td className="p-3 text-right font-bold">₹{fmt(s.final_payout)}</td>
+                              <td className="p-3 text-center">{getSettlementStatusBadge(s.status)}</td>
+                              <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex justify-center gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0 hover:bg-emerald-100"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      viewSettlementDetail(settlement.id);
-                                    }}
-                                  >
-                                    <FileText className="h-4 w-4 text-emerald-700" />
-                                  </Button>
-                                  {settlement.status === 'draft' && canManage && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleSubmitSettlement && handleSubmitSettlement(settlement.id);
-                                      }}
-                                      title="Submit for Approval"
-                                    >
-                                      <Send className="h-4 w-4" />
-                                    </Button>
+                                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => viewSettlementDetail(s.id)} title="View"><FileText className="h-3.5 w-3.5" /></Button>
+                                  {s.status === 'draft' && canManage && (
+                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600 hover:bg-blue-50" onClick={() => handleSubmitSettlement(s.id)} title="Submit"><Send className="h-3.5 w-3.5" /></Button>
                                   )}
-                                  {settlement.status === 'pending_approval' && canApprove && (
-                                    <>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleApproveSettlement && handleApproveSettlement(settlement.id);
-                                        }}
-                                        title="Approve"
-                                      >
-                                        <Check className="h-4 w-4" />
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-8 w-8 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleRejectSettlement && handleRejectSettlement(settlement.id);
-                                        }}
-                                        title="Reject"
-                                      >
-                                        <X className="h-4 w-4" />
-                                      </Button>
-                                    </>
-                                  )}
-                                  {(canDelete || (canManage && settlement.status === 'draft')) && (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-8 w-8 p-0 text-destructive hover:bg-red-50"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setDeleteTarget({
-                                          type: 'settlement',
-                                          id: settlement.id,
-                                          name: settlement.settlement_number
-                                        });
-                                      }}
-                                      title="Delete"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
+                                  {s.status === 'pending_approval' && canApprove && (<>
+                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600 hover:bg-emerald-50" onClick={() => handleApproveSettlement(s.id)} title="Approve"><Check className="h-3.5 w-3.5" /></Button>
+                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-orange-600 hover:bg-orange-50" onClick={() => handleRejectSettlement(s.id)} title="Reject"><X className="h-3.5 w-3.5" /></Button>
+                                  </>)}
+                                  {(canDelete || (canManage && s.status === 'draft')) && (
+                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50" onClick={() => setDeleteTarget({ type: 'settlement', id: s.id, name: s.settlement_number })} title="Delete"><Trash2 className="h-3.5 w-3.5" /></Button>
                                   )}
                                 </div>
                               </td>
                             </tr>
-                          ))}
-                          {/* Account Total Row */}
-                          <tr className="bg-emerald-100/50 font-semibold">
-                            <td colSpan={2} className="p-4 text-right text-emerald-800">Account Total:</td>
-                            <td className="p-4 text-right text-emerald-800">{group.totals.total_deliveries}</td>
-                            <td className="p-4 text-right text-emerald-800">₹{group.totals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-4 text-right text-emerald-600">₹{group.totals.distributor_earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-4 text-right text-emerald-800">₹{group.totals.margin_at_transfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className={`p-4 text-right ${group.totals.adjustment >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                              {group.totals.adjustment >= 0 ? '+' : ''}₹{group.totals.adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td colSpan={2}></td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              ))}
-              
-              {/* Grand Total */}
-              <div className="border border-emerald-200 rounded-xl p-6 bg-gradient-to-r from-emerald-50 to-emerald-100/50 shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
-                <div className="flex items-center justify-between">
-                  <div className="font-semibold text-emerald-900" style={{ fontFamily: 'Manrope, sans-serif' }}>
-                    Grand Total ({settlementAccountGroups.length} customer(s), {settlements.length} settlement(s))
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
-                  <div className="flex items-center gap-8">
-                    <div className="text-right">
-                      <p className="text-xs text-emerald-600/60 uppercase tracking-wider font-medium">Total Billing</p>
-                      <p className="font-bold text-lg text-emerald-800">₹{settlementAccountGroups.reduce((sum, g) => sum + g.totals.total_billing, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-emerald-600/60 uppercase tracking-wider font-medium">Total Earnings</p>
-                      <p className="font-bold text-lg text-emerald-600">₹{settlementAccountGroups.reduce((sum, g) => sum + g.totals.distributor_earnings, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-emerald-600/60 uppercase tracking-wider font-medium">Net Adjustment</p>
-                      <p className={`font-bold text-lg ${settlementAccountGroups.reduce((sum, g) => sum + g.totals.adjustment, 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                        {settlementAccountGroups.reduce((sum, g) => sum + g.totals.adjustment, 0) >= 0 ? '+' : ''}₹{settlementAccountGroups.reduce((sum, g) => sum + g.totals.adjustment, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
-            </div>
-            
+            ))}
+
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                <div className="text-sm text-muted-foreground">
-                  Showing {((settlementsPage - 1) * settlementsPageSize) + 1} to {Math.min(settlementsPage * settlementsPageSize, settlementsTotal)} of {settlementsTotal} settlements
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSettlementsPage(1)}
-                    disabled={settlementsPage === 1}
-                  >
-                    First
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSettlementsPage(prev => Math.max(1, prev - 1))}
-                    disabled={settlementsPage === 1}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <span className="text-sm px-2">Page {settlementsPage} of {totalPages}</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSettlementsPage(prev => Math.min(totalPages, prev + 1))}
-                    disabled={settlementsPage === totalPages}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSettlementsPage(totalPages)}
-                    disabled={settlementsPage === totalPages}
-                  >
-                    Last
-                  </Button>
+              <div className="flex items-center justify-between pt-4 border-t">
+                <span className="text-sm text-slate-500">Page {settlementsPage} of {totalPages}</span>
+                <div className="flex gap-1">
+                  <Button variant="outline" size="sm" onClick={() => setSettlementsPage(1)} disabled={settlementsPage === 1}>First</Button>
+                  <Button variant="outline" size="sm" onClick={() => setSettlementsPage(p => Math.max(1, p - 1))} disabled={settlementsPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
+                  <Button variant="outline" size="sm" onClick={() => setSettlementsPage(p => Math.min(totalPages, p + 1))} disabled={settlementsPage === totalPages}><ChevronRight className="h-4 w-4" /></Button>
+                  <Button variant="outline" size="sm" onClick={() => setSettlementsPage(totalPages)} disabled={settlementsPage === totalPages}>Last</Button>
                 </div>
               </div>
             )}
-          </>
+          </div>
         )}
       </CardContent>
     </Card>

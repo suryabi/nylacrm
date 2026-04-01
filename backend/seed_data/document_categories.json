@@ -1,0 +1,26 @@
+[
+  {
+    "id": "5f2fbf63-e6c4-49ca-8933-0d598d400e84",
+    "name": "Sales Materials",
+    "description": "Sales brochures and presentations",
+    "created_by": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "created_at": "2026-02-22T20:36:41.690659+00:00",
+    "updated_at": "2026-02-22T20:36:41.690661+00:00"
+  },
+  {
+    "id": "a732c865-e543-4656-8658-be80dfb61c62",
+    "name": "Company Certifications",
+    "description": "FSSAI , BIS , etc..",
+    "created_by": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "created_at": "2026-02-22T20:49:01.956283+00:00",
+    "updated_at": "2026-02-24T14:17:26.970689+00:00"
+  },
+  {
+    "id": "96abdd21-b04b-43b9-9a4f-34fe6475c1fc",
+    "name": "Proposals",
+    "description": "Customer Proposals",
+    "created_by": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "created_at": "2026-02-22T20:49:54.685863+00:00",
+    "updated_at": "2026-02-22T20:49:54.685866+00:00"
+  }
+]

@@ -1,0 +1,381 @@
+[
+  {
+    "id": "81263309-2118-4d51-b1d9-fe9549da07b7",
+    "account_id": "TOOP-HYD-A26-001",
+    "lead_id": "TOOP-HYD-L26-001",
+    "account_name": "Toopa Ice-creamery",
+    "account_type": "Tier 1",
+    "contact_name": "Mr. Raj Kumar",
+    "contact_number": "+91-9876543210",
+    "city": "Hyderabad",
+    "state": "Telangana",
+    "territory": "South India",
+    "assigned_to": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "sku_pricing": [
+      {
+        "sku": "20L Premium",
+        "price_per_unit": 150.0,
+        "return_bottle_credit": 10.0
+      },
+      {
+        "sku": "1L Pack (12)",
+        "price_per_unit": 180.0,
+        "return_bottle_credit": 0.0
+      },
+      {
+        "sku": "",
+        "price_per_unit": 0.0,
+        "return_bottle_credit": 0.0
+      }
+    ],
+    "outstanding_balance": 0.0,
+    "overdue_amount": 0.0,
+    "last_payment_date": null,
+    "last_payment_amount": 0.0,
+    "created_at": "2026-02-19T17:31:15.847722+00:00",
+    "updated_at": "2026-03-18T06:34:56.584386+00:00",
+    "category": "Restaurant",
+    "next_follow_up": "2026-03-04",
+    "sales_owner_id": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "sales_owner_name": "Surya Yadavalli",
+    "tenant_id": "nyla-air-water",
+    "invoice_count": 0,
+    "last_invoice_date": "2026-02-15",
+    "last_invoice_no": "INV-NEW-FORMAT-001",
+    "total_credit_note_value": 0,
+    "total_gross_invoice_value": 0,
+    "total_net_invoice_value": 0,
+    "total_outstanding": 0
+  },
+  {
+    "id": "fafad845-4809-4597-ab2d-74b7cabe4412",
+    "account_id": "LEAD-HYD-A26-001",
+    "lead_id": "LEAD_17",
+    "account_name": "Lead Seventeen Test",
+    "account_type": null,
+    "contact_name": null,
+    "contact_number": null,
+    "city": "Hyderabad",
+    "state": "Telangana",
+    "territory": "South",
+    "assigned_to": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6",
+    "sku_pricing": [
+      {
+        "sku": "Nyla \u2013 600 ml / Silver",
+        "price_per_unit": 125.0,
+        "return_bottle_credit": 30.0
+      },
+      {
+        "sku": "Nyla \u2013 660 ml / Gold",
+        "price_per_unit": 145.0,
+        "return_bottle_credit": 30.0
+      },
+      {
+        "sku": "Nyla \u2013 330 ml / Sparkling",
+        "price_per_unit": 72.0,
+        "return_bottle_credit": 15.0
+      }
+    ],
+    "outstanding_balance": 0.0,
+    "overdue_amount": 0.0,
+    "last_payment_date": null,
+    "last_payment_amount": 0.0,
+    "created_at": "2026-02-19T17:34:40.803404+00:00",
+    "updated_at": "2026-03-22T04:43:12.711341+00:00",
+    "category": "Restaurant",
+    "sales_owner_id": "8194d1b1-d50c-4a04-a9a7-5a79e4d8b5fd",
+    "sales_owner_name": "Vamsi Bommena",
+    "tenant_id": "nyla-air-water",
+    "invoice_count": 0,
+    "last_invoice_date": "2026-02-25",
+    "total_credit_note_value": 0,
+    "total_gross_invoice_value": 0,
+    "total_net_invoice_value": 0,
+    "total_outstanding": 0
+  },
+  {
+    "id": "d4e2187a-5e7d-4847-902b-b6699ae910fc",
+    "account_id": "EMPI-BEN-A26-001",
+    "lead_id": "EMPI-BEN-L26-001",
+    "account_name": "Empire Restaurant",
+    "account_type": "Tier 1",
+    "contact_name": "adfasfasf",
+    "contact_number": "+91 80 4267 8888",
+    "city": "Bengaluru",
+    "state": "Karnataka",
+    "territory": "South India",
+    "assigned_to": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "sku_pricing": [
+      {
+        "sku": "Nyla \u2013 330 ml / Silver",
+        "price_per_unit": 140.0,
+        "return_bottle_credit": 45.0
+      },
+      {
+        "sku": "Nyla \u2013 660 ml / Gold",
+        "price_per_unit": 150.0,
+        "return_bottle_credit": 45.0
+      }
+    ],
+    "outstanding_balance": 0.0,
+    "overdue_amount": 0.0,
+    "last_payment_date": null,
+    "last_payment_amount": 0.0,
+    "created_at": "2026-02-19T17:42:44.476682+00:00",
+    "updated_at": "2026-03-22T12:22:02.491067+00:00",
+    "delivery_address": {
+      "address_line1": "Sy no 90, 7 & 90/8, Outer Ring Rd, beside Radisson Blu 8, Marathahalli Village, Marathahalli",
+      "address_line2": "Bengaluru",
+      "city": "Bengaluru",
+      "state": "Karnataka",
+      "pincode": "560037",
+      "landmark": ""
+    },
+    "category": "Restaurant",
+    "sales_owner_id": "77d8163f-7a11-46ef-9afb-c1596e5624ec",
+    "sales_owner_name": "Karanabir Singh Gulati",
+    "tenant_id": "nyla-air-water",
+    "invoice_count": 0,
+    "last_invoice_date": "2026-02-06",
+    "total_credit_note_value": 0,
+    "total_gross_invoice_value": 0,
+    "total_net_invoice_value": 0,
+    "total_outstanding": 0
+  },
+  {
+    "id": "fc96dab4-7c1b-4746-bfb4-d78a1083aedb",
+    "account_id": "TEST-DEL-A26-001",
+    "lead_id": "TEST-DEL-L26-003",
+    "account_name": "Test Status Validation Company",
+    "account_type": null,
+    "contact_name": null,
+    "contact_number": "9876543210",
+    "city": "Delhi",
+    "state": "Delhi",
+    "territory": "North India",
+    "assigned_to": null,
+    "sku_pricing": [
+      {
+        "sku": "Nyla \u2013 330 ml / Silver",
+        "price_per_unit": 45.0,
+        "return_bottle_credit": 14.0
+      }
+    ],
+    "outstanding_balance": 0.0,
+    "overdue_amount": 0.0,
+    "last_payment_date": null,
+    "last_payment_amount": 0.0,
+    "created_at": "2026-02-24T14:21:01.651678+00:00",
+    "updated_at": "2026-03-18T06:34:56.583358+00:00",
+    "category": "Hotel",
+    "delivery_address": {
+      "address_line1": "Golkonda Resorts Road Gandipet, Osman Sagar, Narsingi",
+      "address_line2": "Hyderabad",
+      "city": "Hyderabad",
+      "state": "Delhi",
+      "pincode": "500075",
+      "landmark": ""
+    },
+    "logo_height_mm": 35,
+    "logo_url": "/api/static/logos/fc96dab4-7c1b-4746-bfb4-d78a1083aedb.png",
+    "logo_width_mm": 35,
+    "sales_owner_id": "d6ff6bf4-8cc4-49d4-a54e-64cbca30c221",
+    "sales_owner_name": "Rahul Sharma",
+    "tenant_id": "nyla-air-water",
+    "invoice_count": 0,
+    "last_invoice_date": "2025-12-31",
+    "total_credit_note_value": 0,
+    "total_gross_invoice_value": 0,
+    "total_net_invoice_value": 0,
+    "total_outstanding": 0
+  },
+  {
+    "id": "82e80890-e390-4d54-a64b-378316b1918d",
+    "account_id": "OCEA-HYD-A26-001",
+    "lead_id": "OCEA-MUM-L26-003",
+    "account_name": "Oceans Fresh Seafood",
+    "account_type": null,
+    "contact_name": null,
+    "contact_number": null,
+    "city": "Hyderabad",
+    "state": "Telangana",
+    "territory": "South India",
+    "assigned_to": "c368292a-c134-4d6f-ab0d-e8345a72c610",
+    "sku_pricing": [
+      {
+        "sku": "Nyla \u2013 660 ml / Gold",
+        "price_per_unit": 120.0,
+        "return_bottle_credit": 25.0
+      },
+      {
+        "sku": "Nyla \u2013 330 ml / Silver",
+        "price_per_unit": 65.0,
+        "return_bottle_credit": 15.0
+      }
+    ],
+    "outstanding_balance": 0.0,
+    "overdue_amount": 0.0,
+    "last_payment_date": null,
+    "last_payment_amount": 0.0,
+    "created_at": "2026-02-27T18:51:11.558558+00:00",
+    "updated_at": "2026-03-18T06:34:56.587071+00:00",
+    "category": "Restaurant",
+    "sales_owner_id": "019c536c-9b37-4764-93d6-11706d31916d",
+    "sales_owner_name": "Priya Menon",
+    "tenant_id": "nyla-air-water",
+    "invoice_count": 0,
+    "last_invoice_date": "2026-03-10",
+    "total_credit_note_value": 0,
+    "total_gross_invoice_value": 0,
+    "total_net_invoice_value": 0,
+    "total_outstanding": 0
+  },
+  {
+    "id": "2a03a944-2b5b-419a-94f0-859f35693c3e",
+    "account_id": "TAJS-AMB-A26-001",
+    "lead_id": "TAJS-AMB-L26-001",
+    "account_name": "Taj Sarees",
+    "account_type": null,
+    "contact_name": null,
+    "contact_number": "+91 94665 10617",
+    "city": "Ambala",
+    "state": "Haryana",
+    "territory": "North India",
+    "assigned_to": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "sku_pricing": [
+      {
+        "sku": "Nyla \u2013 330 ml / Silver",
+        "price_per_unit": 58.0,
+        "return_bottle_credit": 15.0
+      },
+      {
+        "sku": "Nyla \u2013 660 ml / Gold",
+        "price_per_unit": 94.0,
+        "return_bottle_credit": 30.0
+      }
+    ],
+    "outstanding_balance": 0.0,
+    "overdue_amount": 0.0,
+    "last_payment_date": null,
+    "last_payment_amount": 0.0,
+    "created_at": "2026-02-28T09:54:14.919557+00:00",
+    "updated_at": "2026-03-18T06:34:56.582322+00:00",
+    "category": "Restaurant",
+    "delivery_address": {
+      "address_line1": "887/11, Chowk, Jalbera Rd, near Manav chowk, W D S Colony, Ambala",
+      "address_line2": "Singanwala",
+      "city": "Singanwala",
+      "state": "Haryana",
+      "pincode": "134003",
+      "landmark": ""
+    },
+    "invoice_count": 0,
+    "last_invoice_date": "2026-01-20",
+    "last_invoice_no": "INV-001412",
+    "total_credit_note_value": 0,
+    "total_gross_invoice_value": 0,
+    "total_net_invoice_value": 0,
+    "total_outstanding": 0,
+    "sales_owner_id": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "sales_owner_name": "System Admin",
+    "tenant_id": "nyla-air-water",
+    "scoring": {
+      "total_score": 100,
+      "category_scores": {
+        "b7d771ae-510d-461d-a995-52cf3ebf8ad3": {
+          "score": 25,
+          "tier_id": "5b9878d7-8c66-4e91-b876-270557506ebf",
+          "tier_label": ">5000",
+          "category_name": "Volume Potential",
+          "category_weight": 25
+        },
+        "73c50da5-302f-443a-952f-461b36397a5b": {
+          "score": 20,
+          "tier_id": "5a305b11-afed-4c1c-923c-bacbcdb3c81d",
+          "tier_label": ">40%",
+          "category_name": "Margin Potential",
+          "category_weight": 20
+        },
+        "e9d58953-70c5-4d27-b254-86d16a497917": {
+          "score": 20,
+          "tier_id": "e6b984cb-c9b4-4ae7-9aa1-d8111a88ab4d",
+          "tier_label": "5-Star Global Hotel",
+          "category_name": "Brand Prestige",
+          "category_weight": 20
+        },
+        "15cb2c86-5eac-4af0-a24e-de93e9d5ce34": {
+          "score": 20,
+          "tier_id": "0e7d709a-24e0-4833-bdde-21cfac852591",
+          "tier_label": "International Luxury Travellers",
+          "category_name": "Guest Influence",
+          "category_weight": 20
+        },
+        "16525d30-34e7-42dd-9a03-0c9b5d42e163": {
+          "score": 15,
+          "tier_id": "b60c5c0b-f1f7-45bb-92f3-f2871bc35abf",
+          "tier_label": "Strong ESG / Eco Luxury",
+          "category_name": "Sustainability Alignment",
+          "category_weight": 15
+        }
+      },
+      "quadrant": "Stars",
+      "scored_at": "2026-03-13T19:43:52.136614+00:00",
+      "scored_by": "7d03cff4-4db2-4b2e-969b-f5b3d57d58a6"
+    }
+  },
+  {
+    "id": "5b939dbe-ccc2-4615-8f4c-6d337aad0fdc",
+    "account_id": "ORLO-HYD-A26-001",
+    "lead_id": "ORLO-HYD-L26-001",
+    "account_name": "Orlo",
+    "invoice_count": 1,
+    "last_invoice_date": "2026-01-21",
+    "last_invoice_no": "INV-009083",
+    "total_credit_note_value": 4538.9,
+    "total_gross_invoice_value": 7227.7,
+    "total_net_invoice_value": 11766.6,
+    "total_outstanding": 107765.0,
+    "updated_at": "2026-03-18T06:35:27.845294+00:00"
+  },
+  {
+    "id": "feaaaec8-fbd3-4c78-9b88-5dabc9ba2630",
+    "account_id": "PATN-KOL-A26-001",
+    "lead_id": "PATN-CHE-L26-001",
+    "account_name": "Patni Plaza",
+    "account_type": null,
+    "contact_name": null,
+    "contact_number": null,
+    "city": "Kolkata",
+    "state": "West Bengal",
+    "territory": "East India",
+    "assigned_to": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "next_follow_up": null,
+    "sku_pricing": [
+      {
+        "sku": "Nyla \u2013 600 ml / Silver",
+        "price_per_unit": 100.0,
+        "return_bottle_credit": 30.0
+      },
+      {
+        "sku": "Nyla \u2013 330 ml / Silver",
+        "price_per_unit": 100.0,
+        "return_bottle_credit": 15.0
+      },
+      {
+        "sku": "Nyla \u2013 330 ml / Gold",
+        "price_per_unit": 100.0,
+        "return_bottle_credit": 15.0
+      }
+    ],
+    "outstanding_balance": 0.0,
+    "overdue_amount": 0.0,
+    "last_payment_date": null,
+    "last_payment_amount": 0.0,
+    "created_at": "2026-03-23T08:45:06.448117+00:00",
+    "updated_at": "2026-03-31T16:54:36.057126+00:00",
+    "category": "Restaurant",
+    "tenant_id": "nyla-air-water",
+    "onboarded_month": 2,
+    "onboarded_year": 2026
+  }
+]

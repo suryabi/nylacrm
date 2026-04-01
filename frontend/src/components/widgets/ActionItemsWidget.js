@@ -44,8 +44,7 @@ export function ActionItemsWidget({
   taskFilter,
   setTaskFilter,
   onCompleteTask,
-  onUpdateTask,
-  onNewTask
+  onUpdateTask
 }) {
   const navigate = useNavigate();
   const [expandedTaskId, setExpandedTaskId] = useState(null);
@@ -124,15 +123,17 @@ export function ActionItemsWidget({
             </div>
           </div>
           
-          <Button 
-            size="sm" 
-            onClick={onNewTask} 
-            data-testid="new-task-btn"
-            className="h-8 sm:h-9 px-2 sm:px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-md shadow-emerald-200/50 dark:shadow-emerald-900/30 border-0"
-          >
-            <Plus className="h-4 w-4 sm:mr-1.5" /> 
-            <span className="hidden sm:inline">New Task</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/tasks')}
+              className="h-8 sm:h-9 px-2 sm:px-4"
+            >
+              <ExternalLink className="h-4 w-4 sm:mr-1.5" />
+              <span className="hidden sm:inline">View All</span>
+            </Button>
+          </div>
         </div>
         
         {/* Filter Tabs - Full width on mobile */}

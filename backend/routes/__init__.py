@@ -29,6 +29,12 @@ from .ai_assistant import router as ai_assistant_router
 from .scoring import router as scoring_router
 from .invoices import router as invoices_router
 from .distributors import router as distributors_router
+from .task_management import router as task_management_router
+from .return_reasons import router as return_reasons_router
+from .customer_returns import router as customer_returns_router
+from .credit_notes import router as credit_notes_router
+from .factory_returns import router as factory_returns_router
+from .performance import router as performance_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -61,5 +67,22 @@ routes_router.include_router(invoices_router, prefix="/invoices", tags=["Invoice
 
 # Distributor Management
 routes_router.include_router(distributors_router, prefix="/distributors", tags=["Distributors"])
+
+# Task Management (GitHub-style Issue Tracker)
+routes_router.include_router(task_management_router, prefix="/task-management", tags=["Task Management"])
+
+# Return Reasons Master
+routes_router.include_router(return_reasons_router, prefix="/return-reasons", tags=["Return Reasons"])
+
+# Customer Returns (under distributors)
+routes_router.include_router(customer_returns_router, prefix="/distributors", tags=["Customer Returns"])
+
+# Credit Notes (under distributors)
+routes_router.include_router(credit_notes_router, prefix="/distributors", tags=["Credit Notes"])
+
+routes_router.include_router(factory_returns_router, prefix="/distributors", tags=["Factory Returns"])
+
+# Performance Tracking
+routes_router.include_router(performance_router, prefix="/performance", tags=["Performance Tracking"])
 
 __all__ = ['routes_router']

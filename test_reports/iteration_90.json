@@ -1,0 +1,96 @@
+{
+  "summary": "Factory Return Source-First Selection feature tested successfully. All 13 features verified: (1) Source is primary selection with two card-style buttons, (2) Warehouse source shows only Expired/Damaged reasons, (3) Customer source shows Empty/Reusable/Expired/Damaged reasons, (4) Warehouse source shows amber settlement warning banner, (5) Customer source shows blue 'no additional settlement' info banner, (6) Switching sources changes reason dropdown and banner, (7) Warehouse source creates return with requires_settlement=true, (8) Customer source creates return with requires_settlement=false, (9) Backend rejects empty_reusable with warehouse source (400 error), (10) Factory returns table shows Source column with Warehouse/Customer badges, (11) Factory returns table shows Settlement column with Adjustable/Tracking only badges, (12) Confirm factory return deducts stock from warehouse, (13) Settlement query filters by requires_settlement/source=warehouse.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_factory_returns_source.py",
+    "/app/test_reports/pytest/factory_returns_source_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_factory_returns_source.py - New test file for source-first selection"
+  ],
+  "success_rate": {
+    "backend": "100% - 8/8 tests passed",
+    "frontend": "100% - All UI features verified"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123"
+  },
+  "seed_data_creation": "Factory returns created during testing with both warehouse and customer_return sources",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Factory Return dialog now has source-first selection: (1) Warehouse Stock - expired/damaged only, requires_settlement=true, amber warning banner, (2) Customer Return - empty_reusable/expired/damaged, requires_settlement=false, blue info banner. Factory returns table shows Source column (Warehouse/Customer badges) and Settlement column (Adjustable/Tracking only badges). Settlement query uses $or: [{requires_settlement: true}, {source: 'warehouse'}] to handle both old and new records.",
+  "features_tested": {
+    "Source_Primary_Selection": {
+      "status": "PASSED",
+      "verified": [
+        "Two card-style buttons: Warehouse Stock, Customer Return",
+        "Warehouse selected by default with amber border",
+        "Customer Return shows blue border when selected"
+      ]
+    },
+    "Warehouse_Source_Reasons": {
+      "status": "PASSED",
+      "verified": [
+        "Shows only 'Expired Stock' and 'Damaged Stock' options",
+        "Does NOT show 'Empty / Reusable Bottles' option"
+      ]
+    },
+    "Customer_Source_Reasons": {
+      "status": "PASSED",
+      "verified": [
+        "Shows 'Empty / Reusable Bottles' as first option",
+        "Also shows 'Expired Stock' and 'Damaged Stock' options"
+      ]
+    },
+    "Settlement_Banners": {
+      "status": "PASSED",
+      "verified": [
+        "Warehouse: Amber banner - 'This return will be adjusted in settlement'",
+        "Customer: Blue banner - 'No additional settlement — customer returns are already accounted for via credit notes'"
+      ]
+    },
+    "Backend_requires_settlement_Flag": {
+      "status": "PASSED",
+      "verified": [
+        "Warehouse source: requires_settlement=true",
+        "Customer source: requires_settlement=false"
+      ]
+    },
+    "Backend_Reason_Validation": {
+      "status": "PASSED",
+      "verified": "Backend returns 400 error when empty_reusable reason is used with warehouse source"
+    },
+    "Factory_Returns_Table_Columns": {
+      "status": "PASSED",
+      "verified": [
+        "Source column with Warehouse (amber) and Customer (blue) badges",
+        "Settlement column with Adjustable and Tracking only badges"
+      ]
+    },
+    "Stock_Deduction_On_Confirm": {
+      "status": "PASSED",
+      "verified": "Confirming factory return deducts stock from distributor warehouse"
+    }
+  },
+  "api_endpoints_tested": [
+    "POST /api/distributors/{id}/factory-returns - Create with source=warehouse, reason=expired",
+    "POST /api/distributors/{id}/factory-returns - Create with source=warehouse, reason=damaged",
+    "POST /api/distributors/{id}/factory-returns - Create with source=customer_return, reason=empty_reusable",
+    "POST /api/distributors/{id}/factory-returns - Create with source=customer_return, reason=expired",
+    "POST /api/distributors/{id}/factory-returns - Create with source=customer_return, reason=damaged",
+    "POST /api/distributors/{id}/factory-returns - Reject source=warehouse, reason=empty_reusable (400)",
+    "GET /api/distributors/{id}/factory-returns - List with source and requires_settlement fields",
+    "PUT /api/distributors/{id}/factory-returns/{rid}/confirm - Confirm and deduct stock"
+  ]
+}

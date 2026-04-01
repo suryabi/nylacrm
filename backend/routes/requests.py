@@ -7,15 +7,107 @@ from typing import List, Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 import uuid
+import logging
 
 from database import get_tenant_db
 from deps import get_current_user
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 def get_tdb():
     """Get tenant-aware database wrapper"""
     return get_tenant_db()
+
+
+async def create_task_for_request(request_type: str, request_data: dict, requester: dict):
+    """Auto-create a task assigned to the approver when a travel/budget request is made"""
+    tdb = get_tdb()
+    
+    # Find the approver (person the requester reports to)
+    approver = await tdb.users.find_one(
+        {'id': requester.get('reports_to')},
+        {'_id': 0, 'id': 1, 'name': 1, 'department': 1}
+    )
+    
+    if not approver:
+        logger.warning(f"No approver found for user {requester.get('name')} - skipping task creation")
+        return None
+    
+    # Build task title & description based on request type
+    requester_name = requester.get('name', 'Unknown')
+    
+    if request_type == 'travel':
+        destination = request_data.get('to_location', request_data.get('destination', 'N/A'))
+        title = f"Travel Request: {requester_name} - {destination}"
+        description = (
+            f"**Travel Request from {requester_name}**\n\n"
+            f"- **Purpose**: {request_data.get('purpose', 'N/A')}\n"
+            f"- **From**: {request_data.get('from_location', 'N/A')}\n"
+            f"- **To**: {destination}\n"
+            f"- **Travel Dates**: {request_data.get('start_date', '')} to {request_data.get('end_date', '')}\n"
+            f"- **Estimated Cost**: {request_data.get('estimated_cost', 'N/A')}\n"
+        )
+        due_date = request_data.get('start_date')
+    elif request_type == 'budget':
+        title = f"Budget Request: {requester_name} - {request_data.get('title', 'N/A')}"
+        description = (
+            f"**Budget Request from {requester_name}**\n\n"
+            f"- **Category**: {request_data.get('category', 'N/A')}\n"
+            f"- **Amount**: {request_data.get('amount', 'N/A')}\n"
+            f"- **Justification**: {request_data.get('justification', 'N/A')}\n"
+        )
+        due_date = request_data.get('needed_by')
+    else:
+        return None
+    
+    # Generate task number
+    count = await tdb.tasks_v2.count_documents({})
+    task_number = f"TASK-{count + 1:05d}"
+    
+    department = approver.get('department', requester.get('department', 'Sales'))
+    
+    task_data = {
+        'id': str(uuid.uuid4()),
+        'task_number': task_number,
+        'title': title,
+        'description': description,
+        'severity': 'medium',
+        'status': 'open',
+        'department_id': department,
+        'assignees': [approver['id']],
+        'assignees_data': [{'id': approver['id'], 'name': approver.get('name', '')}],
+        'milestone_id': None,
+        'labels': [],
+        'due_date': due_date,
+        'due_time': None,
+        'reminder_date': None,
+        'linked_entity_type': f'{request_type}_request',
+        'linked_entity_id': request_data.get('id'),
+        'watchers': [requester['id'], approver['id']],
+        'created_by': requester['id'],
+        'created_by_name': requester_name,
+        'created_at': datetime.now(timezone.utc).isoformat(),
+        'updated_at': datetime.now(timezone.utc).isoformat()
+    }
+    
+    await tdb.tasks_v2.insert_one(task_data)
+    
+    # Log activity
+    await tdb.task_activities.insert_one({
+        'id': str(uuid.uuid4()),
+        'task_id': task_data['id'],
+        'action': 'created',
+        'field': None,
+        'old_value': None,
+        'new_value': None,
+        'user_id': requester['id'],
+        'user_name': requester_name,
+        'created_at': datetime.now(timezone.utc).isoformat()
+    })
+    
+    logger.info(f"Auto-created task {task_number} for {request_type} request from {requester_name}, assigned to {approver.get('name')}")
+    return task_data
 
 # ============= LEAVE REQUEST MODELS =============
 

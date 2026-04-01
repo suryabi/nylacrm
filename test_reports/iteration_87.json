@@ -1,0 +1,143 @@
+{
+  "summary": "Stock Out simplified table and Delivery Detail popup tested successfully. All 8 features verified: (1) Simplified table with 9 columns, (2) Delivery detail popup opens on row click, (3) Items table with detailed columns in popup, (4) Financial Summary section, (5) Credit Notes Detail section for DEL-2026-0003, (6) Download Invoice (GST) button, (7) Create Delivery dialog with Credit Notes section, (8) Pagination controls present.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_87.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A - Frontend only testing",
+    "frontend": "100% - All 8 features verified"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123"
+  },
+  "seed_data_creation": "None - used existing data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Stock Out simplified table is working correctly. DEL-2026-0003 has 2 credit notes applied (CN-2026-0001 and CN-2026-0002, total -₹60.00). The Credit Notes section in Create Delivery dialog appears after account selection AND items are added.",
+  "features_tested": {
+    "Stock_Out_Simplified_Table": {
+      "status": "PASSED",
+      "columns_verified": [
+        "Delivery (with date)",
+        "Account (with city)",
+        "Items (count badge)",
+        "Customer Invoice",
+        "Credit Notes (CN count + amount)",
+        "Net Billing",
+        "Billable to Dist (with 'after CN' note)",
+        "Status",
+        "Actions (view + delete buttons)"
+      ]
+    },
+    "Delivery_Detail_Popup": {
+      "status": "PASSED",
+      "verified": [
+        "Opens on row click",
+        "Shows delivery header with number and status badge",
+        "Shows account, city, location, date info"
+      ]
+    },
+    "Items_Table_In_Popup": {
+      "status": "PASSED",
+      "columns_verified": [
+        "SKU (with margin%)",
+        "Qty",
+        "Base Price",
+        "Billed to Dist",
+        "Cust. Price",
+        "Actual Billable",
+        "Adjustment",
+        "Cust. Invoice",
+        "Totals row"
+      ]
+    },
+    "Financial_Summary_Section": {
+      "status": "PASSED",
+      "fields_verified": [
+        "Customer Invoice",
+        "Credit Notes Applied (conditional)",
+        "Net Customer Billing",
+        "Actual Billable to Dist",
+        "Less: Credit Notes (conditional)",
+        "Final Billable to Dist"
+      ],
+      "example_data": {
+        "delivery": "DEL-2026-0003",
+        "customer_invoice": "₹105.00",
+        "credit_notes_applied": "-₹60.00",
+        "net_customer_billing": "₹45.00",
+        "actual_billable": "₹97.50",
+        "final_billable": "₹37.50"
+      }
+    },
+    "Credit_Notes_Detail_Section": {
+      "status": "PASSED",
+      "verified": [
+        "Section appears for deliveries with applied credit notes",
+        "Shows credit note number and return reference",
+        "Shows amount applied per credit note"
+      ],
+      "example_data": {
+        "delivery": "DEL-2026-0003",
+        "credit_notes": [
+          "CN-2026-0001 (Return: RET-2026-0001) - ₹30.00",
+          "CN-2026-0002 (Return: RET-2026-0002) - ₹30.00"
+        ]
+      }
+    },
+    "Download_Invoice_Button": {
+      "status": "PASSED",
+      "verified": [
+        "Button visible for delivered status",
+        "Button text: 'Download Invoice (GST)'",
+        "data-testid: download-customer-invoice-btn"
+      ]
+    },
+    "Create_Delivery_Dialog": {
+      "status": "PASSED",
+      "verified": [
+        "Opens via 'Record Delivery' button",
+        "Account search field present",
+        "Location select present",
+        "Date input present",
+        "Delivery Items section present",
+        "Credit Notes section appears after account + items added"
+      ]
+    },
+    "Pagination": {
+      "status": "PASSED",
+      "verified": [
+        "Time Period filter (Lifetime option)",
+        "Account filter",
+        "Page size selector (10/20/50/100)",
+        "Total deliveries count shown",
+        "First/Previous/Next/Last buttons (when multiple pages)"
+      ]
+    }
+  },
+  "code_review_notes": {
+    "DeliveriesTab.jsx": [
+      "Lines 886-1044: Simplified table with 9 columns properly implemented",
+      "Lines 648-770: Credit Notes section in Create Delivery dialog properly conditionally renders",
+      "Lines 1047-1107: Pagination controls properly implemented"
+    ],
+    "DistributorDetail.js": [
+      "Lines 2442-2695: Delivery detail popup with items table, financial summary, credit notes detail",
+      "Lines 2646-2657: Download Invoice button for delivered/confirmed status",
+      "Lines 1500-1510: viewDeliveryDetail function fetches delivery details"
+    ]
+  }
+}

@@ -20,7 +20,7 @@ import {
   ArrowLeft, Building2, MapPin, Phone, Mail, Edit2, Trash2,
   RefreshCw, Plus, Package, Truck, CreditCard, Calendar,
   User, FileText, Check, X, Save, Percent, DollarSign, Copy,
-  Settings, Eye, Receipt, Calculator, Warehouse
+  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -32,8 +32,10 @@ import MarginsTab from '../components/distributor/MarginsTab';
 import AssignmentsTab from '../components/distributor/AssignmentsTab';
 import ShipmentsTab from '../components/distributor/ShipmentsTab';
 import DeliveriesTab from '../components/distributor/DeliveriesTab';
+import ReturnsTab from '../components/distributor/ReturnsTab';
 import SettlementsTab from '../components/distributor/SettlementsTab';
 import BillingTab from '../components/distributor/BillingTab';
+import StockDashboardTab from '../components/distributor/StockDashboardTab';
 import { PAYMENT_TERMS, STATUS_OPTIONS, MARGIN_TYPES, formatMarginValue } from '../components/distributor/constants';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -57,7 +59,7 @@ export default function DistributorDetail() {
   
   const [loading, setLoading] = useState(true);
   const [distributor, setDistributor] = useState(null);
-  const [activeTab, setActiveTab] = useState('profile');
+  const [activeTab, setActiveTab] = useState('stock-dashboard');
   
   // Edit mode
   const [isEditing, setIsEditing] = useState(false);
@@ -182,6 +184,7 @@ export default function DistributorDetail() {
   const [savingDelivery, setSavingDelivery] = useState(false);
   const [selectedDelivery, setSelectedDelivery] = useState(null);
   const [showDeliveryDetail, setShowDeliveryDetail] = useState(false);
+  const [downloadingInvoice, setDownloadingInvoice] = useState(false);
   
   // Settlement state
   const [settlements, setSettlements] = useState([]);
@@ -194,6 +197,8 @@ export default function DistributorDetail() {
   const [showSettlementDialog, setShowSettlementDialog] = useState(false);
   const [unsettledDeliveries, setUnsettledDeliveries] = useState([]);
   const [unsettledLoading, setUnsettledLoading] = useState(false);
+  const [settlementPreview, setSettlementPreview] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [settlementForm, setSettlementForm] = useState({
     settlement_month: new Date().getMonth() + 1,
     settlement_year: new Date().getFullYear(),
@@ -434,7 +439,7 @@ export default function DistributorDetail() {
   }, [id, token]);
 
   useEffect(() => {
-    if (activeTab === 'stockout') {
+    if (activeTab === 'stockout' || activeTab === 'returns') {
       fetchDeliveries();
       fetchAssignedAccounts();
       if (skus.length === 0) fetchSkus();
@@ -486,6 +491,23 @@ export default function DistributorDetail() {
       setUnsettledDeliveries([]);
     } finally {
       setUnsettledLoading(false);
+    }
+  }, [id, token]);
+
+  const fetchSettlementPreview = useCallback(async (month, year) => {
+    if (!month || !year) return;
+    try {
+      setPreviewLoading(true);
+      const response = await axios.get(
+        `${API_URL}/api/distributors/${id}/settlement-preview?month=${month}&year=${year}`,
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      setSettlementPreview(response.data);
+    } catch (error) {
+      console.error('Failed to fetch settlement preview:', error);
+      setSettlementPreview(null);
+    } finally {
+      setPreviewLoading(false);
     }
   }, [id, token]);
 
@@ -1332,7 +1354,7 @@ export default function DistributorDetail() {
 
   // ============ Delivery Handlers ============
 
-  const handleCreateDelivery = async () => {
+  const handleCreateDelivery = async (creditNotesToApply = []) => {
     if (!deliveryForm.account_id) {
       toast.error('Please select an account');
       return;
@@ -1371,7 +1393,9 @@ export default function DistributorDetail() {
           customer_selling_price: parseFloat(item.unit_price), // unit_price is the customer selling price
           discount_percent: parseFloat(item.discount_percent) || 0,
           tax_percent: parseFloat(item.tax_percent) || 0
-        }))
+        })),
+        // Include credit notes if any
+        credit_notes_to_apply: creditNotesToApply.length > 0 ? creditNotesToApply : null
       };
       
       const response = await axios.post(`${API_URL}/api/distributors/${id}/deliveries`, deliveryData, {
@@ -1379,7 +1403,13 @@ export default function DistributorDetail() {
         withCredentials: true
       });
       
-      toast.success(`Delivery ${response.data.delivery_number} created successfully`);
+      // Show success message with credit info if applicable
+      const creditApplied = response.data.total_credit_applied || 0;
+      if (creditApplied > 0) {
+        toast.success(`Delivery ${response.data.delivery_number} created with ₹${creditApplied.toLocaleString('en-IN')} in credit notes applied`);
+      } else {
+        toast.success(`Delivery ${response.data.delivery_number} created successfully`);
+      }
       setShowDeliveryDialog(false);
       resetDeliveryForm();
       fetchDeliveries();
@@ -1500,6 +1530,48 @@ export default function DistributorDetail() {
     }
   };
 
+  const handleDownloadCustomerInvoice = async (deliveryId) => {
+    try {
+      setDownloadingInvoice(true);
+      const response = await axios.get(
+        `${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/customer-invoice`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true,
+          responseType: 'blob'
+        }
+      );
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Get filename from response headers or generate one
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `customer_invoice_${selectedDelivery?.delivery_number || deliveryId}.pdf`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Invoice downloaded successfully');
+    } catch (error) {
+      console.error('Invoice download error:', error);
+      toast.error(error.response?.data?.detail || 'Failed to download invoice');
+    } finally {
+      setDownloadingInvoice(false);
+    }
+  };
+
   const getDeliveryStatusBadge = (status) => {
     const statusConfig = {
       draft: { label: 'Draft', color: 'bg-gray-100 text-gray-800' },
@@ -1518,10 +1590,6 @@ export default function DistributorDetail() {
   const handleCreateSettlement = async () => {
     if (!settlementForm.settlement_month || !settlementForm.settlement_year) {
       toast.error('Please select month and year');
-      return;
-    }
-    if (unsettledDeliveries.length === 0) {
-      toast.error('No unsettled deliveries found for this period');
       return;
     }
     
@@ -1559,6 +1627,7 @@ export default function DistributorDetail() {
       remarks: ''
     });
     setUnsettledDeliveries([]);
+    setSettlementPreview(null);
   };
 
   const handleSubmitSettlement = async (settlementId) => {
@@ -1969,7 +2038,11 @@ export default function DistributorDetail() {
 
       {/* Tabs - Consolidated Structure */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6 h-auto p-1">
+        <TabsList className="grid w-full grid-cols-8 h-auto p-1">
+          <TabsTrigger value="stock-dashboard" className="flex items-center gap-2 py-2.5" data-testid="stock-dashboard-tab">
+            <BarChart3 className="h-4 w-4" />
+            <span className="hidden sm:inline">Stock</span>
+          </TabsTrigger>
           <TabsTrigger value="profile" className="flex items-center gap-2 py-2.5" data-testid="profile-tab">
             <Building2 className="h-4 w-4" />
             <span className="hidden sm:inline">Profile</span>
@@ -1985,6 +2058,10 @@ export default function DistributorDetail() {
           <TabsTrigger value="stockout" className="flex items-center gap-2 py-2.5" data-testid="stockout-tab">
             <Truck className="h-4 w-4" />
             <span className="hidden sm:inline">Stock Out</span>
+          </TabsTrigger>
+          <TabsTrigger value="returns" className="flex items-center gap-2 py-2.5" data-testid="returns-tab">
+            <RotateCcw className="h-4 w-4" />
+            <span className="hidden sm:inline">Returns</span>
           </TabsTrigger>
           <TabsTrigger value="settlements" className="flex items-center gap-2 py-2.5" data-testid="settlements-tab">
             <Receipt className="h-4 w-4" />
@@ -2201,6 +2278,17 @@ export default function DistributorDetail() {
           />
         </TabsContent>
 
+        {/* Returns Tab */}
+        <TabsContent value="returns" className="space-y-4">
+          <ReturnsTab
+            distributorId={id}
+            accounts={assignedAccounts}
+            skus={skus}
+            canManage={canManage}
+            canDelete={canDelete}
+          />
+        </TabsContent>
+
         {/* Settlements Tab */}
         <TabsContent value="settlements" className="space-y-4">
           <SettlementsTab
@@ -2228,6 +2316,9 @@ export default function DistributorDetail() {
             unsettledDeliveries={unsettledDeliveries}
             unsettledLoading={unsettledLoading}
             fetchUnsettledDeliveries={fetchUnsettledDeliveries}
+            settlementPreview={settlementPreview}
+            previewLoading={previewLoading}
+            fetchSettlementPreview={fetchSettlementPreview}
             handleCreateSettlement={handleCreateSettlement}
             handleSubmitSettlement={handleSubmitSettlement}
             handleApproveSettlement={handleApproveSettlement}
@@ -2257,6 +2348,14 @@ export default function DistributorDetail() {
             getSettlementStatusBadge={getSettlementStatusBadge}
             setActiveTab={setActiveTab}
             setDeleteTarget={setDeleteTarget}
+            API_URL={API_URL}
+            token={token}
+          />
+        </TabsContent>
+
+        <TabsContent value="stock-dashboard" className="space-y-4">
+          <StockDashboardTab
+            distributor={distributor}
             API_URL={API_URL}
             token={token}
           />
@@ -2374,7 +2473,7 @@ export default function DistributorDetail() {
 
       {/* Delivery Detail Dialog */}
       <Dialog open={showDeliveryDetail} onOpenChange={setShowDeliveryDetail}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
               Delivery {selectedDelivery?.delivery_number}
@@ -2415,52 +2514,239 @@ export default function DistributorDetail() {
                 )}
               </div>
 
-              {/* Items */}
-              <div className="border rounded-md">
-                <table className="w-full text-sm">
+              {/* Detailed Items Table */}
+              <div className="border rounded-md overflow-x-auto">
+                <table className="w-full text-sm" data-testid="delivery-detail-items-table">
                   <thead>
                     <tr className="border-b bg-muted/50">
                       <th className="text-left p-2 font-medium">SKU</th>
                       <th className="text-right p-2 font-medium">Qty</th>
-                      <th className="text-right p-2 font-medium">Price</th>
-                      <th className="text-right p-2 font-medium">Amount</th>
-                      <th className="text-right p-2 font-medium">Margin</th>
+                      <th className="text-right p-2 font-medium text-blue-700">Base Price</th>
+                      <th className="text-right p-2 font-medium text-blue-700">Billed to Dist</th>
+                      <th className="text-right p-2 font-medium text-emerald-700">Cust. Price</th>
+                      <th className="text-right p-2 font-medium text-emerald-700">Actual Billable</th>
+                      <th className="text-right p-2 font-medium text-amber-700">Adj. (Cust. Price)</th>
+                      <th className="text-right p-2 font-medium text-purple-700">Net Adj. (After Credit)</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(selectedDelivery.items || []).map((item, idx) => (
-                      <tr key={idx} className="border-b">
-                        <td className="p-2">{item.sku_name || item.sku_id}</td>
-                        <td className="p-2 text-right">{item.quantity}</td>
-                        <td className="p-2 text-right">₹{item.unit_price}</td>
-                        <td className="p-2 text-right">₹{item.net_amount?.toFixed(2)}</td>
-                        <td className="p-2 text-right">
-                          {item.distributor_earnings > 0 ? (
-                            <span className="text-green-600">₹{item.distributor_earnings?.toFixed(2)}</span>
-                          ) : '-'}
-                        </td>
-                      </tr>
-                    ))}
+                    {(selectedDelivery.items || []).map((item, idx) => {
+                      const qty = item.quantity || 0;
+                      const customerPrice = item.customer_selling_price || item.unit_price || 0;
+                      const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
+                      const basePrice = item.base_price || item.transfer_price || 0;
+                      const transferPrice = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
+                      const billedToDist = qty * transferPrice;
+                      const newTransferPrice = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
+                      const actualBillable = qty * newTransferPrice;
+                      const adjustment = actualBillable - billedToDist;
+                      return (
+                        <tr key={idx} className="border-b">
+                          <td className="p-2">
+                            <span className="font-medium">{item.sku_name || item.sku_id}</span>
+                            <span className="text-xs text-muted-foreground ml-1">({commissionPct}%)</span>
+                          </td>
+                          <td className="p-2 text-right font-medium">{qty}</td>
+                          <td className="p-2 text-right text-blue-700">₹{basePrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className="p-2 text-right text-blue-800 font-medium">₹{billedToDist.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className="p-2 text-right text-emerald-700">₹{customerPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className="p-2 text-right text-emerald-800 font-medium">₹{actualBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className={`p-2 text-right font-semibold ${adjustment > 0 ? 'text-emerald-600' : adjustment < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                            {adjustment > 0 ? '+' : ''}₹{adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="p-2 text-right text-slate-400">—</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <tfoot>
-                    <tr className="bg-muted/30">
-                      <td colSpan="3" className="p-2 text-right font-medium">Total:</td>
-                      <td className="p-2 text-right font-bold">₹{selectedDelivery.total_net_amount?.toLocaleString()}</td>
-                      <td className="p-2 text-right font-bold text-green-600">
-                        {(() => {
-                          const totalEarnings = (selectedDelivery.items || []).reduce((sum, item) => sum + (item.distributor_earnings || 0), 0);
-                          return totalEarnings > 0 ? `₹${totalEarnings.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '-';
-                        })()}
-                      </td>
-                    </tr>
+                    {(() => {
+                      const items = selectedDelivery.items || [];
+                      const totalCreditApplied = selectedDelivery.total_credit_applied || 0;
+                      let totBilled = 0, totActual = 0, totAdj = 0;
+                      items.forEach(item => {
+                        const qty = item.quantity || 0;
+                        const customerPrice = item.customer_selling_price || item.unit_price || 0;
+                        const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
+                        const basePrice = item.base_price || item.transfer_price || 0;
+                        const transferPrice = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
+                        totBilled += qty * transferPrice;
+                        const newTP = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
+                        totActual += qty * newTP;
+                        totAdj += (qty * newTP) - (qty * transferPrice);
+                      });
+                      const netAdj = totAdj - totalCreditApplied;
+                      return (
+                        <tr className="bg-muted/30 font-semibold">
+                          <td colSpan="2" className="p-2 text-right">Total:</td>
+                          <td className="p-2"></td>
+                          <td className="p-2 text-right text-blue-800">₹{totBilled.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className="p-2"></td>
+                          <td className="p-2 text-right text-emerald-800">₹{totActual.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className={`p-2 text-right ${totAdj > 0 ? 'text-emerald-600' : totAdj < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                            {totAdj > 0 ? '+' : ''}₹{totAdj.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className={`p-2 text-right ${netAdj > 0 ? 'text-emerald-600' : netAdj < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                            {netAdj > 0 ? '+' : ''}₹{netAdj.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      );
+                    })()}
                   </tfoot>
                 </table>
               </div>
 
+              {/* Financial Summary - Customer */}
+              {(() => {
+                const items = selectedDelivery.items || [];
+                const totalCreditApplied = selectedDelivery.total_credit_applied || 0;
+                const hasCN = totalCreditApplied > 0;
+                let custBilling = 0, totalTax = 0;
+                items.forEach(item => {
+                  const qty = item.quantity || 0;
+                  const price = item.customer_selling_price || item.unit_price || 0;
+                  const disc = item.discount_percent || 0;
+                  const taxPct = item.tax_percent || 0;
+                  const preTax = qty * price * (1 - disc / 100);
+                  custBilling += preTax;
+                  totalTax += preTax * taxPct / 100;
+                });
+                const effectiveGstRate = custBilling > 0 ? totalTax / custBilling : 0;
+                const totalBillable = Math.max(0, custBilling - totalCreditApplied);
+                const gstAmount = totalBillable * effectiveGstRate;
+                const invoiceValue = totalBillable + gstAmount;
+                const gstPctDisplay = (effectiveGstRate * 100).toFixed(1);
+                return (
+                  <div className="border rounded-lg p-4 bg-blue-50/40 space-y-2" data-testid="delivery-customer-summary">
+                    <h4 className="font-semibold text-sm mb-2 text-blue-800">Customer Summary</h4>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Customer Billing Amount:</span>
+                      <span className="font-medium">₹{custBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    {hasCN && (
+                      <div className="flex justify-between text-sm text-emerald-600">
+                        <span>Less: Return Bottle Credit:</span>
+                        <span className="font-medium">- ₹{totalCreditApplied.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm border-t pt-2">
+                      <span className="font-semibold">Total Billable Amount:</span>
+                      <span className="font-bold">₹{totalBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-slate-600">
+                      <span>GST ({gstPctDisplay}%):</span>
+                      <span className="font-medium">₹{gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-base border-t pt-2">
+                      <span className="font-bold text-blue-800">Customer Invoice Value (Incl. GST):</span>
+                      <span className="font-bold text-blue-800">₹{invoiceValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Financial Summary - Distributor */}
+              {(() => {
+                const items = selectedDelivery.items || [];
+                const totalCreditApplied = selectedDelivery.total_credit_applied || 0;
+                let distBilling = 0, totActual = 0, custBilling = 0, totalTax = 0;
+                items.forEach(item => {
+                  const qty = item.quantity || 0;
+                  const price = item.customer_selling_price || item.unit_price || 0;
+                  const disc = item.discount_percent || 0;
+                  const taxPct = item.tax_percent || 0;
+                  const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
+                  const basePrice = item.base_price || item.transfer_price || 0;
+                  const transferPrice = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
+                  distBilling += qty * transferPrice;
+                  const newTP = price > 0 ? price * (1 - commissionPct / 100) : 0;
+                  totActual += qty * newTP;
+                  const preTax = qty * price * (1 - disc / 100);
+                  custBilling += preTax;
+                  totalTax += preTax * taxPct / 100;
+                });
+                const priceAdj = totActual - distBilling;
+                const combinedAdj = priceAdj - totalCreditApplied;
+                const totalBillable = distBilling + combinedAdj;
+                const effectiveGstRate = custBilling > 0 ? totalTax / custBilling : 0;
+                const gstAmount = totalBillable * effectiveGstRate;
+                const invoiceValue = totalBillable + gstAmount;
+                const gstPctDisplay = (effectiveGstRate * 100).toFixed(1);
+                return (
+                  <div className="border rounded-lg p-4 bg-purple-50/40 space-y-2" data-testid="delivery-distributor-summary">
+                    <h4 className="font-semibold text-sm mb-2 text-purple-800">Distributor Summary</h4>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Distributor Billing Amount:</span>
+                      <span className="font-medium">₹{distBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Adjustment (Customer Price + Return Credit):</span>
+                      <span className={`font-medium ${combinedAdj > 0 ? 'text-emerald-600' : combinedAdj < 0 ? 'text-red-600' : 'text-slate-500'}`}>
+                        {combinedAdj > 0 ? '+' : ''}₹{combinedAdj.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm border-t pt-2">
+                      <span className="font-semibold">Total Billable Amount:</span>
+                      <span className="font-bold">₹{totalBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-slate-600">
+                      <span>GST ({gstPctDisplay}%):</span>
+                      <span className="font-medium">₹{gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between text-base border-t pt-2">
+                      <span className="font-bold text-purple-800">Distributor Invoice Value (Incl. GST):</span>
+                      <span className="font-bold text-purple-800">₹{invoiceValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Credit Notes Applied Detail */}
+              {selectedDelivery.applied_credit_notes && selectedDelivery.applied_credit_notes.length > 0 && (
+                <div className="border rounded-lg p-4 bg-emerald-50/50" data-testid="applied-credit-notes-section">
+                  <h4 className="font-semibold text-sm mb-3 flex items-center gap-2 text-emerald-700">
+                    <CreditCard className="h-4 w-4" />
+                    Credit Notes Detail
+                  </h4>
+                  <div className="space-y-2">
+                    {selectedDelivery.applied_credit_notes.map((cn, idx) => (
+                      <div key={cn.credit_note_id || idx} className="flex justify-between items-center text-sm">
+                        <div>
+                          <span className="font-medium">{cn.credit_note_number}</span>
+                          {cn.return_number && (
+                            <span className="text-muted-foreground ml-2">(Return: {cn.return_number})</span>
+                          )}
+                        </div>
+                        <span className="font-medium text-emerald-600">
+                          - ₹{cn.amount_applied?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Actions */}
-              {canManage && (
-                <div className="flex justify-end gap-2 pt-4 border-t">
-                  {selectedDelivery.status === 'draft' && (
+              <div className="flex justify-between items-center pt-4 border-t">
+                {/* Invoice Download - Available for delivered/confirmed deliveries */}
+                <div>
+                  {(selectedDelivery.status === 'delivered' || selectedDelivery.status === 'confirmed') && (
+                    <Button 
+                      variant="outline" 
+                      onClick={() => handleDownloadCustomerInvoice(selectedDelivery.id)}
+                      disabled={downloadingInvoice}
+                      className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                      data-testid="download-customer-invoice-btn"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      {downloadingInvoice ? 'Generating...' : 'Download Invoice (GST)'}
+                    </Button>
+                  )}
+                </div>
+                
+                {/* Status Actions */}
+                <div className="flex gap-2">
+                  {canManage && selectedDelivery.status === 'draft' && (
                     <>
                       <Button variant="outline" onClick={() => handleCancelDelivery(selectedDelivery.id)}>
                         Cancel Delivery
@@ -2471,7 +2757,7 @@ export default function DistributorDetail() {
                       </Button>
                     </>
                   )}
-                  {selectedDelivery.status === 'confirmed' && (
+                  {canManage && selectedDelivery.status === 'confirmed' && (
                     <>
                       <Button variant="outline" onClick={() => handleCancelDelivery(selectedDelivery.id)}>
                         Cancel
@@ -2482,14 +2768,14 @@ export default function DistributorDetail() {
                       </Button>
                     </>
                   )}
-                  {selectedDelivery.status === 'in_transit' && (
+                  {canManage && selectedDelivery.status === 'in_transit' && (
                     <Button onClick={() => handleCompleteDelivery(selectedDelivery.id)} className="bg-green-600 hover:bg-green-700">
                       <Check className="h-4 w-4 mr-2" />
                       Complete Delivery
                     </Button>
                   )}
                 </div>
-              )}
+              </div>
             </div>
           )}
         </DialogContent>

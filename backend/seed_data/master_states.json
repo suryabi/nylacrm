@@ -1,0 +1,209 @@
+[
+  {
+    "id": "849b0b36-2eee-459c-88c0-6aaeea81273c",
+    "name": "Delhi NCR",
+    "code": "delhi_ncr",
+    "territory_id": "8cb28c48-b5e4-4461-ab2a-8ece0d7f6cf2",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.423569+00:00",
+    "updated_at": "2026-02-24T18:06:25.423575+00:00"
+  },
+  {
+    "id": "5886430d-5828-4cbc-9c65-9e3fe3d7f4c8",
+    "name": "Uttar Pradesh",
+    "code": "uttar_pradesh",
+    "territory_id": "8cb28c48-b5e4-4461-ab2a-8ece0d7f6cf2",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.431542+00:00",
+    "updated_at": "2026-02-25T17:41:40.480670+00:00"
+  },
+  {
+    "id": "fe1fc543-a558-47e3-bb2f-26b4b59b7365",
+    "name": "Punjab",
+    "code": "punjab",
+    "territory_id": "8cb28c48-b5e4-4461-ab2a-8ece0d7f6cf2",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.431926+00:00",
+    "updated_at": "2026-02-25T17:40:13.038439+00:00"
+  },
+  {
+    "id": "ebdeca7a-1733-4e08-8d55-565afde661fb",
+    "name": "Haryana",
+    "code": "haryana",
+    "territory_id": "8cb28c48-b5e4-4461-ab2a-8ece0d7f6cf2",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.432165+00:00",
+    "updated_at": "2026-02-25T17:40:03.011149+00:00"
+  },
+  {
+    "id": "70083fe3-8833-49fd-b786-de895eea3fd6",
+    "name": "Rajasthan",
+    "code": "rajasthan",
+    "territory_id": "8cb28c48-b5e4-4461-ab2a-8ece0d7f6cf2",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.432364+00:00",
+    "updated_at": "2026-02-25T17:40:41.623361+00:00"
+  },
+  {
+    "id": "d5f5472e-bdb5-44cd-8f01-6ad18fbcab63",
+    "name": "Himachal Pradesh",
+    "code": "himachal_pradesh",
+    "territory_id": "8cb28c48-b5e4-4461-ab2a-8ece0d7f6cf2",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.432557+00:00",
+    "updated_at": "2026-02-25T17:56:03.009003+00:00"
+  },
+  {
+    "id": "217953b4-8c9b-41a2-9df5-f1848f3b4a2f",
+    "name": "Uttarakhand",
+    "code": "uttarakhand",
+    "territory_id": "8cb28c48-b5e4-4461-ab2a-8ece0d7f6cf2",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.432743+00:00",
+    "updated_at": "2026-02-25T17:56:07.504016+00:00"
+  },
+  {
+    "id": "4d45db81-6b72-417d-8ef4-7c23ddeb25cd",
+    "name": "Jammu & Kashmir",
+    "code": "jammu_kashmir",
+    "territory_id": "8cb28c48-b5e4-4461-ab2a-8ece0d7f6cf2",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.432928+00:00",
+    "updated_at": "2026-02-25T17:56:12.626369+00:00"
+  },
+  {
+    "id": "70b3ae00-0da2-48b9-9c2f-2dc6c7c18580",
+    "name": "Karnataka",
+    "code": "karnataka",
+    "territory_id": "51e8efbd-26eb-49b8-a310-b6f324af232b",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.433104+00:00",
+    "updated_at": "2026-02-24T18:06:25.433106+00:00"
+  },
+  {
+    "id": "905d061b-363d-4c57-acb1-5aa31fc8c766",
+    "name": "Tamil Nadu",
+    "code": "tamil_nadu",
+    "territory_id": "51e8efbd-26eb-49b8-a310-b6f324af232b",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.433280+00:00",
+    "updated_at": "2026-02-24T18:06:25.433282+00:00"
+  },
+  {
+    "id": "1718558c-dc61-42ee-aed2-798ba7a75af1",
+    "name": "Kerala",
+    "code": "kerala",
+    "territory_id": "51e8efbd-26eb-49b8-a310-b6f324af232b",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.433468+00:00",
+    "updated_at": "2026-02-24T18:58:22.226850+00:00"
+  },
+  {
+    "id": "4e7b69ea-04b7-4580-93cd-a977adadfedd",
+    "name": "Andhra Pradesh",
+    "code": "andhra_pradesh",
+    "territory_id": "51e8efbd-26eb-49b8-a310-b6f324af232b",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.433639+00:00",
+    "updated_at": "2026-02-25T17:40:49.882945+00:00"
+  },
+  {
+    "id": "0ac5940f-0b21-4dd9-9cd4-06df4685e3b4",
+    "name": "Telangana",
+    "code": "telangana",
+    "territory_id": "51e8efbd-26eb-49b8-a310-b6f324af232b",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.433963+00:00",
+    "updated_at": "2026-02-24T18:06:25.433969+00:00"
+  },
+  {
+    "id": "708c77c9-3f36-4459-876a-b4b682a4ea7a",
+    "name": "Maharashtra",
+    "code": "maharashtra",
+    "territory_id": "c48c4919-f211-4464-81cf-e82bdc531c6f",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.434257+00:00",
+    "updated_at": "2026-02-24T18:06:25.434262+00:00"
+  },
+  {
+    "id": "45655395-95a4-4611-a7f8-5c0c9c05fa42",
+    "name": "Gujarat",
+    "code": "gujarat",
+    "territory_id": "c48c4919-f211-4464-81cf-e82bdc531c6f",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.434539+00:00",
+    "updated_at": "2026-02-25T17:55:36.308503+00:00"
+  },
+  {
+    "id": "1f621cd2-d75a-4ce6-9e41-8ba47da3a390",
+    "name": "Goa",
+    "code": "goa",
+    "territory_id": "c48c4919-f211-4464-81cf-e82bdc531c6f",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.434810+00:00",
+    "updated_at": "2026-02-24T18:06:25.434815+00:00"
+  },
+  {
+    "id": "6cd4ec5a-3224-4fdf-b359-77bc9d6725ba",
+    "name": "West Bengal",
+    "code": "west_bengal",
+    "territory_id": "194378a0-c80e-41c1-8876-c0a4da67437d",
+    "is_active": true,
+    "created_at": "2026-02-24T18:06:25.435230+00:00",
+    "updated_at": "2026-02-24T18:06:25.435235+00:00"
+  },
+  {
+    "id": "f9a3b227-233a-4605-b450-559f45a277bf",
+    "name": "Bihar",
+    "code": "bihar",
+    "territory_id": "194378a0-c80e-41c1-8876-c0a4da67437d",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.435554+00:00",
+    "updated_at": "2026-02-25T17:39:12.613055+00:00"
+  },
+  {
+    "id": "2604fa66-39b2-499c-babf-1b031757c7fe",
+    "name": "Odisha",
+    "code": "odisha",
+    "territory_id": "194378a0-c80e-41c1-8876-c0a4da67437d",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.435828+00:00",
+    "updated_at": "2026-02-25T17:39:03.414797+00:00"
+  },
+  {
+    "id": "15bf6967-1752-4c40-9d8e-c59a5de3c1ce",
+    "name": "Jharkhand",
+    "code": "jharkhand",
+    "territory_id": "194378a0-c80e-41c1-8876-c0a4da67437d",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.436089+00:00",
+    "updated_at": "2026-02-25T17:56:44.097261+00:00"
+  },
+  {
+    "id": "88e91965-737e-4aac-8503-b9df07c70ce4",
+    "name": "Assam",
+    "code": "assam",
+    "territory_id": "194378a0-c80e-41c1-8876-c0a4da67437d",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.436356+00:00",
+    "updated_at": "2026-02-25T17:56:47.759760+00:00"
+  },
+  {
+    "id": "724b24a8-b940-4439-8697-f96ab0bdb84e",
+    "name": "Madhya Pradesh",
+    "code": "madhya_pradesh",
+    "territory_id": "6a7515a9-125e-4569-ae5a-badb8c1aa458",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.436628+00:00",
+    "updated_at": "2026-02-25T17:39:29.784111+00:00"
+  },
+  {
+    "id": "f0f492b7-a539-44fb-b8f2-481e847bf8af",
+    "name": "Chhattisgarh",
+    "code": "chhattisgarh",
+    "territory_id": "6a7515a9-125e-4569-ae5a-badb8c1aa458",
+    "is_active": false,
+    "created_at": "2026-02-24T18:06:25.436890+00:00",
+    "updated_at": "2026-02-25T17:39:22.884963+00:00"
+  }
+]

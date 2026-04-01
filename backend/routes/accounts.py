@@ -12,6 +12,7 @@ import base64
 
 from database import get_tenant_db
 from deps import get_current_user
+from core.tenant import get_current_tenant_id
 
 router = APIRouter()
 
@@ -54,6 +55,8 @@ class Account(BaseModel):
     overdue_amount: float = 0.0
     last_payment_date: Optional[str] = None
     last_payment_amount: float = 0.0
+    onboarded_month: Optional[int] = None
+    onboarded_year: Optional[int] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -74,6 +77,8 @@ class AccountUpdate(BaseModel):
     next_follow_up: Optional[str] = None
     sku_pricing: Optional[List[AccountSKUPricing]] = None
     delivery_address: Optional[DeliveryAddress] = None
+    onboarded_month: Optional[int] = None
+    onboarded_year: Optional[int] = None
 
 
 class PaginatedAccountsResponse(BaseModel):
@@ -162,6 +167,8 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
         'sku_pricing': sku_pricing,
         'outstanding_balance': 0.0,
         'overdue_amount': 0.0,
+        'onboarded_month': lead.get('onboarded_month'),
+        'onboarded_year': lead.get('onboarded_year'),
         'created_at': datetime.now(timezone.utc).isoformat(),
         'updated_at': datetime.now(timezone.utc).isoformat()
     }
@@ -344,6 +351,45 @@ async def delete_account(account_id: str, current_user: dict = Depends(get_curre
     await tdb.accounts.delete_one({'id': account_id})
     
     return {'message': 'Account deleted successfully'}
+
+
+@router.get("/{account_id}/sku-pricing")
+async def get_account_sku_pricing(account_id: str, current_user: dict = Depends(get_current_user)):
+    """Get SKU pricing for an account"""
+    tdb = get_tdb()
+    tenant_id = get_current_tenant_id()
+    
+    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+    
+    # Get account-specific SKU pricing
+    sku_pricing = await tdb.account_sku_pricing.find(
+        {'account_id': account_id, 'tenant_id': tenant_id},
+        {'_id': 0}
+    ).to_list(500)
+    
+    # If no account-specific pricing, get from the account's sku_pricing field
+    if not sku_pricing and account.get('sku_pricing'):
+        sku_pricing = account.get('sku_pricing', [])
+    
+    # Enrich with SKU details from master_skus
+    enriched_pricing = []
+    for pricing in sku_pricing:
+        sku_id = pricing.get('sku_id')
+        if sku_id:
+            sku = await tdb.master_skus.find_one({'id': sku_id}, {'_id': 0, 'name': 1, 'sku_code': 1, 'hsn_code': 1, 'base_price': 1})
+            enriched_pricing.append({
+                **pricing,
+                'sku_name': sku.get('name') if sku else pricing.get('sku_name'),
+                'sku_code': sku.get('sku_code') if sku else pricing.get('sku_code'),
+                'hsn_code': sku.get('hsn_code') if sku else pricing.get('hsn_code'),
+                'base_price': sku.get('base_price') if sku else pricing.get('base_price', 0)
+            })
+        else:
+            enriched_pricing.append(pricing)
+    
+    return {'sku_pricing': enriched_pricing, 'account_id': account_id}
 
 
 # ============= INVOICE ROUTES =============

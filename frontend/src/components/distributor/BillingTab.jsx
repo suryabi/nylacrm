@@ -5,47 +5,23 @@ import { Badge } from '../ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
-import { Plus, RefreshCw, FileText, Receipt, Eye, Settings, Trash2, Calendar, Building2, ChevronDown, ChevronUp, Download, Clock, CheckCircle, FileDown, Loader2 } from 'lucide-react';
+import { RefreshCw, FileText, Receipt, Eye, Settings, Trash2, Calendar, Building2, Clock, CheckCircle, FileDown, Loader2, ArrowDown, CreditCard, Factory, Truck, TrendingUp, TrendingDown, Package, ChevronRight, ChevronDown, User } from 'lucide-react';
 
 const MONTHS = [
-  { value: 1, label: 'January' },
-  { value: 2, label: 'February' },
-  { value: 3, label: 'March' },
-  { value: 4, label: 'April' },
-  { value: 5, label: 'May' },
-  { value: 6, label: 'June' },
-  { value: 7, label: 'July' },
-  { value: 8, label: 'August' },
-  { value: 9, label: 'September' },
-  { value: 10, label: 'October' },
-  { value: 11, label: 'November' },
-  { value: 12, label: 'December' }
+  { value: 1, label: 'January' }, { value: 2, label: 'February' }, { value: 3, label: 'March' },
+  { value: 4, label: 'April' }, { value: 5, label: 'May' }, { value: 6, label: 'June' },
+  { value: 7, label: 'July' }, { value: 8, label: 'August' }, { value: 9, label: 'September' },
+  { value: 10, label: 'October' }, { value: 11, label: 'November' }, { value: 12, label: 'December' }
 ];
-
 const currentYear = new Date().getFullYear();
 const YEARS = [currentYear, currentYear - 1, currentYear - 2];
+const fmt = (v) => (v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 });
 
 export default function BillingTab({
-  distributor,
-  canManage,
-  canDelete,
-  // Settlements for reconciliation
-  settlements,
-  settlementsLoading,
-  fetchSettlements,
-  // Debit/Credit Notes
-  debitCreditNotes,
-  notesLoading,
-  fetchNotes,
-  viewNoteDetail,
-  getNoteStatusBadge,
-  getSettlementStatusBadge,
-  // Navigate to margins tab
-  setActiveTab,
-  setDeleteTarget,
-  // API
-  API_URL,
-  token
+  distributor, canManage, canDelete,
+  settlements, settlementsLoading, fetchSettlements,
+  debitCreditNotes, notesLoading, fetchNotes, viewNoteDetail, getNoteStatusBadge, getSettlementStatusBadge,
+  setActiveTab, setDeleteTarget, API_URL, token
 }) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(currentYear);
@@ -55,97 +31,56 @@ export default function BillingTab({
   const [noteRemarks, setNoteRemarks] = useState('');
   const [monthlyData, setMonthlyData] = useState(null);
   const [loadingMonthlyData, setLoadingMonthlyData] = useState(false);
-  const [downloadingPdf, setDownloadingPdf] = useState(null); // Track which note is downloading
+  const [downloadingPdf, setDownloadingPdf] = useState(null);
+  const [expandedWeeks, setExpandedWeeks] = useState({});
 
-  // Fetch settlements for selected month when month/year changes
+  const toggleWeek = (weekNum) => setExpandedWeeks(prev => ({ ...prev, [weekNum]: !prev[weekNum] }));
+
   useEffect(() => {
-    if (distributor?.id) {
-      fetchMonthlyReconciliationData();
-    }
+    if (distributor?.id) fetchMonthlyReconciliationData();
   }, [selectedMonth, selectedYear, distributor?.id]);
 
   const fetchMonthlyReconciliationData = async () => {
     if (!distributor?.id) return;
-    
     setLoadingMonthlyData(true);
     try {
-      // Get token and tenant from localStorage (standard pattern used across the app)
       const authToken = token || localStorage.getItem('token');
       const tenantId = localStorage.getItem('selectedTenant') || localStorage.getItem('tenant_id') || 'nyla-air-water';
-      
-      console.log('Fetching monthly reconciliation:', { month: selectedMonth, year: selectedYear, distributor: distributor.id, tenant: tenantId });
-      
       const response = await fetch(
         `${API_URL}/api/distributors/${distributor.id}/monthly-reconciliation?month=${selectedMonth}&year=${selectedYear}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${authToken}`,
-            'X-Tenant-ID': tenantId
-          }
-        }
+        { headers: { 'Authorization': `Bearer ${authToken}`, 'X-Tenant-ID': tenantId } }
       );
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Monthly reconciliation data:', data);
-        setMonthlyData(data);
-      } else {
-        console.error('Failed to fetch monthly reconciliation:', response.status, await response.text());
-      }
+      if (response.ok) setMonthlyData(await response.json());
     } catch (error) {
-      console.error('Failed to fetch monthly reconciliation data:', error);
+      console.error('Failed to fetch reconciliation:', error);
     } finally {
       setLoadingMonthlyData(false);
     }
   };
 
-  const toggleAccountExpand = (accountId) => {
-    setExpandedAccounts(prev => ({
-      ...prev,
-      [accountId]: !prev[accountId]
-    }));
-  };
+  const toggleAccount = (id) => setExpandedAccounts(prev => ({ ...prev, [id]: !prev[id] }));
 
   const handleGenerateNote = async () => {
-    if (!monthlyData || monthlyData.net_adjustment === 0) return;
-    
+    if (!monthlyData || (monthlyData.net_adjustment_amount || 0) === 0) return;
     setGeneratingNote(true);
     try {
       const authToken = token || localStorage.getItem('token');
       const tenantId = localStorage.getItem('selectedTenant') || localStorage.getItem('tenant_id') || 'nyla-air-water';
-      
       const response = await fetch(
         `${API_URL}/api/distributors/${distributor.id}/generate-monthly-note`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${authToken}`,
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-          },
-          body: JSON.stringify({
-            month: selectedMonth,
-            year: selectedYear,
-            remarks: noteRemarks
-          })
-        }
+        { method: 'POST', headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json', 'X-Tenant-ID': tenantId }, body: JSON.stringify({ month: selectedMonth, year: selectedYear, remarks: noteRemarks }) }
       );
-      
       if (response.ok) {
         setShowGenerateNoteDialog(false);
         setNoteRemarks('');
         fetchMonthlyReconciliationData();
         if (fetchNotes) fetchNotes();
-        alert('Note generated successfully with PDF!');
+        alert('Note generated successfully!');
       } else {
         const error = await response.json();
-        alert(`Failed to generate note: ${error.detail || 'Unknown error'}`);
+        alert(`Failed: ${error.detail || 'Unknown error'}`);
       }
-    } catch (error) {
-      console.error('Failed to generate note:', error);
-      alert('Failed to generate note');
-    } finally {
-      setGeneratingNote(false);
-    }
+    } catch (error) { alert('Failed to generate note'); } finally { setGeneratingNote(false); }
   };
 
   const handleDownloadPdf = async (note) => {
@@ -153,434 +88,597 @@ export default function BillingTab({
     try {
       const authToken = token || localStorage.getItem('token');
       const tenantId = localStorage.getItem('selectedTenant') || localStorage.getItem('tenant_id') || 'nyla-air-water';
-      
-      const response = await fetch(
-        `${API_URL}/api/distributors/${distributor.id}/notes/${note.id}/download`,
-        {
-          headers: {
-            'Authorization': `Bearer ${authToken}`,
-            'X-Tenant-ID': tenantId
-          }
-        }
-      );
-      
+      const response = await fetch(`${API_URL}/api/distributors/${distributor.id}/notes/${note.id}/download`, { headers: { 'Authorization': `Bearer ${authToken}`, 'X-Tenant-ID': tenantId } });
       if (response.ok) {
-        // Get the blob from response
         const blob = await response.blob();
-        
-        // Create download link
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.href = url;
-        link.download = `${note.note_number || 'note'}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        link.href = url; link.download = `${note.note_number || 'note'}.pdf`;
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
-      } else {
-        const error = await response.json();
-        alert(`Failed to download PDF: ${error.detail || 'Unknown error'}`);
       }
-    } catch (error) {
-      console.error('Failed to download PDF:', error);
-      alert('Failed to download PDF');
-    } finally {
-      setDownloadingPdf(null);
-    }
+    } catch (error) { alert('Failed to download PDF'); } finally { setDownloadingPdf(null); }
   };
 
-  // Group UNRECONCILED settlements by account (these can be reconciled)
-  const unreconciledByAccount = (monthlyData?.unreconciled_settlements || []).reduce((acc, settlement) => {
-    const accountId = settlement.account_id || 'unknown';
-    if (!acc[accountId]) {
-      acc[accountId] = {
-        account_id: accountId,
-        account_name: settlement.account_name || 'Unknown Account',
-        settlements: [],
-        totals: {
-          total_billing: 0,
-          distributor_earnings: 0,
-          margin_at_transfer: 0,
-          adjustment: 0
-        }
-      };
-    }
-    acc[accountId].settlements.push(settlement);
-    acc[accountId].totals.total_billing += settlement.total_billing_value || 0;
-    acc[accountId].totals.distributor_earnings += settlement.distributor_earnings || 0;
-    acc[accountId].totals.margin_at_transfer += settlement.margin_at_transfer_price || 0;
-    acc[accountId].totals.adjustment += settlement.adjustment_payable || 0;
+  // Per-settlement: billing at margin matrix transfer price
+  const computeTP = (s) => s.total_at_transfer_price || ((s.total_billing_value || 0) - (s.distributor_earnings || 0) - (s.factory_distributor_adjustment || 0));
+
+  // Group unreconciled settlements by account
+  const unreconciledByAccount = (monthlyData?.unreconciled_settlements || []).reduce((acc, s) => {
+    const aid = s.account_id || 'unknown';
+    if (!acc[aid]) acc[aid] = { account_id: aid, account_name: s.account_name || 'Unknown', settlements: [], totals: { billing_tp: 0, selling_price_adj: 0, credit_notes: 0, factory_returns: 0 } };
+    acc[aid].settlements.push(s);
+    acc[aid].totals.billing_tp += computeTP(s);
+    acc[aid].totals.selling_price_adj += s.factory_distributor_adjustment || 0;
+    acc[aid].totals.credit_notes += s.total_credit_notes_issued || s.credit_notes_applied || 0;
+    acc[aid].totals.factory_returns += s.total_factory_return_credit || 0;
     return acc;
   }, {});
-
   const unreconciledGroups = Object.values(unreconciledByAccount);
 
-  // Group RECONCILED settlements by account (already processed)
-  const reconciledByAccount = (monthlyData?.reconciled_settlements || []).reduce((acc, settlement) => {
-    const accountId = settlement.account_id || 'unknown';
-    if (!acc[accountId]) {
-      acc[accountId] = {
-        account_id: accountId,
-        account_name: settlement.account_name || 'Unknown Account',
-        settlements: [],
-        totals: {
-          total_billing: 0,
-          adjustment: 0
-        }
-      };
-    }
-    acc[accountId].settlements.push(settlement);
-    acc[accountId].totals.total_billing += settlement.total_billing_value || 0;
-    acc[accountId].totals.adjustment += settlement.adjustment_payable || 0;
+  const reconciledGroups = Object.values((monthlyData?.reconciled_settlements || []).reduce((acc, s) => {
+    const aid = s.account_id || 'unknown';
+    if (!acc[aid]) acc[aid] = { account_id: aid, account_name: s.account_name || 'Unknown', settlements: [], totals: { billing_tp: 0 } };
+    acc[aid].settlements.push(s);
+    acc[aid].totals.billing_tp += computeTP(s);
     return acc;
-  }, {});
+  }, {}));
 
-  const reconciledGroups = Object.values(reconciledByAccount);
+  const billingAtTP = monthlyData?.total_at_transfer_price || 0;
+  const weeklyBilling = monthlyData?.weekly_billing || [];
+  const sellingPriceAdj = monthlyData?.settlement_selling_price_adj || monthlyData?.total_factory_adjustment || 0;
+  const totalCN = monthlyData?.total_credit_notes_applied || 0;
+  const totalFR = monthlyData?.total_factory_return_credit || 0;
+  const netAdj = monthlyData?.net_adjustment_amount || 0;
+  const noteType = monthlyData?.settlement_note_type || 'none';
+  const hasUnreconciled = unreconciledGroups.length > 0;
+  const periodLabel = `${MONTHS.find(m => m.value === selectedMonth)?.label} ${selectedYear}`;
 
-  // Calculate grand totals for unreconciled only
-  const grandTotals = unreconciledGroups.reduce((acc, group) => ({
-    total_billing: acc.total_billing + group.totals.total_billing,
-    distributor_earnings: acc.distributor_earnings + group.totals.distributor_earnings,
-    margin_at_transfer: acc.margin_at_transfer + group.totals.margin_at_transfer,
-    adjustment: acc.adjustment + group.totals.adjustment
-  }), { total_billing: 0, distributor_earnings: 0, margin_at_transfer: 0, adjustment: 0 });
-
-  const noteType = grandTotals.adjustment >= 0 ? 'credit' : 'debit';
-  const existingNotes = monthlyData?.existing_notes || [];
-  const hasUnreconciledSettlements = unreconciledGroups.length > 0;
+  // Reconciled Two-Entry data
+  const recBillingAtTP = monthlyData?.reconciled_at_transfer_price || 0;
+  const recWeeklyBilling = monthlyData?.reconciled_weekly_billing || [];
+  const recSellingPriceAdj = monthlyData?.reconciled_selling_price_adj || 0;
+  const recTotalCN = monthlyData?.reconciled_credit_notes || 0;
+  const recTotalFR = monthlyData?.reconciled_factory_return_credit || 0;
+  const recNetAdj = monthlyData?.reconciled_net_adjustment || 0;
+  const recNoteType = monthlyData?.reconciled_note_type || 'none';
+  const hasReconciled = reconciledGroups.length > 0;
 
   return (
     <div className="space-y-6">
-      {/* Pricing Configuration Note */}
+      {/* Pricing Config */}
       <Card className="bg-gradient-to-br from-blue-50/50 to-indigo-50/50 border-blue-200">
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
             <Settings className="h-5 w-5 text-blue-600 mt-0.5" />
             <div>
               <p className="font-medium text-blue-800">Base Prices & Margins</p>
-              <p className="text-sm text-blue-700 mt-1">
-                Base prices and margin percentages are configured in the <strong>Margins</strong> tab.
-              </p>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="mt-2 border-blue-300 text-blue-700 hover:bg-blue-100"
-                onClick={() => setActiveTab('margins')}
-              >
-                Go to Margins Tab
-              </Button>
+              <p className="text-sm text-blue-700 mt-1">Transfer prices and margin percentages are configured in the <strong>Margins</strong> tab.</p>
+              <Button variant="outline" size="sm" className="mt-2 border-blue-300 text-blue-700 hover:bg-blue-100" onClick={() => setActiveTab('margins')}>Go to Margins Tab</Button>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Monthly Reconciliation Section */}
+      {/* Month/Year Selection */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Monthly Reconciliation
-              </CardTitle>
-              <CardDescription>
-                View all settlements for a month and generate Debit/Credit Note
-              </CardDescription>
+              <CardTitle className="text-lg flex items-center gap-2"><FileText className="h-5 w-5" />Monthly Billing & Reconciliation</CardTitle>
+              <CardDescription>Billing at transfer price + Settlement adjustments (Debit/Credit Note)</CardDescription>
             </div>
           </div>
-          
-          {/* Month/Year Selection */}
           <div className="flex items-center gap-4 mt-4 p-4 bg-muted/30 rounded-lg">
             <Calendar className="h-5 w-5 text-muted-foreground" />
             <div className="flex items-center gap-2">
               <Label>Month:</Label>
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                className="border rounded-md px-3 py-1.5 bg-background"
-              >
-                {MONTHS.map(m => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
+              <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))} className="border rounded-md px-3 py-1.5 bg-background text-sm" data-testid="billing-month-select">
+                {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
             </div>
             <div className="flex items-center gap-2">
               <Label>Year:</Label>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="border rounded-md px-3 py-1.5 bg-background"
-              >
-                {YEARS.map(y => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
+              <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className="border rounded-md px-3 py-1.5 bg-background text-sm" data-testid="billing-year-select">
+                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={fetchMonthlyReconciliationData}
-              disabled={loadingMonthlyData}
-            >
+            <Button variant="outline" size="sm" onClick={fetchMonthlyReconciliationData} disabled={loadingMonthlyData}>
               {loadingMonthlyData ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Refresh'}
             </Button>
           </div>
         </CardHeader>
-        
+
         <CardContent>
           {loadingMonthlyData ? (
-            <div className="flex items-center justify-center py-12">
-              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : !hasUnreconciledSettlements && reconciledGroups.length === 0 ? (
+            <div className="flex items-center justify-center py-12"><RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+          ) : !hasUnreconciled && reconciledGroups.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No approved settlements found for {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}</p>
+              <p>No approved settlements for {periodLabel}</p>
               <p className="text-sm">Generate and approve settlements from the Settlements tab first</p>
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Pending Reconciliation Section */}
-              {hasUnreconciledSettlements && (
-                <>
-                  <div className="border-l-4 border-orange-500 pl-4">
-                    <h3 className="font-semibold text-lg flex items-center gap-2">
-                      <Clock className="h-5 w-5 text-orange-500" />
-                      Pending Reconciliation
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      {unreconciledGroups.length} account(s) with {monthlyData?.total_unreconciled || 0} approved settlement(s) ready to reconcile
-                    </p>
-                  </div>
+              {hasUnreconciled && (<>
+                {/* ============ TWO ENTRIES ============ */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" data-testid="billing-two-entries">
 
-                  {/* Summary Cards for Unreconciled */}
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <Card className="bg-muted/30">
-                      <CardContent className="p-4 text-center">
-                        <p className="text-sm text-muted-foreground">Accounts</p>
-                        <p className="text-2xl font-bold">{unreconciledGroups.length}</p>
-                      </CardContent>
-                    </Card>
-                    <Card className="bg-muted/30">
-                      <CardContent className="p-4 text-center">
-                        <p className="text-sm text-muted-foreground">Billing Value</p>
-                        <p className="text-xl font-bold">₹{grandTotals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                      </CardContent>
-                    </Card>
-                    <Card className="bg-blue-50">
-                      <CardContent className="p-4 text-center">
-                        <p className="text-sm text-muted-foreground">Distributor Earnings</p>
-                        <p className="text-xl font-bold text-blue-600">₹{grandTotals.distributor_earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                      </CardContent>
-                    </Card>
-                    <Card className="bg-slate-100">
-                      <CardContent className="p-4 text-center">
-                        <p className="text-sm text-muted-foreground">Margin at Transfer</p>
-                        <p className="text-xl font-bold">₹{grandTotals.margin_at_transfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                      </CardContent>
-                    </Card>
-                    <Card className={grandTotals.adjustment >= 0 ? 'bg-green-50' : 'bg-red-50'}>
-                      <CardContent className="p-4 text-center">
-                        <p className="text-sm text-muted-foreground">Net Adjustment</p>
-                        <p className={`text-xl font-bold ${grandTotals.adjustment >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {grandTotals.adjustment >= 0 ? '+' : ''}₹{grandTotals.adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {grandTotals.adjustment >= 0 ? 'Credit Note' : 'Debit Note'}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Unreconciled Settlements by Account */}
-                  <div className="border rounded-lg">
-                    <div className="p-3 bg-orange-50 border-b font-medium flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-orange-500" />
-                      Settlements Pending Reconciliation
+                  {/* ── ENTRY 1: BILLING AT TRANSFER PRICE ── */}
+                  <div className="border-2 border-blue-200 rounded-xl overflow-hidden" data-testid="entry-billing">
+                    <div className="p-4 bg-blue-600 text-white">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Package className="h-4 w-4" />
+                        <span className="font-semibold text-sm uppercase tracking-wider">Entry 1: Monthly Billing</span>
+                      </div>
+                      <p className="text-xs text-blue-200">Distributor pays factory at agreed transfer price (from margin matrix)</p>
                     </div>
-                    <div className="divide-y">
-                      {unreconciledGroups.map(group => (
-                        <div key={group.account_id}>
-                          <div 
-                            className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors"
-                            onClick={() => toggleAccountExpand(group.account_id)}
-                          >
-                            <div className="flex items-center gap-3">
-                              <Building2 className="h-5 w-5 text-muted-foreground" />
-                              <div>
-                                <p className="font-medium">{group.account_name}</p>
-                                <p className="text-sm text-muted-foreground">{group.settlements.length} settlement(s)</p>
+                    <div className="p-5">
+                      <div className="text-center pb-4 border-b">
+                        <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Total Billing at Transfer Price</p>
+                        <p className="text-3xl font-bold text-blue-700" data-testid="billing-amount">₹{fmt(billingAtTP)}</p>
+                      </div>
+                      {/* Weekly Line Items */}
+                      <div className="pt-3 space-y-0" data-testid="weekly-billing">
+                        <p className="text-xs text-slate-400 uppercase tracking-wider font-medium mb-2">Weekly Breakdown (by delivery date)</p>
+                        {weeklyBilling.length > 0 ? weeklyBilling.map(week => {
+                          const isExpanded = expandedWeeks[week.week];
+                          const details = week.details || [];
+                          const hasDetails = details.length > 0;
+                          // Group deliveries by customer
+                          const byCustomer = details.reduce((acc, d) => {
+                            const key = d.account_name || 'Unknown';
+                            if (!acc[key]) acc[key] = [];
+                            acc[key].push(d);
+                            return acc;
+                          }, {});
+                          return (
+                            <div key={week.week} className={week.week > 1 ? 'border-t border-slate-100' : ''}>
+                              <div
+                                className={`flex items-center justify-between py-2.5 ${hasDetails ? 'cursor-pointer hover:bg-blue-50/50 rounded-md px-1 -mx-1 transition-colors' : ''}`}
+                                onClick={() => hasDetails && toggleWeek(week.week)}
+                                data-testid={`week-${week.week}-row`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  {hasDetails ? (
+                                    isExpanded
+                                      ? <ChevronDown className="w-4 h-4 text-blue-500" />
+                                      : <ChevronRight className="w-4 h-4 text-blue-400" />
+                                  ) : (
+                                    <div className="w-4" />
+                                  )}
+                                  <div className="w-6 h-6 rounded bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-600">{week.week}</div>
+                                  <div>
+                                    <p className="text-sm font-medium text-slate-700">{week.label}</p>
+                                    <p className="text-xs text-slate-400">{week.deliveries} delivery(s){hasDetails ? ' — click to expand' : ''}</p>
+                                  </div>
+                                </div>
+                                <span className={`text-sm font-semibold ${week.amount > 0 ? 'text-blue-700' : 'text-slate-300'}`}>
+                                  ₹{fmt(week.amount)}
+                                </span>
                               </div>
-                            </div>
-                            <div className="flex items-center gap-6">
-                              <div className="text-right">
-                                <p className="text-sm text-muted-foreground">Billing</p>
-                                <p className="font-medium">₹{group.totals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-sm text-muted-foreground">Adjustment</p>
-                                <p className={`font-medium ${group.totals.adjustment >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                  {group.totals.adjustment >= 0 ? '+' : ''}₹{group.totals.adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                </p>
-                              </div>
-                              {expandedAccounts[group.account_id] ? (
-                                <ChevronUp className="h-5 w-5 text-muted-foreground" />
-                              ) : (
-                                <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                              {isExpanded && hasDetails && (
+                                <div className="ml-6 mb-3 mt-1 border border-blue-100 rounded-lg overflow-hidden bg-blue-50/30" data-testid={`week-${week.week}-details`}>
+                                  {Object.entries(byCustomer).map(([customer, deliveries]) => (
+                                    <div key={customer}>
+                                      <div className="px-3 py-1.5 bg-blue-100/60 flex items-center gap-2 border-b border-blue-100">
+                                        <User className="h-3 w-3 text-blue-600" />
+                                        <span className="text-xs font-semibold text-blue-800">{customer}</span>
+                                        <span className="text-[10px] text-blue-500 ml-auto">{deliveries.length} delivery(s) · ₹{fmt(deliveries.reduce((s, d) => s + (d.amount_at_transfer_price || 0), 0))}</span>
+                                      </div>
+                                      <table className="w-full text-xs">
+                                        <thead>
+                                          <tr className="text-[10px] uppercase text-slate-400 border-b border-blue-50">
+                                            <th className="text-left px-3 py-1.5">Date</th>
+                                            <th className="text-left px-3 py-1.5">Delivery #</th>
+                                            <th className="text-right px-3 py-1.5">Amount (at transfer price)</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {deliveries.map(d => (
+                                            <tr key={d.delivery_id} className="border-b border-blue-50/60 last:border-0 hover:bg-white/50">
+                                              <td className="px-3 py-1.5 text-slate-600">{d.delivery_date}</td>
+                                              <td className="px-3 py-1.5 text-slate-700 font-medium">{d.delivery_number || d.delivery_id?.slice(0, 8)}</td>
+                                              <td className="px-3 py-1.5 text-right font-semibold text-blue-700">₹{fmt(d.amount_at_transfer_price)}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  ))}
+                                </div>
                               )}
                             </div>
+                          );
+                        }) : (
+                          <p className="text-sm text-slate-400 py-2">No delivery data available</p>
+                        )}
+                        <div className="flex justify-between font-semibold text-blue-700 border-t-2 border-blue-200 pt-2 mt-1 text-sm">
+                          <span>Total</span>
+                          <span>₹{fmt(billingAtTP)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ── ENTRY 2: SETTLEMENT (All Adjustments → Debit/Credit Note) ── */}
+                  <div className={`border-2 rounded-xl overflow-hidden ${noteType === 'debit' ? 'border-amber-200' : noteType === 'credit' ? 'border-emerald-200' : 'border-slate-200'}`} data-testid="entry-settlement">
+                    <div className={`p-4 text-white ${noteType === 'debit' ? 'bg-amber-600' : noteType === 'credit' ? 'bg-emerald-600' : 'bg-slate-600'}`}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Receipt className="h-4 w-4" />
+                        <span className="font-semibold text-sm uppercase tracking-wider">Entry 2: Monthly Settlement</span>
+                      </div>
+                      <p className={`text-xs ${noteType === 'debit' ? 'text-amber-200' : noteType === 'credit' ? 'text-emerald-200' : 'text-slate-300'}`}>
+                        All adjustments → {noteType === 'debit' ? 'Debit Note' : noteType === 'credit' ? 'Credit Note' : 'No Adjustment'}
+                      </p>
+                    </div>
+                    <div className="p-5 space-y-4">
+                      <div className="text-center pb-2">
+                        <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">
+                          {noteType === 'debit' ? 'Debit Note (Distributor Owes)' : noteType === 'credit' ? 'Credit Note (Factory Owes)' : 'No Adjustment Required'}
+                        </p>
+                        <p className={`text-3xl font-bold ${noteType === 'debit' ? 'text-amber-600' : noteType === 'credit' ? 'text-emerald-600' : 'text-slate-400'}`} data-testid="settlement-amount">
+                          ₹{fmt(Math.abs(netAdj))}
+                        </p>
+                      </div>
+                      <div className="border-t pt-3 space-y-2.5 text-sm">
+                        {/* Selling price adjustment */}
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2 text-slate-600">
+                            <TrendingUp className="h-3.5 w-3.5 text-amber-500" />
+                            <span>Selling Price Adjustments</span>
                           </div>
-                          
+                          <span className={`font-medium ${sellingPriceAdj > 0 ? 'text-amber-600' : sellingPriceAdj < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {sellingPriceAdj > 0 ? '+' : sellingPriceAdj < 0 ? '-' : ''}₹{fmt(Math.abs(sellingPriceAdj))}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 -mt-1 ml-6">Difference between customer selling price and base price</p>
+                        {/* Credit Notes */}
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2 text-slate-600">
+                            <CreditCard className="h-3.5 w-3.5 text-emerald-500" />
+                            <span>Return Credits (Credit Notes)</span>
+                          </div>
+                          <span className={`font-medium ${totalCN > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {totalCN > 0 ? '-' : ''}₹{fmt(totalCN)}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 -mt-1 ml-6">Credit notes issued for customer returns</p>
+                        {/* Factory Returns */}
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2 text-slate-600">
+                            <Factory className="h-3.5 w-3.5 text-purple-500" />
+                            <span>Factory Returns</span>
+                          </div>
+                          <span className={`font-medium ${totalFR > 0 ? 'text-purple-600' : 'text-slate-400'}`}>
+                            {totalFR > 0 ? '-' : ''}₹{fmt(totalFR)}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 -mt-1 ml-6">Warehouse stock returned to factory at transfer price</p>
+                        {/* Net */}
+                        <div className={`flex justify-between font-semibold border-t pt-2 mt-1 ${noteType === 'debit' ? 'text-amber-700' : noteType === 'credit' ? 'text-emerald-700' : 'text-slate-500'}`}>
+                          <span>Net {noteType === 'debit' ? '(Debit Note)' : noteType === 'credit' ? '(Credit Note)' : ''}</span>
+                          <span>₹{fmt(Math.abs(netAdj))}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* === SETTLEMENT BREAKDOWN BY ACCOUNT === */}
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="p-3 bg-slate-100 border-b font-medium flex items-center gap-2 text-sm">
+                    <Clock className="h-4 w-4 text-amber-500" />
+                    <span>Breakdown by Account</span>
+                    <Badge variant="secondary" className="ml-auto">{monthlyData?.total_unreconciled || 0} settlement(s)</Badge>
+                  </div>
+                  <div className="divide-y">
+                    {unreconciledGroups.map(group => {
+                      const adjNet = group.totals.selling_price_adj - group.totals.credit_notes - group.totals.factory_returns;
+                      const adjType = adjNet > 0 ? 'debit' : adjNet < 0 ? 'credit' : 'none';
+                      return (
+                        <div key={group.account_id}>
+                          <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => toggleAccount(group.account_id)}>
+                            <div className="flex items-center gap-3">
+                              <Building2 className="h-5 w-5 text-slate-400" />
+                              <div>
+                                <p className="font-medium text-sm">{group.account_name}</p>
+                                <p className="text-xs text-slate-400">{group.settlements.length} settlement(s)</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4 text-right">
+                              <div>
+                                <p className="text-[10px] text-blue-500 uppercase font-medium">Billing (TP)</p>
+                                <p className="text-sm font-semibold text-blue-600">₹{fmt(group.totals.billing_tp)}</p>
+                              </div>
+                              <div className="border-l pl-3">
+                                <p className="text-[10px] text-slate-400 uppercase font-medium">Selling Price Adj</p>
+                                <p className={`text-sm font-semibold ${group.totals.selling_price_adj > 0 ? 'text-amber-600' : group.totals.selling_price_adj < 0 ? 'text-emerald-600' : 'text-slate-300'}`}>
+                                  {group.totals.selling_price_adj > 0 ? '+' : ''}₹{fmt(group.totals.selling_price_adj)}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-slate-400 uppercase font-medium">Returns & Credits</p>
+                                <p className={`text-sm font-semibold ${(group.totals.credit_notes + group.totals.factory_returns) > 0 ? 'text-emerald-600' : 'text-slate-300'}`}>
+                                  -₹{fmt(group.totals.credit_notes + group.totals.factory_returns)}
+                                </p>
+                              </div>
+                              <div className="border-l pl-3">
+                                <p className="text-[10px] text-slate-400 uppercase font-medium">Settlement Net</p>
+                                <p className={`text-sm font-bold ${adjType === 'debit' ? 'text-amber-600' : adjType === 'credit' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                  ₹{fmt(Math.abs(adjNet))} {adjType !== 'none' ? `(${adjType === 'debit' ? 'DR' : 'CR'})` : ''}
+                                </p>
+                              </div>
+                              <div className={`w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center transition-transform ${expandedAccounts[group.account_id] ? 'rotate-180' : ''}`}>
+                                <ArrowDown className="h-3 w-3 text-slate-500" />
+                              </div>
+                            </div>
+                          </div>
                           {expandedAccounts[group.account_id] && (
-                            <div className="bg-muted/20 p-4 border-t">
+                            <div className="bg-slate-50/50 p-4 border-t">
                               <table className="w-full text-sm">
-                                <thead>
-                                  <tr className="border-b">
-                                    <th className="text-left p-2 font-medium">Settlement #</th>
-                                    <th className="text-right p-2 font-medium">Deliveries</th>
-                                    <th className="text-right p-2 font-medium">Billing</th>
-                                    <th className="text-right p-2 font-medium">Earnings</th>
-                                    <th className="text-right p-2 font-medium">Adjustment</th>
-                                    <th className="text-center p-2 font-medium">Status</th>
-                                  </tr>
-                                </thead>
+                                <thead><tr className="border-b text-xs text-slate-500 uppercase">
+                                  <th className="text-left p-2">Settlement #</th>
+                                  <th className="text-right p-2">Deliveries</th>
+                                  <th className="text-right p-2 text-blue-600">Billing (TP)</th>
+                                  <th className="text-right p-2 text-amber-600">Selling Adj</th>
+                                  <th className="text-right p-2 text-emerald-600">Return Credits</th>
+                                  <th className="text-right p-2 text-purple-600">Factory Ret.</th>
+                                  <th className="text-right p-2 font-bold">Net</th>
+                                  <th className="text-center p-2">Status</th>
+                                </tr></thead>
                                 <tbody>
-                                  {group.settlements.map(settlement => (
-                                    <tr key={settlement.id} className="border-b hover:bg-muted/30">
-                                      <td className="p-2 font-medium">{settlement.settlement_number}</td>
-                                      <td className="p-2 text-right">{settlement.total_deliveries || 0}</td>
-                                      <td className="p-2 text-right">₹{(settlement.total_billing_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                      <td className="p-2 text-right text-blue-600">₹{(settlement.distributor_earnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                      <td className={`p-2 text-right font-medium ${(settlement.adjustment_payable || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        {(settlement.adjustment_payable || 0) >= 0 ? '+' : ''}₹{(settlement.adjustment_payable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                      </td>
-                                      <td className="p-2 text-center">
-                                        {getSettlementStatusBadge ? getSettlementStatusBadge(settlement.status) : (
-                                          <Badge variant="outline">{settlement.status}</Badge>
-                                        )}
-                                      </td>
-                                    </tr>
-                                  ))}
+                                  {group.settlements.map(s => {
+                                    const tp = computeTP(s);
+                                    const spa = s.factory_distributor_adjustment || 0;
+                                    const cn = s.total_credit_notes_issued || s.credit_notes_applied || 0;
+                                    const fr = s.total_factory_return_credit || 0;
+                                    const net = spa - cn - fr;
+                                    return (
+                                      <tr key={s.id} className="border-b hover:bg-white/60">
+                                        <td className="p-2 font-medium">{s.settlement_number}</td>
+                                        <td className="p-2 text-right">{s.total_deliveries || 0}</td>
+                                        <td className="p-2 text-right text-blue-600 font-medium">₹{fmt(tp)}</td>
+                                        <td className={`p-2 text-right ${spa > 0 ? 'text-amber-600' : spa < 0 ? 'text-emerald-600' : 'text-slate-300'}`}>
+                                          {spa !== 0 ? `${spa > 0 ? '+' : ''}₹${fmt(spa)}` : '-'}
+                                        </td>
+                                        <td className={`p-2 text-right ${cn > 0 ? 'text-emerald-600' : 'text-slate-300'}`}>{cn > 0 ? `-₹${fmt(cn)}` : '-'}</td>
+                                        <td className={`p-2 text-right ${fr > 0 ? 'text-purple-600' : 'text-slate-300'}`}>{fr > 0 ? `-₹${fmt(fr)}` : '-'}</td>
+                                        <td className={`p-2 text-right font-bold ${net > 0 ? 'text-amber-600' : net < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                          ₹{fmt(Math.abs(net))} {net !== 0 ? `(${net > 0 ? 'DR' : 'CR'})` : ''}
+                                        </td>
+                                        <td className="p-2 text-center">{getSettlementStatusBadge ? getSettlementStatusBadge(s.status) : <Badge variant="outline">{s.status}</Badge>}</td>
+                                      </tr>
+                                    );
+                                  })}
                                 </tbody>
                               </table>
                             </div>
                           )}
                         </div>
-                      ))}
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Generate Note Button */}
+                <div className="flex justify-end">
+                  {noteType !== 'none' && netAdj !== 0 ? (
+                    <Button onClick={() => setShowGenerateNoteDialog(true)} className={noteType === 'debit' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'} data-testid="generate-note-btn">
+                      <Receipt className="h-4 w-4 mr-2" />
+                      Generate {noteType === 'debit' ? 'Debit' : 'Credit'} Note (₹{fmt(Math.abs(netAdj))})
+                    </Button>
+                  ) : (
+                    <div className="text-muted-foreground text-sm">No adjustments for this period — no note required</div>
+                  )}
+                </div>
+              </>)}
+
+              {/* Already Reconciled - Full Two-Entry View */}
+              {hasReconciled && (
+                <>
+                  <div className="border-l-4 border-green-500 pl-4 mt-6">
+                    <h3 className="font-semibold text-base flex items-center gap-2">
+                      <CheckCircle className="h-5 w-5 text-green-500" />Already Reconciled
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 ml-2">Completed</Badge>
+                    </h3>
+                    <p className="text-sm text-muted-foreground">{reconciledGroups.length} account(s) with {monthlyData?.total_reconciled || 0} settlement(s)</p>
+                  </div>
+
+                  {/* Reconciled Two-Entry Cards */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" data-testid="reconciled-two-entries">
+                    {/* Reconciled Entry 1: Billing at Transfer Price */}
+                    <div className="border-2 border-green-200 rounded-xl overflow-hidden" data-testid="reconciled-entry-billing">
+                      <div className="p-4 bg-green-700 text-white">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Package className="h-4 w-4" />
+                          <span className="font-semibold text-sm uppercase tracking-wider">Entry 1: Monthly Billing</span>
+                          <Badge className="bg-green-500/30 text-green-100 border-green-400/40 text-[10px] ml-auto">Reconciled</Badge>
+                        </div>
+                        <p className="text-xs text-green-200">Distributor paid factory at agreed transfer price (from margin matrix)</p>
+                      </div>
+                      <div className="p-5">
+                        <div className="text-center pb-4 border-b">
+                          <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Total Billing at Transfer Price</p>
+                          <p className="text-3xl font-bold text-green-700" data-testid="reconciled-billing-amount">₹{fmt(recBillingAtTP)}</p>
+                        </div>
+                        <div className="pt-3 space-y-0" data-testid="reconciled-weekly-billing">
+                          <p className="text-xs text-slate-400 uppercase tracking-wider font-medium mb-2">Weekly Breakdown (by delivery date)</p>
+                          {recWeeklyBilling.length > 0 ? recWeeklyBilling.map(week => {
+                            const isExpanded = expandedWeeks[`rec-${week.week}`];
+                            const details = week.details || [];
+                            const hasDetails = details.length > 0;
+                            const byCustomer = details.reduce((acc, d) => {
+                              const key = d.account_name || 'Unknown';
+                              if (!acc[key]) acc[key] = [];
+                              acc[key].push(d);
+                              return acc;
+                            }, {});
+                            return (
+                              <div key={week.week} className={week.week > 1 ? 'border-t border-slate-100' : ''}>
+                                <div
+                                  className={`flex items-center justify-between py-2.5 ${hasDetails ? 'cursor-pointer hover:bg-green-50/50 rounded-md px-1 -mx-1 transition-colors' : ''}`}
+                                  onClick={() => hasDetails && toggleWeek(`rec-${week.week}`)}
+                                  data-testid={`reconciled-week-${week.week}-row`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    {hasDetails ? (
+                                      isExpanded
+                                        ? <ChevronDown className="w-4 h-4 text-green-500" />
+                                        : <ChevronRight className="w-4 h-4 text-green-400" />
+                                    ) : (
+                                      <div className="w-4" />
+                                    )}
+                                    <div className="w-6 h-6 rounded bg-green-100 flex items-center justify-center text-xs font-bold text-green-600">{week.week}</div>
+                                    <div>
+                                      <p className="text-sm font-medium text-slate-700">{week.label}</p>
+                                      <p className="text-xs text-slate-400">{week.deliveries} delivery(s){hasDetails ? ' — click to expand' : ''}</p>
+                                    </div>
+                                  </div>
+                                  <span className={`text-sm font-semibold ${week.amount > 0 ? 'text-green-700' : 'text-slate-300'}`}>
+                                    ₹{fmt(week.amount)}
+                                  </span>
+                                </div>
+                                {isExpanded && hasDetails && (
+                                  <div className="ml-6 mb-3 mt-1 border border-green-100 rounded-lg overflow-hidden bg-green-50/30" data-testid={`reconciled-week-${week.week}-details`}>
+                                    {Object.entries(byCustomer).map(([customer, deliveries]) => (
+                                      <div key={customer}>
+                                        <div className="px-3 py-1.5 bg-green-100/60 flex items-center gap-2 border-b border-green-100">
+                                          <User className="h-3 w-3 text-green-600" />
+                                          <span className="text-xs font-semibold text-green-800">{customer}</span>
+                                          <span className="text-[10px] text-green-500 ml-auto">{deliveries.length} delivery(s) · ₹{fmt(deliveries.reduce((s, d) => s + (d.amount_at_transfer_price || 0), 0))}</span>
+                                        </div>
+                                        <table className="w-full text-xs">
+                                          <thead>
+                                            <tr className="text-[10px] uppercase text-slate-400 border-b border-green-50">
+                                              <th className="text-left px-3 py-1.5">Date</th>
+                                              <th className="text-left px-3 py-1.5">Delivery #</th>
+                                              <th className="text-right px-3 py-1.5">Amount (at transfer price)</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {deliveries.map(d => (
+                                              <tr key={d.delivery_id} className="border-b border-green-50/60 last:border-0 hover:bg-white/50">
+                                                <td className="px-3 py-1.5 text-slate-600">{d.delivery_date}</td>
+                                                <td className="px-3 py-1.5 text-slate-700 font-medium">{d.delivery_number || d.delivery_id?.slice(0, 8)}</td>
+                                                <td className="px-3 py-1.5 text-right font-semibold text-green-700">₹{fmt(d.amount_at_transfer_price)}</td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }) : (
+                            <p className="text-sm text-slate-400 py-2">No delivery data available</p>
+                          )}
+                          <div className="flex justify-between font-semibold text-green-700 border-t-2 border-green-200 pt-2 mt-1 text-sm">
+                            <span>Total</span>
+                            <span>₹{fmt(recBillingAtTP)}</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    
-                    {/* Grand Total Row */}
-                    <div className="p-4 bg-slate-100 dark:bg-slate-800 border-t-2">
-                      <div className="flex items-center justify-between">
-                        <div className="font-semibold">Total Pending ({unreconciledGroups.length} accounts, {monthlyData?.total_unreconciled || 0} settlements)</div>
-                        <div className="flex items-center gap-6">
-                          <div className="text-right">
-                            <p className="text-sm text-muted-foreground">Billing</p>
-                            <p className="font-bold">₹{grandTotals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+
+                    {/* Reconciled Entry 2: Settlement */}
+                    <div className={`border-2 rounded-xl overflow-hidden ${recNoteType === 'debit' ? 'border-amber-200' : recNoteType === 'credit' ? 'border-emerald-200' : 'border-green-200'}`} data-testid="reconciled-entry-settlement">
+                      <div className={`p-4 text-white ${recNoteType === 'debit' ? 'bg-amber-700' : recNoteType === 'credit' ? 'bg-emerald-700' : 'bg-green-700'}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Receipt className="h-4 w-4" />
+                          <span className="font-semibold text-sm uppercase tracking-wider">Entry 2: Monthly Settlement</span>
+                          <Badge className="bg-white/20 text-white/90 border-white/30 text-[10px] ml-auto">Reconciled</Badge>
+                        </div>
+                        <p className={`text-xs ${recNoteType === 'debit' ? 'text-amber-200' : recNoteType === 'credit' ? 'text-emerald-200' : 'text-green-200'}`}>
+                          All adjustments → {recNoteType === 'debit' ? 'Debit Note' : recNoteType === 'credit' ? 'Credit Note' : 'No Adjustment'}
+                        </p>
+                      </div>
+                      <div className="p-5 space-y-4">
+                        <div className="text-center pb-2">
+                          <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">
+                            {recNoteType === 'debit' ? 'Debit Note (Distributor Owed)' : recNoteType === 'credit' ? 'Credit Note (Factory Owed)' : 'No Adjustment Required'}
+                          </p>
+                          <p className={`text-3xl font-bold ${recNoteType === 'debit' ? 'text-amber-600' : recNoteType === 'credit' ? 'text-emerald-600' : 'text-slate-400'}`} data-testid="reconciled-settlement-amount">
+                            ₹{fmt(Math.abs(recNetAdj))}
+                          </p>
+                        </div>
+                        <div className="border-t pt-3 space-y-2.5 text-sm">
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2 text-slate-600">
+                              <TrendingUp className="h-3.5 w-3.5 text-amber-500" />
+                              <span>Selling Price Adjustments</span>
+                            </div>
+                            <span className={`font-medium ${recSellingPriceAdj > 0 ? 'text-amber-600' : recSellingPriceAdj < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                              {recSellingPriceAdj > 0 ? '+' : recSellingPriceAdj < 0 ? '-' : ''}₹{fmt(Math.abs(recSellingPriceAdj))}
+                            </span>
                           </div>
-                          <div className="text-right">
-                            <p className="text-sm text-muted-foreground">Net Adjustment</p>
-                            <p className={`font-bold ${grandTotals.adjustment >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {grandTotals.adjustment >= 0 ? '+' : ''}₹{grandTotals.adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                            </p>
+                          <p className="text-[11px] text-slate-400 -mt-1 ml-6">Difference between customer selling price and base price</p>
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2 text-slate-600">
+                              <CreditCard className="h-3.5 w-3.5 text-emerald-500" />
+                              <span>Return Credits (Credit Notes)</span>
+                            </div>
+                            <span className={`font-medium ${recTotalCN > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                              {recTotalCN > 0 ? '-' : ''}₹{fmt(recTotalCN)}
+                            </span>
                           </div>
-                          <div className="w-20"></div>
+                          <p className="text-[11px] text-slate-400 -mt-1 ml-6">Credit notes issued for customer returns</p>
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2 text-slate-600">
+                              <Factory className="h-3.5 w-3.5 text-purple-500" />
+                              <span>Factory Returns</span>
+                            </div>
+                            <span className={`font-medium ${recTotalFR > 0 ? 'text-purple-600' : 'text-slate-400'}`}>
+                              {recTotalFR > 0 ? '-' : ''}₹{fmt(recTotalFR)}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 -mt-1 ml-6">Warehouse stock returned to factory at transfer price</p>
+                          <div className={`flex justify-between font-semibold border-t pt-2 mt-1 ${recNoteType === 'debit' ? 'text-amber-700' : recNoteType === 'credit' ? 'text-emerald-700' : 'text-slate-500'}`}>
+                            <span>Net {recNoteType === 'debit' ? '(Debit Note)' : recNoteType === 'credit' ? '(Credit Note)' : ''}</span>
+                            <span>₹{fmt(Math.abs(recNetAdj))}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Generate Note Button */}
-                  <div className="flex justify-end">
-                    {grandTotals.adjustment !== 0 ? (
-                      <Button
-                        onClick={() => setShowGenerateNoteDialog(true)}
-                        className={noteType === 'credit' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}
-                        data-testid="generate-note-btn"
-                      >
-                        <Receipt className="h-4 w-4 mr-2" />
-                        Generate {noteType === 'credit' ? 'Credit' : 'Debit'} Note (₹{Math.abs(grandTotals.adjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })})
-                      </Button>
-                    ) : (
-                      <div className="text-muted-foreground">
-                        Net adjustment is ₹0 - no note required
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {/* Already Reconciled Section */}
-              {reconciledGroups.length > 0 && (
-                <>
-                  <div className="border-l-4 border-green-500 pl-4 mt-6">
-                    <h3 className="font-semibold text-lg flex items-center gap-2">
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                      Already Reconciled
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      {reconciledGroups.length} account(s) with {monthlyData?.total_reconciled || 0} settlement(s) already processed
-                    </p>
-                  </div>
-
-                  <div className="border rounded-lg">
-                    <div className="p-3 bg-green-50 border-b font-medium flex items-center gap-2">
+                  {/* Reconciled Account Breakdown */}
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="p-3 bg-green-50 border-b font-medium flex items-center gap-2 text-sm">
                       <CheckCircle className="h-4 w-4 text-green-500" />
-                      Reconciled Settlements
+                      <span>Reconciled Accounts</span>
+                      <Badge variant="secondary" className="ml-auto">{monthlyData?.total_reconciled || 0} settlement(s)</Badge>
                     </div>
                     <div className="divide-y">
                       {reconciledGroups.map(group => (
-                        <div key={group.account_id} className="flex items-center justify-between p-4">
+                        <div key={group.account_id} className="flex items-center justify-between p-4 hover:bg-slate-50/50">
                           <div className="flex items-center gap-3">
-                            <Building2 className="h-5 w-5 text-muted-foreground" />
+                            <Building2 className="h-5 w-5 text-green-400" />
                             <div>
-                              <p className="font-medium">{group.account_name}</p>
-                              <p className="text-sm text-muted-foreground">{group.settlements.length} settlement(s)</p>
+                              <p className="font-medium text-sm">{group.account_name}</p>
+                              <p className="text-xs text-muted-foreground">{group.settlements.length} settlement(s)</p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-6">
+                          <div className="flex items-center gap-4">
                             <div className="text-right">
-                              <p className="text-sm text-muted-foreground">Billing</p>
-                              <p className="font-medium">₹{group.totals.total_billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                              <p className="text-xs text-slate-400">Billing (TP)</p>
+                              <p className="font-medium text-sm text-green-700">₹{fmt(group.totals.billing_tp)}</p>
                             </div>
-                            <div className="text-right">
-                              <p className="text-sm text-muted-foreground">Adjustment</p>
-                              <p className={`font-medium ${group.totals.adjustment >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {group.totals.adjustment >= 0 ? '+' : ''}₹{group.totals.adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                              </p>
-                            </div>
-                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                              Reconciled
-                            </Badge>
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Reconciled</Badge>
                           </div>
                         </div>
                       ))}
-                    </div>
-                    <div className="p-4 bg-green-50 border-t">
-                      <div className="flex items-center justify-between">
-                        <div className="font-semibold text-green-700">Total Reconciled</div>
-                        <div className="flex items-center gap-6">
-                          <div className="text-right">
-                            <p className="font-bold">₹{(monthlyData?.reconciled_billing_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className={`font-bold ${(monthlyData?.reconciled_adjustment || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {(monthlyData?.reconciled_adjustment || 0) >= 0 ? '+' : ''}₹{(monthlyData?.reconciled_adjustment || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                            </p>
-                          </div>
-                          <div className="w-24"></div>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 </>
               )}
 
-              {/* No pending settlements message */}
-              {!hasUnreconciledSettlements && reconciledGroups.length > 0 && (
-                <div className="text-center py-6 text-muted-foreground bg-muted/30 rounded-lg">
-                  <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
-                  <p>All approved settlements for {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear} have been reconciled</p>
+              {!hasUnreconciled && hasReconciled && (
+                <div className="text-center py-4 text-muted-foreground bg-green-50/50 rounded-lg border border-green-100">
+                  <CheckCircle className="h-6 w-6 mx-auto mb-2 text-green-500" />
+                  <p className="text-sm">All settlements for {periodLabel} have been reconciled — view details above</p>
                 </div>
               )}
             </div>
@@ -588,115 +686,60 @@ export default function BillingTab({
         </CardContent>
       </Card>
 
-      {/* Debit/Credit Notes Section */}
+      {/* Debit/Credit Notes */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Receipt className="h-5 w-5" />
-            Debit / Credit Notes
-          </CardTitle>
-          <CardDescription>Monthly reconciliation notes for this distributor</CardDescription>
+          <CardTitle className="text-lg flex items-center gap-2"><Receipt className="h-5 w-5" />Debit / Credit Notes</CardTitle>
+          <CardDescription>Monthly settlement notes for this distributor</CardDescription>
         </CardHeader>
         <CardContent>
           {notesLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <RefreshCw className="h-6 w-6 animate-spin text-emerald-600" />
-            </div>
+            <div className="flex items-center justify-center py-8"><RefreshCw className="h-6 w-6 animate-spin" /></div>
           ) : debitCreditNotes.length === 0 ? (
-            <div className="text-center py-8 text-emerald-600/60">
+            <div className="text-center py-8 text-muted-foreground">
               <Receipt className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p>No debit/credit notes yet</p>
-              <p className="text-sm">Generate notes from monthly reconciliation above</p>
+              <p className="text-sm">Generate notes from reconciliation above</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-sm">
-                <thead>
-                  <tr className="bg-emerald-50/30 border-b border-emerald-100/60">
-                    <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Note #</th>
-                    <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Month/Year</th>
-                    <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Type</th>
-                    <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Amount</th>
-                    <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Paid</th>
-                    <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Balance</th>
-                    <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Status</th>
-                    <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Created</th>
-                    <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>PDF</th>
-                    <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actions</th>
-                  </tr>
-                </thead>
+              <table className="w-full text-sm">
+                <thead><tr className="bg-slate-50 border-b text-xs text-slate-500 uppercase">
+                  <th className="text-left p-3">Note #</th>
+                  <th className="text-left p-3">Period</th>
+                  <th className="text-left p-3">Type</th>
+                  <th className="text-right p-3">Amount</th>
+                  <th className="text-right p-3">Paid</th>
+                  <th className="text-right p-3">Balance</th>
+                  <th className="text-center p-3">Status</th>
+                  <th className="text-left p-3">Created</th>
+                  <th className="text-center p-3">PDF</th>
+                  <th className="text-center p-3">Actions</th>
+                </tr></thead>
                 <tbody>
-                  {debitCreditNotes.map((note, index) => (
-                    <tr 
-                      key={note.id} 
-                      className={`border-b border-emerald-50 transition-colors duration-200 cursor-pointer
-                        ${index % 2 === 1 ? 'bg-emerald-50/40' : 'bg-white'}
-                        hover:bg-emerald-50/60`}
-                      onClick={() => viewNoteDetail && viewNoteDetail(note.id)}
-                    >
-                      <td className="p-4 font-medium text-emerald-700">{note.note_number}</td>
-                      <td className="p-4 text-slate-700">
-                        {note.month ? `${MONTHS.find(m => m.value === note.month)?.label || note.month} ${note.year}` : '-'}
-                      </td>
-                      <td className="p-4">
-                        <Badge variant={note.note_type === 'debit' ? 'destructive' : 'default'} className={note.note_type === 'credit' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : ''}>
+                  {debitCreditNotes.map((note, i) => (
+                    <tr key={note.id} className={`border-b transition-colors cursor-pointer ${i % 2 === 1 ? 'bg-slate-50/40' : ''} hover:bg-slate-50/80`} onClick={() => viewNoteDetail && viewNoteDetail(note.id)}>
+                      <td className="p-3 font-medium">{note.note_number}</td>
+                      <td className="p-3 text-slate-600">{note.month ? `${MONTHS.find(m => m.value === note.month)?.label} ${note.year}` : '-'}</td>
+                      <td className="p-3">
+                        <Badge className={note.note_type === 'debit' ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200'}>
                           {note.note_type === 'debit' ? 'Debit Note' : 'Credit Note'}
                         </Badge>
                       </td>
-                      <td className="p-4 text-right font-medium text-slate-800">₹{(note.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                      <td className="p-4 text-right text-emerald-600 font-medium">₹{(note.paid_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                      <td className="p-4 text-right text-orange-600 font-medium">₹{(note.balance_amount || note.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                      <td className="p-4 text-center">{getNoteStatusBadge ? getNoteStatusBadge(note.status) : <Badge variant="outline">{note.status}</Badge>}</td>
-                      <td className="p-4 text-slate-700">{note.created_at?.split('T')[0]}</td>
-                      <td className="p-4 text-center">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDownloadPdf(note);
-                          }}
-                          disabled={downloadingPdf === note.id}
-                          data-testid={`download-pdf-${note.id}`}
-                          title="Download PDF"
-                        >
-                          {downloadingPdf === note.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <FileDown className="h-4 w-4" />
-                          )}
+                      <td className="p-3 text-right font-medium">₹{fmt(note.amount)}</td>
+                      <td className="p-3 text-right text-emerald-600">₹{fmt(note.paid_amount)}</td>
+                      <td className="p-3 text-right text-amber-600">₹{fmt(note.balance_amount || note.amount)}</td>
+                      <td className="p-3 text-center">{getNoteStatusBadge ? getNoteStatusBadge(note.status) : <Badge variant="outline">{note.status}</Badge>}</td>
+                      <td className="p-3 text-slate-500">{note.created_at?.split('T')[0]}</td>
+                      <td className="p-3 text-center">
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); handleDownloadPdf(note); }} disabled={downloadingPdf === note.id}>
+                          {downloadingPdf === note.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
                         </Button>
                       </td>
-                      <td className="p-4 text-center">
+                      <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
                         <div className="flex justify-center gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="h-8 w-8 p-0 hover:bg-emerald-100"
-                            onClick={(e) => { e.stopPropagation(); viewNoteDetail && viewNoteDetail(note.id); }}
-                          >
-                            <Eye className="h-4 w-4 text-emerald-700" />
-                          </Button>
-                          {canDelete && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 text-destructive hover:bg-red-50"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteTarget({
-                                  type: 'note',
-                                  id: note.id,
-                                  name: note.note_number
-                                });
-                              }}
-                              data-testid={`delete-note-${note.id}`}
-                              title="Delete (Admin)"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => viewNoteDetail && viewNoteDetail(note.id)}><Eye className="h-4 w-4" /></Button>
+                          {canDelete && (<Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50" onClick={() => setDeleteTarget({ type: 'note', id: note.id, name: note.note_number })}><Trash2 className="h-4 w-4" /></Button>)}
                         </div>
                       </td>
                     </tr>
@@ -710,59 +753,68 @@ export default function BillingTab({
 
       {/* Generate Note Dialog */}
       <Dialog open={showGenerateNoteDialog} onOpenChange={setShowGenerateNoteDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>
-              Generate {noteType === 'credit' ? 'Credit' : 'Debit'} Note
-            </DialogTitle>
-            <DialogDescription>
-              Create a {noteType} note for {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}
-            </DialogDescription>
+            <DialogTitle>Generate {noteType === 'debit' ? 'Debit' : 'Credit'} Note</DialogTitle>
+            <DialogDescription>Settlement adjustment for {periodLabel}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-muted/30 p-4 rounded-lg">
-                <p className="text-sm text-muted-foreground">Total Accounts</p>
-                <p className="text-xl font-bold">{unreconciledGroups.length}</p>
+            <div className="space-y-3 text-sm">
+              <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Adjustment Components</p>
+              {/* Selling Price Adj */}
+              <div className={`flex items-center justify-between p-3 rounded-lg border ${sellingPriceAdj > 0 ? 'bg-amber-50 border-amber-100' : sellingPriceAdj < 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
+                <div className="flex items-center gap-2">
+                  <TrendingUp className={`h-4 w-4 ${sellingPriceAdj > 0 ? 'text-amber-600' : 'text-emerald-600'}`} />
+                  <div>
+                    <span className="text-slate-800">Selling Price Adjustments</span>
+                    <p className="text-[11px] text-slate-400">Customer price vs base price difference</p>
+                  </div>
+                </div>
+                <span className={`font-bold ${sellingPriceAdj > 0 ? 'text-amber-700' : sellingPriceAdj < 0 ? 'text-emerald-700' : 'text-slate-400'}`}>
+                  {sellingPriceAdj > 0 ? '+' : ''}₹{fmt(sellingPriceAdj)}
+                </span>
               </div>
-              <div className="bg-muted/30 p-4 rounded-lg">
-                <p className="text-sm text-muted-foreground">Total Settlements</p>
-                <p className="text-xl font-bold">{monthlyData?.total_unreconciled || 0}</p>
+              {/* Credit Notes */}
+              <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-emerald-600" />
+                  <div>
+                    <span className="text-emerald-800">Return Credits (Credit Notes)</span>
+                    <p className="text-[11px] text-slate-400">Customer return reimbursements</p>
+                  </div>
+                </div>
+                <span className="font-bold text-emerald-700">-₹{fmt(totalCN)}</span>
+              </div>
+              {/* Factory Returns */}
+              <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-100">
+                <div className="flex items-center gap-2">
+                  <Factory className="h-4 w-4 text-purple-600" />
+                  <div>
+                    <span className="text-purple-800">Factory Returns</span>
+                    <p className="text-[11px] text-slate-400">Warehouse stock returned at transfer price</p>
+                  </div>
+                </div>
+                <span className="font-bold text-purple-700">-₹{fmt(totalFR)}</span>
+              </div>
+              {/* Net */}
+              <div className="border-t-2 border-dashed my-1"></div>
+              <div className={`flex items-center justify-between p-4 rounded-lg border-2 ${noteType === 'debit' ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50 border-emerald-300'}`}>
+                <div>
+                  <p className={`font-semibold ${noteType === 'debit' ? 'text-amber-800' : 'text-emerald-800'}`}>{noteType === 'debit' ? 'Debit Note' : 'Credit Note'}</p>
+                  <p className="text-xs text-slate-500">{noteType === 'debit' ? 'Distributor pays this to factory' : 'Factory pays this to distributor'}</p>
+                </div>
+                <span className={`text-2xl font-bold ${noteType === 'debit' ? 'text-amber-700' : 'text-emerald-700'}`}>₹{fmt(Math.abs(netAdj))}</span>
               </div>
             </div>
-            
-            <div className={`p-4 rounded-lg ${noteType === 'credit' ? 'bg-green-50' : 'bg-red-50'}`}>
-              <p className="text-sm text-muted-foreground">Net Adjustment Amount</p>
-              <p className={`text-2xl font-bold ${noteType === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
-                ₹{Math.abs(grandTotals.adjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </p>
-              <p className="text-sm mt-1">
-                {noteType === 'credit' 
-                  ? 'This amount will be credited to the distributor' 
-                  : 'This amount is owed by the distributor'}
-              </p>
-            </div>
-            
             <div className="space-y-2">
               <Label>Remarks (Optional)</Label>
-              <Textarea
-                placeholder="Any notes for this reconciliation..."
-                value={noteRemarks}
-                onChange={(e) => setNoteRemarks(e.target.value)}
-                rows={3}
-              />
+              <Textarea placeholder="Notes for this settlement..." value={noteRemarks} onChange={(e) => setNoteRemarks(e.target.value)} rows={2} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowGenerateNoteDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleGenerateNote}
-              disabled={generatingNote}
-              className={noteType === 'credit' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}
-            >
-              {generatingNote ? 'Generating...' : `Generate ${noteType === 'credit' ? 'Credit' : 'Debit'} Note`}
+            <Button variant="outline" onClick={() => setShowGenerateNoteDialog(false)}>Cancel</Button>
+            <Button onClick={handleGenerateNote} disabled={generatingNote} className={noteType === 'debit' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'} data-testid="confirm-generate-note-btn">
+              {generatingNote ? 'Generating...' : `Generate ${noteType === 'debit' ? 'Debit' : 'Credit'} Note`}
             </Button>
           </DialogFooter>
         </DialogContent>

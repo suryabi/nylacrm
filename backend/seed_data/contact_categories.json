@@ -1,0 +1,62 @@
+[
+  {
+    "id": "fb290a76-20fa-4952-b32d-17cf0ae3d2c9",
+    "name": "Vendors",
+    "description": "Product and service vendors",
+    "icon": "truck",
+    "color": "#f59e0b",
+    "is_active": true,
+    "is_default": true,
+    "created_at": "2026-03-08T18:50:43.963116+00:00",
+    "updated_at": "2026-03-08T18:50:43.963127+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "9a8d1fa2-5b0a-4b44-890d-83cae81c6589",
+    "name": "Partners",
+    "description": "Business partners and collaborators",
+    "icon": "handshake",
+    "color": "#10b981",
+    "is_active": true,
+    "is_default": true,
+    "created_at": "2026-03-08T18:50:44.631267+00:00",
+    "updated_at": "2026-03-08T18:50:44.631279+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "08d4ee49-4150-4f5e-80ea-5fc05bc46a9f",
+    "name": "Distributors",
+    "description": "Product distributors and resellers",
+    "icon": "package",
+    "color": "#6366f1",
+    "is_active": true,
+    "is_default": true,
+    "created_at": "2026-03-08T18:50:44.631863+00:00",
+    "updated_at": "2026-03-08T18:50:44.631870+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "ced6b853-6367-4c4a-85e5-aee256f0e67e",
+    "name": "Hoteliers",
+    "description": "Hotel owners and managers",
+    "icon": "hotel",
+    "color": "#ec4899",
+    "is_active": true,
+    "is_default": true,
+    "created_at": "2026-03-08T18:50:44.632243+00:00",
+    "updated_at": "2026-03-08T18:50:44.632249+00:00",
+    "tenant_id": "nyla-air-water"
+  },
+  {
+    "id": "2f14cce8-0f49-43c7-964b-765b4f19c726",
+    "name": "Event Managers",
+    "description": "Event planning and management contacts",
+    "icon": "calendar",
+    "color": "#8b5cf6",
+    "is_active": true,
+    "is_default": true,
+    "created_at": "2026-03-08T18:50:44.632560+00:00",
+    "updated_at": "2026-03-08T18:50:44.632567+00:00",
+    "tenant_id": "nyla-air-water"
+  }
+]

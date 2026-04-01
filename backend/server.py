@@ -185,6 +185,23 @@ security = HTTPBearer()
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
+# Health check endpoint for deployment - must be at root level
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Kubernetes/deployment health probes"""
+    return {"status": "healthy", "service": "backend"}
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {"status": "ok", "service": "nyla-crm-api"}
+
+# Also add health check under /api prefix for ingress routing
+@api_router.get("/health")
+async def api_health_check():
+    """Health check endpoint under /api prefix"""
+    return {"status": "healthy", "service": "backend"}
+
 # Import modular routes
 from routes import routes_router
 
@@ -478,6 +495,41 @@ async def create_approval_task(
     
     await get_tdb().tasks.insert_one(task_doc)
     
+    # Also create in tasks_v2 (Task Management module) so it shows up in the new module
+    approver_dept = 'Sales'
+    approver_doc = await get_tdb().users.find_one({'id': approver_id}, {'_id': 0, 'department': 1})
+    if approver_doc:
+        approver_dept = approver_doc.get('department', 'Sales')
+    
+    task_count = await get_tdb().tasks_v2.count_documents({})
+    task_v2_doc = {
+        'id': task_id,
+        'task_number': f"TASK-{task_count + 1:05d}",
+        'title': title,
+        'description': full_description if full_description else None,
+        'severity': 'high' if (custom_priority or config['priority']) == 'high' else 'medium',
+        'status': 'open',
+        'department_id': approver_dept,
+        'assignees': [approver_id],
+        'assignees_data': [{'id': approver_id, 'name': approver_name or ''}],
+        'milestone_id': None,
+        'labels': [],
+        'due_date': due_date,
+        'due_time': None,
+        'reminder_date': None,
+        'linked_entity_type': reference_type or f'{approval_type}',
+        'linked_entity_id': reference_id,
+        'watchers': [requester_id, approver_id],
+        'created_by': requester_id,
+        'created_by_name': requester_name,
+        'is_approval_task': True,
+        'approval_type': approval_type,
+        'created_at': now.isoformat(),
+        'updated_at': now.isoformat()
+    }
+    
+    await get_tdb().tasks_v2.insert_one(task_v2_doc)
+    
     # Return without _id
     return {k: v for k, v in task_doc.items() if k != '_id'}
 
@@ -513,6 +565,24 @@ async def complete_approval_task(
             }
         }
     )
+    
+    # Also update in tasks_v2 (Task Management module)
+    v2_status = 'closed' if status == 'completed' else 'closed'
+    await get_tdb().tasks_v2.update_many(
+        {
+            'is_approval_task': True,
+            'approval_type': approval_type,
+            'linked_entity_id': reference_id,
+            'status': {'$in': ['open', 'in_progress', 'review']}
+        },
+        {
+            '$set': {
+                'status': v2_status,
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
     return result.modified_count > 0
 
 
@@ -618,6 +688,7 @@ class Lead(BaseModel):
     current_landing_price: Optional[float] = None
     current_volume: Optional[str] = None
     current_selling_price: Optional[float] = None
+    current_brands: Optional[List[dict]] = []  # Multi-brand grid: [{brand_name, volume, landing_price, selling_price}]
     
     # Nyla Details
     interested_skus: Optional[List[str]] = []  # Multi-select SKUs
@@ -644,6 +715,12 @@ class Lead(BaseModel):
     invoice_count: Optional[int] = None
     last_invoice_date: Optional[str] = None
     last_invoice_no: Optional[str] = None
+    
+    # Onboarding tracking
+    onboarded_month: Optional[int] = None
+    onboarded_year: Optional[int] = None
+    target_closure_month: Optional[int] = None
+    target_closure_year: Optional[int] = None
 
 class LeadCreate(BaseModel):
     company: str
@@ -665,9 +742,14 @@ class LeadCreate(BaseModel):
     current_landing_price: Optional[float] = None
     current_volume: Optional[str] = None
     current_selling_price: Optional[float] = None
+    current_brands: Optional[List[dict]] = []
     interested_skus: Optional[List[str]] = []
     notes: Optional[str] = None
     estimated_value: Optional[float] = None
+    onboarded_month: Optional[int] = None
+    onboarded_year: Optional[int] = None
+    target_closure_month: Optional[int] = None
+    target_closure_year: Optional[int] = None
 
 class LeadUpdate(BaseModel):
     company: Optional[str] = None
@@ -689,6 +771,7 @@ class LeadUpdate(BaseModel):
     current_landing_price: Optional[float] = None
     current_volume: Optional[str] = None
     current_selling_price: Optional[float] = None
+    current_brands: Optional[List[dict]] = None
     interested_skus: Optional[List[str]] = None
     proposed_sku_pricing: Optional[List[dict]] = None  # Proposed pricing for this lead
     notes: Optional[str] = None
@@ -698,6 +781,10 @@ class LeadUpdate(BaseModel):
     # Account conversion flag
     converted_to_account: Optional[bool] = False
     account_id: Optional[str] = None
+    onboarded_month: Optional[int] = None
+    onboarded_year: Optional[int] = None
+    target_closure_month: Optional[int] = None
+    target_closure_year: Optional[int] = None
 
 # ============= ACCOUNT MODELS =============
 
@@ -741,6 +828,10 @@ class Account(BaseModel):
     last_payment_date: Optional[str] = None
     last_payment_amount: float = 0.0
     
+    # Onboarding tracking
+    onboarded_month: Optional[int] = None
+    onboarded_year: Optional[int] = None
+    
     # Timestamps
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -766,6 +857,8 @@ class AccountUpdate(BaseModel):
     next_follow_up: Optional[str] = None  # YYYY-MM-DD
     sku_pricing: Optional[List[AccountSKUPricing]] = None
     delivery_address: Optional[DeliveryAddress] = None
+    onboarded_month: Optional[int] = None
+    onboarded_year: Optional[int] = None
 
 class PaginatedAccountsResponse(BaseModel):
     """Paginated response for accounts list"""
@@ -2139,7 +2232,7 @@ async def google_oauth_callback(request: Request, response: Response):
         
         user_doc = await get_tdb().users.find_one({'id': user_id}, {'_id': 0, 'password': 0})
         
-        return {'user': user_doc, 'message': 'Login successful'}
+        return {'user': user_doc, 'session_token': session_token, 'message': 'Login successful'}
         
     except HTTPException:
         raise
@@ -4807,7 +4900,9 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
         assigned_to=lead.get('assigned_to'),
         contact_name=lead.get('contact_person') or lead.get('name'),
         contact_number=lead.get('phone'),
-        sku_pricing=sku_pricing_list
+        sku_pricing=sku_pricing_list,
+        onboarded_month=lead.get('onboarded_month'),
+        onboarded_year=lead.get('onboarded_year')
     )
     
     doc = account.model_dump()
@@ -10817,126 +10912,128 @@ class City(BaseModel):
 @app.on_event("startup")
 async def init_master_locations():
     """Initialize default Indian territories, states, and cities"""
+    try:
+        # Check if territories already exist
+        existing_count = await db.master_territories.count_documents({})
+        if existing_count > 0:
+            return  # Already initialized
     
-    # Check if territories already exist
-    existing_count = await db.master_territories.count_documents({})
-    if existing_count > 0:
-        return  # Already initialized
-    
-    # Default territories
-    territories_data = [
-        {"name": "North India", "code": "north_india"},
-        {"name": "South India", "code": "south_india"},
-        {"name": "West India", "code": "west_india"},
-        {"name": "East India", "code": "east_india"},
-        {"name": "Central India", "code": "central_india"},
-    ]
-    
-    territory_map = {}
-    for t in territories_data:
-        territory_id = str(uuid.uuid4())
-        territory_map[t["code"]] = territory_id
-        await db.master_territories.insert_one({
-            "id": territory_id,
-            "name": t["name"],
-            "code": t["code"],
-            "is_active": True,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        })
-    
-    # Default states by territory
-    states_data = {
-        "north_india": [
-            {"name": "Delhi NCR", "code": "delhi_ncr"},
-            {"name": "Uttar Pradesh", "code": "uttar_pradesh"},
-            {"name": "Punjab", "code": "punjab"},
-            {"name": "Haryana", "code": "haryana"},
-            {"name": "Rajasthan", "code": "rajasthan"},
-            {"name": "Himachal Pradesh", "code": "himachal_pradesh"},
-            {"name": "Uttarakhand", "code": "uttarakhand"},
-            {"name": "Jammu & Kashmir", "code": "jammu_kashmir"},
-        ],
-        "south_india": [
-            {"name": "Karnataka", "code": "karnataka"},
-            {"name": "Tamil Nadu", "code": "tamil_nadu"},
-            {"name": "Kerala", "code": "kerala"},
-            {"name": "Andhra Pradesh", "code": "andhra_pradesh"},
-            {"name": "Telangana", "code": "telangana"},
-        ],
-        "west_india": [
-            {"name": "Maharashtra", "code": "maharashtra"},
-            {"name": "Gujarat", "code": "gujarat"},
-            {"name": "Goa", "code": "goa"},
-        ],
-        "east_india": [
-            {"name": "West Bengal", "code": "west_bengal"},
-            {"name": "Bihar", "code": "bihar"},
-            {"name": "Odisha", "code": "odisha"},
-            {"name": "Jharkhand", "code": "jharkhand"},
-            {"name": "Assam", "code": "assam"},
-        ],
-        "central_india": [
-            {"name": "Madhya Pradesh", "code": "madhya_pradesh"},
-            {"name": "Chhattisgarh", "code": "chhattisgarh"},
-        ],
-    }
-    
-    state_map = {}
-    for territory_code, states in states_data.items():
-        territory_id = territory_map[territory_code]
-        for s in states:
-            state_id = str(uuid.uuid4())
-            state_map[s["code"]] = state_id
-            await db.master_states.insert_one({
-                "id": state_id,
-                "name": s["name"],
-                "code": s["code"],
-                "territory_id": territory_id,
+        # Default territories
+        territories_data = [
+            {"name": "North India", "code": "north_india"},
+            {"name": "South India", "code": "south_india"},
+            {"name": "West India", "code": "west_india"},
+            {"name": "East India", "code": "east_india"},
+            {"name": "Central India", "code": "central_india"},
+        ]
+        
+        territory_map = {}
+        for t in territories_data:
+            territory_id = str(uuid.uuid4())
+            territory_map[t["code"]] = territory_id
+            await db.master_territories.insert_one({
+                "id": territory_id,
+                "name": t["name"],
+                "code": t["code"],
                 "is_active": True,
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "updated_at": datetime.now(timezone.utc).isoformat()
             })
-    
-    # Default cities by state
-    cities_data = {
-        "delhi_ncr": ["New Delhi", "Gurugram", "Noida", "Faridabad", "Ghaziabad"],
-        "uttar_pradesh": ["Lucknow", "Kanpur", "Agra", "Varanasi", "Prayagraj", "Meerut"],
-        "punjab": ["Chandigarh", "Ludhiana", "Amritsar", "Jalandhar", "Patiala"],
-        "haryana": ["Gurugram", "Faridabad", "Panipat", "Ambala", "Karnal"],
-        "rajasthan": ["Jaipur", "Jodhpur", "Udaipur", "Kota", "Ajmer"],
-        "karnataka": ["Bengaluru", "Mysuru", "Hubli", "Mangaluru", "Belgaum"],
-        "tamil_nadu": ["Chennai", "Coimbatore", "Madurai", "Tiruchirappalli", "Salem"],
-        "kerala": ["Thiruvananthapuram", "Kochi", "Kozhikode", "Thrissur", "Kollam"],
-        "andhra_pradesh": ["Visakhapatnam", "Vijayawada", "Guntur", "Nellore", "Tirupati"],
-        "telangana": ["Hyderabad", "Warangal", "Nizamabad", "Karimnagar", "Khammam"],
-        "maharashtra": ["Mumbai", "Pune", "Nagpur", "Nashik", "Aurangabad", "Thane"],
-        "gujarat": ["Ahmedabad", "Surat", "Vadodara", "Rajkot", "Gandhinagar"],
-        "goa": ["Panaji", "Margao", "Vasco da Gama"],
-        "west_bengal": ["Kolkata", "Howrah", "Durgapur", "Asansol", "Siliguri"],
-        "bihar": ["Patna", "Gaya", "Bhagalpur", "Muzaffarpur", "Darbhanga"],
-        "odisha": ["Bhubaneswar", "Cuttack", "Rourkela", "Berhampur", "Sambalpur"],
-        "madhya_pradesh": ["Bhopal", "Indore", "Jabalpur", "Gwalior", "Ujjain"],
-        "chhattisgarh": ["Raipur", "Bhilai", "Bilaspur", "Korba", "Durg"],
-    }
-    
-    for state_code, cities in cities_data.items():
-        if state_code not in state_map:
-            continue
-        state_id = state_map[state_code]
-        for city_name in cities:
-            city_code = city_name.lower().replace(" ", "_").replace("'", "")
-            await db.master_cities.insert_one({
-                "id": str(uuid.uuid4()),
-                "name": city_name,
-                "code": city_code,
-                "state_id": state_id,
-                "is_active": True,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "updated_at": datetime.now(timezone.utc).isoformat()
-            })
-    
-    logger.info("Master locations initialized with default Indian territories, states, and cities")
+        
+        # Default states by territory
+        states_data = {
+            "north_india": [
+                {"name": "Delhi NCR", "code": "delhi_ncr"},
+                {"name": "Uttar Pradesh", "code": "uttar_pradesh"},
+                {"name": "Punjab", "code": "punjab"},
+                {"name": "Haryana", "code": "haryana"},
+                {"name": "Rajasthan", "code": "rajasthan"},
+                {"name": "Himachal Pradesh", "code": "himachal_pradesh"},
+                {"name": "Uttarakhand", "code": "uttarakhand"},
+                {"name": "Jammu & Kashmir", "code": "jammu_kashmir"},
+            ],
+            "south_india": [
+                {"name": "Karnataka", "code": "karnataka"},
+                {"name": "Tamil Nadu", "code": "tamil_nadu"},
+                {"name": "Kerala", "code": "kerala"},
+                {"name": "Andhra Pradesh", "code": "andhra_pradesh"},
+                {"name": "Telangana", "code": "telangana"},
+            ],
+            "west_india": [
+                {"name": "Maharashtra", "code": "maharashtra"},
+                {"name": "Gujarat", "code": "gujarat"},
+                {"name": "Goa", "code": "goa"},
+            ],
+            "east_india": [
+                {"name": "West Bengal", "code": "west_bengal"},
+                {"name": "Bihar", "code": "bihar"},
+                {"name": "Odisha", "code": "odisha"},
+                {"name": "Jharkhand", "code": "jharkhand"},
+                {"name": "Assam", "code": "assam"},
+            ],
+            "central_india": [
+                {"name": "Madhya Pradesh", "code": "madhya_pradesh"},
+                {"name": "Chhattisgarh", "code": "chhattisgarh"},
+            ],
+        }
+        
+        state_map = {}
+        for territory_code, states in states_data.items():
+            territory_id = territory_map[territory_code]
+            for s in states:
+                state_id = str(uuid.uuid4())
+                state_map[s["code"]] = state_id
+                await db.master_states.insert_one({
+                    "id": state_id,
+                    "name": s["name"],
+                    "code": s["code"],
+                    "territory_id": territory_id,
+                    "is_active": True,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                })
+        
+        # Default cities by state
+        cities_data = {
+            "delhi_ncr": ["New Delhi", "Gurugram", "Noida", "Faridabad", "Ghaziabad"],
+            "uttar_pradesh": ["Lucknow", "Kanpur", "Agra", "Varanasi", "Prayagraj", "Meerut"],
+            "punjab": ["Chandigarh", "Ludhiana", "Amritsar", "Jalandhar", "Patiala"],
+            "haryana": ["Gurugram", "Faridabad", "Panipat", "Ambala", "Karnal"],
+            "rajasthan": ["Jaipur", "Jodhpur", "Udaipur", "Kota", "Ajmer"],
+            "karnataka": ["Bengaluru", "Mysuru", "Hubli", "Mangaluru", "Belgaum"],
+            "tamil_nadu": ["Chennai", "Coimbatore", "Madurai", "Tiruchirappalli", "Salem"],
+            "kerala": ["Thiruvananthapuram", "Kochi", "Kozhikode", "Thrissur", "Kollam"],
+            "andhra_pradesh": ["Visakhapatnam", "Vijayawada", "Guntur", "Nellore", "Tirupati"],
+            "telangana": ["Hyderabad", "Warangal", "Nizamabad", "Karimnagar", "Khammam"],
+            "maharashtra": ["Mumbai", "Pune", "Nagpur", "Nashik", "Aurangabad", "Thane"],
+            "gujarat": ["Ahmedabad", "Surat", "Vadodara", "Rajkot", "Gandhinagar"],
+            "goa": ["Panaji", "Margao", "Vasco da Gama"],
+            "west_bengal": ["Kolkata", "Howrah", "Durgapur", "Asansol", "Siliguri"],
+            "bihar": ["Patna", "Gaya", "Bhagalpur", "Muzaffarpur", "Darbhanga"],
+            "odisha": ["Bhubaneswar", "Cuttack", "Rourkela", "Berhampur", "Sambalpur"],
+            "madhya_pradesh": ["Bhopal", "Indore", "Jabalpur", "Gwalior", "Ujjain"],
+            "chhattisgarh": ["Raipur", "Bhilai", "Bilaspur", "Korba", "Durg"],
+        }
+        
+        for state_code, cities in cities_data.items():
+            if state_code not in state_map:
+                continue
+            state_id = state_map[state_code]
+            for city_name in cities:
+                city_code = city_name.lower().replace(" ", "_").replace("'", "")
+                await db.master_cities.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "name": city_name,
+                    "code": city_code,
+                    "state_id": state_id,
+                    "is_active": True,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                })
+        
+        logger.info("Master locations initialized with default Indian territories, states, and cities")
+    except Exception as e:
+        logger.warning(f"Failed to initialize master locations (non-blocking): {e}")
 
 # Get all locations (hierarchical)
 @api_router.get("/master-locations")
@@ -11455,10 +11552,8 @@ async def get_resources_by_location(
     """Get sales resources filtered by territory or city"""
     query = {'is_active': True}
     
-    # Include all sales-related roles
-    sales_roles = ['National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Head of Business', 
-                   'Business Development Executive', 'Sales Executive', 'Area Sales Manager']
-    query['role'] = {'$in': sales_roles}
+    # Filter for sales or admin department
+    query['department'] = {'$in': ['Sales', 'Admin', 'sales', 'admin']}
     
     if city:
         query['city'] = city
@@ -11467,7 +11562,7 @@ async def get_resources_by_location(
     
     users = await get_tdb().users.find(
         query,
-        {'_id': 0, 'id': 1, 'name': 1, 'email': 1, 'role': 1, 'city': 1, 'state': 1, 'territory': 1}
+        {'_id': 0, 'id': 1, 'name': 1, 'email': 1, 'role': 1, 'department': 1, 'city': 1, 'state': 1, 'territory': 1}
     ).to_list(200)
     return users
 
@@ -11877,10 +11972,10 @@ SALES_ROLES_V2 = ['National Sales Head', 'Regional Sales Manager', 'Partner - Sa
 async def get_sales_resources_v2(
     current_user: dict = Depends(get_current_user)
 ):
-    """Get all sales team members for target allocation"""
+    """Get all sales and admin department members for target allocation"""
     users = await get_tdb().users.find(
-        {'role': {'$in': SALES_ROLES_V2}},
-        {'_id': 0, 'id': 1, 'name': 1, 'email': 1, 'role': 1, 'city': 1, 'territory': 1}
+        {'is_active': True, 'department': {'$in': ['Sales', 'Admin', 'sales', 'admin']}},
+        {'_id': 0, 'id': 1, 'name': 1, 'email': 1, 'role': 1, 'department': 1, 'city': 1, 'territory': 1}
     ).to_list(200)
     return users
 

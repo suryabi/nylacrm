@@ -1,0 +1,38 @@
+[
+  {
+    "id": "00ae1033-e3e1-4551-b5b7-88aa05f1a27b",
+    "lead_id": "6e84992a-14eb-42e9-ba92-b41b8a959a0b",
+    "title": "Initial Discovery Call",
+    "description": "Schedule discovery call to understand requirements",
+    "scheduled_date": "2026-02-05T05:06:27.943972+00:00",
+    "is_completed": true,
+    "assigned_to": "d5d66e90-cc74-4def-baec-d3aacabff82a",
+    "created_by": "77d8163f-7a11-46ef-9afb-c1596e5624ec",
+    "created_at": "2026-02-04T05:06:27.943977+00:00",
+    "completed_at": "2026-02-04T09:31:43.855389+00:00"
+  },
+  {
+    "id": "452c32d7-06f0-4637-bc09-c2af9e0d2a57",
+    "lead_id": "1b5f9703-91c1-46a5-bb36-68d36fa475eb",
+    "title": "Send Proposal",
+    "description": "Send detailed proposal with pricing",
+    "scheduled_date": "2026-02-04T10:06:27.943983+00:00",
+    "is_completed": true,
+    "assigned_to": "d6ff6bf4-8cc4-49d4-a54e-64cbca30c221",
+    "created_by": "77d8163f-7a11-46ef-9afb-c1596e5624ec",
+    "created_at": "2026-02-04T05:06:27.943986+00:00",
+    "completed_at": "2026-02-04T09:31:02.781551+00:00"
+  },
+  {
+    "id": "f9042e9b-f40c-4d58-aafe-f99f9665812e",
+    "lead_id": "2b793648-c74f-4f8d-93c5-00175127bc00",
+    "title": "Follow p",
+    "description": "Today",
+    "scheduled_date": "2026-02-12T03:59:00+00:00",
+    "is_completed": true,
+    "completed_at": "2026-02-04T09:31:42.137693+00:00",
+    "assigned_to": "d5d66e90-cc74-4def-baec-d3aacabff82a",
+    "created_by": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "created_at": "2026-02-04T09:29:19.281754+00:00"
+  }
+]

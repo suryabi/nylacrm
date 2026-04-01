@@ -1,0 +1,22 @@
+[
+  {
+    "id": "c4a63457-bec5-4b6a-8d75-b402854f3ec7",
+    "lead_id": "2a3ca2de-8e26-406a-8be0-d9a28adfc0fb",
+    "activity_type": "email",
+    "interaction_method": "email",
+    "description": "Proposal shared via email to: surya.yadavalli@gmail.com",
+    "created_by": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "created_by_name": "System Admin",
+    "created_at": "2026-02-28T18:08:40.429166+00:00"
+  },
+  {
+    "id": "65fb6f5d-223c-4987-a5c5-caa0e3afe32a",
+    "lead_id": "2a3ca2de-8e26-406a-8be0-d9a28adfc0fb",
+    "activity_type": "email",
+    "interaction_method": "email",
+    "description": "Proposal shared via email to: surya.yadavalli@nylaairwater.earth",
+    "created_by": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "created_by_name": "System Admin",
+    "created_at": "2026-02-28T18:20:07.594053+00:00"
+  }
+]

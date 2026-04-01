@@ -1,0 +1,10 @@
+[
+  {
+    "id": "6d5df048-3657-477e-aa70-e14c2f1405a5",
+    "user_id": "38a4c602-8f1f-47fc-99fb-a56eea37fcd9",
+    "customer_name": "TestCorp Inc",
+    "bottle_size": "24 Brand",
+    "logo_data": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAABkCAIAAABM5OhcAAAB1klEQVR42u3dQVLDMBBFQUzl/lc2FwCShUea0e+3BiI5XSNjCrju+/6Snu7bJRBYAktgSWAJLIElgSWwlNrLJWjXdX30Yb1/ZALWKEx/fUo/ZGBN8/T/12kjDKzJnhoLA+sUUr++0D5eYB1HqgcvjxvOVbX11U2so0ntG10mVoCqHesBK0bV2lW9zrt0bys/EJpflyXHookVpmrVOsGKVFW/WrBSVRWvGSyBZVzNWTlY2arK1g9WvKqaXYAl91jG1Zy9gEVVyY7AkqPQuJqzL7BkYhlXc3YHlkwsgeWkCN8jWDKxBJYzInynYMnEElgCS26wnt8vWDKxBJbAksASWAJLAktgCSwJLIElsPSu3v/JrdV+wZKJJbAEltxmPb9TsGRiCSxnRPgewZKJJbCcFOG7A0smlqE1Z19gycQytObsCCy2SvYClhyFhtacXYDFVsn6wYq3VbNysOQey9Cas2awgm1VrhasVFvF67zutN+VW1bbv4S75B03scJG16pVgZVka+F6Xt79Fe/l9mNxOXETK2B07Xh1E+vo0bUPNFiH8tp9ewfW1rPpcWFtvl0A6whh/R5tgNXv7v5DZL2fbIPlW8iSPG4QWAJLYElgCSyBJYGlCf0ABE9038nARAkAAAAASUVORK5CYII=",
+    "created_at": "2026-02-20T16:45:19.862203+00:00"
+  }
+]

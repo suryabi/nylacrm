@@ -1366,35 +1366,60 @@ ${userEmail}`;
           </Card>
 
           {/* Current Brand Details */}
-          {(lead.current_water_brand || lead.current_volume || lead.current_landing_price || lead.current_selling_price) && (
+          {((lead.current_brands && lead.current_brands.length > 0) || lead.current_water_brand || lead.current_volume || lead.current_landing_price || lead.current_selling_price) && (
             <Card className="p-6">
               <h2 className="text-lg font-semibold mb-4">Current Brand Details</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {lead.current_water_brand && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Current Water Brand</p>
-                    <p className="font-medium">{lead.current_water_brand}</p>
-                  </div>
-                )}
-                {lead.current_volume && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Current Volume</p>
-                    <p className="font-medium">{lead.current_volume}</p>
-                  </div>
-                )}
-                {lead.current_landing_price && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Current Landing Price</p>
-                    <p className="font-medium">₹{lead.current_landing_price}</p>
-                  </div>
-                )}
-                {lead.current_selling_price && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Current Selling Price</p>
-                    <p className="font-medium">₹{lead.current_selling_price}</p>
-                  </div>
-                )}
-              </div>
+              {lead.current_brands && lead.current_brands.length > 0 ? (
+                <div className="border rounded-lg overflow-hidden" data-testid="lead-brands-grid">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-50 border-b text-xs text-slate-500 uppercase">
+                        <th className="p-2.5 text-left font-medium">Brand Name</th>
+                        <th className="p-2.5 text-left font-medium">Volume</th>
+                        <th className="p-2.5 text-left font-medium">Landing Price</th>
+                        <th className="p-2.5 text-left font-medium">Selling Price</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lead.current_brands.map((brand, idx) => (
+                        <tr key={idx} className={`border-b last:border-b-0 ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`} data-testid={`lead-brand-row-${idx}`}>
+                          <td className="p-2.5 font-medium">{brand.brand_name}</td>
+                          <td className="p-2.5">{brand.volume}</td>
+                          <td className="p-2.5">{brand.landing_price ? `₹${brand.landing_price}` : '-'}</td>
+                          <td className="p-2.5">{brand.selling_price ? `₹${brand.selling_price}` : '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {lead.current_water_brand && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Current Water Brand</p>
+                      <p className="font-medium">{lead.current_water_brand}</p>
+                    </div>
+                  )}
+                  {lead.current_volume && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Current Volume</p>
+                      <p className="font-medium">{lead.current_volume}</p>
+                    </div>
+                  )}
+                  {lead.current_landing_price && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Current Landing Price</p>
+                      <p className="font-medium">₹{lead.current_landing_price}</p>
+                    </div>
+                  )}
+                  {lead.current_selling_price && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Current Selling Price</p>
+                      <p className="font-medium">₹{lead.current_selling_price}</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </Card>
           )}
 

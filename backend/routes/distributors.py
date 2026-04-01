@@ -24,7 +24,7 @@ from models.distributor import (
     BillingConfigCreate, BillingConfigUpdate,
     ProvisionalInvoiceCreate, ReconciliationCreate, DebitCreditNoteCreate
 )
-from utils.pdf_generator import generate_debit_credit_note_pdf
+from utils.pdf_generator import generate_debit_credit_note_pdf, generate_customer_invoice_pdf
 from utils.object_storage import upload_pdf, download_pdf, init_storage
 
 router = APIRouter()
@@ -2595,11 +2595,16 @@ async def generate_delivery_number(tenant_id: str) -> str:
 def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_value: float = None, transfer_price: float = None, base_price: float = None) -> dict:
     """Calculate amounts for a delivery item including margin and adjustment calculations
     
-    Calculations:
-    - Total Customer Billing Value = Qty × Customer Selling Price
-    - Distributor Earnings (On Selling Price) = Total Billing × Commission %
-    - Distributor Margin at Transfer Price = Qty × Transfer Price × Commission %
-    - Adjustment Payable = Distributor Earnings - Margin at Transfer Price
+    Columns (in display order):
+    - Base Price: The original/standard price of the product
+    - Transfer Price: base_price × (1 - margin%) — price at which factory sells to distributor
+    - Billed to Dist: qty × transfer_price — amount initially billed based on base price
+    - Customer Price: What the customer actually pays
+    - New Transfer Price: customer_price × (1 - margin%) — adjusted transfer price based on actual sale
+    - Actual Billable to Dist: qty × new_transfer_price — amount that should be billed based on customer price
+    - Adjustment (Dist → Factory): Actual Billable - Billed to Dist = qty × (1 - margin%) × (customer_price - base_price)
+      Positive = distributor owes factory (sold higher), Negative = factory owes distributor (sold lower)
+    - Customer Invoice: qty × customer_price — what the customer pays
     """
     quantity = item.get('quantity', 0)
     unit_price = item.get('unit_price', 0)  # Customer Selling Price
@@ -2607,31 +2612,51 @@ def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_
     discount_percent = item.get('discount_percent', 0) or 0
     tax_percent = item.get('tax_percent', 0) or 0
     
-    # Get transfer price from item or passed parameter
-    item_transfer_price = item.get('transfer_price') or item.get('base_price') or transfer_price or base_price or 0
+    # Base price from margin matrix
+    item_base_price = item.get('base_price') or base_price or transfer_price or 0
     
-    # Get commission percentage from item or margin_value
+    # Get commission/margin percentage from item or margin_value
     commission_percent = item.get('distributor_commission_percent') or margin_value or 0
     
+    # Transfer Price = base_price × (1 - margin%)
+    item_transfer_price = item.get('transfer_price') or (round(item_base_price * (1 - commission_percent / 100), 2) if item_base_price and commission_percent else item_base_price)
+    
+    # New Transfer Price = customer_price × (1 - margin%)
+    new_transfer_price = round(customer_selling_price * (1 - commission_percent / 100), 2) if customer_selling_price and commission_percent else customer_selling_price
+    
+    # Billed to Distributor = qty × transfer_price (initial billing based on base price)
+    billed_to_dist = round(quantity * item_transfer_price, 2) if item_transfer_price else 0
+    
+    # Actual Billable to Distributor = qty × new_transfer_price (actual billing based on customer price)
+    actual_billable_to_dist = round(quantity * new_transfer_price, 2) if new_transfer_price else 0
+    
     # Calculate billing amounts
-    gross_amount = quantity * customer_selling_price  # Total Customer Billing Value
+    gross_amount = quantity * customer_selling_price  # Customer Invoice = qty × customer_price
     discount_amount = round(gross_amount * discount_percent / 100, 2)
     taxable_amount = gross_amount - discount_amount
     tax_amount = round(taxable_amount * tax_percent / 100, 2)
     net_amount = taxable_amount + tax_amount
     
-    # Calculate distributor earnings and adjustments
-    # Distributor Earnings = Total Customer Billing Value × Commission %
+    # Customer Invoice = qty × customer_price
+    customer_billing = round(gross_amount, 2)
+    
+    # NEW FORMULA: Adjustment (Dist → Factory) = Actual Billable - Billed to Dist
+    # = qty × new_transfer_price - qty × transfer_price
+    # = qty × (1 - margin%) × (customer_price - base_price)
+    # Positive when customer_price > base_price (distributor owes factory)
+    # Negative when customer_price < base_price (factory owes distributor)
+    factory_distributor_adjustment = round(actual_billable_to_dist - billed_to_dist, 2)
+    
+    # Margin per unit = commission% of customer_price
+    margin_per_unit = round(customer_selling_price * commission_percent / 100, 2) if commission_percent else 0
+    
+    # Legacy calculations (kept for backward compatibility)
     distributor_earnings = round(gross_amount * commission_percent / 100, 2) if commission_percent else 0
-    
-    # Margin at Transfer Price = Qty × Transfer Price × Commission %
-    margin_at_transfer_price = round(quantity * item_transfer_price * commission_percent / 100, 2) if item_transfer_price and commission_percent else 0
-    
-    # Adjustment Payable = Distributor Earnings - Margin at Transfer Price
-    # Positive means distributor owes company, Negative means company owes distributor
+    margin_at_transfer_price = round(quantity * item_base_price * commission_percent / 100, 2) if item_base_price and commission_percent else 0
     adjustment_payable = round(distributor_earnings - margin_at_transfer_price, 2)
+    price_premium_payable = round(quantity * (customer_selling_price - item_base_price), 2) if customer_selling_price > item_base_price and item_base_price > 0 else 0
     
-    # Legacy margin calculation (for backward compatibility)
+    # Legacy margin calculation
     margin_amount = 0
     if margin_type and margin_value:
         if margin_type == 'percentage':
@@ -2644,21 +2669,29 @@ def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_
     
     return {
         **item,
-        'customer_selling_price': customer_selling_price,
-        'distributor_commission_percent': commission_percent,
+        'base_price': item_base_price,
         'transfer_price': item_transfer_price,
-        'base_price': item_transfer_price,
+        'customer_selling_price': customer_selling_price,
+        'new_transfer_price': new_transfer_price,
+        'billed_to_dist': billed_to_dist,
+        'actual_billable_to_dist': actual_billable_to_dist,
+        'distributor_commission_percent': commission_percent,
+        'margin_per_unit': margin_per_unit,
         'gross_amount': round(gross_amount, 2),
+        'customer_billing': customer_billing,
+        'factory_distributor_adjustment': factory_distributor_adjustment,
         'discount_amount': discount_amount,
         'taxable_amount': round(taxable_amount, 2),
         'tax_amount': tax_amount,
         'net_amount': round(net_amount, 2),
+        # Legacy fields
         'distributor_earnings': distributor_earnings,
         'margin_at_transfer_price': margin_at_transfer_price,
         'adjustment_payable': adjustment_payable,
+        'price_premium_payable': price_premium_payable,
         'margin_type': margin_type,
         'margin_value': margin_value,
-        'margin_amount': margin_amount or distributor_earnings  # Use new calculation as default
+        'margin_amount': margin_amount or distributor_earnings
     }
 
 
@@ -3031,6 +3064,8 @@ async def create_delivery(
     total_tax_amount = 0
     total_net_amount = 0
     total_margin_amount = 0
+    total_price_premium = 0
+    total_factory_adjustment = 0
     
     for item_data in data.items:
         # Get SKU info
@@ -3083,6 +3118,8 @@ async def create_delivery(
         total_tax_amount += item_dict['tax_amount']
         total_net_amount += item_dict['net_amount']
         total_margin_amount += item_dict.get('margin_amount', 0)
+        total_price_premium += item_dict.get('price_premium_payable', 0)
+        total_factory_adjustment += item_dict.get('factory_distributor_adjustment', 0)
     
     # Create delivery document
     delivery_doc = {
@@ -3111,6 +3148,8 @@ async def create_delivery(
         "total_tax_amount": round(total_tax_amount, 2),
         "total_net_amount": round(total_net_amount, 2),
         "total_margin_amount": round(total_margin_amount, 2),
+        "total_price_premium": round(total_price_premium, 2),
+        "total_factory_adjustment": round(total_factory_adjustment, 2),
         "remarks": data.remarks,
         "created_at": now,
         "updated_at": now,
@@ -3120,6 +3159,48 @@ async def create_delivery(
         "delivered_at": None,
         "delivered_by": None
     }
+    
+    # Handle credit notes if provided
+    applied_credit_notes = []
+    total_credit_applied = 0
+    
+    if data.credit_notes_to_apply:
+        from routes.credit_notes import apply_credit_note_to_delivery
+        
+        for cn_request in data.credit_notes_to_apply:
+            cn_id = cn_request.credit_note_id
+            amount = cn_request.amount_to_apply
+            
+            if not cn_id or amount <= 0:
+                continue
+            
+            try:
+                result = await apply_credit_note_to_delivery(
+                    tenant_id=tenant_id,
+                    credit_note_id=cn_id,
+                    delivery_id=delivery_id,
+                    delivery_number=delivery_number,
+                    amount_to_apply=amount,
+                    applied_by=current_user.get('id')
+                )
+                
+                applied_credit_notes.append({
+                    'credit_note_id': cn_id,
+                    'credit_note_number': result.get('credit_note_number'),
+                    'amount_applied': amount,
+                    'return_number': result.get('return_number')
+                })
+                total_credit_applied += amount
+            except HTTPException as e:
+                logger.warning(f"Failed to apply credit note {cn_id} during delivery creation: {e.detail}")
+    
+    # Calculate net customer billing
+    net_customer_billing = max(0, total_net_amount - total_credit_applied)
+    
+    # Add credit note fields to delivery doc
+    delivery_doc['applied_credit_notes'] = applied_credit_notes
+    delivery_doc['total_credit_applied'] = round(total_credit_applied, 2)
+    delivery_doc['net_customer_billing'] = round(net_customer_billing, 2)
     
     # Insert delivery and items
     await db.distributor_deliveries.insert_one(delivery_doc)
@@ -3132,9 +3213,93 @@ async def create_delivery(
         for item in items_to_insert
     ]
     
-    logger.info(f"Delivery {delivery_number} created for account {data.account_id} by {current_user['email']}")
+    logger.info(f"Delivery {delivery_number} created for account {data.account_id} with ₹{total_credit_applied} in credit notes applied by {current_user['email']}")
     
     return delivery_doc
+
+
+@router.post("/{distributor_id}/deliveries/{delivery_id}/apply-credit-notes")
+async def apply_credit_notes_to_delivery(
+    distributor_id: str,
+    delivery_id: str,
+    credit_notes: List[dict],  # [{credit_note_id: str, amount_to_apply: float}]
+    current_user: dict = Depends(get_current_user)
+):
+    """Apply credit notes to a delivery"""
+    from routes.credit_notes import apply_credit_note_to_delivery
+    
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    tenant_id = get_current_tenant_id()
+    
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    
+    if delivery.get('status') not in ['draft', 'confirmed']:
+        raise HTTPException(status_code=400, detail="Can only apply credit notes to draft or confirmed deliveries")
+    
+    applied_credits = delivery.get('applied_credit_notes', []) or []
+    total_credit_applied = delivery.get('total_credit_applied', 0)
+    
+    # Apply each credit note
+    applications = []
+    for cn_request in credit_notes:
+        cn_id = cn_request.get('credit_note_id')
+        amount = cn_request.get('amount_to_apply', 0)
+        
+        if not cn_id or amount <= 0:
+            continue
+        
+        try:
+            result = await apply_credit_note_to_delivery(
+                tenant_id=tenant_id,
+                credit_note_id=cn_id,
+                delivery_id=delivery_id,
+                delivery_number=delivery.get('delivery_number'),
+                amount_to_apply=amount,
+                applied_by=current_user.get('id')
+            )
+            
+            applied_credits.append({
+                'credit_note_id': cn_id,
+                'credit_note_number': result.get('credit_note_number'),
+                'amount_applied': amount
+            })
+            total_credit_applied += amount
+            applications.append(result)
+        except HTTPException as e:
+            # Log but continue with other credit notes
+            logger.warning(f"Failed to apply credit note {cn_id}: {e.detail}")
+            applications.append({'error': e.detail, 'credit_note_id': cn_id})
+    
+    # Calculate net customer billing
+    total_net_amount = delivery.get('total_net_amount', 0)
+    net_customer_billing = max(0, total_net_amount - total_credit_applied)
+    
+    # Update delivery
+    await db.distributor_deliveries.update_one(
+        {"id": delivery_id, "tenant_id": tenant_id},
+        {"$set": {
+            "applied_credit_notes": applied_credits,
+            "total_credit_applied": round(total_credit_applied, 2),
+            "net_customer_billing": round(net_customer_billing, 2),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    logger.info(f"Applied ₹{total_credit_applied} in credit notes to delivery {delivery.get('delivery_number')}")
+    
+    return {
+        "message": f"Applied {len([a for a in applications if 'error' not in a])} credit notes",
+        "applications": applications,
+        "total_credit_applied": round(total_credit_applied, 2),
+        "net_customer_billing": round(net_customer_billing, 2)
+    }
 
 
 @router.put("/{distributor_id}/deliveries/{delivery_id}")
@@ -3367,6 +3532,18 @@ async def cancel_delivery(
     if reason:
         remarks = f"{remarks}\nCancelled: {reason}".strip()
     
+    # Revert any applied credit notes
+    reverted_notes = []
+    if delivery.get('applied_credit_notes'):
+        from routes.credit_notes import revert_credit_note_application
+        reverted_notes = await revert_credit_note_application(
+            tenant_id=tenant_id,
+            delivery_id=delivery_id,
+            delivery_number=delivery.get('delivery_number')
+        )
+        if reverted_notes:
+            logger.info(f"Reverted {len(reverted_notes)} credit note(s) for cancelled delivery {delivery['delivery_number']}")
+    
     await db.distributor_deliveries.update_one(
         {"id": delivery_id, "tenant_id": tenant_id},
         {"$set": {
@@ -3378,7 +3555,93 @@ async def cancel_delivery(
     
     logger.info(f"Delivery {delivery['delivery_number']} cancelled by {current_user['email']}")
     
-    return {"message": f"Delivery {delivery['delivery_number']} cancelled", "status": "cancelled"}
+    return {
+        "message": f"Delivery {delivery['delivery_number']} cancelled", 
+        "status": "cancelled",
+        "reverted_credit_notes": reverted_notes
+    }
+
+
+@router.get("/{distributor_id}/deliveries/{delivery_id}/customer-invoice")
+async def generate_customer_invoice(
+    distributor_id: str,
+    delivery_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Generate a customer invoice PDF for a delivery with GST"""
+    tenant_id = get_current_tenant_id()
+    
+    # Check access
+    user_is_admin = is_distributor_admin(current_user)
+    user_is_distributor = is_distributor_user(current_user) and current_user.get('distributor_id') == distributor_id
+    
+    if not user_is_admin and not user_is_distributor:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get delivery
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    
+    # Get distributor
+    distributor = await db.distributors.find_one({"id": distributor_id, "tenant_id": tenant_id})
+    if not distributor:
+        raise HTTPException(status_code=404, detail="Distributor not found")
+    
+    # Get account (customer)
+    account = await db.accounts.find_one({"id": delivery.get('account_id'), "tenant_id": tenant_id})
+    if not account:
+        # Try getting minimal data from delivery
+        account = {
+            "account_name": delivery.get('account_name', 'Customer'),
+            "city": delivery.get('account_city', ''),
+            "state": "",
+            "address": "",
+            "gst_number": "",
+            "contact_name": "",
+            "contact_number": ""
+        }
+    
+    # Get tenant for company profile and GST rate
+    tenant = await db.tenants.find_one({"tenant_id": tenant_id}, {"_id": 0})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    
+    company_profile = tenant.get('company_profile', {})
+    branding = tenant.get('branding', {})
+    settings = tenant.get('settings', {})
+    
+    # Get GST rate from tenant settings (default 18%)
+    gst_percent = settings.get('default_distributor_gst_percent', 18.0)
+    
+    # Generate PDF
+    try:
+        pdf_bytes = generate_customer_invoice_pdf(
+            delivery_data=delivery,
+            company_profile=company_profile,
+            account_data=account,
+            distributor_data=distributor,
+            gst_percent=gst_percent,
+            branding=branding
+        )
+        
+        # Generate filename
+        invoice_number = f"INV-{delivery.get('delivery_number', 'N-A').replace('DEL-', '')}"
+        filename = f"customer_invoice_{invoice_number}.pdf"
+        
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            }
+        )
+    except Exception as e:
+        logger.error(f"Failed to generate customer invoice PDF: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate invoice: {str(e)}")
 
 
 
@@ -3646,6 +3909,95 @@ async def get_unsettled_deliveries(
     }
 
 
+@router.get("/{distributor_id}/settlement-preview")
+async def get_settlement_preview(
+    distributor_id: str,
+    month: int,
+    year: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a complete preview of all settlement components for a given month:
+    deliveries, credit notes, and factory returns."""
+    tenant_id = get_current_tenant_id()
+
+    start_date = f"{year}-{month:02d}-01"
+    end_date = f"{year + 1}-01-01" if month == 12 else f"{year}-{month + 1:02d}-01"
+
+    # --- Settled IDs ---
+    settled_items = await db.distributor_settlement_items.find(
+        {"tenant_id": tenant_id}, {"delivery_id": 1}
+    ).to_list(10000)
+    settled_delivery_ids = [item['delivery_id'] for item in settled_items]
+
+    existing_settlements = await db.distributor_settlements.find(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0, "credit_note_ids": 1, "factory_return_ids": 1}
+    ).to_list(10000)
+    settled_cn_ids = []
+    settled_fr_ids = []
+    for es in existing_settlements:
+        settled_cn_ids.extend(es.get('credit_note_ids') or [])
+        settled_fr_ids.extend(es.get('factory_return_ids') or [])
+
+    # --- Deliveries ---
+    deliveries = await db.distributor_deliveries.find({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": "delivered",
+        "id": {"$nin": settled_delivery_ids},
+        "delivery_date": {"$gte": start_date, "$lt": end_date}
+    }, {"_id": 0}).sort("delivery_date", 1).to_list(500)
+    for d in deliveries:
+        d['items'] = await db.distributor_delivery_items.find(
+            {"delivery_id": d['id'], "tenant_id": tenant_id}, {"_id": 0}
+        ).to_list(500)
+
+    # --- Credit Notes ---
+    from datetime import datetime as dt_cls_prev
+    period_start_dt = dt_cls_prev.fromisoformat(start_date + "T00:00:00")
+    period_end_dt = dt_cls_prev.fromisoformat(end_date + "T00:00:00")
+    credit_notes = await db.credit_notes.find({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": {"$in": ["pending", "partially_applied", "fully_applied"]},
+        "created_at": {"$gte": period_start_dt, "$lt": period_end_dt},
+        "id": {"$nin": settled_cn_ids}
+    }, {"_id": 0}).to_list(500)
+    # Serialize datetime fields
+    for cn in credit_notes:
+        for k in ['created_at', 'updated_at']:
+            if hasattr(cn.get(k), 'isoformat'):
+                cn[k] = cn[k].isoformat()
+
+    # --- Factory Returns ---
+    factory_returns = await db.distributor_factory_returns.find({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": {"$in": ["confirmed", "received"]},
+        "return_date": {"$gte": start_date, "$lt": end_date},
+        "$or": [{"requires_settlement": True}, {"source": "warehouse"}],
+        "id": {"$nin": settled_fr_ids}
+    }, {"_id": 0}).to_list(500)
+
+    total_delivery_amount = sum(d.get('total_net_amount', 0) for d in deliveries)
+    total_cn_amount = sum(cn.get('original_amount', 0) or cn.get('total_amount', 0) or 0 for cn in credit_notes)
+    total_fr_amount = sum(fr.get('total_credit_amount', 0) for fr in factory_returns)
+
+    return {
+        "deliveries": deliveries,
+        "credit_notes": credit_notes,
+        "factory_returns": factory_returns,
+        "summary": {
+            "total_deliveries": len(deliveries),
+            "total_delivery_amount": round(total_delivery_amount, 2),
+            "total_credit_notes": len(credit_notes),
+            "total_credit_note_amount": round(total_cn_amount, 2),
+            "total_factory_returns": len(factory_returns),
+            "total_factory_return_amount": round(total_fr_amount, 2)
+        }
+    }
+
+
 @router.post("/{distributor_id}/settlements")
 async def create_settlement(
     distributor_id: str,
@@ -3673,7 +4025,18 @@ async def create_settlement(
         {"delivery_id": 1}
     ).to_list(10000)
     
-    settled_delivery_ids = [item['delivery_id'] for item in settled_items]
+    settled_delivery_ids = [item['delivery_id'] for item in settled_items if item.get('delivery_id')]
+    
+    # Get already-settled credit note IDs and factory return IDs from existing settlements
+    existing_settlements = await db.distributor_settlements.find(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0, "credit_note_ids": 1, "factory_return_ids": 1}
+    ).to_list(10000)
+    settled_cn_ids = []
+    settled_fr_ids = []
+    for s in existing_settlements:
+        settled_cn_ids.extend(s.get('credit_note_ids') or [])
+        settled_fr_ids.extend(s.get('factory_return_ids') or [])
     
     # Get completed deliveries for the period that haven't been settled
     deliveries = await db.distributor_deliveries.find({
@@ -3684,8 +4047,33 @@ async def create_settlement(
         "id": {"$nin": settled_delivery_ids}
     }, {"_id": 0}).sort("delivery_date", 1).to_list(500)
     
-    if not deliveries:
-        raise HTTPException(status_code=400, detail="No unsettled deliveries found for this period")
+    # Get credit notes issued in the period (not yet settled)
+    # credit_notes.created_at is stored as datetime object, convert period dates
+    from datetime import datetime as dt_cls
+    period_start_dt = dt_cls.fromisoformat(data.period_start + "T00:00:00")
+    period_end_dt = dt_cls.fromisoformat(data.period_end + "T23:59:59")
+    credit_notes = await db.credit_notes.find({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": {"$in": ["pending", "partially_applied", "fully_applied"]},
+        "created_at": {"$gte": period_start_dt, "$lte": period_end_dt},
+        "id": {"$nin": settled_cn_ids}
+    }, {"_id": 0}).to_list(500)
+    total_credit_notes_issued = sum(cn.get('original_amount', 0) or cn.get('total_amount', 0) or cn.get('amount', 0) or 0 for cn in credit_notes)
+    
+    # Get adjustable factory returns in the period (not yet settled)
+    factory_returns = await db.distributor_factory_returns.find({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": {"$in": ["confirmed", "received"]},
+        "return_date": {"$gte": data.period_start, "$lte": data.period_end},
+        "$or": [{"requires_settlement": True}, {"source": "warehouse"}],
+        "id": {"$nin": settled_fr_ids}
+    }, {"_id": 0}).to_list(500)
+    total_factory_return_credit = sum(fr.get('total_credit_amount', 0) for fr in factory_returns)
+    
+    if not deliveries and not credit_notes and not factory_returns:
+        raise HTTPException(status_code=400, detail="No unsettled deliveries, credit notes, or factory returns found for this period")
     
     # Generate settlement
     settlement_number = await generate_settlement_number(tenant_id)
@@ -3696,6 +4084,12 @@ async def create_settlement(
     total_quantity = sum(d.get('total_quantity', 0) for d in deliveries)
     total_delivery_amount = sum(d.get('total_net_amount', 0) for d in deliveries)
     total_margin_amount = sum(d.get('total_margin_amount', 0) for d in deliveries)
+    
+    # Adjustment from distributor to factory (when customer price > base price)
+    total_dist_to_factory_adjustment = sum(d.get('total_adjustment_dist_to_factory', 0) for d in deliveries)
+    
+    # Net adjustments: Credit notes issued + Factory return credits (factory pays distributor) - Price adjustments (distributor pays factory)
+    net_adjustments = total_credit_notes_issued + total_factory_return_credit - total_dist_to_factory_adjustment
     
     # Create settlement items
     items_to_insert = []
@@ -3712,8 +4106,13 @@ async def create_settlement(
             "account_city": delivery.get('account_city'),
             "total_quantity": delivery.get('total_quantity', 0),
             "total_amount": delivery.get('total_net_amount', 0),
-            "margin_amount": delivery.get('total_margin_amount', 0)
+            "margin_amount": delivery.get('total_margin_amount', 0),
+            "credit_applied": delivery.get('total_credit_applied', 0),
+            "adjustment_dist_to_factory": delivery.get('total_adjustment_dist_to_factory', 0)
         })
+    
+    # Final payout = Margin + Net Adjustments
+    final_payout = total_margin_amount + net_adjustments
     
     # Create settlement document
     settlement_doc = {
@@ -3730,8 +4129,15 @@ async def create_settlement(
         "total_quantity": total_quantity,
         "total_delivery_amount": round(total_delivery_amount, 2),
         "total_margin_amount": round(total_margin_amount, 2),
-        "adjustments": 0,
-        "final_payout": round(total_margin_amount, 2),
+        "total_credit_notes_issued": round(total_credit_notes_issued, 2),
+        "total_factory_return_credit": round(total_factory_return_credit, 2),
+        "total_dist_to_factory_adjustment": round(total_dist_to_factory_adjustment, 2),
+        "credit_note_ids": [cn.get('id') for cn in credit_notes],
+        "factory_return_ids": [fr.get('id') for fr in factory_returns],
+        "total_credit_notes": len(credit_notes),
+        "total_factory_returns": len(factory_returns),
+        "adjustments": round(net_adjustments, 2),
+        "final_payout": round(final_payout, 2),
         "status": "draft",
         "remarks": data.remarks,
         "created_at": now,
@@ -3817,8 +4223,44 @@ async def generate_monthly_settlements(
     
     deliveries = await db.distributor_deliveries.find(query, {"_id": 0}).to_list(1000)
     
-    if not deliveries:
-        raise HTTPException(status_code=400, detail="No unsettled deliveries found for this period")
+    # --- Independently query credit notes for the period ---
+    from datetime import datetime as dt_cls_monthly
+    period_start_dt = dt_cls_monthly.fromisoformat(start_date + "T00:00:00")
+    period_end_dt = dt_cls_monthly.fromisoformat(end_date + "T00:00:00")  # end_date is already 1st of next month
+    
+    # Get already-settled credit note IDs and factory return IDs from existing settlements
+    existing_monthly_settlements = await db.distributor_settlements.find(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0, "credit_note_ids": 1, "factory_return_ids": 1}
+    ).to_list(10000)
+    settled_cn_ids = []
+    settled_fr_ids = []
+    for es in existing_monthly_settlements:
+        settled_cn_ids.extend(es.get('credit_note_ids') or [])
+        settled_fr_ids.extend(es.get('factory_return_ids') or [])
+    
+    all_credit_notes = await db.credit_notes.find({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": {"$in": ["pending", "partially_applied", "fully_applied"]},
+        "created_at": {"$gte": period_start_dt, "$lt": period_end_dt},
+        "id": {"$nin": settled_cn_ids}
+    }, {"_id": 0}).to_list(500)
+    
+    # Get adjustable factory returns in the period (warehouse-sourced, not yet settled)
+    all_factory_returns = await db.distributor_factory_returns.find({
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "status": {"$in": ["confirmed", "received"]},
+        "return_date": {"$gte": start_date, "$lt": end_date},
+        "$or": [{"requires_settlement": True}, {"source": "warehouse"}],
+        "id": {"$nin": settled_fr_ids}
+    }, {"_id": 0}).to_list(500)
+    
+    total_independent_factory_return_credit = sum(fr.get('total_credit_amount', 0) for fr in all_factory_returns)
+    
+    if not deliveries and not all_credit_notes and not all_factory_returns:
+        raise HTTPException(status_code=400, detail="No unsettled deliveries, credit notes, or factory returns found for this period")
     
     # Group deliveries by account
     accounts = {}
@@ -3838,7 +4280,39 @@ async def generate_monthly_settlements(
             }
         accounts[account_id]['deliveries'].append(delivery)
     
+    # Group credit notes by account_id for per-account distribution
+    credit_notes_by_account = {}
+    for cn in all_credit_notes:
+        cn_account = cn.get('account_id', 'unknown')
+        if cn_account not in credit_notes_by_account:
+            credit_notes_by_account[cn_account] = []
+        credit_notes_by_account[cn_account].append(cn)
+    
+    # Ensure accounts with credit notes (but no deliveries) are also represented
+    for cn_acct_id in credit_notes_by_account:
+        if cn_acct_id not in accounts:
+            # Fetch account name
+            cn_acct_name = 'Unknown'
+            if cn_acct_id != 'unknown':
+                acct_doc = await db.accounts.find_one({"id": cn_acct_id}, {"_id": 0, "account_name": 1, "company": 1, "name": 1})
+                if acct_doc:
+                    cn_acct_name = acct_doc.get('account_name') or acct_doc.get('company') or acct_doc.get('name') or 'Unknown'
+            accounts[cn_acct_id] = {
+                'account_id': cn_acct_id,
+                'account_name': cn_acct_name,
+                'deliveries': []
+            }
+    
+    # If still no accounts but we have factory returns, create a placeholder account
+    if not accounts and all_factory_returns:
+        accounts['_factory_returns_'] = {
+            'account_id': '_factory_returns_',
+            'account_name': 'Factory Returns Adjustment',
+            'deliveries': []
+        }
+    
     settlements_created = []
+    factory_returns_assigned = False  # Track if factory returns have been assigned to a settlement
     
     for account_id, account_data in accounts.items():
         account_deliveries = account_data['deliveries']
@@ -3848,6 +4322,10 @@ async def generate_monthly_settlements(
         distributor_earnings = 0
         margin_at_transfer_price = 0
         total_quantity = 0
+        total_price_premium = 0
+        total_factory_adj = 0
+        total_credit_notes_applied = 0
+        total_at_transfer_price = 0
         
         items_to_insert = []
         
@@ -3861,25 +4339,49 @@ async def generate_monthly_settlements(
             delivery_billing = 0
             delivery_earnings = 0
             delivery_margin_at_transfer = 0
+            delivery_price_premium = 0
+            delivery_factory_adj = 0
+            delivery_credit_applied = delivery.get('total_credit_applied', 0)
+            delivery_at_transfer_price = 0
             
             for item in items:
                 qty = item.get('quantity', 0)
                 customer_price = item.get('customer_selling_price') or item.get('unit_price') or 0
                 commission_pct = item.get('distributor_commission_percent') or item.get('margin_percent') or 2.5
-                transfer_price = item.get('transfer_price') or item.get('base_price') or 0
+                base_p = item.get('base_price') or item.get('transfer_price') or 0
                 
                 billing_value = qty * customer_price
                 earnings = billing_value * (commission_pct / 100)
-                margin_transfer = qty * transfer_price * (commission_pct / 100)
+                margin_transfer = qty * base_p * (commission_pct / 100)
+                
+                # Price premium: extra collected when customer price > base price
+                price_premium = qty * (customer_price - base_p) if customer_price > base_p and base_p > 0 else 0
+                
+                # NEW FORMULA: Adjustment (Dist → Factory) = Actual Billable - Billed to Dist
+                # Billed to Dist = qty × transfer_price = qty × base_price × (1 - margin%)
+                # Actual Billable = qty × new_transfer_price = qty × customer_price × (1 - margin%)
+                # Adjustment = qty × (1 - margin%) × (customer_price - base_price)
+                transfer_price = base_p * (1 - commission_pct / 100) if base_p > 0 else 0
+                new_transfer_price = customer_price * (1 - commission_pct / 100) if customer_price > 0 else 0
+                billed_to_dist = qty * transfer_price
+                actual_billable = qty * new_transfer_price
+                factory_adj = actual_billable - billed_to_dist
                 
                 delivery_billing += billing_value
                 delivery_earnings += earnings
                 delivery_margin_at_transfer += margin_transfer
+                delivery_price_premium += price_premium
+                delivery_factory_adj += factory_adj
+                delivery_at_transfer_price += billed_to_dist
             
             total_billing_value += delivery_billing
             distributor_earnings += delivery_earnings
             margin_at_transfer_price += delivery_margin_at_transfer
             total_quantity += delivery.get('total_quantity', 0)
+            total_price_premium += delivery_price_premium
+            total_factory_adj += delivery_factory_adj
+            total_credit_notes_applied += delivery_credit_applied
+            total_at_transfer_price += delivery_at_transfer_price
             
             items_to_insert.append({
                 "id": str(uuid.uuid4()),
@@ -3894,7 +4396,10 @@ async def generate_monthly_settlements(
                 "total_billing_value": round(delivery_billing, 2),
                 "distributor_earnings": round(delivery_earnings, 2),
                 "margin_at_transfer_price": round(delivery_margin_at_transfer, 2),
-                "adjustment_payable": round(delivery_earnings - delivery_margin_at_transfer, 2)
+                "adjustment_payable": round(delivery_earnings - delivery_margin_at_transfer, 2),
+                "price_premium_payable": round(delivery_price_premium, 2),
+                "factory_distributor_adjustment": round(delivery_factory_adj, 2),
+                "credit_notes_applied": round(delivery_credit_applied, 2)
             })
         
         # Generate settlement for this account
@@ -3906,6 +4411,21 @@ async def generate_monthly_settlements(
             item['settlement_id'] = settlement_id
         
         adjustment_payable = distributor_earnings - margin_at_transfer_price
+        
+        # Per-account credit notes (independently queried)
+        account_credit_notes = credit_notes_by_account.get(account_id, [])
+        account_cn_total = sum(cn.get('original_amount', 0) or cn.get('total_amount', 0) or cn.get('amount', 0) or 0 for cn in account_credit_notes)
+        
+        # Factory returns: assign to first settlement only (they're distributor-level, not per-account)
+        account_fr_total = 0
+        account_factory_returns = []
+        if not factory_returns_assigned and all_factory_returns:
+            account_fr_total = total_independent_factory_return_credit
+            account_factory_returns = all_factory_returns
+            factory_returns_assigned = True
+        
+        # Net Payout = Earnings - ① Price Adj (Dist→Factory) + ② Credit Notes (Factory→Dist) + ③ Factory Returns (Factory→Dist)
+        final_payout = distributor_earnings - total_factory_adj + account_cn_total + account_fr_total
         
         settlement_doc = {
             "id": settlement_id,
@@ -3921,10 +4441,18 @@ async def generate_monthly_settlements(
             "total_deliveries": len(account_deliveries),
             "total_quantity": total_quantity,
             "total_billing_value": round(total_billing_value, 2),
+            "total_at_transfer_price": round(total_at_transfer_price, 2),
             "distributor_earnings": round(distributor_earnings, 2),
             "margin_at_transfer_price": round(margin_at_transfer_price, 2),
             "adjustment_payable": round(adjustment_payable, 2),
-            "final_payout": round(distributor_earnings, 2),
+            "price_premium_payable": round(total_price_premium, 2),
+            "factory_distributor_adjustment": round(total_factory_adj, 2),
+            "credit_notes_applied": round(total_credit_notes_applied, 2),
+            "total_credit_notes_issued": round(account_cn_total, 2),
+            "total_factory_return_credit": round(account_fr_total, 2),
+            "credit_note_ids": [cn.get('id') for cn in account_credit_notes],
+            "factory_return_ids": [fr.get('id') for fr in account_factory_returns],
+            "final_payout": round(final_payout, 2),
             "status": "draft",
             "remarks": remarks,
             "created_by": current_user['id'],
@@ -5228,6 +5756,17 @@ async def delete_debit_credit_note(
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
     
+    # Revert linked settlements back to unreconciled (for draft/pending notes)
+    note_status = note.get('status', 'draft')
+    if note_status in ['draft', 'pending']:
+        settlement_ids = note.get('settlement_ids', [])
+        if settlement_ids:
+            await db.distributor_settlements.update_many(
+                {"id": {"$in": settlement_ids}, "tenant_id": tenant_id},
+                {"$set": {"reconciled": False}, "$unset": {"note_id": "", "note_number": ""}}
+            )
+            logger.info(f"Reverted {len(settlement_ids)} settlement(s) to unreconciled after deleting draft note {note.get('note_number')}")
+    
     # Delete the note
     await db.distributor_debit_credit_notes.delete_one({
         "id": note_id,
@@ -5246,6 +5785,254 @@ async def delete_debit_credit_note(
         )
     
     return {"message": "Note deleted successfully", "note_number": note.get('note_number')}
+
+
+# ============ Stock Dashboard ============
+
+@router.get("/{distributor_id}/stock-dashboard")
+async def get_stock_dashboard(
+    distributor_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Real-time stock dashboard with complete inventory picture per SKU"""
+    tenant_id = get_current_tenant_id()
+    
+    distributor = await db.distributors.find_one(
+        {"id": distributor_id, "tenant_id": tenant_id},
+        {"_id": 0, "id": 1, "distributor_name": 1}
+    )
+    if not distributor:
+        raise HTTPException(status_code=404, detail="Distributor not found")
+    
+    # === 1. STOCK IN: Shipments received (only delivered shipments) ===
+    delivered_shipment_ids = await db.distributor_shipments.distinct(
+        "id",
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": "delivered"}
+    )
+    shipment_items = await db.distributor_shipment_items.find(
+        {"tenant_id": tenant_id, "shipment_id": {"$in": delivered_shipment_ids}},
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1}
+    ).to_list(50000)
+    
+    stock_in_by_sku = {}
+    for si in shipment_items:
+        sid = si.get('sku_id', '')
+        if sid not in stock_in_by_sku:
+            stock_in_by_sku[sid] = {"sku_id": sid, "sku_name": si.get('sku_name', 'Unknown'), "qty": 0}
+        stock_in_by_sku[sid]["qty"] += si.get('quantity', 0)
+    
+    # === 2. STOCK OUT: Deliveries to customers (delivered/completed) ===
+    delivered_delivery_ids = await db.distributor_deliveries.distinct(
+        "id",
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": {"$in": ["delivered", "completed"]}}
+    )
+    delivery_items = await db.distributor_delivery_items.find(
+        {"tenant_id": tenant_id, "delivery_id": {"$in": delivered_delivery_ids}},
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1}
+    ).to_list(50000)
+    
+    stock_out_by_sku = {}
+    for di in delivery_items:
+        sid = di.get('sku_id', '')
+        if sid not in stock_out_by_sku:
+            stock_out_by_sku[sid] = {"sku_id": sid, "sku_name": di.get('sku_name', 'Unknown'), "qty": 0}
+        stock_out_by_sku[sid]["qty"] += di.get('quantity', 0)
+    
+    # Weekly delivery data (last 12 weeks) for average calculation
+    from datetime import timedelta
+    import calendar as cal_mod
+    now = datetime.now(timezone.utc)
+    twelve_weeks_ago = (now - timedelta(weeks=12)).strftime('%Y-%m-%d')
+    
+    recent_deliveries = await db.distributor_deliveries.find(
+        {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "status": {"$in": ["delivered", "completed"]},
+            "delivery_date": {"$gte": twelve_weeks_ago}
+        },
+        {"_id": 0, "id": 1, "delivery_date": 1}
+    ).to_list(10000)
+    recent_delivery_ids = [d['id'] for d in recent_deliveries]
+    
+    recent_items = await db.distributor_delivery_items.find(
+        {"tenant_id": tenant_id, "delivery_id": {"$in": recent_delivery_ids}},
+        {"_id": 0, "sku_id": 1, "quantity": 1, "delivery_id": 1}
+    ).to_list(50000)
+    
+    # Map delivery_id -> delivery_date for weekly grouping
+    del_date_map = {d['id']: d.get('delivery_date', '') for d in recent_deliveries}
+    weekly_by_sku = {}
+    for ri in recent_items:
+        sid = ri.get('sku_id', '')
+        dd = del_date_map.get(ri.get('delivery_id', ''), '')
+        if not dd:
+            continue
+        # Get ISO week number
+        try:
+            dt = datetime.strptime(dd, '%Y-%m-%d')
+            week_key = dt.strftime('%Y-W%W')
+        except Exception:
+            continue
+        if sid not in weekly_by_sku:
+            weekly_by_sku[sid] = {}
+        if week_key not in weekly_by_sku[sid]:
+            weekly_by_sku[sid][week_key] = 0
+        weekly_by_sku[sid][week_key] += ri.get('quantity', 0)
+    
+    # === 3. CUSTOMER RETURNS (by category) ===
+    customer_returns = await db.customer_returns.find(
+        {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "status": {"$nin": ["cancelled", "draft"]}
+        },
+        {"_id": 0, "items": 1, "status": 1}
+    ).to_list(10000)
+    
+    cust_return_by_sku = {}  # {sku_id: {empty: X, damaged: X, expired: X, total: X}}
+    for cr in customer_returns:
+        for item in cr.get('items', []):
+            sid = item.get('sku_id', '')
+            qty = item.get('quantity', 0)
+            cat = item.get('reason_category', 'other')
+            if sid not in cust_return_by_sku:
+                cust_return_by_sku[sid] = {"empty_reusable": 0, "damaged": 0, "expired": 0, "promotional": 0, "other": 0, "total": 0, "pending_factory": 0, "returned_to_factory": 0}
+            bucket = cat if cat in cust_return_by_sku[sid] else "other"
+            cust_return_by_sku[sid][bucket] += qty
+            cust_return_by_sku[sid]["total"] += qty
+            if item.get('return_to_factory'):
+                if item.get('returned_to_factory'):
+                    cust_return_by_sku[sid]["returned_to_factory"] += qty
+                else:
+                    cust_return_by_sku[sid]["pending_factory"] += qty
+    
+    # === 4. FACTORY RETURNS (distributor -> factory) ===
+    factory_returns = await db.distributor_factory_returns.find(
+        {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "status": {"$nin": ["cancelled", "draft"]}
+        },
+        {"_id": 0, "items": 1, "reason": 1, "status": 1}
+    ).to_list(10000)
+    
+    factory_return_by_sku = {}  # {sku_id: {qty, reason_breakdown}}
+    for fr in factory_returns:
+        reason = fr.get('reason', 'other')
+        for item in fr.get('items', []):
+            sid = item.get('sku_id', '')
+            qty = item.get('quantity', 0)
+            if sid not in factory_return_by_sku:
+                factory_return_by_sku[sid] = {"total": 0, "empty_reusable": 0, "damaged": 0, "expired": 0, "other": 0, "sku_name": item.get('sku_name', 'Unknown')}
+            bucket = reason if reason in factory_return_by_sku[sid] else "other"
+            factory_return_by_sku[sid][bucket] += qty
+            factory_return_by_sku[sid]["total"] += qty
+    
+    # === BUILD PER-SKU SUMMARY ===
+    all_sku_ids = set(list(stock_in_by_sku.keys()) + list(stock_out_by_sku.keys()) + list(cust_return_by_sku.keys()) + list(factory_return_by_sku.keys()))
+    
+    sku_summaries = []
+    total_stock_in = 0
+    total_stock_out = 0
+    total_at_hand = 0
+    total_cust_returns = 0
+    total_factory_returns = 0
+    
+    for sid in all_sku_ids:
+        si = stock_in_by_sku.get(sid, {})
+        so = stock_out_by_sku.get(sid, {})
+        cr_data = cust_return_by_sku.get(sid, {})
+        fr_data = factory_return_by_sku.get(sid, {})
+        
+        qty_in = si.get('qty', 0)
+        qty_out = so.get('qty', 0)
+        qty_cust_returned = cr_data.get('total', 0)
+        qty_factory_returned = fr_data.get('total', 0)
+        
+        # Stock at hand = received - delivered to customers - returned to factory + customer returns back
+        # Customer returns come back to distributor, factory returns leave distributor
+        stock_at_hand = qty_in - qty_out - qty_factory_returned + qty_cust_returned
+        
+        # Weekly average (last 12 weeks)
+        weekly_data = weekly_by_sku.get(sid, {})
+        weeks_with_data = len(weekly_data)
+        total_recent_qty = sum(weekly_data.values())
+        weekly_avg = round(total_recent_qty / max(weeks_with_data, 1), 1) if weeks_with_data > 0 else 0
+        
+        # % stock at hand
+        pct_at_hand = round((stock_at_hand / qty_in * 100), 1) if qty_in > 0 else 0
+        
+        # Days of stock remaining
+        daily_avg = weekly_avg / 7 if weekly_avg > 0 else 0
+        days_remaining = round(stock_at_hand / daily_avg, 0) if daily_avg > 0 and stock_at_hand > 0 else None
+        
+        sku_name = si.get('sku_name') or so.get('sku_name') or fr_data.get('sku_name') or 'Unknown'
+        
+        sku_summaries.append({
+            "sku_id": sid,
+            "sku_name": sku_name,
+            "stock_received": qty_in,
+            "stock_delivered": qty_out,
+            "customer_returns": qty_cust_returned,
+            "customer_returns_breakdown": {
+                "empty_reusable": cr_data.get('empty_reusable', 0),
+                "damaged": cr_data.get('damaged', 0),
+                "expired": cr_data.get('expired', 0),
+                "promotional": cr_data.get('promotional', 0),
+            },
+            "factory_returns": qty_factory_returned,
+            "factory_returns_breakdown": {
+                "empty_reusable": fr_data.get('empty_reusable', 0),
+                "damaged": fr_data.get('damaged', 0),
+                "expired": fr_data.get('expired', 0),
+            },
+            "pending_factory_return": cr_data.get('pending_factory', 0),
+            "stock_at_hand": stock_at_hand,
+            "pct_stock_at_hand": pct_at_hand,
+            "weekly_avg_deliveries": weekly_avg,
+            "days_of_stock": days_remaining,
+            "weeks_analyzed": weeks_with_data,
+        })
+    
+    # Sort by stock_at_hand descending
+    sku_summaries.sort(key=lambda x: x['stock_at_hand'], reverse=True)
+    
+    for s in sku_summaries:
+        total_stock_in += s['stock_received']
+        total_stock_out += s['stock_delivered']
+        total_at_hand += s['stock_at_hand']
+        total_cust_returns += s['customer_returns']
+        total_factory_returns += s['factory_returns']
+    
+    # Aggregate bottle tracking
+    total_empty = sum(cr_data.get('empty_reusable', 0) for cr_data in cust_return_by_sku.values())
+    total_damaged = sum(cr_data.get('damaged', 0) for cr_data in cust_return_by_sku.values())
+    total_expired = sum(cr_data.get('expired', 0) for cr_data in cust_return_by_sku.values())
+    total_pending_factory = sum(cr_data.get('pending_factory', 0) for cr_data in cust_return_by_sku.values())
+    
+    return {
+        "distributor_id": distributor_id,
+        "distributor_name": distributor.get('distributor_name', ''),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "totals": {
+            "stock_received": total_stock_in,
+            "stock_delivered": total_stock_out,
+            "stock_at_hand": total_at_hand,
+            "customer_returns": total_cust_returns,
+            "factory_returns": total_factory_returns,
+            "pct_stock_at_hand": round((total_at_hand / total_stock_in * 100), 1) if total_stock_in > 0 else 0,
+        },
+        "bottle_tracking": {
+            "empty_reusable": total_empty,
+            "damaged": total_damaged,
+            "expired": total_expired,
+            "pending_factory_return": total_pending_factory,
+        },
+        "sku_count": len(sku_summaries),
+        "skus": sku_summaries,
+    }
+
 
 
 # ============ Real-time Reconciliation Status ============
@@ -5391,24 +6178,217 @@ async def get_monthly_reconciliation_data(
     # Calculate totals for unreconciled settlements only
     total_billing = sum(s.get('total_billing_value', 0) for s in unreconciled_settlements)
     total_earnings = sum(s.get('distributor_earnings', 0) for s in unreconciled_settlements)
-    total_margin_at_transfer = sum(s.get('margin_at_transfer_price', 0) for s in unreconciled_settlements)
-    net_adjustment = sum(s.get('adjustment_payable', 0) for s in unreconciled_settlements)
+    total_factory_adj = sum(s.get('factory_distributor_adjustment', 0) for s in unreconciled_settlements)
+    total_credit_notes = sum(s.get('total_credit_notes_issued', 0) or s.get('credit_notes_applied', 0) for s in unreconciled_settlements)
+    total_factory_return_credit = sum(s.get('total_factory_return_credit', 0) for s in unreconciled_settlements)
     
-    # Calculate totals for already reconciled
+    # === ENTRY 1: Monthly Billing (at Margin Matrix Transfer Price) ===
+    # Direct sum of (qty × transfer_price) from margin matrix, stored per settlement
+    total_at_transfer_price = sum(s.get('total_at_transfer_price', 0) for s in unreconciled_settlements)
+    # Fallback for older settlements that don't have this field
+    if total_at_transfer_price == 0 and total_billing > 0:
+        total_at_transfer_price = total_billing - total_earnings - total_factory_adj
+    
+    # --- Weekly billing breakdown (based on delivery_date) ---
+    import calendar
+    month_abbrevs = {1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec'}
+    days_in_month = calendar.monthrange(year, month)[1]
+    week_ranges = []
+    day = 1
+    w = 1
+    while day <= days_in_month:
+        end_day = min(day + 6, days_in_month)
+        week_ranges.append({"week": w, "start_day": day, "end_day": end_day, "label": f"Week {w} ({day}-{end_day} {month_abbrevs.get(month, '')})"})
+        day = end_day + 1
+        w += 1
+    
+    # Get all delivered deliveries (settled in unreconciled settlements) with their items
+    all_settlement_ids = [s['id'] for s in unreconciled_settlements]
+    settled_items = await db.distributor_settlement_items.find(
+        {"tenant_id": tenant_id, "settlement_id": {"$in": all_settlement_ids}},
+        {"_id": 0, "delivery_id": 1}
+    ).to_list(10000)
+    settled_delivery_ids = [si['delivery_id'] for si in settled_items]
+    
+    weekly_billing = []
+    if settled_delivery_ids:
+        settled_deliveries = await db.distributor_deliveries.find(
+            {"tenant_id": tenant_id, "id": {"$in": settled_delivery_ids}},
+            {"_id": 0, "id": 1, "delivery_date": 1, "account_name": 1, "delivery_number": 1}
+        ).to_list(10000)
+        
+        # Get delivery items for transfer price calculation
+        all_delivery_items = await db.distributor_delivery_items.find(
+            {"tenant_id": tenant_id, "delivery_id": {"$in": settled_delivery_ids}},
+            {"_id": 0}
+        ).to_list(50000)
+        items_by_delivery = {}
+        for di in all_delivery_items:
+            did = di.get('delivery_id')
+            if did not in items_by_delivery:
+                items_by_delivery[did] = []
+            items_by_delivery[did].append(di)
+        
+        for wr in week_ranges:
+            start_str = f"{year}-{month:02d}-{wr['start_day']:02d}"
+            end_str = f"{year}-{month:02d}-{wr['end_day']:02d}"
+            week_amount = 0
+            week_deliveries = 0
+            delivery_details = []  # Per-delivery detail for expansion
+            for d in settled_deliveries:
+                dd = d.get('delivery_date', '')
+                if dd >= start_str and dd <= end_str:
+                    week_deliveries += 1
+                    del_tp_amount = 0
+                    for item in items_by_delivery.get(d['id'], []):
+                        qty = item.get('quantity', 0)
+                        base_p = item.get('base_price') or item.get('transfer_price') or 0
+                        comm = item.get('distributor_commission_percent') or item.get('margin_percent') or 0
+                        tp = base_p * (1 - comm / 100)
+                        del_tp_amount += qty * tp
+                    week_amount += del_tp_amount
+                    delivery_details.append({
+                        "delivery_id": d['id'],
+                        "delivery_number": d.get('delivery_number', ''),
+                        "account_name": d.get('account_name', 'Unknown'),
+                        "delivery_date": dd,
+                        "amount_at_transfer_price": round(del_tp_amount, 2)
+                    })
+            weekly_billing.append({
+                "week": wr['week'],
+                "start_day": wr['start_day'],
+                "end_day": wr['end_day'],
+                "label": wr['label'],
+                "amount": round(week_amount, 2),
+                "deliveries": week_deliveries,
+                "details": delivery_details
+            })
+    else:
+        # No settled deliveries, return empty weeks
+        for wr in week_ranges:
+            weekly_billing.append({
+                "week": wr['week'],
+                "start_day": wr['start_day'],
+                "end_day": wr['end_day'],
+                "label": wr['label'],
+                "amount": 0,
+                "deliveries": 0
+            })
+    
+    # === ENTRY 2: Monthly Settlement (All Adjustments → Debit/Credit Note) ===
+    # Selling price adjustments (when customer price ≠ base price)
+    settlement_selling_price_adj = total_factory_adj
+    # Credit notes (customer return reimbursements) + factory returns (warehouse stock return credit)
+    settlement_credits = total_credit_notes + total_factory_return_credit
+    # Net: positive = distributor owes more (debit note), negative = factory owes (credit note)
+    net_adjustment_amount = settlement_selling_price_adj - settlement_credits
+    settlement_note_type = "debit" if net_adjustment_amount > 0 else "credit" if net_adjustment_amount < 0 else "none"
+    
+    # === Calculate totals for already reconciled ===
+    reconciled_at_tp = sum(s.get('total_at_transfer_price', 0) for s in reconciled_settlements)
     reconciled_billing = sum(s.get('total_billing_value', 0) for s in reconciled_settlements)
-    reconciled_adjustment = sum(s.get('adjustment_payable', 0) for s in reconciled_settlements)
+    reconciled_earnings = sum(s.get('distributor_earnings', 0) for s in reconciled_settlements)
+    reconciled_factory_adj = sum(s.get('factory_distributor_adjustment', 0) for s in reconciled_settlements)
+    if reconciled_at_tp == 0 and reconciled_billing > 0:
+        reconciled_at_tp = reconciled_billing - reconciled_earnings - reconciled_factory_adj
+    reconciled_credit_notes = sum(s.get('total_credit_notes_issued', 0) or s.get('credit_notes_applied', 0) for s in reconciled_settlements)
+    reconciled_factory_return_credit = sum(s.get('total_factory_return_credit', 0) for s in reconciled_settlements)
+    
+    # --- Reconciled: Weekly billing breakdown ---
+    reconciled_weekly_billing = []
+    if reconciled_settlements:
+        rec_settlement_ids = [s['id'] for s in reconciled_settlements]
+        rec_settled_items = await db.distributor_settlement_items.find(
+            {"tenant_id": tenant_id, "settlement_id": {"$in": rec_settlement_ids}},
+            {"_id": 0, "delivery_id": 1}
+        ).to_list(10000)
+        rec_delivery_ids = list(set(si['delivery_id'] for si in rec_settled_items))
+        
+        if rec_delivery_ids:
+            rec_deliveries = await db.distributor_deliveries.find(
+                {"tenant_id": tenant_id, "id": {"$in": rec_delivery_ids}},
+                {"_id": 0, "id": 1, "delivery_date": 1, "account_name": 1, "delivery_number": 1}
+            ).to_list(10000)
+            rec_all_items = await db.distributor_delivery_items.find(
+                {"tenant_id": tenant_id, "delivery_id": {"$in": rec_delivery_ids}},
+                {"_id": 0}
+            ).to_list(50000)
+            rec_items_by_delivery = {}
+            for di in rec_all_items:
+                did = di.get('delivery_id')
+                if did not in rec_items_by_delivery:
+                    rec_items_by_delivery[did] = []
+                rec_items_by_delivery[did].append(di)
+            
+            for wr in week_ranges:
+                start_str = f"{year}-{month:02d}-{wr['start_day']:02d}"
+                end_str = f"{year}-{month:02d}-{wr['end_day']:02d}"
+                week_amount = 0
+                week_deliveries = 0
+                delivery_details = []
+                for d in rec_deliveries:
+                    dd = d.get('delivery_date', '')
+                    if dd >= start_str and dd <= end_str:
+                        week_deliveries += 1
+                        del_tp_amount = 0
+                        for item in rec_items_by_delivery.get(d['id'], []):
+                            qty = item.get('quantity', 0)
+                            base_p = item.get('base_price') or item.get('transfer_price') or 0
+                            comm = item.get('distributor_commission_percent') or item.get('margin_percent') or 0
+                            tp = base_p * (1 - comm / 100)
+                            del_tp_amount += qty * tp
+                        week_amount += del_tp_amount
+                        delivery_details.append({
+                            "delivery_id": d['id'],
+                            "delivery_number": d.get('delivery_number', ''),
+                            "account_name": d.get('account_name', 'Unknown'),
+                            "delivery_date": dd,
+                            "amount_at_transfer_price": round(del_tp_amount, 2)
+                        })
+                reconciled_weekly_billing.append({
+                    "week": wr['week'], "start_day": wr['start_day'], "end_day": wr['end_day'],
+                    "label": wr['label'], "amount": round(week_amount, 2),
+                    "deliveries": week_deliveries, "details": delivery_details
+                })
+        else:
+            for wr in week_ranges:
+                reconciled_weekly_billing.append({
+                    "week": wr['week'], "start_day": wr['start_day'], "end_day": wr['end_day'],
+                    "label": wr['label'], "amount": 0, "deliveries": 0
+                })
+    
+    # Reconciled Entry 2 adjustment details
+    reconciled_selling_price_adj = reconciled_factory_adj
+    reconciled_net_adj = reconciled_selling_price_adj - reconciled_credit_notes - reconciled_factory_return_credit
+    reconciled_note_type = "debit" if reconciled_net_adj > 0 else "credit" if reconciled_net_adj < 0 else "none"
     
     return {
         "unreconciled_settlements": unreconciled_settlements,
         "reconciled_settlements": reconciled_settlements,
         "total_unreconciled": len(unreconciled_settlements),
         "total_reconciled": len(reconciled_settlements),
+        # Raw totals
         "total_billing_value": round(total_billing, 2),
         "total_distributor_earnings": round(total_earnings, 2),
-        "total_margin_at_transfer": round(total_margin_at_transfer, 2),
-        "net_adjustment": round(net_adjustment, 2),
-        "reconciled_billing_value": round(reconciled_billing, 2),
-        "reconciled_adjustment": round(reconciled_adjustment, 2),
+        "total_factory_adjustment": round(total_factory_adj, 2),
+        "total_credit_notes_applied": round(total_credit_notes, 2),
+        "total_factory_return_credit": round(total_factory_return_credit, 2),
+        # Entry 1: Billing at margin matrix transfer price
+        "total_at_transfer_price": round(total_at_transfer_price, 2),
+        "weekly_billing": weekly_billing,
+        # Entry 2: Settlement adjustments
+        "settlement_selling_price_adj": round(settlement_selling_price_adj, 2),
+        "settlement_credits": round(settlement_credits, 2),
+        "net_adjustment_amount": round(net_adjustment_amount, 2),
+        "settlement_note_type": settlement_note_type,
+        # Reconciled - full Two-Entry data
+        "reconciled_at_transfer_price": round(reconciled_at_tp, 2),
+        "reconciled_weekly_billing": reconciled_weekly_billing,
+        "reconciled_selling_price_adj": round(reconciled_selling_price_adj, 2),
+        "reconciled_credit_notes": round(reconciled_credit_notes, 2),
+        "reconciled_factory_return_credit": round(reconciled_factory_return_credit, 2),
+        "reconciled_net_adjustment": round(reconciled_net_adj, 2),
+        "reconciled_note_type": reconciled_note_type,
         "existing_notes": existing_notes,
         "total_notes": len(existing_notes)
     }
@@ -5450,10 +6430,24 @@ async def generate_monthly_note(
     if not settlements:
         raise HTTPException(status_code=400, detail="No approved unreconciled settlements found for this month")
     
-    # Calculate net adjustment for these settlements
-    net_adjustment = sum(s.get('adjustment_payable', 0) for s in settlements)
+    # Calculate settlement adjustments (separate from billing)
+    total_billing = sum(s.get('total_billing_value', 0) for s in settlements)
+    total_earnings = sum(s.get('distributor_earnings', 0) for s in settlements)
+    total_factory_adj = sum(s.get('factory_distributor_adjustment', 0) for s in settlements)
+    total_credit_notes = sum(s.get('total_credit_notes_issued', 0) or s.get('credit_notes_applied', 0) for s in settlements)
+    total_factory_return_credit = sum(s.get('total_factory_return_credit', 0) for s in settlements)
     
-    if net_adjustment == 0:
+    # Entry 1: Billing at margin matrix transfer price
+    total_at_transfer_price = sum(s.get('total_at_transfer_price', 0) for s in settlements)
+    if total_at_transfer_price == 0 and total_billing > 0:
+        total_at_transfer_price = total_billing - total_earnings - total_factory_adj
+    
+    # Entry 2: All adjustments → Debit/Credit Note
+    settlement_selling_price_adj = total_factory_adj
+    settlement_credits = total_credit_notes + total_factory_return_credit
+    net_adjustment_amount = settlement_selling_price_adj - settlement_credits
+    
+    if net_adjustment_amount == 0:
         raise HTTPException(status_code=400, detail="Net adjustment is zero - no note required")
     
     # Get distributor full info for PDF
@@ -5470,9 +6464,9 @@ async def generate_monthly_note(
     company_profile = tenant.get('company_profile', {}) if tenant else {}
     branding = tenant.get('branding', {}) if tenant else {}
     
-    # Determine note type
-    note_type = "credit" if net_adjustment >= 0 else "debit"
-    amount = abs(net_adjustment)
+    # Determine note type: positive net adjustment = distributor owes more = debit note
+    note_type = "debit" if net_adjustment_amount > 0 else "credit"
+    amount = abs(net_adjustment_amount)
     
     # Generate note number
     count = await db.distributor_debit_credit_notes.count_documents({"tenant_id": tenant_id})
@@ -5497,9 +6491,16 @@ async def generate_monthly_note(
         "balance_amount": round(amount, 2),
         "settlement_ids": [s['id'] for s in settlements],
         "total_settlements": len(settlements),
-        "total_billing_value": round(sum(s.get('total_billing_value', 0) for s in settlements), 2),
-        "total_distributor_earnings": round(sum(s.get('distributor_earnings', 0) for s in settlements), 2),
-        "total_margin_at_transfer": round(sum(s.get('margin_at_transfer_price', 0) for s in settlements), 2),
+        # Entry 1: Billing at margin matrix transfer price
+        "total_billing_value": round(total_billing, 2),
+        "total_at_transfer_price": round(total_at_transfer_price, 2),
+        "total_distributor_earnings": round(total_earnings, 2),
+        # Entry 2: Settlement adjustments
+        "settlement_selling_price_adj": round(settlement_selling_price_adj, 2),
+        "settlement_credits": round(settlement_credits, 2),
+        "total_credit_notes": round(total_credit_notes, 2),
+        "total_factory_return_credit": round(total_factory_return_credit, 2),
+        "net_adjustment_amount": round(net_adjustment_amount, 2),
         "remarks": remarks,
         "status": "pending",
         "created_by": current_user['id'],

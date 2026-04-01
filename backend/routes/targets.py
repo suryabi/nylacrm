@@ -305,10 +305,8 @@ async def get_resources_by_location(
     if territory:
         query['territory'] = territory
     
-    # Filter for sales roles
-    sales_roles = ['Business Development Executive', 'Regional Sales Manager', 'Partner - Sales', 
-                   'National Sales Head', 'Head of Business']
-    query['role'] = {'$in': sales_roles}
+    # Filter for sales or admin department
+    query['department'] = {'$in': ['Sales', 'Admin', 'sales', 'admin']}
     
     users = await db.users.find(query, {'_id': 0, 'password': 0}).to_list(100)
     
@@ -317,12 +315,9 @@ async def get_resources_by_location(
 
 @router.get("/resources/sales")
 async def get_sales_resources(current_user: dict = Depends(get_current_user)):
-    """Get all sales resources"""
-    sales_roles = ['Business Development Executive', 'Regional Sales Manager', 'Partner - Sales',
-                   'National Sales Head', 'Head of Business', 'CEO', 'Director', 'Vice President']
-    
+    """Get all sales and admin department resources"""
     users = await db.users.find(
-        {'is_active': True, 'role': {'$in': sales_roles}},
+        {'is_active': True, 'department': {'$in': ['Sales', 'Admin', 'sales', 'admin']}},
         {'_id': 0, 'password': 0}
     ).to_list(100)
     

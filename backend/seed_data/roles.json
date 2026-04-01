@@ -1,0 +1,8690 @@
+[
+  {
+    "id": "d14d4fa3-13a3-4704-b7e0-1624730f1ac3",
+    "tenant_id": "nyla-air-water",
+    "name": "Admin",
+    "description": "Full access to all features and settings",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "dashboard": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "pipeline": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "sales_portal": {
+        "view": false,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_revenue": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "status_summary": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "sku_management": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "company_profile": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "team": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "master_locations": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "business_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contact_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "expense_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "tenant_settings": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "maintenance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "inventory": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "quality_control": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "assets": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "vendors": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "distributors": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "distributor_coverage": {
+        "view": true,
+        "create": true,
+        "delete": true,
+        "edit": true
+      },
+      "distributor_locations": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "distributor_margins": {
+        "view": true,
+        "create": true,
+        "delete": true,
+        "edit": true
+      },
+      "distributor_assignments": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "distributor_shipments": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "distributor_deliveries": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "distributor_stock": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T15:49:53.362655+00:00",
+    "updated_at": "2026-03-20T12:59:23.945722+00:00"
+  },
+  {
+    "id": "2d4c2366-ff99-4f04-9ff9-af6c42f7b8d9",
+    "tenant_id": "nyla-air-water",
+    "name": "Manager",
+    "description": "Can manage team, leads, and most features",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": true,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "master_locations": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "business_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T15:49:53.362655+00:00",
+    "updated_at": "2026-03-12T15:49:53.362655+00:00"
+  },
+  {
+    "id": "92dca692-faa2-46d3-891d-6e9d0794ac04",
+    "tenant_id": "nyla-air-water",
+    "name": "User",
+    "description": "Standard user access to core features",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": true,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "master_locations": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "business_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T15:49:53.362655+00:00",
+    "updated_at": "2026-03-12T16:02:06.722054+00:00"
+  },
+  {
+    "id": "9690f5f7-debc-4f0a-95cd-480f3f53038b",
+    "tenant_id": "nyla-air-water",
+    "name": "Viewer",
+    "description": "Read-only access to view data",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contacts": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "master_locations": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "business_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T15:49:53.362655+00:00",
+    "updated_at": "2026-03-12T15:49:53.362655+00:00"
+  },
+  {
+    "id": "db7536c7-2c6d-44a4-ae83-71dd3cf02910",
+    "tenant_id": "test-reg-0c0c30d3",
+    "name": "Admin",
+    "description": "Full access to all features and settings",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "dashboard": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "pipeline": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "sales_portal": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_revenue": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "status_summary": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "sku_management": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "company_profile": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "team": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "master_locations": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "business_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contact_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "expense_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "tenant_settings": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "maintenance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "inventory": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "quality_control": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "assets": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "vendors": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:02:14.153748+00:00",
+    "updated_at": "2026-03-12T16:02:14.153748+00:00"
+  },
+  {
+    "id": "02bff069-2834-43ea-86b8-7f7b3b1f002e",
+    "tenant_id": "test-reg-0c0c30d3",
+    "name": "Manager",
+    "description": "Can manage team, leads, and most features",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": true,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "master_locations": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "business_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:02:14.153748+00:00",
+    "updated_at": "2026-03-12T16:02:14.153748+00:00"
+  },
+  {
+    "id": "c309b4dd-3874-4326-8cf4-e213fcc4e38c",
+    "tenant_id": "test-reg-0c0c30d3",
+    "name": "User",
+    "description": "Standard user access to core features",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": true,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "master_locations": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "business_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": true,
+    "created_at": "2026-03-12T16:02:14.153748+00:00",
+    "updated_at": "2026-03-12T16:02:14.153748+00:00"
+  },
+  {
+    "id": "a4f8ece7-4ee4-44fd-9de8-7a5bc7beb45e",
+    "tenant_id": "test-reg-0c0c30d3",
+    "name": "Viewer",
+    "description": "Read-only access to view data",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contacts": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "master_locations": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "business_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:02:14.153748+00:00",
+    "updated_at": "2026-03-12T16:02:14.153748+00:00"
+  },
+  {
+    "id": "ae542456-305d-420d-b859-365df8b7c4b0",
+    "tenant_id": "test-info-5f69db37",
+    "name": "Admin",
+    "description": "Full access to all features and settings",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "dashboard": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "pipeline": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "sales_portal": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_revenue": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "status_summary": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "sku_management": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "company_profile": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "team": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "master_locations": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "business_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contact_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "expense_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "tenant_settings": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "maintenance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "inventory": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "quality_control": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "assets": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "vendors": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:02:15.246915+00:00",
+    "updated_at": "2026-03-12T16:02:15.246915+00:00"
+  },
+  {
+    "id": "f7071996-46f4-4c3e-bcc9-82cadd30d33e",
+    "tenant_id": "test-info-5f69db37",
+    "name": "Manager",
+    "description": "Can manage team, leads, and most features",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": true,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "master_locations": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "business_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:02:15.246915+00:00",
+    "updated_at": "2026-03-12T16:02:15.246915+00:00"
+  },
+  {
+    "id": "fd38777c-b9a5-4e1a-a86c-285bb482959b",
+    "tenant_id": "test-info-5f69db37",
+    "name": "User",
+    "description": "Standard user access to core features",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": true,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "master_locations": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "business_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": true,
+    "created_at": "2026-03-12T16:02:15.246915+00:00",
+    "updated_at": "2026-03-12T16:02:15.246915+00:00"
+  },
+  {
+    "id": "c810af46-0931-4a8d-b7e7-223c63ae4a99",
+    "tenant_id": "test-info-5f69db37",
+    "name": "Viewer",
+    "description": "Read-only access to view data",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contacts": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "master_locations": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "business_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:02:15.246915+00:00",
+    "updated_at": "2026-03-12T16:02:15.246915+00:00"
+  },
+  {
+    "id": "0d6e976f-3eec-405d-9fb6-eff063bc1f94",
+    "tenant_id": "test-login-74478ef9",
+    "name": "Admin",
+    "description": "Full access to all features and settings",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "dashboard": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "pipeline": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "sales_portal": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_revenue": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "status_summary": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "sku_management": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "company_profile": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "team": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "master_locations": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "business_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contact_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "expense_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "tenant_settings": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "maintenance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "inventory": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "quality_control": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "assets": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "vendors": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:02:15.733162+00:00",
+    "updated_at": "2026-03-12T16:02:15.733162+00:00"
+  },
+  {
+    "id": "6e94c448-8b4b-4414-a90e-bf87160e420a",
+    "tenant_id": "test-login-74478ef9",
+    "name": "Manager",
+    "description": "Can manage team, leads, and most features",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": true,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "master_locations": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "business_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:02:15.733162+00:00",
+    "updated_at": "2026-03-12T16:02:15.733162+00:00"
+  },
+  {
+    "id": "e71356a6-7808-4ec6-8047-2c1256acc539",
+    "tenant_id": "test-login-74478ef9",
+    "name": "User",
+    "description": "Standard user access to core features",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": true,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "master_locations": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "business_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": true,
+    "created_at": "2026-03-12T16:02:15.733162+00:00",
+    "updated_at": "2026-03-12T16:02:15.733162+00:00"
+  },
+  {
+    "id": "c565cedc-ed0f-4435-80d5-679e97d2512c",
+    "tenant_id": "test-login-74478ef9",
+    "name": "Viewer",
+    "description": "Read-only access to view data",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contacts": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "master_locations": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "business_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:02:15.733162+00:00",
+    "updated_at": "2026-03-12T16:02:15.733162+00:00"
+  },
+  {
+    "id": "5f5908df-1348-48d9-b3ac-28964c2be6bd",
+    "tenant_id": "test-gws-fab471fb",
+    "name": "Admin",
+    "description": "Full access to all features and settings",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "dashboard": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "pipeline": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "sales_portal": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_revenue": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "status_summary": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "sku_management": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "company_profile": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "team": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "master_locations": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "business_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contact_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "expense_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "tenant_settings": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "maintenance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "inventory": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "quality_control": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "assets": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "vendors": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:02:17.185919+00:00",
+    "updated_at": "2026-03-12T16:02:17.185919+00:00"
+  },
+  {
+    "id": "894e6f72-ac15-4176-83f7-ae29bac3e53e",
+    "tenant_id": "test-gws-fab471fb",
+    "name": "Manager",
+    "description": "Can manage team, leads, and most features",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": true,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "master_locations": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "business_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:02:17.185919+00:00",
+    "updated_at": "2026-03-12T16:02:17.185919+00:00"
+  },
+  {
+    "id": "bfb3a874-6fb4-452c-8d89-e3e5a2102da8",
+    "tenant_id": "test-gws-fab471fb",
+    "name": "User",
+    "description": "Standard user access to core features",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": true,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "master_locations": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "business_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": true,
+    "created_at": "2026-03-12T16:02:17.185919+00:00",
+    "updated_at": "2026-03-12T16:02:17.185919+00:00"
+  },
+  {
+    "id": "224a362e-e14c-4b62-8206-8564624f315e",
+    "tenant_id": "test-gws-fab471fb",
+    "name": "Viewer",
+    "description": "Read-only access to view data",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contacts": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "master_locations": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "business_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:02:17.185919+00:00",
+    "updated_at": "2026-03-12T16:02:17.185919+00:00"
+  },
+  {
+    "id": "859095dc-768f-4807-8dec-1657e9c08344",
+    "tenant_id": "test-reg-86797123",
+    "name": "Admin",
+    "description": "Full access to all features and settings",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "dashboard": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "pipeline": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "sales_portal": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_revenue": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "status_summary": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "sku_management": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "company_profile": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "team": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "master_locations": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "business_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contact_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "expense_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "tenant_settings": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "maintenance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "inventory": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "quality_control": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "assets": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "vendors": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:06:46.530226+00:00",
+    "updated_at": "2026-03-12T16:06:46.530226+00:00"
+  },
+  {
+    "id": "a72d403f-5dac-4037-a856-340d18a81002",
+    "tenant_id": "test-reg-86797123",
+    "name": "Manager",
+    "description": "Can manage team, leads, and most features",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": true,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "master_locations": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "business_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:06:46.530226+00:00",
+    "updated_at": "2026-03-12T16:06:46.530226+00:00"
+  },
+  {
+    "id": "e12c8f5b-cd51-4a28-9786-16dedbe8905e",
+    "tenant_id": "test-reg-86797123",
+    "name": "User",
+    "description": "Standard user access to core features",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": true,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "master_locations": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "business_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": true,
+    "created_at": "2026-03-12T16:06:46.530226+00:00",
+    "updated_at": "2026-03-12T16:06:46.530226+00:00"
+  },
+  {
+    "id": "2c10afff-16e1-412c-a870-b283aab6e766",
+    "tenant_id": "test-reg-86797123",
+    "name": "Viewer",
+    "description": "Read-only access to view data",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contacts": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "master_locations": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "business_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:06:46.530226+00:00",
+    "updated_at": "2026-03-12T16:06:46.530226+00:00"
+  },
+  {
+    "id": "6f5f30f1-22d6-4197-890a-1ed248a4f800",
+    "tenant_id": "test-info-9b4866f8",
+    "name": "Admin",
+    "description": "Full access to all features and settings",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "dashboard": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "pipeline": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "sales_portal": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_revenue": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "status_summary": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "sku_management": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "company_profile": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "team": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "master_locations": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "business_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contact_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "expense_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "tenant_settings": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "maintenance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "inventory": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "quality_control": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "assets": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "vendors": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:06:47.620028+00:00",
+    "updated_at": "2026-03-12T16:06:47.620028+00:00"
+  },
+  {
+    "id": "a29f1343-d22c-42ab-943d-470694c9be75",
+    "tenant_id": "test-info-9b4866f8",
+    "name": "Manager",
+    "description": "Can manage team, leads, and most features",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": true,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "master_locations": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "business_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:06:47.620028+00:00",
+    "updated_at": "2026-03-12T16:06:47.620028+00:00"
+  },
+  {
+    "id": "692e539f-e5e3-465d-aa42-088e79baa5bb",
+    "tenant_id": "test-info-9b4866f8",
+    "name": "User",
+    "description": "Standard user access to core features",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": true,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "master_locations": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "business_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": true,
+    "created_at": "2026-03-12T16:06:47.620028+00:00",
+    "updated_at": "2026-03-12T16:06:47.620028+00:00"
+  },
+  {
+    "id": "c06fe5da-ea1e-4257-8799-0f4d1867f03a",
+    "tenant_id": "test-info-9b4866f8",
+    "name": "Viewer",
+    "description": "Read-only access to view data",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contacts": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "master_locations": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "business_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:06:47.620028+00:00",
+    "updated_at": "2026-03-12T16:06:47.620028+00:00"
+  },
+  {
+    "id": "37183383-6d42-4631-a3a1-91c79f598c1c",
+    "tenant_id": "test-login-828e1ffd",
+    "name": "Admin",
+    "description": "Full access to all features and settings",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "dashboard": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "pipeline": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "sales_portal": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_revenue": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "status_summary": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "sku_management": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "company_profile": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "team": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "master_locations": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "business_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contact_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "expense_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "tenant_settings": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "maintenance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "inventory": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "quality_control": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "assets": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "vendors": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:06:48.119197+00:00",
+    "updated_at": "2026-03-12T16:06:48.119197+00:00"
+  },
+  {
+    "id": "9c47139c-e035-4a93-9c81-5eb220f3693e",
+    "tenant_id": "test-login-828e1ffd",
+    "name": "Manager",
+    "description": "Can manage team, leads, and most features",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": true,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "master_locations": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "business_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:06:48.119197+00:00",
+    "updated_at": "2026-03-12T16:06:48.119197+00:00"
+  },
+  {
+    "id": "ec24c5a8-7a02-4192-8c6a-5b90179cea48",
+    "tenant_id": "test-login-828e1ffd",
+    "name": "User",
+    "description": "Standard user access to core features",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": true,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "master_locations": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "business_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": true,
+    "created_at": "2026-03-12T16:06:48.119197+00:00",
+    "updated_at": "2026-03-12T16:06:48.119197+00:00"
+  },
+  {
+    "id": "caf3d093-9b24-4d3a-8152-ba090d20bbad",
+    "tenant_id": "test-login-828e1ffd",
+    "name": "Viewer",
+    "description": "Read-only access to view data",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contacts": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "master_locations": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "business_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:06:48.119197+00:00",
+    "updated_at": "2026-03-12T16:06:48.119197+00:00"
+  },
+  {
+    "id": "f5c8bf5f-d12b-4772-ac32-4d7be3c5e6c3",
+    "tenant_id": "test-gws-92276844",
+    "name": "Admin",
+    "description": "Full access to all features and settings",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "dashboard": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "pipeline": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "sales_portal": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_revenue": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "status_summary": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "sku_management": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "company_profile": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "team": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "master_locations": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "business_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contact_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "expense_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "tenant_settings": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "maintenance": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "inventory": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "quality_control": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "assets": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "vendors": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:06:49.656487+00:00",
+    "updated_at": "2026-03-12T16:06:49.656487+00:00"
+  },
+  {
+    "id": "24614096-bd5d-4da2-b19f-01ea4b4587ed",
+    "tenant_id": "test-gws-92276844",
+    "name": "Manager",
+    "description": "Can manage team, leads, and most features",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": true,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": true
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "master_locations": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "business_categories": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:06:49.656487+00:00",
+    "updated_at": "2026-03-12T16:06:49.656487+00:00"
+  },
+  {
+    "id": "8fd3dafa-ba3a-47ca-8657-e9749e8c8ced",
+    "tenant_id": "test-gws-92276844",
+    "name": "User",
+    "description": "Standard user access to core features",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": true,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "contacts": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": true,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "master_locations": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "business_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": true,
+    "created_at": "2026-03-12T16:06:49.656487+00:00",
+    "updated_at": "2026-03-12T16:06:49.656487+00:00"
+  },
+  {
+    "id": "0c2d4796-4702-48c3-b12c-1b5541ad49fc",
+    "tenant_id": "test-gws-92276844",
+    "name": "Viewer",
+    "description": "Read-only access to view data",
+    "permissions": {
+      "home": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "dashboard": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leads": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "pipeline": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "accounts": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contacts": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sales_portal": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sales_overview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_revenue": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_sku_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_resource_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "report_account_performance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_discovery": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "target_planning": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "daily_status": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "status_summary": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "cogs_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "transport_calculator": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "sku_management": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "bottle_preview": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_documents": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "files_documents": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "leaves": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "travel_requests": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "budget_requests": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "company_profile": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "team": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "master_locations": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "lead_statuses": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "business_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "contact_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "expense_categories": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "tenant_settings": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "maintenance": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "inventory": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "quality_control": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "assets": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "vendors": {
+        "view": true,
+        "create": false,
+        "edit": false,
+        "delete": false
+      }
+    },
+    "is_system_role": true,
+    "is_default": false,
+    "created_at": "2026-03-12T16:06:49.656487+00:00",
+    "updated_at": "2026-03-12T16:06:49.656487+00:00"
+  }
+]

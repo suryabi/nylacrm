@@ -45,6 +45,7 @@ class Lead(BaseModel):
     current_landing_price: Optional[float] = None
     current_volume: Optional[str] = None
     current_selling_price: Optional[float] = None
+    current_brands: Optional[List[dict]] = []
     interested_skus: Optional[List[str]] = []
     proposed_sku_pricing: Optional[List[dict]] = []
     notes: Optional[str] = None
@@ -61,6 +62,10 @@ class Lead(BaseModel):
     invoice_count: Optional[int] = None
     last_invoice_date: Optional[str] = None
     last_invoice_no: Optional[str] = None
+    onboarded_month: Optional[int] = None
+    onboarded_year: Optional[int] = None
+    target_closure_month: Optional[int] = None
+    target_closure_year: Optional[int] = None
 
     class Config:
         extra = "allow"
@@ -86,9 +91,14 @@ class LeadCreate(BaseModel):
     current_landing_price: Optional[float] = None
     current_volume: Optional[str] = None
     current_selling_price: Optional[float] = None
+    current_brands: Optional[List[dict]] = []
     interested_skus: Optional[List[str]] = []
     notes: Optional[str] = None
     estimated_value: Optional[float] = None
+    onboarded_month: Optional[int] = None
+    onboarded_year: Optional[int] = None
+    target_closure_month: Optional[int] = None
+    target_closure_year: Optional[int] = None
 
 
 class LeadUpdate(BaseModel):
@@ -111,6 +121,7 @@ class LeadUpdate(BaseModel):
     current_landing_price: Optional[float] = None
     current_volume: Optional[str] = None
     current_selling_price: Optional[float] = None
+    current_brands: Optional[List[dict]] = None
     interested_skus: Optional[List[str]] = None
     proposed_sku_pricing: Optional[List[dict]] = None
     notes: Optional[str] = None
@@ -119,6 +130,10 @@ class LeadUpdate(BaseModel):
     converted_to_account: Optional[bool] = False
     account_id: Optional[str] = None
     updated_at: Optional[str] = None  # Admin can set custom date for status changes
+    onboarded_month: Optional[int] = None
+    onboarded_year: Optional[int] = None
+    target_closure_month: Optional[int] = None
+    target_closure_year: Optional[int] = None
 
 
 class PaginatedLeadsResponse(BaseModel):

@@ -199,6 +199,8 @@ export default function AccountDetail() {
   const [gstNumber, setGstNumber] = useState('');
   const [nextFollowUp, setNextFollowUp] = useState('');
   const [skuPricing, setSkuPricing] = useState([]);
+  const [onboardedMonth, setOnboardedMonth] = useState('');
+  const [onboardedYear, setOnboardedYear] = useState('');
   
   // Delivery Address state
   const [deliveryAddress, setDeliveryAddress] = useState({
@@ -440,6 +442,8 @@ ${googleMapsLink}`;
       setGstNumber(data.gst_number || '');
       setNextFollowUp(data.next_follow_up || '');
       setSkuPricing(data.sku_pricing || []);
+      setOnboardedMonth(data.onboarded_month || '');
+      setOnboardedYear(data.onboarded_year || '');
       
       // Update breadcrumb with account name
       if (data.account_name) {
@@ -708,6 +712,8 @@ ${googleMapsLink}`;
         gst_number: gstNumber || null,
         next_follow_up: nextFollowUp || null,
         sku_pricing: skuPricing,
+        onboarded_month: onboardedMonth ? parseInt(onboardedMonth) : null,
+        onboarded_year: onboardedYear ? parseInt(onboardedYear) : null,
       });
       toast.success('Account updated successfully');
       setIsEditing(false);
@@ -823,6 +829,8 @@ ${googleMapsLink}`;
             setContactName(account.contact_name || '');
             setContactNumber(account.contact_number || '');
             setSkuPricing(account.sku_pricing || []);
+            setOnboardedMonth(account.onboarded_month || '');
+            setOnboardedYear(account.onboarded_year || '');
           }}>
             Cancel
           </Button>
@@ -912,6 +920,32 @@ ${googleMapsLink}`;
                     data-testid="edit-follow-up-date"
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label>Actual Onboarded Month</Label>
+                  <Select value={onboardedMonth ? String(onboardedMonth) : ''} onValueChange={setOnboardedMonth}>
+                    <SelectTrigger data-testid="edit-onboarded-month">
+                      <SelectValue placeholder="Select month" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[{v:'1',l:'January'},{v:'2',l:'February'},{v:'3',l:'March'},{v:'4',l:'April'},{v:'5',l:'May'},{v:'6',l:'June'},{v:'7',l:'July'},{v:'8',l:'August'},{v:'9',l:'September'},{v:'10',l:'October'},{v:'11',l:'November'},{v:'12',l:'December'}].map(m => (
+                        <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Actual Onboarded Year</Label>
+                  <Select value={onboardedYear ? String(onboardedYear) : ''} onValueChange={setOnboardedYear}>
+                    <SelectTrigger data-testid="edit-onboarded-year">
+                      <SelectValue placeholder="Select year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[2024, 2025, 2026, 2027].map(y => (
+                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="md:col-span-2 pt-4 border-t">
                   <LogoUploader
                     entityType="accounts"
@@ -954,6 +988,14 @@ ${googleMapsLink}`;
                 <div>
                   <p className="text-sm text-muted-foreground">Next Follow-up</p>
                   <p className="font-medium">{account.next_follow_up || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Actual Onboarded</p>
+                  <p className="font-medium" data-testid="account-onboarded-display">
+                    {account.onboarded_month && account.onboarded_year
+                      ? `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][account.onboarded_month - 1]} ${account.onboarded_year}`
+                      : '-'}
+                  </p>
                 </div>
                 {account.logo_url && (
                   <div className="md:col-span-2 pt-4 border-t">

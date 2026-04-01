@@ -34,8 +34,13 @@ export default function AuthCallback() {
 
         const userData = response.data.user;
 
-        // Navigate to dashboard with user data
-        navigate('/home', { state: { user: userData }, replace: true });
+        // Store session token in localStorage for iPad/Safari compatibility
+        if (response.data.session_token) {
+          localStorage.setItem('token', response.data.session_token);
+        }
+
+        // Force full page reload so AuthProvider re-initializes with the new token
+        window.location.href = '/home';
       } catch (error) {
         console.error('Auth error:', error);
         

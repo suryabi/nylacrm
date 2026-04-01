@@ -17,7 +17,7 @@ import {
   Globe, Clock, DollarSign, Calendar, RefreshCw, MapPin,
   Users, Kanban, Target, CalendarDays, Contact, Plane, Wallet, FolderOpen,
   Wrench, Boxes, ShieldCheck, Box, Landmark, Phone, Mail, FileText,
-  Plus, Trash2, User, Shield, Edit2, Truck, Package
+  Plus, Trash2, User, Shield, Edit2, Truck, Package, Tag, RotateCcw
 } from 'lucide-react';
 import axios from 'axios';
 import RoleManagement from '../components/RoleManagement';
@@ -99,7 +99,9 @@ const MODULE_CONFIG = {
     description: 'Team collaboration tools',
     modules: [
       { key: 'meetings', label: 'Meetings', icon: Calendar, description: 'Meeting scheduling & Zoom' },
-      { key: 'tasks', label: 'Tasks', icon: Calendar, description: 'Task assignment & tracking' },
+      { key: 'task_management', label: 'Tasks', icon: Calendar, description: 'Task assignment & tracking' },
+      { key: 'task_milestones', label: 'Milestones', icon: Target, description: 'Task milestones management' },
+      { key: 'task_labels', label: 'Labels', icon: Tag, description: 'Task label management' },
     ]
   },
   organization: {
@@ -223,6 +225,25 @@ export default function TenantSettings() {
       client_id: '',
       client_secret: ''
     }
+  });
+  
+  // Return Reasons state
+  const [returnReasons, setReturnReasons] = useState([]);
+  const [returnCategories, setReturnCategories] = useState([]);
+  const [creditTypes, setCreditTypes] = useState([]);
+  const [loadingReasons, setLoadingReasons] = useState(false);
+  const [editingReason, setEditingReason] = useState(null);
+  const [showReasonDialog, setShowReasonDialog] = useState(false);
+  const [reasonForm, setReasonForm] = useState({
+    reason_code: '',
+    reason_name: '',
+    description: '',
+    category: 'empty_reusable',
+    credit_type: 'sku_return_credit',
+    credit_percentage: null,
+    return_to_factory: true,
+    requires_inspection: false,
+    color: '#10B981'
   });
   
   // Company Profile state
@@ -487,6 +508,139 @@ export default function TenantSettings() {
     }));
   };
 
+  // ============ RETURN REASONS FUNCTIONS ============
+  
+  // Fetch return reasons
+  const fetchReturnReasons = useCallback(async () => {
+    try {
+      setLoadingReasons(true);
+      const [reasonsRes, categoriesRes, typesRes] = await Promise.all([
+        axios.get(`${API_URL}/api/return-reasons`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API_URL}/api/return-reasons/categories`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API_URL}/api/return-reasons/credit-types`, { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+      setReturnReasons(reasonsRes.data.reasons || []);
+      setReturnCategories(categoriesRes.data.categories || []);
+      setCreditTypes(typesRes.data.credit_types || []);
+    } catch (error) {
+      console.error('Failed to fetch return reasons:', error);
+    } finally {
+      setLoadingReasons(false);
+    }
+  }, [token]);
+
+  // Initialize default return reasons
+  const initializeDefaultReasons = async () => {
+    try {
+      setLoadingReasons(true);
+      await axios.post(`${API_URL}/api/return-reasons/initialize-defaults`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success('Default return reasons created');
+      fetchReturnReasons();
+    } catch (error) {
+      console.error('Failed to initialize return reasons:', error);
+      toast.error('Failed to create default reasons');
+    } finally {
+      setLoadingReasons(false);
+    }
+  };
+
+  // Save return reason (create or update)
+  const saveReturnReason = async () => {
+    try {
+      setSaving(true);
+      if (editingReason) {
+        await axios.put(`${API_URL}/api/return-reasons/${editingReason.id}`, reasonForm, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        toast.success('Return reason updated');
+      } else {
+        await axios.post(`${API_URL}/api/return-reasons`, reasonForm, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        toast.success('Return reason created');
+      }
+      setShowReasonDialog(false);
+      setEditingReason(null);
+      resetReasonForm();
+      fetchReturnReasons();
+    } catch (error) {
+      console.error('Failed to save return reason:', error);
+      toast.error(error.response?.data?.detail || 'Failed to save return reason');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Delete return reason
+  const deleteReturnReason = async (reasonId) => {
+    if (!window.confirm('Are you sure you want to delete this return reason?')) return;
+    try {
+      await axios.delete(`${API_URL}/api/return-reasons/${reasonId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success('Return reason deleted');
+      fetchReturnReasons();
+    } catch (error) {
+      console.error('Failed to delete return reason:', error);
+      toast.error(error.response?.data?.detail || 'Failed to delete return reason');
+    }
+  };
+
+  // Toggle return reason active status
+  const toggleReasonActive = async (reason) => {
+    try {
+      await axios.put(`${API_URL}/api/return-reasons/${reason.id}`, { is_active: !reason.is_active }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success(`Return reason ${reason.is_active ? 'deactivated' : 'activated'}`);
+      fetchReturnReasons();
+    } catch (error) {
+      console.error('Failed to toggle return reason:', error);
+      toast.error('Failed to update return reason');
+    }
+  };
+
+  // Reset reason form
+  const resetReasonForm = () => {
+    setReasonForm({
+      reason_code: '',
+      reason_name: '',
+      description: '',
+      category: 'empty_reusable',
+      credit_type: 'sku_return_credit',
+      credit_percentage: null,
+      return_to_factory: true,
+      requires_inspection: false,
+      color: '#10B981'
+    });
+  };
+
+  // Edit reason
+  const editReason = (reason) => {
+    setEditingReason(reason);
+    setReasonForm({
+      reason_code: reason.reason_code,
+      reason_name: reason.reason_name,
+      description: reason.description || '',
+      category: reason.category,
+      credit_type: reason.credit_type,
+      credit_percentage: reason.credit_percentage,
+      return_to_factory: reason.return_to_factory,
+      requires_inspection: reason.requires_inspection,
+      color: reason.color || '#10B981'
+    });
+    setShowReasonDialog(true);
+  };
+
+  // Fetch return reasons when tab changes
+  useEffect(() => {
+    if (activeTab === 'returns') {
+      fetchReturnReasons();
+    }
+  }, [activeTab, fetchReturnReasons]);
+
   if (!isAdmin) {
     return (
       <div className="p-6">
@@ -534,7 +688,7 @@ export default function TenantSettings() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6 lg:w-[720px]">
+        <TabsList className="grid w-full grid-cols-7 lg:w-[840px]">
           <TabsTrigger value="company" className="flex items-center gap-2" data-testid="tab-company">
             <Building2 className="h-4 w-4" />
             Company
@@ -554,6 +708,10 @@ export default function TenantSettings() {
           <TabsTrigger value="designations" className="flex items-center gap-2" data-testid="tab-designations">
             <User className="h-4 w-4" />
             Designations
+          </TabsTrigger>
+          <TabsTrigger value="returns" className="flex items-center gap-2" data-testid="tab-returns">
+            <RotateCcw className="h-4 w-4" />
+            Returns
           </TabsTrigger>
           <TabsTrigger value="settings" className="flex items-center gap-2" data-testid="tab-settings">
             <Settings className="h-4 w-4" />
@@ -1264,6 +1422,264 @@ export default function TenantSettings() {
         {/* Designations Tab */}
         <TabsContent value="designations" className="space-y-6">
           <DesignationManagement />
+        </TabsContent>
+
+        {/* Return Reasons Tab */}
+        <TabsContent value="returns" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <RotateCcw className="h-5 w-5" />
+                    Return Reasons Master
+                  </CardTitle>
+                  <CardDescription>
+                    Configure return reasons for customer returns. Each reason defines how credit is calculated.
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  {returnReasons.length === 0 && (
+                    <Button variant="outline" onClick={initializeDefaultReasons} disabled={loadingReasons}>
+                      <RefreshCw className={`h-4 w-4 mr-2 ${loadingReasons ? 'animate-spin' : ''}`} />
+                      Initialize Defaults
+                    </Button>
+                  )}
+                  <Button onClick={() => { resetReasonForm(); setEditingReason(null); setShowReasonDialog(true); }}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Reason
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loadingReasons ? (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : returnReasons.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <RotateCcw className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">No Return Reasons Configured</p>
+                  <p className="text-sm mb-4">Click "Initialize Defaults" to create standard return reasons, or add custom ones.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {returnReasons.map((reason) => (
+                    <div
+                      key={reason.id}
+                      className={`flex items-center justify-between p-4 rounded-lg border ${
+                        reason.is_active ? 'bg-card' : 'bg-muted/30 opacity-60'
+                      }`}
+                      data-testid={`return-reason-${reason.reason_code}`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: reason.color || '#6B7280' }}
+                        />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{reason.reason_name}</span>
+                            <Badge variant="outline" className="text-xs">{reason.reason_code}</Badge>
+                            {reason.is_system && <Badge variant="secondary" className="text-xs">System</Badge>}
+                            {!reason.is_active && <Badge variant="destructive" className="text-xs">Inactive</Badge>}
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1">{reason.description}</p>
+                          <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Tag className="h-3 w-3" />
+                              {returnCategories.find(c => c.value === reason.category)?.label || reason.category}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <DollarSign className="h-3 w-3" />
+                              {creditTypes.find(t => t.value === reason.credit_type)?.label || reason.credit_type}
+                              {reason.credit_type === 'percentage' && reason.credit_percentage && ` (${reason.credit_percentage}%)`}
+                            </span>
+                            {reason.return_to_factory && (
+                              <span className="flex items-center gap-1">
+                                <Truck className="h-3 w-3" />
+                                Returns to Factory
+                              </span>
+                            )}
+                            {reason.requires_inspection && (
+                              <span className="flex items-center gap-1">
+                                <ShieldCheck className="h-3 w-3" />
+                                Inspection Required
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={reason.is_active}
+                          onCheckedChange={() => toggleReasonActive(reason)}
+                          data-testid={`toggle-reason-${reason.reason_code}`}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => editReason(reason)}
+                          data-testid={`edit-reason-${reason.reason_code}`}
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        {!reason.is_system && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => deleteReturnReason(reason.id)}
+                            data-testid={`delete-reason-${reason.reason_code}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Return Reason Dialog */}
+          <Dialog open={showReasonDialog} onOpenChange={setShowReasonDialog}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>{editingReason ? 'Edit Return Reason' : 'Add Return Reason'}</DialogTitle>
+                <DialogDescription>
+                  Configure how this return reason affects customer credit
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Reason Code</Label>
+                    <Input
+                      value={reasonForm.reason_code}
+                      onChange={(e) => setReasonForm(prev => ({ ...prev, reason_code: e.target.value.toUpperCase() }))}
+                      placeholder="e.g., EMPTY_RETURN"
+                      disabled={editingReason?.is_system}
+                      data-testid="reason-code-input"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Reason Name</Label>
+                    <Input
+                      value={reasonForm.reason_name}
+                      onChange={(e) => setReasonForm(prev => ({ ...prev, reason_name: e.target.value }))}
+                      placeholder="e.g., Empty Bottle Return"
+                      data-testid="reason-name-input"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Textarea
+                    value={reasonForm.description}
+                    onChange={(e) => setReasonForm(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Describe when this reason applies..."
+                    rows={2}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Category</Label>
+                    <Select
+                      value={reasonForm.category}
+                      onValueChange={(v) => setReasonForm(prev => ({ ...prev, category: v }))}
+                    >
+                      <SelectTrigger data-testid="reason-category-select">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {returnCategories.map(cat => (
+                          <SelectItem key={cat.value} value={cat.value}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
+                              {cat.label}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Credit Type</Label>
+                    <Select
+                      value={reasonForm.credit_type}
+                      onValueChange={(v) => setReasonForm(prev => ({ ...prev, credit_type: v }))}
+                    >
+                      <SelectTrigger data-testid="reason-credit-type-select">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {creditTypes.map(type => (
+                          <SelectItem key={type.value} value={type.value}>
+                            {type.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {reasonForm.credit_type === 'percentage' && (
+                  <div className="space-y-2">
+                    <Label>Credit Percentage (%)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={reasonForm.credit_percentage || ''}
+                      onChange={(e) => setReasonForm(prev => ({ ...prev, credit_percentage: parseFloat(e.target.value) || null }))}
+                      placeholder="e.g., 50"
+                    />
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label>Color</Label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={reasonForm.color}
+                      onChange={(e) => setReasonForm(prev => ({ ...prev, color: e.target.value }))}
+                      className="w-10 h-10 rounded border cursor-pointer"
+                    />
+                    <Input
+                      value={reasonForm.color}
+                      onChange={(e) => setReasonForm(prev => ({ ...prev, color: e.target.value }))}
+                      className="w-28"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={reasonForm.return_to_factory}
+                      onCheckedChange={(v) => setReasonForm(prev => ({ ...prev, return_to_factory: v }))}
+                    />
+                    <Label className="cursor-pointer">Return to Factory</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={reasonForm.requires_inspection}
+                      onCheckedChange={(v) => setReasonForm(prev => ({ ...prev, requires_inspection: v }))}
+                    />
+                    <Label className="cursor-pointer">Requires Inspection</Label>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowReasonDialog(false)}>Cancel</Button>
+                <Button onClick={saveReturnReason} disabled={saving || !reasonForm.reason_code || !reasonForm.reason_name}>
+                  {saving ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                  {editingReason ? 'Update' : 'Create'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* Settings Tab */}
