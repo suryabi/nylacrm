@@ -3,11 +3,13 @@ Authentication and authorization dependencies
 """
 import bcrypt
 import jwt
+import logging
 from datetime import datetime, timezone, timedelta
 from fastapi import HTTPException, Request, Response
 from fastapi.security import HTTPBearer
 from config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS
 from database import db
+
 
 security = HTTPBearer()
 
