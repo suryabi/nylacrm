@@ -31,15 +31,29 @@ async def compute_metrics(tenant_id: str, resource_ids: list, plan_id: str, mont
     resource_filter = {"$in": resource_ids} if len(resource_ids) > 1 else resource_ids[0]
     
     # === A. REVENUE METRICS (from accounts/invoices) ===
-    # Get target from plan — sum across all selected resources
-    target_allocs = await db.target_allocations_v2.find(
-        {"plan_id": plan_id, "resource_id": resource_filter, "level": "resource"},
-        {"_id": 0, "amount": 1, "city": 1, "resource_name": 1}
-    ).to_list(100)
-    monthly_target = sum(t.get("amount", 0) for t in target_allocs)
-    resource_names = [t.get("resource_name", "") for t in target_allocs]
-    resource_name = ", ".join(resource_names) if resource_names else ""
-    resource_city = ", ".join(sorted(set(t.get("city", "") for t in target_allocs if t.get("city")))) if target_allocs else ""
+    monthly_target = 0
+    resource_name = ""
+    resource_city = ""
+    
+    if plan_id:
+        # Get target from plan — sum across all selected resources
+        target_allocs = await db.target_allocations_v2.find(
+            {"plan_id": plan_id, "resource_id": resource_filter, "level": "resource"},
+            {"_id": 0, "amount": 1, "city": 1, "resource_name": 1}
+        ).to_list(100)
+        monthly_target = sum(t.get("amount", 0) for t in target_allocs)
+        resource_names = [t.get("resource_name", "") for t in target_allocs]
+        resource_name = ", ".join(resource_names) if resource_names else ""
+        resource_city = ", ".join(sorted(set(t.get("city", "") for t in target_allocs if t.get("city")))) if target_allocs else ""
+    
+    # Fallback: get resource names/cities from users collection if not found via plan
+    if not resource_name:
+        users = await db.users.find(
+            {"id": resource_filter},
+            {"_id": 0, "id": 1, "name": 1, "city": 1}
+        ).to_list(100)
+        resource_name = ", ".join(u.get("name", "") for u in users)
+        resource_city = ", ".join(sorted(set(u.get("city", "") for u in users if u.get("city"))))
     
     # All invoices this month for these resources
     invoices_this_month = await db.invoices.find(
@@ -102,8 +116,11 @@ async def compute_metrics(tenant_id: str, resource_ids: list, plan_id: str, mont
     
     # Get manual account value overrides
     account_overrides = {}
+    override_query = {"tenant_id": tenant_id}
+    if plan_id:
+        override_query["plan_id"] = plan_id
     override_docs = await db.account_value_overrides.find(
-        {"tenant_id": tenant_id, "plan_id": plan_id},
+        override_query,
         {"_id": 0, "account_id": 1, "manual_value": 1}
     ).to_list(1000)
     for ov in override_docs:
@@ -381,15 +398,36 @@ async def get_resources_by_city(plan_id: str, city: str, current_user: dict = De
     return [r["resource_id"] for r in resources if r.get("resource_id")]
 
 
+@router.get("/all-sales-resources")
+async def get_all_sales_resources(current_user: dict = Depends(get_current_user)):
+    """Get all sales/admin team members with territory and city info, independent of any plan."""
+    tenant_id = get_current_tenant_id()
+    users = await db.users.find(
+        {"tenant_id": tenant_id, "department": {"$in": ["Sales", "Admin"]}, "is_active": {"$ne": False}},
+        {"_id": 0, "id": 1, "name": 1, "territory": 1, "city": 1, "role": 1, "department": 1}
+    ).to_list(500)
+    # Return in a format compatible with the plan-based resource list
+    return [
+        {
+            "resource_id": u["id"],
+            "resource_name": u.get("name", ""),
+            "territory_id": u.get("territory", ""),
+            "territory_name": u.get("territory", ""),
+            "city": u.get("city", ""),
+        }
+        for u in users
+    ]
+
+
 @router.get("/generate")
 async def generate_performance(
-    plan_id: str,
     resource_id: str,
     month: int,
     year: int,
+    plan_id: str = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Generate/compute monthly performance metrics for one or more resources."""
+    """Generate/compute monthly performance metrics for one or more resources. Plan is optional."""
     tenant_id = get_current_tenant_id()
     
     # Parse comma-separated resource_ids
@@ -397,17 +435,20 @@ async def generate_performance(
     if not resource_ids:
         raise HTTPException(status_code=400, detail="No resource IDs provided")
     
-    # Validate plan exists
-    plan = await db.target_plans_v2.find_one(
-        {"id": plan_id}, {"_id": 0, "name": 1}
-    )
-    if not plan:
-        raise HTTPException(status_code=404, detail="Target plan not found")
+    # Validate plan if provided
+    plan_name = ""
+    if plan_id:
+        plan = await db.target_plans_v2.find_one(
+            {"id": plan_id}, {"_id": 0, "name": 1}
+        )
+        if not plan:
+            raise HTTPException(status_code=404, detail="Target plan not found")
+        plan_name = plan.get("name", "")
     
     metrics = await compute_metrics(tenant_id, resource_ids, plan_id, month, year)
     
-    # Check for existing saved record (only for single resource)
-    if len(resource_ids) == 1:
+    # Check for existing saved record (only for single resource with a plan)
+    if len(resource_ids) == 1 and plan_id:
         existing = await db.monthly_performance.find_one(
             {
                 "tenant_id": tenant_id,
@@ -438,7 +479,7 @@ async def generate_performance(
         metrics["record_id"] = None
         metrics["status"] = "multi_resource"
     
-    metrics["plan_name"] = plan.get("name", "")
+    metrics["plan_name"] = plan_name
     return metrics
 
 

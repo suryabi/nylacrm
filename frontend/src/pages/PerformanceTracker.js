@@ -57,19 +57,27 @@ export default function PerformanceTracker() {
   const tenantId = localStorage.getItem('selectedTenant') || localStorage.getItem('tenant_id') || 'nyla-air-water';
   const headers = { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId, 'Content-Type': 'application/json' };
 
+  // Load all sales resources on mount (independent of plan)
   useEffect(() => {
+    fetch(`${API_URL}/api/performance/all-sales-resources`, { headers })
+      .then(r => r.json()).then(setResources).catch(() => {});
     fetch(`${API_URL}/api/performance/target-plans`, { headers })
       .then(r => r.json()).then(setPlans).catch(() => {});
   }, []);
 
+  // When plan changes, reload plan-specific resources if plan is selected (for target amounts)
   useEffect(() => {
     if (!selectedPlan) return;
     fetch(`${API_URL}/api/performance/resources-for-plan/${selectedPlan}`, { headers })
-      .then(r => r.json()).then(setResources).catch(() => {});
-    setTerritoryFilter('all');
-    setCityFilter('all');
-    setSelectedResource([]);
-    setData(null);
+      .then(r => r.json()).then(planRes => {
+        // Merge plan resources with all resources — plan resources have target amounts
+        setResources(prev => {
+          const planMap = new Map(planRes.map(r => [r.resource_id, r]));
+          // If plan has specific resource allocations, use those (they contain territory_id, city, amount)
+          if (planRes.length > 0) return planRes;
+          return prev;
+        });
+      }).catch(() => {});
   }, [selectedPlan]);
 
   // Derive unique territories and cities from the plan's resource allocations
@@ -97,7 +105,6 @@ export default function PerformanceTracker() {
   };
 
   const generate = useCallback(async () => {
-    if (!selectedPlan) return;
     const resourceIds = selectedResource.length > 0
       ? selectedResource
       : resources.filter(r => {
@@ -109,8 +116,9 @@ export default function PerformanceTracker() {
     setLoading(true);
     try {
       const resourceParam = resourceIds.join(',');
+      const planParam = selectedPlan ? `&plan_id=${selectedPlan}` : '';
       const res = await fetch(
-        `${API_URL}/api/performance/generate?plan_id=${selectedPlan}&resource_id=${resourceParam}&month=${selectedMonth}&year=${selectedYear}`,
+        `${API_URL}/api/performance/generate?resource_id=${resourceParam}${planParam}&month=${selectedMonth}&year=${selectedYear}`,
         { headers }
       );
       const d = await res.json();
@@ -130,12 +138,16 @@ export default function PerformanceTracker() {
         setRevenueOverrides({ lifetime: '', this_month: '', new_accounts: '' });
       }
       setRevenueEditing({ lifetime: false, this_month: false, new_accounts: false });
-      // Fetch comparison
-      const compRes = await fetch(
-        `${API_URL}/api/performance/comparison?resource_id=${resourceParam}&plan_id=${selectedPlan}&months=3&month=${selectedMonth}&year=${selectedYear}`,
-        { headers }
-      );
-      setComparison(await compRes.json());
+      // Fetch comparison (only if plan selected)
+      if (selectedPlan) {
+        const compRes = await fetch(
+          `${API_URL}/api/performance/comparison?resource_id=${resourceParam}&plan_id=${selectedPlan}&months=3&month=${selectedMonth}&year=${selectedYear}`,
+          { headers }
+        );
+        setComparison(await compRes.json());
+      } else {
+        setComparison(null);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -215,17 +227,9 @@ export default function PerformanceTracker() {
 
       {/* Selectors */}
       <Card className="border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="performance-selectors">
-        <CardContent className="p-4 sm:p-5">
-          <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
-            <div>
-              <label className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Target Plan</label>
-              <Select value={selectedPlan} onValueChange={setSelectedPlan}>
-                <SelectTrigger data-testid="select-plan"><SelectValue placeholder="Select plan" /></SelectTrigger>
-                <SelectContent>
-                  {plans.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+        <CardContent className="p-4 sm:p-5 space-y-3">
+          {/* Row 1: Location & Resource filters */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
               <label className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Territory</label>
               <Select value={territoryFilter} onValueChange={(v) => { setTerritoryFilter(v); setCityFilter('all'); setSelectedResource([]); }}>
@@ -257,6 +261,19 @@ export default function PerformanceTracker() {
               />
             </div>
             <div>
+              <label className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Target Plan <span className="text-slate-400 normal-case">(optional)</span></label>
+              <Select value={selectedPlan || '__none__'} onValueChange={v => setSelectedPlan(v === '__none__' ? '' : v)}>
+                <SelectTrigger data-testid="select-plan"><SelectValue placeholder="No plan selected" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No Plan</SelectItem>
+                  {plans.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {/* Row 2: Time period & Generate */}
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 items-end">
+            <div>
               <label className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Month</label>
               <Select value={String(selectedMonth)} onValueChange={v => setSelectedMonth(parseInt(v))}>
                 <SelectTrigger data-testid="select-month"><SelectValue /></SelectTrigger>
@@ -274,8 +291,8 @@ export default function PerformanceTracker() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-end">
-              <Button onClick={generate} disabled={loading || !selectedPlan || !hasSelection} className="w-full bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white shadow-sm border-0" data-testid="generate-btn">
+            <div>
+              <Button onClick={generate} disabled={loading || !hasSelection} className="w-full bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white shadow-sm border-0" data-testid="generate-btn">
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Generate
               </Button>
@@ -467,7 +484,13 @@ export default function PerformanceTracker() {
                         <tr
                           key={row.status}
                           className="border-b border-slate-100 dark:border-slate-800 hover:bg-amber-50/50 dark:hover:bg-amber-950/10 cursor-pointer transition-all duration-200 group"
-                          onClick={() => navigate(`/leads?status=${row.status}${selectedResource.length === 1 ? `&assigned_to=${selectedResource[0]}` : ''}`)}
+                          onClick={() => {
+                            const params = new URLSearchParams();
+                            params.set('status', row.status);
+                            const rids = resolveResourceIds();
+                            if (rids.length > 0) params.set('assigned_to', rids.join(','));
+                            navigate(`/leads?${params.toString()}`);
+                          }}
                           data-testid={`pipeline-row-${row.status}`}
                         >
                           <td className="p-2.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 capitalize flex items-center gap-2">
@@ -495,8 +518,13 @@ export default function PerformanceTracker() {
                   <div className="flex justify-between items-center py-1.5 border-b border-dashed border-slate-100 dark:border-slate-800 cursor-pointer group" onClick={() => {
                     const nm = data.pipeline?.next_month;
                     const ny = data.pipeline?.next_year;
-                    const assignedParam = selectedResource.length === 1 ? `&assigned_to=${selectedResource[0]}` : '';
-                    navigate(`/leads?target_closure_month=${nm}&target_closure_year=${ny}${assignedParam}`);
+                    const params = new URLSearchParams();
+                    params.set('target_closure_month', nm);
+                    params.set('target_closure_year', ny);
+                    // Pass all selected/filtered resource IDs as assigned_to
+                    const rids = resolveResourceIds();
+                    if (rids.length > 0) params.set('assigned_to', rids.join(','));
+                    navigate(`/leads?${params.toString()}`);
                   }} data-testid="leads-targeting-next-month-link">
                     <span className="text-xs text-indigo-600 dark:text-indigo-400 group-hover:underline font-medium">Leads Targeting {MONTH_NAMES[data.pipeline?.next_month] || 'Next Month'}</span>
                     <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">{data.pipeline?.next_month_leads_count || 0}<ChevronRight className="h-3 w-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" /></span>
@@ -673,10 +701,10 @@ export default function PerformanceTracker() {
         </>
       )}
 
-      {!data && !loading && selectedPlan && selectedResource && (
+      {!data && !loading && (
         <div className="text-center py-16 text-muted-foreground">
           <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-30" />
-          <p>Click "Generate" to compute performance metrics</p>
+          <p>Select filters and click "Generate" to compute performance metrics</p>
         </div>
       )}
     </div>

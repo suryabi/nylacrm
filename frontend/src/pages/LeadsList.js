@@ -87,7 +87,7 @@ export default function LeadsList() {
   
   const getInitialArrayFilter = (key, urlKey = null) => {
     const urlValue = urlKey ? urlParams.get(urlKey) : null;
-    if (urlValue) return [urlValue];
+    if (urlValue) return urlValue.split(',').map(v => v.trim()).filter(Boolean);
     if (hasUrlFilters) return []; // If coming from dashboard, don't use localStorage
     const saved = localStorage.getItem(`leads_filter_${key}`);
     if (saved) {
@@ -104,6 +104,14 @@ export default function LeadsList() {
   const [stateFilter, setStateFilter] = useState(() => getInitialFilter('state', 'all', 'state'));
   const [cityFilter, setCityFilter] = useState(() => getInitialFilter('city', 'all', 'city'));
   const [assignedToFilter, setAssignedToFilter] = useState(() => getInitialArrayFilter('assigned_to', 'assigned_to'));
+  const [targetClosureMonth, setTargetClosureMonth] = useState(() => {
+    const v = urlParams.get('target_closure_month');
+    return v ? parseInt(v) : null;
+  });
+  const [targetClosureYear, setTargetClosureYear] = useState(() => {
+    const v = urlParams.get('target_closure_year');
+    return v ? parseInt(v) : null;
+  });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
   const [timeFilter, setTimeFilter] = useState(() => getInitialFilter('time', 'lifetime', 'time_filter'));
@@ -152,7 +160,7 @@ export default function LeadsList() {
     fetchUsers();
   }, []);
   
-  useEffect(() => { fetchLeads(); }, [currentPage, itemsPerPage, debouncedSearch, statusFilter, cityFilter, stateFilter, territoryFilter, assignedToFilter, timeFilter, selectedQuadrants, sortField, sortDirection]);
+  useEffect(() => { fetchLeads(); }, [currentPage, itemsPerPage, debouncedSearch, statusFilter, cityFilter, stateFilter, territoryFilter, assignedToFilter, timeFilter, selectedQuadrants, sortField, sortDirection, targetClosureMonth, targetClosureYear]);
 
   const fetchQuadrantMetrics = async () => {
     try {
@@ -203,6 +211,8 @@ export default function LeadsList() {
         assigned_to: assignedToFilter.length > 0 ? assignedToFilter.join(',') : undefined, 
         time_filter: timeFilter !== 'lifetime' ? timeFilter : undefined,
         quadrant: selectedQuadrants.length > 0 ? selectedQuadrants.join(',') : undefined,
+        target_closure_month: targetClosureMonth || undefined,
+        target_closure_year: targetClosureYear || undefined,
         sort_by: sortField,
         sort_order: sortDirection,
       };
@@ -236,7 +246,7 @@ export default function LeadsList() {
   const handleResetFilters = () => {
     setSearchQuery(''); setStatusFilter([]); setTerritoryFilter('all'); setStateFilter('all');
     setCityFilter('all'); setAssignedToFilter([]); setTimeFilter('lifetime'); setCurrentPage(1);
-    setSelectedQuadrants([]); // Clear quadrant selection
+    setSelectedQuadrants([]); setTargetClosureMonth(null); setTargetClosureYear(null);
     // Clear sessionStorage
     sessionStorage.removeItem('leads_filter_search');
     sessionStorage.removeItem('leads_filter_status');
@@ -417,7 +427,7 @@ export default function LeadsList() {
 
   // Use leads directly since sorting is now server-side
   const displayLeads = leads;
-  const hasActiveFilters = searchQuery || statusFilter.length > 0 || territoryFilter !== 'all' || stateFilter !== 'all' || cityFilter !== 'all' || assignedToFilter.length > 0 || timeFilter !== 'lifetime' || selectedQuadrants.length > 0;
+  const hasActiveFilters = searchQuery || statusFilter.length > 0 || territoryFilter !== 'all' || stateFilter !== 'all' || cityFilter !== 'all' || assignedToFilter.length > 0 || timeFilter !== 'lifetime' || selectedQuadrants.length > 0 || targetClosureMonth != null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="leads-list-page">
@@ -610,9 +620,9 @@ export default function LeadsList() {
             >
               <Filter className="h-4 w-4" />
               Filters
-              {[searchQuery, statusFilter.length > 0, territoryFilter !== 'all', stateFilter !== 'all', cityFilter !== 'all', assignedToFilter.length > 0, timeFilter !== 'lifetime'].filter(Boolean).length > 0 && (
+              {[searchQuery, statusFilter.length > 0, territoryFilter !== 'all', stateFilter !== 'all', cityFilter !== 'all', assignedToFilter.length > 0, timeFilter !== 'lifetime', targetClosureMonth != null].filter(Boolean).length > 0 && (
                 <Badge variant="secondary" className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
-                  {[searchQuery, statusFilter.length > 0, territoryFilter !== 'all', stateFilter !== 'all', cityFilter !== 'all', assignedToFilter.length > 0, timeFilter !== 'lifetime'].filter(Boolean).length}
+                  {[searchQuery, statusFilter.length > 0, territoryFilter !== 'all', stateFilter !== 'all', cityFilter !== 'all', assignedToFilter.length > 0, timeFilter !== 'lifetime', targetClosureMonth != null].filter(Boolean).length}
                 </Badge>
               )}
             </Button>
@@ -739,7 +749,8 @@ export default function LeadsList() {
                 stateFilter !== 'all', 
                 cityFilter !== 'all', 
                 assignedToFilter.length > 0, 
-                timeFilter !== 'lifetime'
+                timeFilter !== 'lifetime',
+                targetClosureMonth != null
               ].filter(Boolean).length}
               onReset={handleResetFilters}
             >
@@ -842,6 +853,16 @@ export default function LeadsList() {
             </FilterContainer>
           </div>
         </div>
+
+        {/* Target Closure Filter Banner */}
+        {targetClosureMonth != null && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl text-sm" data-testid="target-closure-filter-banner">
+            <span className="text-amber-700 dark:text-amber-400 font-medium">
+              Filtered by Target Closure: {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][targetClosureMonth - 1]} {targetClosureYear}
+            </span>
+            <button onClick={() => { setTargetClosureMonth(null); setTargetClosureYear(null); window.history.replaceState({}, '', '/leads'); }} className="ml-auto text-amber-600 hover:text-amber-800 text-xs font-medium underline" data-testid="clear-target-closure-filter">Clear</button>
+          </div>
+        )}
 
         {/* Leads Table/Cards */}
         <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">

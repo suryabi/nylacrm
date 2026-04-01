@@ -3776,6 +3776,8 @@ async def get_leads(
     assigned_to: Optional[str] = None,
     time_filter: Optional[str] = None,
     quadrant: Optional[str] = None,
+    target_closure_month: Optional[int] = None,
+    target_closure_year: Optional[int] = None,
     sort_by: Optional[str] = 'created_at',
     sort_order: Optional[str] = 'desc',
     no_limit: Optional[bool] = False,
@@ -3838,6 +3840,12 @@ async def get_leads(
             query['assigned_to'] = {'$in': assigned_list}
     
     # Add time filter
+    # Add target closure month/year filter
+    if target_closure_month is not None:
+        query['target_closure_month'] = target_closure_month
+    if target_closure_year is not None:
+        query['target_closure_year'] = target_closure_year
+    
     if time_filter and time_filter != 'all' and time_filter != 'lifetime':
         now = datetime.now(timezone.utc)
         start_date = None
