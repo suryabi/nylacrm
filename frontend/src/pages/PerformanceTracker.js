@@ -598,10 +598,6 @@ export default function PerformanceTracker() {
                       </div>
                     </div>
                   </div>
-                  <div className="border-t border-slate-100 dark:border-slate-800 pt-3 grid grid-cols-2 gap-3">
-                    <InfoRow label="Visit Productivity" value={data.activities?.visit_productivity > 0 ? `₹${fmt(data.activities?.visit_productivity)}/visit` : '-'} />
-                    <InfoRow label="Call Productivity" value={data.activities?.call_productivity > 0 ? `₹${fmt(data.activities?.call_productivity)}/call` : '-'} />
-                  </div>
                 </div>
               </div>
             </Card>
@@ -666,12 +662,10 @@ export default function PerformanceTracker() {
                 </div>
                 <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Performance KPIs</h3>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <KPICard label="Achievement %" value={fmtPct(data.calculated?.achievement_pct)} good={data.calculated?.achievement_pct >= 80} bad={data.calculated?.achievement_pct < 50} />
                 <KPICard label="Pipeline Coverage" value={fmtPct(data.calculated?.pipeline_coverage)} good={data.calculated?.pipeline_coverage >= 100} bad={data.calculated?.pipeline_coverage < 50} />
                 <KPICard label="Outstanding Ratio" value={fmtPct(data.calculated?.outstanding_ratio)} good={data.calculated?.outstanding_ratio < 20} bad={data.calculated?.outstanding_ratio > 50} invert />
-                <KPICard label="Visit Productivity" value={data.calculated?.visit_productivity > 0 ? `₹${fmt(data.calculated.visit_productivity)}` : '-'} />
-                <KPICard label="Call Productivity" value={data.calculated?.call_productivity > 0 ? `₹${fmt(data.calculated.call_productivity)}` : '-'} />
                 <KPICard label="Conversion Rate" value={fmtPct(data.calculated?.account_conversion_rate)} good={data.calculated?.account_conversion_rate >= 20} />
               </div>
             </div>
