@@ -24,6 +24,7 @@
 - [x] **Month-on-Month Comparison**: Last 3 months, editable Revenue/Outstanding rows. Existing Accounts = cumulative, New Accounts = onboarded that month
 - [x] **Performance KPIs**: Achievement %, Pipeline Coverage, Outstanding Ratio, Visit/Call Productivity, Conversion Rate
 - [x] **Integration**: Linked to Target Setup Module for monthly targets per resource
+- [x] **UI Redesign (2026-04-01)**: Full glass-morphism overhaul — gradient top bars, backdrop-blur cards, SummaryTile components matching HomeDashboard TaskMetricsWidget, gradient KPI cards, styled comparison table, dark mode support
 
 ### Lead & Account Enhancements (2026-03-31)
 - [x] Lead edit form: Actual Onboarded Month & Year, Target Closure Month & Year dropdowns
