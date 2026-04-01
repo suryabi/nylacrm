@@ -75,8 +75,51 @@ async def compute_metrics(tenant_id: str, resource_ids: list, plan_id: str, mont
     ).to_list(1000)
     
     existing_accounts_count = len(all_accounts)
+    
+    # Compute average monthly sales per account from invoices
+    account_avg_sales = {}
+    for inv in all_invoices:
+        acc_id = inv.get("account_uuid") or inv.get("account_id")
+        if acc_id:
+            account_avg_sales.setdefault(acc_id, []).append(inv.get("net_invoice_value") or inv.get("gross_invoice_value") or 0)
+    # Average across all invoices for each account
+    for acc_id, values in account_avg_sales.items():
+        account_avg_sales[acc_id] = round(sum(values) / len(values), 2) if values else 0
+    
+    # Get estimated opportunity value from leads for each account
+    account_leads = await db.leads.find(
+        {"tenant_id": tenant_id, "assigned_to": resource_filter, "status": "active_customer"},
+        {"_id": 0, "id": 1, "account_id": 1, "estimated_value": 1, "opportunity_estimation": 1}
+    ).to_list(1000)
+    account_estimated = {}
+    for lead in account_leads:
+        acc_id = lead.get("account_id")
+        if acc_id:
+            opp = lead.get("opportunity_estimation", {})
+            est_val = (opp.get("estimated_monthly_revenue") if opp else None) or lead.get("estimated_value") or 0
+            if est_val:
+                account_estimated[acc_id] = round(est_val, 2)
+    
+    # Get manual account value overrides
+    account_overrides = {}
+    override_docs = await db.account_value_overrides.find(
+        {"tenant_id": tenant_id, "plan_id": plan_id},
+        {"_id": 0, "account_id": 1, "manual_value": 1}
+    ).to_list(1000)
+    for ov in override_docs:
+        account_overrides[ov["account_id"]] = ov["manual_value"]
+    
     existing_accounts_list = [
-        {"id": a["id"], "name": a.get("account_name", "Unknown"), "city": a.get("city", ""), "status": a.get("account_type", "")}
+        {
+            "id": a["id"],
+            "name": a.get("account_name", "Unknown"),
+            "city": a.get("city", ""),
+            "status": a.get("account_type", ""),
+            "avg_sales": account_avg_sales.get(a["id"], 0),
+            "estimated_value": account_estimated.get(a["id"], 0),
+            "manual_value": account_overrides.get(a["id"]),
+            "display_value": account_overrides.get(a["id"]) or account_avg_sales.get(a["id"], 0) or account_estimated.get(a["id"], 0),
+        }
         for a in all_accounts
     ]
     
@@ -86,7 +129,15 @@ async def compute_metrics(tenant_id: str, resource_ids: list, plan_id: str, mont
         if a.get("onboarded_month") == month and a.get("onboarded_year") == year
     ]
     new_accounts_list = [
-        {"id": a["id"], "name": a.get("account_name", "Unknown"), "city": a.get("city", "")}
+        {
+            "id": a["id"],
+            "name": a.get("account_name", "Unknown"),
+            "city": a.get("city", ""),
+            "avg_sales": account_avg_sales.get(a["id"], 0),
+            "estimated_value": account_estimated.get(a["id"], 0),
+            "manual_value": account_overrides.get(a["id"]),
+            "display_value": account_overrides.get(a["id"]) or account_avg_sales.get(a["id"], 0) or account_estimated.get(a["id"], 0),
+        }
         for a in new_accounts
     ]
     new_account_ids = set(a.get("id") for a in new_accounts)
@@ -231,6 +282,8 @@ async def compute_metrics(tenant_id: str, resource_ids: list, plan_id: str, mont
             "by_status": pipeline_by_status,
             "total_value": round(pipeline_total_value, 2),
             "total_count": pipeline_total_count,
+            "next_month": next_month,
+            "next_year": next_year,
             "next_month_leads_count": len(next_month_leads),
             "next_month_pipeline_value": round(next_month_pipeline_value, 2),
             "coverage_ratio": pipeline_coverage,
@@ -425,6 +478,9 @@ async def save_performance(
         "manual_revenue": data.get("manual_revenue"),
         "manual_visits": data.get("manual_visits"),
         "manual_calls": data.get("manual_calls"),
+        "revenue_lifetime_override": data.get("revenue_lifetime_override"),
+        "revenue_this_month_override": data.get("revenue_this_month_override"),
+        "revenue_new_accounts_override": data.get("revenue_new_accounts_override"),
         # Snapshot of auto-computed metrics at save time
         "snapshot": {
             "revenue_achieved": data.get("revenue_achieved", 0),
@@ -705,3 +761,47 @@ async def reset_comparison_override(
     )
     
     return {"message": f"{field} override reset for {month}/{year}"}
+
+
+
+@router.post("/account-value-override")
+async def save_account_value_override(
+    data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Save a manual value override for an account in performance tracking."""
+    tenant_id = get_current_tenant_id()
+    account_id = data.get("account_id")
+    value = data.get("value")
+    plan_id = data.get("plan_id")
+    
+    if not account_id or value is None or not plan_id:
+        raise HTTPException(status_code=400, detail="account_id, value, and plan_id required")
+    
+    await db.account_value_overrides.update_one(
+        {"tenant_id": tenant_id, "account_id": account_id, "plan_id": plan_id},
+        {"$set": {
+            "tenant_id": tenant_id,
+            "account_id": account_id,
+            "plan_id": plan_id,
+            "manual_value": float(value),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": current_user.get("id")
+        }},
+        upsert=True
+    )
+    return {"message": "Account value saved"}
+
+
+@router.delete("/account-value-override")
+async def reset_account_value_override(
+    account_id: str,
+    plan_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Reset a manual account value override."""
+    tenant_id = get_current_tenant_id()
+    await db.account_value_overrides.delete_one(
+        {"tenant_id": tenant_id, "account_id": account_id, "plan_id": plan_id}
+    )
+    return {"message": "Account value override reset"}

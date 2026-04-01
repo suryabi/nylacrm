@@ -1,45 +1,56 @@
-<analysis>**original_problem_statement**: 
-The user originally requested extensive fixes to distribution accounting, which evolved into building a comprehensive Monthly Performance Tracking Module for the sales team. Over this session, the user provided highly specific requirements for this tracker:
-1. Capture Actual Onboarded Month/Year at the Lead/Account level and Target Closure Month at the Lead level.
-2. Build an editable Month-on-Month (Last 3 Months) comparison grid where Revenue and Outstanding rows can be manually overridden and saved/reset.
-3. Restructure metrics: Account metrics should exclusively track cumulative existing accounts and monthly new accounts. Pipeline metrics must show INR value () broken down by status, and rows must be clickable to navigate to pre-filtered lead lists.
-4. Split Activity Metrics into Total Activities (Visits, Calls, Emails, Messages) and Unique Customers Reached.
-5. Completely redesign the Performance Tracker page to match the contemporary, gradient-heavy, glass-morphism aesthetic of the existing Home Dashboard.
+<analysis>Here is the handover summary based on the provided LLM message history:
+
+**original_problem_statement**: 
+The user requested a series of deep enhancements across the CRM/Distribution application. The core requirements evolved into:
+1. Complete the contemporary glass-morphism UI redesign for the Monthly Performance Tracker.
+2. Fix minor bugs in pipeline status colors, activity metric collection queries, and cross-navigation resource filters.
+3. Enhance the Month-on-Month comparison grid (zebra striping, selected month as the right-most column).
+4. Update Target Planning: Filter eligible resources by  = 'Sales' or 'Admin' (instead of hardcoded roles), and make Resource allocations and SKU allocations mathematically independent.
+5. Convert Current Brand Details in Lead generation from a static 4-field form into a dynamic multi-brand editable grid.
+6. Create an automated seed data script from the current preview environment.
+7. Refactor Performance Tracker location filters to use cascading dropdowns (Territory → City → Resource) mimicking the Leads page.
+8. Apply final UI tweaks to the Performance Tracker: Change Pipeline tile to dynamic Next Month Pipeline, replace Account City with Account Amount (with manual overrides), and make Next Month Leads clickable.
+*Note: A requested Investor Module based on a PDF upload has been put ON HOLD by the user.*
 
 **PRODUCT REQUIREMENTS**:
-- **Monthly Performance Tracker**: Must capture revenue vs target (with manual overrides), cumulative vs new account metrics, pipeline metrics (status-wise with INR values, clickable to Leads page), outstanding collections, and unique vs total activity metrics. 
-- **Lead/Account Management**: Must explicitly track actual onboarded dates and target closure dates, propagating from Lead conversion to Account.
+- **Monthly Performance Tracker**: Must feature cascading location filters, support multi-resource aggregation, allow MoM value overrides, and allow account-level value overrides.
+- **Target Planning**: City budgets can be allocated 100% to resources AND 100% to SKUs independently.
+- **Lead Management**: Must support capturing multiple competitor brands per lead.
 
 **User's preferred language**: English
-*(INSTRUCT next agent to respond in English only)*
 
 **what currently exists?** 
-The Monthly Performance Tracking Module is highly functional. The backend () has been rigorously restructured to support cumulative calculations, unique activity counts, manual revenue overrides, and INR pipeline valuations. The Lead and Account schemas (, , ) successfully capture and propagate onboarding/closure dates. The frontend reflects all functional changes. Currently, the module is undergoing a massive styling overhaul to match the app's modern  aesthetic.
+A highly functional, deeply interconnected Sales CRM. The Performance Tracker features a modern, gradient/glass-morphism UI with cascading location filters and multi-resource aggregation capabilities. The Target Planning module allows independent SKU and Resource budget allocations. Leads support multi-brand competitor tracking. A robust  script exists to export/import all 67 core database collections. 
 
 **Last working item**:
-- **Last item agent was working**: Overhauling the UI/UX design of . The agent was applying bulk  edits to inject gradient backgrounds, backdrop-blur effects, and modern card styling consistent with the Home Dashboard.
+- **Last item agent was working**: Implementing final three tweaks to the Performance Tracker: 1) Updating the Pipeline tile to Next Month Pipeline, 2) Replacing the City column in Account metrics with Amount (derived from avg sales -> estimated opp -> manual override), and 3) Making the Leads Targeting Next Month row clickable to navigate to a pre-filtered Leads list.
 - **Status**: IN PROGRESS
-- **Agent Testing Done**: N (Context ended right after applying the code edits).
-- **Which testing method agent to use?** screenshot tool -> testing_agent_v3_fork
+- **Agent Testing Done**: N (Context ended immediately after applying code edits to  via ).
+- **Which testing method agent to use?** mcp_lint_javascript/python -> screenshot tool -> testing_agent_v3_fork
 - **User Testing Done**: N
 
 **All Pending/In progress Issue list**: 
-  Issue 1: Complete and Verify Performance Tracker Contemporary Redesign (P0)
-     - **Attempted fixes**: Applied bulk  edits to  to update the Summary Cards, Revenue, Accounts, Pipeline, Collections, Activity, and Support sections with new Tailwind classes (e.g., , ).
+  Issue 1: Verify and Test Performance Tracker Final Tweaks (P0)
+     - **Attempted fixes**: Backend () was updated to calculate account amounts, return , and handle account-level overrides (). Frontend () was updated to render these changes and handle the new click navigations. 
      - **Next debug checklist**: 
-        - Run  on  immediately to ensure the bulk edits didn't break syntax.
-        - Verify backend is running (backend                          RUNNING   pid 46, uptime 0:00:04
-code-server                      STOPPED   Not started
-frontend                         STOPPING  
-mongodb                          RUNNING   pid 49, uptime 0:00:04
-nginx-code-proxy                 RUNNING   pid 45, uptime 0:00:04).
-        - Use the  to visually inspect the Performance Tracker page. Ensure all components render cleanly without layout breaks and match the Home Dashboard vibe.
-        - Run  strictly for frontend flows to ensure interactivity (expand/collapse, edit overrides, clickable pipeline rows) survived the redesign.
-     - **Why fix this issue and what will be achieved with the fix?** Fulfills the user's explicit request to make the module feel like the same application rather than a disjointed add-on.
+        - Run  on  and  on .
+        - Verify backend is running cleanly (backend                          RUNNING   pid 46, uptime 0:00:03).
+        - Use the  to visually verify the Account Metrics section and the Next Month Pipeline tile.
+        - Run  to validate the new manual override flow for accounts and the click navigation to the Leads page.
+     - **Why fix this issue and what will be achieved with the fix?** Completes the final user requests for the Performance Tracker module.
      - **Status**: IN PROGRESS
      - **Is recurring issue?** N
-     - **Should Test frontend/backend/both after fix?** Frontend (via screenshot then testing agent).
+     - **Should Test frontend/backend/both after fix?** Both (via screenshot then testing agent).
      - **Blocked on other issue**: None
+
+  Issue 2: Export Production DB to AWS (P1)
+     - **Attempted fixes**: Attempted to connect to user's MongoDB SRV URL but failed due to timeout/IP whitelisting.
+     - **Next debug checklist**: Wait for the user to confirm they have whitelisted the emergent platform IP, then run the dump/restore.
+     - **Why fix this issue?** User needs production data synced to their AWS environment.
+     - **Status**: BLOCKED
+     - **Is recurring issue?** N
+     - **Should Test frontend/backend/both after fix?** Backend.
+     - **Blocked on other issue**: User IP Whitelisting.
 
 **In progress Task List**:
 None.
@@ -50,6 +61,7 @@ None.
   - **P1**: Build Reporting Module (Comprehensive reports for stock balance, deliveries, settlements, and distributor performance).
   
   Future Tasks:
+  - **P2**: Investor Module (Currently ON HOLD - Refer to  extraction when user resumes).
   - **P2**: Task email notifications (Notify users via Resend on assignment or due dates).
   - **P2**: First-login Force Password Change Modal.
   - **P2**: Email Invoice Sharing.
@@ -58,20 +70,23 @@ None.
   - **P2**: Refactor  (Modularize routes into separate files).
 
 **Completed work in this session**
-- Tested Performance Tracker initial UX Fixes (Dialog popup, proper company names) (DONE)
-- Added  and  to Lead/Account schemas & UIs (DONE)
-- Built Editable Month-on-Month Comparison Grid (Revenue/Outstanding manual overrides) (DONE)
-- Restructured Pipeline Metrics to use  (INR) instead of bottle counts (DONE)
-- Implemented clickable Pipeline status rows routing to pre-filtered  (DONE)
-- Converted Account Metrics to show cumulative existing accounts and an inline expandable list (DONE)
-- Split Activity Metrics into Total Activities and Unique Customers Reached (DONE)
+- Completed glass-morphism UI overhaul for Performance Tracker (DONE)
+- Fixed Pipeline status colors to use  hook (DONE)
+- Fixed Activity Metrics fetching (queried  instead of ) (DONE)
+- Updated MoM Comparison Grid with zebra striping and correct month ordering (DONE)
+- Implemented Multi-select Resource dropdown with aggregation logic (DONE)
+- Target Planning: Switched resource filter from hardcoded roles to  in  (DONE)
+- Target Planning: Decoupled Resource and SKU allocations to utilize separate 100% budgets (DONE)
+- Converted Lead Current Brand Details into a dynamic, multi-row editable grid with backward compatibility (DONE)
+- Created Database Seed Script () with 67 exported collections (DONE)
+- Refactored Performance Tracker to use cascading dropdown filters (Territory → City → Resource) (DONE)
 
 **Earlier issues found/mentioned but not fixed**
 None.
 
 **Known issue recurrence from previous fork**
   - Issue recurrence in previous fork:  monolith refactoring.
-  - Recurrence count: 12
+  - Recurrence count: 13
   - Status: NOT STARTED
 
 **Code Architecture**
@@ -79,57 +94,55 @@ None.
 
 **Key Technical Concepts**
 - React frontend, FastAPI backend, MongoDB.
-- Cross-collection Aggregation: Heavy use of MongoDB aggregation in  bridging , , , and .
-- Schema Synchronization: The application currently maintains duplicate Pydantic models in  and modular route files (, ). When updating models, both locations must be updated.
+- Schema Synchronization: The application currently maintains duplicate Pydantic models in  and modular route files (). When updating models, both locations must be updated.
+- Cascading Hooks: Use  for Territory -> City filtering. 
 
 **key DB schema**
-- : 
-- : Added , , , .
-- : Added , .
-- : Collection parsed for unique/total activity tracking.
+- : Replaced flat brand fields with .
+- : Added  field array to store manual amounts.
 
 **changes in tech stack**
 None.
 
 **All files of reference**
--  (Heavily modified, redesign pending verification)
--  (Heavily modified with new aggregations)
--  (Updated schemas)
--  &  (Updated schemas)
--  &  (Updated forms)
--  (Reference for the new design aesthetic)
+-  (Has untested code edits)
+-  (Has untested code edits)
+-  
+- 
+-  (New database mirroring tool)
 
 **Areas that need refactoring**:
 -  (Monolith requires breaking down, specifically duplicate Pydantic models).
 
 **key api endpoints**
--  &  (Manage metric manual overrides)
--  (Returns cumulative MoM data)
--  (Computes all live monthly stats)
+-  &  (NEW: Manage account value overrides)
+-  (Updated to filter by department)
 
 **Critical Info for New Agent**
-- **Immediate Next Step**: The previous agent ended context while halfway through a massive UI redesign of . **You MUST run  on  immediately** to ensure no syntax errors were introduced. Then use the screenshot tool to evaluate the UI, fix any broken layouts, and run  (Frontend focus).
-- **Data Model Alert**: If you ever modify schemas for Leads, Accounts, or Activities, you MUST update both the modular route file (e.g., ) AND the monolith file (), as  routes currently take precedence.
-- Do NOT test on older preview URLs. Always grab the latest URL from the  or bash execution.
+- **Immediate Next Step**: The previous agent ended context immediately after applying code edits for the final Performance Tracker tweaks. **You MUST run  on  and  on  immediately**. Then, use the screenshot tool to evaluate the UI and run  to ensure the new account value overrides and click navigations actually work.
+- **Data Model Alert**: If you ever modify schemas (like ), you MUST update both the modular route file (e.g., ) AND the monolith file (), as  routes currently take precedence.
+- If the user asks about the AWS production DB dump, remind them they need to whitelist the IP first.
 
 **documents and test reports created in this job**
 -  thru 
 - 
+- 
 
 **Last 10 User Messages and any pending HUMAN messages** 
 *(Showing latest user requests)*
-1. : For the accounts, in the edit account option, provide an option to capture actual month and year the account is on boarded... (DONE)
-2. : Month-on-Month Comparison (Last 3 Months) It should be an editable grid... (DONE)
-3. : Only the following should be editable at a row level: Revenue, Outstanding... (DONE)
-4. : At the lead level, capture Target Closure Month. Changes in Account metrics... Changes in pipeline metrics... (DONE)
-5. : wake up servers (DONE)
-6. : Next Month Pipeline Value is showing the monthly bottle opportunity, it should show the estimated opportunity in INR... Account Metrics inline list instead of popup... (DONE)
-7. : Existing accounts value for each month should be cumulative... status rows should be clickable... (DONE)
-8. : Activity Metrics should have two sections... total vs unique customers reached. (DONE)
-9. : Also, completely make this page with contemporary design consistent with the home page, with pipeline colors and tiles design etc. otherwise it feels like a different application (IN PROGRESS)
+1. : I want to deploy the same system with test data in another environment , what can be done. (DONE)
+2. : Can you create seed data for all the tables from the existing preview environment... (DONE)
+3. : how do I load this data in mongodb in my AWS environment (ASK_HUMAN)
+4. : I want to export the data from my production mongo db in emergent and upload in mongodb in AWS (ASK_HUMAN - IP Blocked)
+5. : ok, i wll do later (BLOCKED)
+6. : In the performance tracker, i should be able to look at the performance at territory wise, city wise, resource wise... (DONE)
+7. : why can't you set up the territory, city, resource filters the same way as Leads ? (DONE)
+8. : i need a dump of production db. here is the url... (FAILED/BLOCKED)
+9. : investors are asking to come up with the following, i need a module specifically for investors... (ON HOLD)
+10. : keep this module on hold for a bit. Now in the Monthly Performance Tracker - instead of showing total pipeline value, show the tile next month pipeline... in Accounts metrics section, instead of city, show the amount (avg sales/est opp/manual override)... Leads Targeting Next Month should be clickable... (IN PROGRESS - Code written, testing pending).
 
 **Project Health Check:**
-- Broken: None currently, but  has untested, large-scale UI edits applied.
+- Broken: None currently, but  and  have untested edits applied.
 - Mocked: None.
 
 **3rd Party Integrations**
@@ -144,7 +157,7 @@ None.
 - Claude Sonnet 4.5 (via Emergent LLM Key)
 
 **Testing status**
-- Testing agent used after significant changes: YES (iterations 100, 101, 102, 103, 104, 105, 106)
+- Testing agent used after significant changes: YES (iterations 107, 108, 109)
 - Troubleshoot agent used after agent stuck in loop: NO
 - Test files created:  (latest)
 - Known regressions: None currently.
@@ -153,16 +166,16 @@ None.
 - Admin Email: 
 - Password: 
 - Tenant ID: 
-- Note: To see data in Performance Tracker, use Plan:  and Resource: .
+- Note: To see data in Performance Tracker, use Plan: , Territory: , City: .
 
 **What agent forgot to execute**
-The agent successfully applied the file edits to redesign the Performance Tracker but ran out of context before running , verifying the layout via screenshots, and executing the .
+The agent successfully applied the file edits to add the Next Month Pipeline tile, the Account Amount logic, and the Leads clickable URL, but ran out of context before running linters, verifying the layout via screenshots, and executing the .
 
 **Debugging checklist for current issue**
-    Issue: Verification and completion of Performance Tracker UI Redesign.
+    Issue: Verification and completion of Performance Tracker Final Tweaks.
 
     Frontend files to check: 
-    -  (Check if JSX tags match up, ensure , , and Lucide icons are properly imported and utilized. Check custom  and  components at the bottom of the file).
+    -  (Check if the new  table accurately renders the input fields for manual overrides, and verify the  wrappers for Leads Targeting Next Month).
     
     Backend files to check:
-    - None required for this step. The UI logic relies on existing endpoints that were verified in Iteration 106.</analysis>
+    -  (Verify syntax around the newly added  and  endpoints for ).</analysis>

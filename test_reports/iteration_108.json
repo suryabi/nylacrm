@@ -45,7 +45,7 @@
     "Bug_3_Pipeline_Navigation_Filter": {
       "status": "VERIFIED",
       "description": "Pipeline row click now includes assigned_to parameter in navigation URL",
-      "evidence": "URL after click: /leads?status=qualified&assigned_to=a4abf0ac-3dd3-432e-b5d5-af08e5bf8da1, Leads page shows both STATUS=Qualified and SALES RESOURCE=Rajesh Kumar filters applied",
+      "evidence": "URL after click: /leads?status=qualified&assigned_to=sales-analytics-view, Leads page shows both STATUS=Qualified and SALES RESOURCE=Rajesh Kumar filters applied",
       "code_fix": "PerformanceTracker.js line 411: navigate(`/leads?status=${row.status}&assigned_to=${selectedResource}`)"
     },
     "Bug_4_Status_Labels": {
@@ -57,7 +57,7 @@
   },
   "api_verification": {
     "activity_metrics_api": {
-      "endpoint": "/api/performance/generate?plan_id=813fbe91-8434-4bd6-bc7b-49bd1ebca9b5&resource_id=2c5142d1-808b-44e2-9ddb-f8c1544a280d&month=2&year=2026",
+      "endpoint": "/api/performance/generate?plan_id=sales-analytics-view&resource_id=sales-analytics-view&month=2&year=2026",
       "response": {"messages": 0, "calls": 0, "visits": 0, "emails": 1, "total": 1, "unique_emails": 1}
     },
     "lead_statuses_api": {

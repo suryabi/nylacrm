@@ -26,6 +26,8 @@ const MONTHS = [
 ];
 const SUPPORT_CATEGORIES = ['Pricing', 'Logistics', 'Marketing', 'Collections', 'Management Intervention', 'Product / Supply Support'];
 
+const MONTH_NAMES = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 export default function PerformanceTracker() {
   const navigate = useNavigate();
   const { statuses: leadStatuses, getStatusLabel, getStatusById } = useLeadStatuses();
@@ -331,7 +333,7 @@ export default function PerformanceTracker() {
             <SummaryTile label="Revenue" value={`₹${fmt(data.revenue?.this_month)}`} icon={DollarSign} gradient="from-blue-500 to-indigo-600" bgGradient="from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20" iconBg="bg-blue-100 dark:bg-blue-900/50" textColor="text-blue-700 dark:text-blue-300" sub={fmtPct(data.revenue?.achievement_pct)} testId="metric-achieved" />
             <SummaryTile label="Existing A/C" value={data.accounts?.existing_count} icon={Users} gradient="from-emerald-500 to-teal-600" bgGradient="from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20" iconBg="bg-emerald-100 dark:bg-emerald-900/50" textColor="text-emerald-700 dark:text-emerald-300" testId="metric-existing" />
             <SummaryTile label="New A/C" value={data.accounts?.new_onboarded} icon={Building2} gradient="from-teal-500 to-cyan-600" bgGradient="from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/20" iconBg="bg-teal-100 dark:bg-teal-900/50" textColor="text-teal-700 dark:text-teal-300" testId="metric-new" />
-            <SummaryTile label="Pipeline" value={`₹${fmt(data.pipeline?.total_value)}`} icon={TrendingUp} gradient="from-amber-500 to-orange-600" bgGradient="from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20" iconBg="bg-amber-100 dark:bg-amber-900/50" textColor="text-amber-700 dark:text-amber-300" sub={`${data.pipeline?.total_count} leads`} testId="metric-pipeline" />
+            <SummaryTile label={`${MONTH_NAMES[data.pipeline?.next_month] || 'Next'} Pipeline`} value={`₹${fmt(data.pipeline?.next_month_pipeline_value)}`} icon={TrendingUp} gradient="from-amber-500 to-orange-600" bgGradient="from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20" iconBg="bg-amber-100 dark:bg-amber-900/50" textColor="text-amber-700 dark:text-amber-300" sub={`${data.pipeline?.next_month_leads_count || 0} leads`} testId="metric-pipeline" />
             <SummaryTile label="Outstanding" value={`₹${fmt(data.collections?.total_outstanding)}`} icon={AlertTriangle} gradient="from-red-500 to-rose-600" bgGradient="from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/20" iconBg="bg-red-100 dark:bg-red-900/50" textColor="text-red-700 dark:text-red-300" testId="metric-outstanding" />
             <SummaryTile label="Activities" value={data.activities?.total || 0} icon={Phone} gradient="from-violet-500 to-purple-600" bgGradient="from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/20" iconBg="bg-violet-100 dark:bg-violet-900/50" textColor="text-violet-700 dark:text-violet-300" sub={`${data.activities?.unique_visits || 0} visits`} testId="metric-activity" />
           </div>
@@ -387,10 +389,7 @@ export default function PerformanceTracker() {
                       ).map((acc, idx) => (
                         <div key={acc.id || idx} className="flex items-center justify-between py-1.5 px-3 text-xs rounded-lg bg-white/70 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-all duration-200">
                           <span className="font-medium text-slate-700 dark:text-slate-300">{acc.name || 'Unknown'}</span>
-                          <div className="flex items-center gap-2">
-                            {acc.city && <span className="text-slate-400 dark:text-slate-500">{acc.city}</span>}
-                            {acc.status && <Badge variant="outline" className="text-[10px] capitalize py-0 h-4">{acc.status.replace(/_/g, ' ')}</Badge>}
-                          </div>
+                          <AccountValueCell account={acc} planId={selectedPlan} onRefresh={generate} />
                         </div>
                       ))}
                       {data.accounts.existing_accounts.length > 3 && (
@@ -420,7 +419,7 @@ export default function PerformanceTracker() {
                       ).map((acc, idx) => (
                         <div key={acc.id || idx} className="flex items-center justify-between py-1.5 px-3 text-xs rounded-lg bg-white/70 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-all duration-200">
                           <span className="font-medium text-slate-700 dark:text-slate-300">{acc.name || 'Unknown'}</span>
-                          {acc.city && <span className="text-slate-400 dark:text-slate-500">{acc.city}</span>}
+                          <AccountValueCell account={acc} planId={selectedPlan} onRefresh={generate} />
                         </div>
                       ))}
                       {data.accounts.new_accounts.length > 3 && (
@@ -493,8 +492,16 @@ export default function PerformanceTracker() {
                   </table>
                 </div>
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-3">
-                  <InfoRow label="Leads Targeting Next Month" value={data.pipeline?.next_month_leads_count || 0} />
-                  <InfoRow label="Next Month Pipeline Value" value={`₹${fmt(data.pipeline?.next_month_pipeline_value)}`} />
+                  <div className="flex justify-between items-center py-1.5 border-b border-dashed border-slate-100 dark:border-slate-800 cursor-pointer group" onClick={() => {
+                    const nm = data.pipeline?.next_month;
+                    const ny = data.pipeline?.next_year;
+                    const assignedParam = selectedResource.length === 1 ? `&assigned_to=${selectedResource[0]}` : '';
+                    navigate(`/leads?target_closure_month=${nm}&target_closure_year=${ny}${assignedParam}`);
+                  }} data-testid="leads-targeting-next-month-link">
+                    <span className="text-xs text-indigo-600 dark:text-indigo-400 group-hover:underline font-medium">Leads Targeting {MONTH_NAMES[data.pipeline?.next_month] || 'Next Month'}</span>
+                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">{data.pipeline?.next_month_leads_count || 0}<ChevronRight className="h-3 w-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" /></span>
+                  </div>
+                  <InfoRow label={`${MONTH_NAMES[data.pipeline?.next_month] || 'Next'} Pipeline Value`} value={`₹${fmt(data.pipeline?.next_month_pipeline_value)}`} />
                   <InfoRow label="Coverage Ratio" value={fmtPct(data.pipeline?.coverage_ratio)} highlight={data.pipeline?.coverage_ratio < 50 ? 'red' : 'green'} />
                 </div>
               </div>
@@ -1026,3 +1033,82 @@ function EditableCompRow({ label, months, field, autoField, overrideFlag, prefix
     </tr>
   );
 }
+
+function AccountValueCell({ account, planId, onRefresh }) {
+  const [editing, setEditing] = React.useState(false);
+  const [val, setVal] = React.useState('');
+  const token = localStorage.getItem('token');
+  const tenantId = localStorage.getItem('selectedTenant') || localStorage.getItem('tenant_id') || 'nyla-air-water';
+  const headers = { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId, 'Content-Type': 'application/json' };
+
+  const hasManual = account.manual_value != null;
+  const displayVal = account.display_value || 0;
+
+  const save = async () => {
+    const num = parseFloat(val);
+    if (isNaN(num)) { setEditing(false); return; }
+    await fetch(`${API_URL}/api/performance/account-value-override`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ account_id: account.id, value: num, plan_id: planId })
+    });
+    setEditing(false);
+    onRefresh();
+  };
+
+  const reset = async () => {
+    await fetch(`${API_URL}/api/performance/account-value-override?account_id=${account.id}&plan_id=${planId}`, {
+      method: 'DELETE', headers
+    });
+    onRefresh();
+  };
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1">
+        <input
+          type="number"
+          className="w-20 text-right text-xs border rounded px-1.5 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          autoFocus
+          onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+          data-testid={`account-override-input-${account.id}`}
+        />
+        <button onClick={save} className="p-0.5 rounded hover:bg-blue-100 text-blue-600" data-testid={`account-override-save-${account.id}`}>
+          <Check className="h-3 w-3" />
+        </button>
+        <button onClick={() => setEditing(false)} className="p-0.5 rounded hover:bg-slate-100 text-slate-400" data-testid={`account-override-cancel-${account.id}`}>
+          <X className="h-3 w-3" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <span className={`text-xs font-semibold tabular-nums ${hasManual ? 'text-amber-700 dark:text-amber-400' : 'text-slate-600 dark:text-slate-400'}`} data-testid={`account-value-${account.id}`}>
+        {displayVal > 0 ? `₹${fmt(displayVal)}` : '-'}
+      </span>
+      {hasManual && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" title="Manual override" />}
+      <button
+        onClick={() => { setVal(String(displayVal || 0)); setEditing(true); }}
+        className="p-0.5 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
+        title="Override value"
+        data-testid={`account-override-edit-${account.id}`}
+      >
+        <Pencil className="h-2.5 w-2.5" />
+      </button>
+      {hasManual && (
+        <button
+          onClick={reset}
+          className="p-0.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+          title="Reset to auto"
+          data-testid={`account-override-reset-${account.id}`}
+        >
+          <RotateCcw className="h-2.5 w-2.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
