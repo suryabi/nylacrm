@@ -15,9 +15,9 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 def verify_password(password: str, hashed: str) -> bool:
-    logging.debug(f"Verifying password: {password}")
+    logging.info(f"Verifying password: {password}")
     result = bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
-    logging.debug(f"Verification result: {result}")
+    logging.info(f"Verification result: {result}")
     return result
 
 def create_access_token(user_id: str, email: str, role: str) -> str:
