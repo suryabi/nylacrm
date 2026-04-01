@@ -14,14 +14,15 @@ from models.user import User, UserCreate, UserLogin
 from deps import hash_password, verify_password, get_current_user
 from core.tenant import get_current_tenant_id
 
+# Setup detailed logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+logger = logging.getLogger('activemq_subscriber')
+logger.setLevel(logging.INFO)
 
 router = APIRouter()
-logger = logging.getLogger('auth')
-logger.setLevel(logging.INFO)
 
 def get_tdb():
     """Get tenant-aware database wrapper"""
