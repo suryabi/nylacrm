@@ -183,16 +183,16 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
     }
     
     # Total counts per activity type
-    messages_count = await db.lead_activities.count_documents({**activity_filter, "activity_type": "messaging"})
-    calls_count = await db.lead_activities.count_documents({**activity_filter, "activity_type": "call"})
-    visits_count = await db.lead_activities.count_documents({**activity_filter, "activity_type": {"$in": ["visit", "meeting"]}})
-    emails_count = await db.lead_activities.count_documents({**activity_filter, "activity_type": "email"})
+    messages_count = await db.activities.count_documents({**activity_filter, "activity_type": "messaging"})
+    calls_count = await db.activities.count_documents({**activity_filter, "activity_type": "call"})
+    visits_count = await db.activities.count_documents({**activity_filter, "activity_type": {"$in": ["visit", "meeting", "customer_visit"]}})
+    emails_count = await db.activities.count_documents({**activity_filter, "activity_type": "email"})
     
     # Unique customer counts (distinct lead_ids per activity type)
-    unique_messages = len(await db.lead_activities.distinct("lead_id", {**activity_filter, "activity_type": "messaging"}))
-    unique_calls = len(await db.lead_activities.distinct("lead_id", {**activity_filter, "activity_type": "call"}))
-    unique_visits = len(await db.lead_activities.distinct("lead_id", {**activity_filter, "activity_type": {"$in": ["visit", "meeting"]}}))
-    unique_emails = len(await db.lead_activities.distinct("lead_id", {**activity_filter, "activity_type": "email"}))
+    unique_messages = len(await db.activities.distinct("lead_id", {**activity_filter, "activity_type": "messaging"}))
+    unique_calls = len(await db.activities.distinct("lead_id", {**activity_filter, "activity_type": "call"}))
+    unique_visits = len(await db.activities.distinct("lead_id", {**activity_filter, "activity_type": {"$in": ["visit", "meeting", "customer_visit"]}}))
+    unique_emails = len(await db.activities.distinct("lead_id", {**activity_filter, "activity_type": "email"}))
     
     total_activities = messages_count + calls_count + visits_count + emails_count
     

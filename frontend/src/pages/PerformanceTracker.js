@@ -6,6 +6,7 @@ import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { Input } from '../components/ui/input';
+import { useLeadStatuses } from '../hooks/useLeadStatuses';
 import {
   Target, TrendingUp, TrendingDown, Users, Phone, MapPin, DollarSign,
   BarChart3, RefreshCw, Save, Send, Check, RotateCcw, AlertTriangle,
@@ -26,6 +27,7 @@ const SUPPORT_CATEGORIES = ['Pricing', 'Logistics', 'Marketing', 'Collections', 
 
 export default function PerformanceTracker() {
   const navigate = useNavigate();
+  const { statuses: leadStatuses, getStatusLabel, getStatusById } = useLeadStatuses();
   const [plans, setPlans] = useState([]);
   const [selectedPlan, setSelectedPlan] = useState('');
   const [resources, setResources] = useState([]);
@@ -395,22 +397,26 @@ export default function PerformanceTracker() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(data.pipeline?.by_status || []).map((row) => (
+                      {(data.pipeline?.by_status || []).map((row) => {
+                        const statusInfo = getStatusById(row.status);
+                        const dotColor = statusInfo?.bg || 'bg-slate-400';
+                        return (
                         <tr
                           key={row.status}
                           className="border-b border-slate-100 dark:border-slate-800 hover:bg-amber-50/50 dark:hover:bg-amber-950/10 cursor-pointer transition-all duration-200 group"
-                          onClick={() => navigate(`/leads?status=${row.status}`)}
+                          onClick={() => navigate(`/leads?status=${row.status}&assigned_to=${selectedResource}`)}
                           data-testid={`pipeline-row-${row.status}`}
                         >
                           <td className="p-2.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 capitalize flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-500" />
-                            {row.status.replace(/_/g, ' ')}
+                            <span className={`w-2 h-2 rounded-full ${dotColor}`} />
+                            {getStatusLabel(row.status)}
                             <ChevronRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400" />
                           </td>
                           <td className="p-2.5 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">{row.count}</td>
                           <td className="p-2.5 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">₹{fmt(row.value)}</td>
                         </tr>
-                      ))}
+                        );
+                      })}
                       {(data.pipeline?.by_status || []).length === 0 && (
                         <tr><td colSpan={3} className="text-center py-4 text-xs text-muted-foreground">No active pipeline leads</td></tr>
                       )}
