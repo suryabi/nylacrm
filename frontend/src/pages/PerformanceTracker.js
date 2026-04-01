@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../co
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { MultiSelect } from '../components/ui/multi-select';
 import { Textarea } from '../components/ui/textarea';
 import { Input } from '../components/ui/input';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
@@ -31,7 +32,7 @@ export default function PerformanceTracker() {
   const [plans, setPlans] = useState([]);
   const [selectedPlan, setSelectedPlan] = useState('');
   const [resources, setResources] = useState([]);
-  const [selectedResource, setSelectedResource] = useState('');
+  const [selectedResource, setSelectedResource] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [data, setData] = useState(null);
@@ -64,11 +65,12 @@ export default function PerformanceTracker() {
   }, [selectedPlan]);
 
   const generate = useCallback(async () => {
-    if (!selectedPlan || !selectedResource) return;
+    if (!selectedPlan || selectedResource.length === 0) return;
     setLoading(true);
     try {
+      const resourceParam = selectedResource.join(',');
       const res = await fetch(
-        `${API_URL}/api/performance/generate?plan_id=${selectedPlan}&resource_id=${selectedResource}&month=${selectedMonth}&year=${selectedYear}`,
+        `${API_URL}/api/performance/generate?plan_id=${selectedPlan}&resource_id=${resourceParam}&month=${selectedMonth}&year=${selectedYear}`,
         { headers }
       );
       const d = await res.json();
@@ -90,7 +92,7 @@ export default function PerformanceTracker() {
       setRevenueEditing({ lifetime: false, this_month: false, new_accounts: false });
       // Fetch comparison
       const compRes = await fetch(
-        `${API_URL}/api/performance/comparison?resource_id=${selectedResource}&plan_id=${selectedPlan}&months=3&month=${selectedMonth}&year=${selectedYear}`,
+        `${API_URL}/api/performance/comparison?resource_id=${resourceParam}&plan_id=${selectedPlan}&months=3&month=${selectedMonth}&year=${selectedYear}`,
         { headers }
       );
       setComparison(await compRes.json());
@@ -108,7 +110,7 @@ export default function PerformanceTracker() {
     setSaving(true);
     try {
       const body = {
-        plan_id: selectedPlan, resource_id: selectedResource, month: selectedMonth, year: selectedYear,
+        plan_id: selectedPlan, resource_id: selectedResource[0], month: selectedMonth, year: selectedYear,
         resource_name: data.resource_name,
         status: submitAfter ? 'submitted' : 'draft',
         support_needed: supportNeeded, remarks,
@@ -186,12 +188,13 @@ export default function PerformanceTracker() {
             </div>
             <div>
               <label className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Sales Resource</label>
-              <Select value={selectedResource} onValueChange={setSelectedResource}>
-                <SelectTrigger data-testid="select-resource"><SelectValue placeholder="Select resource" /></SelectTrigger>
-                <SelectContent>
-                  {resources.map(r => <SelectItem key={r.resource_id} value={r.resource_id}>{r.resource_name} ({r.city})</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                options={resources.map(r => ({ value: r.resource_id, label: `${r.resource_name} (${r.city})` }))}
+                selected={selectedResource}
+                onChange={setSelectedResource}
+                placeholder="Select resource(s)"
+                data-testid="select-resource"
+              />
             </div>
             <div>
               <label className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Month</label>
@@ -212,7 +215,7 @@ export default function PerformanceTracker() {
               </Select>
             </div>
             <div className="flex items-end">
-              <Button onClick={generate} disabled={loading || !selectedPlan || !selectedResource} className="w-full bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white shadow-sm border-0" data-testid="generate-btn">
+              <Button onClick={generate} disabled={loading || !selectedPlan || selectedResource.length === 0} className="w-full bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white shadow-sm border-0" data-testid="generate-btn">
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Generate
               </Button>
@@ -233,12 +236,13 @@ export default function PerformanceTracker() {
           <div className="flex items-center justify-between bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-slate-100 dark:border-slate-800 shadow-sm">
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
               <span className="text-sm font-semibold text-slate-800 dark:text-white">{data.resource_name}</span>
-              <Badge variant="outline" className="bg-slate-50 dark:bg-slate-800 text-xs">{data.resource_city}</Badge>
+              {data.resource_city && <Badge variant="outline" className="bg-slate-50 dark:bg-slate-800 text-xs">{data.resource_city}</Badge>}
               <Badge variant="outline" className="bg-slate-50 dark:bg-slate-800 text-xs">{data.plan_name}</Badge>
-              <StatusBadge status={data.status} />
+              {selectedResource.length === 1 && <StatusBadge status={data.status} />}
+              {selectedResource.length > 1 && <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-xs border-indigo-200">{selectedResource.length} resources combined</Badge>}
             </div>
             <div className="flex items-center gap-2">
-              {!isLocked && data.status !== 'submitted' && (
+              {selectedResource.length === 1 && !isLocked && data.status !== 'submitted' && (
                 <>
                   <Button variant="outline" size="sm" onClick={() => saveRecord(false)} disabled={saving} data-testid="save-draft-btn">
                     <Save className="h-4 w-4 mr-1" />{saving ? 'Saving...' : 'Save Draft'}
@@ -248,7 +252,7 @@ export default function PerformanceTracker() {
                   </Button>
                 </>
               )}
-              {data.status === 'submitted' && (
+              {selectedResource.length === 1 && data.status === 'submitted' && (
                 <>
                   <Button variant="outline" size="sm" onClick={returnRecord} data-testid="return-btn">
                     <RotateCcw className="h-4 w-4 mr-1" />Return
@@ -404,7 +408,7 @@ export default function PerformanceTracker() {
                         <tr
                           key={row.status}
                           className="border-b border-slate-100 dark:border-slate-800 hover:bg-amber-50/50 dark:hover:bg-amber-950/10 cursor-pointer transition-all duration-200 group"
-                          onClick={() => navigate(`/leads?status=${row.status}&assigned_to=${selectedResource}`)}
+                          onClick={() => navigate(`/leads?status=${row.status}${selectedResource.length === 1 ? `&assigned_to=${selectedResource[0]}` : ''}`)}
                           data-testid={`pipeline-row-${row.status}`}
                         >
                           <td className="p-2.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 capitalize flex items-center gap-2">
@@ -807,7 +811,7 @@ function ComparisonTable({ comparison, selectedResource, selectedPlan, headers, 
         if (val === autoVal) continue;
         await fetch(`${API_URL}/api/performance/comparison/override`, {
           method: 'POST', headers,
-          body: JSON.stringify({ resource_id: selectedResource, plan_id: selectedPlan, month: m.month, year: m.year, field, value: val })
+          body: JSON.stringify({ resource_id: selectedResource[0], plan_id: selectedPlan, month: m.month, year: m.year, field, value: val })
         });
       }
       setEditingRow(null);
@@ -822,7 +826,7 @@ function ComparisonTable({ comparison, selectedResource, selectedPlan, headers, 
     try {
       for (const m of comparison.months) {
         await fetch(
-          `${API_URL}/api/performance/comparison/override?resource_id=${selectedResource}&plan_id=${selectedPlan}&month=${m.month}&year=${m.year}&field=${field}`,
+          `${API_URL}/api/performance/comparison/override?resource_id=${selectedResource[0]}&plan_id=${selectedPlan}&month=${m.month}&year=${m.year}&field=${field}`,
           { method: 'DELETE', headers }
         );
       }

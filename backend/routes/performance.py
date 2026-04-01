@@ -19,8 +19,8 @@ router = APIRouter()
 
 # ============ Helper: Auto-populate metrics ============
 
-async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month: int, year: int):
-    """Compute all auto-populated metrics for a sales resource for a given month."""
+async def compute_metrics(tenant_id: str, resource_ids: list, plan_id: str, month: int, year: int):
+    """Compute all auto-populated metrics for one or more sales resources for a given month."""
     
     month_start = f"{year}-{month:02d}-01"
     if month == 12:
@@ -28,31 +28,34 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
     else:
         month_end = f"{year}-{month + 1:02d}-01"
     
-    # === A. REVENUE METRICS (from accounts/invoices) ===
-    # Get target from plan
-    target_alloc = await db.target_allocations_v2.find_one(
-        {"plan_id": plan_id, "resource_id": resource_id, "level": "resource"},
-        {"_id": 0, "amount": 1, "city": 1, "resource_name": 1}
-    )
-    monthly_target = target_alloc.get("amount", 0) if target_alloc else 0
-    resource_name = target_alloc.get("resource_name", "") if target_alloc else ""
-    resource_city = target_alloc.get("city", "") if target_alloc else ""
+    resource_filter = {"$in": resource_ids} if len(resource_ids) > 1 else resource_ids[0]
     
-    # All invoices this month for this resource
+    # === A. REVENUE METRICS (from accounts/invoices) ===
+    # Get target from plan — sum across all selected resources
+    target_allocs = await db.target_allocations_v2.find(
+        {"plan_id": plan_id, "resource_id": resource_filter, "level": "resource"},
+        {"_id": 0, "amount": 1, "city": 1, "resource_name": 1}
+    ).to_list(100)
+    monthly_target = sum(t.get("amount", 0) for t in target_allocs)
+    resource_names = [t.get("resource_name", "") for t in target_allocs]
+    resource_name = ", ".join(resource_names) if resource_names else ""
+    resource_city = ", ".join(sorted(set(t.get("city", "") for t in target_allocs if t.get("city")))) if target_allocs else ""
+    
+    # All invoices this month for these resources
     invoices_this_month = await db.invoices.find(
         {
             "tenant_id": tenant_id,
-            "assigned_to": resource_id,
+            "assigned_to": resource_filter,
             "invoice_date": {"$gte": month_start, "$lt": month_end}
         },
         {"_id": 0, "net_invoice_value": 1, "gross_invoice_value": 1, "outstanding": 1, "account_uuid": 1, "account_id": 1, "invoice_date": 1}
     ).to_list(10000)
     
-    # All invoices ever (lifetime) for this resource
+    # All invoices ever (lifetime) for these resources
     all_invoices = await db.invoices.find(
         {
             "tenant_id": tenant_id,
-            "assigned_to": resource_id,
+            "assigned_to": resource_filter,
         },
         {"_id": 0, "net_invoice_value": 1, "gross_invoice_value": 1, "account_uuid": 1}
     ).to_list(50000)
@@ -62,11 +65,11 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
     achievement_pct = round((revenue_this_month / monthly_target * 100), 1) if monthly_target > 0 else 0
     
     # === B. ACCOUNT METRICS (from accounts collection, NOT leads) ===
-    # All accounts for this resource (lifetime)
+    # All accounts for these resources (lifetime)
     all_accounts = await db.accounts.find(
         {
             "tenant_id": tenant_id,
-            "assigned_to": resource_id,
+            "assigned_to": resource_filter,
         },
         {"_id": 0, "id": 1, "account_name": 1, "city": 1, "account_type": 1, "onboarded_month": 1, "onboarded_year": 1, "created_at": 1}
     ).to_list(1000)
@@ -99,7 +102,7 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
     pipeline_leads = await db.leads.find(
         {
             "tenant_id": tenant_id,
-            "assigned_to": resource_id,
+            "assigned_to": resource_filter,
             "status": {"$nin": excluded_statuses}
         },
         {"_id": 0, "id": 1, "company": 1, "name": 1, "city": 1, "status": 1, "expected_value": 1, "estimated_value": 1, "opportunity_estimation": 1, "target_closure_month": 1, "target_closure_year": 1}
@@ -139,7 +142,7 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
     outstanding_invoices = await db.invoices.find(
         {
             "tenant_id": tenant_id,
-            "assigned_to": resource_id,
+            "assigned_to": resource_filter,
             "outstanding": {"$gt": 0}
         },
         {"_id": 0, "account_uuid": 1, "account_id": 1, "outstanding": 1, "invoice_date": 1, "invoice_no": 1}
@@ -178,7 +181,7 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
     # === E. ACTIVITY METRICS ===
     activity_filter = {
         "tenant_id": tenant_id,
-        "created_by": resource_id,
+        "created_by": resource_filter,
         "created_at": {"$gte": month_start, "$lt": month_end}
     }
     
@@ -204,7 +207,7 @@ async def compute_metrics(tenant_id: str, resource_id: str, plan_id: str, month:
     account_conversion_rate = round((len(new_accounts) / pipeline_total_count * 100), 1) if pipeline_total_count > 0 else 0
     
     return {
-        "resource_id": resource_id,
+        "resource_id": ",".join(resource_ids),
         "resource_name": resource_name,
         "resource_city": resource_city,
         "month": month,
@@ -293,8 +296,13 @@ async def generate_performance(
     year: int,
     current_user: dict = Depends(get_current_user)
 ):
-    """Generate/compute monthly performance metrics for a resource."""
+    """Generate/compute monthly performance metrics for one or more resources."""
     tenant_id = get_current_tenant_id()
+    
+    # Parse comma-separated resource_ids
+    resource_ids = [r.strip() for r in resource_id.split(",") if r.strip()]
+    if not resource_ids:
+        raise HTTPException(status_code=400, detail="No resource IDs provided")
     
     # Validate plan exists
     plan = await db.target_plans_v2.find_one(
@@ -303,34 +311,39 @@ async def generate_performance(
     if not plan:
         raise HTTPException(status_code=404, detail="Target plan not found")
     
-    metrics = await compute_metrics(tenant_id, resource_id, plan_id, month, year)
+    metrics = await compute_metrics(tenant_id, resource_ids, plan_id, month, year)
     
-    # Check for existing saved record
-    existing = await db.monthly_performance.find_one(
-        {
-            "tenant_id": tenant_id,
-            "resource_id": resource_id,
-            "plan_id": plan_id,
-            "month": month,
-            "year": year
-        },
-        {"_id": 0}
-    )
-    
-    if existing:
-        metrics["saved_record"] = existing
-        metrics["record_id"] = existing.get("id")
-        metrics["status"] = existing.get("status", "draft")
-        metrics["support_needed"] = existing.get("support_needed", [])
-        metrics["remarks"] = existing.get("remarks", "")
-        metrics["next_month_pipeline_manual"] = existing.get("next_month_pipeline_manual", [])
-        metrics["manual_revenue"] = existing.get("manual_revenue")
-        metrics["manual_visits"] = existing.get("manual_visits")
-        metrics["manual_calls"] = existing.get("manual_calls")
+    # Check for existing saved record (only for single resource)
+    if len(resource_ids) == 1:
+        existing = await db.monthly_performance.find_one(
+            {
+                "tenant_id": tenant_id,
+                "resource_id": resource_ids[0],
+                "plan_id": plan_id,
+                "month": month,
+                "year": year
+            },
+            {"_id": 0}
+        )
+        
+        if existing:
+            metrics["saved_record"] = existing
+            metrics["record_id"] = existing.get("id")
+            metrics["status"] = existing.get("status", "draft")
+            metrics["support_needed"] = existing.get("support_needed", [])
+            metrics["remarks"] = existing.get("remarks", "")
+            metrics["next_month_pipeline_manual"] = existing.get("next_month_pipeline_manual", [])
+            metrics["manual_revenue"] = existing.get("manual_revenue")
+            metrics["manual_visits"] = existing.get("manual_visits")
+            metrics["manual_calls"] = existing.get("manual_calls")
+        else:
+            metrics["saved_record"] = None
+            metrics["record_id"] = None
+            metrics["status"] = "not_created"
     else:
         metrics["saved_record"] = None
         metrics["record_id"] = None
-        metrics["status"] = "not_created"
+        metrics["status"] = "multi_resource"
     
     metrics["plan_name"] = plan.get("name", "")
     return metrics
@@ -467,8 +480,12 @@ async def get_comparison(
     months: int = 3,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get month-on-month comparison data for a resource."""
+    """Get month-on-month comparison data for one or more resources."""
     tenant_id = get_current_tenant_id()
+    
+    # Parse comma-separated resource_ids
+    resource_ids = [r.strip() for r in resource_id.split(",") if r.strip()]
+    resource_filter = {"$in": resource_ids} if len(resource_ids) > 1 else resource_ids[0]
     
     # Use selected month/year as the anchor (last column), default to current month
     if month is None or year is None:
@@ -488,7 +505,7 @@ async def get_comparison(
             m += 12
             y -= 1
         
-        metrics = await compute_metrics(tenant_id, resource_id, plan_id, m, y)
+        metrics = await compute_metrics(tenant_id, resource_ids, plan_id, m, y)
         
         # Compute cumulative existing accounts up to this month
         if m == 12:
@@ -499,7 +516,7 @@ async def get_comparison(
         # Count accounts that existed by end of this month:
         # accounts created before month_end OR onboarded in/before this month
         all_accs = await db.accounts.find(
-            {"tenant_id": tenant_id, "assigned_to": resource_id},
+            {"tenant_id": tenant_id, "assigned_to": resource_filter},
             {"_id": 0, "id": 1, "onboarded_month": 1, "onboarded_year": 1, "created_at": 1}
         ).to_list(5000)
         
@@ -525,13 +542,13 @@ async def get_comparison(
         ])
         
         saved = await db.monthly_performance.find_one(
-            {"tenant_id": tenant_id, "resource_id": resource_id, "plan_id": plan_id, "month": m, "year": y},
+            {"tenant_id": tenant_id, "resource_id": resource_filter, "plan_id": plan_id, "month": m, "year": y},
             {"_id": 0, "status": 1, "support_needed": 1, "remarks": 1}
         )
         
         # Check for manual overrides
         override = await db.comparison_overrides.find_one(
-            {"tenant_id": tenant_id, "resource_id": resource_id, "plan_id": plan_id, "month": m, "year": y},
+            {"tenant_id": tenant_id, "resource_id": resource_filter, "plan_id": plan_id, "month": m, "year": y},
             {"_id": 0}
         )
         
