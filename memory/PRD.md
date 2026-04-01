@@ -31,6 +31,7 @@
 - [x] **Territory/City/Resource View (2026-04-01)**: Cascading filters like Leads page — Territory dropdown filters Cities, City dropdown filters Resources. "All" options at each level. Data aggregates across all matching resources. Backend endpoints added for territories-for-plan, cities-for-plan
 - [x] **Target Planning Enhancements (2026-04-01)**: Resource eligibility changed from hardcoded roles to department-based filter (Sales/Admin). Resource and SKU allocations are now independent — each gets the full city budget separately
 - [x] **Multi-Brand Grid (2026-04-01)**: Current Brand Details section in Lead form converted from single-brand form to editable multi-brand grid. Add/Delete rows, alternating colors, backward compatible with legacy single-brand data. LeadDetail page shows read-only brands table
+- [x] **Final Tweaks (2026-04-01)**: Next Month Pipeline tile (dynamic month name), Account Amount column (avg_sales → estimated_value → manual override) with inline AccountValueCell, Clickable Leads Targeting Next Month row navigating to /leads with target_closure filters. Revenue override fields persisted in save endpoint.
 
 ### Lead & Account Enhancements (2026-03-31)
 - [x] Lead edit form: Actual Onboarded Month & Year, Target Closure Month & Year dropdowns
@@ -47,6 +48,10 @@
 - `POST /api/performance/{id}/approve`
 - `POST /api/performance/{id}/return`
 - `GET /api/performance/comparison`
+- `POST /api/performance/comparison/override`
+- `DELETE /api/performance/comparison/override`
+- `POST /api/performance/account-value-override`
+- `DELETE /api/performance/account-value-override`
 
 ### Distribution
 - `GET /api/distributors/{id}/stock-dashboard`
