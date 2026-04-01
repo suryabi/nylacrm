@@ -1,43 +1,48 @@
 <analysis>**original_problem_statement**: 
-The user requested UI and functional enhancements across the Task Management and Distribution modules, specifically focusing on distribution accounting and reverse logistics. Key requirements included:
-1. Simplify Stock Out (Deliveries) table UI and implement GST handling adjustments (Main table pre-tax, popup detailed summaries).
-2. Refactor the Stock Out tab into collapsible sections: Distributor to Customer and Distributor to Factory.
-3. Restructure Factory Returns: Source (Warehouse vs Customer) should dictate reasons, and Warehouse returns should trigger reimbursements using the  (not ).
-4. Settlements and Billing tabs must independently query and calculate Credit Notes (issued to customers) and Factory Returns (Warehouse sourced) as distinct adjustment line items in the net payout calculation, without relying exclusively on delivery arrays.
+The user originally requested extensive fixes to distribution accounting, which evolved into building a comprehensive Monthly Performance Tracking Module for the sales team. Over this session, the user provided highly specific requirements for this tracker:
+1. Capture Actual Onboarded Month/Year at the Lead/Account level and Target Closure Month at the Lead level.
+2. Build an editable Month-on-Month (Last 3 Months) comparison grid where Revenue and Outstanding rows can be manually overridden and saved/reset.
+3. Restructure metrics: Account metrics should exclusively track cumulative existing accounts and monthly new accounts. Pipeline metrics must show INR value () broken down by status, and rows must be clickable to navigate to pre-filtered lead lists.
+4. Split Activity Metrics into Total Activities (Visits, Calls, Emails, Messages) and Unique Customers Reached.
+5. Completely redesign the Performance Tracker page to match the contemporary, gradient-heavy, glass-morphism aesthetic of the existing Home Dashboard.
 
 **PRODUCT REQUIREMENTS**:
-- **Stock Out UI**: DeliveriesTab must separate customer deliveries and factory returns via collapsible sections.
-- **Factory Returns**: Must filter SKUs based on . Credit generated equals .
-- **Settlements**: Calculate payout as .
+- **Monthly Performance Tracker**: Must capture revenue vs target (with manual overrides), cumulative vs new account metrics, pipeline metrics (status-wise with INR values, clickable to Leads page), outstanding collections, and unique vs total activity metrics. 
+- **Lead/Account Management**: Must explicitly track actual onboarded dates and target closure dates, propagating from Lead conversion to Account.
 
 **User's preferred language**: English
 *(INSTRUCT next agent to respond in English only)*
 
 **what currently exists?** 
-The system has a robust CRM and Distribution module. During this session, the Stock Out tab was successfully refactored to include GST logic, collapsible sections, and a revamped Factory Returns dialog. However, the latest modifications to the Settlement calculations (incorporating independent Credit Notes and Factory Returns) have introduced schema/payload bugs, causing the Settlement Creation and Monthly Reconciliation API to fail.
+The Monthly Performance Tracking Module is highly functional. The backend () has been rigorously restructured to support cumulative calculations, unique activity counts, manual revenue overrides, and INR pipeline valuations. The Lead and Account schemas (, , ) successfully capture and propagate onboarding/closure dates. The frontend reflects all functional changes. Currently, the module is undergoing a massive styling overhaul to match the app's modern  aesthetic.
 
 **Last working item**:
-- **Last item agent was working**: Debugging and fixing the Settlement creation and BillingTab calculation failures reported by the user. The agent discovered type mismatch issues (Credit Note  being a datetime object vs string query), field name mismatches ( vs ), and a missing  in the  frontend payload. The agent successfully fixed the backend  and  queries but the session ended before fully validating the fixes and verifying the Monthly Reconciliation API / BillingTab rendering.
+- **Last item agent was working**: Overhauling the UI/UX design of . The agent was applying bulk  edits to inject gradient backgrounds, backdrop-blur effects, and modern card styling consistent with the Home Dashboard.
 - **Status**: IN PROGRESS
-- **Agent Testing Done**: N
-- **Which testing method agent to use?** backend testing agent/curl (for API) -> screenshot tool (for frontend) -> testing_agent_v3_fork
+- **Agent Testing Done**: N (Context ended right after applying the code edits).
+- **Which testing method agent to use?** screenshot tool -> testing_agent_v3_fork
 - **User Testing Done**: N
 
-**All Pending/In progress Issue list**:
-  Issue 1: Settlement creation and BillingTab calculation failures (P0)
-     - **Attempted fixes**: The agent fixed the credit note  field lookup and corrected the string vs. datetime query filter for  in .
+**All Pending/In progress Issue list**: 
+  Issue 1: Complete and Verify Performance Tracker Contemporary Redesign (P0)
+     - **Attempted fixes**: Applied bulk  edits to  to update the Summary Cards, Revenue, Accounts, Pipeline, Collections, Activity, and Support sections with new Tailwind classes (e.g., , ).
      - **Next debug checklist**: 
-        - Verify  payload from the frontend (likely  or similar) to ensure  is passed correctly to avoid the 422 Validation Error.
-        - Verify  endpoint correctly calculates and returns  and .
-        - Ensure  reads the exact property names returned by the backend (e.g., distinguishing between  and ) to populate the 7 summary cards.
-     - **Why fix this issue and what will be achieved with the fix?** Completes the user's critical request for accurate end-to-end settlement payouts and billing displays.
+        - Run  on  immediately to ensure the bulk edits didn't break syntax.
+        - Verify backend is running (backend                          RUNNING   pid 46, uptime 0:00:04
+code-server                      STOPPED   Not started
+frontend                         STOPPING  
+mongodb                          RUNNING   pid 49, uptime 0:00:04
+nginx-code-proxy                 RUNNING   pid 45, uptime 0:00:04).
+        - Use the  to visually inspect the Performance Tracker page. Ensure all components render cleanly without layout breaks and match the Home Dashboard vibe.
+        - Run  strictly for frontend flows to ensure interactivity (expand/collapse, edit overrides, clickable pipeline rows) survived the redesign.
+     - **Why fix this issue and what will be achieved with the fix?** Fulfills the user's explicit request to make the module feel like the same application rather than a disjointed add-on.
      - **Status**: IN PROGRESS
      - **Is recurring issue?** N
-     - **Should Test frontend/backend/both after fix?** both
+     - **Should Test frontend/backend/both after fix?** Frontend (via screenshot then testing agent).
      - **Blocked on other issue**: None
 
 **In progress Task List**:
-None (All feature tasks completed except the resulting bugs in Issue 1).
+None.
 
 **Upcoming and Future Tasks**
   Upcoming Tasks:
@@ -53,80 +58,78 @@ None (All feature tasks completed except the resulting bugs in Issue 1).
   - **P2**: Refactor  (Modularize routes into separate files).
 
 **Completed work in this session**
-- Removed orphaned old table code from  (DONE)
-- Applied GST handling (Pre-tax main table, detailed post-tax summaries in popup) (DONE)
-- Implemented Collapsible sections for Customer vs Factory returns (DONE)
-- Restructured Factory Return dialog with Source-first selection (DONE)
-- Fixed Factory Return SKU dropdown to pull exclusively from  (DONE)
-- Fixed Factory Return credit formula to use  instead of  (DONE)
-- Cleared all testing/mock data from DB per user request (DONE)
+- Tested Performance Tracker initial UX Fixes (Dialog popup, proper company names) (DONE)
+- Added  and  to Lead/Account schemas & UIs (DONE)
+- Built Editable Month-on-Month Comparison Grid (Revenue/Outstanding manual overrides) (DONE)
+- Restructured Pipeline Metrics to use  (INR) instead of bottle counts (DONE)
+- Implemented clickable Pipeline status rows routing to pre-filtered  (DONE)
+- Converted Account Metrics to show cumulative existing accounts and an inline expandable list (DONE)
+- Split Activity Metrics into Total Activities and Unique Customers Reached (DONE)
 
 **Earlier issues found/mentioned but not fixed**
 None.
 
 **Known issue recurrence from previous fork**
-- Issue recurrence in previous fork:  monolith refactoring.
-- Recurrence count: 9
-- Status: NOT STARTED
+  - Issue recurrence in previous fork:  monolith refactoring.
+  - Recurrence count: 12
+  - Status: NOT STARTED
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
 - React frontend, FastAPI backend, MongoDB.
-- Complex MongoDB multi-collection aggregation (Deliveries, Credit Notes, Factory Returns, Settlements).
-- Schema mapping between global Master SKUs and Distributor-specific Margin Matrix SKUs.
+- Cross-collection Aggregation: Heavy use of MongoDB aggregation in  bridging , , , and .
+- Schema Synchronization: The application currently maintains duplicate Pydantic models in  and modular route files (, ). When updating models, both locations must be updated.
 
 **key DB schema**
 - : 
-- : 
-- : 
-- : 
+- : Added , , , .
+- : Added , .
+- : Collection parsed for unique/total activity tracking.
 
 **changes in tech stack**
 None.
 
 **All files of reference**
-- 
-- 
-- 
-- 
-- 
+-  (Heavily modified, redesign pending verification)
+-  (Heavily modified with new aggregations)
+-  (Updated schemas)
+-  &  (Updated schemas)
+-  &  (Updated forms)
+-  (Reference for the new design aesthetic)
 
 **Areas that need refactoring**:
--  (Monolith requires breaking down).
+-  (Monolith requires breaking down, specifically duplicate Pydantic models).
 
 **key api endpoints**
-- 
-- 
-- 
+-  &  (Manage metric manual overrides)
+-  (Returns cumulative MoM data)
+-  (Computes all live monthly stats)
 
 **Critical Info for New Agent**
-- **Immediate Blocker**: The Settlement creation is currently throwing a 422 Unprocessable Entity because  is missing in the payload body from the frontend. Additionally, ensure the backend queries for Credit Notes in  correctly match MongoDB's  objects against the string / dates.
-- Check variables mapping for the BillingTab: Ensure the backend's monthly reconciliation response exact property names match what the frontend expects for rendering the 7 summary cards.
+- **Immediate Next Step**: The previous agent ended context while halfway through a massive UI redesign of . **You MUST run  on  immediately** to ensure no syntax errors were introduced. Then use the screenshot tool to evaluate the UI, fix any broken layouts, and run  (Frontend focus).
+- **Data Model Alert**: If you ever modify schemas for Leads, Accounts, or Activities, you MUST update both the modular route file (e.g., ) AND the monolith file (), as  routes currently take precedence.
+- Do NOT test on older preview URLs. Always grab the latest URL from the  or bash execution.
 
 **documents and test reports created in this job**
-- 
-- 
-- 
-- 
+-  thru 
 - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1. : Make both of the section, collapsiable, default should be distirbutor to customer expandable... (DONE)
-2. : c. both options. Yes, add to settlements (DONE)
-3. : In the distributor to factory returns - i dont see the SKU dropdown populating (DONE)
-4. : In the stock-out process from distributor to factory, the primary selection should identify whether the source of the stock-out is the customer or the warehouse... (DONE)
-5. : In distributor to factory stock out, the base price credit is not reflecting. Also, the SKu should be only those that are assigned in the margin matrix... (DONE)
-6. : sorry, its not the base price credit that is adjustable but the transfer price... (DONE)
-7. : remove all stock out, reutrns ,setllement and billing data (DONE)
-8. : The settlement should consider the credit issued by the distributor to the customer and the stock the is returned by the distributor to the factory which is adjustable. currnently its considering only the deliveries (DONE - but buggy)
-9. : hi (ACKNOWLEDGED)
-10. : The following features are not working [Lists Settlement and Billing Calculation errors] (IN PROGRESS)
-*(No pending human messages. Proceed directly to resolving the settlement API and Billing payload bugs).*
+*(Showing latest user requests)*
+1. : For the accounts, in the edit account option, provide an option to capture actual month and year the account is on boarded... (DONE)
+2. : Month-on-Month Comparison (Last 3 Months) It should be an editable grid... (DONE)
+3. : Only the following should be editable at a row level: Revenue, Outstanding... (DONE)
+4. : At the lead level, capture Target Closure Month. Changes in Account metrics... Changes in pipeline metrics... (DONE)
+5. : wake up servers (DONE)
+6. : Next Month Pipeline Value is showing the monthly bottle opportunity, it should show the estimated opportunity in INR... Account Metrics inline list instead of popup... (DONE)
+7. : Existing accounts value for each month should be cumulative... status rows should be clickable... (DONE)
+8. : Activity Metrics should have two sections... total vs unique customers reached. (DONE)
+9. : Also, completely make this page with contemporary design consistent with the home page, with pipeline colors and tiles design etc. otherwise it feels like a different application (IN PROGRESS)
 
 **Project Health Check:**
-- Broken:  fails due to schema/payload validation.
+- Broken: None currently, but  has untested, large-scale UI edits applied.
 - Mocked: None.
 
 **3rd Party Integrations**
@@ -141,23 +144,25 @@ None.
 - Claude Sonnet 4.5 (via Emergent LLM Key)
 
 **Testing status**
-- Testing agent used after significant changes: YES (iterations 87-91)
+- Testing agent used after significant changes: YES (iterations 100, 101, 102, 103, 104, 105, 106)
 - Troubleshoot agent used after agent stuck in loop: NO
-- Test files created: 
-- Known regressions: Settlement creation and Billing calculations broken in latest feature push.
+- Test files created:  (latest)
+- Known regressions: None currently.
 
 **Credentials to test flow:**
-- Admin Email:  | Password: 
+- Admin Email: 
+- Password: 
+- Tenant ID: 
+- Note: To see data in Performance Tracker, use Plan:  and Resource: .
 
 **What agent forgot to execute**
-The agent discovered the root causes of the Settlement creation bugs (Credit note , datetime mismatches, and  missing in the creation payload), but ran out of context limit before fully implementing and validating the payload fixes for the  API and frontend components.
+The agent successfully applied the file edits to redesign the Performance Tracker but ran out of context before running , verifying the layout via screenshots, and executing the .
 
 **Debugging checklist for current issue**
-    Issue: Settlement creation and Billing calculations fail due to bad payload and data schema mismatches.
+    Issue: Verification and completion of Performance Tracker UI Redesign.
 
     Frontend files to check: 
-    - : Verify the payload structure for creating settlements includes .
-    - : Ensure the frontend matches the EXACT variable names returned by the  backend response.
-  
+    -  (Check if JSX tags match up, ensure , , and Lucide icons are properly imported and utilized. Check custom  and  components at the bottom of the file).
+    
     Backend files to check:
-    - : Review  and  for proper datetime-to-string query matching on the  collection.</analysis>
+    - None required for this step. The UI logic relies on existing endpoints that were verified in Iteration 106.</analysis>

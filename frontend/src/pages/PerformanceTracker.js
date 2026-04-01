@@ -155,11 +155,14 @@ export default function PerformanceTracker() {
   const isLocked = data?.status === 'approved';
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6" data-testid="performance-tracker">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-5 sm:space-y-6" data-testid="performance-tracker">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <BarChart3 className="h-6 w-6 text-indigo-600" />
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 dark:text-white flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-900/50 dark:to-violet-900/30">
+              <BarChart3 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+            </div>
             Monthly Performance Tracker
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Track sales outcomes, activity, pipeline, and collections per resource</p>
@@ -167,11 +170,11 @@ export default function PerformanceTracker() {
       </div>
 
       {/* Selectors */}
-      <Card data-testid="performance-selectors">
-        <CardContent className="p-4">
+      <Card className="border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="performance-selectors">
+        <CardContent className="p-4 sm:p-5">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div>
-              <label className="text-xs font-medium text-slate-500 mb-1 block">Target Plan</label>
+              <label className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Target Plan</label>
               <Select value={selectedPlan} onValueChange={setSelectedPlan}>
                 <SelectTrigger data-testid="select-plan"><SelectValue placeholder="Select plan" /></SelectTrigger>
                 <SelectContent>
@@ -180,7 +183,7 @@ export default function PerformanceTracker() {
               </Select>
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-500 mb-1 block">Sales Resource</label>
+              <label className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Sales Resource</label>
               <Select value={selectedResource} onValueChange={setSelectedResource}>
                 <SelectTrigger data-testid="select-resource"><SelectValue placeholder="Select resource" /></SelectTrigger>
                 <SelectContent>
@@ -189,7 +192,7 @@ export default function PerformanceTracker() {
               </Select>
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-500 mb-1 block">Month</label>
+              <label className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Month</label>
               <Select value={String(selectedMonth)} onValueChange={v => setSelectedMonth(parseInt(v))}>
                 <SelectTrigger data-testid="select-month"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -198,7 +201,7 @@ export default function PerformanceTracker() {
               </Select>
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-500 mb-1 block">Year</label>
+              <label className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Year</label>
               <Select value={String(selectedYear)} onValueChange={v => setSelectedYear(parseInt(v))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -207,7 +210,7 @@ export default function PerformanceTracker() {
               </Select>
             </div>
             <div className="flex items-end">
-              <Button onClick={generate} disabled={loading || !selectedPlan || !selectedResource} className="w-full" data-testid="generate-btn">
+              <Button onClick={generate} disabled={loading || !selectedPlan || !selectedResource} className="w-full bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white shadow-sm border-0" data-testid="generate-btn">
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Generate
               </Button>
@@ -218,18 +221,18 @@ export default function PerformanceTracker() {
 
       {loading && (
         <div className="flex items-center justify-center py-20">
-          <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+          <RefreshCw className="h-6 w-6 animate-spin text-indigo-500" />
         </div>
       )}
 
       {data && !loading && (
         <>
           {/* Status bar */}
-          <div className="flex items-center justify-between bg-slate-50 rounded-lg p-3 border">
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium">{data.resource_name}</span>
-              <Badge variant="outline">{data.resource_city}</Badge>
-              <Badge variant="outline">{data.plan_name}</Badge>
+          <div className="flex items-center justify-between bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-slate-100 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+              <span className="text-sm font-semibold text-slate-800 dark:text-white">{data.resource_name}</span>
+              <Badge variant="outline" className="bg-slate-50 dark:bg-slate-800 text-xs">{data.resource_city}</Badge>
+              <Badge variant="outline" className="bg-slate-50 dark:bg-slate-800 text-xs">{data.plan_name}</Badge>
               <StatusBadge status={data.status} />
             </div>
             <div className="flex items-center gap-2">
@@ -256,83 +259,59 @@ export default function PerformanceTracker() {
             </div>
           </div>
 
-          {/* Summary Cards Row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3" data-testid="summary-cards">
-            <MetricCard label="Target" value={`₹${fmt(data.revenue?.target)}`} icon={<Target className="h-4 w-4" />} color="slate" testId="metric-target" />
-            <MetricCard label="Revenue (Month)" value={`₹${fmt(data.revenue?.this_month)}`} icon={<DollarSign className="h-4 w-4" />} color="blue" sub={fmtPct(data.revenue?.achievement_pct)} testId="metric-achieved" />
-            <MetricCard label="Existing Accounts" value={data.accounts?.existing_count} icon={<Users className="h-4 w-4" />} color="emerald" testId="metric-existing" />
-            <MetricCard label="New Accounts" value={data.accounts?.new_onboarded} icon={<Building2 className="h-4 w-4" />} color="teal" testId="metric-new" />
-            <MetricCard label="Pipeline" value={`₹${fmt(data.pipeline?.total_value)}`} icon={<TrendingUp className="h-4 w-4" />} color="amber" sub={`${data.pipeline?.total_count} leads`} testId="metric-pipeline" />
-            <MetricCard label="Outstanding" value={`₹${fmt(data.collections?.total_outstanding)}`} icon={<AlertTriangle className="h-4 w-4" />} color="red" testId="metric-outstanding" />
-            <MetricCard label="Activities" value={data.activities?.total || 0} icon={<Phone className="h-4 w-4" />} color="purple" sub={`${data.activities?.unique_visits || 0} unique visits`} testId="metric-activity" />
+          {/* Summary Cards Row - TaskMetricsWidget Style */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 sm:gap-4" data-testid="summary-cards">
+            <SummaryTile label="Target" value={`₹${fmt(data.revenue?.target)}`} icon={Target} gradient="from-slate-500 to-slate-700" bgGradient="from-slate-50 to-gray-50 dark:from-slate-950/30 dark:to-gray-950/20" iconBg="bg-slate-100 dark:bg-slate-900/50" textColor="text-slate-700 dark:text-slate-300" testId="metric-target" />
+            <SummaryTile label="Revenue (Month)" value={`₹${fmt(data.revenue?.this_month)}`} icon={DollarSign} gradient="from-blue-500 to-indigo-600" bgGradient="from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20" iconBg="bg-blue-100 dark:bg-blue-900/50" textColor="text-blue-700 dark:text-blue-300" sub={fmtPct(data.revenue?.achievement_pct)} testId="metric-achieved" />
+            <SummaryTile label="Existing Accounts" value={data.accounts?.existing_count} icon={Users} gradient="from-emerald-500 to-teal-600" bgGradient="from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20" iconBg="bg-emerald-100 dark:bg-emerald-900/50" textColor="text-emerald-700 dark:text-emerald-300" testId="metric-existing" />
+            <SummaryTile label="New Accounts" value={data.accounts?.new_onboarded} icon={Building2} gradient="from-teal-500 to-cyan-600" bgGradient="from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/20" iconBg="bg-teal-100 dark:bg-teal-900/50" textColor="text-teal-700 dark:text-teal-300" testId="metric-new" />
+            <SummaryTile label="Pipeline" value={`₹${fmt(data.pipeline?.total_value)}`} icon={TrendingUp} gradient="from-amber-500 to-orange-600" bgGradient="from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20" iconBg="bg-amber-100 dark:bg-amber-900/50" textColor="text-amber-700 dark:text-amber-300" sub={`${data.pipeline?.total_count} leads`} testId="metric-pipeline" />
+            <SummaryTile label="Outstanding" value={`₹${fmt(data.collections?.total_outstanding)}`} icon={AlertTriangle} gradient="from-red-500 to-rose-600" bgGradient="from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/20" iconBg="bg-red-100 dark:bg-red-900/50" textColor="text-red-700 dark:text-red-300" testId="metric-outstanding" />
+            <SummaryTile label="Activities" value={data.activities?.total || 0} icon={Phone} gradient="from-violet-500 to-purple-600" bgGradient="from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/20" iconBg="bg-violet-100 dark:bg-violet-900/50" textColor="text-violet-700 dark:text-violet-300" sub={`${data.activities?.unique_visits || 0} unique visits`} testId="metric-activity" />
           </div>
 
           {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
             {/* Revenue Section */}
-            <Card data-testid="revenue-section">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2"><DollarSign className="h-4 w-4 text-blue-600" />Revenue Metrics</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <InfoRow label="Monthly Target" value={`₹${fmt(data.revenue?.target)}`} />
-                  <InfoRow label="Achievement %" value={fmtPct(data.revenue?.achievement_pct)} highlight={data.revenue?.achievement_pct < 50 ? 'red' : data.revenue?.achievement_pct >= 100 ? 'green' : 'amber'} />
+            <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="revenue-section">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500" style={{position:'relative'}} />
+              <div className="p-4 sm:p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/30">
+                    <DollarSign className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Revenue Metrics</h3>
                 </div>
-                <div className="space-y-2 border-t pt-2">
-                  <OverridableRow
-                    label="Revenue Lifetime (As-on-date)"
-                    autoValue={data.revenue?.lifetime}
-                    overrideValue={revenueOverrides.lifetime}
-                    editing={revenueEditing.lifetime}
-                    locked={isLocked}
-                    onEdit={() => setRevenueEditing(p => ({ ...p, lifetime: true }))}
-                    onChange={(v) => setRevenueOverrides(p => ({ ...p, lifetime: v }))}
-                    onSave={() => setRevenueEditing(p => ({ ...p, lifetime: false }))}
-                    onReset={() => { setRevenueOverrides(p => ({ ...p, lifetime: '' })); setRevenueEditing(p => ({ ...p, lifetime: false })); }}
-                    testId="revenue-lifetime"
-                  />
-                  <OverridableRow
-                    label="Revenue This Month (All Accounts)"
-                    autoValue={data.revenue?.this_month}
-                    overrideValue={revenueOverrides.this_month}
-                    editing={revenueEditing.this_month}
-                    locked={isLocked}
-                    onEdit={() => setRevenueEditing(p => ({ ...p, this_month: true }))}
-                    onChange={(v) => setRevenueOverrides(p => ({ ...p, this_month: v }))}
-                    onSave={() => setRevenueEditing(p => ({ ...p, this_month: false }))}
-                    onReset={() => { setRevenueOverrides(p => ({ ...p, this_month: '' })); setRevenueEditing(p => ({ ...p, this_month: false })); }}
-                    testId="revenue-this-month"
-                  />
-                  <OverridableRow
-                    label="Revenue from New Accounts This Month"
-                    autoValue={data.revenue?.from_new_accounts}
-                    overrideValue={revenueOverrides.new_accounts}
-                    editing={revenueEditing.new_accounts}
-                    locked={isLocked}
-                    onEdit={() => setRevenueEditing(p => ({ ...p, new_accounts: true }))}
-                    onChange={(v) => setRevenueOverrides(p => ({ ...p, new_accounts: v }))}
-                    onSave={() => setRevenueEditing(p => ({ ...p, new_accounts: false }))}
-                    onReset={() => { setRevenueOverrides(p => ({ ...p, new_accounts: '' })); setRevenueEditing(p => ({ ...p, new_accounts: false })); }}
-                    testId="revenue-new-accounts"
-                  />
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <InfoRow label="Monthly Target" value={`₹${fmt(data.revenue?.target)}`} />
+                    <InfoRow label="Achievement %" value={fmtPct(data.revenue?.achievement_pct)} highlight={data.revenue?.achievement_pct < 50 ? 'red' : data.revenue?.achievement_pct >= 100 ? 'green' : 'amber'} />
+                  </div>
+                  <div className="space-y-2 border-t border-slate-100 dark:border-slate-800 pt-3">
+                    <OverridableRow label="Revenue Lifetime (As-on-date)" autoValue={data.revenue?.lifetime} overrideValue={revenueOverrides.lifetime} editing={revenueEditing.lifetime} locked={isLocked} onEdit={() => setRevenueEditing(p => ({ ...p, lifetime: true }))} onChange={(v) => setRevenueOverrides(p => ({ ...p, lifetime: v }))} onSave={() => setRevenueEditing(p => ({ ...p, lifetime: false }))} onReset={() => { setRevenueOverrides(p => ({ ...p, lifetime: '' })); setRevenueEditing(p => ({ ...p, lifetime: false })); }} testId="revenue-lifetime" />
+                    <OverridableRow label="Revenue This Month (All Accounts)" autoValue={data.revenue?.this_month} overrideValue={revenueOverrides.this_month} editing={revenueEditing.this_month} locked={isLocked} onEdit={() => setRevenueEditing(p => ({ ...p, this_month: true }))} onChange={(v) => setRevenueOverrides(p => ({ ...p, this_month: v }))} onSave={() => setRevenueEditing(p => ({ ...p, this_month: false }))} onReset={() => { setRevenueOverrides(p => ({ ...p, this_month: '' })); setRevenueEditing(p => ({ ...p, this_month: false })); }} testId="revenue-this-month" />
+                    <OverridableRow label="Revenue from New Accounts" autoValue={data.revenue?.from_new_accounts} overrideValue={revenueOverrides.new_accounts} editing={revenueEditing.new_accounts} locked={isLocked} onEdit={() => setRevenueEditing(p => ({ ...p, new_accounts: true }))} onChange={(v) => setRevenueOverrides(p => ({ ...p, new_accounts: v }))} onSave={() => setRevenueEditing(p => ({ ...p, new_accounts: false }))} onReset={() => { setRevenueOverrides(p => ({ ...p, new_accounts: '' })); setRevenueEditing(p => ({ ...p, new_accounts: false })); }} testId="revenue-new-accounts" />
+                  </div>
                 </div>
-              </CardContent>
+              </div>
             </Card>
 
-            {/* Accounts Section (from Accounts collection) */}
-            <Card data-testid="accounts-section">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Users className="h-4 w-4 text-emerald-600" />Account Metrics
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
+            {/* Accounts Section */}
+            <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="accounts-section">
+              <div className="h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
+              <div className="p-4 sm:p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/50 dark:to-teal-900/30">
+                    <Users className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Account Metrics</h3>
+                </div>
+              <div className="space-y-4">
                 {/* Existing Accounts */}
                 <div data-testid="existing-accounts-tile">
-                  <div className="flex justify-between items-center py-2 px-3 border border-dashed border-emerald-200 rounded-lg bg-emerald-50/30">
-                    <span className="text-xs text-slate-500">Existing Accounts (Lifetime)</span>
-                    <span className="text-sm font-bold text-emerald-700">{data.accounts?.existing_count}</span>
+                  <div className="flex justify-between items-center py-2.5 px-3.5 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/10 border border-emerald-100 dark:border-emerald-900/30">
+                    <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Existing Accounts (Lifetime)</span>
+                    <span className="text-lg font-bold text-emerald-700 dark:text-emerald-400">{data.accounts?.existing_count}</span>
                   </div>
                   {(data.accounts?.existing_accounts || []).length > 0 && (
                     <div className="mt-1.5 space-y-1">
@@ -340,10 +319,10 @@ export default function PerformanceTracker() {
                         ? data.accounts.existing_accounts
                         : data.accounts.existing_accounts.slice(0, 3)
                       ).map((acc, idx) => (
-                        <div key={acc.id || idx} className="flex items-center justify-between py-1 px-3 text-xs rounded bg-slate-50 border border-slate-100">
-                          <span className="font-medium text-slate-700">{acc.name || 'Unknown'}</span>
+                        <div key={acc.id || idx} className="flex items-center justify-between py-1.5 px-3 text-xs rounded-lg bg-white/70 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-all duration-200">
+                          <span className="font-medium text-slate-700 dark:text-slate-300">{acc.name || 'Unknown'}</span>
                           <div className="flex items-center gap-2">
-                            {acc.city && <span className="text-slate-400">{acc.city}</span>}
+                            {acc.city && <span className="text-slate-400 dark:text-slate-500">{acc.city}</span>}
                             {acc.status && <Badge variant="outline" className="text-[10px] capitalize py-0 h-4">{acc.status.replace(/_/g, ' ')}</Badge>}
                           </div>
                         </div>
@@ -351,7 +330,7 @@ export default function PerformanceTracker() {
                       {data.accounts.existing_accounts.length > 3 && (
                         <button
                           onClick={() => setExpandedAccountList(p => ({ ...p, existing: !p.existing }))}
-                          className="text-xs text-blue-600 hover:text-blue-800 px-3 py-0.5 flex items-center gap-1"
+                          className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 px-3 py-0.5 flex items-center gap-1 font-medium"
                           data-testid="expand-existing-accounts"
                         >
                           {expandedAccountList.existing ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
@@ -363,9 +342,9 @@ export default function PerformanceTracker() {
                 </div>
                 {/* New Accounts This Month */}
                 <div data-testid="new-accounts-tile">
-                  <div className={`flex justify-between items-center py-2 px-3 border border-dashed rounded-lg ${data.accounts?.new_onboarded > 0 ? 'border-teal-200 bg-teal-50/30' : 'border-red-200 bg-red-50/30'}`}>
-                    <span className="text-xs text-slate-500">New Accounts Onboarded This Month</span>
-                    <span className={`text-sm font-bold ${data.accounts?.new_onboarded > 0 ? 'text-teal-700' : 'text-red-600'}`}>{data.accounts?.new_onboarded}</span>
+                  <div className={`flex justify-between items-center py-2.5 px-3.5 rounded-xl border ${data.accounts?.new_onboarded > 0 ? 'bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/20 dark:to-cyan-950/10 border-teal-100 dark:border-teal-900/30' : 'bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/20 dark:to-rose-950/10 border-red-100 dark:border-red-900/30'}`}>
+                    <span className="text-xs font-medium text-slate-600 dark:text-slate-400">New Accounts Onboarded This Month</span>
+                    <span className={`text-lg font-bold ${data.accounts?.new_onboarded > 0 ? 'text-teal-700 dark:text-teal-400' : 'text-red-600 dark:text-red-400'}`}>{data.accounts?.new_onboarded}</span>
                   </div>
                   {(data.accounts?.new_accounts || []).length > 0 && (
                     <div className="mt-1.5 space-y-1">
@@ -373,15 +352,15 @@ export default function PerformanceTracker() {
                         ? data.accounts.new_accounts
                         : data.accounts.new_accounts.slice(0, 3)
                       ).map((acc, idx) => (
-                        <div key={acc.id || idx} className="flex items-center justify-between py-1 px-3 text-xs rounded bg-slate-50 border border-slate-100">
-                          <span className="font-medium text-slate-700">{acc.name || 'Unknown'}</span>
-                          {acc.city && <span className="text-slate-400">{acc.city}</span>}
+                        <div key={acc.id || idx} className="flex items-center justify-between py-1.5 px-3 text-xs rounded-lg bg-white/70 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-all duration-200">
+                          <span className="font-medium text-slate-700 dark:text-slate-300">{acc.name || 'Unknown'}</span>
+                          {acc.city && <span className="text-slate-400 dark:text-slate-500">{acc.city}</span>}
                         </div>
                       ))}
                       {data.accounts.new_accounts.length > 3 && (
                         <button
                           onClick={() => setExpandedAccountList(p => ({ ...p, new: !p.new }))}
-                          className="text-xs text-blue-600 hover:text-blue-800 px-3 py-0.5 flex items-center gap-1"
+                          className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 px-3 py-0.5 flex items-center gap-1 font-medium"
                           data-testid="expand-new-accounts"
                         >
                           {expandedAccountList.new ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
@@ -391,67 +370,78 @@ export default function PerformanceTracker() {
                     </div>
                   )}
                 </div>
-              </CardContent>
+              </div>
+              </div>
             </Card>
 
-            {/* Pipeline Section (from leads, status-wise breakdown) */}
-            <Card data-testid="pipeline-section">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-amber-600" />Pipeline Metrics
-                </CardTitle>
-              </CardHeader>
+            {/* Pipeline Section */}
+            <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="pipeline-section">
+              <div className="h-1 bg-gradient-to-r from-amber-500 to-orange-500" />
+              <div className="p-4 sm:p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/50 dark:to-orange-900/30">
+                    <TrendingUp className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Pipeline Metrics</h3>
+                </div>
               <CardContent>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm" data-testid="pipeline-status-table">
                     <thead>
-                      <tr className="bg-slate-50 border-b text-xs text-slate-500 uppercase">
-                        <th className="text-left p-2">Status</th>
-                        <th className="text-right p-2">No of Leads</th>
-                        <th className="text-right p-2">Pipeline Value</th>
+                      <tr className="bg-gradient-to-r from-amber-50/80 to-orange-50/80 dark:from-amber-950/20 dark:to-orange-950/10 border-b border-amber-100 dark:border-amber-900/30 text-xs text-slate-500 dark:text-slate-400 uppercase">
+                        <th className="text-left p-2.5">Status</th>
+                        <th className="text-right p-2.5">No of Leads</th>
+                        <th className="text-right p-2.5">Pipeline Value</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(data.pipeline?.by_status || []).map((row) => (
                         <tr
                           key={row.status}
-                          className="border-b hover:bg-slate-100/70 cursor-pointer transition-colors"
+                          className="border-b border-slate-100 dark:border-slate-800 hover:bg-amber-50/50 dark:hover:bg-amber-950/10 cursor-pointer transition-all duration-200 group"
                           onClick={() => navigate(`/leads?status=${row.status}`)}
                           data-testid={`pipeline-row-${row.status}`}
                         >
-                          <td className="p-2 text-xs font-medium text-blue-600 capitalize underline decoration-dotted underline-offset-2">{row.status.replace(/_/g, ' ')}</td>
-                          <td className="p-2 text-right text-sm font-medium">{row.count}</td>
-                          <td className="p-2 text-right text-sm font-medium">₹{fmt(row.value)}</td>
+                          <td className="p-2.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 capitalize flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-500" />
+                            {row.status.replace(/_/g, ' ')}
+                            <ChevronRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400" />
+                          </td>
+                          <td className="p-2.5 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">{row.count}</td>
+                          <td className="p-2.5 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">₹{fmt(row.value)}</td>
                         </tr>
                       ))}
                       {(data.pipeline?.by_status || []).length === 0 && (
-                        <tr><td colSpan={3} className="text-center py-3 text-xs text-muted-foreground">No active pipeline leads</td></tr>
+                        <tr><td colSpan={3} className="text-center py-4 text-xs text-muted-foreground">No active pipeline leads</td></tr>
                       )}
-                      <tr className="bg-slate-50 font-semibold border-t">
-                        <td className="p-2 text-xs text-slate-700">Total</td>
-                        <td className="p-2 text-right text-sm">{data.pipeline?.total_count || 0}</td>
-                        <td className="p-2 text-right text-sm">₹{fmt(data.pipeline?.total_value)}</td>
+                      <tr className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-800/50 dark:to-gray-800/30 font-semibold border-t-2 border-slate-200 dark:border-slate-700">
+                        <td className="p-2.5 text-xs text-slate-700 dark:text-slate-300">Total</td>
+                        <td className="p-2.5 text-right text-sm text-slate-800 dark:text-white">{data.pipeline?.total_count || 0}</td>
+                        <td className="p-2.5 text-right text-sm text-slate-800 dark:text-white">₹{fmt(data.pipeline?.total_value)}</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
-                <div className="mt-3 pt-2 border-t grid grid-cols-2 gap-3">
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-3">
                   <InfoRow label="Leads Targeting Next Month" value={data.pipeline?.next_month_leads_count || 0} />
                   <InfoRow label="Next Month Pipeline Value" value={`₹${fmt(data.pipeline?.next_month_pipeline_value)}`} />
                   <InfoRow label="Coverage Ratio" value={fmtPct(data.pipeline?.coverage_ratio)} highlight={data.pipeline?.coverage_ratio < 50 ? 'red' : 'green'} />
                 </div>
               </CardContent>
+              </div>
             </Card>
 
             {/* Outstanding Section */}
-            <Card data-testid="outstanding-section">
-              <CardHeader className="pb-2 cursor-pointer" onClick={() => toggleSection('outstanding')}>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-red-600" />Collections / Outstanding
-                  {expandedSections.outstanding ? <ChevronDown className="h-4 w-4 ml-auto" /> : <ChevronRight className="h-4 w-4 ml-auto" />}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+            <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="outstanding-section">
+              <div className="h-1 bg-gradient-to-r from-red-500 to-rose-500" />
+              <div className="p-4 sm:p-5">
+                <div className="flex items-center gap-2 mb-4 cursor-pointer" onClick={() => toggleSection('outstanding')}>
+                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-red-100 to-rose-100 dark:from-red-900/50 dark:to-rose-900/30">
+                    <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Collections / Outstanding</h3>
+                  {expandedSections.outstanding ? <ChevronDown className="h-4 w-4 ml-auto text-slate-400" /> : <ChevronRight className="h-4 w-4 ml-auto text-slate-400" />}
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <InfoRow label="Total Outstanding" value={`₹${fmt(data.collections?.total_outstanding)}`} highlight={data.collections?.total_outstanding > 0 ? 'red' : 'green'} />
                   <InfoRow label="Outstanding Ratio" value={fmtPct(data.collections?.outstanding_ratio)} />
@@ -465,107 +455,116 @@ export default function PerformanceTracker() {
                   </div>
                 )}
                 {expandedSections.outstanding && data.collections?.account_details?.length > 0 && (
-                  <div className="mt-3 border-t pt-2">
-                    <p className="text-xs font-semibold text-red-600 uppercase mb-1">Account-Level Outstanding</p>
+                  <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-2">
+                    <p className="text-xs font-semibold text-red-600 dark:text-red-400 uppercase mb-1">Account-Level Outstanding</p>
                     {data.collections.account_details.slice(0, 10).map(a => (
                       <div key={a.account_id} className="text-xs flex justify-between py-0.5">
-                        <span>{a.account_id?.slice(0, 12)}... ({a.invoices} inv)</span>
-                        <span className="font-medium text-red-600">₹{fmt(a.outstanding)}</span>
+                        <span className="text-slate-600 dark:text-slate-400">{a.account_id?.slice(0, 12)}... ({a.invoices} inv)</span>
+                        <span className="font-medium text-red-600 dark:text-red-400">₹{fmt(a.outstanding)}</span>
                       </div>
                     ))}
                   </div>
                 )}
-              </CardContent>
+              </div>
             </Card>
 
             {/* Activity Section */}
-            <Card data-testid="activity-section">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2"><Phone className="h-4 w-4 text-purple-600" />Activity Metrics</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Section 1: Total Activity Counts */}
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Total Activities</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex items-center justify-between py-1.5 px-3 rounded bg-purple-50/40 border border-purple-100">
-                      <span className="text-xs text-slate-600 flex items-center gap-1.5"><MessageSquare className="h-3 w-3 text-purple-500" />Messages</span>
-                      <span className="text-sm font-bold text-slate-700">{data.activities?.messages || 0}</span>
-                    </div>
-                    <div className="flex items-center justify-between py-1.5 px-3 rounded bg-blue-50/40 border border-blue-100">
-                      <span className="text-xs text-slate-600 flex items-center gap-1.5"><Phone className="h-3 w-3 text-blue-500" />Calls</span>
-                      <span className="text-sm font-bold text-slate-700">{data.activities?.calls || 0}</span>
-                    </div>
-                    <div className="flex items-center justify-between py-1.5 px-3 rounded bg-emerald-50/40 border border-emerald-100">
-                      <span className="text-xs text-slate-600 flex items-center gap-1.5"><MapPin className="h-3 w-3 text-emerald-500" />Customer Visits</span>
-                      <span className="text-sm font-bold text-slate-700">{data.activities?.visits || 0}</span>
-                    </div>
-                    <div className="flex items-center justify-between py-1.5 px-3 rounded bg-amber-50/40 border border-amber-100">
-                      <span className="text-xs text-slate-600 flex items-center gap-1.5"><Mail className="h-3 w-3 text-amber-500" />Emails</span>
-                      <span className="text-sm font-bold text-slate-700">{data.activities?.emails || 0}</span>
+            <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="activity-section">
+              <div className="h-1 bg-gradient-to-r from-violet-500 to-purple-500" />
+              <div className="p-4 sm:p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-900/50 dark:to-purple-900/30">
+                    <Phone className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Activity Metrics</h3>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Total Activities</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-gradient-to-br from-purple-50/60 to-violet-50/40 dark:from-purple-950/20 dark:to-violet-950/10 border border-purple-100/60 dark:border-purple-900/20">
+                        <span className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1.5"><MessageSquare className="h-3 w-3 text-purple-500 dark:text-purple-400" />Messages</span>
+                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{data.activities?.messages || 0}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-gradient-to-br from-blue-50/60 to-indigo-50/40 dark:from-blue-950/20 dark:to-indigo-950/10 border border-blue-100/60 dark:border-blue-900/20">
+                        <span className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1.5"><Phone className="h-3 w-3 text-blue-500 dark:text-blue-400" />Calls</span>
+                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{data.activities?.calls || 0}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-gradient-to-br from-emerald-50/60 to-teal-50/40 dark:from-emerald-950/20 dark:to-teal-950/10 border border-emerald-100/60 dark:border-emerald-900/20">
+                        <span className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1.5"><MapPin className="h-3 w-3 text-emerald-500 dark:text-emerald-400" />Customer Visits</span>
+                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{data.activities?.visits || 0}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-gradient-to-br from-amber-50/60 to-orange-50/40 dark:from-amber-950/20 dark:to-orange-950/10 border border-amber-100/60 dark:border-amber-900/20">
+                        <span className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1.5"><Mail className="h-3 w-3 text-amber-500 dark:text-amber-400" />Emails</span>
+                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{data.activities?.emails || 0}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-                {/* Section 2: Unique Customer Counts */}
-                <div className="border-t pt-3">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Unique Customers Reached</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex items-center justify-between py-1.5 px-3 rounded bg-slate-50 border border-slate-100">
-                      <span className="text-xs text-slate-600">Unique Visits</span>
-                      <span className="text-sm font-bold text-slate-700">{data.activities?.unique_visits || 0}</span>
-                    </div>
-                    <div className="flex items-center justify-between py-1.5 px-3 rounded bg-slate-50 border border-slate-100">
-                      <span className="text-xs text-slate-600">Unique Messages</span>
-                      <span className="text-sm font-bold text-slate-700">{data.activities?.unique_messages || 0}</span>
-                    </div>
-                    <div className="flex items-center justify-between py-1.5 px-3 rounded bg-slate-50 border border-slate-100">
-                      <span className="text-xs text-slate-600">Unique Calls</span>
-                      <span className="text-sm font-bold text-slate-700">{data.activities?.unique_calls || 0}</span>
-                    </div>
-                    <div className="flex items-center justify-between py-1.5 px-3 rounded bg-slate-50 border border-slate-100">
-                      <span className="text-xs text-slate-600">Unique Emails</span>
-                      <span className="text-sm font-bold text-slate-700">{data.activities?.unique_emails || 0}</span>
+                  <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
+                    <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Unique Customers Reached</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50/80 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800">
+                        <span className="text-xs text-slate-600 dark:text-slate-400">Unique Visits</span>
+                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{data.activities?.unique_visits || 0}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50/80 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800">
+                        <span className="text-xs text-slate-600 dark:text-slate-400">Unique Messages</span>
+                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{data.activities?.unique_messages || 0}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50/80 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800">
+                        <span className="text-xs text-slate-600 dark:text-slate-400">Unique Calls</span>
+                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{data.activities?.unique_calls || 0}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50/80 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800">
+                        <span className="text-xs text-slate-600 dark:text-slate-400">Unique Emails</span>
+                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{data.activities?.unique_emails || 0}</span>
+                      </div>
                     </div>
                   </div>
+                  <div className="border-t border-slate-100 dark:border-slate-800 pt-3 grid grid-cols-2 gap-3">
+                    <InfoRow label="Visit Productivity" value={data.activities?.visit_productivity > 0 ? `₹${fmt(data.activities?.visit_productivity)}/visit` : '-'} />
+                    <InfoRow label="Call Productivity" value={data.activities?.call_productivity > 0 ? `₹${fmt(data.activities?.call_productivity)}/call` : '-'} />
+                  </div>
                 </div>
-                {/* Productivity */}
-                <div className="border-t pt-3 grid grid-cols-2 gap-3">
-                  <InfoRow label="Visit Productivity" value={data.activities?.visit_productivity > 0 ? `₹${fmt(data.activities?.visit_productivity)}/visit` : '-'} />
-                  <InfoRow label="Call Productivity" value={data.activities?.call_productivity > 0 ? `₹${fmt(data.activities?.call_productivity)}/call` : '-'} />
-                </div>
-              </CardContent>
+              </div>
             </Card>
 
             {/* Support Section */}
-            <Card data-testid="support-section">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2"><MapPin className="h-4 w-4 text-indigo-600" />Support Needed</CardTitle>
-                <CardDescription>Select areas where team support is required</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex flex-wrap gap-2">
-                  {SUPPORT_CATEGORIES.map(cat => (
-                    <Badge
-                      key={cat}
-                      variant={supportNeeded.includes(cat) ? 'default' : 'outline'}
-                      className={`cursor-pointer transition-all ${supportNeeded.includes(cat) ? 'bg-indigo-600' : 'hover:bg-indigo-50'} ${isLocked ? 'pointer-events-none' : ''}`}
-                      onClick={() => !isLocked && toggleSupport(cat)}
-                      data-testid={`support-${cat.toLowerCase().replace(/\s+/g, '-')}`}
-                    >
-                      {cat}
-                    </Badge>
-                  ))}
+            <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="support-section">
+              <div className="h-1 bg-gradient-to-r from-indigo-500 to-blue-500" />
+              <div className="p-4 sm:p-5">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-indigo-100 to-blue-100 dark:from-indigo-900/50 dark:to-blue-900/30">
+                    <MapPin className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Support Needed</h3>
                 </div>
-                <div>
-                  <label className="text-xs text-slate-500">Remarks</label>
-                  <Textarea
-                    value={remarks} onChange={e => setRemarks(e.target.value)}
-                    placeholder="Additional comments or observations..."
-                    className="mt-1" rows={3} disabled={isLocked}
-                    data-testid="remarks"
-                  />
+                <p className="text-xs text-muted-foreground mb-3 ml-9">Select areas where team support is required</p>
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {SUPPORT_CATEGORIES.map(cat => (
+                      <Badge
+                        key={cat}
+                        variant={supportNeeded.includes(cat) ? 'default' : 'outline'}
+                        className={`cursor-pointer transition-all duration-200 ${supportNeeded.includes(cat) ? 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 border-0 text-white shadow-sm' : 'hover:bg-indigo-50 dark:hover:bg-indigo-950/30 hover:border-indigo-200'} ${isLocked ? 'pointer-events-none' : ''}`}
+                        onClick={() => !isLocked && toggleSupport(cat)}
+                        data-testid={`support-${cat.toLowerCase().replace(/\s+/g, '-')}`}
+                      >
+                        {cat}
+                      </Badge>
+                    ))}
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 dark:text-slate-400">Remarks</label>
+                    <Textarea
+                      value={remarks} onChange={e => setRemarks(e.target.value)}
+                      placeholder="Additional comments or observations..."
+                      className="mt-1 bg-white/50 dark:bg-slate-800/30" rows={3} disabled={isLocked}
+                      data-testid="remarks"
+                    />
+                  </div>
                 </div>
-              </CardContent>
+              </div>
             </Card>
           </div>
 
@@ -581,11 +580,15 @@ export default function PerformanceTracker() {
           )}
 
           {/* Calculated KPIs */}
-          <Card data-testid="kpi-section">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2"><Target className="h-4 w-4 text-teal-600" />Performance KPIs</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="kpi-section">
+            <div className="h-1 bg-gradient-to-r from-teal-500 to-cyan-500" />
+            <div className="p-4 sm:p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-1.5 rounded-lg bg-gradient-to-br from-teal-100 to-cyan-100 dark:from-teal-900/50 dark:to-cyan-900/30">
+                  <Target className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                </div>
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Performance KPIs</h3>
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 <KPICard label="Achievement %" value={fmtPct(data.calculated?.achievement_pct)} good={data.calculated?.achievement_pct >= 80} bad={data.calculated?.achievement_pct < 50} />
                 <KPICard label="Pipeline Coverage" value={fmtPct(data.calculated?.pipeline_coverage)} good={data.calculated?.pipeline_coverage >= 100} bad={data.calculated?.pipeline_coverage < 50} />
@@ -594,7 +597,7 @@ export default function PerformanceTracker() {
                 <KPICard label="Call Productivity" value={data.calculated?.call_productivity > 0 ? `₹${fmt(data.calculated.call_productivity)}` : '-'} />
                 <KPICard label="Conversion Rate" value={fmtPct(data.calculated?.account_conversion_rate)} good={data.calculated?.account_conversion_rate >= 20} />
               </div>
-            </CardContent>
+            </div>
           </Card>
         </>
       )}
