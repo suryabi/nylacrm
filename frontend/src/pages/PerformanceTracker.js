@@ -90,7 +90,7 @@ export default function PerformanceTracker() {
       setRevenueEditing({ lifetime: false, this_month: false, new_accounts: false });
       // Fetch comparison
       const compRes = await fetch(
-        `${API_URL}/api/performance/comparison?resource_id=${selectedResource}&plan_id=${selectedPlan}&months=3`,
+        `${API_URL}/api/performance/comparison?resource_id=${selectedResource}&plan_id=${selectedPlan}&months=3&month=${selectedMonth}&year=${selectedYear}`,
         { headers }
       );
       setComparison(await compRes.json());
@@ -750,13 +750,14 @@ function KPICard({ label, value, good, bad, invert }) {
   );
 }
 
-function CompRow({ label, months, field, prefix = '', suffix = '' }) {
+function CompRow({ label, months, field, prefix = '', suffix = '', rowIndex = 0 }) {
   const values = months.map(m => m[field] || 0);
   const last = values[values.length - 1];
   const prev = values.length > 1 ? values[values.length - 2] : 0;
   const change = prev > 0 ? ((last - prev) / prev * 100) : 0;
+  const isEven = rowIndex % 2 === 0;
   return (
-    <tr className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
+    <tr className={`border-b border-slate-100 dark:border-slate-800 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/10 transition-colors ${isEven ? 'bg-slate-50/50 dark:bg-slate-800/20' : ''}`}>
       <td className="p-2.5 text-xs font-medium text-slate-600 dark:text-slate-400">{label}</td>
       {values.map((v, i) => (
         <td key={i} className="p-2.5 text-right text-sm font-medium text-slate-700 dark:text-slate-300">{prefix}{fmt(v)}{suffix}</td>
@@ -866,22 +867,24 @@ function ComparisonTable({ comparison, selectedResource, selectedPlan, headers, 
                 setEditValues={setEditValues} savingRow={savingRow} rowKey="revenue"
                 onEdit={() => startEdit('revenue')} onSave={() => saveRow('revenue')}
                 onCancel={cancelEdit} onReset={() => resetRow('revenue')} hasOverride={hasOverride('revenue')}
+                rowIndex={0}
               />
-              <CompRow label="Target" months={comparison.months} field="monthly_target" prefix="₹" />
-              <CompRow label="Achievement %" months={comparison.months} field="achievement_pct" suffix="%" />
-              <CompRow label="New Accounts" months={comparison.months} field="new_accounts" />
-              <CompRow label="Existing Accounts" months={comparison.months} field="existing_accounts" />
-              <CompRow label="Pipeline Value" months={comparison.months} field="pipeline_value" prefix="₹" />
-              <CompRow label="Pipeline Accounts" months={comparison.months} field="pipeline_count" />
+              <CompRow label="Target" months={comparison.months} field="monthly_target" prefix="₹" rowIndex={1} />
+              <CompRow label="Achievement %" months={comparison.months} field="achievement_pct" suffix="%" rowIndex={2} />
+              <CompRow label="New Accounts" months={comparison.months} field="new_accounts" rowIndex={3} />
+              <CompRow label="Existing Accounts" months={comparison.months} field="existing_accounts" rowIndex={4} />
+              <CompRow label="Pipeline Value" months={comparison.months} field="pipeline_value" prefix="₹" rowIndex={5} />
+              <CompRow label="Pipeline Accounts" months={comparison.months} field="pipeline_count" rowIndex={6} />
               <EditableCompRow
                 label="Outstanding" months={comparison.months} field="total_outstanding" autoField="auto_outstanding"
                 overrideFlag="has_outstanding_override" prefix="₹" editingRow={editingRow} editValues={editValues}
                 setEditValues={setEditValues} savingRow={savingRow} rowKey="outstanding"
                 onEdit={() => startEdit('outstanding')} onSave={() => saveRow('outstanding')}
                 onCancel={cancelEdit} onReset={() => resetRow('outstanding')} hasOverride={hasOverride('outstanding')}
+                rowIndex={7}
               />
-              <CompRow label="Visits" months={comparison.months} field="visits" />
-              <CompRow label="Calls" months={comparison.months} field="calls" />
+              <CompRow label="Visits" months={comparison.months} field="visits" rowIndex={8} />
+              <CompRow label="Calls" months={comparison.months} field="calls" rowIndex={9} />
             </tbody>
           </table>
         </div>
@@ -890,16 +893,17 @@ function ComparisonTable({ comparison, selectedResource, selectedPlan, headers, 
   );
 }
 
-function EditableCompRow({ label, months, field, autoField, overrideFlag, prefix = '', editingRow, editValues, setEditValues, savingRow, rowKey, onEdit, onSave, onCancel, onReset, hasOverride }) {
+function EditableCompRow({ label, months, field, autoField, overrideFlag, prefix = '', editingRow, editValues, setEditValues, savingRow, rowKey, onEdit, onSave, onCancel, onReset, hasOverride, rowIndex = 0 }) {
   const isEditing = editingRow === rowKey;
   const isSaving = savingRow === rowKey;
   const values = months.map(m => m[field] || 0);
   const last = values[values.length - 1];
   const prev = values.length > 1 ? values[values.length - 2] : 0;
   const change = prev > 0 ? ((last - prev) / prev * 100) : 0;
+  const isEven = rowIndex % 2 === 0;
 
   return (
-    <tr className={`border-b ${isEditing ? 'bg-blue-50/50' : hasOverride ? 'bg-amber-50/30' : 'hover:bg-slate-50/50'}`} data-testid={`comp-row-${rowKey}`}>
+    <tr className={`border-b border-slate-100 dark:border-slate-800 ${isEditing ? 'bg-blue-50/50 dark:bg-blue-950/20' : hasOverride ? 'bg-amber-50/30 dark:bg-amber-950/10' : isEven ? 'bg-slate-50/50 dark:bg-slate-800/20' : ''} hover:bg-indigo-50/40 dark:hover:bg-indigo-950/10 transition-colors`} data-testid={`comp-row-${rowKey}`}>
       <td className="p-2.5 text-xs font-medium text-slate-600 flex items-center gap-1.5">
         {label}
         {hasOverride && !isEditing && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" title="Manual override applied" />}

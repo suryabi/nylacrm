@@ -462,18 +462,28 @@ async def return_performance(record_id: str, data: dict = {}, current_user: dict
 async def get_comparison(
     resource_id: str,
     plan_id: str,
+    month: int = None,
+    year: int = None,
     months: int = 3,
     current_user: dict = Depends(get_current_user)
 ):
     """Get month-on-month comparison data for a resource."""
     tenant_id = get_current_tenant_id()
     
-    now = datetime.now(timezone.utc)
+    # Use selected month/year as the anchor (last column), default to current month
+    if month is None or year is None:
+        now = datetime.now(timezone.utc)
+        anchor_month = now.month
+        anchor_year = now.year
+    else:
+        anchor_month = month
+        anchor_year = year
+    
     comparison_data = []
     
     for i in range(months):
-        m = now.month - i
-        y = now.year
+        m = anchor_month - i
+        y = anchor_year
         while m <= 0:
             m += 12
             y -= 1
