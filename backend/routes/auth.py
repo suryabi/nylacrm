@@ -15,7 +15,8 @@ from deps import hash_password, verify_password, get_current_user
 from core.tenant import get_current_tenant_id
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('auth')
+logger.setLevel(logging.INFO)
 
 def get_tdb():
     """Get tenant-aware database wrapper"""
