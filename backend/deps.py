@@ -11,6 +11,8 @@ from database import db
 
 security = HTTPBearer()
 
+logger = logging.getLogger(__name__)
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
