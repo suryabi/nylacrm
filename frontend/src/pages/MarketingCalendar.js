@@ -232,18 +232,34 @@ function PostFormDialog({ open, onClose, post, categories, platforms, onSave, on
 }
 
 // --- Post Pill (calendar cell item) ---
-function PostPill({ post, onClick }) {
+function PostPill({ post, onClick, onDelete, onDragStart }) {
   const status = STATUS_STYLES[post.status] || STATUS_STYLES.draft;
   const Icon = CONTENT_TYPE_ICONS[post.content_type] || MoreHorizontal;
 
   return (
-    <button onClick={() => onClick(post)}
-      className="w-full text-left px-2 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 border transition-all hover:-translate-y-0.5 truncate"
+    <div
+      draggable
+      onDragStart={(e) => {
+        e.stopPropagation();
+        e.dataTransfer.setData('text/plain', post.id);
+        e.dataTransfer.effectAllowed = 'move';
+        onDragStart?.(post.id);
+      }}
+      className="w-full text-left px-2 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 border transition-all hover:-translate-y-0.5 truncate cursor-grab active:cursor-grabbing group/pill relative"
       style={{ backgroundColor: status.bg, color: status.text, borderColor: status.border }}
       data-testid={`post-pill-${post.id}`}>
-      <Icon size={10} className="shrink-0" />
-      <span className="truncate">{post.concept || post.category || 'Untitled'}</span>
-    </button>
+      <button onClick={(e) => { e.stopPropagation(); onClick(post); }} className="flex items-center gap-1.5 truncate flex-1 min-w-0">
+        <Icon size={10} className="shrink-0" />
+        <span className="truncate">{post.concept || post.category || 'Untitled'}</span>
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); onDelete(post.id); }}
+        className="shrink-0 opacity-0 group-hover/pill:opacity-100 transition-opacity p-0.5 rounded hover:bg-black/10"
+        title="Delete post"
+        data-testid={`delete-pill-${post.id}`}>
+        <X size={10} />
+      </button>
+    </div>
   );
 }
 
@@ -281,6 +297,10 @@ export default function MarketingCalendar() {
 
   // Week view state
   const [weekStart, setWeekStart] = useState(null);
+
+  // Drag & drop state
+  const [draggingPostId, setDraggingPostId] = useState(null);
+  const [dropTarget, setDropTarget] = useState(null);
 
   useEffect(() => {
     const today = new Date();
@@ -344,6 +364,20 @@ export default function MarketingCalendar() {
     await marketingAPI.deletePost(id);
     toast.success('Post deleted');
     loadCalendar();
+  };
+
+  // Drag & drop: move post to a new date
+  const handleDropOnDate = async (dateStr) => {
+    if (!draggingPostId) return;
+    setDropTarget(null);
+    setDraggingPostId(null);
+    try {
+      await marketingAPI.updatePost(draggingPostId, { post_date: dateStr });
+      toast.success('Post moved');
+      loadCalendar();
+    } catch {
+      toast.error('Failed to move post');
+    }
   };
 
   // Build calendar grid
@@ -484,8 +518,11 @@ export default function MarketingCalendar() {
 
                     return (
                       <div key={dateStr}
-                        className={`min-h-[120px] p-2 border-r border-b border-[#1C1C1C]/20 cursor-pointer transition-colors hover:bg-[#FFF8E1]/40 relative group ${isToday ? 'bg-[#FFF3E0]/30' : 'bg-white'}`}
+                        className={`min-h-[120px] p-2 border-r border-b border-[#1C1C1C]/20 cursor-pointer transition-colors relative group ${isToday ? 'bg-[#FFF3E0]/30' : 'bg-white'} ${dropTarget === dateStr ? 'bg-[#FF6B6B]/10 ring-2 ring-[#FF6B6B] ring-inset' : 'hover:bg-[#FFF8E1]/40'}`}
                         onClick={() => handleCellClick(dateStr)}
+                        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDropTarget(dateStr); }}
+                        onDragLeave={() => setDropTarget(null)}
+                        onDrop={(e) => { e.preventDefault(); handleDropOnDate(dateStr); }}
                         data-testid={`cal-cell-${dateStr}`}>
                         {/* Date Number */}
                         <div className="flex items-center justify-between mb-1">
@@ -501,7 +538,10 @@ export default function MarketingCalendar() {
                         {/* Posts */}
                         <div className="space-y-1 mt-1">
                           {posts.slice(0, 3).map(p => (
-                            <PostPill key={p.id} post={p} onClick={(e) => { e.stopPropagation?.(); handlePostClick(p); }} />
+                            <PostPill key={p.id} post={p}
+                              onClick={handlePostClick}
+                              onDelete={handleDeletePost}
+                              onDragStart={setDraggingPostId} />
                           ))}
                           {posts.length > 3 && (
                             <div className="text-[10px] font-bold text-[#4B5563]">+{posts.length - 3} more</div>
@@ -536,11 +576,14 @@ export default function MarketingCalendar() {
                     const mmdd = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                     const dayEvents = getEventsForDate(mmdd);
                     return (
-                      <div key={ds} className="p-2 border-r border-[#1C1C1C]/20 last:border-r-0 cursor-pointer hover:bg-[#FFF8E1]/40 transition-colors"
-                        onClick={() => handleCellClick(ds)}>
+                      <div key={ds} className={`p-2 border-r border-[#1C1C1C]/20 last:border-r-0 cursor-pointer transition-colors ${dropTarget === ds ? 'bg-[#FF6B6B]/10 ring-2 ring-[#FF6B6B] ring-inset' : 'hover:bg-[#FFF8E1]/40'}`}
+                        onClick={() => handleCellClick(ds)}
+                        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDropTarget(ds); }}
+                        onDragLeave={() => setDropTarget(null)}
+                        onDrop={(e) => { e.preventDefault(); handleDropOnDate(ds); }}>
                         {dayEvents.map((ev, ei) => <EventMarker key={ei} event={ev} />)}
                         <div className="space-y-1.5 mt-1">
-                          {posts.map(p => <PostPill key={p.id} post={p} onClick={handlePostClick} />)}
+                          {posts.map(p => <PostPill key={p.id} post={p} onClick={handlePostClick} onDelete={handleDeletePost} onDragStart={setDraggingPostId} />)}
                         </div>
                       </div>
                     );
