@@ -34,6 +34,26 @@
 - [x] **Final Tweaks (2026-04-01)**: Next Month Pipeline tile (dynamic month name), Account Amount column (avg_sales → estimated_value → manual override) with inline AccountValueCell, Clickable Leads Targeting Next Month row navigating to /leads with target_closure filters. Revenue override fields persisted in save endpoint.
 - [x] **UI Redesign (2026-04-02)**: Complete redesign of Performance Tracker from glass-morphism/gradient to Swiss/high-contrast aesthetic. Summary tiles use text-2xl/3xl font sizes in a 1px-gap Swiss grid. Pipeline statuses show colored dots instead of hyperlink text. Leads Targeting Next Month is a block CTA. All gradients and backdrop-blur removed. Clean flat cards with white bg and slate-200 borders.
 
+### Investor Module (2026-04-02)
+- [x] **Annual Business Plan**: FY Summary KPIs (Revenue, Gross Margin, EBITDA, Net Profit, Cash Balance, Key Customers, New Customers Target), Revenue Build-Up table (4 streams with targets/% of total/growth drivers), Full P&L Statement (11 line items with FY Target vs Last FY Actual vs Variance)
+- [x] **Monthly Updates**: Month navigator, Quick Stats (Revenue, Gross Revenue, New Customers, Orders Won with auto-computed actuals from CRM), Monthly P&L with Target vs Actual vs Variance, Key Updates list, P&L Override with Reset to Auto
+- [x] **Comments System**: Section-level commenting for all sections (summary, pnl, revenue_buildup, priorities, risks, support, monthly_pnl, monthly_updates). Any role can comment. Authors and Admins can delete.
+- [x] **RBAC**: CEO/Director/Admin = Editor mode (editable fields, Save). Investor = Read-only + commenting.
+- [x] **Auto-Computed CRM Data**: YTD Revenue, Prev FY Revenue, Total Accounts, Outstanding — live from invoices/accounts collections
+- [x] **Swiss Design**: rounded-none, JetBrains Mono for numbers, Cabinet Grotesk headings, 1px slate borders, no gradients
+- [x] **API Endpoints**: GET/PUT /api/investor/plan, GET/PUT /api/investor/monthly/{year}/{month}, GET/POST/DELETE /api/investor/comments
+- [x] **Navigation**: Added to sidebar under Lead & Sales Operations
+
+### Key API Endpoints — Investor Module
+- `GET /api/investor/plan?fy=FY2025-2026`
+- `PUT /api/investor/plan`
+- `GET /api/investor/monthly/{year}/{month}`
+- `PUT /api/investor/monthly/{year}/{month}`
+- `GET /api/investor/comments?section=X&fy=X&year=X&month=X`
+- `POST /api/investor/comments`
+- `DELETE /api/investor/comments/{comment_id}`
+
+
 ### Lead & Account Enhancements (2026-03-31)
 - [x] Lead edit form: Actual Onboarded Month & Year, Target Closure Month & Year dropdowns
 - [x] Account edit form: Actual Onboarded Month & Year dropdowns + read-only display
