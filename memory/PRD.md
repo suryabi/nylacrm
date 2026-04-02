@@ -54,6 +54,19 @@
 - `DELETE /api/investor/comments/{comment_id}`
 
 
+### Marketing Management Module (2026-04-02)
+- [x] **Content Calendar**: Monthly/Weekly/Daily views with auto-events (28 global + Indian holidays), clickable cells to plan posts, post pills with status colors, today highlight
+- [x] **Post Planning CRUD**: Date, Category, Content Type (Reel/Image/Video/Other), Concept, Message, Platform multi-select (LinkedIn/WhatsApp/YouTube/Instagram/Facebook), Status workflow (Draft → Review → Scheduled → Published)
+- [x] **Master Data Management**: Categories (CRUD with color), Platforms (enable/disable toggle), Custom Events (CRUD, MM-DD format)
+- [x] **Module Context**: Marketing as separate module context in sidebar switcher, with Content Calendar and Masters nav items
+- [x] **RBAC**: Added to Tenant Settings and Platform Admin module toggles (marketing_calendar, marketing_masters)
+- [x] **Design**: Neo-Brutalism style - bold 2px borders, shadow-[4px_4px_0px], Outfit headings, Manrope body, coral/yellow/mint/teal accent palette
+- [x] **API Endpoints**: GET /api/marketing/calendar, CRUD /api/marketing/posts, /api/marketing/categories, /api/marketing/platforms, /api/marketing/events
+
+### Bottle Preview Bug Fix (2026-04-02)
+- [x] Fixed download mismatch: download now measures actual rendered logo-to-bottle ratio from DOM via getBoundingClientRect() for WYSIWYG output
+
+
 ### Lead & Account Enhancements (2026-03-31)
 - [x] Lead edit form: Actual Onboarded Month & Year, Target Closure Month & Year dropdowns
 - [x] Account edit form: Actual Onboarded Month & Year dropdowns + read-only display
