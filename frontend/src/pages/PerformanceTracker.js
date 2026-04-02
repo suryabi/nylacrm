@@ -252,23 +252,23 @@ export default function PerformanceTracker() {
   const isLocked = data?.status === 'approved';
 
   return (
-    <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-6 sm:space-y-8 bg-slate-50 min-h-screen" data-testid="performance-tracker">
+    <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 bg-slate-50 min-h-screen" data-testid="performance-tracker">
       <AppBreadcrumb />
       {/* Header */}
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
-          <div className="p-2 bg-slate-100 rounded-sm">
-            <BarChart3 className="h-5 w-5 text-slate-700" />
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2 sm:gap-3">
+          <div className="p-1.5 sm:p-2 bg-slate-100 rounded-sm">
+            <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5 text-slate-700" />
           </div>
           Monthly Performance Tracker
         </h1>
-        <p className="text-sm text-slate-500 mt-1.5 ml-12">Track sales outcomes, activity, pipeline, and collections per resource</p>
+        <p className="text-xs sm:text-sm text-slate-500 mt-1 ml-9 sm:ml-12">Track sales outcomes, activity, pipeline, and collections per resource</p>
       </div>
 
       {/* Selectors */}
-      <div className="bg-white border border-slate-200 rounded-sm p-4 sm:p-5 space-y-3" data-testid="performance-selectors">
+      <div className="bg-white border border-slate-200 rounded-sm p-3 sm:p-4 lg:p-5 space-y-3" data-testid="performance-selectors">
           {/* Row 1: Location & Resource filters */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
             <div>
               <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Territory</label>
               <Select value={territoryFilter} onValueChange={(v) => { setTerritoryFilter(v); setCityFilter('all'); setSelectedResource([]); }}>
@@ -311,7 +311,7 @@ export default function PerformanceTracker() {
             </div>
           </div>
           {/* Row 2: Time period & Generate */}
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 items-end">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 items-end">
             <div>
               <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Month</label>
               <Select value={String(selectedMonth)} onValueChange={v => setSelectedMonth(parseInt(v))}>
@@ -348,8 +348,8 @@ export default function PerformanceTracker() {
       {data && !loading && (
         <>
           {/* Status bar */}
-          <div className="flex items-center justify-between bg-white rounded-sm p-3 sm:p-4 border border-slate-200">
-            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white rounded-sm p-3 sm:p-4 border border-slate-200 gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-bold text-slate-900">{data.resource_name}</span>
               {data.resource_city && <Badge variant="outline" className="bg-slate-50 text-xs rounded-sm border-slate-200">{data.resource_city}</Badge>}
               {data.plan_name && <Badge variant="outline" className="bg-slate-50 text-xs rounded-sm border-slate-200">{data.plan_name}</Badge>}
@@ -382,7 +382,7 @@ export default function PerformanceTracker() {
             </div>
           </div>
 
-          {/* Summary Cards Row - Swiss Grid */}
+          {/* Summary Cards Row */}
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-px bg-slate-200 border border-slate-200 overflow-hidden rounded-sm" data-testid="summary-cards">
             <SummaryTile label="Target" value={`₹${fmt(data.revenue?.target)}`} icon={Target} testId="metric-target" />
             <SummaryTile label="Revenue" value={`₹${fmt(data.revenue?.this_month)}`} icon={DollarSign} sub={fmtPct(data.revenue?.achievement_pct)} testId="metric-achieved" />
@@ -394,7 +394,7 @@ export default function PerformanceTracker() {
           </div>
 
           {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
             {/* Revenue Section */}
             <div className="bg-white border border-slate-200 rounded-sm" data-testid="revenue-section">
               <div className="flex items-center gap-2.5 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100">
@@ -429,9 +429,9 @@ export default function PerformanceTracker() {
               <div className="p-4 sm:p-5 pt-3 sm:pt-4 space-y-4">
                 {/* Existing Accounts */}
                 <div data-testid="existing-accounts-tile">
-                  <div className="flex justify-between items-center py-2.5 px-3.5 bg-slate-50 border border-slate-200 rounded-sm">
-                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Existing Accounts (Lifetime)</span>
-                    <span className="text-xl font-light text-slate-900 tabular-nums">{data.accounts?.existing_count}</span>
+                  <div className="flex justify-between items-center py-2 sm:py-2.5 px-3 sm:px-3.5 bg-slate-50 border border-slate-200 rounded-sm">
+                    <span className="text-[10px] sm:text-xs font-semibold text-slate-600 uppercase tracking-wide">Existing Accounts (Lifetime)</span>
+                    <span className="text-lg sm:text-xl font-light text-slate-900 tabular-nums">{data.accounts?.existing_count}</span>
                   </div>
                   {(data.accounts?.existing_accounts || []).length > 0 && (
                     <div className="mt-2 space-y-px">
@@ -459,9 +459,9 @@ export default function PerformanceTracker() {
                 </div>
                 {/* New Accounts This Month */}
                 <div data-testid="new-accounts-tile">
-                  <div className={`flex justify-between items-center py-2.5 px-3.5 border rounded-sm ${data.accounts?.new_onboarded > 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
-                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">New Accounts This Month</span>
-                    <span className={`text-xl font-light tabular-nums ${data.accounts?.new_onboarded > 0 ? 'text-emerald-800' : 'text-red-700'}`}>{data.accounts?.new_onboarded}</span>
+                  <div className={`flex justify-between items-center py-2 sm:py-2.5 px-3 sm:px-3.5 border rounded-sm ${data.accounts?.new_onboarded > 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                    <span className="text-[10px] sm:text-xs font-semibold text-slate-600 uppercase tracking-wide">New Accounts This Month</span>
+                    <span className={`text-lg sm:text-xl font-light tabular-nums ${data.accounts?.new_onboarded > 0 ? 'text-emerald-800' : 'text-red-700'}`}>{data.accounts?.new_onboarded}</span>
                   </div>
                   {(data.accounts?.new_accounts || []).length > 0 && (
                     <div className="mt-2 space-y-px">
@@ -547,7 +547,7 @@ export default function PerformanceTracker() {
 
                 {/* Leads Targeting Next Month - Block CTA */}
                 <div
-                  className="flex justify-between items-center p-4 bg-slate-50 border border-slate-200 rounded-sm mt-5 hover:border-slate-400 hover:bg-slate-100 transition-colors cursor-pointer group"
+                  className="flex justify-between items-center p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-sm mt-4 sm:mt-5 hover:border-slate-400 hover:bg-slate-100 transition-colors cursor-pointer group"
                   onClick={() => {
                     const nm = data.pipeline?.next_month;
                     const ny = data.pipeline?.next_year;
@@ -560,8 +560,8 @@ export default function PerformanceTracker() {
                   }}
                   data-testid="leads-targeting-next-month-link"
                 >
-                  <span className="text-xs font-semibold text-slate-900 uppercase tracking-wide">Leads Targeting {MONTH_NAMES[data.pipeline?.next_month] || 'Next Month'}</span>
-                  <span className="text-lg font-bold text-slate-900 flex items-center gap-2 tabular-nums">
+                  <span className="text-[10px] sm:text-xs font-semibold text-slate-900 uppercase tracking-wide">Leads Targeting {MONTH_NAMES[data.pipeline?.next_month] || 'Next Month'}</span>
+                  <span className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2 tabular-nums">
                     {data.pipeline?.next_month_leads_count || 0}
                     <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-slate-700 transition-colors" />
                   </span>
@@ -589,7 +589,7 @@ export default function PerformanceTracker() {
                   <InfoRow label="Outstanding Ratio" value={fmtPct(data.collections?.outstanding_ratio)} />
                 </div>
                 {data.collections?.aging && (
-                  <div className="mt-4 grid grid-cols-4 gap-2">
+                  <div className="mt-3 sm:mt-4 grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
                     <AgingBucket label="0-30d" value={data.collections.aging['0_30']} color="emerald" />
                     <AgingBucket label="31-60d" value={data.collections.aging['31_60']} color="amber" />
                     <AgingBucket label="61-90d" value={data.collections.aging['61_90']} color="orange" />
@@ -618,46 +618,46 @@ export default function PerformanceTracker() {
                 </div>
                 <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">Activity Metrics</h3>
               </div>
-              <div className="p-4 sm:p-5 pt-3 sm:pt-4 space-y-4">
+              <div className="p-3 sm:p-4 lg:p-5 pt-3 sm:pt-4 space-y-4">
                 <div>
-                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-3">Total Activities</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex items-center justify-between py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-sm">
-                      <span className="text-sm text-slate-600 flex items-center gap-2"><MessageSquare className="h-3.5 w-3.5 text-slate-400" />Messages</span>
-                      <span className="text-base font-semibold text-slate-900 tabular-nums">{data.activities?.messages || 0}</span>
+                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-2 sm:mb-3">Total Activities</p>
+                  <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+                    <div className="flex items-center justify-between py-2 sm:py-2.5 px-2.5 sm:px-3 bg-slate-50 border border-slate-200 rounded-sm">
+                      <span className="text-xs sm:text-sm text-slate-600 flex items-center gap-1.5"><MessageSquare className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-400" />Messages</span>
+                      <span className="text-sm sm:text-base font-semibold text-slate-900 tabular-nums">{data.activities?.messages || 0}</span>
                     </div>
-                    <div className="flex items-center justify-between py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-sm">
-                      <span className="text-sm text-slate-600 flex items-center gap-2"><Phone className="h-3.5 w-3.5 text-slate-400" />Calls</span>
-                      <span className="text-base font-semibold text-slate-900 tabular-nums">{data.activities?.calls || 0}</span>
+                    <div className="flex items-center justify-between py-2 sm:py-2.5 px-2.5 sm:px-3 bg-slate-50 border border-slate-200 rounded-sm">
+                      <span className="text-xs sm:text-sm text-slate-600 flex items-center gap-1.5"><Phone className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-400" />Calls</span>
+                      <span className="text-sm sm:text-base font-semibold text-slate-900 tabular-nums">{data.activities?.calls || 0}</span>
                     </div>
-                    <div className="flex items-center justify-between py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-sm">
-                      <span className="text-sm text-slate-600 flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-slate-400" />Customer Visits</span>
-                      <span className="text-base font-semibold text-slate-900 tabular-nums">{data.activities?.visits || 0}</span>
+                    <div className="flex items-center justify-between py-2 sm:py-2.5 px-2.5 sm:px-3 bg-slate-50 border border-slate-200 rounded-sm">
+                      <span className="text-xs sm:text-sm text-slate-600 flex items-center gap-1.5"><MapPin className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-400" />Visits</span>
+                      <span className="text-sm sm:text-base font-semibold text-slate-900 tabular-nums">{data.activities?.visits || 0}</span>
                     </div>
-                    <div className="flex items-center justify-between py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-sm">
-                      <span className="text-sm text-slate-600 flex items-center gap-2"><Mail className="h-3.5 w-3.5 text-slate-400" />Emails</span>
-                      <span className="text-base font-semibold text-slate-900 tabular-nums">{data.activities?.emails || 0}</span>
+                    <div className="flex items-center justify-between py-2 sm:py-2.5 px-2.5 sm:px-3 bg-slate-50 border border-slate-200 rounded-sm">
+                      <span className="text-xs sm:text-sm text-slate-600 flex items-center gap-1.5"><Mail className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-400" />Emails</span>
+                      <span className="text-sm sm:text-base font-semibold text-slate-900 tabular-nums">{data.activities?.emails || 0}</span>
                     </div>
                   </div>
                 </div>
-                <div className="border-t border-slate-100 pt-4">
-                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-3">Unique Customers Reached</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="flex items-center justify-between py-2.5 px-3 border border-slate-200 rounded-sm">
-                      <span className="text-sm text-slate-600">Unique Visits</span>
-                      <span className="text-base font-semibold text-slate-900 tabular-nums">{data.activities?.unique_visits || 0}</span>
+                <div className="border-t border-slate-100 pt-3 sm:pt-4">
+                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-2 sm:mb-3">Unique Customers Reached</p>
+                  <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+                    <div className="flex items-center justify-between py-2 sm:py-2.5 px-2.5 sm:px-3 border border-slate-200 rounded-sm">
+                      <span className="text-xs sm:text-sm text-slate-600">Visits</span>
+                      <span className="text-sm sm:text-base font-semibold text-slate-900 tabular-nums">{data.activities?.unique_visits || 0}</span>
                     </div>
-                    <div className="flex items-center justify-between py-2.5 px-3 border border-slate-200 rounded-sm">
-                      <span className="text-sm text-slate-600">Unique Messages</span>
-                      <span className="text-base font-semibold text-slate-900 tabular-nums">{data.activities?.unique_messages || 0}</span>
+                    <div className="flex items-center justify-between py-2 sm:py-2.5 px-2.5 sm:px-3 border border-slate-200 rounded-sm">
+                      <span className="text-xs sm:text-sm text-slate-600">Messages</span>
+                      <span className="text-sm sm:text-base font-semibold text-slate-900 tabular-nums">{data.activities?.unique_messages || 0}</span>
                     </div>
-                    <div className="flex items-center justify-between py-2.5 px-3 border border-slate-200 rounded-sm">
-                      <span className="text-sm text-slate-600">Unique Calls</span>
-                      <span className="text-base font-semibold text-slate-900 tabular-nums">{data.activities?.unique_calls || 0}</span>
+                    <div className="flex items-center justify-between py-2 sm:py-2.5 px-2.5 sm:px-3 border border-slate-200 rounded-sm">
+                      <span className="text-xs sm:text-sm text-slate-600">Calls</span>
+                      <span className="text-sm sm:text-base font-semibold text-slate-900 tabular-nums">{data.activities?.unique_calls || 0}</span>
                     </div>
-                    <div className="flex items-center justify-between py-2.5 px-3 border border-slate-200 rounded-sm">
-                      <span className="text-sm text-slate-600">Unique Emails</span>
-                      <span className="text-base font-semibold text-slate-900 tabular-nums">{data.activities?.unique_emails || 0}</span>
+                    <div className="flex items-center justify-between py-2 sm:py-2.5 px-2.5 sm:px-3 border border-slate-200 rounded-sm">
+                      <span className="text-xs sm:text-sm text-slate-600">Emails</span>
+                      <span className="text-sm sm:text-base font-semibold text-slate-900 tabular-nums">{data.activities?.unique_emails || 0}</span>
                     </div>
                   </div>
                 </div>
@@ -714,8 +714,8 @@ export default function PerformanceTracker() {
           )}
 
           {/* Calculated KPIs */}
-          <div className="bg-white border border-slate-200 rounded-sm p-4 sm:p-5" data-testid="kpi-section">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 mb-4">Performance KPIs</h3>
+          <div className="bg-white border border-slate-200 rounded-sm p-3 sm:p-4 lg:p-5" data-testid="kpi-section">
+            <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-900 mb-3 sm:mb-4">Performance KPIs</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <KPICard label="Achievement %" value={fmtPct(data.calculated?.achievement_pct)} good={data.calculated?.achievement_pct >= 80} bad={data.calculated?.achievement_pct < 50} />
                 <KPICard label="Pipeline Coverage" value={fmtPct(data.calculated?.pipeline_coverage)} good={data.calculated?.pipeline_coverage >= 100} bad={data.calculated?.pipeline_coverage < 50} />
@@ -785,14 +785,14 @@ function OverridableRow({ label, autoValue, overrideValue, editing, locked, onEd
 
 function SummaryTile({ label, value, icon: Icon, sub, testId }) {
   return (
-    <div className="bg-white p-4 sm:p-5 relative group flex flex-col justify-between min-h-[110px] hover:bg-slate-50 transition-colors" data-testid={testId}>
-      <div className="flex items-start justify-between">
-        <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.2em] leading-tight">{label}</p>
-        <Icon className="h-4 w-4 text-slate-300 group-hover:text-slate-500 transition-colors" />
+    <div className="bg-white p-3 sm:p-4 relative group flex flex-col justify-between min-h-[90px] sm:min-h-[100px] hover:bg-slate-50 transition-colors overflow-hidden" data-testid={testId}>
+      <div className="flex items-start justify-between gap-1">
+        <p className="text-[9px] sm:text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] leading-tight">{label}</p>
+        <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-300 flex-shrink-0" />
       </div>
-      <div>
-        <p className="text-2xl sm:text-3xl font-light tracking-tight text-slate-900 tabular-nums mt-2">{value}</p>
-        {sub && <p className="text-[10px] text-slate-500 mt-1 font-medium">{sub}</p>}
+      <div className="min-w-0">
+        <p className="text-base sm:text-lg lg:text-xl font-semibold tracking-tight text-slate-900 tabular-nums mt-1.5 truncate" title={String(value)}>{value}</p>
+        {sub && <p className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5 font-medium truncate">{sub}</p>}
       </div>
     </div>
   );
@@ -840,9 +840,9 @@ function AgingBucket({ label, value, color }) {
     red: 'bg-red-50 text-red-800 border border-red-200'
   };
   return (
-    <div className={`rounded-sm p-2.5 text-center ${styles[color]}`}>
-      <p className="text-[10px] font-semibold uppercase tracking-wider">{label}</p>
-      <p className="text-sm font-bold tabular-nums mt-1">₹{fmt(value)}</p>
+    <div className={`rounded-sm p-2 sm:p-2.5 text-center ${styles[color]}`}>
+      <p className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider">{label}</p>
+      <p className="text-xs sm:text-sm font-bold tabular-nums mt-0.5 sm:mt-1 truncate">₹{fmt(value)}</p>
     </div>
   );
 }
@@ -853,9 +853,9 @@ function KPICard({ label, value, good, bad, invert }) {
   const bg = isGood ? 'bg-emerald-50 border-emerald-200' : isBad ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200';
   const text = isGood ? 'text-emerald-800' : isBad ? 'text-red-700' : 'text-slate-900';
   return (
-    <div className={`border rounded-sm p-4 text-center ${bg}`}>
-      <p className="text-[10px] uppercase tracking-[0.15em] font-semibold text-slate-500 mb-2">{label}</p>
-      <p className={`text-2xl sm:text-3xl font-light tracking-tight tabular-nums ${text}`}>{value}</p>
+    <div className={`border rounded-sm p-3 sm:p-4 text-center ${bg}`}>
+      <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.15em] font-semibold text-slate-500 mb-1.5">{label}</p>
+      <p className={`text-lg sm:text-xl lg:text-2xl font-semibold tracking-tight tabular-nums ${text}`}>{value}</p>
     </div>
   );
 }
