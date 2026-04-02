@@ -1,123 +1,95 @@
 {
-  "theme": "light",
+  "theme": "Light",
+  "archetype": "4 (Swiss & High-Contrast)",
+  "component_path": "/app/frontend/src/pages/PerformanceTracker.js",
   "typography": {
-    "fonts": {
-      "headings": "Manrope",
-      "body": "IBM Plex Sans",
-      "mono": "JetBrains Mono"
-    },
-    "rules": [
-      "DO NOT use Inter, Roboto, Open Sans, or Lato for headings.",
-      "Headlines (>32px) MUST use tracking-tight.",
-      "Overlines/Labels MUST be Uppercase, text-xs, with tracking-[0.2em].",
-      "Use font-light for large numbers in KPI tiles to make them elegant, not bulky."
-    ]
-  },
-  "colors": {
-    "archetype": "ORGANIC & EARTHY",
-    "primary": "#065F46",
-    "primary_tailwind": "emerald-800",
-    "background": "#F9FAFB",
-    "surface": "#FFFFFF",
-    "accents": {
-      "sage": "#86A789",
-      "forest": "#022C22",
-      "terracotta": "#E2725B"
-    },
-    "table_alternate_row": "bg-emerald-50/40",
-    "table_hover_row": "bg-emerald-50/60",
-    "rules": [
-      "No pure black or pure gray. Tint neutrals slightly towards green/emerald.",
-      "Ensure text meets APCA minimum 4.5:1 contrast.",
-      "Limit the use of primary color to CTAs and active states.",
-      "CRITICAL: DO NOT use complete transparent background in header, overlays, any surface that has content under it."
-    ]
-  },
-  "visual_enhancers": {
-    "shadows": [
-      "KPI Tiles & Address Cards: shadow-[0_2px_8px_rgba(6,95,70,0.04)]",
-      "Hover state: shadow-[0_8px_24px_rgba(6,95,70,0.08)] -translate-y-[2px]"
-    ],
-    "borders": "1px solid border-emerald-100/60",
-    "radius": "rounded-xl for cards, rounded-lg for inner elements like badges."
-  },
-  "grids_and_layouts": {
-    "bento_mode": "High Density Grid (For Dashboards/Analytics)",
-    "kpi_grid": "grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6",
-    "address_grid": "grid-cols-1 md:grid-cols-3 gap-6",
-    "spacing": "Generous spacing. Use p-6 or p-8 inside cards."
-  },
-  "components": {
-    "KPI_Tiles": {
-      "description": "Elegant tiles with large numbers, icons, mini sparkline charts, and progress indicators.",
-      "layout": "Flex column, top section with Title & Icon, middle with massive font-light Number & Badge, bottom with Recharts sparkline.",
-      "chart": "Recharts LineChart with height 60px, no axes, no grid, stroke emerald-600, strokeWidth 2."
-    },
-    "Address_Cards": {
-      "description": "Minimalist, visually interesting address cards.",
-      "layout": "Include a subtle leading icon (MapPin), uppercase overline for address type (e.g., BILLING), and standard body text for address.",
-      "style": "Flat background, 1px emerald-100 border, hover lift effect."
-    },
-    "Data_Table": {
-      "features": ["Sorting", "Pagination (default 50 rows)", "Clickable rows"],
-      "style": "border-collapse, alternating rows using even:bg-emerald-50/40, hover:bg-emerald-50/60. Headers should have uppercase tracking-wider text-xs font-semibold text-emerald-800/70.",
-      "interaction": "TableRow must have cursor-pointer and onClick handler navigating to details."
-    },
-    "Tabs": {
-      "style": "Minimalist underline style. Active tab gets a 2px bottom border of emerald-800 and text-emerald-900. Inactive tabs text-emerald-600/60."
+    "headings_font": "Cabinet Grotesk, ui-sans-serif, system-ui",
+    "body_font": "IBM Plex Sans, ui-sans-serif, system-ui",
+    "hierarchy": {
+      "h1": "text-2xl sm:text-3xl font-bold tracking-tight text-slate-900",
+      "h2": "text-xl sm:text-2xl font-bold tracking-tight text-slate-900",
+      "h3": "text-sm font-bold uppercase tracking-wider text-slate-900",
+      "metric_value": "text-3xl sm:text-4xl font-light tracking-tight text-slate-900 tabular-nums",
+      "metric_label": "text-[10px] sm:text-xs font-semibold uppercase tracking-[0.2em] text-slate-500",
+      "body": "text-sm text-slate-700",
+      "small_label": "text-[10px] font-medium uppercase tracking-wider text-slate-500"
     }
   },
-  "motion": {
-    "hover": "transition-[transform,box-shadow,background-color] duration-300 ease-out",
-    "table_row": "transition-colors duration-200",
-    "rules": [
-      "Do not use generic 'transition-all' on elements that transform.",
-      "Add micro-interactions to table row clicks (e.g., active:scale-[0.99])."
-    ]
+  "colors": {
+    "background": "bg-slate-50",
+    "card_background": "bg-white",
+    "border": "border-slate-200",
+    "text_primary": "text-slate-900",
+    "text_secondary": "text-slate-500",
+    "primary_accent": "text-slate-900 bg-slate-100 border-slate-300",
+    "success": "text-emerald-700 bg-emerald-50 border-emerald-200",
+    "warning": "text-amber-700 bg-amber-50 border-amber-200",
+    "danger": "text-red-700 bg-red-50 border-red-200"
+  },
+  "visual_enhancers": {
+    "shadows": "shadow-none",
+    "radius": "rounded-none sm:rounded-sm",
+    "gradients": "strictly prohibited, use solid colors only",
+    "glassmorphism": "strictly prohibited, use opaque backgrounds only"
+  },
+  "grids_and_layouts": {
+    "main_container": "max-w-7xl mx-auto p-4 sm:p-8 space-y-6 sm:space-y-8",
+    "summary_row": "grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-px bg-slate-200 border border-slate-200 overflow-hidden rounded-sm",
+    "content_grid": "grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6"
+  },
+  "motion_and_interactions": {
+    "hover_state": "hover:bg-slate-50 transition-colors duration-200",
+    "active_state": "active:scale-[0.98] transition-transform",
+    "focus_state": "focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2"
   },
   "accessibility": {
-    "rules": [
-      "All interactive elements MUST include data-testid attribute (e.g., data-testid='distributor-row-1').",
-      "Sparklines must have aria-label for screen readers.",
-      "Status badges must use appropriate accessible colors."
-    ]
+    "contrast": "Ensure text-slate-500 passes contrast against bg-white.",
+    "aria_labels": "Add aria-labels to all icon-only buttons",
+    "data_testid": "MANDATORY on all interactive and key informational elements"
+  },
+  "media_and_image_urls": {
+    "hero": null,
+    "background": null,
+    "logos": [],
+    "placeholders": []
+  },
+  "component_specific_rules": {
+    "SummaryTile": {
+      "container": "bg-white p-4 sm:p-5 relative group flex flex-col justify-between h-full min-h-[120px] hover:bg-slate-50 transition-colors",
+      "label": "text-[10px] font-semibold text-slate-500 uppercase tracking-[0.2em] mb-4 block",
+      "value": "text-3xl sm:text-4xl font-light tracking-tight text-slate-900 tabular-nums",
+      "icon_container": "absolute top-5 right-5 text-slate-300 group-hover:text-slate-500 transition-colors",
+      "subtext": "text-[10px] text-slate-500 mt-2 font-medium"
+    },
+    "PipelineMetrics": {
+      "table": "w-full text-left border-collapse",
+      "th": "pb-3 border-b border-slate-200 text-[10px] uppercase tracking-wider font-semibold text-slate-500",
+      "row": "border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors",
+      "status_cell": "py-3 text-sm font-medium text-slate-900 flex items-center gap-2",
+      "status_dot": "w-2 h-2 rounded-full",
+      "count_cell": "py-3 text-right text-sm font-medium text-slate-700",
+      "value_cell": "py-3 text-right text-sm font-medium text-slate-700 tabular-nums",
+      "leads_targeting_block": "flex justify-between items-center p-4 bg-slate-50 border border-slate-200 rounded-sm mt-4 hover:border-slate-400 hover:bg-slate-100 transition-colors cursor-pointer group",
+      "leads_targeting_text": "text-sm font-semibold text-slate-900 uppercase tracking-wide",
+      "leads_targeting_value": "text-lg font-bold text-slate-900 flex items-center gap-2"
+    },
+    "Card": {
+      "wrapper": "bg-white border border-slate-200 rounded-sm p-4 sm:p-6 shadow-sm",
+      "header": "flex items-center justify-between mb-6 pb-4 border-b border-slate-100",
+      "title": "text-sm font-bold uppercase tracking-wider text-slate-900 flex items-center gap-2",
+      "icon_wrapper": "p-1.5 bg-slate-100 rounded-sm"
+    }
   },
   "instructions_to_main_agent": [
-    "Install and use 'Manrope' for headings and 'IBM Plex Sans' for body font.",
-    "Install '@phosphor-icons/react' for elegant, professional icons suitable for dense dashboards.",
-    "Install 'recharts' for the mini sparkline charts inside KPI tiles.",
-    "For the Distribution module, create a layout that features 4 KPI tiles at the top, followed by a filter/search bar, and then the main Distributors Table.",
-    "For the Distributor Detail page (/distributors/:id), implement a header with the Distributor Name and Status, followed by the Address Cards grid, and then the 6 Tabs (Profile, Commercial, Stock In, Stock Out, Settlements, Billing).",
-    "Implement table pagination defaulting to 50 rows per page. Add a dropdown to change row count.",
-    "Ensure table rows are fully clickable and navigate to the distributor detail page.",
-    "Alternate table rows MUST use 'even:bg-emerald-50/40' to give a very light brand color tint.",
-    "KPI Tile Numbers MUST use a light font weight (e.g., font-light text-4xl or text-5xl) to appear elegant rather than clunky.",
-    "Do NOT center align the app container. Keep text aligned naturally.",
-    "Use 'sonner' for any toast notifications.",
-    "Ensure all code is written in .js/.jsx, as the project does not use TypeScript."
-  ],
-  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
-    "You tend to converge toward generic, 'on distribution' outputs. Avoid this: make creative, distinctive frontends that surprise and delight.",
-    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
-    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
-    "Create depth through layered design elements with z-index hierarchy.",
-    "Use glass-morphism effects with backdrop filters (12-24px blur).",
-    "You MUST NOT apply universal transition (e.g., transition: all). Always add transitions for specific interactive elements like button, input excluding transforms.",
-    "You MUST NOT center align the app container. Do not add '.App { text-align: center; }' in the css file.",
-    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
-    "NEVER use AI assistant Emoji characters for icons.",
-    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
-    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
-    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations separate good from extraordinary.",
-    "Prioritize using pre-existing components from src/components/ui when applicable.",
-    "Components MUST use named exports. Pages MUST use default exports."
-  ],
-  "libraries_to_install": [
-    "@phosphor-icons/react",
-    "recharts",
-    "sonner",
-    "clsx",
-    "tailwind-merge"
-  ],
-  "image_urls": []
+    "1. Open PerformanceTracker.js and completely rewrite its styling to match the Swiss & High-Contrast archetype.",
+    "2. Remove ALL gradient classes (`bg-gradient-to-*`), glassmorphism classes (`backdrop-blur-*`, `bg-white/80`), colored texts, and rounded corners (`rounded-xl` or `rounded-lg`). Use strictly `bg-white`, `border-slate-200`, and `rounded-sm`.",
+    "3. Drastically increase metric font sizes in `SummaryTile` to `text-3xl sm:text-4xl font-light tracking-tight text-slate-900`. Change metric labels to `text-[10px] uppercase tracking-[0.2em] text-slate-500`.",
+    "4. Layout the 'Summary Row' using a 1px gap grid approach (`gap-px bg-slate-200 border border-slate-200`) with `bg-white` items inside. This creates a crisp technical grid layout, rather than floating individual rounded cards.",
+    "5. Fix Pipeline Metrics: Remove hyperlink-like styles (`text-indigo-600`, `group-hover:underline`). Use solid `text-slate-900` with color-coded status dots (`w-2 h-2 rounded-full`). Do not style data text as clickable links.",
+    "6. Convert 'Leads Targeting Next Month' from a dashed underline link to a distinct, full-width block (`bg-slate-50 border border-slate-200 p-4`) within the pipeline card, looking like a call-to-action panel.",
+    "7. Remove all colored top border strips (e.g., `h-1 bg-gradient-to-r...`) from all cards. Use a standard `border-b border-slate-100` on the header sections inside the card padding.",
+    "8. Change all badge components to flat, high-contrast structural styles (e.g., `bg-slate-900 text-white` for selected/primary actions, `bg-slate-100 text-slate-600` for unselected).",
+    "9. Retain all `data-testid` attributes exactly as they are and add them to any newly structured elements.",
+    "10. For data tables (Comparison, Pipeline, Accounts), use strict `border-b border-slate-100` on rows, avoiding any tinted row backgrounds unless indicating an alert state."
+  ]
 }
