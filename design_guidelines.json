@@ -1,138 +1,106 @@
 {
   "theme": "light",
-  "archetype": "Swiss & High-Contrast",
+  "archetype": "3 (Pastel & Soft) mixed with Neo-Brutalism",
+  "design_philosophy": "A fresh, vibrant marketing-focused aesthetic moving away from typical sterile SaaS layouts. It uses soft pastels grounded by deep charcoal text and hard borders (Neo-brutalist twist) to create a structured, approachable, and creative 'marketing vibe' that remains intuitive for non-technical users.",
+  "colors": {
+    "background": "#FAF9F6",
+    "surface": "#FFFFFF",
+    "primary": "#FF6B6B",
+    "primary_foreground": "#FFFFFF",
+    "secondary": "#FDE74C",
+    "secondary_foreground": "#1C1C1C",
+    "accent": "#A8E6CF",
+    "accent_foreground": "#1C1C1C",
+    "text_primary": "#1C1C1C",
+    "text_secondary": "#4B5563",
+    "border": "#1C1C1C",
+    "muted": "#F3F4F6",
+    "workflow_statuses": {
+      "draft": { "bg": "#E2E8F0", "text": "#1C1C1C", "border": "#1C1C1C" },
+      "review": { "bg": "#FDE74C", "text": "#1C1C1C", "border": "#1C1C1C" },
+      "scheduled": { "bg": "#4EA8DE", "text": "#FFFFFF", "border": "#1C1C1C" },
+      "published": { "bg": "#A8E6CF", "text": "#1C1C1C", "border": "#1C1C1C" }
+    },
+    "platforms": {
+      "linkedin": "#0A66C2",
+      "whatsapp": "#25D366",
+      "youtube": "#FF0000",
+      "instagram": "#E1306C",
+      "facebook": "#1877F2"
+    }
+  },
   "typography": {
-    "fonts": {
-      "display": "Cabinet Grotesk",
-      "body": "IBM Plex Sans",
-      "mono": "JetBrains Mono",
-      "import_links": [
-        "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap",
-        "https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800&display=swap"
-      ]
+    "font_family": {
+      "heading": "'Outfit', sans-serif",
+      "body": "'Manrope', sans-serif"
     },
     "hierarchy": {
-      "h1": "text-4xl tracking-tighter font-display font-medium text-slate-900",
-      "h2": "text-2xl tracking-tight font-display font-medium text-slate-900",
-      "h3": "text-lg tracking-tight font-display font-medium text-slate-900",
-      "h4": "text-base font-medium font-sans text-slate-800",
-      "body": "text-sm leading-relaxed font-sans text-slate-700",
-      "data_large": "text-3xl tracking-tighter font-mono font-medium text-slate-900",
-      "data_small": "text-sm font-mono tracking-tight text-slate-800",
-      "overline": "text-xs font-mono uppercase tracking-[0.1em] text-slate-500"
+      "h1": "text-4xl sm:text-5xl font-black tracking-tight text-[#1C1C1C]",
+      "h2": "text-2xl sm:text-3xl font-bold tracking-tight text-[#1C1C1C]",
+      "h3": "text-xl sm:text-2xl font-bold text-[#1C1C1C]",
+      "body": "text-base font-medium text-[#4B5563] leading-relaxed",
+      "small": "text-sm font-semibold uppercase tracking-widest text-[#4B5563]"
     }
   },
-  "colors": {
-    "background": {
-      "page": "#F9FAFB",
-      "card": "#FFFFFF",
-      "table_header": "#F3F4F6",
-      "highlight": "#F3F4F6",
-      "nav": "#FFFFFF"
-    },
-    "text": {
-      "primary": "#0A0A0A",
-      "secondary": "#525252",
-      "tertiary": "#A3A3A3",
-      "inverse": "#FFFFFF"
-    },
-    "border": {
-      "default": "#E5E7EB",
-      "focus": "#0A0A0A",
-      "divider": "#F3F4F6",
-      "dark": "#D1D5DB"
-    },
-    "status": {
-      "positive_bg": "#ECFDF5",
-      "positive_text": "#059669",
-      "negative_bg": "#FEF2F2",
-      "negative_text": "#DC2626",
-      "warning_bg": "#FFFBEB",
-      "warning_text": "#D97706"
-    },
-    "primary": {
-      "default": "#000000",
-      "hover": "#262626"
-    }
-  },
-  "layout": {
-    "spacing": {
-      "section_gap": "gap-8",
-      "widget_gap": "gap-4",
-      "card_padding": "p-6",
-      "page_padding": "p-8 md:p-12"
-    },
-    "grid": {
-      "type": "Control Room Grid",
-      "base": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4",
-      "style": "Technical Grid Borders"
-    },
-    "surfaces": {
-      "card": "bg-white border border-slate-200 rounded-none shadow-sm",
-      "card_hover": "hover:border-slate-300 transition-colors",
-      "header": "bg-white border-b border-slate-200 sticky top-0 z-50",
-      "input": "border border-slate-300 rounded-none focus:ring-1 focus:ring-black focus:border-black transition-colors"
-    }
-  },
-  "motion": {
-    "hover": "transition-all duration-200 ease-in-out",
-    "active": "active:scale-[0.98]",
-    "table_row_hover": "hover:bg-slate-50 transition-colors"
+  "spacing_and_layout": {
+    "container_padding": "p-6 sm:p-8 lg:p-12",
+    "calendar_grid": "grid grid-cols-7 gap-0 border-l border-t border-[#1C1C1C]",
+    "calendar_cell": "min-h-[120px] p-2 border-r border-b border-[#1C1C1C] bg-white transition-colors hover:bg-muted/50",
+    "bento_spacing": "gap-6 sm:gap-8",
+    "radius": "rounded-xl"
   },
   "components": {
+    "cards": "bg-white border-2 border-[#1C1C1C] rounded-xl shadow-[4px_4px_0px_#1C1C1C] hover:shadow-[6px_6px_0px_#1C1C1C] transition-shadow duration-200",
     "buttons": {
-      "primary": "bg-black text-white hover:bg-slate-800 rounded-none px-6 py-2 text-sm font-medium transition-colors",
-      "secondary": "bg-white text-black border border-slate-300 hover:border-black hover:bg-slate-50 rounded-none px-6 py-2 text-sm font-medium transition-colors",
-      "ghost": "bg-transparent text-slate-600 hover:text-black hover:bg-slate-100 rounded-none px-4 py-2 text-sm transition-colors",
-      "override_reset": "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-black rounded-none px-2 py-1 text-xs font-mono transition-colors border border-slate-200"
+      "primary": "bg-[#FF6B6B] text-white border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] hover:shadow-[4px_4px_0px_#1C1C1C] hover:-translate-y-0.5 transition-all font-bold px-6 py-3 rounded-lg",
+      "secondary": "bg-[#FDE74C] text-[#1C1C1C] border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] hover:shadow-[4px_4px_0px_#1C1C1C] hover:-translate-y-0.5 transition-all font-bold px-6 py-3 rounded-lg",
+      "outline": "bg-white text-[#1C1C1C] border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] hover:shadow-[4px_4px_0px_#1C1C1C] hover:-translate-y-0.5 transition-all font-bold px-6 py-3 rounded-lg"
     },
-    "tables": {
-      "wrapper": "w-full border-collapse text-left",
-      "header_cell": "border-y border-slate-200 py-3 px-4 text-xs font-mono uppercase tracking-[0.05em] text-slate-500 bg-slate-50 whitespace-nowrap",
-      "body_cell": "border-b border-slate-100 py-3 px-4 text-sm font-sans text-slate-800",
-      "number_cell": "text-right font-mono tracking-tight",
-      "row": "hover:bg-slate-50/50 transition-colors group"
-    },
-    "tabs": {
-      "list": "flex border-b border-slate-200",
-      "trigger": "px-6 py-3 text-sm font-medium text-slate-500 border-b-2 border-transparent hover:text-black data-[state=active]:border-black data-[state=active]:text-black transition-colors rounded-none outline-none"
-    },
-    "inputs": {
-      "text": "flex h-9 w-full rounded-none border border-slate-300 bg-white px-3 py-1 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-black focus:border-black disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500",
-      "number": "flex h-9 w-full rounded-none border border-slate-300 bg-white px-3 py-1 text-sm font-mono text-right placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-black focus:border-black",
-      "textarea": "flex min-h-[80px] w-full rounded-none border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-black focus:border-black disabled:cursor-not-allowed disabled:bg-slate-50"
-    },
-    "comments": {
-      "container": "border-l-2 border-amber-400 bg-amber-50/50 p-4 mt-2 text-sm font-sans",
-      "timestamp": "text-xs font-mono text-slate-500 mb-1 block",
-      "author": "font-medium text-slate-900 mr-2",
-      "trigger": "opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-black p-1"
-    },
-    "badges": {
-      "positive": "inline-flex items-center px-2 py-0.5 rounded-none text-xs font-mono font-medium bg-emerald-50 text-emerald-700 border border-emerald-200",
-      "negative": "inline-flex items-center px-2 py-0.5 rounded-none text-xs font-mono font-medium bg-red-50 text-red-700 border border-red-200",
-      "neutral": "inline-flex items-center px-2 py-0.5 rounded-none text-xs font-mono font-medium bg-slate-100 text-slate-700 border border-slate-200"
-    }
+    "inputs": "bg-white border-2 border-[#1C1C1C] rounded-lg px-4 py-3 focus:ring-2 focus:ring-[#FF6B6B] focus:border-[#1C1C1C] font-medium transition-all shadow-[inset_2px_2px_0px_rgba(0,0,0,0.05)]",
+    "badges": "px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full border border-[#1C1C1C] flex items-center gap-1",
+    "sidebar": "w-64 border-r-2 border-[#1C1C1C] bg-white h-screen fixed top-0 left-0 p-6 flex flex-col gap-8 z-50"
   },
-  "media": {
-    "images": [
+  "iconography": {
+    "library": "@phosphor-icons/react",
+    "style": "duotone or bold for a playful but professional look",
+    "installation": "yarn add @phosphor-icons/react"
+  },
+  "interactions": {
+    "hover_states": "Elements should lift up (-translate-y-1) and cast a slightly larger hard shadow to emphasize the tactile Neo-Brutalist feel.",
+    "focus_states": "High contrast ring focus (focus:ring-2 focus:ring-[#FF6B6B] focus:outline-none).",
+    "transitions": "transition-all duration-200 ease-in-out"
+  },
+  "image_assets": {
+    "avatars": [
       {
-        "category": "logo",
-        "url": "https://images.unsplash.com/photo-1770210217380-d78a69acdc77?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTZ8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwYWJzdHJhY3QlMjBjb21wYW55JTIwbG9nb3xlbnwwfHx8fDE3NzUwOTQwNzN8MA&ixlib=rb-4.1.0&q=85",
-        "description": "Minimalist geometric concentric circles logo",
-        "alt_text": "Company Logo"
+        "url": "https://images.unsplash.com/photo-1655249493799-9cee4fe983bb?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwxfHxwcm9maWxlJTIwcG9ydHJhaXQlMjBwcm9mZXNzaW9uYWx8ZW58MHx8fHwxNzc1MTM4NTIzfDA&ixlib=rb-4.1.0&q=85",
+        "description": "User avatar for the top right profile dropdown."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1762522926157-bcc04bf0b10a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwzfHxwcm9maWxlJTIwcG9ydHJhaXQlMjBwcm9mZXNzaW9uYWx8ZW58MHx8fHwxNzc1MTM4NTIzfDA&ixlib=rb-4.1.0&q=85",
+        "description": "Team member avatar for post reviewer assignments."
+      }
+    ],
+    "content_thumbnails": [
+      {
+        "url": "https://images.unsplash.com/photo-1770368787714-4e5a5ea557fd?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHwyfHxzb2NpYWwlMjBtZWRpYSUyMGNvbnRlbnQlMjBhZXN0aGV0aWN8ZW58MHx8fHwxNzc1MTM4NTI0fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Example thumbnail for a planned social media reel/post in the review sheet."
       }
     ]
   },
+  "testing_attributes": {
+    "requirement": "All interactive elements must include data-testid. E.g., data-testid='calendar-next-month-btn', data-testid='new-post-modal-btn', data-testid='post-status-select'."
+  },
   "instructions_to_main_agent": [
-    "INSTALLATION: Install @phosphor-icons/react for clinical, thin-lined icons that match the Swiss theme.",
-    "STYLING: Strictly adhere to 'rounded-none' for all components (cards, inputs, buttons). Do not use soft shadows; rely on 1px borders (border-slate-200) for separation.",
-    "FONTS: Implement font imports exactly as provided. Use JetBrains Mono exclusively for numerical data, tables, and tiny labels. Use Cabinet Grotesk for Headings, and IBM Plex Sans for body text. INTER IS BANNED for headings.",
-    "TABLE DESIGN: Ensure numbers are right-aligned and utilize 'font-mono tracking-tight'. Left-align text. Use a very subtle row hover effect ('hover:bg-slate-50/50').",
-    "DATA OVERRIDES: For editable financial fields (Admin/CEO role), show a native HTML input styled as 'components.inputs.number'. If the value differs from the CRM auto-computed value, visually indicate the override (e.g., a subtle yellow tint in the cell background or a small 'overridden' dot) and show a 'Reset to Auto' button.",
-    "COMMENTS FEATURE: For Investor role, rows and cards should have an 'Add Comment' trigger that appears on hover. Render existing comments underneath the row or section using the 'comments.container' style (amber left-border).",
-    "ROLE TOGGLE: Build a global state toggle in the header: 'View as: Admin / Investor' to easily verify read/write vs read-only UI behaviors during development.",
-    "TESTING: Apply distinct 'data-testid' attributes to all inputs, 'Reset to Auto' buttons, comment submission buttons, and major sections.",
-    "RESPONSIVENESS: Ensure horizontal scroll on complex financial tables (P&L, Revenue Build-Up) on mobile viewports."
+    "Install and use 'Outfit' (Headings) and 'Manrope' (Body) from Google Fonts.",
+    "Implement the layout with a fixed Left Sidebar and a Main Content area.",
+    "The primary view is the Marketing Calendar. Build a robust grid layout for the Monthly view. Implement a Weekly and Daily toggle as well.",
+    "Calendar cells must look like large bento boxes with 1px dark borders. Use absolute positioning inside relative cells for event pills if there are many, or simple flex columns.",
+    "For the 'Post Planning' feature, use a Shadcn Sheet (sliding in from the right) or Dialog to create/edit posts.",
+    "Ensure Multi-select is implemented properly for platforms (LinkedIn, Instagram, etc.), perhaps using command/combobox from Shadcn UI.",
+    "For Auto-Events (Global/Indian events), display them in the calendar cells as subtle, non-intrusive text/icons at the bottom of the date cell.",
+    "Embrace the Neo-Brutalist aesthetic. Use the specified custom shadow classes (`shadow-[4px_4px_0px_#1C1C1C]`) on cards and buttons instead of the default Shadcn soft shadows. Override Shadcn defaults to match this tactile, fresh marketing vibe.",
+    "Use Phosphor icons heavily to complement the modern, creative tone.",
+    "Ensure full responsive behavior for the calendar. On mobile, the month view might switch to a list view."
   ]
 }
