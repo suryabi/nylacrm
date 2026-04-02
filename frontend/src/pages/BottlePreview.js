@@ -606,6 +606,7 @@ export default function BottlePreview() {
   };
 
   // Download composite image (bottle + logo)
+  // Fix: Measure actual rendered logo-to-container ratio from DOM so download matches preview exactly
   const handleDownloadComposite = async () => {
     if (!logoPreview) {
       toast.error('Please upload a logo first');
@@ -618,6 +619,26 @@ export default function BottlePreview() {
     try {
       // Get current bottle template
       const currentBottle = BOTTLE_TEMPLATES.find(b => b.id === selectedBottle);
+      
+      // Measure the actual rendered sizes from the DOM before any async work
+      const container = bottleContainerRef.current;
+      const containerRect = container.getBoundingClientRect();
+      const logoEl = container.querySelector('[data-testid="preview-logo-img"]');
+      const bottleEl = container.querySelector('[data-testid="bottle-image"]');
+      
+      // getBoundingClientRect gives the ACTUAL rendered size including CSS transforms (scale)
+      const logoRect = logoEl.getBoundingClientRect();
+      const bottleRect = bottleEl.getBoundingClientRect();
+      
+      // Ratio of logo size to the displayed bottle image size — this is what the user sees
+      const widthRatio = logoRect.width / bottleRect.width;
+      const heightRatio = logoRect.height / bottleRect.height;
+      
+      // Logo center position relative to the bottle image element
+      const logoCenterX = (logoRect.left + logoRect.width / 2) - bottleRect.left;
+      const logoCenterY = (logoRect.top + logoRect.height / 2) - bottleRect.top;
+      const posXRatio = logoCenterX / bottleRect.width;
+      const posYRatio = logoCenterY / bottleRect.height;
       
       // Fetch bottle image as blob to bypass CORS restrictions
       bottleBlobUrl = await fetchImageAsBlob(currentBottle.image);
@@ -637,19 +658,13 @@ export default function BottlePreview() {
       // Draw bottle image
       ctx.drawImage(bottleImage, 0, 0);
       
-      // Calculate logo position and size based on current settings
-      const logoWidth = (logoImage.width * (logoScale / 100));
-      const logoHeight = (logoImage.height * (logoScale / 100));
+      // Apply the exact same ratio from preview to the full-res bottle
+      const finalLogoWidth = widthRatio * bottleImage.width;
+      const finalLogoHeight = heightRatio * bottleImage.height;
       
-      // Scale logo to fit reasonably on the bottle (max 25% of bottle width)
-      const maxLogoWidth = bottleImage.width * 0.25;
-      const scaleFactor = logoWidth > maxLogoWidth ? maxLogoWidth / logoWidth : 1;
-      const finalLogoWidth = logoWidth * scaleFactor;
-      const finalLogoHeight = logoHeight * scaleFactor;
-      
-      // Position logo based on logoPosition (percentage based)
-      const logoX = (logoPosition.x / 100) * bottleImage.width - (finalLogoWidth / 2);
-      const logoY = (logoPosition.y / 100) * bottleImage.height - (finalLogoHeight / 2);
+      // Position using the measured center position ratio
+      const logoX = posXRatio * bottleImage.width - (finalLogoWidth / 2);
+      const logoY = posYRatio * bottleImage.height - (finalLogoHeight / 2);
       
       // Draw logo on bottle
       ctx.drawImage(logoImage, logoX, logoY, finalLogoWidth, finalLogoHeight);
