@@ -350,7 +350,31 @@ export default function PerformanceTracker() {
           {/* Status bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white rounded-sm p-3 sm:p-4 border border-slate-200 gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-bold text-slate-900">{data.resource_name}</span>
+              {/* Show resource initials for multi-resource, full name for single */}
+              {(() => {
+                const names = (data.resource_name || '').split(', ').filter(Boolean);
+                if (names.length === 1) {
+                  return <span className="text-sm font-bold text-slate-900">{names[0]}</span>;
+                }
+                return (
+                  <div className="flex items-center gap-1">
+                    {names.slice(0, 5).map((name, i) => {
+                      const parts = name.trim().split(' ').filter(Boolean);
+                      const initials = parts.length >= 2 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : parts[0]?.[0] || '?';
+                      return (
+                        <span key={i} className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-800 text-white text-[10px] font-bold cursor-default" title={name}>
+                          {initials.toUpperCase()}
+                        </span>
+                      );
+                    })}
+                    {names.length > 5 && (
+                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-300 text-slate-700 text-[10px] font-bold" title={names.slice(5).join(', ')}>
+                        +{names.length - 5}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
               {data.resource_city && <Badge variant="outline" className="bg-slate-50 text-xs rounded-sm border-slate-200">{data.resource_city}</Badge>}
               {data.plan_name && <Badge variant="outline" className="bg-slate-50 text-xs rounded-sm border-slate-200">{data.plan_name}</Badge>}
               {territoryFilter !== 'all' && <Badge className="bg-slate-900 text-white text-xs rounded-sm">{planTerritories.find(t => t.id === territoryFilter)?.name}</Badge>}
@@ -740,8 +764,8 @@ function OverridableRow({ label, autoValue, overrideValue, editing, locked, onEd
   const displayValue = overrideValue !== '' ? parseFloat(overrideValue) : autoValue;
   const hasOverride = overrideValue !== '' && overrideValue !== null && overrideValue !== undefined;
   return (
-    <div className={`flex items-center justify-between py-1.5 px-2 rounded ${hasOverride ? 'bg-amber-50/60' : ''}`} data-testid={testId}>
-      <span className="text-xs text-slate-500 flex items-center gap-1">
+    <div className={`flex items-center justify-between py-2.5 px-2 rounded ${hasOverride ? 'bg-amber-50/60' : ''}`} data-testid={testId}>
+      <span className="text-sm text-slate-500 flex items-center gap-1">
         {label}
         {hasOverride && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" title="Manual override" />}
       </span>
@@ -750,7 +774,7 @@ function OverridableRow({ label, autoValue, overrideValue, editing, locked, onEd
           <>
             <input
               type="number"
-              className="w-28 text-right text-sm font-medium border rounded px-2 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+              className="w-28 text-right text-base font-bold border rounded px-2 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
               value={overrideValue}
               onChange={e => onChange(e.target.value)}
               autoFocus
@@ -762,7 +786,7 @@ function OverridableRow({ label, autoValue, overrideValue, editing, locked, onEd
           </>
         ) : (
           <>
-            <span className={`text-sm font-semibold ${hasOverride ? 'text-amber-700' : 'text-slate-700'}`}>₹{fmt(displayValue)}</span>
+            <span className={`text-base font-bold tabular-nums ${hasOverride ? 'text-amber-700' : 'text-slate-900'}`}>₹{fmt(displayValue)}</span>
             {!locked && (
               <button onClick={() => { onChange(String(autoValue || 0)); onEdit(); }} className="p-0.5 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600" title="Override" data-testid={`${testId}-edit`}>
                 <Pencil className="h-3 w-3" />
@@ -785,14 +809,12 @@ function OverridableRow({ label, autoValue, overrideValue, editing, locked, onEd
 
 function SummaryTile({ label, value, icon: Icon, sub, testId }) {
   return (
-    <div className="bg-white p-3 sm:p-4 relative group flex flex-col justify-between min-h-[90px] sm:min-h-[100px] hover:bg-slate-50 transition-colors overflow-hidden" data-testid={testId}>
-      <div className="flex items-start justify-between gap-1">
-        <p className="text-[9px] sm:text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] leading-tight">{label}</p>
-        <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-300 flex-shrink-0" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-base sm:text-lg lg:text-xl font-semibold tracking-tight text-slate-900 tabular-nums mt-1.5 truncate" title={String(value)}>{value}</p>
-        {sub && <p className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5 font-medium truncate">{sub}</p>}
+    <div className="bg-white p-3 sm:p-4 relative group flex flex-col justify-between min-h-[80px] sm:min-h-[90px] hover:bg-slate-50 transition-colors overflow-hidden" data-testid={testId}>
+      <p className="text-[9px] sm:text-[10px] font-semibold text-slate-400 uppercase tracking-[0.15em] leading-tight pr-5">{label}</p>
+      <Icon className="h-3.5 w-3.5 text-slate-300 absolute top-3 right-3 sm:top-4 sm:right-4" />
+      <div className="min-w-0 mt-auto">
+        <p className="text-base sm:text-lg font-bold tracking-tight text-slate-900 tabular-nums truncate" title={String(value)}>{value}</p>
+        <p className="text-[9px] sm:text-[10px] text-slate-400 font-medium h-4 truncate">{sub || '\u00A0'}</p>
       </div>
     </div>
   );
@@ -825,9 +847,9 @@ function MetricCard({ label, value, icon, color, sub, testId }) {
 function InfoRow({ label, value, highlight }) {
   const hlMap = { red: 'text-red-700', green: 'text-emerald-700', amber: 'text-amber-700' };
   return (
-    <div className="flex justify-between items-center py-2 border-b border-slate-100">
-      <span className="text-xs font-medium text-slate-500">{label}</span>
-      <span className={`text-sm font-semibold tabular-nums ${highlight ? hlMap[highlight] : 'text-slate-900'}`}>{value}</span>
+    <div className="flex justify-between items-center py-2.5 border-b border-slate-100">
+      <span className="text-sm font-medium text-slate-500">{label}</span>
+      <span className={`text-base font-bold tabular-nums ${highlight ? hlMap[highlight] : 'text-slate-900'}`}>{value}</span>
     </div>
   );
 }
