@@ -157,3 +157,24 @@ export const filesAPI = {
   }),
   deleteDocument: (id) => axios.delete(`${API_URL}/documents/${id}`, { headers: getAuthHeaders() }),
 };
+
+// Investor Module API
+export const investorAPI = {
+  getPlan: (fy) => {
+    const params = fy ? `?fy=${fy}` : '';
+    return axios.get(`${API_URL}/investor/plan${params}`, { headers: getAuthHeaders() });
+  },
+  updatePlan: (data) => axios.put(`${API_URL}/investor/plan`, data, { headers: getAuthHeaders() }),
+  getMonthly: (year, month) => axios.get(`${API_URL}/investor/monthly/${year}/${month}`, { headers: getAuthHeaders() }),
+  updateMonthly: (year, month, data) => axios.put(`${API_URL}/investor/monthly/${year}/${month}`, data, { headers: getAuthHeaders() }),
+  getComments: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.section) q.append('section', params.section);
+    if (params.fy) q.append('fy', params.fy);
+    if (params.year) q.append('year', params.year);
+    if (params.month) q.append('month', params.month);
+    return axios.get(`${API_URL}/investor/comments?${q.toString()}`, { headers: getAuthHeaders() });
+  },
+  addComment: (data) => axios.post(`${API_URL}/investor/comments`, data, { headers: getAuthHeaders() }),
+  deleteComment: (id) => axios.delete(`${API_URL}/investor/comments/${id}`, { headers: getAuthHeaders() }),
+};

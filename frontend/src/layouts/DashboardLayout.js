@@ -14,7 +14,7 @@ import {
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
   Kanban, Wrench, Box, ShieldCheck, Boxes,
-  Factory, ArrowLeftRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3
+  Factory, ArrowLeftRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart
 } from 'lucide-react';
 
 // Platform Admin emails
@@ -51,6 +51,7 @@ const salesNavigationGroups = [
       { name: 'Lead Discovery', href: '/lead-discovery', icon: Search, moduleKey: 'lead_discovery', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Target Planning', href: '/target-planning', icon: Target, moduleKey: 'target_planning', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Performance Tracker', href: '/performance', icon: BarChart3, moduleKey: 'performance_tracker', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
+      { name: 'Investor Dashboard', href: '/investor-dashboard', icon: LineChart, roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Investor'] },
       { name: 'Daily Status', href: '/daily-status', icon: CalendarDays, moduleKey: 'daily_status', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Status Summary', href: '/status-summary', icon: UsersRound, moduleKey: 'status_summary', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
     ]

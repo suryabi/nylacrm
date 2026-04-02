@@ -6,20 +6,12 @@ Auto-computes revenue/COGS from CRM data with manual override support.
 
 from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone
+from deps import get_current_user
+from core.tenant import get_current_tenant_id
+from database import db
 import uuid
 
 router = APIRouter()
-
-# ---- DB & Auth Setup ----
-db = None
-get_current_user = None
-get_current_tenant_id = None
-
-def init_investor_router(database, auth_dep, tenant_dep):
-    global db, get_current_user, get_current_tenant_id
-    db = database
-    get_current_user = auth_dep
-    get_current_tenant_id = tenant_dep
 
 EDITOR_ROLES = ['CEO', 'Director', 'Admin']
 
@@ -31,9 +23,8 @@ def check_editor(user):
 # ---- Auto-Compute Helpers ----
 async def compute_revenue_data(tenant_id: str, fy_start: str, fy_end: str):
     """Auto-compute revenue and customer metrics from CRM data."""
-    # Revenue from invoices in FY
     pipeline = [
-        {"$match": {"invoice_date": {"$gte": fy_start, "$lt": fy_end}}},
+        {"$match": {"tenant_id": tenant_id, "invoice_date": {"$gte": fy_start, "$lt": fy_end}}},
         {"$group": {"_id": None, "total_revenue": {"$sum": "$net_invoice_value"}, "gross_revenue": {"$sum": "$gross_invoice_value"}, "count": {"$sum": 1}}}
     ]
     result = await db.invoices.aggregate(pipeline).to_list(1)
@@ -43,7 +34,7 @@ async def compute_revenue_data(tenant_id: str, fy_start: str, fy_end: str):
     prev_start = str(int(fy_start[:4]) - 1) + fy_start[4:]
     prev_end = str(int(fy_end[:4]) - 1) + fy_end[4:]
     prev_result = await db.invoices.aggregate([
-        {"$match": {"invoice_date": {"$gte": prev_start, "$lt": prev_end}}},
+        {"$match": {"tenant_id": tenant_id, "invoice_date": {"$gte": prev_start, "$lt": prev_end}}},
         {"$group": {"_id": None, "total_revenue": {"$sum": "$net_invoice_value"}, "gross_revenue": {"$sum": "$gross_invoice_value"}}}
     ]).to_list(1)
     prev_revenue = prev_result[0] if prev_result else {"total_revenue": 0, "gross_revenue": 0}
@@ -56,15 +47,15 @@ async def compute_revenue_data(tenant_id: str, fy_start: str, fy_end: str):
     })
 
     # COGS from cogs_data
-    cogs_docs = await db.cogs_data.find({"total_cogs": {"$exists": True}}, {"_id": 0, "total_cogs": 1}).to_list(1000)
-    avg_cogs_pct = 0
-    if cogs_docs and revenue.get("total_revenue", 0) > 0:
+    cogs_docs = await db.cogs_data.find({"tenant_id": tenant_id, "total_cogs": {"$exists": True}}, {"_id": 0, "total_cogs": 1}).to_list(1000)
+    avg_cogs_per_sku = 0
+    if cogs_docs:
         total_cogs = sum(d.get("total_cogs", 0) for d in cogs_docs)
-        avg_cogs_pct = (total_cogs / len(cogs_docs)) if cogs_docs else 0
+        avg_cogs_per_sku = round(total_cogs / len(cogs_docs), 2) if cogs_docs else 0
 
     # Outstanding
     outstanding_result = await db.invoices.aggregate([
-        {"$match": {"outstanding": {"$gt": 0}}},
+        {"$match": {"tenant_id": tenant_id, "outstanding": {"$gt": 0}}},
         {"$group": {"_id": None, "total": {"$sum": "$outstanding"}}}
     ]).to_list(1)
     total_outstanding = outstanding_result[0]["total"] if outstanding_result else 0
@@ -77,7 +68,7 @@ async def compute_revenue_data(tenant_id: str, fy_start: str, fy_end: str):
         "total_accounts": total_accounts,
         "new_accounts_fy": new_accounts_fy,
         "total_outstanding": total_outstanding,
-        "avg_cogs_per_sku": avg_cogs_pct,
+        "avg_cogs_per_sku": avg_cogs_per_sku,
     }
 
 
@@ -89,20 +80,17 @@ async def compute_monthly_actuals(tenant_id: str, year: int, month: int):
     else:
         month_end = f"{year}-{month + 1:02d}-01"
 
-    # Revenue
     rev_result = await db.invoices.aggregate([
-        {"$match": {"invoice_date": {"$gte": month_start, "$lt": month_end}}},
+        {"$match": {"tenant_id": tenant_id, "invoice_date": {"$gte": month_start, "$lt": month_end}}},
         {"$group": {"_id": None, "net": {"$sum": "$net_invoice_value"}, "gross": {"$sum": "$gross_invoice_value"}}}
     ]).to_list(1)
     rev = rev_result[0] if rev_result else {"net": 0, "gross": 0}
 
-    # New customers this month
     new_customers = await db.accounts.count_documents({
         "tenant_id": tenant_id,
         "created_at": {"$gte": month_start, "$lt": month_end}
     })
 
-    # Orders won (leads moved to 'won' status this month)
     orders_won = await db.leads.count_documents({
         "tenant_id": tenant_id, "status": "won",
         "updated_at": {"$gte": month_start, "$lt": month_end}
@@ -130,14 +118,12 @@ async def get_plan(fy: str = None, current_user: dict = Depends(get_current_user
         {"tenant_id": tenant_id, "fy": fy}, {"_id": 0}
     )
 
-    # Auto-compute CRM data
     fy_year = int(fy[2:6])
     fy_start = f"{fy_year}-04-01"
     fy_end = f"{fy_year + 1}-04-01"
     auto = await compute_revenue_data(tenant_id, fy_start, fy_end)
 
     if not plan:
-        # Return default structure with auto-computed values
         plan = {
             "id": str(uuid.uuid4()),
             "tenant_id": tenant_id,
@@ -219,16 +205,12 @@ async def get_monthly_update(year: int, month: int, current_user: dict = Depends
     """Get monthly update with auto-computed actuals and target from plan."""
     tenant_id = get_current_tenant_id()
 
-    # Get saved monthly data
     saved = await db.investor_monthly.find_one(
         {"tenant_id": tenant_id, "year": year, "month": month}, {"_id": 0}
     )
 
-    # Auto-compute actuals
     actuals = await compute_monthly_actuals(tenant_id, year, month)
 
-    # Get annual plan for targets (derive monthly = annual / 12)
-    now = datetime.now(timezone.utc)
     fy = f"FY{year}-{year + 1}" if month >= 4 else f"FY{year - 1}-{year}"
     plan = await db.investor_plans.find_one(
         {"tenant_id": tenant_id, "fy": fy}, {"_id": 0, "pnl": 1, "summary": 1}
@@ -331,7 +313,7 @@ async def add_comment(data: dict, current_user: dict = Depends(get_current_user)
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.investor_comments.insert_one(comment)
-    del comment["_id"] if "_id" in comment else None
+    comment.pop("_id", None)
     return comment
 
 

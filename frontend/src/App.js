@@ -84,6 +84,7 @@ import StockDashboard from './pages/StockDashboard';
 import TaskManagement from './pages/TaskManagement';
 import TaskDetail from './pages/TaskDetail';
 import PerformanceTracker from './pages/PerformanceTracker';
+import InvestorDashboard from './pages/InvestorDashboard';
 import '@/App.css';
 import { useActivityTracker } from './hooks/useActivityTracker';
 import { NavigationProvider } from './context/NavigationContext';
@@ -241,6 +242,7 @@ function AppRouter() {
           <Route path="/tasks" element={<ProtectedRoute><TaskManagement /></ProtectedRoute>} />
           <Route path="/tasks/:taskId" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />
           <Route path="/performance" element={<ProtectedRoute><PerformanceTracker /></ProtectedRoute>} />
+          <Route path="/investor-dashboard" element={<ProtectedRoute><InvestorDashboard /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </>
