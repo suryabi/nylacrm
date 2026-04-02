@@ -651,6 +651,8 @@ export default function PlatformAdmin() {
                         { key: 'sales_portal', label: 'Sales Portal' },
                         { key: 'lead_discovery', label: 'Lead Discovery' },
                         { key: 'target_planning', label: 'Target Planning' },
+                        { key: 'performance_tracker', label: 'Performance Tracker' },
+                        { key: 'investor_dashboard', label: 'Investor Dashboard' },
                         { key: 'cogs_calculator', label: 'COGS Calculator' },
                         { key: 'team', label: 'Team Management' },
                         { key: 'contacts', label: 'Contacts' },

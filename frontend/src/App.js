@@ -241,8 +241,8 @@ function AppRouter() {
           {/* Task Management */}
           <Route path="/tasks" element={<ProtectedRoute><TaskManagement /></ProtectedRoute>} />
           <Route path="/tasks/:taskId" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />
-          <Route path="/performance" element={<ProtectedRoute><PerformanceTracker /></ProtectedRoute>} />
-          <Route path="/investor-dashboard" element={<ProtectedRoute><InvestorDashboard /></ProtectedRoute>} />
+          <Route path="/performance" element={<ProtectedRoute moduleKey="performance_tracker"><PerformanceTracker /></ProtectedRoute>} />
+          <Route path="/investor-dashboard" element={<ProtectedRoute moduleKey="investor_dashboard"><InvestorDashboard /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </>

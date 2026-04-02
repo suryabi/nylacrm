@@ -56,6 +56,8 @@ const MODULE_CONFIG = {
     modules: [
       { key: 'lead_discovery', label: 'Lead Discovery', icon: Users, description: 'Find & import new leads' },
       { key: 'target_planning', label: 'Target Planning', icon: Target, description: 'Sales target management' },
+      { key: 'performance_tracker', label: 'Performance Tracker', icon: Target, description: 'Monthly performance tracking & KPIs' },
+      { key: 'investor_dashboard', label: 'Investor Dashboard', icon: DollarSign, description: 'Investor-facing annual plan & monthly updates' },
       { key: 'daily_status', label: 'Daily Status', icon: CalendarDays, description: 'Daily activity updates' },
       { key: 'status_summary', label: 'Status Summary', icon: Users, description: 'Team status aggregation' },
     ]
