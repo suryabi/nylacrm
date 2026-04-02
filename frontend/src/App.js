@@ -85,6 +85,9 @@ import TaskManagement from './pages/TaskManagement';
 import TaskDetail from './pages/TaskDetail';
 import PerformanceTracker from './pages/PerformanceTracker';
 import InvestorDashboard from './pages/InvestorDashboard';
+// Marketing Module
+import MarketingCalendar from './pages/MarketingCalendar';
+import MarketingMasters from './pages/MarketingMasters';
 import '@/App.css';
 import { useActivityTracker } from './hooks/useActivityTracker';
 import { NavigationProvider } from './context/NavigationContext';
@@ -243,6 +246,9 @@ function AppRouter() {
           <Route path="/tasks/:taskId" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />
           <Route path="/performance" element={<ProtectedRoute moduleKey="performance_tracker"><PerformanceTracker /></ProtectedRoute>} />
           <Route path="/investor-dashboard" element={<ProtectedRoute moduleKey="investor_dashboard"><InvestorDashboard /></ProtectedRoute>} />
+          {/* Marketing Module */}
+          <Route path="/marketing-calendar" element={<ProtectedRoute moduleKey="marketing_calendar"><MarketingCalendar /></ProtectedRoute>} />
+          <Route path="/marketing-masters" element={<ProtectedRoute moduleKey="marketing_masters"><MarketingMasters /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </>

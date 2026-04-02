@@ -656,6 +656,8 @@ export default function PlatformAdmin() {
                         { key: 'cogs_calculator', label: 'COGS Calculator' },
                         { key: 'team', label: 'Team Management' },
                         { key: 'contacts', label: 'Contacts' },
+                        { key: 'marketing_calendar', label: 'Marketing Calendar' },
+                        { key: 'marketing_masters', label: 'Marketing Masters' },
                       ].map(({ key, label }) => (
                         <div key={key} className="flex items-center justify-between p-3 border rounded-lg">
                           <span className="text-sm">{label}</span>

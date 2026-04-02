@@ -14,7 +14,7 @@ import {
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
   Kanban, Wrench, Box, ShieldCheck, Boxes,
-  Factory, ArrowLeftRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart
+  Factory, ArrowLeftRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers
 } from 'lucide-react';
 
 // Platform Admin emails
@@ -195,6 +195,31 @@ const distributorUserNavigationGroups = [
   },
 ];
 
+// Marketing Context Navigation
+const marketingNavigationGroups = [
+  {
+    title: 'Marketing',
+    items: [
+      { name: 'Content Calendar', href: '/marketing-calendar', icon: CalendarRange, moduleKey: 'marketing_calendar', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator'] },
+      { name: 'Masters', href: '/marketing-masters', icon: Layers, moduleKey: 'marketing_masters', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager'] },
+    ]
+  },
+  {
+    title: 'Organization',
+    items: [
+      { name: 'Company Profile', href: '/company-profile', icon: Building, moduleKey: 'company_profile', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager'] },
+      { name: 'Team', href: '/team', icon: UserCog, moduleKey: 'team', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager'] },
+      { name: 'Tasks', href: '/tasks', icon: ClipboardList, roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator'] },
+    ]
+  },
+  {
+    title: 'Admin',
+    items: [
+      { name: 'Tenant Settings', href: '/tenant-settings', icon: Settings, roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
+    ]
+  },
+];
+
 export default function DashboardLayout({ children }) {
   const { user, logout } = useAuth();
   const { currentContext, switchContext, canAccessMultipleModules, getAccessibleModules, modules, isDistributorUser, getDistributorId } = useAppContext();
@@ -271,6 +296,8 @@ export default function DashboardLayout({ children }) {
         return productionNavigationGroups;
       case 'distribution':
         return distributionNavigationGroups;
+      case 'marketing':
+        return marketingNavigationGroups;
       default:
         return salesNavigationGroups;
     }
@@ -365,6 +392,7 @@ export default function DashboardLayout({ children }) {
                 {currentContext === 'sales' && <Store className="w-4 h-4 text-primary" />}
                 {currentContext === 'production' && <Factory className="w-4 h-4 text-primary" />}
                 {currentContext === 'distribution' && <Truck className="w-4 h-4 text-primary" />}
+                {currentContext === 'marketing' && <Megaphone className="w-4 h-4 text-primary" />}
                 <span className="text-xs text-primary font-medium">
                   {modules[currentContext]?.label || 'Sales'} Module Active
                 </span>

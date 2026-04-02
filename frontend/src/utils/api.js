@@ -178,3 +178,35 @@ export const investorAPI = {
   addComment: (data) => axios.post(`${API_URL}/investor/comments`, data, { headers: getAuthHeaders() }),
   deleteComment: (id) => axios.delete(`${API_URL}/investor/comments/${id}`, { headers: getAuthHeaders() }),
 };
+
+// Marketing Module API
+export const marketingAPI = {
+  getCalendar: (month, year) => axios.get(`${API_URL}/marketing/calendar?month=${month}&year=${year}`, { headers: getAuthHeaders() }),
+  getPosts: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.month) q.append('month', params.month);
+    if (params.year) q.append('year', params.year);
+    if (params.status) q.append('status', params.status);
+    if (params.category) q.append('category', params.category);
+    return axios.get(`${API_URL}/marketing/posts?${q.toString()}`, { headers: getAuthHeaders() });
+  },
+  getPost: (id) => axios.get(`${API_URL}/marketing/posts/${id}`, { headers: getAuthHeaders() }),
+  createPost: (data) => axios.post(`${API_URL}/marketing/posts`, data, { headers: getAuthHeaders() }),
+  updatePost: (id, data) => axios.put(`${API_URL}/marketing/posts/${id}`, data, { headers: getAuthHeaders() }),
+  deletePost: (id) => axios.delete(`${API_URL}/marketing/posts/${id}`, { headers: getAuthHeaders() }),
+  updatePostStatus: (id, status) => axios.put(`${API_URL}/marketing/posts/${id}/status`, { status }, { headers: getAuthHeaders() }),
+  getCategories: () => axios.get(`${API_URL}/marketing/categories`, { headers: getAuthHeaders() }),
+  createCategory: (data) => axios.post(`${API_URL}/marketing/categories`, data, { headers: getAuthHeaders() }),
+  updateCategory: (id, data) => axios.put(`${API_URL}/marketing/categories/${id}`, data, { headers: getAuthHeaders() }),
+  deleteCategory: (id) => axios.delete(`${API_URL}/marketing/categories/${id}`, { headers: getAuthHeaders() }),
+  getPlatforms: () => axios.get(`${API_URL}/marketing/platforms`, { headers: getAuthHeaders() }),
+  updatePlatform: (id, data) => axios.put(`${API_URL}/marketing/platforms/${id}`, data, { headers: getAuthHeaders() }),
+  getEvents: (month, year) => {
+    const q = new URLSearchParams();
+    if (month) q.append('month', month);
+    if (year) q.append('year', year);
+    return axios.get(`${API_URL}/marketing/events?${q.toString()}`, { headers: getAuthHeaders() });
+  },
+  createEvent: (data) => axios.post(`${API_URL}/marketing/events`, data, { headers: getAuthHeaders() }),
+  deleteEvent: (id) => axios.delete(`${API_URL}/marketing/events/${id}`, { headers: getAuthHeaders() }),
+};

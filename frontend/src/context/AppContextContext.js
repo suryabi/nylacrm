@@ -11,6 +11,7 @@ const MODULES = {
   sales: { id: 'sales', label: 'Sales', icon: 'Store', defaultRoute: '/home' },
   production: { id: 'production', label: 'Production', icon: 'Factory', defaultRoute: '/maintenance' },
   distribution: { id: 'distribution', label: 'Distribution', icon: 'Truck', defaultRoute: '/distributors' },
+  marketing: { id: 'marketing', label: 'Marketing', icon: 'Megaphone', defaultRoute: '/marketing-calendar' },
 };
 
 export function AppContextProvider({ children }) {
@@ -33,6 +34,7 @@ export function AppContextProvider({ children }) {
     if (moduleId === 'sales' && (user.department === 'sales' || !user.department)) return true;
     if (moduleId === 'production' && user.department === 'production') return true;
     if (moduleId === 'distribution' && (user.department === 'distribution' || user.department === 'sales')) return true;
+    if (moduleId === 'marketing' && (user.department === 'marketing' || user.department === 'both' || user.department === 'all')) return true;
     return false;
   };
   
@@ -126,6 +128,7 @@ export function AppContextProvider({ children }) {
     canAccessSales: canAccessSales(),
     canAccessProduction: canAccessProduction(),
     canAccessDistribution: canAccessDistribution(),
+    canAccessMarketing: canAccessModule('marketing'),
     getAccessibleModules,
     modules: MODULES,
     isDistributorUser: isDistributorUser(),

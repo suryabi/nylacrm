@@ -143,6 +143,14 @@ const MODULE_CONFIG = {
       { key: 'distributor_deliveries', label: 'Account Deliveries', icon: Package, description: 'Deliveries to end accounts' },
       { key: 'distributor_stock', label: 'Stock Management', icon: Boxes, description: 'Distributor inventory levels' },
     ]
+  },
+  marketing: {
+    title: 'Marketing',
+    description: 'Content calendar and social media planning',
+    modules: [
+      { key: 'marketing_calendar', label: 'Content Calendar', icon: CalendarDays, description: 'Plan & schedule marketing content' },
+      { key: 'marketing_masters', label: 'Marketing Masters', icon: Settings, description: 'Categories, platforms & events' },
+    ]
   }
 };
 

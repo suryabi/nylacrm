@@ -159,6 +159,10 @@ export const MODULE_ROUTE_MAP = {
   distributor_shipments: ['/distributors'],
   distributor_deliveries: ['/distributors'],
   distributor_stock: ['/distributors'],
+
+  // Marketing Modules
+  marketing_calendar: ['/marketing-calendar'],
+  marketing_masters: ['/marketing-masters'],
 };
 
 // Mapping from navigation href to module key

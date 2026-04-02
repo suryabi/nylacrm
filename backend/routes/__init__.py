@@ -36,6 +36,7 @@ from .credit_notes import router as credit_notes_router
 from .factory_returns import router as factory_returns_router
 from .performance import router as performance_router
 from .investor import router as investor_router
+from .marketing import router as marketing_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -88,5 +89,8 @@ routes_router.include_router(performance_router, prefix="/performance", tags=["P
 
 # Investor Module
 routes_router.include_router(investor_router, prefix="/investor", tags=["Investor Module"])
+
+# Marketing Module
+routes_router.include_router(marketing_router, prefix="/marketing", tags=["Marketing Module"])
 
 __all__ = ['routes_router']
