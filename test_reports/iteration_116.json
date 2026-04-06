@@ -1,0 +1,89 @@
+{
+  "summary": "Marketing Platform Links & Analytics Feature - All tests passed. Backend: 15/15 tests passed (100%). Frontend: All UI elements verified - Analytics summary, per-platform rows, edit mode, save/cancel functionality, 'Add Links' vs 'Update Links' states.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_marketing_platform_links.py",
+    "/app/test_reports/pytest/marketing_platform_links_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_marketing_platform_links.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 tests passed)",
+    "frontend": "100% - All UI elements verified"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_id": "nyla-air-water"
+  },
+  "seed_data_creation": "Test posts created and cleaned up during backend tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Platform Links & Analytics feature fully tested. PUT /api/marketing/posts/{post_id}/links endpoint saves platform_links with url and analytics fields (views, likes, comments, shares, subscribers_added). Only accepts platforms assigned to the post. Validates numeric fields (invalid values converted to 0). Merges with existing links data. GET /api/marketing/posts/{post_id} returns platform_links in response. Frontend shows analytics summary totals when links exist, per-platform rows with individual breakdowns, 'Update Links' button for posts with links, 'Add Links' button for posts without links, edit mode with URL and analytics inputs, Save/Cancel buttons work correctly.",
+  "features_tested": {
+    "Backend_API_Tests": {
+      "PUT_links_saves_url_and_analytics": "PASSED - Saves platform_links with url, views, likes, comments, shares, subscribers_added",
+      "PUT_links_only_accepts_assigned_platforms": "PASSED - Ignores platforms not assigned to the post",
+      "PUT_links_validates_numeric_fields": "PASSED - Invalid values converted to 0",
+      "PUT_links_merges_with_existing_data": "PASSED - New data merges with existing platform_links",
+      "PUT_links_updates_existing_metrics": "PASSED - Updates merge with existing platform metrics",
+      "PUT_links_returns_404_for_nonexistent": "PASSED - Returns 404 for non-existent post",
+      "PUT_links_invalid_format_returns_400": "PASSED - Returns 400 for invalid platform_links format",
+      "GET_post_returns_platform_links": "PASSED - platform_links included in response",
+      "GET_post_with_links_has_analytics": "PASSED - Analytics data present in platform_links",
+      "GET_new_post_has_empty_links": "PASSED - New posts have empty platform_links",
+      "PUT_links_empty_payload": "PASSED - Empty platform_links accepted",
+      "PUT_links_url_only": "PASSED - URL without analytics accepted",
+      "PUT_links_analytics_without_url": "PASSED - Analytics without URL accepted",
+      "PUT_links_zero_values": "PASSED - Zero values accepted for analytics",
+      "PUT_links_large_values": "PASSED - Large analytics values handled correctly"
+    },
+    "Frontend_UI_Tests": {
+      "Post_detail_loads": "PASSED - Post detail page loads with data-testid='marketing-post-detail'",
+      "Platform_Links_section_present": "PASSED - Section with data-testid='section-links' found",
+      "Analytics_summary_shows_totals": "PASSED - Shows Views, Likes, Comments, Shares, New Subs totals",
+      "Per_platform_rows_present": "PASSED - Individual platform rows with analytics breakdowns",
+      "Open_link_button_for_platforms_with_urls": "PASSED - External link button appears for platforms with URLs",
+      "No_link_yet_for_platforms_without_urls": "PASSED - 'No link yet' text shown for platforms without URLs",
+      "Update_Links_button_for_posts_with_links": "PASSED - 'Update Links' button shown when links exist",
+      "Add_Links_button_for_posts_without_links": "PASSED - 'Add Links' button shown when no links exist",
+      "Edit_mode_shows_URL_inputs": "PASSED - URL input fields for each platform in edit mode",
+      "Edit_mode_shows_analytics_inputs": "PASSED - Views, Likes, Comments, Shares, New Subs inputs",
+      "Save_button_in_edit_mode": "PASSED - Save button calls PUT /links API",
+      "Cancel_button_reverts_form": "PASSED - Cancel button returns to view mode without saving",
+      "Analytics_summary_hidden_when_no_links": "PASSED - Summary not shown for posts without links"
+    }
+  },
+  "data_testids_verified": [
+    "marketing-post-detail",
+    "section-links",
+    "analytics-summary",
+    "analytics-total-views",
+    "analytics-total-likes",
+    "analytics-total-comments",
+    "analytics-total-shares",
+    "analytics-total-new-subs",
+    "link-row-{platform}",
+    "link-open-{platform}",
+    "edit-links-btn",
+    "save-links-btn",
+    "cancel-links-btn",
+    "link-url-{platform}",
+    "link-views-{platform}",
+    "link-likes-{platform}",
+    "link-comments-{platform}",
+    "link-shares-{platform}",
+    "link-subscribers_added-{platform}"
+  ]
+}

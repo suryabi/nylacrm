@@ -195,6 +195,7 @@ export const marketingAPI = {
   updatePost: (id, data) => axios.put(`${API_URL}/marketing/posts/${id}`, data, { headers: getAuthHeaders() }),
   deletePost: (id) => axios.delete(`${API_URL}/marketing/posts/${id}`, { headers: getAuthHeaders() }),
   updatePostStatus: (id, status) => axios.put(`${API_URL}/marketing/posts/${id}/status`, { status }, { headers: getAuthHeaders() }),
+  updatePostLinks: (id, platformLinks) => axios.put(`${API_URL}/marketing/posts/${id}/links`, { platform_links: platformLinks }, { headers: getAuthHeaders() }),
   getCategories: () => axios.get(`${API_URL}/marketing/categories`, { headers: getAuthHeaders() }),
   createCategory: (data) => axios.post(`${API_URL}/marketing/categories`, data, { headers: getAuthHeaders() }),
   updateCategory: (id, data) => axios.put(`${API_URL}/marketing/categories/${id}`, data, { headers: getAuthHeaders() }),

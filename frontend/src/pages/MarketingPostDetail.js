@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import {
   ArrowLeft, Film, Image, Video, MoreHorizontal, Save, Trash2,
   Eye, Send, PenLine, Calendar as CalendarIcon, ExternalLink,
+  BarChart3, Users, Heart, MessageCircle, Share2, Link as LinkIcon,
 } from 'lucide-react';
 
 const STATUS_CONFIG = {
@@ -36,6 +37,9 @@ export default function MarketingPostDetail() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({});
+  const [editingLinks, setEditingLinks] = useState(false);
+  const [savingLinks, setSavingLinks] = useState(false);
+  const [linkForm, setLinkForm] = useState({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,6 +51,7 @@ export default function MarketingPostDetail() {
       ]);
       setPost(postRes.data);
       setForm(postRes.data);
+      setLinkForm(postRes.data.platform_links || {});
       setCategories(catRes.data || []);
       setPlatforms(platRes.data || []);
     } catch {
@@ -101,6 +106,27 @@ export default function MarketingPostDetail() {
     }));
   };
 
+  const updateLinkField = (platformKey, field, value) => {
+    setLinkForm(prev => ({
+      ...prev,
+      [platformKey]: { ...(prev[platformKey] || {}), [field]: value },
+    }));
+  };
+
+  const handleSaveLinks = async () => {
+    setSavingLinks(true);
+    try {
+      await marketingAPI.updatePostLinks(postId, linkForm);
+      toast.success('Links & analytics saved');
+      setEditingLinks(false);
+      load();
+    } catch {
+      toast.error('Failed to save links');
+    } finally {
+      setSavingLinks(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -127,6 +153,20 @@ export default function MarketingPostDetail() {
   const dateFormatted = dateObj ? dateObj.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '—';
   const currentIdx = WORKFLOW_ORDER.indexOf(post.status);
   const enabledPlatforms = platforms.filter(p => p.enabled !== false);
+
+  // Compute analytics totals from platform_links
+  const pLinks = post.platform_links || {};
+  const totals = { views: 0, likes: 0, comments: 0, shares: 0, subscribers_added: 0 };
+  let hasAnyLink = false;
+  for (const pk of (post.platforms || [])) {
+    const m = pLinks[pk] || {};
+    if (m.url) hasAnyLink = true;
+    totals.views += m.views || 0;
+    totals.likes += m.likes || 0;
+    totals.comments += m.comments || 0;
+    totals.shares += m.shares || 0;
+    totals.subscribers_added += m.subscribers_added || 0;
+  }
 
   return (
     <div className="min-h-screen bg-white" data-testid="marketing-post-detail">
@@ -201,24 +241,128 @@ export default function MarketingPostDetail() {
               )}
             </div>
 
-            {/* Platform Links (future — placeholder) */}
+            {/* Platform Links & Analytics */}
             <div className="border border-slate-200 rounded-lg p-5" data-testid="section-links">
-              <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400 mb-3 block">Platform Links & Analytics</label>
+              <div className="flex items-center justify-between mb-4">
+                <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Platform Links & Analytics</label>
+                {!editingLinks ? (
+                  <button onClick={() => setEditingLinks(true)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-blue-600 hover:bg-blue-50 transition-colors border border-blue-200"
+                    data-testid="edit-links-btn">
+                    <span className="flex items-center gap-1"><LinkIcon size={12} /> {hasAnyLink ? 'Update Links' : 'Add Links'}</span>
+                  </button>
+                ) : (
+                  <div className="flex gap-2">
+                    <button onClick={() => { setEditingLinks(false); setLinkForm(post.platform_links || {}); }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:bg-slate-100 transition-colors"
+                      data-testid="cancel-links-btn">Cancel</button>
+                    <button onClick={handleSaveLinks} disabled={savingLinks}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-1"
+                      data-testid="save-links-btn"><Save size={12} /> {savingLinks ? 'Saving...' : 'Save'}</button>
+                  </div>
+                )}
+              </div>
+
+              {/* Analytics Summary */}
+              {hasAnyLink && !editingLinks && (
+                <div className="grid grid-cols-5 gap-2 mb-4" data-testid="analytics-summary">
+                  {[
+                    { label: 'Views', value: totals.views, icon: Eye, color: 'text-blue-600' },
+                    { label: 'Likes', value: totals.likes, icon: Heart, color: 'text-rose-500' },
+                    { label: 'Comments', value: totals.comments, icon: MessageCircle, color: 'text-amber-600' },
+                    { label: 'Shares', value: totals.shares, icon: Share2, color: 'text-emerald-600' },
+                    { label: 'New Subs', value: totals.subscribers_added, icon: Users, color: 'text-violet-600' },
+                  ].map(({ label, value, icon: Icon, color }) => (
+                    <div key={label} className="border border-slate-100 rounded-lg px-3 py-2 bg-slate-50/50 text-center" data-testid={`analytics-total-${label.toLowerCase().replace(' ', '-')}`}>
+                      <Icon size={14} className={`mx-auto ${color} mb-0.5`} />
+                      <div className="text-lg font-semibold text-slate-900">{value.toLocaleString()}</div>
+                      <div className="text-[10px] text-slate-400 uppercase tracking-wider">{label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Per-Platform Rows */}
               <div className="space-y-2">
                 {(post.platforms || []).map(pk => {
                   const ps = PLATFORM_STYLES[pk] || {};
+                  const metrics = editingLinks ? (linkForm[pk] || {}) : (pLinks[pk] || {});
+                  const hasLink = !!metrics.url;
+
                   return (
-                    <div key={pk} className="flex items-center justify-between py-2.5 px-3 rounded-lg bg-slate-50 border border-slate-100">
-                      <div className="flex items-center gap-3">
-                        <span className="w-7 h-7 rounded-md flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: ps.color }}>{ps.short}</span>
-                        <span className="text-sm font-medium text-slate-700">{ps.label}</span>
+                    <div key={pk} className="rounded-lg border border-slate-100 overflow-hidden" data-testid={`link-row-${pk}`}>
+                      {/* Platform header */}
+                      <div className={`flex items-center justify-between py-2.5 px-3 ${hasLink && !editingLinks ? 'bg-white' : 'bg-slate-50'}`}>
+                        <div className="flex items-center gap-3">
+                          <span className="w-7 h-7 rounded-md flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: ps.color }}>{ps.short}</span>
+                          <span className="text-sm font-medium text-slate-700">{ps.label}</span>
+                        </div>
+                        {!editingLinks && (
+                          hasLink ? (
+                            <a href={metrics.url} target="_blank" rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                              data-testid={`link-open-${pk}`}
+                              onClick={e => e.stopPropagation()}>
+                              <ExternalLink size={11} /> Open
+                            </a>
+                          ) : (
+                            <span className="text-xs text-slate-400 italic">No link yet</span>
+                          )
+                        )}
                       </div>
-                      <span className="text-xs text-slate-400 italic">Link not added yet</span>
+
+                      {/* Editable fields */}
+                      {editingLinks && (
+                        <div className="px-3 pb-3 pt-1 space-y-2 bg-white">
+                          <div>
+                            <label className="text-[10px] text-slate-400 uppercase tracking-wider mb-0.5 block">URL</label>
+                            <input type="url" value={metrics.url || ''} placeholder={`https://${pk}.com/...`}
+                              onChange={e => updateLinkField(pk, 'url', e.target.value)}
+                              className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                              data-testid={`link-url-${pk}`} />
+                          </div>
+                          <div className="grid grid-cols-5 gap-2">
+                            {[
+                              { key: 'views', label: 'Views', icon: Eye },
+                              { key: 'likes', label: 'Likes', icon: Heart },
+                              { key: 'comments', label: 'Comments', icon: MessageCircle },
+                              { key: 'shares', label: 'Shares', icon: Share2 },
+                              { key: 'subscribers_added', label: 'New Subs', icon: Users },
+                            ].map(({ key, label, icon: MIcon }) => (
+                              <div key={key}>
+                                <label className="text-[10px] text-slate-400 uppercase tracking-wider mb-0.5 flex items-center gap-1"><MIcon size={9} /> {label}</label>
+                                <input type="number" min="0" value={metrics[key] || ''}
+                                  onChange={e => updateLinkField(pk, key, e.target.value)}
+                                  placeholder="0"
+                                  className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-center"
+                                  data-testid={`link-${key}-${pk}`} />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Read-only analytics row */}
+                      {!editingLinks && hasLink && (
+                        <div className="grid grid-cols-5 gap-px bg-slate-100 border-t border-slate-100">
+                          {[
+                            { v: metrics.views, label: 'Views' },
+                            { v: metrics.likes, label: 'Likes' },
+                            { v: metrics.comments, label: 'Comments' },
+                            { v: metrics.shares, label: 'Shares' },
+                            { v: metrics.subscribers_added, label: 'New Subs' },
+                          ].map(({ v, label }) => (
+                            <div key={label} className="bg-white px-2 py-2 text-center">
+                              <div className="text-sm font-semibold text-slate-800">{(v || 0).toLocaleString()}</div>
+                              <div className="text-[9px] text-slate-400 uppercase tracking-wider">{label}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
-              <p className="text-[11px] text-slate-400 mt-3">Platform links and analytics tracking will be available in a future update.</p>
             </div>
           </div>
 

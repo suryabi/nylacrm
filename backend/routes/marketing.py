@@ -243,6 +243,7 @@ async def create_post(data: dict, current_user: dict = Depends(get_current_user)
         "concept": data.get("concept", ""),
         "message": data.get("message", ""),
         "platforms": data.get("platforms", ["linkedin", "whatsapp", "youtube", "instagram", "facebook"]),
+        "platform_links": {},
         "status": data.get("status", "draft"),
         "owner_id": data.get("owner_id", current_user.get("id")),
         "owner_name": data.get("owner_name", current_user.get("name", "")),
@@ -265,7 +266,7 @@ async def update_post(post_id: str, data: dict, current_user: dict = Depends(get
     if not existing:
         raise HTTPException(status_code=404, detail="Post not found")
 
-    allowed_fields = ["post_date", "category", "content_type", "concept", "message", "platforms", "status", "owner_id", "owner_name"]
+    allowed_fields = ["post_date", "category", "content_type", "concept", "message", "platforms", "status", "owner_id", "owner_name", "platform_links"]
     update = {k: v for k, v in data.items() if k in allowed_fields}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     update["updated_by"] = current_user.get("id")
@@ -301,6 +302,61 @@ async def update_post_status(post_id: str, data: dict, current_user: dict = Depe
         {"$set": {"status": new_status, "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": current_user.get("id")}}
     )
     return {"message": f"Status updated to {new_status}"}
+
+
+VALID_ANALYTICS_FIELDS = ["url", "views", "likes", "comments", "shares", "subscribers_added"]
+
+
+@router.put("/posts/{post_id}/links")
+async def update_post_links(post_id: str, data: dict, current_user: dict = Depends(get_current_user)):
+    """Update platform links and analytics for a post.
+    Expects: { "platform_links": { "linkedin": { "url": "...", "views": 100, ... }, ... } }
+    """
+    tenant_id = get_current_tenant_id()
+
+    existing = await db.marketing_posts.find_one({"id": post_id, "tenant_id": tenant_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    incoming = data.get("platform_links", {})
+    if not isinstance(incoming, dict):
+        raise HTTPException(status_code=400, detail="platform_links must be an object")
+
+    current_links = existing.get("platform_links", {})
+    post_platforms = existing.get("platforms", [])
+
+    # Only accept data for platforms assigned to this post
+    for pk, metrics in incoming.items():
+        if pk not in post_platforms:
+            continue
+        if not isinstance(metrics, dict):
+            continue
+        clean = {}
+        for field in VALID_ANALYTICS_FIELDS:
+            if field in metrics:
+                if field == "url":
+                    clean[field] = str(metrics[field])
+                else:
+                    try:
+                        clean[field] = int(metrics[field])
+                    except (ValueError, TypeError):
+                        clean[field] = 0
+        # Merge with existing
+        if pk in current_links:
+            current_links[pk].update(clean)
+        else:
+            current_links[pk] = clean
+
+    await db.marketing_posts.update_one(
+        {"id": post_id, "tenant_id": tenant_id},
+        {"$set": {
+            "platform_links": current_links,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": current_user.get("id"),
+        }}
+    )
+    updated = await db.marketing_posts.find_one({"id": post_id, "tenant_id": tenant_id}, {"_id": 0})
+    return updated
 
 
 # ---- Calendar Summary ----
