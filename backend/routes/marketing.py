@@ -331,23 +331,41 @@ async def get_calendar_data(month: int = Query(...), year: int = Query(...), cur
     # Get events for this month
     month_str = f"{month:02d}"
     auto = [e for e in AUTO_EVENTS if e["date"].startswith(month_str)]
-    custom = await db.marketing_events.find(
-        {"tenant_id": tenant_id, "date": {"$regex": f"^{month_str}"}},
-        {"_id": 0}
-    ).to_list(100)
-    events = auto + [{"date": c["date"], "name": c["name"], "type": "custom", "id": c.get("id")} for c in custom]
+    # Custom events stored as YYYY-MM-DD — match by month
+    custom_query = {
+        "tenant_id": tenant_id,
+        "$or": [
+            {"date": {"$regex": f"^{month_str}-"}},
+            {"date": {"$regex": f"^{year}-{month_str}-"}},
+        ]
+    }
+    custom = await db.marketing_events.find(custom_query, {"_id": 0}).to_list(100)
+    events = auto + [{"date": c.get("date", ""), "name": c["name"], "type": "custom", "id": c.get("id")} for c in custom]
 
     # Stats
     total = len(posts)
     by_status = {}
+    by_category = {}
+    by_content_type = {}
     for p in posts:
         s = p.get("status", "draft")
         by_status[s] = by_status.get(s, 0) + 1
+        cat = p.get("category", "Uncategorized")
+        if cat:
+            by_category[cat] = by_category.get(cat, 0) + 1
+        ct = p.get("content_type", "other")
+        by_content_type[ct] = by_content_type.get(ct, 0) + 1
 
     return {
         "posts_by_date": posts_by_date,
         "events": events,
-        "stats": {"total": total, "by_status": by_status},
+        "stats": {
+            "total": total,
+            "by_status": by_status,
+            "by_category": by_category,
+            "by_content_type": by_content_type,
+            "events_count": len(events),
+        },
         "month": month,
         "year": year,
     }

@@ -215,13 +215,13 @@ function PostCard({ post, onClick, onDelete, onDragStart }) {
   );
 }
 
-// --- Event Badge ---
+// --- Event Badge (prominent) ---
 function EventBadge({ event }) {
   const isIndian = event.type === 'indian';
   const isCustom = event.type === 'custom';
   return (
-    <div className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium mb-0.5 ${isIndian ? 'bg-orange-50 text-orange-600' : isCustom ? 'bg-violet-50 text-violet-600' : 'bg-sky-50 text-sky-600'}`} title={event.name}>
-      <Sparkles size={8} />
+    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold mb-1 border ${isIndian ? 'bg-orange-50 text-orange-700 border-orange-200' : isCustom ? 'bg-violet-50 text-violet-700 border-violet-200' : 'bg-sky-50 text-sky-700 border-sky-200'}`} title={event.name}>
+      <Sparkles size={10} className="shrink-0" />
       <span className="truncate">{event.name}</span>
     </div>
   );
@@ -311,7 +311,7 @@ export default function MarketingCalendar() {
   const prevWeek = () => { const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d); if (d.getMonth() + 1 !== month) { setMonth(d.getMonth() + 1); setYear(d.getFullYear()); } };
   const nextWeek = () => { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d); if (d.getMonth() + 1 !== month) { setMonth(d.getMonth() + 1); setYear(d.getFullYear()); } };
   const fmtDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const getEventsForDate = (mmdd) => events.filter(e => e.date === mmdd);
+  const getEventsForDate = (mmdd, fullDate) => events.filter(e => e.date === mmdd || e.date === fullDate);
 
   return (
     <div className="min-h-screen bg-white" data-testid="marketing-calendar">
@@ -361,6 +361,40 @@ export default function MarketingCalendar() {
         </div>
       </div>
 
+      {/* Metrics Bar */}
+      <div className="px-6 lg:px-8 pt-4 pb-0">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+          {/* Total Posts */}
+          <div className="border border-slate-200 rounded-lg px-4 py-3 bg-white" data-testid="metric-total">
+            <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Total Posts</div>
+            <div className="text-2xl font-semibold text-slate-900 mt-0.5">{stats.total}</div>
+          </div>
+          {/* Events this month */}
+          <div className="border border-slate-200 rounded-lg px-4 py-3 bg-white" data-testid="metric-events">
+            <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Events</div>
+            <div className="text-2xl font-semibold text-sky-600 mt-0.5">{stats.events_count || events.length}</div>
+          </div>
+          {/* Reels */}
+          <div className="border border-slate-200 rounded-lg px-4 py-3 bg-white" data-testid="metric-reels">
+            <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Reels</div>
+            <div className="text-2xl font-semibold text-violet-600 mt-0.5">{stats.by_content_type?.reel || 0}</div>
+          </div>
+          {/* Category breakdown */}
+          {Object.entries(stats.by_category || {}).slice(0, 3).map(([cat, count]) => {
+            const catDef = categories.find(c => c.name === cat);
+            return (
+              <div key={cat} className="border border-slate-200 rounded-lg px-4 py-3 bg-white" data-testid={`metric-cat-${cat}`}>
+                <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  {catDef && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: catDef.color }} />}
+                  {cat}
+                </div>
+                <div className="text-2xl font-semibold text-slate-900 mt-0.5">{count}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Calendar Body */}
       <div className="px-6 lg:px-8 py-4">
         {loading ? (
@@ -384,7 +418,7 @@ export default function MarketingCalendar() {
                     const isToday = dateStr === todayStr;
                     const posts = postsByDate[dateStr] || [];
                     const mmdd = `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                    const dayEvents = getEventsForDate(mmdd);
+                    const dayEvents = getEventsForDate(mmdd, dateStr);
                     const isDrop = dropTarget === dateStr;
 
                     return (
@@ -434,7 +468,7 @@ export default function MarketingCalendar() {
                     const ds = fmtDate(d);
                     const posts = postsByDate[ds] || [];
                     const mmdd = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                    const dayEvents = getEventsForDate(mmdd);
+                    const dayEvents = getEventsForDate(mmdd, ds);
                     const isDrop = dropTarget === ds;
                     const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                     return (
@@ -458,7 +492,7 @@ export default function MarketingCalendar() {
             {view === 'day' && (() => {
               const dayPosts = postsByDate[todayStr] || [];
               const mmdd = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-              const dayEvents = getEventsForDate(mmdd);
+              const dayEvents = getEventsForDate(mmdd, todayStr);
               return (
                 <div className="max-w-xl mx-auto space-y-4">
                   <div className="border border-slate-200 rounded-lg p-6 bg-white">

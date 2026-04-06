@@ -162,9 +162,8 @@ export default function MarketingMasters() {
                 <div className="border border-slate-200 rounded-lg p-4">
                   <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400 mb-2 block">Add Custom Event</label>
                   <div className="flex gap-2 items-center">
-                    <input type="text" value={newEvent.date} onChange={e => setNewEvent(p => ({ ...p, date: e.target.value }))}
-                      placeholder="MM-DD" maxLength={5}
-                      className="w-24 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    <input type="date" value={newEvent.date} onChange={e => setNewEvent(p => ({ ...p, date: e.target.value }))}
+                      className="w-40 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                       data-testid="new-event-date" />
                     <input type="text" value={newEvent.name} onChange={e => setNewEvent(p => ({ ...p, name: e.target.value }))}
                       placeholder="Event name..." onKeyDown={e => { if (e.key === 'Enter') addEvent(); }}
@@ -174,16 +173,21 @@ export default function MarketingMasters() {
                   </div>
                 </div>
 
-                {events.filter(e => e.type === 'custom').map(ev => (
+                {events.filter(e => e.type === 'custom').map(ev => {
+                  const dateLabel = ev.date?.length > 5
+                    ? new Date(ev.date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                    : ev.date;
+                  return (
                   <div key={ev.id} className="border border-slate-200 rounded-lg px-4 py-3 flex items-center justify-between group hover:border-slate-300 transition-all"
                     data-testid={`event-${ev.id}`}>
                     <div className="flex items-center gap-3">
-                      <span className="bg-violet-50 text-violet-600 rounded px-2 py-0.5 text-xs font-medium">{ev.date}</span>
+                      <span className="bg-violet-50 text-violet-600 rounded px-2 py-0.5 text-xs font-medium">{dateLabel}</span>
                       <span className="text-sm font-medium text-slate-700">{ev.name}</span>
                     </div>
                     <button onClick={() => deleteEvent(ev.id)} className="text-slate-400 hover:text-red-600 p-1 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={13} /></button>
                   </div>
-                ))}
+                  );
+                })}
                 {events.filter(e => e.type === 'custom').length === 0 && (
                   <p className="text-center text-slate-400 text-sm py-8">No custom events yet</p>
                 )}
