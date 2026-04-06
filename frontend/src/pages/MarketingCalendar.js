@@ -371,13 +371,15 @@ export default function MarketingCalendar() {
             {view === 'month' && (
               <div className="border border-slate-200 rounded-lg overflow-hidden">
                 <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
-                  {DAYS.map(d => (
-                    <div key={d} className="py-2.5 text-center text-[11px] font-medium uppercase tracking-wider text-slate-400 border-r border-slate-200 last:border-r-0">{d}</div>
+                  {DAYS.map((d, di) => (
+                    <div key={d} className={`py-2.5 text-center text-[11px] font-medium uppercase tracking-wider border-r border-slate-200 last:border-r-0 ${di === 0 || di === 6 ? 'text-slate-400/70 bg-slate-100/60' : 'text-slate-400'}`}>{d}</div>
                   ))}
                 </div>
                 <div className="grid grid-cols-7">
                   {calendarDays.map((day, i) => {
-                    if (day === null) return <div key={`e-${i}`} className="min-h-[130px] bg-slate-50/50 border-r border-b border-slate-100" />;
+                    const colIndex = i % 7;
+                    const isWeekend = colIndex === 0 || colIndex === 6;
+                    if (day === null) return <div key={`e-${i}`} className={`min-h-[130px] border-r border-b border-slate-100 ${isWeekend ? 'bg-slate-50/80' : 'bg-slate-50/50'}`} />;
                     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                     const isToday = dateStr === todayStr;
                     const posts = postsByDate[dateStr] || [];
@@ -387,14 +389,14 @@ export default function MarketingCalendar() {
 
                     return (
                       <div key={dateStr}
-                        className={`min-h-[130px] p-2 border-r border-b border-slate-100 cursor-pointer transition-all group ${isToday ? 'bg-blue-50/30' : 'bg-white hover:bg-slate-50/50'} ${isDrop ? 'bg-blue-50 ring-2 ring-blue-400 ring-inset' : ''}`}
+                        className={`min-h-[130px] p-2 border-r border-b border-slate-100 cursor-pointer transition-all group ${isToday ? 'bg-blue-50/30' : isWeekend ? 'bg-slate-50/60 hover:bg-slate-100/40' : 'bg-white hover:bg-slate-50/50'} ${isDrop ? 'bg-blue-50 ring-2 ring-blue-400 ring-inset' : ''}`}
                         onClick={() => openNew(dateStr)}
                         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDropTarget(dateStr); }}
                         onDragLeave={() => setDropTarget(null)}
                         onDrop={(e) => { e.preventDefault(); handleDrop(dateStr); }}
                         data-testid={`cal-cell-${dateStr}`}>
                         <div className="flex items-center justify-between mb-1.5">
-                          <span className={`text-sm ${isToday ? 'bg-blue-600 text-white w-7 h-7 flex items-center justify-center rounded-full font-semibold' : 'text-slate-500 font-medium'}`}>{day}</span>
+                          <span className={`text-sm ${isToday ? 'bg-blue-600 text-white w-7 h-7 flex items-center justify-center rounded-full font-semibold' : isWeekend ? 'text-slate-400 font-medium' : 'text-slate-500 font-medium'}`}>{day}</span>
                           <Plus size={14} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
                         {dayEvents.map((ev, ei) => <EventBadge key={ei} event={ev} />)}
@@ -418,10 +420,11 @@ export default function MarketingCalendar() {
                   {getWeekDates().map(d => {
                     const ds = fmtDate(d);
                     const isToday = ds === todayStr;
+                    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                     return (
-                      <div key={ds} className={`py-3 text-center border-r border-slate-200 last:border-r-0 ${isToday ? 'bg-blue-50' : ''}`}>
-                        <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{DAYS[d.getDay()]}</div>
-                        <div className={`text-lg font-semibold mt-0.5 ${isToday ? 'text-blue-600' : 'text-slate-700'}`}>{d.getDate()}</div>
+                      <div key={ds} className={`py-3 text-center border-r border-slate-200 last:border-r-0 ${isToday ? 'bg-blue-50' : isWeekend ? 'bg-slate-100/60' : ''}`}>
+                        <div className={`text-[11px] font-medium uppercase tracking-wider ${isWeekend ? 'text-slate-400/70' : 'text-slate-400'}`}>{DAYS[d.getDay()]}</div>
+                        <div className={`text-lg font-semibold mt-0.5 ${isToday ? 'text-blue-600' : isWeekend ? 'text-slate-400' : 'text-slate-700'}`}>{d.getDate()}</div>
                       </div>
                     );
                   })}
@@ -433,8 +436,9 @@ export default function MarketingCalendar() {
                     const mmdd = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                     const dayEvents = getEventsForDate(mmdd);
                     const isDrop = dropTarget === ds;
+                    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                     return (
-                      <div key={ds} className={`p-2 border-r border-slate-100 last:border-r-0 cursor-pointer transition-all hover:bg-slate-50/50 ${isDrop ? 'bg-blue-50 ring-2 ring-blue-400 ring-inset' : ''}`}
+                      <div key={ds} className={`p-2 border-r border-slate-100 last:border-r-0 cursor-pointer transition-all ${isWeekend ? 'bg-slate-50/60 hover:bg-slate-100/40' : 'hover:bg-slate-50/50'} ${isDrop ? 'bg-blue-50 ring-2 ring-blue-400 ring-inset' : ''}`}
                         onClick={() => openNew(ds)}
                         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDropTarget(ds); }}
                         onDragLeave={() => setDropTarget(null)}
