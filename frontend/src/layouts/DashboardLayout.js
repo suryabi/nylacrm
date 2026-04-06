@@ -20,7 +20,7 @@ import {
 // Platform Admin emails
 const PLATFORM_ADMIN_EMAILS = ['surya.yadavalli@gmail.com', 'surya.yadavalli@nylaairwater.earth'];
 
-const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
+const NYLA_LOGO = null;
 
 // Dashboard submenu items
 const dashboardSubmenu = [
@@ -230,9 +230,9 @@ export default function DashboardLayout({ children }) {
   const navigate = useNavigate();
   
   // Get branding values with fallbacks
-  const logoUrl = branding?.logo_url || NYLA_LOGO;
-  const appName = branding?.app_name || 'Nyla Air Water';
-  const tagline = branding?.tagline || (currentContext === 'production' ? 'Production' : currentContext === 'distribution' ? 'Distribution' : 'Sales CRM');
+  const logoUrl = branding?.logo_url || null;
+  const appName = branding?.app_name || 'Sales CRM';
+  const tagline = branding?.tagline || (currentContext === 'production' ? 'Production' : currentContext === 'distribution' ? 'Distribution' : currentContext === 'marketing' ? 'Marketing' : 'Sales CRM');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(
     location.pathname === '/dashboard' || location.pathname === '/sales-revenue' || 
