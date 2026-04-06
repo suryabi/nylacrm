@@ -21,7 +21,12 @@ const STATUS_CONFIG = {
   published: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500', label: 'Published', icon: Send },
 };
 
-const CONTENT_TYPE_ICONS = { reel: Film, image: Image, video: Video, other: MoreHorizontal };
+const CONTENT_TYPE_ICONS = {
+  reel: { icon: Film, color: '#8b5cf6', bg: 'bg-violet-100', text: 'text-violet-700', label: 'Reel' },
+  image: { icon: Image, color: '#0ea5e9', bg: 'bg-sky-100', text: 'text-sky-700', label: 'Image' },
+  video: { icon: Video, color: '#f43f5e', bg: 'bg-rose-100', text: 'text-rose-700', label: 'Video' },
+  other: { icon: MoreHorizontal, color: '#64748b', bg: 'bg-slate-100', text: 'text-slate-600', label: 'Other' },
+};
 
 const PLATFORM_STYLES = {
   linkedin: { color: '#0A66C2', label: 'LinkedIn', short: 'Li' },
@@ -123,12 +128,13 @@ function PostPanel({ open, onClose, post, categories, platforms, onSave, onDelet
             <label className="text-[11px] font-medium uppercase tracking-wider text-slate-500 mb-2 block">Content Type</label>
             <div className="flex gap-1.5" data-testid="content-type-group">
               {['reel', 'image', 'video', 'other'].map(t => {
-                const Icon = CONTENT_TYPE_ICONS[t];
+                const ctDef = CONTENT_TYPE_ICONS[t];
+                const CtIcon = ctDef.icon;
                 const active = form.content_type === t;
                 return (
                   <button key={t} onClick={() => setForm(p => ({ ...p, content_type: t }))}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium capitalize transition-all ${active ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
-                    data-testid={`content-type-${t}`}><Icon size={14} /> {t}</button>
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium capitalize transition-all ${active ? 'bg-slate-900 text-white' : `${ctDef.bg} ${ctDef.text} hover:opacity-80`}`}
+                    data-testid={`content-type-${t}`}><CtIcon size={14} /> {t}</button>
                 );
               })}
             </div>
@@ -192,7 +198,8 @@ function PostPanel({ open, onClose, post, categories, platforms, onSave, onDelet
 // --- Post Card (in calendar cell) ---
 function PostCard({ post, onClick, onDelete, onDragStart }) {
   const status = STATUS_CONFIG[post.status] || STATUS_CONFIG.draft;
-  const Icon = CONTENT_TYPE_ICONS[post.content_type] || MoreHorizontal;
+  const ct = CONTENT_TYPE_ICONS[post.content_type] || CONTENT_TYPE_ICONS.other;
+  const CtIcon = ct.icon;
 
   return (
     <div
@@ -204,8 +211,10 @@ function PostCard({ post, onClick, onDelete, onDragStart }) {
         <button onClick={(e) => { e.stopPropagation(); onClick(post); }} className="flex-1 min-w-0 text-left">
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className={`w-1.5 h-1.5 rounded-full ${status.dot} shrink-0`} />
-            <Icon size={10} className="text-slate-400 shrink-0" />
-            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider truncate">{post.category || post.content_type}</span>
+            <span className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${ct.bg}`}>
+              <CtIcon size={12} className={ct.text} />
+            </span>
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider truncate">{post.category || ct.label}</span>
           </div>
           <p className="text-xs font-medium text-slate-700 leading-snug line-clamp-2">{post.concept || 'Untitled'}</p>
         </button>
@@ -612,14 +621,17 @@ export default function MarketingCalendar() {
                       <div className="space-y-3 mt-4">
                         {dayPosts.map(post => {
                           const s = STATUS_CONFIG[post.status] || STATUS_CONFIG.draft;
-                          const Icon = CONTENT_TYPE_ICONS[post.content_type] || MoreHorizontal;
+                          const ct = CONTENT_TYPE_ICONS[post.content_type] || CONTENT_TYPE_ICONS.other;
+                          const CtIcon = ct.icon;
                           return (
                             <div key={post.id} onClick={() => openEdit(post)}
                               className="border border-slate-200 rounded-lg p-4 cursor-pointer hover:border-slate-300 hover:shadow-sm transition-all"
                               data-testid={`day-post-${post.id}`}>
                               <div className="flex items-start justify-between">
-                                <div className="flex items-center gap-2">
-                                  <Icon size={14} className="text-slate-400" />
+                                <div className="flex items-center gap-2.5">
+                                  <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${ct.bg}`}>
+                                    <CtIcon size={18} className={ct.text} />
+                                  </span>
                                   <span className="font-medium text-slate-900 text-sm">{post.concept || 'Untitled'}</span>
                                 </div>
                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${s.bg} ${s.text}`}>{s.label}</span>
@@ -707,7 +719,8 @@ export default function MarketingCalendar() {
                         <tbody className="divide-y divide-slate-100">
                           {filtered.map(post => {
                             const s = STATUS_CONFIG[post.status] || STATUS_CONFIG.draft;
-                            const Icon = CONTENT_TYPE_ICONS[post.content_type] || MoreHorizontal;
+                            const ct = CONTENT_TYPE_ICONS[post.content_type] || CONTENT_TYPE_ICONS.other;
+                            const CtIcon = ct.icon;
                             const catDef = categories.find(c => c.name === post.category);
                             const dateObj = post.post_date ? new Date(post.post_date + 'T00:00:00') : null;
                             const dateLabel = dateObj ? dateObj.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—';
@@ -729,8 +742,11 @@ export default function MarketingCalendar() {
                                   </span>
                                 </td>
                                 <td className="px-4 py-3">
-                                  <span className="inline-flex items-center gap-1 text-xs text-slate-500 capitalize">
-                                    <Icon size={12} /> {post.content_type}
+                                  <span className={`inline-flex items-center gap-2 text-xs font-medium capitalize ${ct.text}`}>
+                                    <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${ct.bg}`}>
+                                      <CtIcon size={16} className={ct.text} />
+                                    </span>
+                                    {ct.label}
                                   </span>
                                 </td>
                                 <td className="px-4 py-3">
@@ -861,7 +877,14 @@ export default function MarketingCalendar() {
                               <td className="px-3 py-2 text-xs text-slate-700 whitespace-nowrap">{row.post_date}</td>
                               <td className="px-3 py-2 text-xs text-slate-800 font-medium max-w-[160px] truncate">{row.concept || '—'}</td>
                               <td className="px-3 py-2 text-xs text-slate-600">{row.category || '—'}</td>
-                              <td className="px-3 py-2 text-xs text-slate-500 capitalize">{row.content_type}</td>
+                              <td className="px-3 py-2">
+                                {(() => { const pct = CONTENT_TYPE_ICONS[row.content_type] || CONTENT_TYPE_ICONS.other; const PIcon = pct.icon; return (
+                                  <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${pct.text}`}>
+                                    <span className={`w-5 h-5 rounded flex items-center justify-center ${pct.bg}`}><PIcon size={12} className={pct.text} /></span>
+                                    {pct.label}
+                                  </span>
+                                ); })()}
+                              </td>
                               <td className="px-3 py-2">
                                 <div className="flex gap-0.5">
                                   {(row.platforms || []).map(pk => {
