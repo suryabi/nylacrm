@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { marketingAPI } from '../utils/api';
 import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import {
   ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon,
   Film, Image, Video, MoreHorizontal, X, Save, Trash2,
-  Sparkles, Eye, Send, PenLine, GripVertical,
+  Sparkles, Eye, Send, PenLine, GripVertical, List,
 } from 'lucide-react';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-const VIEWS = ['month','week','day'];
+const VIEWS = ['month','week','day','list'];
 
 const STATUS_CONFIG = {
   draft: { bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400', label: 'Draft', icon: PenLine },
@@ -230,6 +231,7 @@ function EventBadge({ event }) {
 
 // ---- Main Calendar ----
 export default function MarketingCalendar() {
+  const navigate = useNavigate();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
@@ -249,6 +251,10 @@ export default function MarketingCalendar() {
   const [weekStart, setWeekStart] = useState(null);
   const [draggingPostId, setDraggingPostId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
+
+  // List view filters
+  const [listStatus, setListStatus] = useState('all');
+  const [listCategory, setListCategory] = useState('all');
 
   useEffect(() => {
     const today = new Date();
@@ -353,7 +359,7 @@ export default function MarketingCalendar() {
                 {VIEWS.map(v => (
                   <button key={v} onClick={() => setView(v)}
                     className={`px-3.5 py-1.5 text-xs font-medium rounded-md capitalize transition-all ${view === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    data-testid={`view-${v}`}>{v}</button>
+                    data-testid={`view-${v}`}>{v === 'list' ? <span className="flex items-center gap-1"><List size={12} /> List</span> : v}</button>
                 ))}
               </div>
             </div>
@@ -548,6 +554,121 @@ export default function MarketingCalendar() {
                       </div>
                     )}
                   </div>
+                </div>
+              );
+            })()}
+
+            {/* LIST VIEW */}
+            {view === 'list' && (() => {
+              // Flatten all posts from postsByDate
+              const allPosts = Object.values(postsByDate).flat();
+              const filtered = allPosts.filter(p => {
+                if (listStatus !== 'all' && p.status !== listStatus) return false;
+                if (listCategory !== 'all' && p.category !== listCategory) return false;
+                return true;
+              });
+
+              return (
+                <div>
+                  {/* Filters */}
+                  <div className="flex flex-wrap items-center gap-3 mb-4" data-testid="list-filters">
+                    <select value={month} onChange={e => setMonth(Number(e.target.value))}
+                      className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      data-testid="filter-month">
+                      {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+                    </select>
+                    <select value={year} onChange={e => setYear(Number(e.target.value))}
+                      className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      data-testid="filter-year">
+                      {[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                    <select value={listStatus} onChange={e => setListStatus(e.target.value)}
+                      className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      data-testid="filter-status">
+                      <option value="all">All Statuses</option>
+                      {Object.entries(STATUS_CONFIG).map(([k, s]) => <option key={k} value={k}>{s.label}</option>)}
+                    </select>
+                    <select value={listCategory} onChange={e => setListCategory(e.target.value)}
+                      className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      data-testid="filter-category">
+                      <option value="all">All Categories</option>
+                      {categories.map(c => <option key={c.id || c.name} value={c.name}>{c.name}</option>)}
+                    </select>
+                    <span className="text-xs text-slate-400 ml-1">{filtered.length} post{filtered.length !== 1 ? 's' : ''}</span>
+                  </div>
+
+                  {/* Table */}
+                  {filtered.length === 0 ? (
+                    <div className="border border-slate-200 rounded-lg p-12 text-center text-slate-400">
+                      <CalendarIcon size={32} className="mx-auto mb-3 opacity-30" />
+                      <p className="text-sm font-medium">No posts found</p>
+                    </div>
+                  ) : (
+                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                      <table className="w-full text-left" data-testid="list-table">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200">
+                            <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-slate-400">Date</th>
+                            <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-slate-400">Concept</th>
+                            <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-slate-400">Category</th>
+                            <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-slate-400">Type</th>
+                            <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-slate-400">Platforms</th>
+                            <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-slate-400">Status</th>
+                            <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-slate-400 w-10"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {filtered.map(post => {
+                            const s = STATUS_CONFIG[post.status] || STATUS_CONFIG.draft;
+                            const Icon = CONTENT_TYPE_ICONS[post.content_type] || MoreHorizontal;
+                            const catDef = categories.find(c => c.name === post.category);
+                            const dateObj = post.post_date ? new Date(post.post_date + 'T00:00:00') : null;
+                            const dateLabel = dateObj ? dateObj.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—';
+
+                            return (
+                              <tr key={post.id}
+                                className="hover:bg-slate-50/50 cursor-pointer transition-colors group"
+                                onClick={() => navigate(`/marketing-post/${post.id}`)}
+                                data-testid={`list-row-${post.id}`}>
+                                <td className="px-4 py-3 text-sm text-slate-600 font-medium whitespace-nowrap">{dateLabel}</td>
+                                <td className="px-4 py-3">
+                                  <div className="text-sm font-medium text-slate-900 line-clamp-1">{post.concept || 'Untitled'}</div>
+                                  {post.message && <div className="text-xs text-slate-400 line-clamp-1 mt-0.5">{post.message}</div>}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
+                                    {catDef && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: catDef.color }} />}
+                                    {post.category || '—'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="inline-flex items-center gap-1 text-xs text-slate-500 capitalize">
+                                    <Icon size={12} /> {post.content_type}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex gap-1">
+                                    {(post.platforms || []).map(pk => {
+                                      const ps = PLATFORM_STYLES[pk] || {};
+                                      return <span key={pk} className="w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-bold text-white" style={{ backgroundColor: ps.color }} title={ps.label}>{ps.short}</span>;
+                                    })}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-medium ${s.bg} ${s.text}`}>{s.label}</span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <button onClick={(e) => { e.stopPropagation(); deletePost(post.id); }}
+                                    className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1"
+                                    data-testid={`list-delete-${post.id}`}><Trash2 size={14} /></button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               );
             })()}
