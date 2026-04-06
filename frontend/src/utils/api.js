@@ -215,3 +215,20 @@ export const marketingAPI = {
   uploadPreview: (file) => { const fd = new FormData(); fd.append('file', file); const h = getAuthHeaders(); delete h['Content-Type']; return axios.post(`${API_URL}/marketing/upload-preview`, fd, { headers: h }); },
   uploadConfirm: (month, year, rows) => axios.post(`${API_URL}/marketing/upload-confirm`, { month, year, rows }, { headers: getAuthHeaders() }),
 };
+
+
+export const meetingMinutesAPI = {
+  list: (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.month) q.append('month', params.month);
+    if (params.year) q.append('year', params.year);
+    if (params.periodicity) q.append('periodicity', params.periodicity);
+    if (params.purpose) q.append('purpose', params.purpose);
+    if (params.participant) q.append('participant', params.participant);
+    return axios.get(`${API_URL}/meeting-minutes?${q.toString()}`, { headers: getAuthHeaders() });
+  },
+  get: (id) => axios.get(`${API_URL}/meeting-minutes/${id}`, { headers: getAuthHeaders() }),
+  create: (data) => axios.post(`${API_URL}/meeting-minutes`, data, { headers: getAuthHeaders() }),
+  update: (id, data) => axios.put(`${API_URL}/meeting-minutes/${id}`, data, { headers: getAuthHeaders() }),
+  delete: (id) => axios.delete(`${API_URL}/meeting-minutes/${id}`, { headers: getAuthHeaders() }),
+};

@@ -37,6 +37,7 @@ from .factory_returns import router as factory_returns_router
 from .performance import router as performance_router
 from .investor import router as investor_router
 from .marketing import router as marketing_router
+from .meeting_minutes import router as meeting_minutes_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -92,5 +93,8 @@ routes_router.include_router(investor_router, prefix="/investor", tags=["Investo
 
 # Marketing Module
 routes_router.include_router(marketing_router, prefix="/marketing", tags=["Marketing Module"])
+
+# Meeting Minutes Module
+routes_router.include_router(meeting_minutes_router, tags=["Meeting Minutes"])
 
 __all__ = ['routes_router']
