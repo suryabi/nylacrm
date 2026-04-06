@@ -29,7 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
-import { Plus, Loader2, Edit, Trash2, Clock, Activity, Eye, MousePointer, Users } from 'lucide-react';
+import { Plus, Loader2, Edit, Trash2, Clock, Activity, Eye, MousePointer, Users, X } from 'lucide-react';
 import { formatDuration, formatRelativeTime, getPageName } from '../hooks/useActivityTracker';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 
@@ -660,7 +660,7 @@ function AddTeamMemberForm({ onSuccess }) {
     state: '',
     territory: '',
     role: '',
-    department: 'Sales',
+    department: ['Sales'],
     password: '',
     reports_to: '',
     is_active: true
@@ -778,16 +778,35 @@ function AddTeamMemberForm({ onSuccess }) {
         </div>
         <div className="space-y-2">
           <Label htmlFor="department">Department *</Label>
-          <Select value={formData.department} onValueChange={(v) => setFormData(prev => ({ ...prev, department: v }))}>
-            <SelectTrigger data-testid="team-department-select">
-              <SelectValue placeholder="Select department" />
-            </SelectTrigger>
-            <SelectContent>
-              {DEPARTMENTS.map(dept => (
-                <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="relative" data-testid="team-department-select">
+            <div className="flex flex-wrap gap-1.5 min-h-[40px] p-2 border border-input rounded-md bg-background cursor-pointer"
+              onClick={(e) => { const dd = e.currentTarget.nextSibling; dd.classList.toggle('hidden'); }}>
+              {(formData.department || []).length > 0 ? (formData.department || []).map(d => (
+                <span key={d} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-xs font-medium">
+                  {d}
+                  <button type="button" onClick={(e) => { e.stopPropagation(); setFormData(prev => ({ ...prev, department: prev.department.filter(x => x !== d) })); }} className="hover:text-blue-900">
+                    <X size={12} />
+                  </button>
+                </span>
+              )) : <span className="text-sm text-muted-foreground">Select departments</span>}
+            </div>
+            <div className="hidden absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-md shadow-lg py-1 max-h-48 overflow-y-auto">
+              {DEPARTMENTS.map(dept => {
+                const checked = (formData.department || []).includes(dept);
+                return (
+                  <label key={dept} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer text-sm">
+                    <input type="checkbox" checked={checked} onChange={() => {
+                      setFormData(prev => ({
+                        ...prev,
+                        department: checked ? prev.department.filter(d => d !== dept) : [...(prev.department || []), dept]
+                      }));
+                    }} className="rounded border-slate-300" />
+                    {dept}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
         </div>
         <div className="space-y-2">
           <Label htmlFor="email">Email *</Label>
@@ -925,11 +944,12 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [designations, setDesignations] = useState(DEFAULT_DESIGNATIONS);
   const [roles, setRoles] = useState([]);
-  // Normalize department value to match DEPARTMENTS array
+  // Normalize department value to array format
   const getNormalizedDept = (dept) => {
-    if (!dept) return 'Sales';
+    if (!dept) return ['Sales'];
+    if (Array.isArray(dept)) return dept;
     const deptMatch = DEPARTMENTS.find(d => d.toLowerCase() === dept.toLowerCase());
-    return deptMatch || 'Sales';
+    return deptMatch ? [deptMatch] : ['Sales'];
   };
 
   const [formData, setFormData] = useState({
@@ -1111,16 +1131,35 @@ function EditTeamMemberForm({ user, onSuccess, onCancel }) {
         </div>
         <div className="space-y-2">
           <Label htmlFor="edit-department">Department *</Label>
-          <Select value={formData.department} onValueChange={(v) => setFormData(prev => ({ ...prev, department: v }))}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select department" />
-            </SelectTrigger>
-            <SelectContent>
-              {DEPARTMENTS.map(dept => (
-                <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="relative" data-testid="edit-department-select">
+            <div className="flex flex-wrap gap-1.5 min-h-[40px] p-2 border border-input rounded-md bg-background cursor-pointer"
+              onClick={(e) => { const dd = e.currentTarget.nextSibling; dd.classList.toggle('hidden'); }}>
+              {(formData.department || []).length > 0 ? (formData.department || []).map(d => (
+                <span key={d} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-xs font-medium">
+                  {d}
+                  <button type="button" onClick={(e) => { e.stopPropagation(); setFormData(prev => ({ ...prev, department: prev.department.filter(x => x !== d) })); }} className="hover:text-blue-900">
+                    <X size={12} />
+                  </button>
+                </span>
+              )) : <span className="text-sm text-muted-foreground">Select departments</span>}
+            </div>
+            <div className="hidden absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-md shadow-lg py-1 max-h-48 overflow-y-auto">
+              {DEPARTMENTS.map(dept => {
+                const checked = (formData.department || []).includes(dept);
+                return (
+                  <label key={dept} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer text-sm">
+                    <input type="checkbox" checked={checked} onChange={() => {
+                      setFormData(prev => ({
+                        ...prev,
+                        department: checked ? prev.department.filter(d => d !== dept) : [...(prev.department || []), dept]
+                      }));
+                    }} className="rounded border-slate-300" />
+                    {dept}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
         </div>
         <div className="space-y-2">
           <Label htmlFor="edit-phone">Phone Number *</Label>

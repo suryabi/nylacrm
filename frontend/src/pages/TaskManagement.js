@@ -377,7 +377,7 @@ export default function TaskManagement() {
       description: '',
       severity: 'medium',
       status: 'open',
-      department_id: user?.department || '',
+      department_id: Array.isArray(user?.department) ? (user.department[0] || '') : (user?.department || ''),
       assignees: [],
       milestone_id: '',
       labels: [],

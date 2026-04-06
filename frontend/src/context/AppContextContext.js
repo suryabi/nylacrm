@@ -29,12 +29,13 @@ export function AppContextProvider({ children }) {
     
     // Admin roles can always access all modules
     if (ADMIN_ROLES.includes(user.role)) return true;
-    // Check department-based access
-    if (user.department === 'both' || user.department === 'all') return true;
-    if (moduleId === 'sales' && (user.department === 'sales' || !user.department)) return true;
-    if (moduleId === 'production' && user.department === 'production') return true;
-    if (moduleId === 'distribution' && (user.department === 'distribution' || user.department === 'sales')) return true;
-    if (moduleId === 'marketing' && (user.department === 'marketing' || user.department === 'both' || user.department === 'all')) return true;
+    // Check department-based access (support both string and array)
+    const depts = Array.isArray(user.department) ? user.department.map(d => d?.toLowerCase()) : [(user.department || '').toLowerCase()];
+    if (depts.includes('both') || depts.includes('all')) return true;
+    if (moduleId === 'sales' && (depts.includes('sales') || depts.length === 0)) return true;
+    if (moduleId === 'production' && depts.includes('production')) return true;
+    if (moduleId === 'distribution' && (depts.includes('distribution') || depts.includes('sales'))) return true;
+    if (moduleId === 'marketing' && (depts.includes('marketing') || depts.includes('both') || depts.includes('all'))) return true;
     return false;
   };
   
@@ -96,10 +97,11 @@ export function AppContextProvider({ children }) {
       return;
     }
     
-    // Set based on department
-    if (user.department === 'production') {
+    // Set based on department (support both string and array)
+    const depts = Array.isArray(user.department) ? user.department.map(d => d?.toLowerCase()) : [(user.department || '').toLowerCase()];
+    if (depts.includes('production') && !depts.includes('sales')) {
       setCurrentContext('production');
-    } else if (user.department === 'distribution') {
+    } else if (depts.includes('distribution') && !depts.includes('sales')) {
       setCurrentContext('distribution');
     } else {
       setCurrentContext('sales');
