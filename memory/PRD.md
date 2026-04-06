@@ -71,13 +71,16 @@
 
 ### Meeting Minutes Module (2026-04-06)
 - [x] **CRUD**: Create/read/update/delete meeting entries with date, title, periodicity, purpose, participants, minutes, action items
+- [x] **Full Page Views**: List page, dedicated detail page (/meeting-minutes/:id), dedicated edit page (/meeting-minutes/:id/edit), new meeting page (/meeting-minutes/new)
+- [x] **Large Textareas**: Discussion points and action items use multi-line textareas (rows=3) for big text
+- [x] **Auto-Task Creation**: Action items automatically create tasks in task management (tasks_v2) with linked_entity_type='meeting', task_id and task_number linked back
 - [x] **Periodicity**: Weekly, Monthly, Quarterly, Ad-hoc with colored badges
 - [x] **Purpose**: Multi-select from Sales, Production, General, Finance, Administration, Investors, Marketing
 - [x] **Participants**: Multi-select from all team members with search, avatar initials display
 - [x] **Meeting Minutes**: Bullet-point list format with add/remove functionality
 - [x] **Action Items**: Description, assignee (from all team members), due date, status (Open/In Progress/Done) with add/remove
 - [x] **Filters**: Month, year, periodicity, purpose (multi-select), participant dropdowns
-- [x] **Edit History**: Full tracking — each edit records edited_by, edited_by_name, edited_at, shown in detail panel
+- [x] **Edit History**: Full tracking — each edit records edited_by, edited_by_name, edited_at, shown in detail page sidebar
 - [x] **Navigation**: Menu item alongside Daily Status with NotebookPen icon
 - [x] **API Endpoints**: CRUD at /api/meeting-minutes with filter support
 
