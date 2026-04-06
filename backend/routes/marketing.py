@@ -3,12 +3,14 @@ Marketing Module - Calendar, Post Planning, and Master Data
 Provides endpoints for managing marketing content calendar and social media planning.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi.responses import StreamingResponse
 from datetime import datetime, timezone
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
 from database import db
 import uuid
+import io
 
 router = APIRouter()
 
@@ -425,3 +427,308 @@ async def get_calendar_data(month: int = Query(...), year: int = Query(...), cur
         "month": month,
         "year": year,
     }
+
+
+# ---- Spreadsheet Template, Upload, Export ----
+
+TEMPLATE_COLUMNS = ["Post Date", "Category", "Content Type", "Concept", "Message / Caption", "Platforms", "Status"]
+PLATFORM_KEYS = ["linkedin", "whatsapp", "youtube", "instagram", "facebook"]
+
+
+def _build_workbook(rows=None, is_template=False):
+    """Build an openpyxl Workbook. If is_template, adds instructions and a sample row."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Marketing Calendar"
+
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="1e3a5f", end_color="1e3a5f", fill_type="solid")
+    thin_border = Border(
+        left=Side(style="thin", color="d0d5dd"),
+        right=Side(style="thin", color="d0d5dd"),
+        top=Side(style="thin", color="d0d5dd"),
+        bottom=Side(style="thin", color="d0d5dd"),
+    )
+
+    # Header row
+    for col_idx, col_name in enumerate(TEMPLATE_COLUMNS, 1):
+        cell = ws.cell(row=1, column=col_idx, value=col_name)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+        cell.border = thin_border
+
+    # Column widths
+    widths = [14, 16, 14, 40, 50, 40, 12]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[chr(64 + i)].width = w
+
+    if is_template:
+        # Sample row
+        sample = ["2026-04-15", "Health", "reel", "World Health Day Reel", "Celebrate wellness with us!", "linkedin,instagram,youtube", "draft"]
+        for col_idx, val in enumerate(sample, 1):
+            cell = ws.cell(row=2, column=col_idx, value=val)
+            cell.font = Font(italic=True, color="888888")
+            cell.border = thin_border
+
+        # Instructions sheet
+        ins = wb.create_sheet("Instructions")
+        instructions = [
+            ("Column", "Description", "Valid Values"),
+            ("Post Date", "Date in YYYY-MM-DD format", "e.g. 2026-04-15"),
+            ("Category", "Marketing category name", "e.g. Health, Water, Luxury, Brand, Product, Event"),
+            ("Content Type", "Type of content", "reel, image, video, other"),
+            ("Concept", "Brief concept or idea", "Free text"),
+            ("Message / Caption", "Post message or caption", "Free text (optional)"),
+            ("Platforms", "Comma-separated platform keys", "linkedin, whatsapp, youtube, instagram, facebook"),
+            ("Status", "Post workflow status", "draft, review, scheduled, published"),
+        ]
+        for r, row_data in enumerate(instructions, 1):
+            for c, val in enumerate(row_data, 1):
+                cell = ins.cell(row=r, column=c, value=val)
+                if r == 1:
+                    cell.font = Font(bold=True)
+                ins.column_dimensions[chr(64 + c)].width = 30
+    elif rows:
+        for r_idx, row in enumerate(rows, 2):
+            for c_idx, val in enumerate(row, 1):
+                cell = ws.cell(row=r_idx, column=c_idx, value=val)
+                cell.border = thin_border
+
+    return wb
+
+
+def _wb_to_response(wb, filename):
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/template")
+async def download_template(current_user: dict = Depends(get_current_user)):
+    """Download an empty Excel template for bulk upload."""
+    wb = _build_workbook(is_template=True)
+    return _wb_to_response(wb, "marketing_calendar_template.xlsx")
+
+
+@router.get("/export")
+async def export_posts(month: int = Query(...), year: int = Query(...), current_user: dict = Depends(get_current_user)):
+    """Export posts for a given month/year as Excel."""
+    tenant_id = get_current_tenant_id()
+    start = f"{year}-{month:02d}-01"
+    end = f"{year + 1}-01-01" if month == 12 else f"{year}-{month + 1:02d}-01"
+
+    posts = await db.marketing_posts.find(
+        {"tenant_id": tenant_id, "post_date": {"$gte": start, "$lt": end}},
+        {"_id": 0}
+    ).sort("post_date", 1).to_list(500)
+
+    rows = []
+    for p in posts:
+        rows.append([
+            p.get("post_date", ""),
+            p.get("category", ""),
+            p.get("content_type", ""),
+            p.get("concept", ""),
+            p.get("message", ""),
+            ",".join(p.get("platforms", [])),
+            p.get("status", "draft"),
+        ])
+
+    wb = _build_workbook(rows=rows)
+    filename = f"marketing_calendar_{year}_{month:02d}.xlsx"
+    return _wb_to_response(wb, filename)
+
+
+@router.post("/upload-preview")
+async def upload_preview(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    """Parse an uploaded Excel/CSV and return preview data without saving."""
+    from openpyxl import load_workbook
+    import csv as csv_mod
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+
+    content = await file.read()
+    parsed_rows = []
+    errors = []
+
+    try:
+        if file.filename.endswith(".csv"):
+            text = content.decode("utf-8-sig")
+            reader = csv_mod.DictReader(io.StringIO(text))
+            for i, row in enumerate(reader, 2):
+                parsed_rows.append({
+                    "row_num": i,
+                    "post_date": (row.get("Post Date") or "").strip(),
+                    "category": (row.get("Category") or "").strip(),
+                    "content_type": (row.get("Content Type") or "image").strip().lower(),
+                    "concept": (row.get("Concept") or "").strip(),
+                    "message": (row.get("Message / Caption") or row.get("Message") or "").strip(),
+                    "platforms": [p.strip().lower() for p in (row.get("Platforms") or "").split(",") if p.strip()],
+                    "status": (row.get("Status") or "draft").strip().lower(),
+                })
+        else:
+            wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+            ws = wb.active
+            headers = [str(c.value or "").strip() for c in next(ws.iter_rows(min_row=1, max_row=1))]
+
+            col_map = {}
+            for idx, h in enumerate(headers):
+                hl = h.lower()
+                if "date" in hl:
+                    col_map["post_date"] = idx
+                elif "categ" in hl:
+                    col_map["category"] = idx
+                elif "type" in hl:
+                    col_map["content_type"] = idx
+                elif "concept" in hl:
+                    col_map["concept"] = idx
+                elif "message" in hl or "caption" in hl:
+                    col_map["message"] = idx
+                elif "platform" in hl:
+                    col_map["platforms"] = idx
+                elif "status" in hl:
+                    col_map["status"] = idx
+
+            for r_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
+                if not row or all(v is None for v in row):
+                    continue
+                vals = list(row)
+
+                def get_val(key, default=""):
+                    idx = col_map.get(key)
+                    if idx is not None and idx < len(vals):
+                        v = vals[idx]
+                        if v is None:
+                            return default
+                        if isinstance(v, datetime):
+                            return v.strftime("%Y-%m-%d")
+                        return str(v).strip()
+                    return default
+
+                date_str = get_val("post_date")
+                plat_str = get_val("platforms", "linkedin,instagram,youtube,facebook,whatsapp")
+                platforms = [p.strip().lower() for p in plat_str.split(",") if p.strip()]
+
+                parsed_rows.append({
+                    "row_num": r_idx,
+                    "post_date": date_str,
+                    "category": get_val("category"),
+                    "content_type": get_val("content_type", "image").lower(),
+                    "concept": get_val("concept"),
+                    "message": get_val("message"),
+                    "platforms": platforms,
+                    "status": get_val("status", "draft").lower(),
+                })
+            wb.close()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse file: {str(e)}")
+
+    # Validate rows
+    valid_rows = []
+    for row in parsed_rows:
+        row_errors = []
+        # Date validation
+        if not row["post_date"]:
+            row_errors.append("Missing date")
+        else:
+            try:
+                datetime.strptime(row["post_date"][:10], "%Y-%m-%d")
+                row["post_date"] = row["post_date"][:10]
+            except ValueError:
+                row_errors.append(f"Invalid date format: {row['post_date']}")
+
+        if not row["concept"]:
+            row_errors.append("Missing concept")
+
+        if row["content_type"] not in VALID_CONTENT_TYPES:
+            row_errors.append(f"Invalid content type: {row['content_type']}")
+
+        if row["status"] not in VALID_STATUSES:
+            row["status"] = "draft"
+
+        row["platforms"] = [p for p in row["platforms"] if p in PLATFORM_KEYS]
+        if not row["platforms"]:
+            row["platforms"] = PLATFORM_KEYS
+
+        row["valid"] = len(row_errors) == 0
+        row["errors"] = row_errors
+        valid_rows.append(row)
+
+    valid_count = sum(1 for r in valid_rows if r["valid"])
+    return {
+        "rows": valid_rows,
+        "total": len(valid_rows),
+        "valid_count": valid_count,
+        "error_count": len(valid_rows) - valid_count,
+    }
+
+
+@router.post("/upload-confirm")
+async def upload_confirm(data: dict, current_user: dict = Depends(get_current_user)):
+    """Replace all posts for a month with the uploaded data.
+    Expects: { "month": 4, "year": 2026, "rows": [ { post_date, category, ... }, ... ] }
+    """
+    tenant_id = get_current_tenant_id()
+    month = data.get("month")
+    year = data.get("year")
+    rows = data.get("rows", [])
+
+    if not month or not year:
+        raise HTTPException(status_code=400, detail="month and year are required")
+    if not rows:
+        raise HTTPException(status_code=400, detail="No rows to save")
+
+    # Delete existing posts for this month
+    start = f"{year}-{month:02d}-01"
+    end = f"{year + 1}-01-01" if month == 12 else f"{year}-{month + 1:02d}-01"
+    delete_result = await db.marketing_posts.delete_many({
+        "tenant_id": tenant_id,
+        "post_date": {"$gte": start, "$lt": end}
+    })
+
+    # Insert new posts
+    now_iso = datetime.now(timezone.utc).isoformat()
+    new_posts = []
+    for row in rows:
+        post = {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "post_date": row.get("post_date", ""),
+            "category": row.get("category", ""),
+            "content_type": row.get("content_type", "image"),
+            "concept": row.get("concept", ""),
+            "message": row.get("message", ""),
+            "platforms": row.get("platforms", PLATFORM_KEYS),
+            "platform_links": {},
+            "status": row.get("status", "draft"),
+            "owner_id": current_user.get("id"),
+            "owner_name": current_user.get("name", ""),
+            "created_by": current_user.get("id"),
+            "created_by_name": current_user.get("name", ""),
+            "created_at": now_iso,
+            "updated_at": now_iso,
+        }
+        new_posts.append(post)
+
+    if new_posts:
+        await db.marketing_posts.insert_many(new_posts)
+        # Remove _id from response
+        for p in new_posts:
+            p.pop("_id", None)
+
+    return {
+        "message": f"Replaced {delete_result.deleted_count} existing posts with {len(new_posts)} new posts for {year}-{month:02d}",
+        "deleted": delete_result.deleted_count,
+        "inserted": len(new_posts),
+    }
+

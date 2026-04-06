@@ -7,6 +7,7 @@ import {
   ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon,
   Film, Image, Video, MoreHorizontal, X, Save, Trash2,
   Sparkles, Eye, Send, PenLine, GripVertical, List,
+  Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2, Loader2,
 } from 'lucide-react';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -256,6 +257,13 @@ export default function MarketingCalendar() {
   const [listStatus, setListStatus] = useState('all');
   const [listCategory, setListCategory] = useState('all');
 
+  // Upload flow
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadStep, setUploadStep] = useState('choose'); // choose | preview | done
+  const [uploadParsed, setUploadParsed] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
   useEffect(() => {
     const today = new Date();
     const d = today.getDay();
@@ -301,6 +309,77 @@ export default function MarketingCalendar() {
     catch { toast.error('Failed to move post'); }
   };
 
+  // --- Spreadsheet Upload / Download ---
+  const handleDownloadTemplate = async () => {
+    try {
+      const res = await marketingAPI.downloadTemplate();
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a'); a.href = url; a.download = 'marketing_calendar_template.xlsx';
+      document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
+      toast.success('Template downloaded');
+    } catch { toast.error('Failed to download template'); }
+  };
+
+  const handleExport = async () => {
+    try {
+      const res = await marketingAPI.exportPosts(month, year);
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a'); a.href = url; a.download = `marketing_calendar_${year}_${String(month).padStart(2,'0')}.xlsx`;
+      document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
+      toast.success('Calendar exported');
+    } catch { toast.error('Failed to export'); }
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const res = await marketingAPI.uploadPreview(file);
+      setUploadParsed(res.data);
+      setUploadStep('preview');
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Failed to parse file');
+    } finally { setUploading(false); }
+  };
+
+  const removePreviewRow = (rowNum) => {
+    if (!uploadParsed) return;
+    const rows = uploadParsed.rows.filter(r => r.row_num !== rowNum);
+    setUploadParsed({
+      ...uploadParsed,
+      rows,
+      total: rows.length,
+      valid_count: rows.filter(r => r.valid).length,
+      error_count: rows.filter(r => !r.valid).length,
+    });
+  };
+
+  const handleUploadConfirm = async () => {
+    if (!uploadParsed) return;
+    const validRows = uploadParsed.rows.filter(r => r.valid);
+    if (!validRows.length) { toast.error('No valid rows to save'); return; }
+
+    // Determine month/year from the first row's date
+    const firstDate = validRows[0].post_date;
+    const uploadMonth = parseInt(firstDate.split('-')[1], 10);
+    const uploadYear = parseInt(firstDate.split('-')[0], 10);
+
+    setConfirming(true);
+    try {
+      const res = await marketingAPI.uploadConfirm(uploadMonth, uploadYear, validRows);
+      toast.success(res.data.message);
+      setUploadStep('done');
+      setMonth(uploadMonth);
+      setYear(uploadYear);
+      loadCalendar();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Failed to save');
+    } finally { setConfirming(false); }
+  };
+
+  const resetUpload = () => { setUploadOpen(false); setUploadStep('choose'); setUploadParsed(null); };
+
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayOfMonth(year, month);
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -329,9 +408,17 @@ export default function MarketingCalendar() {
               <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">Content Calendar</h1>
               <p className="text-sm text-slate-500 mt-0.5">Plan, schedule & publish</p>
             </div>
-            <button onClick={() => openNew(todayStr)}
-              className="bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium px-5 py-2.5 rounded-lg flex items-center gap-2 text-sm"
-              data-testid="new-post-btn"><Plus size={16} /> New Post</button>
+            <div className="flex items-center gap-2">
+              <button onClick={handleExport}
+                className="border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 text-sm"
+                data-testid="export-btn"><Download size={15} /> Export</button>
+              <button onClick={() => { setUploadOpen(true); setUploadStep('choose'); setUploadParsed(null); }}
+                className="border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 text-sm"
+                data-testid="upload-btn"><Upload size={15} /> Upload</button>
+              <button onClick={() => openNew(todayStr)}
+                className="bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium px-5 py-2.5 rounded-lg flex items-center gap-2 text-sm"
+                data-testid="new-post-btn"><Plus size={16} /> New Post</button>
+            </div>
           </div>
 
           {/* Controls */}
@@ -679,6 +766,168 @@ export default function MarketingCalendar() {
       <PostPanel open={panelOpen} onClose={() => { setPanelOpen(false); setEditingPost(null); }}
         post={editingPost || { post_date: clickedDate }} categories={categories} platforms={platforms}
         onSave={savePost} onDelete={deletePost} />
+
+      {/* Upload Sheet */}
+      <Sheet open={uploadOpen} onOpenChange={resetUpload}>
+        <SheetContent side="right" className="w-full sm:max-w-2xl border-l border-slate-200 p-0 bg-white overflow-y-auto [&>button]:hidden">
+          <div className="px-6 pt-5 pb-4 border-b border-slate-200 sticky top-0 z-10 bg-white">
+            <div className="flex items-center justify-between">
+              <SheetTitle className="text-lg font-semibold text-slate-900">
+                {uploadStep === 'choose' ? 'Upload Calendar' : uploadStep === 'preview' ? 'Preview Upload' : 'Upload Complete'}
+              </SheetTitle>
+              <button onClick={resetUpload} className="p-1 rounded hover:bg-slate-100 transition-colors" data-testid="close-upload-btn"><X size={18} className="text-slate-400" /></button>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-6">
+            {/* Step 1: Choose file */}
+            {uploadStep === 'choose' && (
+              <>
+                {/* Download template */}
+                <div className="border border-dashed border-slate-300 rounded-xl p-6 text-center bg-slate-50/50">
+                  <FileSpreadsheet size={32} className="mx-auto text-slate-400 mb-3" />
+                  <h3 className="text-sm font-semibold text-slate-800 mb-1">Start with the template</h3>
+                  <p className="text-xs text-slate-500 mb-4">Download the Excel template, fill in your posts, then upload it back.</p>
+                  <button onClick={handleDownloadTemplate}
+                    className="px-4 py-2 rounded-lg text-sm font-medium border border-slate-200 text-slate-700 hover:bg-white transition-colors inline-flex items-center gap-2"
+                    data-testid="download-template-btn"><Download size={14} /> Download Template</button>
+                </div>
+
+                {/* Upload area */}
+                <div className="relative">
+                  <div className="border-2 border-dashed border-blue-200 rounded-xl p-8 text-center bg-blue-50/30 hover:bg-blue-50/60 transition-colors cursor-pointer">
+                    <Upload size={28} className="mx-auto text-blue-400 mb-3" />
+                    <h3 className="text-sm font-semibold text-slate-800 mb-1">Upload your spreadsheet</h3>
+                    <p className="text-xs text-slate-500 mb-1">Supports .xlsx and .csv files</p>
+                    {uploading && <div className="flex items-center justify-center gap-2 mt-3 text-sm text-blue-600"><Loader2 size={14} className="animate-spin" /> Parsing file...</div>}
+                    <input type="file" accept=".xlsx,.csv" onChange={handleFileUpload}
+                      className="absolute inset-0 opacity-0 cursor-pointer" disabled={uploading}
+                      data-testid="upload-file-input" />
+                  </div>
+                </div>
+
+                <div className="border border-amber-200 bg-amber-50 rounded-lg px-4 py-3">
+                  <p className="text-xs text-amber-800 flex items-start gap-2">
+                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                    <span>Uploading will <strong>replace all existing posts</strong> for the uploaded month. Make sure to export your current data first if needed.</span>
+                  </p>
+                </div>
+              </>
+            )}
+
+            {/* Step 2: Preview */}
+            {uploadStep === 'preview' && uploadParsed && (
+              <>
+                {/* Summary */}
+                <div className="flex gap-3">
+                  <div className="flex-1 border border-slate-200 rounded-lg px-4 py-3">
+                    <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Total Rows</div>
+                    <div className="text-xl font-semibold text-slate-900">{uploadParsed.total}</div>
+                  </div>
+                  <div className="flex-1 border border-emerald-200 rounded-lg px-4 py-3 bg-emerald-50/50">
+                    <div className="text-[11px] font-medium uppercase tracking-wider text-emerald-600">Valid</div>
+                    <div className="text-xl font-semibold text-emerald-700">{uploadParsed.valid_count}</div>
+                  </div>
+                  {uploadParsed.error_count > 0 && (
+                    <div className="flex-1 border border-red-200 rounded-lg px-4 py-3 bg-red-50/50">
+                      <div className="text-[11px] font-medium uppercase tracking-wider text-red-600">Errors</div>
+                      <div className="text-xl font-semibold text-red-700">{uploadParsed.error_count}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Preview table */}
+                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                  <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                    <table className="w-full text-left" data-testid="upload-preview-table">
+                      <thead className="bg-slate-50 sticky top-0 z-10">
+                        <tr>
+                          <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">#</th>
+                          <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Date</th>
+                          <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Concept</th>
+                          <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Category</th>
+                          <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Type</th>
+                          <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Platforms</th>
+                          <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Status</th>
+                          <th className="px-3 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 w-8"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {uploadParsed.rows.map((row) => {
+                          const s = STATUS_CONFIG[row.status] || STATUS_CONFIG.draft;
+                          return (
+                            <tr key={row.row_num} className={`border-t border-slate-100 ${!row.valid ? 'bg-red-50/50' : ''}`} data-testid={`preview-row-${row.row_num}`}>
+                              <td className="px-3 py-2 text-xs text-slate-400">{row.row_num}</td>
+                              <td className="px-3 py-2 text-xs text-slate-700 whitespace-nowrap">{row.post_date}</td>
+                              <td className="px-3 py-2 text-xs text-slate-800 font-medium max-w-[160px] truncate">{row.concept || '—'}</td>
+                              <td className="px-3 py-2 text-xs text-slate-600">{row.category || '—'}</td>
+                              <td className="px-3 py-2 text-xs text-slate-500 capitalize">{row.content_type}</td>
+                              <td className="px-3 py-2">
+                                <div className="flex gap-0.5">
+                                  {(row.platforms || []).map(pk => {
+                                    const ps = PLATFORM_STYLES[pk] || {};
+                                    return <span key={pk} className="w-4 h-4 rounded-full flex items-center justify-center text-[6px] font-bold text-white" style={{ backgroundColor: ps.color }}>{ps.short}</span>;
+                                  })}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded-full text-[9px] font-medium ${s.bg} ${s.text}`}>{s.label}</span></td>
+                              <td className="px-3 py-2">
+                                {row.valid ? (
+                                  <button onClick={() => removePreviewRow(row.row_num)} className="text-slate-300 hover:text-red-500 transition-colors" data-testid={`remove-row-${row.row_num}`}><X size={13} /></button>
+                                ) : (
+                                  <span className="text-red-400" title={row.errors?.join(', ')}><AlertCircle size={13} /></span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Error rows detail */}
+                {uploadParsed.error_count > 0 && (
+                  <div className="space-y-1">
+                    {uploadParsed.rows.filter(r => !r.valid).map(r => (
+                      <div key={r.row_num} className="text-xs text-red-600 flex items-start gap-1.5 px-1">
+                        <AlertCircle size={11} className="mt-0.5 shrink-0" />
+                        <span>Row {r.row_num}: {r.errors?.join(', ')}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex gap-3 pt-2">
+                  <button onClick={() => { setUploadStep('choose'); setUploadParsed(null); }}
+                    className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+                    data-testid="upload-back-btn">Back</button>
+                  <button onClick={handleUploadConfirm} disabled={confirming || uploadParsed.valid_count === 0}
+                    className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    data-testid="upload-confirm-btn">
+                    {confirming ? <><Loader2 size={14} className="animate-spin" /> Saving...</> : <>
+                      <CheckCircle2 size={14} /> Confirm & Replace ({uploadParsed.valid_count} posts)
+                    </>}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Step 3: Done */}
+            {uploadStep === 'done' && (
+              <div className="text-center py-8">
+                <CheckCircle2 size={48} className="mx-auto text-emerald-500 mb-4" />
+                <h3 className="text-lg font-semibold text-slate-900 mb-1">Upload Complete</h3>
+                <p className="text-sm text-slate-500 mb-6">Your calendar has been updated successfully.</p>
+                <button onClick={resetUpload}
+                  className="px-6 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                  data-testid="upload-done-btn">Done</button>
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

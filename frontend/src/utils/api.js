@@ -210,4 +210,8 @@ export const marketingAPI = {
   },
   createEvent: (data) => axios.post(`${API_URL}/marketing/events`, data, { headers: getAuthHeaders() }),
   deleteEvent: (id) => axios.delete(`${API_URL}/marketing/events/${id}`, { headers: getAuthHeaders() }),
+  downloadTemplate: () => axios.get(`${API_URL}/marketing/template`, { headers: getAuthHeaders(), responseType: 'blob' }),
+  exportPosts: (month, year) => axios.get(`${API_URL}/marketing/export?month=${month}&year=${year}`, { headers: getAuthHeaders(), responseType: 'blob' }),
+  uploadPreview: (file) => { const fd = new FormData(); fd.append('file', file); return axios.post(`${API_URL}/marketing/upload-preview`, fd, { headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' } }); },
+  uploadConfirm: (month, year, rows) => axios.post(`${API_URL}/marketing/upload-confirm`, { month, year, rows }, { headers: getAuthHeaders() }),
 };
