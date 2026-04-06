@@ -695,12 +695,11 @@ async def upload_confirm(data: dict, current_user: dict = Depends(get_current_us
     if not rows:
         raise HTTPException(status_code=400, detail="No rows to save")
 
-    # Delete existing posts for this month
-    start = f"{year}-{month:02d}-01"
-    end = f"{year + 1}-01-01" if month == 12 else f"{year}-{month + 1:02d}-01"
+    # Delete existing posts ONLY for dates present in the upload
+    upload_dates = list(set(r.get("post_date", "") for r in rows if r.get("post_date")))
     delete_result = await db.marketing_posts.delete_many({
         "tenant_id": tenant_id,
-        "post_date": {"$gte": start, "$lt": end}
+        "post_date": {"$in": upload_dates}
     })
 
     # Insert new posts

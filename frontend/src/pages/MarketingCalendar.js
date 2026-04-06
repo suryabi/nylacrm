@@ -809,7 +809,7 @@ export default function MarketingCalendar() {
                 <div className="border border-amber-200 bg-amber-50 rounded-lg px-4 py-3">
                   <p className="text-xs text-amber-800 flex items-start gap-2">
                     <AlertCircle size={14} className="mt-0.5 shrink-0" />
-                    <span>Uploading will <strong>replace all existing posts</strong> for the uploaded month. Make sure to export your current data first if needed.</span>
+                    <span>Uploading will <strong>replace existing posts only for the dates</strong> present in your spreadsheet. Posts on other dates will remain unchanged.</span>
                   </p>
                 </div>
               </>
@@ -907,7 +907,7 @@ export default function MarketingCalendar() {
                     className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     data-testid="upload-confirm-btn">
                     {confirming ? <><Loader2 size={14} className="animate-spin" /> Saving...</> : <>
-                      <CheckCircle2 size={14} /> Confirm & Replace ({uploadParsed.valid_count} posts)
+                      <CheckCircle2 size={14} /> Confirm Upload ({uploadParsed.valid_count} posts)
                     </>}
                   </button>
                 </div>
