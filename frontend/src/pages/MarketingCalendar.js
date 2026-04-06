@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { marketingAPI } from '../utils/api';
 import { toast } from 'sonner';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import {
   ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon,
@@ -40,7 +40,7 @@ function getFirstDayOfMonth(year, month) {
   return new Date(year, month - 1, 1).getDay();
 }
 
-// --- Post Form Dialog ---
+// --- Post Form Side Panel ---
 function PostFormDialog({ open, onClose, post, categories, platforms, onSave, onDelete }) {
   const [form, setForm] = useState({
     post_date: '', category: '', content_type: 'image',
@@ -102,13 +102,20 @@ function PostFormDialog({ open, onClose, post, categories, platforms, onSave, on
   const enabledPlatforms = platforms.filter(p => p.enabled !== false);
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto border-2 border-[#1C1C1C] rounded-xl shadow-[6px_6px_0px_#1C1C1C] bg-white p-0">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b-2 border-[#1C1C1C] bg-[#FAF9F6]">
-          <DialogTitle className="text-xl font-bold text-[#1C1C1C]" style={{ fontFamily: "'Outfit', sans-serif" }}>
-            {post?.id ? 'Edit Post' : 'Plan New Post'}
-          </DialogTitle>
-        </DialogHeader>
+    <Sheet open={open} onOpenChange={onClose}>
+      <SheetContent side="right" className="w-full sm:max-w-lg border-l-2 border-[#1C1C1C] p-0 bg-white overflow-y-auto [&>button]:hidden">
+        {/* Header */}
+        <div className="px-6 pt-6 pb-4 border-b-2 border-[#1C1C1C] bg-[#FAF9F6] sticky top-0 z-10">
+          <div className="flex items-center justify-between">
+            <SheetTitle className="text-xl font-bold text-[#1C1C1C]" style={{ fontFamily: "'Outfit', sans-serif" }}>
+              {post?.id ? 'Edit Post' : 'Plan New Post'}
+            </SheetTitle>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-black/5 transition-colors" data-testid="close-panel-btn">
+              <X size={18} className="text-[#4B5563]" />
+            </button>
+          </div>
+        </div>
+
         <div className="px-6 py-5 space-y-5">
           {/* Date & Category */}
           <div className="grid grid-cols-2 gap-4">
@@ -147,12 +154,13 @@ function PostFormDialog({ open, onClose, post, categories, platforms, onSave, on
             </div>
           </div>
 
-          {/* Concept */}
+          {/* Concept — large textarea */}
           <div>
             <label className="text-xs font-bold uppercase tracking-wider text-[#4B5563] mb-1.5 block">Concept</label>
-            <input type="text" value={form.concept} onChange={e => setForm(p => ({ ...p, concept: e.target.value }))}
-              placeholder="Brief idea for this post..."
-              className="w-full bg-white border-2 border-[#1C1C1C] rounded-lg px-4 py-2.5 font-medium focus:ring-2 focus:ring-[#FF6B6B] focus:outline-none transition-all"
+            <textarea value={form.concept} onChange={e => setForm(p => ({ ...p, concept: e.target.value }))}
+              placeholder="Describe the idea for this post — theme, angle, visual direction..."
+              rows={4}
+              className="w-full bg-white border-2 border-[#1C1C1C] rounded-lg px-4 py-3 text-base font-medium focus:ring-2 focus:ring-[#FF6B6B] focus:outline-none transition-all resize-none leading-relaxed"
               data-testid="post-concept-input" />
           </div>
 
@@ -204,8 +212,8 @@ function PostFormDialog({ open, onClose, post, categories, platforms, onSave, on
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="px-6 py-4 border-t-2 border-[#1C1C1C] bg-[#FAF9F6] flex items-center justify-between">
+        {/* Actions — sticky footer */}
+        <div className="px-6 py-4 border-t-2 border-[#1C1C1C] bg-[#FAF9F6] sticky bottom-0 flex items-center justify-between">
           <div>
             {post?.id && (
               <button onClick={() => { onDelete(post.id); onClose(); }}
@@ -226,8 +234,8 @@ function PostFormDialog({ open, onClose, post, categories, platforms, onSave, on
             </button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -245,29 +253,42 @@ function PostPill({ post, onClick, onDelete, onDragStart }) {
         e.dataTransfer.effectAllowed = 'move';
         onDragStart?.(post.id);
       }}
-      className="w-full text-left px-2 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 border transition-all hover:-translate-y-0.5 truncate cursor-grab active:cursor-grabbing group/pill relative"
+      className="w-full text-left px-2.5 py-2 rounded-lg text-[11px] font-semibold border-2 transition-all hover:-translate-y-0.5 cursor-grab active:cursor-grabbing group/pill relative shadow-[1px_1px_0px_#1C1C1C]"
       style={{ backgroundColor: status.bg, color: status.text, borderColor: status.border }}
       data-testid={`post-pill-${post.id}`}>
-      <button onClick={(e) => { e.stopPropagation(); onClick(post); }} className="flex items-center gap-1.5 truncate flex-1 min-w-0">
-        <Icon size={10} className="shrink-0" />
-        <span className="truncate">{post.concept || post.category || 'Untitled'}</span>
-      </button>
-      <button
-        onClick={(e) => { e.stopPropagation(); onDelete(post.id); }}
-        className="shrink-0 opacity-0 group-hover/pill:opacity-100 transition-opacity p-0.5 rounded hover:bg-black/10"
-        title="Delete post"
-        data-testid={`delete-pill-${post.id}`}>
-        <X size={10} />
-      </button>
+      <div className="flex items-start justify-between gap-1">
+        <button onClick={(e) => { e.stopPropagation(); onClick(post); }} className="flex-1 min-w-0 text-left">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <Icon size={11} className="shrink-0" />
+            <span className="font-bold text-[11px] uppercase tracking-wide opacity-70">{post.category || post.content_type}</span>
+          </div>
+          <p className="text-xs font-bold leading-snug line-clamp-2">{post.concept || 'Untitled'}</p>
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(post.id); }}
+          className="shrink-0 opacity-0 group-hover/pill:opacity-100 transition-opacity p-0.5 rounded hover:bg-black/10 mt-0.5"
+          title="Delete post"
+          data-testid={`delete-pill-${post.id}`}>
+          <X size={11} />
+        </button>
+      </div>
     </div>
   );
 }
 
 // --- Event Marker ---
 function EventMarker({ event }) {
+  const colors = {
+    indian: { bg: '#FFF7ED', border: '#FB923C', text: '#9A3412', icon: 'text-orange-500' },
+    global: { bg: '#EFF6FF', border: '#60A5FA', text: '#1E40AF', icon: 'text-blue-500' },
+    custom: { bg: '#FAF5FF', border: '#C084FC', text: '#6B21A8', icon: 'text-purple-500' },
+  };
+  const c = colors[event.type] || colors.global;
   return (
-    <div className="flex items-center gap-1 text-[10px] text-[#4B5563] truncate" title={event.name}>
-      <Sparkles size={8} className={event.type === 'indian' ? 'text-orange-500' : event.type === 'custom' ? 'text-purple-500' : 'text-sky-500'} />
+    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-bold mb-0.5"
+      style={{ backgroundColor: c.bg, borderColor: c.border, color: c.text }}
+      title={event.name}>
+      <Sparkles size={10} className={c.icon} />
       <span className="truncate">{event.name}</span>
     </div>
   );
