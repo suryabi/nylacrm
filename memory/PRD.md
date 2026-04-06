@@ -69,6 +69,18 @@
 - [x] **Spreadsheet Upload/Download (2026-04-06)**: Download empty Excel template with sample row + Instructions sheet. Upload filled .xlsx/.csv with preview (validation for missing date, missing concept, invalid content type). Confirm to replace all posts for the month. Export current month's data as .xlsx. Slide-out Sheet UI with 3-step flow (choose → preview → confirm).
 - [x] **API Endpoints**: GET /api/marketing/calendar, CRUD /api/marketing/posts, GET /api/marketing/posts/{id}, PUT /api/marketing/posts/{id}/status, PUT /api/marketing/posts/{id}/links, GET /api/marketing/template, GET /api/marketing/export, POST /api/marketing/upload-preview, POST /api/marketing/upload-confirm, /api/marketing/categories, /api/marketing/platforms, /api/marketing/events
 
+### Meeting Minutes Module (2026-04-06)
+- [x] **CRUD**: Create/read/update/delete meeting entries with date, title, periodicity, purpose, participants, minutes, action items
+- [x] **Periodicity**: Weekly, Monthly, Quarterly, Ad-hoc with colored badges
+- [x] **Purpose**: Multi-select from Sales, Production, General, Finance, Administration, Investors, Marketing
+- [x] **Participants**: Multi-select from all team members with search, avatar initials display
+- [x] **Meeting Minutes**: Bullet-point list format with add/remove functionality
+- [x] **Action Items**: Description, assignee (from all team members), due date, status (Open/In Progress/Done) with add/remove
+- [x] **Filters**: Month, year, periodicity, purpose (multi-select), participant dropdowns
+- [x] **Edit History**: Full tracking — each edit records edited_by, edited_by_name, edited_at, shown in detail panel
+- [x] **Navigation**: Menu item alongside Daily Status with NotebookPen icon
+- [x] **API Endpoints**: CRUD at /api/meeting-minutes with filter support
+
 ### Branding Generalization (2026-04-06)
 - [x] **Splash Screen**: Replaced Nyla logo with generic CRM icon cluster (BarChart3 + TrendingUp + Users), dark navy gradient, "Sales CRM / Manage. Track. Grow."
 - [x] **Login Left Panel**: Replaced Nyla bottle mountain image with animated CSS dashboard illustration — Revenue Pipeline chart, Deals Won / Contacts / Target metrics, "Your Sales, Supercharged." copy, feature pills (Analytics, Team CRM, Reports, Automation)
