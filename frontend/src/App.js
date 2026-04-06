@@ -38,6 +38,8 @@ import LocationAnalytics from './pages/LocationAnalytics';
 import TeamManagement from './pages/TeamManagement';
 import DailyStatusUpdate from './pages/DailyStatusUpdate';
 import MeetingMinutes from './pages/MeetingMinutes';
+import MeetingDetail from './pages/MeetingDetail';
+import MeetingEdit from './pages/MeetingEdit';
 import StatusSummary from './pages/StatusSummary';
 import DashboardPreview from './pages/DashboardPreview';
 import BottlePreview from './pages/BottlePreview';
@@ -197,6 +199,9 @@ function AppRouter() {
           <Route path="/team" element={<ProtectedRoute moduleKey="team"><TeamManagement /></ProtectedRoute>} />
           <Route path="/daily-status" element={<ProtectedRoute moduleKey="daily_status"><DailyStatusUpdate /></ProtectedRoute>} />
           <Route path="/meeting-minutes" element={<ProtectedRoute moduleKey="meeting_minutes"><MeetingMinutes /></ProtectedRoute>} />
+          <Route path="/meeting-minutes/new" element={<ProtectedRoute moduleKey="meeting_minutes"><MeetingEdit /></ProtectedRoute>} />
+          <Route path="/meeting-minutes/:id" element={<ProtectedRoute moduleKey="meeting_minutes"><MeetingDetail /></ProtectedRoute>} />
+          <Route path="/meeting-minutes/:id/edit" element={<ProtectedRoute moduleKey="meeting_minutes"><MeetingEdit /></ProtectedRoute>} />
           <Route path="/status-summary" element={<ProtectedRoute moduleKey="status_summary"><StatusSummary /></ProtectedRoute>} />
           <Route path="/bottle-preview" element={<ProtectedRoute moduleKey="bottle_preview"><BottlePreview /></ProtectedRoute>} />
           <Route path="/leaves" element={<ProtectedRoute moduleKey="leaves"><LeaveManagement /></ProtectedRoute>} />

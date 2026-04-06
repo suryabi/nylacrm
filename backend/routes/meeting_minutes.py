@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
-from database import db
+from database import db, get_tenant_db
 import uuid
 from typing import Optional
 
@@ -17,6 +17,52 @@ router = APIRouter(prefix="/meeting-minutes", tags=["meeting-minutes"])
 VALID_PERIODICITIES = ["weekly", "monthly", "quarterly", "adhoc"]
 VALID_PURPOSES = ["sales", "production", "general", "finance", "administration", "investors", "marketing"]
 VALID_ACTION_STATUSES = ["open", "in_progress", "done"]
+
+# Map meeting action status to task status
+_STATUS_MAP = {"open": "open", "in_progress": "in_progress", "done": "closed"}
+
+
+async def _create_tasks_for_action_items(action_items, meeting_id, meeting_title, current_user, tenant_id, now_iso):
+    """Auto-create tasks in tasks_v2 for each action item using tenant-aware database."""
+    tdb = get_tenant_db()
+    for ai in action_items:
+        if ai.get("task_id"):
+            continue  # already linked
+        count = await tdb.tasks_v2.count_documents({})
+        task_number = f"TASK-{count + 1:05d}"
+        assignees = [ai["assignee_id"]] if ai.get("assignee_id") else []
+        assignees_data = []
+        if assignees:
+            assignees_data = [{"id": ai["assignee_id"], "name": ai.get("assignee_name", "")}]
+
+        task = {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "task_number": task_number,
+            "title": ai["description"],
+            "description": f"Auto-created from meeting: {meeting_title}",
+            "severity": "medium",
+            "status": _STATUS_MAP.get(ai.get("status", "open"), "open"),
+            "department_id": "",
+            "assignees": assignees,
+            "assignees_data": assignees_data,
+            "milestone_id": None,
+            "labels": [],
+            "due_date": ai.get("due_date", ""),
+            "due_time": None,
+            "reminder_date": None,
+            "linked_entity_type": "meeting",
+            "linked_entity_id": meeting_id,
+            "watchers": [current_user.get("id")],
+            "created_by": current_user.get("id"),
+            "created_by_name": current_user.get("name"),
+            "created_at": now_iso,
+            "updated_at": now_iso,
+        }
+        await tdb.tasks_v2.insert_one(task)
+        task.pop("_id", None)
+        ai["task_id"] = task["id"]
+        ai["task_number"] = task_number
 
 
 @router.get("")
@@ -120,6 +166,17 @@ async def create_meeting(data: dict, current_user: dict = Depends(get_current_us
 
     await db.meeting_minutes.insert_one(meeting)
     meeting.pop("_id", None)
+
+    # Auto-create tasks for action items
+    await _create_tasks_for_action_items(action_items, meeting["id"], meeting["title"], current_user, tenant_id, now_iso)
+
+    # Update action_items with task_ids
+    if any(a.get("task_id") for a in action_items):
+        await db.meeting_minutes.update_one(
+            {"id": meeting["id"], "tenant_id": tenant_id},
+            {"$set": {"action_items": action_items}}
+        )
+
     return meeting
 
 
@@ -182,6 +239,18 @@ async def update_meeting(meeting_id: str, data: dict, current_user: dict = Depen
             "$push": {"edit_history": edit_entry},
         },
     )
+
+    # Auto-create tasks for new action items (only those without task_id)
+    if "action_items" in update_fields:
+        new_items = [a for a in update_fields["action_items"] if not a.get("task_id")]
+        if new_items:
+            meeting_title = update_fields.get("title") or existing.get("title", "Meeting")
+            await _create_tasks_for_action_items(new_items, meeting_id, meeting_title, current_user, tenant_id, now_iso)
+            # Update action_items with task_ids
+            await db.meeting_minutes.update_one(
+                {"id": meeting_id, "tenant_id": tenant_id},
+                {"$set": {"action_items": update_fields["action_items"]}}
+            )
 
     updated = await db.meeting_minutes.find_one({"id": meeting_id, "tenant_id": tenant_id}, {"_id": 0})
     return updated
