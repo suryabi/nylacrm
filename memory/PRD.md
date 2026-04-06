@@ -60,8 +60,12 @@
 - [x] **Master Data Management**: Categories (CRUD with color), Platforms (enable/disable toggle), Custom Events (CRUD, MM-DD format)
 - [x] **Module Context**: Marketing as separate module context in sidebar switcher, with Content Calendar and Masters nav items
 - [x] **RBAC**: Added to Tenant Settings and Platform Admin module toggles (marketing_calendar, marketing_masters)
-- [x] **Design**: Neo-Brutalism style - bold 2px borders, shadow-[4px_4px_0px], Outfit headings, Manrope body, coral/yellow/mint/teal accent palette
-- [x] **API Endpoints**: GET /api/marketing/calendar, CRUD /api/marketing/posts, /api/marketing/categories, /api/marketing/platforms, /api/marketing/events
+- [x] **Design**: Corporate minimalist — white backgrounds, 1px slate borders, blue-600 accents, clean typography
+- [x] **Drag & Drop**: HTML5 native drag and drop for rescheduling posts across calendar dates
+- [x] **Metrics Bar**: Total Posts, Events, Reels, and category breakdowns per month
+- [x] **List View (2026-04-06)**: Table view toggle with Date/Concept/Category/Type/Platforms/Status columns. Filters: month, year, status, category dropdowns. Row click navigates to detail page.
+- [x] **Post Detail Page (2026-04-06)**: Dedicated page at /marketing-post/:postId. Shows concept, message/caption, platform links placeholder, workflow status progression, date/category/content-type/created-by metadata, platform badges. Edit mode with inline form fields. Delete with redirect. Back navigation to calendar.
+- [x] **API Endpoints**: GET /api/marketing/calendar, CRUD /api/marketing/posts, GET /api/marketing/posts/{id}, PUT /api/marketing/posts/{id}/status, /api/marketing/categories, /api/marketing/platforms, /api/marketing/events
 
 ### Bottle Preview Bug Fix (2026-04-02)
 - [x] Fixed download mismatch: download now measures actual rendered logo-to-bottle ratio from DOM via getBoundingClientRect() for WYSIWYG output
