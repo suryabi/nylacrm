@@ -65,7 +65,8 @@
 - [x] **Metrics Bar**: Total Posts, Events, Reels, and category breakdowns per month
 - [x] **List View (2026-04-06)**: Table view toggle with Date/Concept/Category/Type/Platforms/Status columns. Filters: month, year, status, category dropdowns. Row click navigates to detail page.
 - [x] **Post Detail Page (2026-04-06)**: Dedicated page at /marketing-post/:postId. Shows concept, message/caption, platform links placeholder, workflow status progression, date/category/content-type/created-by metadata, platform badges. Edit mode with inline form fields. Delete with redirect. Back navigation to calendar.
-- [x] **API Endpoints**: GET /api/marketing/calendar, CRUD /api/marketing/posts, GET /api/marketing/posts/{id}, PUT /api/marketing/posts/{id}/status, /api/marketing/categories, /api/marketing/platforms, /api/marketing/events
+- [x] **Platform Links & Analytics (2026-04-06)**: Per-platform URL tracking and analytics capture (views, likes, comments, shares, subscribers_added). Aggregated totals summary. Edit mode for updating links/metrics. Open external link button. Dedicated PUT /api/marketing/posts/{id}/links endpoint with validation.
+- [x] **API Endpoints**: GET /api/marketing/calendar, CRUD /api/marketing/posts, GET /api/marketing/posts/{id}, PUT /api/marketing/posts/{id}/status, PUT /api/marketing/posts/{id}/links, /api/marketing/categories, /api/marketing/platforms, /api/marketing/events
 
 ### Bottle Preview Bug Fix (2026-04-02)
 - [x] Fixed download mismatch: download now measures actual rendered logo-to-bottle ratio from DOM via getBoundingClientRect() for WYSIWYG output
