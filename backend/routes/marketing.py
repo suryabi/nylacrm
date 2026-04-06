@@ -637,15 +637,22 @@ async def upload_preview(file: UploadFile = File(...), current_user: dict = Depe
     valid_rows = []
     for row in parsed_rows:
         row_errors = []
-        # Date validation
+        # Date validation — accept multiple formats and normalize to YYYY-MM-DD
         if not row["post_date"]:
             row_errors.append("Missing date")
         else:
-            try:
-                datetime.strptime(row["post_date"][:10], "%Y-%m-%d")
-                row["post_date"] = row["post_date"][:10]
-            except ValueError:
-                row_errors.append(f"Invalid date format: {row['post_date']}")
+            date_str = row["post_date"].strip()
+            parsed_date = None
+            for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%m/%d/%Y", "%Y/%m/%d", "%d.%m.%Y"):
+                try:
+                    parsed_date = datetime.strptime(date_str[:10], fmt)
+                    break
+                except ValueError:
+                    continue
+            if parsed_date:
+                row["post_date"] = parsed_date.strftime("%Y-%m-%d")
+            else:
+                row_errors.append(f"Invalid date format: {row['post_date']} (use YYYY-MM-DD)")
 
         if not row["concept"]:
             row_errors.append("Missing concept")

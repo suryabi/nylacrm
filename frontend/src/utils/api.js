@@ -212,6 +212,6 @@ export const marketingAPI = {
   deleteEvent: (id) => axios.delete(`${API_URL}/marketing/events/${id}`, { headers: getAuthHeaders() }),
   downloadTemplate: () => axios.get(`${API_URL}/marketing/template`, { headers: getAuthHeaders(), responseType: 'blob' }),
   exportPosts: (month, year) => axios.get(`${API_URL}/marketing/export?month=${month}&year=${year}`, { headers: getAuthHeaders(), responseType: 'blob' }),
-  uploadPreview: (file) => { const fd = new FormData(); fd.append('file', file); return axios.post(`${API_URL}/marketing/upload-preview`, fd, { headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' } }); },
+  uploadPreview: (file) => { const fd = new FormData(); fd.append('file', file); const h = getAuthHeaders(); delete h['Content-Type']; return axios.post(`${API_URL}/marketing/upload-preview`, fd, { headers: h }); },
   uploadConfirm: (month, year, rows) => axios.post(`${API_URL}/marketing/upload-confirm`, { month, year, rows }, { headers: getAuthHeaders() }),
 };
