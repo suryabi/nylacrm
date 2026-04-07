@@ -1078,7 +1078,10 @@ export default function TaskManagement() {
                   </div>
                 ) : (
                   users
-                    .filter(u => u.department === taskForm.department_id || !u.department)
+                    .filter(u => {
+                      const uDepts = Array.isArray(u.department) ? u.department : [u.department || ''];
+                      return uDepts.some(d => d?.toLowerCase() === taskForm.department_id?.toLowerCase()) || !u.department || (Array.isArray(u.department) && u.department.length === 0);
+                    })
                     .map(u => {
                       const isSelected = taskForm.assignees.includes(u.id);
                       return (
@@ -1103,7 +1106,7 @@ export default function TaskManagement() {
                           </div>
                           <div className="flex-1">
                             <p className="text-sm font-medium text-slate-700">{u.name}</p>
-                            <p className="text-xs text-slate-400">{u.role || u.department}</p>
+                            <p className="text-xs text-slate-400">{u.role || (Array.isArray(u.department) ? u.department.join(', ') : u.department)}</p>
                           </div>
                           {isSelected && (
                             <CheckCircle2 className="h-5 w-5 text-emerald-600" />
@@ -1112,7 +1115,10 @@ export default function TaskManagement() {
                       );
                     })
                 )}
-                {taskForm.department_id && users.filter(u => u.department === taskForm.department_id || !u.department).length === 0 && (
+                {taskForm.department_id && users.filter(u => {
+                  const uDepts = Array.isArray(u.department) ? u.department : [u.department || ''];
+                  return uDepts.some(d => d?.toLowerCase() === taskForm.department_id?.toLowerCase()) || !u.department || (Array.isArray(u.department) && u.department.length === 0);
+                }).length === 0 && (
                   <div className="p-3 text-sm text-slate-400 text-center">
                     No users found in this department
                   </div>

@@ -84,6 +84,11 @@
 - [x] **Navigation**: Menu item alongside Daily Status with NotebookPen icon
 - [x] **API Endpoints**: CRUD at /api/meeting-minutes with filter support
 
+### Multi-Department User Assignment (2026-04-06)
+- [x] **Schema Change**: `user.department` updated from `str` to `List[str]` (backend + frontend)
+- [x] **Multi-Select UI**: Team Management form uses multi-select checkboxes for department assignment
+- [x] **Codebase-Wide Fix (2026-04-07)**: Fixed all frontend components treating `user.department` as a string — `HomeDashboard.js`, `SalesROIPanel.js`, `AppContextContext.js`, `TaskDetail.js`, `TaskManagement.js` now use `Array.isArray()` checks with `.some()` for department matching
+
 ### Branding Generalization (2026-04-06)
 - [x] **Splash Screen**: Replaced Nyla logo with generic CRM icon cluster (BarChart3 + TrendingUp + Users), dark navy gradient, "Sales CRM / Manage. Track. Grow."
 - [x] **Login Left Panel**: Replaced Nyla bottle mountain image with animated CSS dashboard illustration — Revenue Pipeline chart, Deals Won / Contacts / Target metrics, "Your Sales, Supercharged." copy, feature pills (Analytics, Team CRM, Reports, Automation)
