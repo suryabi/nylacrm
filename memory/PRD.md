@@ -79,6 +79,7 @@
 - [x] **Mandatory Assignee (2026-04-07)**: Frontend toast + backend 400 validation blocks saving action items without an assignee selected.
 - [x] **Task-Modified Lock (2026-04-07)**: Action items whose linked tasks have been edited from Task Management become read-only in Meeting Minutes (amber border, lock badge "Updated from Tasks — read only", disabled inputs, no delete). Backend also protects task-modified items from being altered or deleted via PUT.
 - [x] **RBAC Matrix (2026-04-07)**: Added Marketing category (Content Calendar, Marketing Masters) and Meeting Minutes to the RBAC permission matrix in both Tenant Settings and Platform Admin. Backend `MODULE_CATEGORIES` and `MODULE_LABELS` updated in `/app/backend/models/role.py`.
+- [x] **Participant-Only Visibility (2026-04-07)**: Meeting minutes list and detail endpoints now filter by participant. Non-admin users only see meetings where they are a participant or the creator. Admins (CEO, Director, Admin, System Admin) see all meetings.
 - [x] **Periodicity**: Weekly, Monthly, Quarterly, Ad-hoc with colored badges
 - [x] **Purpose**: Multi-select from Sales, Production, General, Finance, Administration, Investors, Marketing
 - [x] **Participants**: Multi-select from all team members with search, avatar initials display

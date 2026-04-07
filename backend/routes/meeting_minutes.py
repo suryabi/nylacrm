@@ -77,6 +77,16 @@ async def list_meetings(
     tenant_id = get_current_tenant_id()
     query = {"tenant_id": tenant_id}
 
+    # Non-admin users can only see meetings where they are a participant or creator
+    user_role = current_user.get("role", "")
+    admin_roles = ["CEO", "Director", "Admin", "System Admin"]
+    if user_role not in admin_roles:
+        user_id = current_user.get("id", "")
+        query["$or"] = [
+            {"participants.id": user_id},
+            {"created_by": user_id},
+        ]
+
     if month and year:
         start = f"{year}-{month:02d}-01"
         end = f"{year + 1}-01-01" if month == 12 else f"{year}-{month + 1:02d}-01"
@@ -107,6 +117,15 @@ async def get_meeting(meeting_id: str, current_user: dict = Depends(get_current_
     )
     if not meeting:
         raise HTTPException(status_code=404, detail="Meeting not found")
+
+    # Non-admin users can only view meetings where they are a participant or creator
+    user_role = current_user.get("role", "")
+    admin_roles = ["CEO", "Director", "Admin", "System Admin"]
+    if user_role not in admin_roles:
+        user_id = current_user.get("id", "")
+        participant_ids = [p.get("id") for p in meeting.get("participants", [])]
+        if user_id not in participant_ids and meeting.get("created_by") != user_id:
+            raise HTTPException(status_code=403, detail="You are not a participant of this meeting")
 
     # Enrich action items: check if linked tasks were modified externally
     tdb = get_tenant_db()
