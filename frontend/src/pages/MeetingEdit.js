@@ -358,8 +358,8 @@ export default function MeetingEdit() {
             <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
               <MessageSquare size={16} className="text-blue-500" /> Meeting Minutes
             </h2>
-            <button onClick={addMinute} className="px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-1"
-              data-testid="add-minute-btn"><Plus size={13} /> Add Point</button>
+            <button onClick={addMinute} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+              data-testid="add-minute-btn"><Plus size={15} /> Add Discussion Point</button>
           </div>
           <div className="space-y-3">
             {form.minutes.map((m, i) => (
@@ -385,8 +385,8 @@ export default function MeetingEdit() {
               <ListChecks size={16} className="text-emerald-500" /> Action Items
               <span className="text-[10px] text-slate-400 font-normal">(auto-creates tasks)</span>
             </h2>
-            <button onClick={addActionItem} className="px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-1"
-              data-testid="add-action-btn"><Plus size={13} /> Add Action</button>
+            <button onClick={addActionItem} className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+              data-testid="add-action-btn"><Plus size={15} /> Add Action Item</button>
           </div>
           <div className="space-y-4">
             {form.action_items.map((ai, i) => {
