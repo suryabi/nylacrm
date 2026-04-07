@@ -122,7 +122,7 @@ export default function MeetingDetail() {
                 {meeting.minutes.map((m, i) => (
                   <div key={i} className="flex items-start gap-3 py-2 px-3 rounded-lg hover:bg-slate-50 transition-colors" data-testid={`minute-${i}`}>
                     <span className="mt-2 w-2 h-2 rounded-full bg-blue-400 shrink-0" />
-                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{m}</p>
+                    <div className="text-sm text-slate-700 leading-relaxed prose prose-sm max-w-none [&>p]:m-0" dangerouslySetInnerHTML={{ __html: m }} />
                   </div>
                 ))}
               </div>

@@ -1,0 +1,38 @@
+.meeting-quill-wrapper .ql-container {
+  border: 1px solid #e2e8f0;
+  border-top: none;
+  border-radius: 0 0 0.5rem 0.5rem;
+  font-size: 0.875rem;
+  min-height: 80px;
+}
+
+.meeting-quill-wrapper .ql-toolbar {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: #f8fafc;
+}
+
+.meeting-quill-wrapper .ql-editor {
+  min-height: 80px;
+  line-height: 1.6;
+  padding: 0.625rem 0.75rem;
+}
+
+.meeting-quill-wrapper .ql-editor.ql-blank::before {
+  color: #94a3b8;
+  font-style: normal;
+  font-size: 0.875rem;
+}
+
+.meeting-quill-wrapper .ql-toolbar button:hover,
+.meeting-quill-wrapper .ql-toolbar button.ql-active {
+  color: #2563eb;
+}
+
+.meeting-quill-wrapper .ql-toolbar button.ql-active .ql-stroke {
+  stroke: #2563eb;
+}
+
+.meeting-quill-wrapper .ql-toolbar button.ql-active .ql-fill {
+  fill: #2563eb;
+}

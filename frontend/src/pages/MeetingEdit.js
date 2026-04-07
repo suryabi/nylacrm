@@ -4,12 +4,25 @@ import { meetingMinutesAPI } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 import axios from 'axios';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
+import '../styles/meeting-quill.css';
 import {
   ArrowLeft, Save, Loader2, X, Plus, Search, ChevronDown,
   MessageSquare, ListChecks, Users, Lock,
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
+
+const QUILL_MODULES = {
+  toolbar: [
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+    ['link'],
+    ['clean'],
+  ],
+};
+const QUILL_FORMATS = ['bold', 'italic', 'underline', 'strike', 'list', 'bullet', 'link'];
 
 const PERIODICITIES = [
   { value: 'weekly', label: 'Weekly', color: 'bg-blue-100 text-blue-700' },
@@ -305,7 +318,7 @@ export default function MeetingEdit() {
           <button onClick={handleSave} disabled={saving}
             className="px-5 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
             data-testid="save-btn">
-            {saving ? <><Loader2 size={14} className="animate-spin" /> Saving...</> : <><Save size={14} /> {isNew ? 'Create Meeting' : 'Save Changes'}</>}
+            {saving ? <><Loader2 size={14} className="animate-spin" /> Saving...</> : <><Save size={14} /> {isNew ? 'Create Meeting Minutes' : 'Save Changes'}</>}
           </button>
         </div>
       </div>
@@ -365,11 +378,16 @@ export default function MeetingEdit() {
             {form.minutes.map((m, i) => (
               <div key={i} className="flex items-start gap-3">
                 <span className="mt-3 w-2 h-2 rounded-full bg-blue-400 shrink-0" />
-                <textarea value={m} onChange={e => updateMinute(i, e.target.value)}
-                  placeholder={`Discussion point ${i + 1}...`}
-                  rows={3}
-                  className="flex-1 border border-slate-200 rounded-lg px-3 py-2.5 text-sm leading-relaxed resize-y focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                  data-testid={`minute-input-${i}`} />
+                <div className="flex-1 meeting-quill-wrapper" data-testid={`minute-input-${i}`}>
+                  <ReactQuill
+                    theme="snow"
+                    value={m}
+                    onChange={(val) => updateMinute(i, val)}
+                    modules={QUILL_MODULES}
+                    formats={QUILL_FORMATS}
+                    placeholder={`Discussion point ${i + 1}...`}
+                  />
+                </div>
                 {form.minutes.length > 1 && (
                   <button onClick={() => removeMinute(i)} className="mt-2 text-slate-300 hover:text-red-500 transition-colors" data-testid={`remove-minute-${i}`}><X size={16} /></button>
                 )}
@@ -457,7 +475,7 @@ export default function MeetingEdit() {
           <button onClick={handleSave} disabled={saving}
             className="px-6 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
             data-testid="save-bottom-btn">
-            {saving ? <><Loader2 size={14} className="animate-spin" /> Saving...</> : <><Save size={14} /> {isNew ? 'Create Meeting' : 'Save Changes'}</>}
+            {saving ? <><Loader2 size={14} className="animate-spin" /> Saving...</> : <><Save size={14} /> {isNew ? 'Create Meeting Minutes' : 'Save Changes'}</>}
           </button>
         </div>
       </div>
