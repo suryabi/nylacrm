@@ -83,7 +83,7 @@ export default function MeetingMinutesPage() {
     try {
       const token = localStorage.getItem('token');
       const tenantId = localStorage.getItem('tenantId');
-      const res = await axios.get(`${API_URL}/users`, { headers: { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId } });
+      const res = await axios.get(`${API_URL}/api/users`, { headers: { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId } });
       setUsers(res.data || []);
     } catch { /* ignore */ }
   }, []);
@@ -168,10 +168,6 @@ export default function MeetingMinutesPage() {
           <span className="text-lg font-semibold text-slate-900">{meetings.reduce((s, m) => s + (m.action_items?.length || 0), 0)}</span>
           <span className="text-xs text-slate-500 ml-1.5">Action Items</span>
         </div>
-        <div className="px-4 py-2.5 bg-white border border-amber-200 rounded-lg bg-amber-50/50">
-          <span className="text-lg font-semibold text-amber-700">{meetings.reduce((s, m) => s + (m.action_items?.filter(a => a.status !== 'done').length || 0), 0)}</span>
-          <span className="text-xs text-amber-600 ml-1.5">Open Items</span>
-        </div>
       </div>
 
       {/* Meeting list */}
@@ -188,7 +184,6 @@ export default function MeetingMinutesPage() {
           {meetings.map(m => {
             const pConf = PERIODICITIES.find(p => p.value === m.periodicity);
             const totalActions = m.action_items?.length || 0;
-            const doneActions = m.action_items?.filter(a => a.status === 'done').length || 0;
             return (
               <div key={m.id} onClick={() => navigate(`/meeting-minutes/${m.id}`)}
                 className="bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer"
@@ -210,7 +205,7 @@ export default function MeetingMinutesPage() {
                       <span className="flex items-center gap-1"><Users size={12} /> {m.participants?.length || 0} participants</span>
                       <span className="flex items-center gap-1"><MessageSquare size={12} /> {m.minutes?.length || 0} points</span>
                       {totalActions > 0 && (
-                        <span className="flex items-center gap-1"><ListChecks size={12} /> {doneActions}/{totalActions} done</span>
+                        <span className="flex items-center gap-1"><ListChecks size={12} /> {totalActions} actions</span>
                       )}
                     </div>
                   </div>

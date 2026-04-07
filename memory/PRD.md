@@ -73,12 +73,15 @@
 - [x] **CRUD**: Create/read/update/delete meeting entries with date, title, periodicity, purpose, participants, minutes, action items
 - [x] **Full Page Views**: List page, dedicated detail page (/meeting-minutes/:id), dedicated edit page (/meeting-minutes/:id/edit), new meeting page (/meeting-minutes/new)
 - [x] **Large Textareas**: Discussion points and action items use multi-line textareas (rows=3) for big text
-- [x] **Auto-Task Creation**: Action items automatically create tasks in task management (tasks_v2) with linked_entity_type='meeting', task_id and task_number linked back
+- [x] **Auto-Task Creation**: Action items automatically create tasks in task management (tasks_v2) with linked_entity_type='meeting', always in "open" status
+- [x] **Assignee Picker (2026-04-07)**: Replaced plain `<select>` with rich dropdown showing avatar initials, name, and role/department — matching Task Details screen pattern. Includes search functionality.
+- [x] **Simplified Action Items (2026-04-07)**: Removed due date and status fields from action item form. All action items auto-create tasks in "open" status. Status/due date managed via Task Management module.
+- [x] **Fixed API Path (2026-04-07)**: Corrected user fetch URL from `/users` to `/api/users` in MeetingEdit.js and MeetingMinutes.js
 - [x] **Periodicity**: Weekly, Monthly, Quarterly, Ad-hoc with colored badges
 - [x] **Purpose**: Multi-select from Sales, Production, General, Finance, Administration, Investors, Marketing
 - [x] **Participants**: Multi-select from all team members with search, avatar initials display
 - [x] **Meeting Minutes**: Bullet-point list format with add/remove functionality
-- [x] **Action Items**: Description, assignee (from all team members), due date, status (Open/In Progress/Done) with add/remove
+- [x] **Action Items**: Description + assignee selector (from all team members) with add/remove
 - [x] **Filters**: Month, year, periodicity, purpose (multi-select), participant dropdowns
 - [x] **Edit History**: Full tracking — each edit records edited_by, edited_by_name, edited_at, shown in detail page sidebar
 - [x] **Navigation**: Menu item alongside Daily Status with NotebookPen icon

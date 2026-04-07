@@ -7,7 +7,7 @@ import axios from 'axios';
 import {
   ArrowLeft, Calendar as CalendarIcon, Clock, Users, Save, Trash2,
   PenLine, History, MessageSquare, ListChecks, ExternalLink, Loader2,
-  CheckCircle2, Circle, AlertCircle, X, Plus, Link as LinkIcon,
+  X, Plus, Link as LinkIcon,
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -135,35 +135,28 @@ export default function MeetingDetail() {
           <div className="border border-slate-200 rounded-xl p-5" data-testid="section-actions">
             <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2 mb-4">
               <ListChecks size={16} className="text-emerald-500" /> Action Items
-              {actionTotal > 0 && <span className="text-xs font-normal text-slate-400">({actionDone}/{actionTotal} completed)</span>}
+              {actionTotal > 0 && <span className="text-xs font-normal text-slate-400">({actionTotal} items)</span>}
             </h2>
             {actionTotal > 0 ? (
               <div className="space-y-3">
                 {meeting.action_items.map((ai, i) => {
-                  const sDef = ACTION_STATUSES.find(s => s.value === ai.status);
                   return (
-                    <div key={ai.id || i} className={`rounded-xl border border-slate-200 p-4 ${sDef?.bg || 'bg-white'}`} data-testid={`action-item-${i}`}>
+                    <div key={ai.id || i} className="rounded-xl border border-slate-200 p-4 bg-white" data-testid={`action-item-${i}`}>
                       <div className="flex items-start gap-3">
-                        <span className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 ${sDef?.dot || 'bg-slate-400'}`} />
+                        <span className="mt-1 w-2.5 h-2.5 rounded-full shrink-0 bg-slate-400" />
                         <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-medium leading-relaxed whitespace-pre-wrap ${ai.status === 'done' ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                          <p className="text-sm font-medium leading-relaxed whitespace-pre-wrap text-slate-800">
                             {ai.description}
                           </p>
                           <div className="flex items-center flex-wrap gap-3 mt-2">
                             {ai.assignee_name && (
                               <span className="flex items-center gap-1.5 text-xs text-slate-500">
-                                <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center text-[8px] font-medium text-blue-700">
+                                <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-[8px] font-medium text-emerald-700">
                                   {ai.assignee_name.split(' ').map(w => w[0]).join('').slice(0, 2)}
                                 </div>
                                 {ai.assignee_name}
                               </span>
                             )}
-                            {ai.due_date && (
-                              <span className="text-xs text-slate-400 flex items-center gap-1"><CalendarIcon size={11} /> {ai.due_date}</span>
-                            )}
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-medium uppercase ${sDef?.dot === 'bg-emerald-500' ? 'text-emerald-600' : sDef?.dot === 'bg-amber-500' ? 'text-amber-600' : 'text-slate-500'}`}>
-                              {sDef?.label}
-                            </span>
                             {ai.task_number && (
                               <span className="text-[10px] text-blue-600 font-medium flex items-center gap-1">
                                 <LinkIcon size={10} /> {ai.task_number}
@@ -217,24 +210,6 @@ export default function MeetingDetail() {
                 <span className="text-xs text-slate-500">Action Items</span>
                 <span className="text-sm font-semibold text-slate-800">{actionTotal}</span>
               </div>
-              {actionTotal > 0 && (
-                <>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-emerald-600">Completed</span>
-                    <span className="text-sm font-semibold text-emerald-700">{actionDone}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-amber-600">Open</span>
-                    <span className="text-sm font-semibold text-amber-700">{actionOpen}</span>
-                  </div>
-                  {/* Progress bar */}
-                  <div className="mt-1">
-                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${(actionDone / actionTotal) * 100}%` }} />
-                    </div>
-                  </div>
-                </>
-              )}
             </div>
           </div>
 

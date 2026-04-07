@@ -28,12 +28,6 @@ const PURPOSES = [
   { value: 'marketing', label: 'Marketing', color: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
 ];
 
-const ACTION_STATUSES = [
-  { value: 'open', label: 'Open' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'done', label: 'Done' },
-];
-
 function getAuthHeaders() {
   const token = localStorage.getItem('token');
   const tenantId = localStorage.getItem('tenantId');
@@ -126,6 +120,79 @@ function ParticipantSelect({ users, selected, onChange, testId }) {
   );
 }
 
+function ActionAssigneeSelect({ users, selectedId, onChange, testId }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const filtered = users.filter(u => u.name?.toLowerCase().includes(search.toLowerCase()));
+  const selected = users.find(u => u.id === selectedId);
+
+  return (
+    <div className="relative" data-testid={testId}>
+      <div
+        className="flex items-center gap-2.5 min-h-[42px] px-3 py-2 border border-slate-200 rounded-lg bg-white cursor-pointer hover:border-slate-300 transition-colors"
+        onClick={() => setOpen(!open)}
+      >
+        {selected ? (
+          <>
+            <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center text-[10px] font-medium text-emerald-700">
+              {selected.name?.split(' ').map(w => w[0]).join('').slice(0, 2)}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-slate-700 truncate">{selected.name}</p>
+              <p className="text-[10px] text-slate-400 truncate">{selected.role || (Array.isArray(selected.department) ? selected.department.join(', ') : selected.department || '')}</p>
+            </div>
+            <button type="button" onClick={(e) => { e.stopPropagation(); onChange(''); }}
+              className="text-slate-300 hover:text-red-500 transition-colors"><X size={14} /></button>
+          </>
+        ) : (
+          <>
+            <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center">
+              <Users size={12} className="text-slate-400" />
+            </div>
+            <span className="text-sm text-slate-400">Select assignee</span>
+          </>
+        )}
+        <ChevronDown size={14} className="ml-auto text-slate-400" />
+      </div>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => { setOpen(false); setSearch(''); }} />
+          <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-hidden">
+            <div className="p-2 border-b border-slate-100">
+              <div className="flex items-center gap-2 px-2 py-1.5 bg-slate-50 rounded-md">
+                <Search size={13} className="text-slate-400" />
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search team members..."
+                  className="bg-transparent text-sm outline-none flex-1" autoFocus />
+              </div>
+            </div>
+            <div className="max-h-48 overflow-y-auto py-1">
+              {filtered.map(u => {
+                const isSelected = u.id === selectedId;
+                return (
+                  <div key={u.id}
+                    onClick={() => { onChange(u.id); setOpen(false); setSearch(''); }}
+                    className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${isSelected ? 'bg-emerald-50' : 'hover:bg-slate-50'}`}>
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-medium ${isSelected ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-700'}`}>
+                      {u.name?.split(' ').map(w => w[0]).join('').slice(0, 2)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-700">{u.name}</p>
+                      <p className="text-[10px] text-slate-400">{u.role || (Array.isArray(u.department) ? u.department.join(', ') : u.department || '')}</p>
+                    </div>
+                  </div>
+                );
+              })}
+              {filtered.length === 0 && (
+                <p className="text-xs text-slate-400 text-center py-3">No matching team members</p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function MeetingEdit() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -143,7 +210,7 @@ export default function MeetingEdit() {
   useEffect(() => {
     const loadUsers = async () => {
       try {
-        const res = await axios.get(`${API_URL}/users`, { headers: getAuthHeaders() });
+        const res = await axios.get(`${API_URL}/api/users`, { headers: getAuthHeaders() });
         setUsers(res.data || []);
       } catch { /* ignore */ }
     };
@@ -178,7 +245,7 @@ export default function MeetingEdit() {
   const removeMinute = (i) => setForm(p => ({ ...p, minutes: p.minutes.filter((_, idx) => idx !== i) }));
 
   const addActionItem = () => setForm(p => ({
-    ...p, action_items: [...p.action_items, { id: '', description: '', assignee_id: '', assignee_name: '', due_date: '', status: 'open' }]
+    ...p, action_items: [...p.action_items, { id: '', description: '', assignee_id: '', assignee_name: '' }]
   }));
   const updateActionItem = (i, field, val) => setForm(p => ({
     ...p, action_items: p.action_items.map((a, idx) => {
@@ -325,30 +392,14 @@ export default function MeetingEdit() {
                     data-testid={`action-desc-${i}`} />
                   <button onClick={() => removeActionItem(i)} className="mt-1 text-slate-300 hover:text-red-500 transition-colors"><X size={16} /></button>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-[10px] text-slate-400 uppercase tracking-wider mb-1 block">Assignee</label>
-                    <select value={ai.assignee_id} onChange={e => updateActionItem(i, 'assignee_id', e.target.value)}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                      data-testid={`action-assignee-${i}`}>
-                      <option value="">Select assignee</option>
-                      {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-slate-400 uppercase tracking-wider mb-1 block">Due Date</label>
-                    <input type="date" value={ai.due_date} onChange={e => updateActionItem(i, 'due_date', e.target.value)}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                      data-testid={`action-due-${i}`} />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-slate-400 uppercase tracking-wider mb-1 block">Status</label>
-                    <select value={ai.status} onChange={e => updateActionItem(i, 'status', e.target.value)}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                      data-testid={`action-status-${i}`}>
-                      {ACTION_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                    </select>
-                  </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 uppercase tracking-wider mb-1.5 block">Assignee</label>
+                  <ActionAssigneeSelect
+                    users={users}
+                    selectedId={ai.assignee_id}
+                    onChange={(uid) => updateActionItem(i, 'assignee_id', uid)}
+                    testId={`action-assignee-${i}`}
+                  />
                 </div>
                 {ai.task_number && (
                   <p className="mt-2 text-[10px] text-blue-600 font-medium">Linked to {ai.task_number}</p>

@@ -42,7 +42,7 @@ async def _create_tasks_for_action_items(action_items, meeting_id, meeting_title
             "title": ai["description"],
             "description": f"Auto-created from meeting: {meeting_title}",
             "severity": "medium",
-            "status": _STATUS_MAP.get(ai.get("status", "open"), "open"),
+            "status": "open",
             "department_id": "",
             "assignees": assignees,
             "assignees_data": assignees_data,
@@ -138,8 +138,8 @@ async def create_meeting(data: dict, current_user: dict = Depends(get_current_us
             "description": item.get("description", ""),
             "assignee_id": item.get("assignee_id", ""),
             "assignee_name": item.get("assignee_name", ""),
-            "due_date": item.get("due_date", ""),
-            "status": item.get("status", "open") if item.get("status") in VALID_ACTION_STATUSES else "open",
+            "due_date": "",
+            "status": "open",
         }
         if ai["description"]:
             action_items.append(ai)
@@ -220,8 +220,8 @@ async def update_meeting(meeting_id: str, data: dict, current_user: dict = Depen
                         "description": item.get("description", ""),
                         "assignee_id": item.get("assignee_id", ""),
                         "assignee_name": item.get("assignee_name", ""),
-                        "due_date": item.get("due_date", ""),
-                        "status": item.get("status", "open") if item.get("status") in VALID_ACTION_STATUSES else "open",
+                        "due_date": "",
+                        "status": "open",
                     }
                     if ai["description"]:
                         clean_items.append(ai)
