@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import axios from 'axios';
 import {
   ArrowLeft, Save, Loader2, X, Plus, Search, ChevronDown,
-  MessageSquare, ListChecks, Users,
+  MessageSquare, ListChecks, Users, Lock,
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -261,6 +261,13 @@ export default function MeetingEdit() {
 
   const handleSave = async () => {
     if (!form.date) { toast.error('Date is required'); return; }
+    // Validate: all action items must have an assignee
+    const editableActions = form.action_items.filter(ai => !ai.task_modified);
+    const missingAssignee = editableActions.find(ai => ai.description?.trim() && !ai.assignee_id);
+    if (missingAssignee) {
+      toast.error('Every action item must have an assignee');
+      return;
+    }
     setSaving(true);
     try {
       const payload = { ...form, minutes: form.minutes.filter(m => m.trim()) };
@@ -382,30 +389,58 @@ export default function MeetingEdit() {
               data-testid="add-action-btn"><Plus size={13} /> Add Action</button>
           </div>
           <div className="space-y-4">
-            {form.action_items.map((ai, i) => (
-              <div key={i} className="border border-slate-200 rounded-xl p-4 bg-slate-50/30" data-testid={`action-item-${i}`}>
+            {form.action_items.map((ai, i) => {
+              const isLocked = !!ai.task_modified;
+              const assigneeUser = users.find(u => u.id === ai.assignee_id);
+              return (
+              <div key={i} className={`border rounded-xl p-4 ${isLocked ? 'border-amber-200 bg-amber-50/30' : 'border-slate-200 bg-slate-50/30'}`} data-testid={`action-item-${i}`}>
+                {isLocked && (
+                  <div className="flex items-center gap-1.5 mb-3 px-2 py-1.5 bg-amber-100/60 rounded-lg w-fit">
+                    <Lock size={11} className="text-amber-600" />
+                    <span className="text-[10px] font-medium text-amber-700">Updated from Tasks — read only</span>
+                  </div>
+                )}
                 <div className="flex items-start gap-2 mb-3">
-                  <textarea value={ai.description} onChange={e => updateActionItem(i, 'description', e.target.value)}
-                    placeholder="Describe the action item..."
-                    rows={3}
-                    className="flex-1 border border-slate-200 rounded-lg px-3 py-2.5 text-sm leading-relaxed resize-y bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                    data-testid={`action-desc-${i}`} />
-                  <button onClick={() => removeActionItem(i)} className="mt-1 text-slate-300 hover:text-red-500 transition-colors"><X size={16} /></button>
+                  {isLocked ? (
+                    <p className="flex-1 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap bg-white border border-slate-200 rounded-lg px-3 py-2.5 opacity-75">{ai.description}</p>
+                  ) : (
+                    <textarea value={ai.description} onChange={e => updateActionItem(i, 'description', e.target.value)}
+                      placeholder="Describe the action item..."
+                      rows={3}
+                      className="flex-1 border border-slate-200 rounded-lg px-3 py-2.5 text-sm leading-relaxed resize-y bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                      data-testid={`action-desc-${i}`} />
+                  )}
+                  {!isLocked && (
+                    <button onClick={() => removeActionItem(i)} className="mt-1 text-slate-300 hover:text-red-500 transition-colors" data-testid={`action-remove-${i}`}><X size={16} /></button>
+                  )}
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-400 uppercase tracking-wider mb-1.5 block">Assignee</label>
-                  <ActionAssigneeSelect
-                    users={users}
-                    selectedId={ai.assignee_id}
-                    onChange={(uid) => updateActionItem(i, 'assignee_id', uid)}
-                    testId={`action-assignee-${i}`}
-                  />
+                  <label className="text-[10px] text-slate-400 uppercase tracking-wider mb-1.5 block">Assignee *</label>
+                  {isLocked ? (
+                    <div className="flex items-center gap-2.5 min-h-[42px] px-3 py-2 border border-slate-200 rounded-lg bg-white opacity-75">
+                      <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center text-[10px] font-medium text-emerald-700">
+                        {ai.assignee_name?.split(' ').map(w => w[0]).join('').slice(0, 2) || '?'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-700 truncate">{ai.assignee_name || 'Unknown'}</p>
+                        {assigneeUser && <p className="text-[10px] text-slate-400 truncate">{assigneeUser.role || (Array.isArray(assigneeUser.department) ? assigneeUser.department.join(', ') : assigneeUser.department || '')}</p>}
+                      </div>
+                    </div>
+                  ) : (
+                    <ActionAssigneeSelect
+                      users={users}
+                      selectedId={ai.assignee_id}
+                      onChange={(uid) => updateActionItem(i, 'assignee_id', uid)}
+                      testId={`action-assignee-${i}`}
+                    />
+                  )}
                 </div>
                 {ai.task_number && (
                   <p className="mt-2 text-[10px] text-blue-600 font-medium">Linked to {ai.task_number}</p>
                 )}
               </div>
-            ))}
+              );
+            })}
             {form.action_items.length === 0 && (
               <div className="text-center py-6 border border-dashed border-slate-200 rounded-xl">
                 <ListChecks size={24} className="mx-auto text-slate-300 mb-2" />

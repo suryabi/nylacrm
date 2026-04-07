@@ -107,6 +107,16 @@ async def get_meeting(meeting_id: str, current_user: dict = Depends(get_current_
     )
     if not meeting:
         raise HTTPException(status_code=404, detail="Meeting not found")
+
+    # Enrich action items: check if linked tasks were modified externally
+    tdb = get_tenant_db()
+    for ai in meeting.get("action_items", []):
+        ai["task_modified"] = False
+        if ai.get("task_id"):
+            task = await tdb.tasks_v2.find_one({"id": ai["task_id"]}, {"_id": 0, "created_at": 1, "updated_at": 1})
+            if task and task.get("updated_at") and task.get("created_at") and task["updated_at"] != task["created_at"]:
+                ai["task_modified"] = True
+
     return meeting
 
 
@@ -142,6 +152,8 @@ async def create_meeting(data: dict, current_user: dict = Depends(get_current_us
             "status": "open",
         }
         if ai["description"]:
+            if not ai["assignee_id"]:
+                raise HTTPException(status_code=400, detail=f"Assignee is required for action item: {ai['description'][:50]}")
             action_items.append(ai)
 
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -213,8 +225,30 @@ async def update_meeting(meeting_id: str, data: dict, current_user: dict = Depen
                 if isinstance(val, str):
                     val = [m.strip() for m in val.split("\n") if m.strip()]
             elif field == "action_items":
+                # Build lookup of existing action items and check task modification
+                existing_ai_map = {}
+                tdb = get_tenant_db()
+                for eai in existing.get("action_items", []):
+                    if eai.get("id"):
+                        eai_modified = False
+                        if eai.get("task_id"):
+                            task = await tdb.tasks_v2.find_one({"id": eai["task_id"]}, {"_id": 0, "created_at": 1, "updated_at": 1})
+                            if task and task.get("updated_at") and task.get("created_at") and task["updated_at"] != task["created_at"]:
+                                eai_modified = True
+                        existing_ai_map[eai["id"]] = {"data": eai, "task_modified": eai_modified}
+
                 clean_items = []
+                # First, preserve all task-modified items from existing data
+                submitted_ids = set()
                 for item in val:
+                    item_id = item.get("id", "")
+                    submitted_ids.add(item_id)
+
+                    # If this item exists and its task was modified externally, use original data
+                    if item_id and item_id in existing_ai_map and existing_ai_map[item_id]["task_modified"]:
+                        clean_items.append(existing_ai_map[item_id]["data"])
+                        continue
+
                     ai = {
                         "id": item.get("id") or str(uuid.uuid4()),
                         "description": item.get("description", ""),
@@ -223,8 +257,24 @@ async def update_meeting(meeting_id: str, data: dict, current_user: dict = Depen
                         "due_date": "",
                         "status": "open",
                     }
+                    # Preserve task_id and task_number from existing items
+                    if item_id and item_id in existing_ai_map:
+                        ai["task_id"] = existing_ai_map[item_id]["data"].get("task_id")
+                        ai["task_number"] = existing_ai_map[item_id]["data"].get("task_number")
+                    elif item.get("task_id"):
+                        ai["task_id"] = item["task_id"]
+                        ai["task_number"] = item.get("task_number")
+
                     if ai["description"]:
+                        if not ai["assignee_id"]:
+                            raise HTTPException(status_code=400, detail=f"Assignee is required for action item: {ai['description'][:50]}")
                         clean_items.append(ai)
+
+                # Ensure task-modified items that weren't submitted are still preserved (can't delete them)
+                for eid, einfo in existing_ai_map.items():
+                    if eid not in submitted_ids and einfo["task_modified"]:
+                        clean_items.append(einfo["data"])
+
                 val = clean_items
             update_fields[field] = val
 

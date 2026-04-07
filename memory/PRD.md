@@ -76,6 +76,8 @@
 - [x] **Auto-Task Creation**: Action items automatically create tasks in task management (tasks_v2) with linked_entity_type='meeting', always in "open" status
 - [x] **Assignee Picker (2026-04-07)**: Replaced plain `<select>` with rich dropdown showing avatar initials, name, and role/department — matching Task Details screen pattern. Includes search functionality.
 - [x] **Simplified Action Items (2026-04-07)**: Removed due date and status fields from action item form. All action items auto-create tasks in "open" status. Status/due date managed via Task Management module.
+- [x] **Mandatory Assignee (2026-04-07)**: Frontend toast + backend 400 validation blocks saving action items without an assignee selected.
+- [x] **Task-Modified Lock (2026-04-07)**: Action items whose linked tasks have been edited from Task Management become read-only in Meeting Minutes (amber border, lock badge "Updated from Tasks — read only", disabled inputs, no delete). Backend also protects task-modified items from being altered or deleted via PUT.
 - [x] **Fixed API Path (2026-04-07)**: Corrected user fetch URL from `/users` to `/api/users` in MeetingEdit.js and MeetingMinutes.js
 - [x] **Periodicity**: Weekly, Monthly, Quarterly, Ad-hoc with colored badges
 - [x] **Purpose**: Multi-select from Sales, Production, General, Finance, Administration, Investors, Marketing
