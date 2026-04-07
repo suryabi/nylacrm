@@ -78,7 +78,7 @@
 - [x] **Simplified Action Items (2026-04-07)**: Removed due date and status fields from action item form. All action items auto-create tasks in "open" status. Status/due date managed via Task Management module.
 - [x] **Mandatory Assignee (2026-04-07)**: Frontend toast + backend 400 validation blocks saving action items without an assignee selected.
 - [x] **Task-Modified Lock (2026-04-07)**: Action items whose linked tasks have been edited from Task Management become read-only in Meeting Minutes (amber border, lock badge "Updated from Tasks — read only", disabled inputs, no delete). Backend also protects task-modified items from being altered or deleted via PUT.
-- [x] **Fixed API Path (2026-04-07)**: Corrected user fetch URL from `/users` to `/api/users` in MeetingEdit.js and MeetingMinutes.js
+- [x] **RBAC Matrix (2026-04-07)**: Added Marketing category (Content Calendar, Marketing Masters) and Meeting Minutes to the RBAC permission matrix in both Tenant Settings and Platform Admin. Backend `MODULE_CATEGORIES` and `MODULE_LABELS` updated in `/app/backend/models/role.py`.
 - [x] **Periodicity**: Weekly, Monthly, Quarterly, Ad-hoc with colored badges
 - [x] **Purpose**: Multi-select from Sales, Production, General, Finance, Administration, Investors, Marketing
 - [x] **Participants**: Multi-select from all team members with search, avatar initials display

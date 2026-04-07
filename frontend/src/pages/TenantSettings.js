@@ -17,7 +17,7 @@ import {
   Globe, Clock, DollarSign, Calendar, RefreshCw, MapPin,
   Users, Kanban, Target, CalendarDays, Contact, Plane, Wallet, FolderOpen,
   Wrench, Boxes, ShieldCheck, Box, Landmark, Phone, Mail, FileText,
-  Plus, Trash2, User, Shield, Edit2, Truck, Package, Tag, RotateCcw
+  Plus, Trash2, User, Shield, Edit2, Truck, Package, Tag, RotateCcw, ClipboardList
 } from 'lucide-react';
 import axios from 'axios';
 import RoleManagement from '../components/RoleManagement';
@@ -150,6 +150,7 @@ const MODULE_CONFIG = {
     modules: [
       { key: 'marketing_calendar', label: 'Content Calendar', icon: CalendarDays, description: 'Plan & schedule marketing content' },
       { key: 'marketing_masters', label: 'Marketing Masters', icon: Settings, description: 'Categories, platforms & events' },
+      { key: 'meeting_minutes', label: 'Meeting Minutes', icon: ClipboardList, description: 'Record meeting notes & action items' },
     ]
   }
 };
