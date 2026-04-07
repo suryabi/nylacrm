@@ -9,7 +9,7 @@ import logging
 import urllib.parse
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
-from typing import List, Optional
+from typing import List, Optional, Union
 import uuid
 from datetime import datetime, timezone, timedelta
 import jwt
@@ -598,7 +598,7 @@ class User(BaseModel):
     name: str
     role: str  # 'ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep', 'Distributor'
     designation: Optional[str] = None  # Full title like 'CEO & Managing Director'
-    department: Optional[str] = 'Sales'  # 'Admin', 'Sales', 'Production', 'Marketing', 'Finance', 'Distribution'
+    department: Optional[Union[str, List[str]]] = 'Sales'
     phone: Optional[str] = None
     avatar: Optional[str] = None
     city: Optional[str] = None
@@ -622,7 +622,7 @@ class UserCreate(BaseModel):
     name: str
     role: str = 'sales_rep'
     designation: Optional[str] = None
-    department: Optional[str] = 'Sales'  # 'Admin', 'Sales', 'Production', 'Marketing', 'Finance', 'Distribution'
+    department: Optional[Union[str, List[str]]] = 'Sales'
     phone: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None

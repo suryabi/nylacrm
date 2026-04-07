@@ -3,7 +3,7 @@ Users routes - User management, team hierarchy
 Multi-tenant aware - all queries automatically filter by tenant_id
 """
 from fastapi import APIRouter, HTTPException, Depends
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Union
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field, EmailStr
 import uuid
@@ -25,7 +25,7 @@ class User(BaseModel):
     name: str
     role: str
     designation: Optional[str] = None
-    department: Optional[Any] = 'Sales'  # str or list of str
+    department: Optional[Union[str, List[str]]] = 'Sales'
     phone: Optional[str] = None
     avatar: Optional[str] = None
     city: Optional[str] = None
@@ -49,7 +49,7 @@ class UserCreate(BaseModel):
     name: str
     role: str = 'sales_rep'
     designation: Optional[str] = None
-    department: Optional[Any] = 'Sales'  # str or list of str
+    department: Optional[Union[str, List[str]]] = 'Sales'
     phone: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
@@ -65,7 +65,7 @@ class UserUpdate(BaseModel):
     name: Optional[str] = None
     role: Optional[str] = None
     designation: Optional[str] = None
-    department: Optional[Any] = None  # str or list of str
+    department: Optional[Union[str, List[str]]] = None
     phone: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
