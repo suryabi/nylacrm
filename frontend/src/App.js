@@ -68,6 +68,8 @@ import QualityControl from './pages/QualityControl';
 import ProductionBatches from './pages/ProductionBatches';
 import BatchDetail from './pages/BatchDetail';
 import QCRouteConfig from './pages/QCRouteConfig';
+import RejectionReasons from './pages/RejectionReasons';
+import RejectionReport from './pages/RejectionReport';
 import Assets from './pages/Assets';
 import Vendors from './pages/Vendors';
 import MasterLocations from './pages/MasterLocations';
@@ -246,6 +248,8 @@ function AppRouter() {
           <Route path="/production-batches" element={<ProtectedRoute><ProductionBatches /></ProtectedRoute>} />
           <Route path="/production-batches/:batchId" element={<ProtectedRoute><BatchDetail /></ProtectedRoute>} />
           <Route path="/qc-routes" element={<ProtectedRoute><QCRouteConfig /></ProtectedRoute>} />
+          <Route path="/rejection-reasons" element={<ProtectedRoute><RejectionReasons /></ProtectedRoute>} />
+          <Route path="/rejection-report" element={<ProtectedRoute><RejectionReport /></ProtectedRoute>} />
           <Route path="/assets" element={<ProtectedRoute moduleKey="assets"><Assets /></ProtectedRoute>} />
           <Route path="/vendors" element={<ProtectedRoute moduleKey="vendors"><Vendors /></ProtectedRoute>} />
           

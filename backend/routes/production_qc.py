@@ -612,3 +612,156 @@ async def get_production_stats(current_user: dict = Depends(get_current_user)):
         "total_rejected": totals.get("total_rejected", 0),
         "total_passed_final": totals.get("total_passed_final", 0),
     }
+
+
+# ──────────────────────────────────────────────
+# Rejection Reasons Master Data
+# ──────────────────────────────────────────────
+
+class RejectionReasonCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+class RejectionReasonUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+@router.get("/rejection-reasons")
+async def list_rejection_reasons(current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    reasons = await tdb.rejection_reasons.find({"tenant_id": tenant_id}, {"_id": 0}).sort("name", 1).to_list(500)
+    return reasons
+
+@router.post("/rejection-reasons")
+async def create_rejection_reason(data: RejectionReasonCreate, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    existing = await tdb.rejection_reasons.find_one({"name": data.name, "tenant_id": tenant_id})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Rejection reason '{data.name}' already exists")
+    now = datetime.now(timezone.utc).isoformat()
+    reason = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "name": data.name,
+        "description": data.description or "",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await tdb.rejection_reasons.insert_one(reason)
+    reason.pop("_id", None)
+    return reason
+
+@router.put("/rejection-reasons/{reason_id}")
+async def update_rejection_reason(reason_id: str, data: RejectionReasonUpdate, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    existing = await tdb.rejection_reasons.find_one({"id": reason_id, "tenant_id": tenant_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Rejection reason not found")
+    updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if data.name is not None:
+        dup = await tdb.rejection_reasons.find_one({"name": data.name, "tenant_id": tenant_id, "id": {"$ne": reason_id}})
+        if dup:
+            raise HTTPException(status_code=400, detail=f"Rejection reason '{data.name}' already exists")
+        updates["name"] = data.name
+    if data.description is not None:
+        updates["description"] = data.description
+    await tdb.rejection_reasons.update_one({"id": reason_id}, {"$set": updates})
+    updated = await tdb.rejection_reasons.find_one({"id": reason_id}, {"_id": 0})
+    return updated
+
+@router.delete("/rejection-reasons/{reason_id}")
+async def delete_rejection_reason(reason_id: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    result = await tdb.rejection_reasons.delete_one({"id": reason_id, "tenant_id": tenant_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Rejection reason not found")
+    return {"message": "Rejection reason deleted"}
+
+
+# ──────────────────────────────────────────────
+# Rejection Report (cross-batch)
+# ──────────────────────────────────────────────
+
+@router.get("/rejection-report")
+async def get_rejection_report(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    batch_id: Optional[str] = None,
+    resource_id: Optional[str] = None,
+    stage_type: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Get rejection report: per resource, per date, per stage with totals."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    query = {"tenant_id": tenant_id, "qty_rejected": {"$gt": 0}}
+    if batch_id:
+        query["batch_id"] = batch_id
+    if resource_id:
+        query["inspected_by"] = resource_id
+    if stage_type:
+        query["stage_type"] = stage_type
+    if date_from or date_to:
+        date_filter = {}
+        if date_from:
+            date_filter["$gte"] = date_from
+        if date_to:
+            date_filter["$lte"] = date_to + "T23:59:59"
+        query["inspected_at"] = date_filter
+
+    inspections = await tdb.inspections.find(query, {"_id": 0}).sort("inspected_at", -1).to_list(5000)
+
+    # Enrich with batch info
+    batch_ids = list(set(i["batch_id"] for i in inspections))
+    batches_map = {}
+    if batch_ids:
+        batches = await tdb.production_batches.find(
+            {"id": {"$in": batch_ids}, "tenant_id": tenant_id},
+            {"_id": 0, "id": 1, "batch_code": 1, "sku_name": 1}
+        ).to_list(len(batch_ids))
+        batches_map = {b["id"]: b for b in batches}
+
+    rows = []
+    total_rejected = 0
+    for ins in inspections:
+        b = batches_map.get(ins["batch_id"], {})
+        rows.append({
+            "id": ins["id"],
+            "batch_id": ins["batch_id"],
+            "batch_code": b.get("batch_code", ""),
+            "sku_name": b.get("sku_name", ""),
+            "stage_name": ins.get("stage_name", ""),
+            "stage_type": ins.get("stage_type", ""),
+            "date": ins.get("inspected_at", "")[:10],
+            "resource_name": ins.get("inspected_by_name", ""),
+            "resource_id": ins.get("inspected_by", ""),
+            "qty_inspected": ins.get("qty_inspected", 0),
+            "qty_rejected": ins.get("qty_rejected", 0),
+            "rejection_reason": ins.get("rejection_reason", ""),
+            "remarks": ins.get("remarks", ""),
+        })
+        total_rejected += ins.get("qty_rejected", 0)
+
+    # Summary by resource
+    by_resource = {}
+    for r in rows:
+        key = r["resource_name"]
+        by_resource[key] = by_resource.get(key, 0) + r["qty_rejected"]
+
+    # Summary by date
+    by_date = {}
+    for r in rows:
+        key = r["date"]
+        by_date[key] = by_date.get(key, 0) + r["qty_rejected"]
+
+    return {
+        "rows": rows,
+        "total_rejected": total_rejected,
+        "by_resource": [{"name": k, "bottles": v} for k, v in sorted(by_resource.items())],
+        "by_date": [{"date": k, "bottles": v} for k, v in sorted(by_date.items())],
+    }

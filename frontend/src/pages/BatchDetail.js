@@ -36,19 +36,23 @@ export default function BatchDetail() {
   const navigate = useNavigate();
   const [batch, setBatch] = useState(null);
   const [history, setHistory] = useState({ timeline: [] });
+  const [rejectionReasons, setRejectionReasons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
+  const [showRejections, setShowRejections] = useState(false);
 
   const fetchBatch = useCallback(async () => {
     try {
       const headers = getAuthHeaders();
-      const [bRes, hRes] = await Promise.allSettled([
+      const [bRes, hRes, rrRes] = await Promise.allSettled([
         axios.get(`${API_URL}/production/batches/${batchId}`, { headers }),
         axios.get(`${API_URL}/production/batches/${batchId}/history`, { headers }),
+        axios.get(`${API_URL}/production/rejection-reasons`, { headers }),
       ]);
       if (bRes.status === 'fulfilled') setBatch(bRes.value.data);
       else { toast.error('Batch not found'); navigate('/production-batches'); return; }
       if (hRes.status === 'fulfilled') setHistory(hRes.value.data);
+      if (rrRes.status === 'fulfilled') setRejectionReasons(rrRes.value.data);
     } finally {
       setLoading(false);
     }
@@ -163,6 +167,7 @@ export default function BatchDetail() {
                 sourceQty={isFirst ? (batch.unallocated_crates || 0) : (prevBal?.passed || 0)}
                 batchId={batchId}
                 bottlesPerCrate={batch.bottles_per_crate || 1}
+                rejectionReasons={rejectionReasons}
                 onUpdate={fetchBatch}
               />
             );
@@ -173,6 +178,52 @@ export default function BatchDetail() {
           <FlaskConical className="w-8 h-8 text-amber-400 mx-auto mb-2" />
           <p className="text-sm text-amber-700 font-medium">No QC Route Configured</p>
           <p className="text-xs text-amber-600 mt-1">Configure a QC route for "{batch.sku_name}" to start tracking</p>
+        </div>
+      )}
+
+      {/* Rejection Summary Table */}
+      {history.inspections?.some(i => i.qty_rejected > 0) && (
+        <div className="bg-white border border-slate-200 rounded-xl">
+          <button onClick={() => setShowRejections(!showRejections)}
+            className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors rounded-xl"
+            data-testid="toggle-rejections">
+            <span className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+              <AlertTriangle size={16} className="text-red-500" /> Rejection Summary ({history.inspections.filter(i => i.qty_rejected > 0).length} records, {history.inspections.reduce((s, i) => s + (i.qty_rejected || 0), 0)} bottles)
+            </span>
+            {showRejections ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+          </button>
+          {showRejections && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-y border-slate-200">
+                    {['Resource', 'Date', 'Stage', 'Bottles Rejected', 'Reason', 'Remarks'].map(h => (
+                      <th key={h} className="text-left px-4 py-2 text-[10px] text-slate-500 uppercase tracking-wider font-medium whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {history.inspections.filter(i => i.qty_rejected > 0).map(i => (
+                    <tr key={i.id} className="hover:bg-slate-50" data-testid={`rej-summary-${i.id}`}>
+                      <td className="px-4 py-2 text-slate-700 font-medium whitespace-nowrap">{i.inspected_by_name}</td>
+                      <td className="px-4 py-2 text-slate-600 whitespace-nowrap">{(i.inspected_at || '').slice(0, 10)}</td>
+                      <td className="px-4 py-2 text-slate-600 whitespace-nowrap">{i.stage_name}</td>
+                      <td className="px-4 py-2 font-bold text-red-600 text-center">{i.qty_rejected}</td>
+                      <td className="px-4 py-2 text-slate-600">{i.rejection_reason || '-'}</td>
+                      <td className="px-4 py-2 text-slate-400">{i.remarks || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-50 border-t border-slate-200 font-semibold text-xs">
+                    <td colSpan={3} className="px-4 py-2 text-right text-slate-600">Total</td>
+                    <td className="px-4 py-2 text-red-600 text-center">{history.inspections.reduce((s, i) => s + (i.qty_rejected || 0), 0)}</td>
+                    <td colSpan={2}></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -231,7 +282,7 @@ export default function BatchDetail() {
 
 /* ─── Stage Card with Move & Inspect actions ─── */
 
-function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sourceLabel, sourceQty, batchId, bottlesPerCrate, onUpdate }) {
+function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sourceLabel, sourceQty, batchId, bottlesPerCrate, rejectionReasons, onUpdate }) {
   const [showMove, setShowMove] = useState(false);
   const [showInspect, setShowInspect] = useState(false);
   const [moveQty, setMoveQty] = useState('');
@@ -371,8 +422,13 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
           {parseInt(inspForm.qty_rejected) > 0 && (
             <div>
               <label className="text-[10px] text-slate-500 mb-1 block">Rejection Reason</label>
-              <input value={inspForm.rejection_reason} onChange={e => setInspForm(p => ({ ...p, rejection_reason: e.target.value }))}
-                placeholder="e.g. Contamination, Label defect..." className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" data-testid={`insp-reason-${stage.id}`} />
+              <select value={inspForm.rejection_reason} onChange={e => setInspForm(p => ({ ...p, rejection_reason: e.target.value }))}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" data-testid={`insp-reason-${stage.id}`}>
+                <option value="">Select reason...</option>
+                {(rejectionReasons || []).map(r => (
+                  <option key={r.id} value={r.name}>{r.name}</option>
+                ))}
+              </select>
             </div>
           )}
           <div>
