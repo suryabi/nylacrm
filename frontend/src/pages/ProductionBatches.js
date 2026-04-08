@@ -45,7 +45,8 @@ export default function ProductionBatches() {
         axios.get(`${API_URL}/production/stats`, { headers }),
       ]);
       setBatches(batchRes.data);
-      setSkus(skuRes.data.filter(s => s.is_active !== false));
+      const skuList = skuRes.data.skus || skuRes.data;
+      setSkus(Array.isArray(skuList) ? skuList.filter(s => s.is_active !== false) : []);
       setStats(statsRes.data);
     } catch (err) {
       toast.error('Failed to load data');

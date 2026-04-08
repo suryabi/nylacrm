@@ -36,7 +36,8 @@ export default function QCRouteConfig() {
         axios.get(`${API_URL}/master-skus`, { headers }),
       ]);
       setRoutes(routeRes.data);
-      setSkus(skuRes.data.filter(s => s.is_active !== false));
+      const skuList = skuRes.data.skus || skuRes.data;
+      setSkus(Array.isArray(skuList) ? skuList.filter(s => s.is_active !== false) : []);
     } catch {
       toast.error('Failed to load data');
     } finally {
