@@ -1,0 +1,387 @@
+"""
+Production QC Tracking Module
+- QC Route Master (SKU-specific QC flows)
+- Production Batches (CRUD)
+- Rejection Cost Rules (per-stage cost config)
+"""
+import uuid
+from datetime import datetime, timezone
+from typing import List, Optional
+from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, Depends
+from deps import get_current_user
+from core.tenant import get_current_tenant_id
+from database import db, get_tenant_db
+
+router = APIRouter(prefix="/production", tags=["Production QC"])
+
+# ──────────────────────────────────────────────
+# Models
+# ──────────────────────────────────────────────
+
+class QCStage(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str  # e.g. "QC Stage 1", "Labeling", "Final QC"
+    stage_type: str  # "qc", "labeling", "final_qc"
+    order: int
+    description: Optional[str] = None
+
+class QCRouteCreate(BaseModel):
+    sku_id: str
+    sku_name: str
+    stages: List[QCStage]
+    is_active: bool = True
+
+class QCRouteUpdate(BaseModel):
+    stages: Optional[List[QCStage]] = None
+    is_active: Optional[bool] = None
+
+class BatchCreate(BaseModel):
+    sku_id: str
+    sku_name: str
+    batch_code: str
+    production_date: str
+    total_crates: int
+    bottles_per_crate: int
+    production_line: Optional[str] = None
+    notes: Optional[str] = None
+
+class BatchUpdate(BaseModel):
+    total_crates: Optional[int] = None
+    bottles_per_crate: Optional[int] = None
+    production_line: Optional[str] = None
+    notes: Optional[str] = None
+    status: Optional[str] = None
+
+class RejectionCostRuleCreate(BaseModel):
+    stage_name: str
+    stage_type: str
+    cost_per_unit: float  # cost per bottle/crate rejected at this stage
+    cost_components: Optional[List[str]] = []  # e.g. ["bottle", "cap", "water", "production"]
+    description: Optional[str] = None
+
+class RejectionCostRuleUpdate(BaseModel):
+    cost_per_unit: Optional[float] = None
+    cost_components: Optional[List[str]] = None
+    description: Optional[str] = None
+
+
+# ──────────────────────────────────────────────
+# QC Routes
+# ──────────────────────────────────────────────
+
+@router.get("/qc-routes")
+async def list_qc_routes(current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    routes = await tdb.qc_routes.find({"tenant_id": tenant_id}, {"_id": 0}).sort("sku_name", 1).to_list(500)
+    return routes
+
+@router.get("/qc-routes/{route_id}")
+async def get_qc_route(route_id: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    route = await tdb.qc_routes.find_one({"id": route_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not route:
+        raise HTTPException(status_code=404, detail="QC route not found")
+    return route
+
+@router.get("/qc-routes/by-sku/{sku_id}")
+async def get_qc_route_by_sku(sku_id: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    route = await tdb.qc_routes.find_one({"sku_id": sku_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not route:
+        raise HTTPException(status_code=404, detail="No QC route defined for this SKU")
+    return route
+
+@router.post("/qc-routes")
+async def create_qc_route(data: QCRouteCreate, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    # Check if route already exists for this SKU
+    existing = await tdb.qc_routes.find_one({"sku_id": data.sku_id, "tenant_id": tenant_id})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"QC route already exists for SKU: {data.sku_name}")
+
+    now = datetime.now(timezone.utc).isoformat()
+    route = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "sku_id": data.sku_id,
+        "sku_name": data.sku_name,
+        "stages": [s.model_dump() for s in data.stages],
+        "is_active": data.is_active,
+        "created_by": current_user.get("id"),
+        "created_by_name": current_user.get("name"),
+        "created_at": now,
+        "updated_at": now,
+    }
+    await tdb.qc_routes.insert_one(route)
+    route.pop("_id", None)
+    return route
+
+@router.put("/qc-routes/{route_id}")
+async def update_qc_route(route_id: str, data: QCRouteUpdate, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    existing = await tdb.qc_routes.find_one({"id": route_id, "tenant_id": tenant_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="QC route not found")
+
+    updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if data.stages is not None:
+        updates["stages"] = [s.model_dump() for s in data.stages]
+    if data.is_active is not None:
+        updates["is_active"] = data.is_active
+
+    await tdb.qc_routes.update_one({"id": route_id}, {"$set": updates})
+    updated = await tdb.qc_routes.find_one({"id": route_id}, {"_id": 0})
+    return updated
+
+@router.delete("/qc-routes/{route_id}")
+async def delete_qc_route(route_id: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    result = await tdb.qc_routes.delete_one({"id": route_id, "tenant_id": tenant_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="QC route not found")
+    return {"message": "QC route deleted"}
+
+
+# ──────────────────────────────────────────────
+# Production Batches
+# ──────────────────────────────────────────────
+
+@router.get("/batches")
+async def list_batches(
+    status: Optional[str] = None,
+    sku_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    query = {"tenant_id": tenant_id}
+    if status:
+        query["status"] = status
+    if sku_id:
+        query["sku_id"] = sku_id
+
+    batches = await tdb.production_batches.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return batches
+
+@router.get("/batches/{batch_id}")
+async def get_batch(batch_id: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    batch = await tdb.production_batches.find_one({"id": batch_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    return batch
+
+@router.post("/batches")
+async def create_batch(data: BatchCreate, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    # Check if batch code already exists
+    existing = await tdb.production_batches.find_one({"batch_code": data.batch_code, "tenant_id": tenant_id})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Batch code '{data.batch_code}' already exists")
+
+    # Get QC route for this SKU
+    qc_route = await tdb.qc_routes.find_one({"sku_id": data.sku_id, "tenant_id": tenant_id}, {"_id": 0})
+
+    total_bottles = data.total_crates * data.bottles_per_crate
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Initialize stage balances from QC route
+    stage_balances = {}
+    qc_route_id = None
+    qc_stages = []
+    if qc_route:
+        qc_route_id = qc_route["id"]
+        qc_stages = qc_route.get("stages", [])
+        for stage in qc_stages:
+            stage_balances[stage["id"]] = {
+                "stage_id": stage["id"],
+                "stage_name": stage["name"],
+                "stage_type": stage["stage_type"],
+                "order": stage["order"],
+                "pending": 0,
+                "passed": 0,
+                "rejected": 0,
+                "received": 0,
+            }
+
+    batch = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "batch_code": data.batch_code,
+        "sku_id": data.sku_id,
+        "sku_name": data.sku_name,
+        "production_date": data.production_date,
+        "total_crates": data.total_crates,
+        "bottles_per_crate": data.bottles_per_crate,
+        "total_bottles": total_bottles,
+        "production_line": data.production_line or "",
+        "notes": data.notes or "",
+        "status": "created",  # created, in_qc, in_labeling, in_final_qc, completed
+        "qc_route_id": qc_route_id,
+        "qc_stages": qc_stages,
+        "stage_balances": stage_balances,
+        "unallocated_crates": data.total_crates,  # crates not yet moved to any stage
+        "total_rejected": 0,
+        "total_passed_final": 0,
+        "created_by": current_user.get("id"),
+        "created_by_name": current_user.get("name"),
+        "created_at": now,
+        "updated_at": now,
+    }
+    await tdb.production_batches.insert_one(batch)
+    batch.pop("_id", None)
+    return batch
+
+@router.put("/batches/{batch_id}")
+async def update_batch(batch_id: str, data: BatchUpdate, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    existing = await tdb.production_batches.find_one({"id": batch_id, "tenant_id": tenant_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Batch not found")
+
+    updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    for field in ["total_crates", "bottles_per_crate", "production_line", "notes", "status"]:
+        val = getattr(data, field, None)
+        if val is not None:
+            updates[field] = val
+
+    # Recalculate total_bottles if crates or bottles_per_crate changed
+    new_crates = data.total_crates or existing.get("total_crates", 0)
+    new_bpc = data.bottles_per_crate or existing.get("bottles_per_crate", 0)
+    if data.total_crates is not None or data.bottles_per_crate is not None:
+        updates["total_bottles"] = new_crates * new_bpc
+
+    await tdb.production_batches.update_one({"id": batch_id}, {"$set": updates})
+    updated = await tdb.production_batches.find_one({"id": batch_id}, {"_id": 0})
+    return updated
+
+@router.delete("/batches/{batch_id}")
+async def delete_batch(batch_id: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    batch = await tdb.production_batches.find_one({"id": batch_id, "tenant_id": tenant_id})
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+
+    # Only allow deleting batches that haven't moved to QC yet
+    if batch.get("status") not in ("created",):
+        raise HTTPException(status_code=400, detail="Cannot delete a batch that is already in QC process")
+
+    await tdb.production_batches.delete_one({"id": batch_id})
+    return {"message": "Batch deleted"}
+
+
+# ──────────────────────────────────────────────
+# Rejection Cost Rules
+# ──────────────────────────────────────────────
+
+@router.get("/rejection-cost-rules")
+async def list_rejection_cost_rules(current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    rules = await tdb.rejection_cost_rules.find({"tenant_id": tenant_id}, {"_id": 0}).sort("stage_name", 1).to_list(100)
+    return rules
+
+@router.post("/rejection-cost-rules")
+async def create_rejection_cost_rule(data: RejectionCostRuleCreate, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    now = datetime.now(timezone.utc).isoformat()
+    rule = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "stage_name": data.stage_name,
+        "stage_type": data.stage_type,
+        "cost_per_unit": data.cost_per_unit,
+        "cost_components": data.cost_components or [],
+        "description": data.description or "",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await tdb.rejection_cost_rules.insert_one(rule)
+    rule.pop("_id", None)
+    return rule
+
+@router.put("/rejection-cost-rules/{rule_id}")
+async def update_rejection_cost_rule(rule_id: str, data: RejectionCostRuleUpdate, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    existing = await tdb.rejection_cost_rules.find_one({"id": rule_id, "tenant_id": tenant_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Rule not found")
+
+    updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if data.cost_per_unit is not None:
+        updates["cost_per_unit"] = data.cost_per_unit
+    if data.cost_components is not None:
+        updates["cost_components"] = data.cost_components
+    if data.description is not None:
+        updates["description"] = data.description
+
+    await tdb.rejection_cost_rules.update_one({"id": rule_id}, {"$set": updates})
+    updated = await tdb.rejection_cost_rules.find_one({"id": rule_id}, {"_id": 0})
+    return updated
+
+@router.delete("/rejection-cost-rules/{rule_id}")
+async def delete_rejection_cost_rule(rule_id: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    result = await tdb.rejection_cost_rules.delete_one({"id": rule_id, "tenant_id": tenant_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    return {"message": "Rule deleted"}
+
+
+# ──────────────────────────────────────────────
+# Batch Summary / Stats
+# ──────────────────────────────────────────────
+
+@router.get("/stats")
+async def get_production_stats(current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    total_batches = await tdb.production_batches.count_documents({"tenant_id": tenant_id})
+    active_batches = await tdb.production_batches.count_documents({"tenant_id": tenant_id, "status": {"$nin": ["completed"]}})
+    completed_batches = await tdb.production_batches.count_documents({"tenant_id": tenant_id, "status": "completed"})
+    qc_routes_count = await tdb.qc_routes.count_documents({"tenant_id": tenant_id, "is_active": True})
+
+    # Aggregate total crates and rejections
+    pipeline = [
+        {"$match": {"tenant_id": tenant_id}},
+        {"$group": {
+            "_id": None,
+            "total_crates": {"$sum": "$total_crates"},
+            "total_rejected": {"$sum": "$total_rejected"},
+            "total_passed_final": {"$sum": "$total_passed_final"},
+        }}
+    ]
+    agg = await tdb.production_batches.aggregate(pipeline).to_list(1)
+    totals = agg[0] if agg else {"total_crates": 0, "total_rejected": 0, "total_passed_final": 0}
+
+    return {
+        "total_batches": total_batches,
+        "active_batches": active_batches,
+        "completed_batches": completed_batches,
+        "qc_routes_configured": qc_routes_count,
+        "total_crates_produced": totals.get("total_crates", 0),
+        "total_rejected": totals.get("total_rejected", 0),
+        "total_passed_final": totals.get("total_passed_final", 0),
+    }

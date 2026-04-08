@@ -69,7 +69,16 @@
 - [x] **Spreadsheet Upload/Download (2026-04-06)**: Download empty Excel template with sample row + Instructions sheet. Upload filled .xlsx/.csv with preview (validation for missing date, missing concept, invalid content type). Confirm to replace all posts for the month. Export current month's data as .xlsx. Slide-out Sheet UI with 3-step flow (choose → preview → confirm).
 - [x] **API Endpoints**: GET /api/marketing/calendar, CRUD /api/marketing/posts, GET /api/marketing/posts/{id}, PUT /api/marketing/posts/{id}/status, PUT /api/marketing/posts/{id}/links, GET /api/marketing/template, GET /api/marketing/export, POST /api/marketing/upload-preview, POST /api/marketing/upload-confirm, /api/marketing/categories, /api/marketing/platforms, /api/marketing/events
 
-### Meeting Minutes Module (2026-04-06)
+### Production QC Tracking Module - Phase 1 (2026-04-08)
+- [x] **Backend Route**: `/app/backend/routes/production_qc.py` with full CRUD for QC Routes, Production Batches, Rejection Cost Rules, and Stats
+- [x] **QC Route Master**: Define SKU-specific QC flows (e.g., QC Stage 1 → QC Stage 2 → Labeling → Final QC). One route per SKU. Visual flow with color-coded stage badges.
+- [x] **Production Batches**: Create batches with SKU, batch code, production date, crates, bottles/crate, production line. Auto-calculates total bottles. Initializes stage balances from QC route.
+- [x] **Batch Detail Page**: Shows batch info grid, visual QC stage flow with RECV/PASS/REJ/PEND counters, stage detail table, and summary (unallocated/rejected/delivery ready).
+- [x] **Rejection Cost Rules**: CRUD for configuring cost per unit per stage with cost components.
+- [x] **Production Stats**: Aggregated stats (total/active/completed batches, total crates, rejections).
+- [x] **Navigation**: Added "Production Batches" and "QC Routes" to Production context sidebar.
+- [x] **Routes**: `/production-batches`, `/production-batches/:batchId`, `/qc-routes`
+- [x] **Collections**: `qc_routes`, `production_batches`, `rejection_cost_rules` (in tenant DB)
 - [x] **CRUD**: Create/read/update/delete meeting entries with date, title, periodicity, purpose, participants, minutes, action items
 - [x] **Full Page Views**: List page, dedicated detail page (/meeting-minutes/:id), dedicated edit page (/meeting-minutes/:id/edit), new meeting page (/meeting-minutes/new)
 - [x] **Large Textareas**: Discussion points and action items use multi-line textareas (rows=3) for big text

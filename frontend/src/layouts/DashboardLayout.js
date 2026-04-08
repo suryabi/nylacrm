@@ -14,7 +14,7 @@ import {
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
   Kanban, Wrench, Box, ShieldCheck, Boxes,
-  Factory, ArrowLeftRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen
+  Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen
 } from 'lucide-react';
 
 // Platform Admin emails
@@ -115,6 +115,8 @@ const productionNavigationGroups = [
   {
     title: 'Production',
     items: [
+      { name: 'Production Batches', href: '/production-batches', icon: Factory, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
+      { name: 'QC Routes', href: '/qc-routes', icon: ArrowRight, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
       { name: 'Maintenance', href: '/maintenance', icon: Wrench, moduleKey: 'maintenance', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Inventory', href: '/inventory', icon: Boxes, moduleKey: 'inventory', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Quality Control', href: '/quality-control', icon: ShieldCheck, moduleKey: 'quality_control', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },

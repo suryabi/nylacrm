@@ -65,6 +65,9 @@ import FilesDocuments from './pages/FilesDocuments';
 import Maintenance from './pages/Maintenance';
 import Inventory from './pages/Inventory';
 import QualityControl from './pages/QualityControl';
+import ProductionBatches from './pages/ProductionBatches';
+import BatchDetail from './pages/BatchDetail';
+import QCRouteConfig from './pages/QCRouteConfig';
 import Assets from './pages/Assets';
 import Vendors from './pages/Vendors';
 import MasterLocations from './pages/MasterLocations';
@@ -240,6 +243,9 @@ function AppRouter() {
           <Route path="/maintenance" element={<ProtectedRoute moduleKey="maintenance"><Maintenance /></ProtectedRoute>} />
           <Route path="/inventory" element={<ProtectedRoute moduleKey="inventory"><Inventory /></ProtectedRoute>} />
           <Route path="/quality-control" element={<ProtectedRoute moduleKey="quality_control"><QualityControl /></ProtectedRoute>} />
+          <Route path="/production-batches" element={<ProtectedRoute><ProductionBatches /></ProtectedRoute>} />
+          <Route path="/production-batches/:batchId" element={<ProtectedRoute><BatchDetail /></ProtectedRoute>} />
+          <Route path="/qc-routes" element={<ProtectedRoute><QCRouteConfig /></ProtectedRoute>} />
           <Route path="/assets" element={<ProtectedRoute moduleKey="assets"><Assets /></ProtectedRoute>} />
           <Route path="/vendors" element={<ProtectedRoute moduleKey="vendors"><Vendors /></ProtectedRoute>} />
           
