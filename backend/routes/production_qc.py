@@ -287,6 +287,229 @@ async def delete_batch(batch_id: str, current_user: dict = Depends(get_current_u
 
 
 # ──────────────────────────────────────────────
+# Stage Movement & Inspection
+# ──────────────────────────────────────────────
+
+class StageMovement(BaseModel):
+    to_stage_id: str
+    quantity: int  # crates to move
+    notes: Optional[str] = None
+
+class InspectionRecord(BaseModel):
+    stage_id: str
+    qty_inspected: int
+    qty_passed: int
+    qty_rejected: int
+    rejection_reason: Optional[str] = None
+    remarks: Optional[str] = None
+
+@router.post("/batches/{batch_id}/move")
+async def move_stock(batch_id: str, data: StageMovement, current_user: dict = Depends(get_current_user)):
+    """Move crates into a stage: from unallocated → first stage, or records receiving at a stage."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    batch = await tdb.production_batches.find_one({"id": batch_id, "tenant_id": tenant_id})
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    if data.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be > 0")
+
+    stages = batch.get("qc_stages", [])
+    balances = batch.get("stage_balances", {})
+    target_stage = next((s for s in stages if s["id"] == data.to_stage_id), None)
+    if not target_stage:
+        raise HTTPException(status_code=400, detail="Invalid stage")
+
+    sorted_stages = sorted(stages, key=lambda s: s["order"])
+    target_order = target_stage["order"]
+    is_first_stage = target_order == sorted_stages[0]["order"]
+
+    if is_first_stage:
+        # Moving from unallocated → first stage
+        unallocated = batch.get("unallocated_crates", 0)
+        if data.quantity > unallocated:
+            raise HTTPException(status_code=400, detail=f"Only {unallocated} unallocated crates available")
+
+        bal = balances.get(data.to_stage_id, {})
+        bal["received"] = bal.get("received", 0) + data.quantity
+        bal["pending"] = bal.get("pending", 0) + data.quantity
+        balances[data.to_stage_id] = bal
+
+        updates = {
+            "unallocated_crates": unallocated - data.quantity,
+            "stage_balances": balances,
+            "status": "in_qc" if batch.get("status") == "created" else batch.get("status"),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+    else:
+        # Moving from previous stage (passed) → this stage
+        prev_stage = None
+        for s in sorted_stages:
+            if s["order"] < target_order:
+                prev_stage = s
+        if not prev_stage:
+            raise HTTPException(status_code=400, detail="No previous stage found")
+
+        prev_bal = balances.get(prev_stage["id"], {})
+        available = prev_bal.get("passed", 0)
+        if data.quantity > available:
+            raise HTTPException(status_code=400, detail=f"Only {available} crates passed in {prev_stage['name']}")
+
+        # Deduct from previous stage passed, add to target stage received+pending
+        prev_bal["passed"] = prev_bal.get("passed", 0) - data.quantity
+        balances[prev_stage["id"]] = prev_bal
+
+        tar_bal = balances.get(data.to_stage_id, {})
+        tar_bal["received"] = tar_bal.get("received", 0) + data.quantity
+        tar_bal["pending"] = tar_bal.get("pending", 0) + data.quantity
+        balances[data.to_stage_id] = tar_bal
+
+        # Update batch status based on stage type
+        new_status = batch.get("status")
+        if target_stage.get("stage_type") == "labeling":
+            new_status = "in_labeling"
+        elif target_stage.get("stage_type") == "final_qc":
+            new_status = "in_final_qc"
+
+        updates = {
+            "stage_balances": balances,
+            "status": new_status,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    # Record movement in history
+    now = datetime.now(timezone.utc).isoformat()
+    movement = {
+        "id": str(uuid.uuid4()),
+        "batch_id": batch_id,
+        "to_stage_id": data.to_stage_id,
+        "to_stage_name": target_stage["name"],
+        "quantity": data.quantity,
+        "notes": data.notes or "",
+        "moved_by": current_user.get("id"),
+        "moved_by_name": current_user.get("name"),
+        "moved_at": now,
+        "tenant_id": tenant_id,
+    }
+    await tdb.stage_movements.insert_one(movement)
+
+    await tdb.production_batches.update_one({"id": batch_id}, {"$set": updates})
+    updated = await tdb.production_batches.find_one({"id": batch_id}, {"_id": 0})
+    return updated
+
+
+@router.post("/batches/{batch_id}/inspect")
+async def record_inspection(batch_id: str, data: InspectionRecord, current_user: dict = Depends(get_current_user)):
+    """Record QC inspection at a stage: pass/reject crates from pending."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    batch = await tdb.production_batches.find_one({"id": batch_id, "tenant_id": tenant_id})
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+
+    stages = batch.get("qc_stages", [])
+    balances = batch.get("stage_balances", {})
+    stage = next((s for s in stages if s["id"] == data.stage_id), None)
+    if not stage:
+        raise HTTPException(status_code=400, detail="Invalid stage")
+
+    bal = balances.get(data.stage_id, {})
+    pending = bal.get("pending", 0)
+
+    if data.qty_inspected <= 0:
+        raise HTTPException(status_code=400, detail="Inspected quantity must be > 0")
+    if data.qty_passed + data.qty_rejected != data.qty_inspected:
+        raise HTTPException(status_code=400, detail="Passed + Rejected must equal Inspected")
+    if data.qty_inspected > pending:
+        raise HTTPException(status_code=400, detail=f"Only {pending} crates pending at {stage['name']}")
+
+    # Update balances
+    bal["pending"] = pending - data.qty_inspected
+    bal["passed"] = bal.get("passed", 0) + data.qty_passed
+    bal["rejected"] = bal.get("rejected", 0) + data.qty_rejected
+    balances[data.stage_id] = bal
+
+    # Track total rejections and final QC pass-through
+    total_rejected = batch.get("total_rejected", 0) + data.qty_rejected
+    total_passed_final = batch.get("total_passed_final", 0)
+
+    # If this is the final_qc stage, passed crates become delivery-ready
+    if stage.get("stage_type") == "final_qc":
+        total_passed_final += data.qty_passed
+
+    # Check if batch is completed (all crates accounted for)
+    sorted_stages = sorted(stages, key=lambda s: s["order"])
+    all_done = batch.get("unallocated_crates", 0) == 0
+    if all_done:
+        for s in sorted_stages:
+            sb = balances.get(s["id"], {})
+            if sb.get("pending", 0) > 0 or sb.get("passed", 0) > 0:
+                all_done = False
+                break
+
+    new_status = "completed" if all_done else batch.get("status")
+
+    updates = {
+        "stage_balances": balances,
+        "total_rejected": total_rejected,
+        "total_passed_final": total_passed_final,
+        "status": new_status,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    # Record inspection
+    now = datetime.now(timezone.utc).isoformat()
+    inspection = {
+        "id": str(uuid.uuid4()),
+        "batch_id": batch_id,
+        "stage_id": data.stage_id,
+        "stage_name": stage["name"],
+        "stage_type": stage.get("stage_type", "qc"),
+        "qty_inspected": data.qty_inspected,
+        "qty_passed": data.qty_passed,
+        "qty_rejected": data.qty_rejected,
+        "rejection_reason": data.rejection_reason or "",
+        "remarks": data.remarks or "",
+        "inspected_by": current_user.get("id"),
+        "inspected_by_name": current_user.get("name"),
+        "inspected_at": now,
+        "tenant_id": tenant_id,
+    }
+    await tdb.inspections.insert_one(inspection)
+
+    await tdb.production_batches.update_one({"id": batch_id}, {"$set": updates})
+    updated = await tdb.production_batches.find_one({"id": batch_id}, {"_id": 0})
+    return updated
+
+
+@router.get("/batches/{batch_id}/history")
+async def get_batch_history(batch_id: str, current_user: dict = Depends(get_current_user)):
+    """Get movement and inspection history for a batch."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    movements = await tdb.stage_movements.find(
+        {"batch_id": batch_id, "tenant_id": tenant_id}, {"_id": 0}
+    ).sort("moved_at", -1).to_list(500)
+
+    inspections = await tdb.inspections.find(
+        {"batch_id": batch_id, "tenant_id": tenant_id}, {"_id": 0}
+    ).sort("inspected_at", -1).to_list(500)
+
+    # Merge into a single timeline
+    timeline = []
+    for m in movements:
+        timeline.append({**m, "type": "movement", "timestamp": m["moved_at"]})
+    for i in inspections:
+        timeline.append({**i, "type": "inspection", "timestamp": i["inspected_at"]})
+    timeline.sort(key=lambda x: x["timestamp"], reverse=True)
+
+    return {"movements": movements, "inspections": inspections, "timeline": timeline}
+
+
+# ──────────────────────────────────────────────
 # Rejection Cost Rules
 # ──────────────────────────────────────────────
 
