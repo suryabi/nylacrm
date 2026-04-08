@@ -79,6 +79,18 @@
 - [x] **Navigation**: Added "Production Batches" and "QC Routes" to Production context sidebar.
 - [x] **Routes**: `/production-batches`, `/production-batches/:batchId`, `/qc-routes`
 - [x] **Collections**: `qc_routes`, `production_batches`, `rejection_cost_rules` (in tenant DB)
+
+### Production QC Tracking Module - Phase 2 (2026-04-08)
+- [x] **Stage Movement**: Move crates from unallocated → first stage, or from previous stage's passed → next stage. Partial quantity support.
+- [x] **Inspection Recording**: Record pass/reject at any stage with auto-calculated rejected count (inspected - passed). Rejection reason field appears when rejected > 0.
+- [x] **Stage Balance Tracking**: Each stage tracks received/pending/passed/rejected counters in real-time.
+- [x] **Batch Status Transitions**: Automatic status updates (created → in_qc → in_labeling → in_final_qc → completed) based on stage type during movement.
+- [x] **Activity Log**: Merged timeline of movements and inspections with user attribution and timestamps.
+- [x] **Validations**: Cannot move more than available, cannot inspect more than pending, passed+rejected must equal inspected.
+- [x] **StageCard UI**: Inline "Receive Stock" and "Record Inspection" forms within each stage card. Source label shows available quantity.
+- [x] **Collections**: `stage_movements`, `inspections` (in tenant DB)
+- [x] **Endpoints**: POST /api/production/batches/{batch_id}/move, POST /api/production/batches/{batch_id}/inspect, GET /api/production/batches/{batch_id}/history
+- [x] **Testing**: 16/16 backend tests passed, all frontend UI tests verified (iteration_120)
 - [x] **CRUD**: Create/read/update/delete meeting entries with date, title, periodicity, purpose, participants, minutes, action items
 - [x] **Full Page Views**: List page, dedicated detail page (/meeting-minutes/:id), dedicated edit page (/meeting-minutes/:id/edit), new meeting page (/meeting-minutes/new)
 - [x] **Large Textareas**: Discussion points and action items use multi-line textareas (rows=3) for big text
