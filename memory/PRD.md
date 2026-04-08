@@ -99,6 +99,16 @@
 - [x] **Activity Log**: Updated format — "X crates inspected, Y bottles rejected" or "all passed".
 - [x] **Backend**: Removed `passed + rejected = inspected` constraint. `qty_passed` auto-set to `qty_inspected`.
 - [x] **Testing**: 9/9 backend + all frontend tests passed (iteration_121)
+
+### Rejection Tracking Enhancements (2026-04-08)
+- [x] **Rejection Reasons Master Data**: CRUD page at `/rejection-reasons` for managing predefined rejection reasons. Duplicate name validation.
+- [x] **Dropdown-Driven Reasons**: Inspection form now shows rejection reason as a dropdown populated from master data (replaces free-text input).
+- [x] **Rejection Summary on Batch Detail**: Collapsible section showing Resource | Date | Stage | Bottles Rejected | Reason with totals row.
+- [x] **Rejection Report Page**: Dedicated page at `/rejection-report` with filters (date range, batch, stage type). Summary cards: Total Rejected, By Resource, By Date. Detail table with all rejection records and totals footer.
+- [x] **Navigation**: Added "Rejection Reasons" and "Rejection Report" to Production sidebar.
+- [x] **Collections**: `rejection_reasons` (in tenant DB)
+- [x] **Endpoints**: CRUD /api/production/rejection-reasons, GET /api/production/rejection-report
+- [x] **Testing**: 15/15 backend + all frontend tests passed (iteration_122)
 - [x] **CRUD**: Create/read/update/delete meeting entries with date, title, periodicity, purpose, participants, minutes, action items
 - [x] **Full Page Views**: List page, dedicated detail page (/meeting-minutes/:id), dedicated edit page (/meeting-minutes/:id/edit), new meeting page (/meeting-minutes/new)
 - [x] **Large Textareas**: Discussion points and action items use multi-line textareas (rows=3) for big text
