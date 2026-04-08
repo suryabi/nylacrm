@@ -39,17 +39,19 @@ export default function ProductionBatches() {
   const fetchData = useCallback(async () => {
     try {
       const headers = getAuthHeaders();
-      const [batchRes, skuRes, statsRes] = await Promise.all([
+      const [batchRes, skuRes, statsRes] = await Promise.allSettled([
         axios.get(`${API_URL}/production/batches`, { headers }),
         axios.get(`${API_URL}/master-skus`, { headers }),
         axios.get(`${API_URL}/production/stats`, { headers }),
       ]);
-      setBatches(batchRes.data);
-      const skuList = skuRes.data.skus || skuRes.data;
-      setSkus(Array.isArray(skuList) ? skuList.filter(s => s.is_active !== false) : []);
-      setStats(statsRes.data);
-    } catch (err) {
-      toast.error('Failed to load data');
+      if (batchRes.status === 'fulfilled') setBatches(batchRes.value.data);
+      if (skuRes.status === 'fulfilled') {
+        const skuList = skuRes.value.data.skus || skuRes.value.data;
+        setSkus(Array.isArray(skuList) ? skuList.filter(s => s.is_active !== false) : []);
+      }
+      if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
+    } catch {
+      // silent
     } finally {
       setLoading(false);
     }

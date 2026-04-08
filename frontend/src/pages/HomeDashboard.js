@@ -73,7 +73,7 @@ export default function HomeDashboard() {
       const response = await axios.get(`${API_URL}/dashboard`, { withCredentials: true });
       setDashboardData(response.data);
     } catch (error) {
-      toast.error('Failed to load dashboard data');
+      console.error('Failed to load dashboard data:', error);
     } finally {
       setLoading(false);
     }

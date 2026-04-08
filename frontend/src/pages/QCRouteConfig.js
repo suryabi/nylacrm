@@ -31,15 +31,17 @@ export default function QCRouteConfig() {
   const fetchData = useCallback(async () => {
     try {
       const headers = getAuthHeaders();
-      const [routeRes, skuRes] = await Promise.all([
+      const [routeRes, skuRes] = await Promise.allSettled([
         axios.get(`${API_URL}/production/qc-routes`, { headers }),
         axios.get(`${API_URL}/master-skus`, { headers }),
       ]);
-      setRoutes(routeRes.data);
-      const skuList = skuRes.data.skus || skuRes.data;
-      setSkus(Array.isArray(skuList) ? skuList.filter(s => s.is_active !== false) : []);
+      if (routeRes.status === 'fulfilled') setRoutes(routeRes.value.data);
+      if (skuRes.status === 'fulfilled') {
+        const skuList = skuRes.value.data.skus || skuRes.value.data;
+        setSkus(Array.isArray(skuList) ? skuList.filter(s => s.is_active !== false) : []);
+      }
     } catch {
-      toast.error('Failed to load data');
+      // silent
     } finally {
       setLoading(false);
     }
