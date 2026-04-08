@@ -91,6 +91,14 @@
 - [x] **Collections**: `stage_movements`, `inspections` (in tenant DB)
 - [x] **Endpoints**: POST /api/production/batches/{batch_id}/move, POST /api/production/batches/{batch_id}/inspect, GET /api/production/batches/{batch_id}/history
 - [x] **Testing**: 16/16 backend tests passed, all frontend UI tests verified (iteration_120)
+
+### Production QC Tracking Module - Rejection in Bottles (2026-04-08)
+- [x] **Bottle-Level Rejection**: Changed rejection tracking from crates to individual bottles. All inspected crates pass through; defective bottles tracked separately.
+- [x] **Inspection Form Simplified**: Two fields — "Crates Inspected" and "Rejected Bottles" (removed old Passed field). Max bottles validation = crates × bottles_per_crate.
+- [x] **Unit Labels**: Stage cards show "crates" under Received/Pending/Passed and "bottles" under Rejected. Summary bar also labeled.
+- [x] **Activity Log**: Updated format — "X crates inspected, Y bottles rejected" or "all passed".
+- [x] **Backend**: Removed `passed + rejected = inspected` constraint. `qty_passed` auto-set to `qty_inspected`.
+- [x] **Testing**: 9/9 backend + all frontend tests passed (iteration_121)
 - [x] **CRUD**: Create/read/update/delete meeting entries with date, title, periodicity, purpose, participants, minutes, action items
 - [x] **Full Page Views**: List page, dedicated detail page (/meeting-minutes/:id), dedicated edit page (/meeting-minutes/:id/edit), new meeting page (/meeting-minutes/new)
 - [x] **Large Textareas**: Discussion points and action items use multi-line textareas (rows=3) for big text
