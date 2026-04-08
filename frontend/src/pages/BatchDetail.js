@@ -124,14 +124,17 @@ export default function BatchDetail() {
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
               <p className="text-xs text-slate-400 mb-0.5">Unallocated</p>
               <p className="text-2xl font-bold text-slate-800">{batch.unallocated_crates || 0}</p>
+              <p className="text-[9px] text-slate-300">crates</p>
             </div>
             <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
               <p className="text-xs text-red-400 mb-0.5">Total Rejected</p>
               <p className="text-2xl font-bold text-red-600">{batch.total_rejected || 0}</p>
+              <p className="text-[9px] text-red-300">bottles</p>
             </div>
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
               <p className="text-xs text-emerald-400 mb-0.5">Delivery Ready</p>
               <p className="text-2xl font-bold text-emerald-600">{batch.total_passed_final || 0}</p>
+              <p className="text-[9px] text-emerald-300">crates</p>
             </div>
           </div>
 
@@ -159,6 +162,7 @@ export default function BatchDetail() {
                 sourceLabel={isFirst ? 'Unallocated' : prevStage?.name}
                 sourceQty={isFirst ? (batch.unallocated_crates || 0) : (prevBal?.passed || 0)}
                 batchId={batchId}
+                bottlesPerCrate={batch.bottles_per_crate || 1}
                 onUpdate={fetchBatch}
               />
             );
@@ -198,9 +202,9 @@ export default function BatchDetail() {
                       <p className="text-slate-700"><span className="font-medium">{item.quantity} crates</span> moved to <span className="font-medium">{item.to_stage_name}</span></p>
                     ) : (
                       <p className="text-slate-700">
-                        Inspected <span className="font-medium">{item.qty_inspected}</span> at <span className="font-medium">{item.stage_name}</span>
-                        {' '}&mdash; <span className="text-emerald-600">{item.qty_passed} passed</span>
-                        {item.qty_rejected > 0 && <>, <span className="text-red-600">{item.qty_rejected} rejected</span>{item.rejection_reason && ` (${item.rejection_reason})`}</>}
+                        Inspected <span className="font-medium">{item.qty_inspected} crates</span> at <span className="font-medium">{item.stage_name}</span>
+                        {item.qty_rejected > 0 && <> &mdash; <span className="text-red-600">{item.qty_rejected} bottles rejected</span>{item.rejection_reason && ` (${item.rejection_reason})`}</>}
+                        {(!item.qty_rejected || item.qty_rejected === 0) && <> &mdash; <span className="text-emerald-600">all passed</span></>}
                       </p>
                     )}
                     <div className="flex items-center gap-2 mt-0.5 text-slate-400">
@@ -227,12 +231,12 @@ export default function BatchDetail() {
 
 /* ─── Stage Card with Move & Inspect actions ─── */
 
-function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sourceLabel, sourceQty, batchId, onUpdate }) {
+function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sourceLabel, sourceQty, batchId, bottlesPerCrate, onUpdate }) {
   const [showMove, setShowMove] = useState(false);
   const [showInspect, setShowInspect] = useState(false);
   const [moveQty, setMoveQty] = useState('');
   const [moveNotes, setMoveNotes] = useState('');
-  const [inspForm, setInspForm] = useState({ qty_inspected: '', qty_passed: '', qty_rejected: '', rejection_reason: '', remarks: '' });
+  const [inspForm, setInspForm] = useState({ qty_inspected: '', qty_rejected: '', rejection_reason: '', remarks: '' });
   const [saving, setSaving] = useState(false);
 
   const handleMove = async () => {
@@ -254,36 +258,25 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
 
   const handleInspect = async () => {
     const insp = parseInt(inspForm.qty_inspected);
-    const pass = parseInt(inspForm.qty_passed);
-    const rej = parseInt(inspForm.qty_rejected);
+    const rej = parseInt(inspForm.qty_rejected) || 0;
     if (!insp || insp <= 0) { toast.error('Inspected qty must be > 0'); return; }
-    if (isNaN(pass) || isNaN(rej) || pass < 0 || rej < 0) { toast.error('Invalid pass/reject values'); return; }
-    if (pass + rej !== insp) { toast.error('Passed + Rejected must equal Inspected'); return; }
-    if (insp > (bal.pending || 0)) { toast.error(`Only ${bal.pending} pending`); return; }
+    if (insp > (bal.pending || 0)) { toast.error(`Only ${bal.pending} crates pending`); return; }
+    if (rej < 0) { toast.error('Rejected bottles cannot be negative'); return; }
+    const maxBottles = insp * (bottlesPerCrate || 1);
+    if (rej > maxBottles) { toast.error(`Max ${maxBottles} bottles (${insp} crates x ${bottlesPerCrate})`); return; }
     setSaving(true);
     try {
       await axios.post(`${API_URL}/production/batches/${batchId}/inspect`, {
-        stage_id: stage.id, qty_inspected: insp, qty_passed: pass, qty_rejected: rej,
+        stage_id: stage.id, qty_inspected: insp, qty_rejected: rej,
         rejection_reason: inspForm.rejection_reason, remarks: inspForm.remarks,
       }, { headers: getAuthHeaders() });
       toast.success(`Inspection recorded at ${stage.name}`);
       setShowInspect(false);
-      setInspForm({ qty_inspected: '', qty_passed: '', qty_rejected: '', rejection_reason: '', remarks: '' });
+      setInspForm({ qty_inspected: '', qty_rejected: '', rejection_reason: '', remarks: '' });
       onUpdate();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Inspection failed');
     } finally { setSaving(false); }
-  };
-
-  // Auto-calc rejected when inspected and passed change
-  const onInspChange = (field, val) => {
-    const next = { ...inspForm, [field]: val };
-    if (field === 'qty_inspected' || field === 'qty_passed') {
-      const i = parseInt(field === 'qty_inspected' ? val : next.qty_inspected) || 0;
-      const p = parseInt(field === 'qty_passed' ? val : next.qty_passed) || 0;
-      next.qty_rejected = String(Math.max(0, i - p));
-    }
-    setInspForm(next);
   };
 
   return (
@@ -318,14 +311,15 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
       {/* Balance Row */}
       <div className="grid grid-cols-4 divide-x divide-slate-100 border-b border-slate-100">
         {[
-          { label: 'Received', value: bal.received || 0, cls: 'text-slate-800' },
-          { label: 'Pending', value: bal.pending || 0, cls: 'text-amber-600' },
-          { label: 'Passed', value: bal.passed || 0, cls: 'text-emerald-600' },
-          { label: 'Rejected', value: bal.rejected || 0, cls: 'text-red-600' },
+          { label: 'Received', unit: 'crates', value: bal.received || 0, cls: 'text-slate-800' },
+          { label: 'Pending', unit: 'crates', value: bal.pending || 0, cls: 'text-amber-600' },
+          { label: 'Passed', unit: 'crates', value: bal.passed || 0, cls: 'text-emerald-600' },
+          { label: 'Rejected', unit: 'bottles', value: bal.rejected || 0, cls: 'text-red-600' },
         ].map((c, i) => (
           <div key={i} className="py-3 px-4 text-center">
             <p className="text-[10px] text-slate-400 uppercase tracking-wider">{c.label}</p>
             <p className={`text-xl font-bold ${c.cls}`}>{c.value}</p>
+            <p className="text-[9px] text-slate-300 mt-0.5">{c.unit}</p>
           </div>
         ))}
       </div>
@@ -358,23 +352,20 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
       {/* Inspection Form */}
       {showInspect && (
         <div className="px-5 py-4 bg-emerald-50/50 border-t border-emerald-100 space-y-3">
-          <p className="text-xs text-emerald-700 font-medium">Record inspection at <span className="font-bold">{stage.name}</span> ({bal.pending || 0} pending)</p>
-          <div className="grid grid-cols-3 gap-3">
+          <p className="text-xs text-emerald-700 font-medium">Record inspection at <span className="font-bold">{stage.name}</span> ({bal.pending || 0} crates pending, {bottlesPerCrate} bottles/crate)</p>
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] text-slate-500 mb-1 block">Inspected *</label>
-              <input type="number" value={inspForm.qty_inspected} onChange={e => onInspChange('qty_inspected', e.target.value)}
+              <label className="text-[10px] text-slate-500 mb-1 block">Crates Inspected *</label>
+              <input type="number" value={inspForm.qty_inspected} onChange={e => setInspForm(p => ({ ...p, qty_inspected: e.target.value }))}
                 max={bal.pending || 0} placeholder={`Max ${bal.pending || 0}`}
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" data-testid={`insp-qty-${stage.id}`} />
             </div>
             <div>
-              <label className="text-[10px] text-slate-500 mb-1 block">Passed *</label>
-              <input type="number" value={inspForm.qty_passed} onChange={e => onInspChange('qty_passed', e.target.value)}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" data-testid={`insp-pass-${stage.id}`} />
-            </div>
-            <div>
-              <label className="text-[10px] text-slate-500 mb-1 block">Rejected</label>
-              <input type="number" value={inspForm.qty_rejected} readOnly
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-slate-50 text-red-600 font-medium" />
+              <label className="text-[10px] text-slate-500 mb-1 block">Rejected Bottles</label>
+              <input type="number" value={inspForm.qty_rejected} onChange={e => setInspForm(p => ({ ...p, qty_rejected: e.target.value }))}
+                min="0" placeholder="0"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-red-600 font-medium" data-testid={`insp-rej-${stage.id}`} />
+              {inspForm.qty_inspected && <p className="text-[9px] text-slate-400 mt-0.5">Max {(parseInt(inspForm.qty_inspected) || 0) * (bottlesPerCrate || 1)} bottles</p>}
             </div>
           </div>
           {parseInt(inspForm.qty_rejected) > 0 && (

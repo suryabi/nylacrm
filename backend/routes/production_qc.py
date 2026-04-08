@@ -297,9 +297,8 @@ class StageMovement(BaseModel):
 
 class InspectionRecord(BaseModel):
     stage_id: str
-    qty_inspected: int
-    qty_passed: int
-    qty_rejected: int
+    qty_inspected: int  # crates inspected
+    qty_rejected: int   # bottles rejected
     rejection_reason: Optional[str] = None
     remarks: Optional[str] = None
 
@@ -401,7 +400,8 @@ async def move_stock(batch_id: str, data: StageMovement, current_user: dict = De
 
 @router.post("/batches/{batch_id}/inspect")
 async def record_inspection(batch_id: str, data: InspectionRecord, current_user: dict = Depends(get_current_user)):
-    """Record QC inspection at a stage: pass/reject crates from pending."""
+    """Record QC inspection: inspect crates, reject individual bottles.
+    All inspected crates pass through; rejected bottles are tracked separately."""
     tenant_id = get_current_tenant_id()
     tdb = get_tenant_db()
 
@@ -417,27 +417,31 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
 
     bal = balances.get(data.stage_id, {})
     pending = bal.get("pending", 0)
+    bottles_per_crate = batch.get("bottles_per_crate", 1)
 
     if data.qty_inspected <= 0:
         raise HTTPException(status_code=400, detail="Inspected quantity must be > 0")
-    if data.qty_passed + data.qty_rejected != data.qty_inspected:
-        raise HTTPException(status_code=400, detail="Passed + Rejected must equal Inspected")
     if data.qty_inspected > pending:
         raise HTTPException(status_code=400, detail=f"Only {pending} crates pending at {stage['name']}")
+    if data.qty_rejected < 0:
+        raise HTTPException(status_code=400, detail="Rejected bottles cannot be negative")
+    max_bottles = data.qty_inspected * bottles_per_crate
+    if data.qty_rejected > max_bottles:
+        raise HTTPException(status_code=400, detail=f"Cannot reject more than {max_bottles} bottles ({data.qty_inspected} crates x {bottles_per_crate})")
 
-    # Update balances
+    # All inspected crates pass through; rejected bottles tracked separately
     bal["pending"] = pending - data.qty_inspected
-    bal["passed"] = bal.get("passed", 0) + data.qty_passed
-    bal["rejected"] = bal.get("rejected", 0) + data.qty_rejected
+    bal["passed"] = bal.get("passed", 0) + data.qty_inspected
+    bal["rejected"] = bal.get("rejected", 0) + data.qty_rejected  # bottles
     balances[data.stage_id] = bal
 
-    # Track total rejections and final QC pass-through
+    # Track total rejected bottles and final QC pass-through
     total_rejected = batch.get("total_rejected", 0) + data.qty_rejected
     total_passed_final = batch.get("total_passed_final", 0)
 
     # If this is the final_qc stage, passed crates become delivery-ready
     if stage.get("stage_type") == "final_qc":
-        total_passed_final += data.qty_passed
+        total_passed_final += data.qty_inspected
 
     # Check if batch is completed (all crates accounted for)
     sorted_stages = sorted(stages, key=lambda s: s["order"])
@@ -468,8 +472,8 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
         "stage_name": stage["name"],
         "stage_type": stage.get("stage_type", "qc"),
         "qty_inspected": data.qty_inspected,
-        "qty_passed": data.qty_passed,
-        "qty_rejected": data.qty_rejected,
+        "qty_passed": data.qty_inspected,  # all crates pass
+        "qty_rejected": data.qty_rejected,  # bottles
         "rejection_reason": data.rejection_reason or "",
         "remarks": data.remarks or "",
         "inspected_by": current_user.get("id"),
