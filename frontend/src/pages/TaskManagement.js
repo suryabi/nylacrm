@@ -654,9 +654,9 @@ export default function TaskManagement() {
                           onClick={() => navigate(`/tasks/${task.id}`)}
                           data-testid={`task-row-${task.id}`}
                         >
-                          <td className="p-4">
+                          <td className="p-4" style={{maxWidth: '400px'}}>
                             <div>
-                              <p className="font-medium text-slate-900 dark:text-white">{task.title}</p>
+                              <p className="font-medium text-slate-900 dark:text-white truncate" style={{maxWidth: '400px'}} title={task.title}>{task.title}</p>
                               <div className="flex items-center gap-2 mt-1">
                                 <span className="text-xs text-slate-500">{task.task_number}</span>
                                 {task.labels_data?.map(label => (
