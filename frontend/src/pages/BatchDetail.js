@@ -357,11 +357,15 @@ export default function BatchDetail() {
                       {[...uniqueResources].sort().map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <select value={rejFilter.date} onChange={e => setRejFilter(p => ({ ...p, date: e.target.value }))}
-                    className="h-9 px-2 border border-slate-200 rounded-md text-xs" data-testid="rej-filter-date">
-                    <option value="">All Dates</option>
-                    {[...uniqueDates].sort().map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
+                  <Select value={rejFilter.date || ""} onValueChange={v => setRejFilter(p => ({ ...p, date: v === "__all__" ? "" : v }))}>
+                    <SelectTrigger className="h-9 text-xs border-slate-200" data-testid="rej-filter-date">
+                      <SelectValue placeholder="All Dates" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All Dates</SelectItem>
+                      {[...uniqueDates].sort().map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                   <Select value={rejFilter.reason || ""} onValueChange={v => setRejFilter(p => ({ ...p, reason: v === "__all__" ? "" : v }))}>
                     <SelectTrigger className="h-9 text-xs border-slate-200" data-testid="rej-filter-reason">
                       <SelectValue placeholder="All Reasons" />

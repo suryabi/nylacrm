@@ -148,6 +148,7 @@
 - [x] **Always-Visible Metrics**: 4 cards in gradient header — Total Rejected (big number), By Resource (progress bars), By Reason (amber bars), By Stage (blue bars). Top 3 shown per category.
 - [x] **Expandable Detail View**: Toggle section with filter row (Resource, Date, Reason, Stage dropdowns) and polished grid (dark header, alternating rows, colored badges, totals footer).
 - [x] **Grid Visual Upgrades**: Red pill badges for rejected count, emerald passed numbers, amber reason pills, slate stage tags, alternating row backgrounds, hover highlight.
+- [x] **Shadcn UI Consistency (2026-04-09)**: Replaced native date `<select>` in Rejection Summary filters with Shadcn `Select` — all 4 filters now use consistent Shadcn components. Replaced native module context switcher `<select>` in sidebar (`DashboardLayout.js`) with Shadcn `Select` with dark theme styling matching the sidebar.
 - [x] **CRUD**: Create/read/update/delete meeting entries with date, title, periodicity, purpose, participants, minutes, action items
 - [x] **Full Page Views**: List page, dedicated detail page (/meeting-minutes/:id), dedicated edit page (/meeting-minutes/:id/edit), new meeting page (/meeting-minutes/new)
 - [x] **Large Textareas**: Discussion points and action items use multi-line textareas (rows=3) for big text

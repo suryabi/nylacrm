@@ -6,6 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '../context/NavigationContext';
 import { useTenantConfig } from '../context/TenantConfigContext';
 import { Button } from '../components/ui/button';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
 import AISalesAssistant from '../components/AISalesAssistant';
 import { 
   LogOut, Menu, ChevronDown, ChevronRight, 
@@ -378,21 +379,25 @@ export default function DashboardLayout({ children }) {
               <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-2 block">
                 Module
               </label>
-              <div className="relative">
-                <select
-                  value={currentContext}
-                  onChange={(e) => handleContextSwitch(e.target.value)}
-                  className="w-full appearance-none bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm font-medium text-white cursor-pointer hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+              <Select value={currentContext} onValueChange={handleContextSwitch}>
+                <SelectTrigger
+                  className="w-full bg-white/5 border-white/10 text-white hover:bg-white/10 focus:ring-primary/50 transition-all [&>svg]:text-white/50"
                   data-testid="module-selector"
                 >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
                   {getAccessibleModules().map((module) => (
-                    <option key={module.id} value={module.id} className="bg-slate-800 text-white">
+                    <SelectItem
+                      key={module.id}
+                      value={module.id}
+                      className="text-white focus:bg-white/10 focus:text-white"
+                    >
                       {module.label}
-                    </option>
+                    </SelectItem>
                   ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50 pointer-events-none" />
-              </div>
+                </SelectContent>
+              </Select>
               {/* Active Module Indicator */}
               <div className="mt-2 flex items-center gap-2">
                 {currentContext === 'sales' && <Store className="w-4 h-4 text-primary" />}
