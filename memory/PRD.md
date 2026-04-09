@@ -134,6 +134,15 @@
 - [x] **Passed Column**: Auto-calculated per row (crates × bottles/crate - rejected) in green. Totals footer sums all.
 - [x] **Backend**: `InspectionRecord` no longer has top-level `qty_inspected`; derived from sum of entry-level. `RejectionEntry` now includes `qty_inspected` per resource.
 - [x] **Testing**: 8/8 backend + all frontend tests passed (iteration_124)
+
+### Hierarchical Inspection Structure (2026-04-09)
+- [x] **Entry-Level Grouping**: Each inspection entry = Resource + Date + Crates Inspected. Under each entry, multiple rejection items (Count + Reason).
+- [x] **Card-Based UI**: Entry cards with header (Resource dropdown, Date, Crates) and sub-section for rejection details. "+ Add Entry" for new resource, "+ Add Rejection" for sub-items.
+- [x] **Backend Model**: `InspectionRecord.entries[]` where each `InspectionEntry` has `resource_id, resource_name, date, qty_inspected, rejections: [{qty_rejected, reason}]`.
+- [x] **Rejection Report**: Expands nested `entries[].rejections[]` into flat rows per reason.
+- [x] **Activity Log**: Shows per-entry nested details (resource, date, crates, rejection breakdown).
+- [x] **Totals Bar**: Aggregated crates, rejected, passed across all entries.
+- [x] **Testing**: 13/13 backend + all frontend tests passed (iteration_125)
 - [x] **CRUD**: Create/read/update/delete meeting entries with date, title, periodicity, purpose, participants, minutes, action items
 - [x] **Full Page Views**: List page, dedicated detail page (/meeting-minutes/:id), dedicated edit page (/meeting-minutes/:id/edit), new meeting page (/meeting-minutes/new)
 - [x] **Large Textareas**: Discussion points and action items use multi-line textareas (rows=3) for big text

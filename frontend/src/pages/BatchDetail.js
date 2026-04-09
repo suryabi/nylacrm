@@ -565,7 +565,7 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
                   <div className="grid grid-cols-12 gap-3 items-end">
                     <div className="col-span-4">
                       <label className="text-[10px] text-slate-500 mb-1 block font-medium uppercase tracking-wider">Resource</label>
-                      <Select value={entry.resource_id || undefined} onValueChange={v => updateEntry(eIdx, 'resource_id', v)}>
+                      <Select value={entry.resource_id || ""} onValueChange={v => updateEntry(eIdx, 'resource_id', v)}>
                         <SelectTrigger className="h-10 text-sm border-slate-200 bg-white" data-testid={`entry-resource-${eIdx}`}>
                           <SelectValue placeholder="Select resource..." />
                         </SelectTrigger>
@@ -624,7 +624,7 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
                             className="w-full h-9 px-3 border border-slate-200 rounded-md text-sm text-right text-red-600 font-medium bg-white" data-testid={`rej-qty-${eIdx}-${rIdx}`} />
                         </div>
                         <div className="flex-1">
-                          <Select value={rej.reason || undefined} onValueChange={v => updateRejItem(eIdx, rIdx, 'reason', v)}>
+                          <Select value={rej.reason || ""} onValueChange={v => updateRejItem(eIdx, rIdx, 'reason', v)}>
                             <SelectTrigger className="h-9 text-sm border-slate-200 bg-white" data-testid={`rej-reason-${eIdx}-${rIdx}`}>
                               <SelectValue placeholder="Select reason..." />
                             </SelectTrigger>
