@@ -143,6 +143,11 @@
 - [x] **Activity Log**: Shows per-entry nested details (resource, date, crates, rejection breakdown).
 - [x] **Totals Bar**: Aggregated crates, rejected, passed across all entries.
 - [x] **Testing**: 13/13 backend + all frontend tests passed (iteration_125)
+
+### Rejection Summary: Metrics Cards + Filterable Detail Grid (2026-04-09)
+- [x] **Always-Visible Metrics**: 4 cards in gradient header — Total Rejected (big number), By Resource (progress bars), By Reason (amber bars), By Stage (blue bars). Top 3 shown per category.
+- [x] **Expandable Detail View**: Toggle section with filter row (Resource, Date, Reason, Stage dropdowns) and polished grid (dark header, alternating rows, colored badges, totals footer).
+- [x] **Grid Visual Upgrades**: Red pill badges for rejected count, emerald passed numbers, amber reason pills, slate stage tags, alternating row backgrounds, hover highlight.
 - [x] **CRUD**: Create/read/update/delete meeting entries with date, title, periodicity, purpose, participants, minutes, action items
 - [x] **Full Page Views**: List page, dedicated detail page (/meeting-minutes/:id), dedicated edit page (/meeting-minutes/:id/edit), new meeting page (/meeting-minutes/new)
 - [x] **Large Textareas**: Discussion points and action items use multi-line textareas (rows=3) for big text

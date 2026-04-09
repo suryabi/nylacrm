@@ -42,6 +42,7 @@ export default function BatchDetail() {
   const [loading, setLoading] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
   const [showRejections, setShowRejections] = useState(false);
+  const [rejFilter, setRejFilter] = useState({ resource: '', date: '', reason: '', stage: '' });
 
   const fetchBatch = useCallback(async () => {
     try {
@@ -186,14 +187,14 @@ export default function BatchDetail() {
         </div>
       )}
 
-      {/* Rejection Summary Table */}
+      {/* Rejection Summary — Metrics always visible, expandable detail grid */}
       {history.inspections?.some(i => i.qty_rejected > 0) && (() => {
-        // Flatten rejection entries from all inspections
+        // Flatten all rejection entries
         const rejEntries = [];
         history.inspections.filter(i => i.qty_rejected > 0).forEach(i => {
-          const entries = i.entries || [];
-          if (entries.length > 0) {
-            entries.forEach(entry => {
+          const inEntries = i.entries || [];
+          if (inEntries.length > 0) {
+            inEntries.forEach(entry => {
               (entry.rejections || []).filter(r => r.qty_rejected > 0).forEach(r => {
                 rejEntries.push({
                   resource_name: entry.resource_name, date: entry.date,
@@ -203,7 +204,6 @@ export default function BatchDetail() {
               });
             });
           } else {
-            // Legacy flat format
             const rejs = i.rejections || [];
             if (rejs.length > 0) {
               rejs.filter(r => r.qty_rejected > 0).forEach(r => {
@@ -223,51 +223,223 @@ export default function BatchDetail() {
             }
           }
         });
+
+        // Compute metrics
         const totalRej = rejEntries.reduce((s, e) => s + (e.qty_rejected || 0), 0);
+        const byResource = {};
+        const byReason = {};
+        const byStage = {};
+        const uniqueDates = new Set();
+        const uniqueResources = new Set();
+        const uniqueReasons = new Set();
+        const uniqueStages = new Set();
+        rejEntries.forEach(e => {
+          byResource[e.resource_name] = (byResource[e.resource_name] || 0) + e.qty_rejected;
+          byReason[e.reason] = (byReason[e.reason] || 0) + e.qty_rejected;
+          byStage[e.stage_name] = (byStage[e.stage_name] || 0) + e.qty_rejected;
+          if (e.date) uniqueDates.add(e.date);
+          if (e.resource_name) uniqueResources.add(e.resource_name);
+          if (e.reason) uniqueReasons.add(e.reason);
+          if (e.stage_name) uniqueStages.add(e.stage_name);
+        });
+        const topResource = Object.entries(byResource).sort((a, b) => b[1] - a[1]);
+        const topReason = Object.entries(byReason).sort((a, b) => b[1] - a[1]);
+        const topStage = Object.entries(byStage).sort((a, b) => b[1] - a[1]);
+
+        // Filter
+        const filtered = rejEntries.filter(e => {
+          if (rejFilter.resource && e.resource_name !== rejFilter.resource) return false;
+          if (rejFilter.date && e.date !== rejFilter.date) return false;
+          if (rejFilter.reason && e.reason !== rejFilter.reason) return false;
+          if (rejFilter.stage && e.stage_name !== rejFilter.stage) return false;
+          return true;
+        });
+        const filteredTotal = filtered.reduce((s, e) => s + (e.qty_rejected || 0), 0);
+        const bpc = batch?.bottles_per_crate || 1;
+
         return (
-        <div className="bg-white border border-slate-200 rounded-xl">
-          <button onClick={() => setShowRejections(!showRejections)}
-            className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors rounded-xl"
-            data-testid="toggle-rejections">
-            <span className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-              <AlertTriangle size={16} className="text-red-500" /> Rejection Summary ({rejEntries.length} records, {totalRej} bottles)
-            </span>
-            {showRejections ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
-          </button>
-          {showRejections && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="bg-slate-50 border-y border-slate-200">
-                    {['Resource', 'Date', 'Stage', 'Crates Inspected', 'Rejected Count', 'Passed', 'Reason', 'Remarks'].map(h => (
-                      <th key={h} className="text-left px-4 py-2 text-[10px] text-slate-500 uppercase tracking-wider font-medium whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {rejEntries.map((e, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50" data-testid={`rej-summary-${idx}`}>
-                      <td className="px-4 py-2 text-slate-700 font-medium whitespace-nowrap">{e.resource_name}</td>
-                      <td className="px-4 py-2 text-slate-600 whitespace-nowrap">{e.date}</td>
-                      <td className="px-4 py-2 text-slate-600 whitespace-nowrap">{e.stage_name}</td>
-                      <td className="px-4 py-2 text-slate-800 text-center">{e.qty_inspected || '-'}</td>
-                      <td className="px-4 py-2 font-bold text-red-600 text-center">{e.qty_rejected}</td>
-                      <td className="px-4 py-2 font-bold text-emerald-600 text-center">{e.qty_inspected ? ((e.qty_inspected * (batch?.bottles_per_crate || 1)) - (e.qty_rejected || 0)) : '-'}</td>
-                      <td className="px-4 py-2 text-slate-600">{e.reason || '-'}</td>
-                      <td className="px-4 py-2 text-slate-400">{e.remarks || '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-slate-50 border-t border-slate-200 font-semibold text-xs">
-                    <td colSpan={4} className="px-4 py-2 text-right text-slate-600">Total</td>
-                    <td className="px-4 py-2 text-red-600 text-center">{totalRej}</td>
-                    <td colSpan={3}></td>
-                  </tr>
-                </tfoot>
-              </table>
+        <div className="space-y-0" data-testid="rejection-summary-section">
+          {/* Always-Visible Metrics */}
+          <div className="bg-gradient-to-br from-red-50 to-rose-50 border border-red-200/60 rounded-t-xl p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
+                <AlertTriangle size={16} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Rejection Summary</h3>
+                <p className="text-[10px] text-slate-500">{rejEntries.length} rejection records across inspections</p>
+              </div>
             </div>
-          )}
+
+            <div className="grid grid-cols-4 gap-3">
+              {/* Total Rejected */}
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-red-100">
+                <p className="text-[10px] text-red-400 uppercase tracking-wider font-medium mb-1">Total Rejected</p>
+                <p className="text-3xl font-black text-red-600" data-testid="rej-metric-total">{totalRej.toLocaleString()}</p>
+                <p className="text-[10px] text-red-300 mt-0.5">bottles</p>
+              </div>
+
+              {/* By Resource — top 3 */}
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-slate-100">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-2">By Resource</p>
+                <div className="space-y-1.5">
+                  {topResource.slice(0, 3).map(([name, count], i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <span className="text-xs text-slate-600 truncate mr-2">{name}</span>
+                      <div className="flex items-center gap-1.5">
+                        <div className="h-1.5 rounded-full bg-red-200" style={{ width: `${Math.max(16, (count / totalRej) * 60)}px` }}>
+                          <div className="h-full rounded-full bg-red-500" style={{ width: '100%' }} />
+                        </div>
+                        <span className="text-xs font-bold text-red-600 tabular-nums w-8 text-right">{count}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* By Reason — top 3 */}
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-slate-100">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-2">By Reason</p>
+                <div className="space-y-1.5">
+                  {topReason.slice(0, 3).map(([name, count], i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <span className="text-xs text-slate-600 truncate mr-2">{name}</span>
+                      <div className="flex items-center gap-1.5">
+                        <div className="h-1.5 rounded-full bg-amber-200" style={{ width: `${Math.max(16, (count / totalRej) * 60)}px` }}>
+                          <div className="h-full rounded-full bg-amber-500" style={{ width: '100%' }} />
+                        </div>
+                        <span className="text-xs font-bold text-amber-600 tabular-nums w-8 text-right">{count}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* By Stage — top 3 */}
+              <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-slate-100">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-2">By Stage</p>
+                <div className="space-y-1.5">
+                  {topStage.slice(0, 3).map(([name, count], i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <span className="text-xs text-slate-600 truncate mr-2">{name}</span>
+                      <div className="flex items-center gap-1.5">
+                        <div className="h-1.5 rounded-full bg-blue-200" style={{ width: `${Math.max(16, (count / totalRej) * 60)}px` }}>
+                          <div className="h-full rounded-full bg-blue-500" style={{ width: '100%' }} />
+                        </div>
+                        <span className="text-xs font-bold text-blue-600 tabular-nums w-8 text-right">{count}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Expandable Detail Grid */}
+          <div className="bg-white border border-t-0 border-slate-200 rounded-b-xl">
+            <button onClick={() => setShowRejections(!showRejections)}
+              className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-slate-50 transition-colors"
+              data-testid="toggle-rejections">
+              <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Detail View</span>
+              {showRejections ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
+            </button>
+
+            {showRejections && (
+              <div className="px-5 pb-5 space-y-3">
+                {/* Filters */}
+                <div className="grid grid-cols-4 gap-3" data-testid="rej-filters">
+                  <Select value={rejFilter.resource || ""} onValueChange={v => setRejFilter(p => ({ ...p, resource: v === "__all__" ? "" : v }))}>
+                    <SelectTrigger className="h-9 text-xs border-slate-200" data-testid="rej-filter-resource">
+                      <SelectValue placeholder="All Resources" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All Resources</SelectItem>
+                      {[...uniqueResources].sort().map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <select value={rejFilter.date} onChange={e => setRejFilter(p => ({ ...p, date: e.target.value }))}
+                    className="h-9 px-2 border border-slate-200 rounded-md text-xs" data-testid="rej-filter-date">
+                    <option value="">All Dates</option>
+                    {[...uniqueDates].sort().map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                  <Select value={rejFilter.reason || ""} onValueChange={v => setRejFilter(p => ({ ...p, reason: v === "__all__" ? "" : v }))}>
+                    <SelectTrigger className="h-9 text-xs border-slate-200" data-testid="rej-filter-reason">
+                      <SelectValue placeholder="All Reasons" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All Reasons</SelectItem>
+                      {[...uniqueReasons].sort().map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={rejFilter.stage || ""} onValueChange={v => setRejFilter(p => ({ ...p, stage: v === "__all__" ? "" : v }))}>
+                    <SelectTrigger className="h-9 text-xs border-slate-200" data-testid="rej-filter-stage">
+                      <SelectValue placeholder="All Stages" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All Stages</SelectItem>
+                      {[...uniqueStages].sort().map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Grid */}
+                <div className="rounded-xl border border-slate-200 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-800 text-white">
+                        <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider font-semibold">Resource</th>
+                        <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider font-semibold">Date</th>
+                        <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider font-semibold">Stage</th>
+                        <th className="text-center px-4 py-3 text-[10px] uppercase tracking-wider font-semibold">Crates</th>
+                        <th className="text-center px-4 py-3 text-[10px] uppercase tracking-wider font-semibold text-red-300">Rejected</th>
+                        <th className="text-center px-4 py-3 text-[10px] uppercase tracking-wider font-semibold text-emerald-300">Passed</th>
+                        <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider font-semibold">Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((e, idx) => (
+                        <tr key={idx}
+                          className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-blue-50/50 transition-colors border-b border-slate-100`}
+                          data-testid={`rej-summary-${idx}`}>
+                          <td className="px-4 py-3">
+                            <span className="text-sm font-medium text-slate-800">{e.resource_name}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-sm text-slate-600 tabular-nums">{e.date}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{e.stage_name}</span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="text-sm font-semibold text-slate-700 tabular-nums">{e.qty_inspected || '-'}</span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="inline-flex items-center justify-center min-w-[28px] h-6 px-2 text-xs font-bold text-white bg-red-500 rounded-full">{e.qty_rejected}</span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="text-sm font-semibold text-emerald-600 tabular-nums">{e.qty_inspected ? ((e.qty_inspected * bpc) - e.qty_rejected).toLocaleString() : '-'}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">{e.reason || '-'}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-slate-800 text-white font-semibold">
+                        <td colSpan={4} className="px-4 py-3 text-right text-xs uppercase tracking-wider">Total ({filtered.length} records)</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="inline-flex items-center justify-center min-w-[32px] h-6 px-2 text-xs font-bold bg-red-400 rounded-full">{filteredTotal.toLocaleString()}</span>
+                        </td>
+                        <td className="px-4 py-3 text-center text-emerald-300 text-sm">{(filtered.reduce((s, e) => s + ((e.qty_inspected || 0) * bpc), 0) - filteredTotal).toLocaleString()}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
         );
       })()}
