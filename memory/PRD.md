@@ -109,6 +109,19 @@
 - [x] **Collections**: `rejection_reasons` (in tenant DB)
 - [x] **Endpoints**: CRUD /api/production/rejection-reasons, GET /api/production/rejection-report
 - [x] **Testing**: 15/15 backend + all frontend tests passed (iteration_122)
+
+### Inspection Editable Grid & QC Team Master (2026-04-09)
+- [x] **QC Team Master**: New CRUD page at `/qc-team` for managing QC inspection team members (name, role). Duplicate name validation.
+- [x] **Editable Rejection Grid**: Inspection form now shows a table grid with columns: Resource (dropdown from QC Team master), Date (date picker, defaults to today), Bottles Rejected (number), Reason (dropdown from Rejection Reasons master).
+- [x] **Add/Remove Rows**: "Add" button to add new rejection rows; trash icon to remove rows.
+- [x] **Backend Model Updated**: `InspectionRecord` now accepts `rejections: List[{resource_id, resource_name, date, qty_rejected, reason}]` array. Total rejected validated against max bottles (crates x bottles/crate).
+- [x] **Rejection Summary**: Batch Detail section now expands individual rejection entries per resource/date from the `rejections` array.
+- [x] **Rejection Report**: Now shows per-entry rows (one row per resource/date/reason) instead of per-inspection.
+- [x] **Activity Log**: Shows per-resource rejection details under each inspection event.
+- [x] **Navigation**: "QC Team" added to Production sidebar.
+- [x] **Collections**: `qc_team` (in tenant DB)
+- [x] **Endpoints**: CRUD /api/production/qc-team
+- [x] **Testing**: 14/14 backend + all frontend tests passed (iteration_123)
 - [x] **CRUD**: Create/read/update/delete meeting entries with date, title, periodicity, purpose, participants, minutes, action items
 - [x] **Full Page Views**: List page, dedicated detail page (/meeting-minutes/:id), dedicated edit page (/meeting-minutes/:id/edit), new meeting page (/meeting-minutes/new)
 - [x] **Large Textareas**: Discussion points and action items use multi-line textareas (rows=3) for big text
