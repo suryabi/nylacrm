@@ -295,11 +295,17 @@ class StageMovement(BaseModel):
     quantity: int  # crates to move
     notes: Optional[str] = None
 
+class RejectionEntry(BaseModel):
+    resource_id: str
+    resource_name: str
+    date: str
+    qty_rejected: int  # bottles
+    reason: str
+
 class InspectionRecord(BaseModel):
     stage_id: str
     qty_inspected: int  # crates inspected
-    qty_rejected: int   # bottles rejected
-    rejection_reason: Optional[str] = None
+    rejections: List[RejectionEntry] = []  # grid of rejection records
     remarks: Optional[str] = None
 
 @router.post("/batches/{batch_id}/move")
@@ -400,7 +406,7 @@ async def move_stock(batch_id: str, data: StageMovement, current_user: dict = De
 
 @router.post("/batches/{batch_id}/inspect")
 async def record_inspection(batch_id: str, data: InspectionRecord, current_user: dict = Depends(get_current_user)):
-    """Record QC inspection: inspect crates, reject individual bottles.
+    """Record QC inspection: inspect crates, reject individual bottles via grid entries.
     All inspected crates pass through; rejected bottles are tracked separately."""
     tenant_id = get_current_tenant_id()
     tdb = get_tenant_db()
@@ -423,27 +429,30 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
         raise HTTPException(status_code=400, detail="Inspected quantity must be > 0")
     if data.qty_inspected > pending:
         raise HTTPException(status_code=400, detail=f"Only {pending} crates pending at {stage['name']}")
-    if data.qty_rejected < 0:
-        raise HTTPException(status_code=400, detail="Rejected bottles cannot be negative")
+
+    # Calculate total rejected from grid entries
+    total_rej_bottles = sum(r.qty_rejected for r in data.rejections)
+    for r in data.rejections:
+        if r.qty_rejected < 0:
+            raise HTTPException(status_code=400, detail="Rejected bottles cannot be negative")
     max_bottles = data.qty_inspected * bottles_per_crate
-    if data.qty_rejected > max_bottles:
-        raise HTTPException(status_code=400, detail=f"Cannot reject more than {max_bottles} bottles ({data.qty_inspected} crates x {bottles_per_crate})")
+    if total_rej_bottles > max_bottles:
+        raise HTTPException(status_code=400, detail=f"Total rejected ({total_rej_bottles}) exceeds max {max_bottles} bottles ({data.qty_inspected} crates x {bottles_per_crate})")
 
     # All inspected crates pass through; rejected bottles tracked separately
     bal["pending"] = pending - data.qty_inspected
     bal["passed"] = bal.get("passed", 0) + data.qty_inspected
-    bal["rejected"] = bal.get("rejected", 0) + data.qty_rejected  # bottles
+    bal["rejected"] = bal.get("rejected", 0) + total_rej_bottles
     balances[data.stage_id] = bal
 
     # Track total rejected bottles and final QC pass-through
-    total_rejected = batch.get("total_rejected", 0) + data.qty_rejected
+    batch_total_rejected = batch.get("total_rejected", 0) + total_rej_bottles
     total_passed_final = batch.get("total_passed_final", 0)
 
-    # If this is the final_qc stage, passed crates become delivery-ready
     if stage.get("stage_type") == "final_qc":
         total_passed_final += data.qty_inspected
 
-    # Check if batch is completed (all crates accounted for)
+    # Check if batch is completed
     sorted_stages = sorted(stages, key=lambda s: s["order"])
     all_done = batch.get("unallocated_crates", 0) == 0
     if all_done:
@@ -457,13 +466,13 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
 
     updates = {
         "stage_balances": balances,
-        "total_rejected": total_rejected,
+        "total_rejected": batch_total_rejected,
         "total_passed_final": total_passed_final,
         "status": new_status,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    # Record inspection
+    # Record inspection with rejection entries
     now = datetime.now(timezone.utc).isoformat()
     inspection = {
         "id": str(uuid.uuid4()),
@@ -472,9 +481,9 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
         "stage_name": stage["name"],
         "stage_type": stage.get("stage_type", "qc"),
         "qty_inspected": data.qty_inspected,
-        "qty_passed": data.qty_inspected,  # all crates pass
-        "qty_rejected": data.qty_rejected,  # bottles
-        "rejection_reason": data.rejection_reason or "",
+        "qty_passed": data.qty_inspected,
+        "qty_rejected": total_rej_bottles,
+        "rejections": [r.model_dump() for r in data.rejections],
         "remarks": data.remarks or "",
         "inspected_by": current_user.get("id"),
         "inspected_by_name": current_user.get("name"),
@@ -615,6 +624,74 @@ async def get_production_stats(current_user: dict = Depends(get_current_user)):
 
 
 # ──────────────────────────────────────────────
+# QC Team Master Data
+# ──────────────────────────────────────────────
+
+class QCTeamMemberCreate(BaseModel):
+    name: str
+    role: Optional[str] = None
+
+class QCTeamMemberUpdate(BaseModel):
+    name: Optional[str] = None
+    role: Optional[str] = None
+
+@router.get("/qc-team")
+async def list_qc_team(current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    members = await tdb.qc_team.find({"tenant_id": tenant_id}, {"_id": 0}).sort("name", 1).to_list(500)
+    return members
+
+@router.post("/qc-team")
+async def create_qc_team_member(data: QCTeamMemberCreate, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    existing = await tdb.qc_team.find_one({"name": data.name, "tenant_id": tenant_id})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"QC team member '{data.name}' already exists")
+    now = datetime.now(timezone.utc).isoformat()
+    member = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "name": data.name,
+        "role": data.role or "",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await tdb.qc_team.insert_one(member)
+    member.pop("_id", None)
+    return member
+
+@router.put("/qc-team/{member_id}")
+async def update_qc_team_member(member_id: str, data: QCTeamMemberUpdate, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    existing = await tdb.qc_team.find_one({"id": member_id, "tenant_id": tenant_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="QC team member not found")
+    updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if data.name is not None:
+        dup = await tdb.qc_team.find_one({"name": data.name, "tenant_id": tenant_id, "id": {"$ne": member_id}})
+        if dup:
+            raise HTTPException(status_code=400, detail=f"QC team member '{data.name}' already exists")
+        updates["name"] = data.name
+    if data.role is not None:
+        updates["role"] = data.role
+    await tdb.qc_team.update_one({"id": member_id}, {"$set": updates})
+    updated = await tdb.qc_team.find_one({"id": member_id}, {"_id": 0})
+    return updated
+
+@router.delete("/qc-team/{member_id}")
+async def delete_qc_team_member(member_id: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    result = await tdb.qc_team.delete_one({"id": member_id, "tenant_id": tenant_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="QC team member not found")
+    return {"message": "QC team member deleted"}
+
+
+# ──────────────────────────────────────────────
 # Rejection Reasons Master Data
 # ──────────────────────────────────────────────
 
@@ -730,21 +807,45 @@ async def get_rejection_report(
     total_rejected = 0
     for ins in inspections:
         b = batches_map.get(ins["batch_id"], {})
-        rows.append({
-            "id": ins["id"],
-            "batch_id": ins["batch_id"],
-            "batch_code": b.get("batch_code", ""),
-            "sku_name": b.get("sku_name", ""),
-            "stage_name": ins.get("stage_name", ""),
-            "stage_type": ins.get("stage_type", ""),
-            "date": ins.get("inspected_at", "")[:10],
-            "resource_name": ins.get("inspected_by_name", ""),
-            "resource_id": ins.get("inspected_by", ""),
-            "qty_inspected": ins.get("qty_inspected", 0),
-            "qty_rejected": ins.get("qty_rejected", 0),
-            "rejection_reason": ins.get("rejection_reason", ""),
-            "remarks": ins.get("remarks", ""),
-        })
+        # New format: rejections array with per-resource entries
+        rejection_entries = ins.get("rejections", [])
+        if rejection_entries:
+            for rej in rejection_entries:
+                if rej.get("qty_rejected", 0) > 0:
+                    rows.append({
+                        "id": ins["id"] + "-" + rej.get("resource_id", ""),
+                        "inspection_id": ins["id"],
+                        "batch_id": ins["batch_id"],
+                        "batch_code": b.get("batch_code", ""),
+                        "sku_name": b.get("sku_name", ""),
+                        "stage_name": ins.get("stage_name", ""),
+                        "stage_type": ins.get("stage_type", ""),
+                        "date": rej.get("date", ins.get("inspected_at", "")[:10]),
+                        "resource_name": rej.get("resource_name", ""),
+                        "resource_id": rej.get("resource_id", ""),
+                        "qty_inspected": ins.get("qty_inspected", 0),
+                        "qty_rejected": rej.get("qty_rejected", 0),
+                        "rejection_reason": rej.get("reason", ""),
+                        "remarks": ins.get("remarks", ""),
+                    })
+        elif ins.get("qty_rejected", 0) > 0:
+            # Legacy format (single rejection)
+            rows.append({
+                "id": ins["id"],
+                "inspection_id": ins["id"],
+                "batch_id": ins["batch_id"],
+                "batch_code": b.get("batch_code", ""),
+                "sku_name": b.get("sku_name", ""),
+                "stage_name": ins.get("stage_name", ""),
+                "stage_type": ins.get("stage_type", ""),
+                "date": ins.get("inspected_at", "")[:10],
+                "resource_name": ins.get("inspected_by_name", ""),
+                "resource_id": ins.get("inspected_by", ""),
+                "qty_inspected": ins.get("qty_inspected", 0),
+                "qty_rejected": ins.get("qty_rejected", 0),
+                "rejection_reason": ins.get("rejection_reason", ""),
+                "remarks": ins.get("remarks", ""),
+            })
         total_rejected += ins.get("qty_rejected", 0)
 
     # Summary by resource

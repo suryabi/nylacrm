@@ -1,0 +1,105 @@
+{
+  "summary": "QC Team Master CRUD and Inspection Grid with Rejections Array testing complete. Backend: 14/14 tests passed (100%). Frontend: All UI elements verified - QC Team page with add/edit/delete, Batch Detail inspection form with editable grid (Resource, Date, Bottles, Reason columns), Add/Remove row buttons, Rejection Summary section, and Rejection Report page.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "QC Team page sidebar",
+        "issues": ["Sidebar shows Sales context instead of Production context when on /qc-team page. The QC Team nav item is defined in Production navigation group but sidebar doesn't auto-switch context based on current route."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_qc_team_inspection_grid.py",
+    "/app/test_reports/pytest/qc_team_inspection_grid_results.xml"
+  ],
+  "action_items": [
+    "Consider auto-switching sidebar context to Production when navigating to Production-related pages like /qc-team, /production-batches, /qc-routes, /rejection-reasons, /rejection-report"
+  ],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_qc_team_inspection_grid.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "100% - All UI elements and integrations verified"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_id": "nyla-air-water"
+  },
+  "seed_data_creation": "Used existing test batch: BATCH-TEST-001 (ID: 5833eb23-8664-4a53-8fc7-eedb9ff18178). Created test QC team members and rejection reasons during tests (cleaned up after).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "QC Team Master CRUD and Inspection Grid features fully tested. Key features: 1) QC Team Master at /qc-team - CRUD operations with duplicate name validation (400 error). 2) Inspection form editable grid with data-testids: rej-grid-row-{idx}, rej-resource-{idx}, rej-date-{idx}, rej-qty-{idx}, rej-reason-{idx}, rej-remove-{idx}, add-rej-row-{stage_id}. 3) InspectionRecord Pydantic model accepts rejections array with {resource_id, resource_name, date, qty_rejected, reason}. 4) Total rejected validation: sum cannot exceed qty_inspected * bottles_per_crate. 5) Rejection Summary on batch detail shows per-entry details. 6) Rejection Report shows per-entry rows with resource_name, date, reason. 7) Navigation: QC Team is at /qc-team, defined in Production sidebar group (line 120 in DashboardLayout.js).",
+  "features_tested": {
+    "Backend_API_Tests": {
+      "GET_qc_team_list": "PASSED - Returns list of QC team members",
+      "POST_qc_team_create": "PASSED - Creates new member with id, name, role",
+      "POST_qc_team_duplicate_name": "PASSED - Returns 400 'already exists'",
+      "PUT_qc_team_update": "PASSED - Updates name and role",
+      "DELETE_qc_team": "PASSED - Deletes member successfully",
+      "DELETE_qc_team_nonexistent": "PASSED - Returns 404",
+      "GET_batch_for_inspection": "PASSED - Returns batch with stage_balances, qc_stages, bottles_per_crate",
+      "POST_inspection_with_rejections_array": "PASSED - Records inspection with multiple rejection entries",
+      "POST_inspection_total_rejected_validation": "PASSED - Returns 400 when total exceeds max bottles",
+      "POST_inspection_with_zero_rejections": "PASSED - Records inspection with empty rejections (all pass)",
+      "GET_rejection_report_per_entry_rows": "PASSED - Shows individual rejection entries",
+      "GET_rejection_report_by_resource_summary": "PASSED - Contains name and bottles",
+      "GET_rejection_report_by_date_summary": "PASSED - Contains date and bottles",
+      "GET_batch_history_rejections_array": "PASSED - Inspections contain rejections array"
+    },
+    "Frontend_UI_Tests": {
+      "QC_Team_page_loads": "PASSED - data-testid='qc-team-page' found",
+      "Add_Member_button": "PASSED - Opens form with name/role inputs",
+      "Member_name_input": "PASSED - data-testid='member-name-input' found",
+      "Member_role_input": "PASSED - data-testid='member-role-input' found",
+      "Member_save_button": "PASSED - data-testid='member-save-btn' found",
+      "Batch_Detail_page_loads": "PASSED - data-testid='batch-detail-page' found",
+      "Record_Inspection_button": "PASSED - data-testid='inspect-{stage_id}' found",
+      "Crates_Inspected_input": "PASSED - data-testid='insp-qty-{stage_id}' found",
+      "Rejection_grid_row": "PASSED - data-testid='rej-grid-row-0' found",
+      "Resource_dropdown": "PASSED - data-testid='rej-resource-0' found",
+      "Date_input": "PASSED - data-testid='rej-date-0' found",
+      "Bottles_input": "PASSED - data-testid='rej-qty-0' found",
+      "Reason_dropdown": "PASSED - data-testid='rej-reason-0' found",
+      "Remove_row_button": "PASSED - data-testid='rej-remove-0' found",
+      "Add_rejection_row_button": "PASSED - data-testid='add-rej-row-{stage_id}' found",
+      "Add_row_functionality": "PASSED - New row added (rej-grid-row-1)",
+      "Remove_row_functionality": "PASSED - Row removed successfully",
+      "Submit_Inspection_button": "PASSED - data-testid='insp-submit-{stage_id}' found",
+      "Rejection_Summary_toggle": "PASSED - data-testid='toggle-rejections' found",
+      "Rejection_Summary_rows": "PASSED - data-testid='rej-summary-{idx}' found",
+      "Rejection_Report_page_loads": "PASSED - data-testid='rejection-report-page' found"
+    }
+  },
+  "data_testids_verified": [
+    "qc-team-page",
+    "add-member-btn",
+    "member-name-input",
+    "member-role-input",
+    "member-save-btn",
+    "edit-member-{id}",
+    "delete-member-{id}",
+    "batch-detail-page",
+    "inspect-{stage_id}",
+    "insp-qty-{stage_id}",
+    "rej-grid-row-{idx}",
+    "rej-resource-{idx}",
+    "rej-date-{idx}",
+    "rej-qty-{idx}",
+    "rej-reason-{idx}",
+    "rej-remove-{idx}",
+    "add-rej-row-{stage_id}",
+    "insp-submit-{stage_id}",
+    "toggle-rejections",
+    "rej-summary-{idx}",
+    "rejection-report-page"
+  ]
+}
