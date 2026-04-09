@@ -126,6 +126,14 @@
 ### UI Polish: Themed Dropdowns & Auto-Calculated Passed (2026-04-09)
 - [x] **Shadcn Select Dropdowns**: Replaced native `<select>` elements in the rejection grid with Shadcn `Select` component (Radix UI) for consistent app theming.
 - [x] **Auto-Calculated Passed Bottles**: When crates inspected is entered, shows inline: Total bottles, Rejected count, and auto-calculated Passed count = (crates x bottles/crate) - total rejected.
+
+### Inspection Grid: Per-Row Crates & COGS-Style Sizing (2026-04-09)
+- [x] **Crates Inspected per Resource**: Each grid row now has its own "Crates Inspected" column. No more top-level crates field.
+- [x] **Renamed Column**: "Bottles" → "Rejected Count" throughout (grid, summary, report).
+- [x] **COGS-Style Grid**: Inputs are h-10, p-3 padding, text-sm font, rounded-xl border — matches COGS calculator rows.
+- [x] **Passed Column**: Auto-calculated per row (crates × bottles/crate - rejected) in green. Totals footer sums all.
+- [x] **Backend**: `InspectionRecord` no longer has top-level `qty_inspected`; derived from sum of entry-level. `RejectionEntry` now includes `qty_inspected` per resource.
+- [x] **Testing**: 8/8 backend + all frontend tests passed (iteration_124)
 - [x] **CRUD**: Create/read/update/delete meeting entries with date, title, periodicity, purpose, participants, minutes, action items
 - [x] **Full Page Views**: List page, dedicated detail page (/meeting-minutes/:id), dedicated edit page (/meeting-minutes/:id/edit), new meeting page (/meeting-minutes/new)
 - [x] **Large Textareas**: Discussion points and action items use multi-line textareas (rows=3) for big text
