@@ -6,7 +6,7 @@ import {
   ArrowLeft, Package, Calendar, Factory, Boxes, Tag,
   Loader2, FlaskConical, Paintbrush, ShieldCheck,
   Trash2, ArrowRight, MoveRight, ClipboardCheck,
-  Clock, User, AlertTriangle, ChevronDown, ChevronUp, Plus, CheckCircle,
+  Clock, User, AlertTriangle, ChevronDown, ChevronUp, Plus,
 } from 'lucide-react';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
 
@@ -221,7 +221,7 @@ export default function BatchDetail() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-y border-slate-200">
-                    {['Resource', 'Date', 'Stage', 'Bottles Rejected', 'Reason', 'Remarks'].map(h => (
+                    {['Resource', 'Date', 'Stage', 'Crates Inspected', 'Rejected Count', 'Passed', 'Reason', 'Remarks'].map(h => (
                       <th key={h} className="text-left px-4 py-2 text-[10px] text-slate-500 uppercase tracking-wider font-medium whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -232,7 +232,9 @@ export default function BatchDetail() {
                       <td className="px-4 py-2 text-slate-700 font-medium whitespace-nowrap">{e.resource_name}</td>
                       <td className="px-4 py-2 text-slate-600 whitespace-nowrap">{e.date}</td>
                       <td className="px-4 py-2 text-slate-600 whitespace-nowrap">{e.stage_name}</td>
+                      <td className="px-4 py-2 text-slate-800 text-center">{e.qty_inspected || '-'}</td>
                       <td className="px-4 py-2 font-bold text-red-600 text-center">{e.qty_rejected}</td>
+                      <td className="px-4 py-2 font-bold text-emerald-600 text-center">{e.qty_inspected ? ((e.qty_inspected * (batch?.bottles_per_crate || 1)) - (e.qty_rejected || 0)) : '-'}</td>
                       <td className="px-4 py-2 text-slate-600">{e.reason || '-'}</td>
                       <td className="px-4 py-2 text-slate-400">{e.remarks || '-'}</td>
                     </tr>
@@ -240,9 +242,9 @@ export default function BatchDetail() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-50 border-t border-slate-200 font-semibold text-xs">
-                    <td colSpan={3} className="px-4 py-2 text-right text-slate-600">Total</td>
+                    <td colSpan={4} className="px-4 py-2 text-right text-slate-600">Total</td>
                     <td className="px-4 py-2 text-red-600 text-center">{totalRej}</td>
-                    <td colSpan={2}></td>
+                    <td colSpan={3}></td>
                   </tr>
                 </tfoot>
               </table>
@@ -322,9 +324,8 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
   const [showInspect, setShowInspect] = useState(false);
   const [moveQty, setMoveQty] = useState('');
   const [moveNotes, setMoveNotes] = useState('');
-  const [inspQty, setInspQty] = useState('');
   const [inspRemarks, setInspRemarks] = useState('');
-  const emptyRow = () => ({ resource_id: '', resource_name: '', date: new Date().toISOString().slice(0, 10), qty_rejected: '', reason: '' });
+  const emptyRow = () => ({ resource_id: '', resource_name: '', date: new Date().toISOString().slice(0, 10), qty_inspected: '', qty_rejected: '', reason: '' });
   const [rejRows, setRejRows] = useState([emptyRow()]);
   const [saving, setSaving] = useState(false);
 
@@ -346,40 +347,38 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
   };
 
   const handleInspect = async () => {
-    const insp = parseInt(inspQty);
-    if (!insp || insp <= 0) { toast.error('Crates inspected must be > 0'); return; }
-    if (insp > (bal.pending || 0)) { toast.error(`Only ${bal.pending} crates pending`); return; }
-
-    // Build rejections array — filter out empty rows
-    const rejections = rejRows
-      .filter(r => parseInt(r.qty_rejected) > 0)
-      .map(r => ({
-        resource_id: r.resource_id,
-        resource_name: r.resource_name,
-        date: r.date,
-        qty_rejected: parseInt(r.qty_rejected) || 0,
-        reason: r.reason,
-      }));
+    // Build entries — each row has its own crates inspected and rejected count
+    const entries = rejRows.map(r => ({
+      resource_id: r.resource_id,
+      resource_name: r.resource_name,
+      date: r.date,
+      qty_inspected: parseInt(r.qty_inspected) || 0,
+      qty_rejected: parseInt(r.qty_rejected) || 0,
+      reason: r.reason,
+    }));
 
     // Validate entries
-    for (const r of rejections) {
-      if (!r.resource_name) { toast.error('Select a resource for all rejection rows'); return; }
-      if (!r.date) { toast.error('Date is required for all rejection rows'); return; }
-      if (!r.reason) { toast.error('Select a reason for all rejection rows'); return; }
+    for (const r of entries) {
+      if (!r.resource_name) { toast.error('Select a resource for all rows'); return; }
+      if (!r.date) { toast.error('Date is required for all rows'); return; }
+      if (r.qty_inspected <= 0) { toast.error('Crates inspected must be > 0 for all rows'); return; }
+      if (r.qty_rejected < 0) { toast.error('Rejected count cannot be negative'); return; }
+      if (!r.reason) { toast.error('Select a reason for all rows'); return; }
+      const maxBottles = r.qty_inspected * (bottlesPerCrate || 1);
+      if (r.qty_rejected > maxBottles) { toast.error(`Rejected (${r.qty_rejected}) exceeds max ${maxBottles} for ${r.resource_name}`); return; }
     }
 
-    const totalRej = rejections.reduce((s, r) => s + r.qty_rejected, 0);
-    const maxBottles = insp * (bottlesPerCrate || 1);
-    if (totalRej > maxBottles) { toast.error(`Total rejected (${totalRej}) exceeds max ${maxBottles} bottles`); return; }
+    const totalCrates = entries.reduce((s, r) => s + r.qty_inspected, 0);
+    if (totalCrates > (bal.pending || 0)) { toast.error(`Total crates (${totalCrates}) exceeds ${bal.pending} pending`); return; }
 
     setSaving(true);
     try {
       await axios.post(`${API_URL}/production/batches/${batchId}/inspect`, {
-        stage_id: stage.id, qty_inspected: insp, rejections, remarks: inspRemarks,
+        stage_id: stage.id, rejections: entries, remarks: inspRemarks,
       }, { headers: getAuthHeaders() });
       toast.success(`Inspection recorded at ${stage.name}`);
       setShowInspect(false);
-      setInspQty(''); setInspRemarks('');
+      setInspRemarks('');
       setRejRows([emptyRow()]);
       onUpdate();
     } catch (err) {
@@ -473,112 +472,120 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
         </div>
       )}
 
-      {/* Inspection Form — Editable Grid */}
+      {/* Inspection Form — Editable Grid (COGS-style rows) */}
       {showInspect && (() => {
-        const cratesInsp = parseInt(inspQty) || 0;
-        const totalBottles = cratesInsp * (bottlesPerCrate || 1);
+        const totalCrates = rejRows.reduce((s, r) => s + (parseInt(r.qty_inspected) || 0), 0);
+        const totalBottles = rejRows.reduce((s, r) => s + ((parseInt(r.qty_inspected) || 0) * (bottlesPerCrate || 1)), 0);
         const totalRejected = rejRows.reduce((s, r) => s + (parseInt(r.qty_rejected) || 0), 0);
         const passedBottles = Math.max(0, totalBottles - totalRejected);
         return (
-        <div className="px-5 py-4 bg-emerald-50/50 border-t border-emerald-100 space-y-3">
-          <p className="text-xs text-emerald-700 font-medium">Record inspection at <span className="font-bold">{stage.name}</span> ({bal.pending || 0} crates pending, {bottlesPerCrate} bottles/crate)</p>
-          <div className="flex items-end gap-4">
-            <div className="w-44">
-              <label className="text-[10px] text-slate-500 mb-1 block">Crates Inspected *</label>
-              <input type="number" value={inspQty} onChange={e => setInspQty(e.target.value)}
-                max={bal.pending || 0} placeholder={`Max ${bal.pending || 0}`}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" data-testid={`insp-qty-${stage.id}`} />
-            </div>
-            {cratesInsp > 0 && (
-              <div className="flex items-center gap-4 text-xs pb-2">
-                <span className="text-slate-500">Total: <span className="font-bold text-slate-700">{totalBottles}</span> bottles</span>
-                <span className="text-red-500">Rejected: <span className="font-bold">{totalRejected}</span></span>
-                <span className="text-emerald-600 flex items-center gap-1"><CheckCircle size={12} /> Passed: <span className="font-bold">{passedBottles}</span></span>
-              </div>
-            )}
-          </div>
-
-          {/* Rejection Grid */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">Rejection Records</label>
-              <button onClick={addRejRow}
-                className="px-2.5 py-1 text-[10px] font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-md flex items-center gap-1"
-                data-testid={`add-rej-row-${stage.id}`}>
-                <Plus size={10} /> Add
-              </button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs border border-slate-200 rounded-lg overflow-hidden">
-                <thead>
-                  <tr className="bg-slate-100">
-                    <th className="text-left px-3 py-2 text-[10px] text-slate-500 uppercase tracking-wider font-medium" style={{minWidth: '180px'}}>Resource *</th>
-                    <th className="text-left px-3 py-2 text-[10px] text-slate-500 uppercase tracking-wider font-medium" style={{minWidth: '130px'}}>Date *</th>
-                    <th className="text-left px-3 py-2 text-[10px] text-slate-500 uppercase tracking-wider font-medium" style={{minWidth: '90px'}}>Bottles *</th>
-                    <th className="text-left px-3 py-2 text-[10px] text-slate-500 uppercase tracking-wider font-medium" style={{minWidth: '180px'}}>Reason *</th>
-                    <th className="w-8"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {rejRows.map((row, idx) => (
-                    <tr key={idx} data-testid={`rej-grid-row-${idx}`}>
-                      <td className="px-2 py-1.5">
-                        <Select value={row.resource_id || undefined} onValueChange={v => updateRejRow(idx, 'resource_id', v)}>
-                          <SelectTrigger className="h-8 text-xs" data-testid={`rej-resource-${idx}`}>
-                            <SelectValue placeholder="Select resource..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(qcTeam || []).map(m => (
-                              <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <input type="date" value={row.date} onChange={e => updateRejRow(idx, 'date', e.target.value)}
-                          className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-xs h-8" data-testid={`rej-date-${idx}`} />
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <input type="number" value={row.qty_rejected} onChange={e => updateRejRow(idx, 'qty_rejected', e.target.value)}
-                          min="0" placeholder="0"
-                          className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-xs text-red-600 font-medium h-8" data-testid={`rej-qty-${idx}`} />
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <Select value={row.reason || undefined} onValueChange={v => updateRejRow(idx, 'reason', v)}>
-                          <SelectTrigger className="h-8 text-xs" data-testid={`rej-reason-${idx}`}>
-                            <SelectValue placeholder="Select reason..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(rejectionReasons || []).map(r => (
-                              <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="px-1 py-1.5">
-                        <button onClick={() => removeRejRow(idx)} className="p-1 hover:bg-red-50 rounded" data-testid={`rej-remove-${idx}`}>
-                          <Trash2 size={11} className="text-slate-300 hover:text-red-400" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div>
-            <label className="text-[10px] text-slate-500 mb-1 block">Remarks</label>
-            <input value={inspRemarks} onChange={e => setInspRemarks(e.target.value)}
-              placeholder="Optional remarks" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={handleInspect} disabled={saving}
-              className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg disabled:opacity-50 flex items-center gap-1.5"
-              data-testid={`insp-submit-${stage.id}`}>
-              {saving ? <Loader2 size={13} className="animate-spin" /> : <ClipboardCheck size={13} />} Submit Inspection
+        <div className="px-5 py-5 bg-emerald-50/50 border-t border-emerald-100 space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-emerald-700 font-medium">Record inspection at <span className="font-bold">{stage.name}</span> <span className="text-slate-400 font-normal">({bal.pending || 0} crates pending, {bottlesPerCrate} bottles/crate)</span></p>
+            <button onClick={addRejRow}
+              className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg flex items-center gap-1.5 transition-colors"
+              data-testid={`add-rej-row-${stage.id}`}>
+              <Plus size={12} /> Add Row
             </button>
-            <button onClick={() => { setShowInspect(false); setRejRows([emptyRow()]); }} className="px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 rounded-lg">Cancel</button>
+          </div>
+
+          {/* Grid Table — COGS calculator sizing */}
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50">
+                <tr className="border-b border-slate-200">
+                  <th className="text-left p-3 font-semibold text-slate-600" style={{minWidth: '200px'}}>Resource</th>
+                  <th className="text-left p-3 font-semibold text-slate-600" style={{minWidth: '150px'}}>Date</th>
+                  <th className="text-left p-3 font-semibold text-slate-600" style={{minWidth: '130px'}}>Crates Inspected</th>
+                  <th className="text-left p-3 font-semibold text-slate-600" style={{minWidth: '130px'}}>Rejected Count</th>
+                  <th className="text-right p-3 font-semibold text-emerald-600 bg-emerald-50/50" style={{minWidth: '110px'}}>Passed</th>
+                  <th className="text-left p-3 font-semibold text-slate-600" style={{minWidth: '200px'}}>Reason</th>
+                  <th className="w-12"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rejRows.map((row, idx) => {
+                  const rowCrates = parseInt(row.qty_inspected) || 0;
+                  const rowTotalBottles = rowCrates * (bottlesPerCrate || 1);
+                  const rowRejected = parseInt(row.qty_rejected) || 0;
+                  const rowPassed = Math.max(0, rowTotalBottles - rowRejected);
+                  return (
+                  <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50/50" data-testid={`rej-grid-row-${idx}`}>
+                    <td className="p-2">
+                      <Select value={row.resource_id || undefined} onValueChange={v => updateRejRow(idx, 'resource_id', v)}>
+                        <SelectTrigger className="h-10 text-sm border-slate-200" data-testid={`rej-resource-${idx}`}>
+                          <SelectValue placeholder="Select resource..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(qcTeam || []).map(m => (
+                            <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td className="p-2">
+                      <input type="date" value={row.date} onChange={e => updateRejRow(idx, 'date', e.target.value)}
+                        className="w-full h-10 px-3 border border-slate-200 rounded-md text-sm bg-white" data-testid={`rej-date-${idx}`} />
+                    </td>
+                    <td className="p-2">
+                      <input type="number" value={row.qty_inspected} onChange={e => updateRejRow(idx, 'qty_inspected', e.target.value)}
+                        min="1" placeholder="0"
+                        className="w-full h-10 px-3 border border-slate-200 rounded-md text-sm text-right bg-white" data-testid={`rej-crates-${idx}`} />
+                    </td>
+                    <td className="p-2">
+                      <input type="number" value={row.qty_rejected} onChange={e => updateRejRow(idx, 'qty_rejected', e.target.value)}
+                        min="0" placeholder="0"
+                        className="w-full h-10 px-3 border border-slate-200 rounded-md text-sm text-right text-red-600 font-medium bg-white" data-testid={`rej-qty-${idx}`} />
+                    </td>
+                    <td className="p-3 text-right font-bold text-emerald-600 bg-emerald-50/30">
+                      {rowCrates > 0 ? rowPassed.toLocaleString() : '-'}
+                    </td>
+                    <td className="p-2">
+                      <Select value={row.reason || undefined} onValueChange={v => updateRejRow(idx, 'reason', v)}>
+                        <SelectTrigger className="h-10 text-sm border-slate-200" data-testid={`rej-reason-${idx}`}>
+                          <SelectValue placeholder="Select reason..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(rejectionReasons || []).map(r => (
+                            <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td className="p-2 text-center">
+                      <button onClick={() => removeRejRow(idx)} className="p-2 hover:bg-red-50 rounded-lg transition-colors" data-testid={`rej-remove-${idx}`}>
+                        <Trash2 size={14} className="text-slate-300 hover:text-red-500" />
+                      </button>
+                    </td>
+                  </tr>
+                  );
+                })}
+              </tbody>
+              {/* Totals Footer */}
+              <tfoot>
+                <tr className="bg-slate-50 border-t border-slate-200 font-semibold">
+                  <td colSpan={2} className="p-3 text-right text-slate-600 text-sm">Totals</td>
+                  <td className="p-3 text-right text-slate-800">{totalCrates}</td>
+                  <td className="p-3 text-right text-red-600">{totalRejected}</td>
+                  <td className="p-3 text-right text-emerald-600 bg-emerald-50/30">{passedBottles.toLocaleString()}</td>
+                  <td colSpan={2}></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div className="max-w-md">
+            <label className="text-xs text-slate-500 mb-1.5 block font-medium">Remarks</label>
+            <input value={inspRemarks} onChange={e => setInspRemarks(e.target.value)}
+              placeholder="Optional remarks" className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" />
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={handleInspect} disabled={saving}
+              className="px-5 py-2.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg disabled:opacity-50 flex items-center gap-2 transition-colors"
+              data-testid={`insp-submit-${stage.id}`}>
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <ClipboardCheck size={14} />} Submit Inspection
+            </button>
+            <button onClick={() => { setShowInspect(false); setRejRows([emptyRow()]); }} className="px-4 py-2.5 text-sm text-slate-500 hover:bg-slate-100 rounded-lg transition-colors">Cancel</button>
           </div>
         </div>
         );

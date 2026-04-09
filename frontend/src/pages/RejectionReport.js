@@ -170,7 +170,7 @@ export default function RejectionReport() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    {['Date', 'Batch', 'SKU', 'Stage', 'Resource', 'Crates Inspected', 'Bottles Rejected', 'Reason', 'Remarks'].map(h => (
+                    {['Date', 'Batch', 'SKU', 'Stage', 'Resource', 'Crates Inspected', 'Rejected Count', 'Reason', 'Remarks'].map(h => (
                       <th key={h} className="text-left px-4 py-2.5 text-[10px] text-slate-500 uppercase tracking-wider font-medium whitespace-nowrap">{h}</th>
                     ))}
                   </tr>

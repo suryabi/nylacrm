@@ -299,13 +299,13 @@ class RejectionEntry(BaseModel):
     resource_id: str
     resource_name: str
     date: str
-    qty_rejected: int  # bottles
+    qty_inspected: int  # crates inspected by this resource
+    qty_rejected: int  # bottles rejected
     reason: str
 
 class InspectionRecord(BaseModel):
     stage_id: str
-    qty_inspected: int  # crates inspected
-    rejections: List[RejectionEntry] = []  # grid of rejection records
+    rejections: List[RejectionEntry] = []  # grid of inspection/rejection records
     remarks: Optional[str] = None
 
 @router.post("/batches/{batch_id}/move")
@@ -406,7 +406,7 @@ async def move_stock(batch_id: str, data: StageMovement, current_user: dict = De
 
 @router.post("/batches/{batch_id}/inspect")
 async def record_inspection(batch_id: str, data: InspectionRecord, current_user: dict = Depends(get_current_user)):
-    """Record QC inspection: inspect crates, reject individual bottles via grid entries.
+    """Record QC inspection: each row has crates inspected and rejected bottles per resource.
     All inspected crates pass through; rejected bottles are tracked separately."""
     tenant_id = get_current_tenant_id()
     tdb = get_tenant_db()
@@ -425,23 +425,31 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
     pending = bal.get("pending", 0)
     bottles_per_crate = batch.get("bottles_per_crate", 1)
 
-    if data.qty_inspected <= 0:
-        raise HTTPException(status_code=400, detail="Inspected quantity must be > 0")
-    if data.qty_inspected > pending:
+    if not data.rejections:
+        raise HTTPException(status_code=400, detail="At least one inspection entry is required")
+
+    # Compute totals from row-level data
+    total_crates_inspected = sum(r.qty_inspected for r in data.rejections)
+    total_rej_bottles = sum(r.qty_rejected for r in data.rejections)
+
+    if total_crates_inspected <= 0:
+        raise HTTPException(status_code=400, detail="Total crates inspected must be > 0")
+    if total_crates_inspected > pending:
         raise HTTPException(status_code=400, detail=f"Only {pending} crates pending at {stage['name']}")
 
-    # Calculate total rejected from grid entries
-    total_rej_bottles = sum(r.qty_rejected for r in data.rejections)
+    # Validate each entry
     for r in data.rejections:
+        if r.qty_inspected <= 0:
+            raise HTTPException(status_code=400, detail="Crates inspected must be > 0 for each row")
         if r.qty_rejected < 0:
-            raise HTTPException(status_code=400, detail="Rejected bottles cannot be negative")
-    max_bottles = data.qty_inspected * bottles_per_crate
-    if total_rej_bottles > max_bottles:
-        raise HTTPException(status_code=400, detail=f"Total rejected ({total_rej_bottles}) exceeds max {max_bottles} bottles ({data.qty_inspected} crates x {bottles_per_crate})")
+            raise HTTPException(status_code=400, detail="Rejected count cannot be negative")
+        max_bottles = r.qty_inspected * bottles_per_crate
+        if r.qty_rejected > max_bottles:
+            raise HTTPException(status_code=400, detail=f"Rejected ({r.qty_rejected}) exceeds max {max_bottles} bottles for {r.resource_name}")
 
     # All inspected crates pass through; rejected bottles tracked separately
-    bal["pending"] = pending - data.qty_inspected
-    bal["passed"] = bal.get("passed", 0) + data.qty_inspected
+    bal["pending"] = pending - total_crates_inspected
+    bal["passed"] = bal.get("passed", 0) + total_crates_inspected
     bal["rejected"] = bal.get("rejected", 0) + total_rej_bottles
     balances[data.stage_id] = bal
 
@@ -450,7 +458,7 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
     total_passed_final = batch.get("total_passed_final", 0)
 
     if stage.get("stage_type") == "final_qc":
-        total_passed_final += data.qty_inspected
+        total_passed_final += total_crates_inspected
 
     # Check if batch is completed
     sorted_stages = sorted(stages, key=lambda s: s["order"])
@@ -472,7 +480,7 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    # Record inspection with rejection entries
+    # Record inspection with row-level entries
     now = datetime.now(timezone.utc).isoformat()
     inspection = {
         "id": str(uuid.uuid4()),
@@ -480,8 +488,8 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
         "stage_id": data.stage_id,
         "stage_name": stage["name"],
         "stage_type": stage.get("stage_type", "qc"),
-        "qty_inspected": data.qty_inspected,
-        "qty_passed": data.qty_inspected,
+        "qty_inspected": total_crates_inspected,
+        "qty_passed": total_crates_inspected,
         "qty_rejected": total_rej_bottles,
         "rejections": [r.model_dump() for r in data.rejections],
         "remarks": data.remarks or "",
@@ -823,7 +831,7 @@ async def get_rejection_report(
                         "date": rej.get("date", ins.get("inspected_at", "")[:10]),
                         "resource_name": rej.get("resource_name", ""),
                         "resource_id": rej.get("resource_id", ""),
-                        "qty_inspected": ins.get("qty_inspected", 0),
+                        "qty_inspected": rej.get("qty_inspected", 0),
                         "qty_rejected": rej.get("qty_rejected", 0),
                         "rejection_reason": rej.get("reason", ""),
                         "remarks": ins.get("remarks", ""),
