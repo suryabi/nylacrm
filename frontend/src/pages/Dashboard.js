@@ -95,12 +95,12 @@ export default function Dashboard() {
   const fetchSalesTeam = async () => {
     try {
       const response = await axios.get(`${API_URL}/users`, { withCredentials: true });
-      // Include all roles that can have leads assigned to them
-      const salesRoles = [
-        'CEO', 'Director', 'Vice President', 'System Admin',
-        'Head of Business', 'Regional Sales Manager', 'National Sales Head', 'Partner - Sales'
-      ];
-      setSalesTeam(response.data.filter(u => salesRoles.includes(u.role) && u.is_active));
+      // Include all active users belonging to the Sales department
+      setSalesTeam(response.data.filter(u => {
+        if (!u.is_active) return false;
+        const depts = Array.isArray(u.department) ? u.department : [u.department || ''];
+        return depts.some(d => d === 'Sales' || d === 'Admin');
+      }));
     } catch (error) { console.error('Failed to load team'); }
   };
 
