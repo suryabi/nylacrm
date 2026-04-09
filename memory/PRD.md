@@ -122,6 +122,10 @@
 - [x] **Collections**: `qc_team` (in tenant DB)
 - [x] **Endpoints**: CRUD /api/production/qc-team
 - [x] **Testing**: 14/14 backend + all frontend tests passed (iteration_123)
+
+### UI Polish: Themed Dropdowns & Auto-Calculated Passed (2026-04-09)
+- [x] **Shadcn Select Dropdowns**: Replaced native `<select>` elements in the rejection grid with Shadcn `Select` component (Radix UI) for consistent app theming.
+- [x] **Auto-Calculated Passed Bottles**: When crates inspected is entered, shows inline: Total bottles, Rejected count, and auto-calculated Passed count = (crates x bottles/crate) - total rejected.
 - [x] **CRUD**: Create/read/update/delete meeting entries with date, title, periodicity, purpose, participants, minutes, action items
 - [x] **Full Page Views**: List page, dedicated detail page (/meeting-minutes/:id), dedicated edit page (/meeting-minutes/:id/edit), new meeting page (/meeting-minutes/new)
 - [x] **Large Textareas**: Discussion points and action items use multi-line textareas (rows=3) for big text

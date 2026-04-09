@@ -6,8 +6,9 @@ import {
   ArrowLeft, Package, Calendar, Factory, Boxes, Tag,
   Loader2, FlaskConical, Paintbrush, ShieldCheck,
   Trash2, ArrowRight, MoveRight, ClipboardCheck,
-  Clock, User, AlertTriangle, ChevronDown, ChevronUp, Plus,
+  Clock, User, AlertTriangle, ChevronDown, ChevronUp, Plus, CheckCircle,
 } from 'lucide-react';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -473,14 +474,28 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
       )}
 
       {/* Inspection Form — Editable Grid */}
-      {showInspect && (
+      {showInspect && (() => {
+        const cratesInsp = parseInt(inspQty) || 0;
+        const totalBottles = cratesInsp * (bottlesPerCrate || 1);
+        const totalRejected = rejRows.reduce((s, r) => s + (parseInt(r.qty_rejected) || 0), 0);
+        const passedBottles = Math.max(0, totalBottles - totalRejected);
+        return (
         <div className="px-5 py-4 bg-emerald-50/50 border-t border-emerald-100 space-y-3">
           <p className="text-xs text-emerald-700 font-medium">Record inspection at <span className="font-bold">{stage.name}</span> ({bal.pending || 0} crates pending, {bottlesPerCrate} bottles/crate)</p>
-          <div className="w-48">
-            <label className="text-[10px] text-slate-500 mb-1 block">Crates Inspected *</label>
-            <input type="number" value={inspQty} onChange={e => setInspQty(e.target.value)}
-              max={bal.pending || 0} placeholder={`Max ${bal.pending || 0}`}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" data-testid={`insp-qty-${stage.id}`} />
+          <div className="flex items-end gap-4">
+            <div className="w-44">
+              <label className="text-[10px] text-slate-500 mb-1 block">Crates Inspected *</label>
+              <input type="number" value={inspQty} onChange={e => setInspQty(e.target.value)}
+                max={bal.pending || 0} placeholder={`Max ${bal.pending || 0}`}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" data-testid={`insp-qty-${stage.id}`} />
+            </div>
+            {cratesInsp > 0 && (
+              <div className="flex items-center gap-4 text-xs pb-2">
+                <span className="text-slate-500">Total: <span className="font-bold text-slate-700">{totalBottles}</span> bottles</span>
+                <span className="text-red-500">Rejected: <span className="font-bold">{totalRejected}</span></span>
+                <span className="text-emerald-600 flex items-center gap-1"><CheckCircle size={12} /> Passed: <span className="font-bold">{passedBottles}</span></span>
+              </div>
+            )}
           </div>
 
           {/* Rejection Grid */}
@@ -497,10 +512,10 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
               <table className="w-full text-xs border border-slate-200 rounded-lg overflow-hidden">
                 <thead>
                   <tr className="bg-slate-100">
-                    <th className="text-left px-3 py-2 text-[10px] text-slate-500 uppercase tracking-wider font-medium" style={{minWidth: '160px'}}>Resource *</th>
+                    <th className="text-left px-3 py-2 text-[10px] text-slate-500 uppercase tracking-wider font-medium" style={{minWidth: '180px'}}>Resource *</th>
                     <th className="text-left px-3 py-2 text-[10px] text-slate-500 uppercase tracking-wider font-medium" style={{minWidth: '130px'}}>Date *</th>
                     <th className="text-left px-3 py-2 text-[10px] text-slate-500 uppercase tracking-wider font-medium" style={{minWidth: '90px'}}>Bottles *</th>
-                    <th className="text-left px-3 py-2 text-[10px] text-slate-500 uppercase tracking-wider font-medium" style={{minWidth: '160px'}}>Reason *</th>
+                    <th className="text-left px-3 py-2 text-[10px] text-slate-500 uppercase tracking-wider font-medium" style={{minWidth: '180px'}}>Reason *</th>
                     <th className="w-8"></th>
                   </tr>
                 </thead>
@@ -508,27 +523,37 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
                   {rejRows.map((row, idx) => (
                     <tr key={idx} data-testid={`rej-grid-row-${idx}`}>
                       <td className="px-2 py-1.5">
-                        <select value={row.resource_id} onChange={e => updateRejRow(idx, 'resource_id', e.target.value)}
-                          className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs" data-testid={`rej-resource-${idx}`}>
-                          <option value="">Select...</option>
-                          {(qcTeam || []).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                        </select>
+                        <Select value={row.resource_id || undefined} onValueChange={v => updateRejRow(idx, 'resource_id', v)}>
+                          <SelectTrigger className="h-8 text-xs" data-testid={`rej-resource-${idx}`}>
+                            <SelectValue placeholder="Select resource..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(qcTeam || []).map(m => (
+                              <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </td>
                       <td className="px-2 py-1.5">
                         <input type="date" value={row.date} onChange={e => updateRejRow(idx, 'date', e.target.value)}
-                          className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs" data-testid={`rej-date-${idx}`} />
+                          className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-xs h-8" data-testid={`rej-date-${idx}`} />
                       </td>
                       <td className="px-2 py-1.5">
                         <input type="number" value={row.qty_rejected} onChange={e => updateRejRow(idx, 'qty_rejected', e.target.value)}
                           min="0" placeholder="0"
-                          className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs text-red-600 font-medium" data-testid={`rej-qty-${idx}`} />
+                          className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-xs text-red-600 font-medium h-8" data-testid={`rej-qty-${idx}`} />
                       </td>
                       <td className="px-2 py-1.5">
-                        <select value={row.reason} onChange={e => updateRejRow(idx, 'reason', e.target.value)}
-                          className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs" data-testid={`rej-reason-${idx}`}>
-                          <option value="">Select...</option>
-                          {(rejectionReasons || []).map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
-                        </select>
+                        <Select value={row.reason || undefined} onValueChange={v => updateRejRow(idx, 'reason', v)}>
+                          <SelectTrigger className="h-8 text-xs" data-testid={`rej-reason-${idx}`}>
+                            <SelectValue placeholder="Select reason..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(rejectionReasons || []).map(r => (
+                              <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </td>
                       <td className="px-1 py-1.5">
                         <button onClick={() => removeRejRow(idx)} className="p-1 hover:bg-red-50 rounded" data-testid={`rej-remove-${idx}`}>
@@ -540,12 +565,6 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
                 </tbody>
               </table>
             </div>
-            {inspQty && (
-              <p className="text-[9px] text-slate-400 mt-1">
-                Total rejected: {rejRows.reduce((s, r) => s + (parseInt(r.qty_rejected) || 0), 0)} bottles
-                (max {(parseInt(inspQty) || 0) * (bottlesPerCrate || 1)})
-              </p>
-            )}
           </div>
 
           <div>
@@ -562,7 +581,8 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
             <button onClick={() => { setShowInspect(false); setRejRows([emptyRow()]); }} className="px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 rounded-lg">Cancel</button>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
