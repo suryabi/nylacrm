@@ -1,0 +1,96 @@
+{
+  "summary": "Hierarchical Inspection Structure - All features tested and verified. Backend: 13/13 tests passed (100%). Frontend: All UI elements verified - Entry cards with Resource/Date/Crates header, Rejection items sub-grid with Count/Reason, Add Entry and Add Rejection buttons, Totals bar, Rejection Summary table with nested entries expanded to flat rows, Activity Log with per-entry nested details.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Inspection Form",
+        "issues": ["Console warning: 'Select is changing from uncontrolled to controlled' - minor React state management issue in Select components"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_hierarchical_inspection.py",
+    "/app/test_reports/pytest/hierarchical_inspection_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor: Select components show 'uncontrolled to controlled' warning - consider initializing with empty string instead of undefined"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_hierarchical_inspection.py"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13 tests passed)",
+    "frontend": "100% - All UI elements and integrations verified"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_id": "nyla-air-water"
+  },
+  "seed_data_creation": "Used existing test batch: BATCH-TEST-001 (ID: 5833eb23-8664-4a53-8fc7-eedb9ff18178). Created test QC team members and rejection reasons during tests (cleaned up after).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Hierarchical Inspection Structure fully tested. Key changes from previous iteration: 1) Data model changed from flat grid to hierarchical: Entry (Resource + Date + Crates) → multiple Rejection Items (Count + Reason). 2) Backend payload: {stage_id, entries: [{resource_id, resource_name, date, qty_inspected, rejections: [{qty_rejected, reason}]}], remarks}. 3) Validation: total crates from all entries cannot exceed pending, per-entry rejected total cannot exceed entry's crates × bottles_per_crate. 4) Frontend data-testids: entry-card-{idx}, entry-resource-{idx}, entry-date-{idx}, entry-crates-{idx}, entry-remove-{idx}, add-entry-{stage_id}, rej-item-{eIdx}-{rIdx}, rej-qty-{eIdx}-{rIdx}, rej-reason-{eIdx}-{rIdx}, rej-remove-{eIdx}-{rIdx}, add-rej-{eIdx}, insp-submit-{stage_id}. 5) Rejection Summary table expands entries[].rejections[] into flat rows with columns: Resource, Date, Stage, Crates Inspected, Rejected Count, Passed, Reason, Remarks. 6) Activity Log shows per-entry nested details with resource name, date, crates, and rejection breakdown.",
+  "features_tested": {
+    "Backend_API_Tests": {
+      "test_get_batch_details": "PASSED - Batch has stage_balances, qc_stages, bottles_per_crate",
+      "test_get_qc_stage_pending": "PASSED - Can read pending crates at QC Stage 2",
+      "test_inspection_payload_structure": "PASSED - Hierarchical payload accepted",
+      "test_inspection_multiple_entries": "PASSED - Multiple entries (different resources/dates) work",
+      "test_inspection_multiple_rejections_per_entry": "PASSED - Entry with multiple rejection items works",
+      "test_validation_total_crates_exceeds_pending": "PASSED - Returns 400 when total crates exceed pending",
+      "test_validation_entry_rejected_exceeds_max_bottles": "PASSED - Returns 400 when rejected exceeds max bottles",
+      "test_validation_entry_crates_must_be_positive": "PASSED - Returns 400 when qty_inspected is 0",
+      "test_validation_at_least_one_entry_required": "PASSED - Returns 400 when entries array is empty",
+      "test_inspection_stored_with_entries_field": "PASSED - Inspection stored with 'entries' field",
+      "test_rejection_report_expands_entries": "PASSED - Report expands entries[].rejections[] into flat rows",
+      "test_list_qc_team": "PASSED - QC team members listed",
+      "test_list_rejection_reasons": "PASSED - Rejection reasons listed"
+    },
+    "Frontend_UI_Tests": {
+      "Batch_Detail_page_loads": "PASSED - data-testid='batch-detail-page' found",
+      "Record_Inspection_button": "PASSED - data-testid='inspect-{stage_id}' found",
+      "Entry_card": "PASSED - data-testid='entry-card-0' found",
+      "Entry_resource_dropdown": "PASSED - data-testid='entry-resource-0' found",
+      "Entry_date_input": "PASSED - data-testid='entry-date-0' found",
+      "Entry_crates_input": "PASSED - data-testid='entry-crates-0' found",
+      "Rejection_item": "PASSED - data-testid='rej-item-0-0' found",
+      "Rejection_qty_input": "PASSED - data-testid='rej-qty-0-0' found",
+      "Rejection_reason_dropdown": "PASSED - data-testid='rej-reason-0-0' found",
+      "Add_Entry_button": "PASSED - data-testid='add-entry-{stage_id}' found",
+      "Add_Rejection_button": "PASSED - data-testid='add-rej-0' found",
+      "Submit_button": "PASSED - data-testid='insp-submit-{stage_id}' found",
+      "Second_entry_card_added": "PASSED - entry-card-1 created after clicking Add Entry",
+      "Second_rejection_item_added": "PASSED - rej-item-0-1 created after clicking Add Rejection",
+      "Totals_bar": "PASSED - Shows aggregated crates, rejected, passed",
+      "Rejection_Summary_table": "PASSED - 21 rows with all expected columns",
+      "Activity_Log": "PASSED - Shows per-entry nested details"
+    }
+  },
+  "data_testids_verified": [
+    "batch-detail-page",
+    "inspect-{stage_id}",
+    "entry-card-{idx}",
+    "entry-resource-{idx}",
+    "entry-date-{idx}",
+    "entry-crates-{idx}",
+    "entry-remove-{idx}",
+    "add-entry-{stage_id}",
+    "rej-item-{eIdx}-{rIdx}",
+    "rej-qty-{eIdx}-{rIdx}",
+    "rej-reason-{eIdx}-{rIdx}",
+    "rej-remove-{eIdx}-{rIdx}",
+    "add-rej-{eIdx}",
+    "insp-submit-{stage_id}",
+    "toggle-rejections",
+    "toggle-history",
+    "rej-summary-{idx}"
+  ]
+}

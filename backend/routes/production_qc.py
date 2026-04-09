@@ -295,17 +295,20 @@ class StageMovement(BaseModel):
     quantity: int  # crates to move
     notes: Optional[str] = None
 
-class RejectionEntry(BaseModel):
-    resource_id: str
-    resource_name: str
-    date: str
-    qty_inspected: int  # crates inspected by this resource
+class RejectionItem(BaseModel):
     qty_rejected: int  # bottles rejected
     reason: str
 
+class InspectionEntry(BaseModel):
+    resource_id: str
+    resource_name: str
+    date: str
+    qty_inspected: int  # crates inspected by this resource on this date
+    rejections: List[RejectionItem] = []
+
 class InspectionRecord(BaseModel):
     stage_id: str
-    rejections: List[RejectionEntry] = []  # grid of inspection/rejection records
+    entries: List[InspectionEntry] = []
     remarks: Optional[str] = None
 
 @router.post("/batches/{batch_id}/move")
@@ -406,8 +409,8 @@ async def move_stock(batch_id: str, data: StageMovement, current_user: dict = De
 
 @router.post("/batches/{batch_id}/inspect")
 async def record_inspection(batch_id: str, data: InspectionRecord, current_user: dict = Depends(get_current_user)):
-    """Record QC inspection: each row has crates inspected and rejected bottles per resource.
-    All inspected crates pass through; rejected bottles are tracked separately."""
+    """Record QC inspection: each entry = resource + date + crates inspected,
+    with multiple rejection items (count + reason) per entry."""
     tenant_id = get_current_tenant_id()
     tdb = get_tenant_db()
 
@@ -425,12 +428,15 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
     pending = bal.get("pending", 0)
     bottles_per_crate = batch.get("bottles_per_crate", 1)
 
-    if not data.rejections:
+    if not data.entries:
         raise HTTPException(status_code=400, detail="At least one inspection entry is required")
 
-    # Compute totals from row-level data
-    total_crates_inspected = sum(r.qty_inspected for r in data.rejections)
-    total_rej_bottles = sum(r.qty_rejected for r in data.rejections)
+    # Compute totals from entries
+    total_crates_inspected = sum(e.qty_inspected for e in data.entries)
+    total_rej_bottles = 0
+    for e in data.entries:
+        entry_rejected = sum(r.qty_rejected for r in e.rejections)
+        total_rej_bottles += entry_rejected
 
     if total_crates_inspected <= 0:
         raise HTTPException(status_code=400, detail="Total crates inspected must be > 0")
@@ -438,14 +444,16 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
         raise HTTPException(status_code=400, detail=f"Only {pending} crates pending at {stage['name']}")
 
     # Validate each entry
-    for r in data.rejections:
-        if r.qty_inspected <= 0:
-            raise HTTPException(status_code=400, detail="Crates inspected must be > 0 for each row")
-        if r.qty_rejected < 0:
-            raise HTTPException(status_code=400, detail="Rejected count cannot be negative")
-        max_bottles = r.qty_inspected * bottles_per_crate
-        if r.qty_rejected > max_bottles:
-            raise HTTPException(status_code=400, detail=f"Rejected ({r.qty_rejected}) exceeds max {max_bottles} bottles for {r.resource_name}")
+    for e in data.entries:
+        if e.qty_inspected <= 0:
+            raise HTTPException(status_code=400, detail="Crates inspected must be > 0 for each entry")
+        entry_rejected = sum(r.qty_rejected for r in e.rejections)
+        max_bottles = e.qty_inspected * bottles_per_crate
+        if entry_rejected > max_bottles:
+            raise HTTPException(status_code=400, detail=f"Total rejected ({entry_rejected}) exceeds max {max_bottles} bottles for {e.resource_name}")
+        for r in e.rejections:
+            if r.qty_rejected < 0:
+                raise HTTPException(status_code=400, detail="Rejected count cannot be negative")
 
     # All inspected crates pass through; rejected bottles tracked separately
     bal["pending"] = pending - total_crates_inspected
@@ -453,14 +461,11 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
     bal["rejected"] = bal.get("rejected", 0) + total_rej_bottles
     balances[data.stage_id] = bal
 
-    # Track total rejected bottles and final QC pass-through
     batch_total_rejected = batch.get("total_rejected", 0) + total_rej_bottles
     total_passed_final = batch.get("total_passed_final", 0)
-
     if stage.get("stage_type") == "final_qc":
         total_passed_final += total_crates_inspected
 
-    # Check if batch is completed
     sorted_stages = sorted(stages, key=lambda s: s["order"])
     all_done = batch.get("unallocated_crates", 0) == 0
     if all_done:
@@ -480,7 +485,6 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    # Record inspection with row-level entries
     now = datetime.now(timezone.utc).isoformat()
     inspection = {
         "id": str(uuid.uuid4()),
@@ -491,7 +495,7 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
         "qty_inspected": total_crates_inspected,
         "qty_passed": total_crates_inspected,
         "qty_rejected": total_rej_bottles,
-        "rejections": [r.model_dump() for r in data.rejections],
+        "entries": [e.model_dump() for e in data.entries],
         "remarks": data.remarks or "",
         "inspected_by": current_user.get("id"),
         "inspected_by_name": current_user.get("name"),
@@ -815,45 +819,67 @@ async def get_rejection_report(
     total_rejected = 0
     for ins in inspections:
         b = batches_map.get(ins["batch_id"], {})
-        # New format: rejections array with per-resource entries
-        rejection_entries = ins.get("rejections", [])
-        if rejection_entries:
-            for rej in rejection_entries:
-                if rej.get("qty_rejected", 0) > 0:
-                    rows.append({
-                        "id": ins["id"] + "-" + rej.get("resource_id", ""),
-                        "inspection_id": ins["id"],
-                        "batch_id": ins["batch_id"],
-                        "batch_code": b.get("batch_code", ""),
-                        "sku_name": b.get("sku_name", ""),
-                        "stage_name": ins.get("stage_name", ""),
-                        "stage_type": ins.get("stage_type", ""),
-                        "date": rej.get("date", ins.get("inspected_at", "")[:10]),
-                        "resource_name": rej.get("resource_name", ""),
-                        "resource_id": rej.get("resource_id", ""),
-                        "qty_inspected": rej.get("qty_inspected", 0),
-                        "qty_rejected": rej.get("qty_rejected", 0),
-                        "rejection_reason": rej.get("reason", ""),
-                        "remarks": ins.get("remarks", ""),
-                    })
-        elif ins.get("qty_rejected", 0) > 0:
-            # Legacy format (single rejection)
-            rows.append({
-                "id": ins["id"],
-                "inspection_id": ins["id"],
-                "batch_id": ins["batch_id"],
-                "batch_code": b.get("batch_code", ""),
-                "sku_name": b.get("sku_name", ""),
-                "stage_name": ins.get("stage_name", ""),
-                "stage_type": ins.get("stage_type", ""),
-                "date": ins.get("inspected_at", "")[:10],
-                "resource_name": ins.get("inspected_by_name", ""),
-                "resource_id": ins.get("inspected_by", ""),
-                "qty_inspected": ins.get("qty_inspected", 0),
-                "qty_rejected": ins.get("qty_rejected", 0),
-                "rejection_reason": ins.get("rejection_reason", ""),
-                "remarks": ins.get("remarks", ""),
-            })
+        # New nested format: entries[].rejections[]
+        entries = ins.get("entries", [])
+        if entries:
+            for entry in entries:
+                for rej in entry.get("rejections", []):
+                    if rej.get("qty_rejected", 0) > 0:
+                        rows.append({
+                            "id": ins["id"] + "-" + entry.get("resource_id", "") + "-" + rej.get("reason", ""),
+                            "inspection_id": ins["id"],
+                            "batch_id": ins["batch_id"],
+                            "batch_code": b.get("batch_code", ""),
+                            "sku_name": b.get("sku_name", ""),
+                            "stage_name": ins.get("stage_name", ""),
+                            "stage_type": ins.get("stage_type", ""),
+                            "date": entry.get("date", ins.get("inspected_at", "")[:10]),
+                            "resource_name": entry.get("resource_name", ""),
+                            "resource_id": entry.get("resource_id", ""),
+                            "qty_inspected": entry.get("qty_inspected", 0),
+                            "qty_rejected": rej.get("qty_rejected", 0),
+                            "rejection_reason": rej.get("reason", ""),
+                            "remarks": ins.get("remarks", ""),
+                        })
+        else:
+            # Legacy flat format: rejections[] or single rejection
+            rejection_entries = ins.get("rejections", [])
+            if rejection_entries:
+                for rej in rejection_entries:
+                    if rej.get("qty_rejected", 0) > 0:
+                        rows.append({
+                            "id": ins["id"] + "-" + rej.get("resource_id", ""),
+                            "inspection_id": ins["id"],
+                            "batch_id": ins["batch_id"],
+                            "batch_code": b.get("batch_code", ""),
+                            "sku_name": b.get("sku_name", ""),
+                            "stage_name": ins.get("stage_name", ""),
+                            "stage_type": ins.get("stage_type", ""),
+                            "date": rej.get("date", ins.get("inspected_at", "")[:10]),
+                            "resource_name": rej.get("resource_name", ""),
+                            "resource_id": rej.get("resource_id", ""),
+                            "qty_inspected": rej.get("qty_inspected", ins.get("qty_inspected", 0)),
+                            "qty_rejected": rej.get("qty_rejected", 0),
+                            "rejection_reason": rej.get("reason", ""),
+                            "remarks": ins.get("remarks", ""),
+                        })
+            elif ins.get("qty_rejected", 0) > 0:
+                rows.append({
+                    "id": ins["id"],
+                    "inspection_id": ins["id"],
+                    "batch_id": ins["batch_id"],
+                    "batch_code": b.get("batch_code", ""),
+                    "sku_name": b.get("sku_name", ""),
+                    "stage_name": ins.get("stage_name", ""),
+                    "stage_type": ins.get("stage_type", ""),
+                    "date": ins.get("inspected_at", "")[:10],
+                    "resource_name": ins.get("inspected_by_name", ""),
+                    "resource_id": ins.get("inspected_by", ""),
+                    "qty_inspected": ins.get("qty_inspected", 0),
+                    "qty_rejected": ins.get("qty_rejected", 0),
+                    "rejection_reason": ins.get("rejection_reason", ""),
+                    "remarks": ins.get("remarks", ""),
+                })
         total_rejected += ins.get("qty_rejected", 0)
 
     # Summary by resource

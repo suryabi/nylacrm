@@ -191,18 +191,36 @@ export default function BatchDetail() {
         // Flatten rejection entries from all inspections
         const rejEntries = [];
         history.inspections.filter(i => i.qty_rejected > 0).forEach(i => {
-          const entries = i.rejections || [];
+          const entries = i.entries || [];
           if (entries.length > 0) {
-            entries.filter(e => e.qty_rejected > 0).forEach(e => {
-              rejEntries.push({ ...e, stage_name: i.stage_name, remarks: i.remarks, inspId: i.id });
+            entries.forEach(entry => {
+              (entry.rejections || []).filter(r => r.qty_rejected > 0).forEach(r => {
+                rejEntries.push({
+                  resource_name: entry.resource_name, date: entry.date,
+                  qty_inspected: entry.qty_inspected, qty_rejected: r.qty_rejected,
+                  reason: r.reason, stage_name: i.stage_name, remarks: i.remarks,
+                });
+              });
             });
           } else {
-            // Legacy format
-            rejEntries.push({
-              resource_name: i.inspected_by_name, date: (i.inspected_at || '').slice(0, 10),
-              qty_rejected: i.qty_rejected, reason: i.rejection_reason || '',
-              stage_name: i.stage_name, remarks: i.remarks, inspId: i.id,
-            });
+            // Legacy flat format
+            const rejs = i.rejections || [];
+            if (rejs.length > 0) {
+              rejs.filter(r => r.qty_rejected > 0).forEach(r => {
+                rejEntries.push({
+                  resource_name: r.resource_name, date: r.date,
+                  qty_inspected: r.qty_inspected || i.qty_inspected,
+                  qty_rejected: r.qty_rejected, reason: r.reason || '',
+                  stage_name: i.stage_name, remarks: i.remarks,
+                });
+              });
+            } else {
+              rejEntries.push({
+                resource_name: i.inspected_by_name, date: (i.inspected_at || '').slice(0, 10),
+                qty_inspected: i.qty_inspected, qty_rejected: i.qty_rejected,
+                reason: i.rejection_reason || '', stage_name: i.stage_name, remarks: i.remarks,
+              });
+            }
           }
         });
         const totalRej = rejEntries.reduce((s, e) => s + (e.qty_rejected || 0), 0);
@@ -284,11 +302,27 @@ export default function BatchDetail() {
                         {(!item.qty_rejected || item.qty_rejected === 0) && <> &mdash; <span className="text-emerald-600">all passed</span></>}
                         {item.qty_rejected > 0 && <> &mdash; <span className="text-red-600">{item.qty_rejected} bottles rejected</span></>}
                         </p>
-                        {item.rejections && item.rejections.length > 0 && (
+                        {/* New nested entries format */}
+                        {item.entries && item.entries.length > 0 && (
+                          <div className="mt-1 ml-2 space-y-1">
+                            {item.entries.map((entry, ei) => (
+                              <div key={ei}>
+                                <p className="text-xs text-slate-500 font-medium">{entry.resource_name} ({entry.date}) &mdash; {entry.qty_inspected} crates</p>
+                                {entry.rejections?.filter(r => r.qty_rejected > 0).map((r, ri) => (
+                                  <p key={ri} className="text-xs text-slate-400 ml-3">
+                                    <span className="text-red-500 font-medium">{r.qty_rejected}</span> rejected &mdash; {r.reason}
+                                  </p>
+                                ))}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {/* Legacy flat rejections format */}
+                        {!item.entries && item.rejections && item.rejections.length > 0 && (
                           <div className="mt-1 ml-2 space-y-0.5">
                             {item.rejections.filter(r => r.qty_rejected > 0).map((r, ri) => (
                               <p key={ri} className="text-xs text-slate-500">
-                                {r.resource_name} ({r.date}): <span className="text-red-500 font-medium">{r.qty_rejected} bottles</span> &mdash; {r.reason}
+                                {r.resource_name} ({r.date}): <span className="text-red-500 font-medium">{r.qty_rejected}</span> &mdash; {r.reason}
                               </p>
                             ))}
                           </div>
@@ -325,8 +359,9 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
   const [moveQty, setMoveQty] = useState('');
   const [moveNotes, setMoveNotes] = useState('');
   const [inspRemarks, setInspRemarks] = useState('');
-  const emptyRow = () => ({ resource_id: '', resource_name: '', date: new Date().toISOString().slice(0, 10), qty_inspected: '', qty_rejected: '', reason: '' });
-  const [rejRows, setRejRows] = useState([emptyRow()]);
+  const emptyRejItem = () => ({ qty_rejected: '', reason: '' });
+  const emptyEntry = () => ({ resource_id: '', resource_name: '', date: new Date().toISOString().slice(0, 10), qty_inspected: '', rejItems: [emptyRejItem()] });
+  const [entries, setEntries] = useState([emptyEntry()]);
   const [saving, setSaving] = useState(false);
 
   const handleMove = async () => {
@@ -347,50 +382,53 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
   };
 
   const handleInspect = async () => {
-    // Build entries — each row has its own crates inspected and rejected count
-    const entries = rejRows.map(r => ({
-      resource_id: r.resource_id,
-      resource_name: r.resource_name,
-      date: r.date,
-      qty_inspected: parseInt(r.qty_inspected) || 0,
-      qty_rejected: parseInt(r.qty_rejected) || 0,
-      reason: r.reason,
+    // Build entries for the API
+    const apiEntries = entries.map(e => ({
+      resource_id: e.resource_id,
+      resource_name: e.resource_name,
+      date: e.date,
+      qty_inspected: parseInt(e.qty_inspected) || 0,
+      rejections: e.rejItems.filter(r => parseInt(r.qty_rejected) > 0).map(r => ({
+        qty_rejected: parseInt(r.qty_rejected) || 0,
+        reason: r.reason,
+      })),
     }));
 
-    // Validate entries
-    for (const r of entries) {
-      if (!r.resource_name) { toast.error('Select a resource for all rows'); return; }
-      if (!r.date) { toast.error('Date is required for all rows'); return; }
-      if (r.qty_inspected <= 0) { toast.error('Crates inspected must be > 0 for all rows'); return; }
-      if (r.qty_rejected < 0) { toast.error('Rejected count cannot be negative'); return; }
-      if (!r.reason) { toast.error('Select a reason for all rows'); return; }
-      const maxBottles = r.qty_inspected * (bottlesPerCrate || 1);
-      if (r.qty_rejected > maxBottles) { toast.error(`Rejected (${r.qty_rejected}) exceeds max ${maxBottles} for ${r.resource_name}`); return; }
+    // Validate
+    for (const e of apiEntries) {
+      if (!e.resource_name) { toast.error('Select a resource for all entries'); return; }
+      if (!e.date) { toast.error('Date is required'); return; }
+      if (e.qty_inspected <= 0) { toast.error('Crates inspected must be > 0'); return; }
+      for (const r of e.rejections) {
+        if (!r.reason) { toast.error('Select a reason for all rejection rows'); return; }
+      }
+      const entryRejTotal = e.rejections.reduce((s, r) => s + r.qty_rejected, 0);
+      const maxBottles = e.qty_inspected * (bottlesPerCrate || 1);
+      if (entryRejTotal > maxBottles) { toast.error(`Rejected (${entryRejTotal}) exceeds ${maxBottles} for ${e.resource_name}`); return; }
     }
 
-    const totalCrates = entries.reduce((s, r) => s + r.qty_inspected, 0);
+    const totalCrates = apiEntries.reduce((s, e) => s + e.qty_inspected, 0);
     if (totalCrates > (bal.pending || 0)) { toast.error(`Total crates (${totalCrates}) exceeds ${bal.pending} pending`); return; }
 
     setSaving(true);
     try {
       await axios.post(`${API_URL}/production/batches/${batchId}/inspect`, {
-        stage_id: stage.id, rejections: entries, remarks: inspRemarks,
+        stage_id: stage.id, entries: apiEntries, remarks: inspRemarks,
       }, { headers: getAuthHeaders() });
       toast.success(`Inspection recorded at ${stage.name}`);
       setShowInspect(false);
       setInspRemarks('');
-      setRejRows([emptyRow()]);
+      setEntries([emptyEntry()]);
       onUpdate();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Inspection failed');
     } finally { setSaving(false); }
   };
 
-  const updateRejRow = (idx, field, value) => {
-    setRejRows(prev => {
+  const updateEntry = (idx, field, value) => {
+    setEntries(prev => {
       const next = [...prev];
       next[idx] = { ...next[idx], [field]: value };
-      // Auto-fill resource_name when resource_id is selected
       if (field === 'resource_id') {
         const member = (qcTeam || []).find(m => m.id === value);
         next[idx].resource_name = member ? member.name : '';
@@ -398,9 +436,33 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
       return next;
     });
   };
+  const addEntry = () => setEntries(prev => [...prev, emptyEntry()]);
+  const removeEntry = (idx) => setEntries(prev => prev.length > 1 ? prev.filter((_, i) => i !== idx) : [emptyEntry()]);
 
-  const addRejRow = () => setRejRows(prev => [...prev, emptyRow()]);
-  const removeRejRow = (idx) => setRejRows(prev => prev.length > 1 ? prev.filter((_, i) => i !== idx) : [emptyRow()]);
+  const updateRejItem = (entryIdx, rejIdx, field, value) => {
+    setEntries(prev => {
+      const next = [...prev];
+      const items = [...next[entryIdx].rejItems];
+      items[rejIdx] = { ...items[rejIdx], [field]: value };
+      next[entryIdx] = { ...next[entryIdx], rejItems: items };
+      return next;
+    });
+  };
+  const addRejItem = (entryIdx) => {
+    setEntries(prev => {
+      const next = [...prev];
+      next[entryIdx] = { ...next[entryIdx], rejItems: [...next[entryIdx].rejItems, emptyRejItem()] };
+      return next;
+    });
+  };
+  const removeRejItem = (entryIdx, rejIdx) => {
+    setEntries(prev => {
+      const next = [...prev];
+      const items = next[entryIdx].rejItems;
+      next[entryIdx] = { ...next[entryIdx], rejItems: items.length > 1 ? items.filter((_, i) => i !== rejIdx) : [emptyRejItem()] };
+      return next;
+    });
+  };
 
   return (
     <div className={`bg-white border rounded-xl overflow-hidden ${cfg.border}`} data-testid={`stage-card-${stage.id}`}>
@@ -472,48 +534,39 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
         </div>
       )}
 
-      {/* Inspection Form — Editable Grid (COGS-style rows) */}
+      {/* Inspection Form — Hierarchical: Entry (Resource + Date + Crates) → Rejection Items (Count + Reason) */}
       {showInspect && (() => {
-        const totalCrates = rejRows.reduce((s, r) => s + (parseInt(r.qty_inspected) || 0), 0);
-        const totalBottles = rejRows.reduce((s, r) => s + ((parseInt(r.qty_inspected) || 0) * (bottlesPerCrate || 1)), 0);
-        const totalRejected = rejRows.reduce((s, r) => s + (parseInt(r.qty_rejected) || 0), 0);
+        const totalCrates = entries.reduce((s, e) => s + (parseInt(e.qty_inspected) || 0), 0);
+        const totalRejected = entries.reduce((s, e) => s + e.rejItems.reduce((rs, r) => rs + (parseInt(r.qty_rejected) || 0), 0), 0);
+        const totalBottles = entries.reduce((s, e) => s + ((parseInt(e.qty_inspected) || 0) * (bottlesPerCrate || 1)), 0);
         const passedBottles = Math.max(0, totalBottles - totalRejected);
         return (
         <div className="px-5 py-5 bg-emerald-50/50 border-t border-emerald-100 space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-emerald-700 font-medium">Record inspection at <span className="font-bold">{stage.name}</span> <span className="text-slate-400 font-normal">({bal.pending || 0} crates pending, {bottlesPerCrate} bottles/crate)</span></p>
-            <button onClick={addRejRow}
+            <button onClick={addEntry}
               className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg flex items-center gap-1.5 transition-colors"
-              data-testid={`add-rej-row-${stage.id}`}>
-              <Plus size={12} /> Add Row
+              data-testid={`add-entry-${stage.id}`}>
+              <Plus size={12} /> Add Entry
             </button>
           </div>
 
-          {/* Grid Table — COGS calculator sizing */}
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50">
-                <tr className="border-b border-slate-200">
-                  <th className="text-left p-3 font-semibold text-slate-600" style={{minWidth: '200px'}}>Resource</th>
-                  <th className="text-left p-3 font-semibold text-slate-600" style={{minWidth: '150px'}}>Date</th>
-                  <th className="text-left p-3 font-semibold text-slate-600" style={{minWidth: '130px'}}>Crates Inspected</th>
-                  <th className="text-left p-3 font-semibold text-slate-600" style={{minWidth: '130px'}}>Rejected Count</th>
-                  <th className="text-right p-3 font-semibold text-emerald-600 bg-emerald-50/50" style={{minWidth: '110px'}}>Passed</th>
-                  <th className="text-left p-3 font-semibold text-slate-600" style={{minWidth: '200px'}}>Reason</th>
-                  <th className="w-12"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rejRows.map((row, idx) => {
-                  const rowCrates = parseInt(row.qty_inspected) || 0;
-                  const rowTotalBottles = rowCrates * (bottlesPerCrate || 1);
-                  const rowRejected = parseInt(row.qty_rejected) || 0;
-                  const rowPassed = Math.max(0, rowTotalBottles - rowRejected);
-                  return (
-                  <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50/50" data-testid={`rej-grid-row-${idx}`}>
-                    <td className="p-2">
-                      <Select value={row.resource_id || undefined} onValueChange={v => updateRejRow(idx, 'resource_id', v)}>
-                        <SelectTrigger className="h-10 text-sm border-slate-200" data-testid={`rej-resource-${idx}`}>
+          {/* Entry Cards */}
+          <div className="space-y-3">
+            {entries.map((entry, eIdx) => {
+              const eCrates = parseInt(entry.qty_inspected) || 0;
+              const eBottles = eCrates * (bottlesPerCrate || 1);
+              const eRejected = entry.rejItems.reduce((s, r) => s + (parseInt(r.qty_rejected) || 0), 0);
+              const ePassed = Math.max(0, eBottles - eRejected);
+              return (
+              <div key={eIdx} className="bg-white border border-slate-200 rounded-xl overflow-hidden" data-testid={`entry-card-${eIdx}`}>
+                {/* Entry Header: Resource + Date + Crates */}
+                <div className="p-3 bg-slate-50/80 border-b border-slate-200">
+                  <div className="grid grid-cols-12 gap-3 items-end">
+                    <div className="col-span-4">
+                      <label className="text-[10px] text-slate-500 mb-1 block font-medium uppercase tracking-wider">Resource</label>
+                      <Select value={entry.resource_id || undefined} onValueChange={v => updateEntry(eIdx, 'resource_id', v)}>
+                        <SelectTrigger className="h-10 text-sm border-slate-200 bg-white" data-testid={`entry-resource-${eIdx}`}>
                           <SelectValue placeholder="Select resource..." />
                         </SelectTrigger>
                         <SelectContent>
@@ -522,56 +575,84 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
                           ))}
                         </SelectContent>
                       </Select>
-                    </td>
-                    <td className="p-2">
-                      <input type="date" value={row.date} onChange={e => updateRejRow(idx, 'date', e.target.value)}
-                        className="w-full h-10 px-3 border border-slate-200 rounded-md text-sm bg-white" data-testid={`rej-date-${idx}`} />
-                    </td>
-                    <td className="p-2">
-                      <input type="number" value={row.qty_inspected} onChange={e => updateRejRow(idx, 'qty_inspected', e.target.value)}
+                    </div>
+                    <div className="col-span-3">
+                      <label className="text-[10px] text-slate-500 mb-1 block font-medium uppercase tracking-wider">Date</label>
+                      <input type="date" value={entry.date} onChange={e => updateEntry(eIdx, 'date', e.target.value)}
+                        className="w-full h-10 px-3 border border-slate-200 rounded-md text-sm bg-white" data-testid={`entry-date-${eIdx}`} />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-[10px] text-slate-500 mb-1 block font-medium uppercase tracking-wider">Crates Inspected</label>
+                      <input type="number" value={entry.qty_inspected} onChange={e => updateEntry(eIdx, 'qty_inspected', e.target.value)}
                         min="1" placeholder="0"
-                        className="w-full h-10 px-3 border border-slate-200 rounded-md text-sm text-right bg-white" data-testid={`rej-crates-${idx}`} />
-                    </td>
-                    <td className="p-2">
-                      <input type="number" value={row.qty_rejected} onChange={e => updateRejRow(idx, 'qty_rejected', e.target.value)}
-                        min="0" placeholder="0"
-                        className="w-full h-10 px-3 border border-slate-200 rounded-md text-sm text-right text-red-600 font-medium bg-white" data-testid={`rej-qty-${idx}`} />
-                    </td>
-                    <td className="p-3 text-right font-bold text-emerald-600 bg-emerald-50/30">
-                      {rowCrates > 0 ? rowPassed.toLocaleString() : '-'}
-                    </td>
-                    <td className="p-2">
-                      <Select value={row.reason || undefined} onValueChange={v => updateRejRow(idx, 'reason', v)}>
-                        <SelectTrigger className="h-10 text-sm border-slate-200" data-testid={`rej-reason-${idx}`}>
-                          <SelectValue placeholder="Select reason..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(rejectionReasons || []).map(r => (
-                            <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </td>
-                    <td className="p-2 text-center">
-                      <button onClick={() => removeRejRow(idx)} className="p-2 hover:bg-red-50 rounded-lg transition-colors" data-testid={`rej-remove-${idx}`}>
+                        className="w-full h-10 px-3 border border-slate-200 rounded-md text-sm text-right bg-white" data-testid={`entry-crates-${eIdx}`} />
+                    </div>
+                    <div className="col-span-2 flex items-center gap-3 pb-0.5">
+                      {eCrates > 0 && (
+                        <div className="text-xs">
+                          <span className="text-red-500 font-medium">{eRejected}</span>
+                          <span className="text-slate-300 mx-1">/</span>
+                          <span className="text-emerald-600 font-bold">{ePassed}</span>
+                          <span className="text-slate-300 text-[10px] ml-1">rej/pass</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="col-span-1 flex justify-end pb-0.5">
+                      <button onClick={() => removeEntry(eIdx)} className="p-2 hover:bg-red-50 rounded-lg transition-colors" data-testid={`entry-remove-${eIdx}`}>
                         <Trash2 size={14} className="text-slate-300 hover:text-red-500" />
                       </button>
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-              {/* Totals Footer */}
-              <tfoot>
-                <tr className="bg-slate-50 border-t border-slate-200 font-semibold">
-                  <td colSpan={2} className="p-3 text-right text-slate-600 text-sm">Totals</td>
-                  <td className="p-3 text-right text-slate-800">{totalCrates}</td>
-                  <td className="p-3 text-right text-red-600">{totalRejected}</td>
-                  <td className="p-3 text-right text-emerald-600 bg-emerald-50/30">{passedBottles.toLocaleString()}</td>
-                  <td colSpan={2}></td>
-                </tr>
-              </tfoot>
-            </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Rejection Items Sub-Grid */}
+                <div className="p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">Rejection Details</label>
+                    <button onClick={() => addRejItem(eIdx)}
+                      className="px-2 py-0.5 text-[10px] font-medium text-slate-500 hover:text-blue-700 hover:bg-blue-50 rounded flex items-center gap-1 transition-colors"
+                      data-testid={`add-rej-${eIdx}`}>
+                      <Plus size={9} /> Add Rejection
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {entry.rejItems.map((rej, rIdx) => (
+                      <div key={rIdx} className="flex items-center gap-3" data-testid={`rej-item-${eIdx}-${rIdx}`}>
+                        <div className="w-28">
+                          <input type="number" value={rej.qty_rejected} onChange={e => updateRejItem(eIdx, rIdx, 'qty_rejected', e.target.value)}
+                            min="0" placeholder="Count"
+                            className="w-full h-9 px-3 border border-slate-200 rounded-md text-sm text-right text-red-600 font-medium bg-white" data-testid={`rej-qty-${eIdx}-${rIdx}`} />
+                        </div>
+                        <div className="flex-1">
+                          <Select value={rej.reason || undefined} onValueChange={v => updateRejItem(eIdx, rIdx, 'reason', v)}>
+                            <SelectTrigger className="h-9 text-sm border-slate-200 bg-white" data-testid={`rej-reason-${eIdx}-${rIdx}`}>
+                              <SelectValue placeholder="Select reason..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(rejectionReasons || []).map(r => (
+                                <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <button onClick={() => removeRejItem(eIdx, rIdx)} className="p-1.5 hover:bg-red-50 rounded transition-colors" data-testid={`rej-remove-${eIdx}-${rIdx}`}>
+                          <Trash2 size={12} className="text-slate-300 hover:text-red-400" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              );
+            })}
+          </div>
+
+          {/* Totals Bar */}
+          <div className="flex items-center gap-6 bg-white border border-slate-200 rounded-xl p-3 text-sm">
+            <span className="text-slate-500">Totals:</span>
+            <span className="text-slate-700 font-medium">{totalCrates} crates</span>
+            <span className="text-red-500 font-medium">{totalRejected} rejected</span>
+            <span className="text-emerald-600 font-bold">{passedBottles.toLocaleString()} passed</span>
           </div>
 
           <div className="max-w-md">
@@ -585,7 +666,7 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
               data-testid={`insp-submit-${stage.id}`}>
               {saving ? <Loader2 size={14} className="animate-spin" /> : <ClipboardCheck size={14} />} Submit Inspection
             </button>
-            <button onClick={() => { setShowInspect(false); setRejRows([emptyRow()]); }} className="px-4 py-2.5 text-sm text-slate-500 hover:bg-slate-100 rounded-lg transition-colors">Cancel</button>
+            <button onClick={() => { setShowInspect(false); setEntries([emptyEntry()]); }} className="px-4 py-2.5 text-sm text-slate-500 hover:bg-slate-100 rounded-lg transition-colors">Cancel</button>
           </div>
         </div>
         );
