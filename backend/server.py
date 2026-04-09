@@ -6853,10 +6853,78 @@ async def get_dashboard_analytics(
     leads_lost = status_counts.get('closed_lost', 0)
     conversion_rate = (leads_won / total_leads * 100) if total_leads > 0 else 0
     
-    # Pipeline value - exclude won, lost, closed_won, closed_lost, and not_qualified (only active opportunities)
+    # Pipeline value - based on target_closure_month/year matching the time filter
+    # Sum opportunity_estimation.estimated_monthly_revenue from proposed SKU section
+    pipeline_match = {}
+    if current_user['role'] == 'sales_rep':
+        pipeline_match['assigned_to'] = current_user['id']
+    elif sales_resource:
+        pipeline_match['assigned_to'] = sales_resource
+    if territory and territory != 'all':
+        pipeline_match['region'] = territory
+    if state:
+        pipeline_match['state'] = state
+    if city:
+        pipeline_match['city'] = city
+    pipeline_match['status'] = {'$nin': ['closed_lost', 'closed_won', 'not_qualified', 'won', 'lost']}
+
+    # Build target_closure month/year conditions from time_filter
+    def _get_target_closure_conditions(tf, ref_now):
+        conditions = []
+        if tf == 'this_month':
+            conditions = [{'target_closure_month': ref_now.month, 'target_closure_year': ref_now.year}]
+        elif tf == 'last_month':
+            prev = ref_now.replace(day=1) - timedelta(days=1)
+            conditions = [{'target_closure_month': prev.month, 'target_closure_year': prev.year}]
+        elif tf == 'this_week':
+            conditions = [{'target_closure_month': ref_now.month, 'target_closure_year': ref_now.year}]
+        elif tf == 'last_week':
+            lw = ref_now - timedelta(days=ref_now.weekday() + 7)
+            conditions = [{'target_closure_month': lw.month, 'target_closure_year': lw.year}]
+        elif tf == 'this_quarter':
+            q_start = ((ref_now.month - 1) // 3) * 3 + 1
+            for m in range(q_start, q_start + 3):
+                conditions.append({'target_closure_month': m, 'target_closure_year': ref_now.year})
+        elif tf == 'last_quarter':
+            q = (ref_now.month - 1) // 3
+            if q == 0:
+                for m in [10, 11, 12]:
+                    conditions.append({'target_closure_month': m, 'target_closure_year': ref_now.year - 1})
+            else:
+                q_start = (q - 1) * 3 + 1
+                for m in range(q_start, q_start + 3):
+                    conditions.append({'target_closure_month': m, 'target_closure_year': ref_now.year})
+        elif tf == 'last_3_months':
+            d = ref_now
+            seen = set()
+            for _ in range(90):
+                key = (d.month, d.year)
+                if key not in seen:
+                    seen.add(key)
+                    conditions.append({'target_closure_month': d.month, 'target_closure_year': d.year})
+                d = d - timedelta(days=1)
+                if len(seen) >= 3:
+                    break
+        elif tf == 'last_6_months':
+            d = ref_now
+            seen = set()
+            for _ in range(180):
+                key = (d.month, d.year)
+                if key not in seen:
+                    seen.add(key)
+                    conditions.append({'target_closure_month': d.month, 'target_closure_year': d.year})
+                d = d - timedelta(days=1)
+                if len(seen) >= 6:
+                    break
+        return conditions
+
+    tc_conditions = _get_target_closure_conditions(time_filter, now)
+    if tc_conditions:
+        pipeline_match['$or'] = tc_conditions
+
     pipeline_value_pipeline = [
-        {'$match': {**match_stage, 'status': {'$nin': ['closed_lost', 'closed_won', 'not_qualified', 'won', 'lost']}}},
-        {'$group': {'_id': None, 'total_value': {'$sum': '$estimated_value'}}}
+        {'$match': pipeline_match},
+        {'$group': {'_id': None, 'total_value': {'$sum': {'$ifNull': ['$opportunity_estimation.estimated_monthly_revenue', 0]}}}}
     ]
     pipeline_value_result = await get_tdb().leads.aggregate(pipeline_value_pipeline).to_list(1)
     pipeline_value = pipeline_value_result[0]['total_value'] if pipeline_value_result else 0
@@ -7018,56 +7086,67 @@ async def get_pipeline_accounts(
 ):
     """Get list of accounts/leads contributing to pipeline value"""
     
-    # Calculate date range based on time filter
     now = datetime.now(timezone.utc)
     
-    if time_filter == 'this_week':
-        start_date = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'last_week':
-        start_date = (now - timedelta(days=now.weekday() + 7)).replace(hour=0, minute=0, second=0).isoformat()
-        end_date = (now - timedelta(days=now.weekday() + 1)).replace(hour=23, minute=59, second=59).isoformat()
-    elif time_filter == 'this_month':
-        start_date = now.replace(day=1, hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'last_month':
-        # Get the first day of current month, then go back one day to get last day of previous month
-        first_of_current = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        last_day_of_prev = first_of_current - timedelta(days=1)
-        first_of_prev = last_day_of_prev.replace(day=1)
-        start_date = first_of_prev.isoformat()
-        end_date = last_day_of_prev.replace(hour=23, minute=59, second=59).isoformat()
-    elif time_filter == 'last_3_months':
-        start_date = (now - timedelta(days=90)).replace(hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'last_6_months':
-        start_date = (now - timedelta(days=180)).replace(hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'this_quarter':
-        quarter = (now.month - 1) // 3
-        start_date = now.replace(month=quarter * 3 + 1, day=1, hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'last_quarter':
-        quarter = (now.month - 1) // 3
-        if quarter == 0:
-            start_date = now.replace(year=now.year - 1, month=10, day=1, hour=0, minute=0, second=0).isoformat()
-            end_date = now.replace(year=now.year - 1, month=12, day=31, hour=23, minute=59, second=59).isoformat()
-        else:
-            start_date = now.replace(month=(quarter - 1) * 3 + 1, day=1, hour=0, minute=0, second=0).isoformat()
-            end_date = now.replace(month=quarter * 3, day=1, hour=0, minute=0, second=0).isoformat()
-    else:  # lifetime or default
-        start_date = None
-        end_date = None
-    
-    # Build match stage - exclude won, lost, closed_won, closed_lost, and not_qualified (only active opportunities)
+    # Build match stage - exclude won, lost, closed statuses, only leads with opportunity estimation
     match_stage = {
         'status': {'$nin': ['closed_lost', 'closed_won', 'not_qualified', 'won', 'lost']},
-        'estimated_value': {'$gt': 0}  # Only leads with value
+        'opportunity_estimation.estimated_monthly_revenue': {'$gt': 0}
     }
     
-    # Add date filter if not lifetime
-    if start_date and end_date:
-        match_stage['created_at'] = {'$gte': start_date, '$lte': end_date}
+    # Build target_closure month/year conditions from time_filter
+    def _get_tc_conditions(tf, ref_now):
+        conditions = []
+        if tf == 'this_month':
+            conditions = [{'target_closure_month': ref_now.month, 'target_closure_year': ref_now.year}]
+        elif tf == 'last_month':
+            prev = ref_now.replace(day=1) - timedelta(days=1)
+            conditions = [{'target_closure_month': prev.month, 'target_closure_year': prev.year}]
+        elif tf == 'this_week':
+            conditions = [{'target_closure_month': ref_now.month, 'target_closure_year': ref_now.year}]
+        elif tf == 'last_week':
+            lw = ref_now - timedelta(days=ref_now.weekday() + 7)
+            conditions = [{'target_closure_month': lw.month, 'target_closure_year': lw.year}]
+        elif tf == 'this_quarter':
+            q_start = ((ref_now.month - 1) // 3) * 3 + 1
+            for m in range(q_start, q_start + 3):
+                conditions.append({'target_closure_month': m, 'target_closure_year': ref_now.year})
+        elif tf == 'last_quarter':
+            q = (ref_now.month - 1) // 3
+            if q == 0:
+                for m in [10, 11, 12]:
+                    conditions.append({'target_closure_month': m, 'target_closure_year': ref_now.year - 1})
+            else:
+                q_start = (q - 1) * 3 + 1
+                for m in range(q_start, q_start + 3):
+                    conditions.append({'target_closure_month': m, 'target_closure_year': ref_now.year})
+        elif tf == 'last_3_months':
+            d = ref_now
+            seen = set()
+            for _ in range(90):
+                key = (d.month, d.year)
+                if key not in seen:
+                    seen.add(key)
+                    conditions.append({'target_closure_month': d.month, 'target_closure_year': d.year})
+                d = d - timedelta(days=1)
+                if len(seen) >= 3:
+                    break
+        elif tf == 'last_6_months':
+            d = ref_now
+            seen = set()
+            for _ in range(180):
+                key = (d.month, d.year)
+                if key not in seen:
+                    seen.add(key)
+                    conditions.append({'target_closure_month': d.month, 'target_closure_year': d.year})
+                d = d - timedelta(days=1)
+                if len(seen) >= 6:
+                    break
+        return conditions
+
+    tc_conditions = _get_tc_conditions(time_filter, now)
+    if tc_conditions:
+        match_stage['$or'] = tc_conditions
     
     # Add territory/state/city filters
     if territory and territory != 'all':
@@ -7087,11 +7166,11 @@ async def get_pipeline_accounts(
     # Get total pipeline value
     pipeline_value_result = await get_tdb().leads.aggregate([
         {'$match': match_stage},
-        {'$group': {'_id': None, 'total_value': {'$sum': '$estimated_value'}}}
+        {'$group': {'_id': None, 'total_value': {'$sum': {'$ifNull': ['$opportunity_estimation.estimated_monthly_revenue', 0]}}}}
     ]).to_list(1)
     total_pipeline_value = pipeline_value_result[0]['total_value'] if pipeline_value_result else 0
     
-    # Get paginated accounts sorted by estimated_value descending
+    # Get paginated accounts sorted by opportunity estimation descending
     accounts = await get_tdb().leads.find(
         match_stage,
         {
@@ -7104,16 +7183,21 @@ async def get_pipeline_accounts(
             'state': 1,
             'status': 1,
             'estimated_value': 1,
+            'opportunity_estimation.estimated_monthly_revenue': 1,
             'assigned_to': 1,
             'assigned_to_name': 1,
+            'target_closure_month': 1,
+            'target_closure_year': 1,
             'created_at': 1,
             'updated_at': 1
         }
-    ).sort('estimated_value', -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    ).sort('opportunity_estimation.estimated_monthly_revenue', -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
     
-    # Map company to account_name for frontend compatibility
+    # Map company to account_name and use opportunity estimation for display value
     for account in accounts:
         account['account_name'] = account.pop('company', None)
+        oe = account.pop('opportunity_estimation', None) or {}
+        account['estimated_value'] = oe.get('estimated_monthly_revenue', 0) or account.get('estimated_value', 0) or 0
     
     return {
         'accounts': accounts,

@@ -213,6 +213,12 @@
 - Manager Dashboard (team-wise comparison, activity vs outcome)
 - Leadership Dashboard (territory trends, pipeline health)
 
+## Pipeline Value Logic (2026-04-09)
+- Pipeline value is now based on `target_closure_month`/`target_closure_year` matching the time filter
+- Value = sum of `opportunity_estimation.estimated_monthly_revenue` (from proposed SKU section) for active leads
+- Excludes closed_won, closed_lost, won, lost, not_qualified statuses
+- Pipeline accounts dialog also uses the same target_closure-based filtering
+
 ## Backlog (P2)
 - Task email notifications, First-login Password Change, Email Invoice Sharing
 - Settlement Auto-scheduling, Dashboard analytics, server.py refactoring
