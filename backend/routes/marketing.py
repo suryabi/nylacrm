@@ -261,6 +261,60 @@ async def delete_calendar_event(event_id: str, current_user: dict = Depends(get_
     return {"message": "Calendar event deleted"}
 
 
+# ---- Comments (Posts & Events) ----
+
+@router.get("/comments/{entity_type}/{entity_id}")
+async def get_comments(entity_type: str, entity_id: str, current_user: dict = Depends(get_current_user)):
+    """Get comments for a post or event"""
+    if entity_type not in ("post", "event"):
+        raise HTTPException(status_code=400, detail="entity_type must be 'post' or 'event'")
+    tenant_id = get_current_tenant_id()
+    comments = await db.marketing_comments.find(
+        {"tenant_id": tenant_id, "entity_type": entity_type, "entity_id": entity_id},
+        {"_id": 0}
+    ).sort("created_at", 1).to_list(500)
+    return comments
+
+
+@router.post("/comments/{entity_type}/{entity_id}")
+async def add_comment(entity_type: str, entity_id: str, data: dict, current_user: dict = Depends(get_current_user)):
+    """Add a comment to a post or event"""
+    if entity_type not in ("post", "event"):
+        raise HTTPException(status_code=400, detail="entity_type must be 'post' or 'event'")
+    content = data.get("content", "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Comment content is required")
+    tenant_id = get_current_tenant_id()
+    comment = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "content": content,
+        "created_by": current_user.get("id"),
+        "created_by_name": current_user.get("name", ""),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.marketing_comments.insert_one(comment)
+    comment.pop("_id", None)
+    return comment
+
+
+@router.delete("/comments/{comment_id}")
+async def delete_comment(comment_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a comment (author or admin only)"""
+    tenant_id = get_current_tenant_id()
+    comment = await db.marketing_comments.find_one({"id": comment_id, "tenant_id": tenant_id})
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    user_role = current_user.get("role", "")
+    is_admin = user_role.lower() in ("ceo", "director", "system admin")
+    if comment["created_by"] != current_user["id"] and not is_admin:
+        raise HTTPException(status_code=403, detail="Only comment author or admin can delete")
+    await db.marketing_comments.delete_one({"id": comment_id})
+    return {"message": "Comment deleted"}
+
+
 
 # ---- Categories (Master Data) ----
 @router.get("/categories")

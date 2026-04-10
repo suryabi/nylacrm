@@ -7,6 +7,7 @@ import {
   Eye, Send, PenLine, Calendar as CalendarIcon, ExternalLink,
   BarChart3, Users, Heart, MessageCircle, Share2, Link as LinkIcon,
 } from 'lucide-react';
+import CommentThread from '../components/CommentThread';
 
 const STATUS_CONFIG = {
   draft: { bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400', label: 'Draft', icon: PenLine },
@@ -364,6 +365,9 @@ export default function MarketingPostDetail() {
                 })}
               </div>
             </div>
+
+            {/* Comments */}
+            <CommentThread entityType="post" entityId={postId} accentColor="blue" />
           </div>
 
           {/* Sidebar — right col */}

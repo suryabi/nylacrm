@@ -5,6 +5,7 @@ import {
   Save, Trash2, Plus, X, CalendarDays, MapPin,
   Users, DollarSign, ListChecks, ClipboardList, Loader2,
 } from 'lucide-react';
+import CommentThread from './CommentThread';
 
 const EVENT_STATUSES = [
   { value: 'planned', label: 'Planned', color: 'bg-blue-100 text-blue-700' },
@@ -271,6 +272,11 @@ export default function EventPanel({ open, onClose, event, eventTypes, teamMembe
               )}
             </div>
           </div>
+
+          {/* Comments */}
+          {event?.id && (
+            <CommentThread entityType="event" entityId={event.id} accentColor="violet" />
+          )}
         </div>
 
         {/* Footer */}

@@ -230,6 +230,10 @@ export const marketingAPI = {
   createCalendarEvent: (data) => axios.post(`${API_URL}/marketing/calendar-events`, data, { headers: getAuthHeaders() }),
   updateCalendarEvent: (id, data) => axios.put(`${API_URL}/marketing/calendar-events/${id}`, data, { headers: getAuthHeaders() }),
   deleteCalendarEvent: (id) => axios.delete(`${API_URL}/marketing/calendar-events/${id}`, { headers: getAuthHeaders() }),
+  // Comments (shared for posts & events)
+  getComments: (entityType, entityId) => axios.get(`${API_URL}/marketing/comments/${entityType}/${entityId}`, { headers: getAuthHeaders() }),
+  addComment: (entityType, entityId, content) => axios.post(`${API_URL}/marketing/comments/${entityType}/${entityId}`, { content }, { headers: getAuthHeaders() }),
+  deleteComment: (commentId) => axios.delete(`${API_URL}/marketing/comments/${commentId}`, { headers: getAuthHeaders() }),
 };
 
 
