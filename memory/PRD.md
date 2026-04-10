@@ -207,6 +207,12 @@
 - `GET /api/distributors/{id}/stock-dashboard`
 - `GET /api/distributors/{id}/monthly-reconciliation`
 
+### Marketing Comments for Posts & Events (2026-04-10)
+- [x] **Reusable CommentThread component**: Used in both EventPanel (events) and MarketingPostDetail (posts)
+- [x] **Backend**: `GET/POST /api/marketing/comments/{entity_type}/{entity_id}`, `DELETE /api/marketing/comments/{comment_id}` — single `marketing_comments` collection with entity_type (post/event)
+- [x] Comments show author name, avatar initials, relative timestamp, and delete button (author-only)
+- [x] Renamed "Marketing Team Tasks" to "Marketing Team - Tasks & Requests" in EventPanel
+
 ### Tasks & Requests Two-Tab Restructure (2026-04-10)
 - [x] **Renamed** "Tasks" module to "Tasks & Requests" across all sidebar entries
 - [x] **"My Tasks" tab** (default): Shows tasks assigned to or created by the logged-in user. Personal metrics: Total, Assigned to Me, Created by Me, In Progress, Overdue, High Priority
