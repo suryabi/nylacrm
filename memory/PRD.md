@@ -212,6 +212,8 @@
 - [x] **SKU filter** — dropdown populated from batch SKUs, filters rejections by SKU
 - [x] **Backend**: Added `month`, `year`, and `sku_id` query params to `/api/production/rejection-report`
 - [x] All filters use consistent Shadcn Select components, responsive grid layout
+- [x] **Dynamic Batch Dropdown (2026-04-10)**: Batch dropdown dynamically filters based on selected SKU + Month + Year (uses `useMemo` on production_date). Resets batch selection when no longer valid.
+- [x] **Rejection Reason Filter (2026-04-10)**: New "Reason" dropdown populated from `/api/production/rejection-reasons` master data. Backend accepts `rejection_reason` query param for case-insensitive row filtering. 8-column filter grid.
 
 ### Marketing Calendar Events (2026-04-10)
 - [x] **Calendar Events CRUD** - Full events with name, date/time, description, location, budget, attendees, event type (from master), status tracking (Planned → In Progress → Completed / Cancelled)

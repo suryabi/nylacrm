@@ -296,8 +296,8 @@ export default function RejectionReport() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {report.rows.map((r) => (
-                    <tr key={r.id} className="hover:bg-slate-50 transition-colors" data-testid={`rejection-row-${r.id}`}>
+                  {report.rows.map((r, idx) => (
+                    <tr key={`${r.id}-${idx}`} className="hover:bg-slate-50 transition-colors" data-testid={`rejection-row-${r.id}`}>
                       <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{r.date}</td>
                       <td className="px-4 py-2.5 font-medium text-slate-800 whitespace-nowrap">{r.batch_code}</td>
                       <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{r.sku_name}</td>
