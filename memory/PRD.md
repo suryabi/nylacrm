@@ -207,6 +207,12 @@
 - `GET /api/distributors/{id}/stock-dashboard`
 - `GET /api/distributors/{id}/monthly-reconciliation`
 
+### Rejection Report Filters Enhancement (2026-04-10)
+- [x] **Month/Year filters** replace date_from/date_to — defaults to current month/year, uses Shadcn Select
+- [x] **SKU filter** — dropdown populated from batch SKUs, filters rejections by SKU
+- [x] **Backend**: Added `month`, `year`, and `sku_id` query params to `/api/production/rejection-report`
+- [x] All filters use consistent Shadcn Select components, responsive grid layout
+
 ### Marketing Calendar Events (2026-04-10)
 - [x] **Calendar Events CRUD** - Full events with name, date/time, description, location, budget, attendees, event type (from master), status tracking (Planned → In Progress → Completed / Cancelled)
 - [x] **Requirements list** — Free-text items (e.g. "500 brochures", "2 standees")

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import axios from 'axios';
-import { Loader2, AlertTriangle, Download, Filter, BarChart3, User, Calendar } from 'lucide-react';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
+import { Loader2, AlertTriangle, Filter, BarChart3, User, Calendar, Droplets } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -11,25 +12,36 @@ function getAuthHeaders() {
   return { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId, 'Content-Type': 'application/json' };
 }
 
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
 export default function RejectionReport() {
+  const now = new Date();
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [batches, setBatches] = useState([]);
-  const [filters, setFilters] = useState({ date_from: '', date_to: '', batch_id: '', resource_id: '', stage_type: '' });
+  const [skus, setSkus] = useState([]);
+  const [filters, setFilters] = useState({
+    month: String(now.getMonth() + 1),
+    year: String(now.getFullYear()),
+    batch_id: '',
+    sku_id: '',
+    resource_id: '',
+    stage_type: '',
+  });
   const [resources, setResources] = useState([]);
 
   const fetchReport = useCallback(async (f) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (f.date_from) params.set('date_from', f.date_from);
-      if (f.date_to) params.set('date_to', f.date_to);
+      if (f.month) params.set('month', f.month);
+      if (f.year) params.set('year', f.year);
       if (f.batch_id) params.set('batch_id', f.batch_id);
+      if (f.sku_id) params.set('sku_id', f.sku_id);
       if (f.resource_id) params.set('resource_id', f.resource_id);
       if (f.stage_type) params.set('stage_type', f.stage_type);
       const { data } = await axios.get(`${API_URL}/production/rejection-report?${params}`, { headers: getAuthHeaders() });
       setReport(data);
-      // Extract unique resources from data
       const resMap = {};
       (data.rows || []).forEach(r => { if (r.resource_id) resMap[r.resource_id] = r.resource_name; });
       setResources(Object.entries(resMap).map(([id, name]) => ({ id, name })));
@@ -41,28 +53,35 @@ export default function RejectionReport() {
   }, []);
 
   useEffect(() => {
-    const fetchBatches = async () => {
+    const loadMeta = async () => {
       try {
         const { data } = await axios.get(`${API_URL}/production/batches`, { headers: getAuthHeaders() });
         setBatches(data);
-      } catch { /* ignore */ }
+        const skuMap = {};
+        data.forEach(b => { if (b.sku_id && b.sku_name) skuMap[b.sku_id] = b.sku_name; });
+        setSkus(Object.entries(skuMap).map(([id, name]) => ({ id, name })));
+      } catch { }
     };
-    fetchBatches();
+    loadMeta();
     fetchReport(filters);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const applyFilters = () => fetchReport(filters);
   const clearFilters = () => {
-    const empty = { date_from: '', date_to: '', batch_id: '', resource_id: '', stage_type: '' };
+    const empty = { month: '', year: '', batch_id: '', sku_id: '', resource_id: '', stage_type: '' };
     setFilters(empty);
     fetchReport(empty);
   };
 
+  // Generate year options (current year ± 2)
+  const yearOptions = [];
+  for (let y = now.getFullYear() - 2; y <= now.getFullYear() + 1; y++) yearOptions.push(y);
+
   return (
-    <div className="p-6 lg:p-8 max-w-[1600px] mx-auto space-y-6" data-testid="rejection-report-page">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto space-y-4 sm:space-y-6" data-testid="rejection-report-page">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-800">Rejection Report</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Bottle rejections across all batches — by resource, date, and stage</p>
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-800">Rejection Report</h1>
+        <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Bottle rejections across all batches — by resource, date, and stage</p>
       </div>
 
       {/* Filters */}
@@ -71,35 +90,88 @@ export default function RejectionReport() {
           <Filter size={14} className="text-slate-400" />
           <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Filters</span>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3">
+          {/* Month */}
           <div>
-            <label className="text-[10px] text-slate-500 mb-1 block">From Date</label>
-            <input type="date" value={filters.date_from} onChange={e => setFilters(p => ({ ...p, date_from: e.target.value }))}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" data-testid="filter-date-from" />
+            <label className="text-[10px] text-slate-500 mb-1 block">Month</label>
+            <Select value={filters.month || "__all__"} onValueChange={v => setFilters(p => ({ ...p, month: v === "__all__" ? "" : v }))}>
+              <SelectTrigger className="h-9 text-sm border-slate-200" data-testid="filter-month">
+                <SelectValue placeholder="All Months" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All Months</SelectItem>
+                {MONTHS.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
+          {/* Year */}
           <div>
-            <label className="text-[10px] text-slate-500 mb-1 block">To Date</label>
-            <input type="date" value={filters.date_to} onChange={e => setFilters(p => ({ ...p, date_to: e.target.value }))}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" data-testid="filter-date-to" />
+            <label className="text-[10px] text-slate-500 mb-1 block">Year</label>
+            <Select value={filters.year || "__all__"} onValueChange={v => setFilters(p => ({ ...p, year: v === "__all__" ? "" : v }))}>
+              <SelectTrigger className="h-9 text-sm border-slate-200" data-testid="filter-year">
+                <SelectValue placeholder="All Years" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All Years</SelectItem>
+                {yearOptions.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
+          {/* SKU */}
+          <div>
+            <label className="text-[10px] text-slate-500 mb-1 block">SKU</label>
+            <Select value={filters.sku_id || "__all__"} onValueChange={v => setFilters(p => ({ ...p, sku_id: v === "__all__" ? "" : v }))}>
+              <SelectTrigger className="h-9 text-sm border-slate-200" data-testid="filter-sku">
+                <SelectValue placeholder="All SKUs" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All SKUs</SelectItem>
+                {skus.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {/* Batch */}
           <div>
             <label className="text-[10px] text-slate-500 mb-1 block">Batch</label>
-            <select value={filters.batch_id} onChange={e => setFilters(p => ({ ...p, batch_id: e.target.value }))}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" data-testid="filter-batch">
-              <option value="">All Batches</option>
-              {batches.map(b => <option key={b.id} value={b.id}>{b.batch_code}</option>)}
-            </select>
+            <Select value={filters.batch_id || "__all__"} onValueChange={v => setFilters(p => ({ ...p, batch_id: v === "__all__" ? "" : v }))}>
+              <SelectTrigger className="h-9 text-sm border-slate-200" data-testid="filter-batch">
+                <SelectValue placeholder="All Batches" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All Batches</SelectItem>
+                {batches.map(b => <SelectItem key={b.id} value={b.id}>{b.batch_code}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
+          {/* Stage Type */}
           <div>
-            <label className="text-[10px] text-slate-500 mb-1 block">Stage Type</label>
-            <select value={filters.stage_type} onChange={e => setFilters(p => ({ ...p, stage_type: e.target.value }))}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" data-testid="filter-stage-type">
-              <option value="">All Stages</option>
-              <option value="qc">QC</option>
-              <option value="labeling">Labeling</option>
-              <option value="final_qc">Final QC</option>
-            </select>
+            <label className="text-[10px] text-slate-500 mb-1 block">Stage</label>
+            <Select value={filters.stage_type || "__all__"} onValueChange={v => setFilters(p => ({ ...p, stage_type: v === "__all__" ? "" : v }))}>
+              <SelectTrigger className="h-9 text-sm border-slate-200" data-testid="filter-stage-type">
+                <SelectValue placeholder="All Stages" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All Stages</SelectItem>
+                <SelectItem value="qc">QC</SelectItem>
+                <SelectItem value="labeling">Labeling</SelectItem>
+                <SelectItem value="final_qc">Final QC</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+          {/* Resource (populated from results) */}
+          <div>
+            <label className="text-[10px] text-slate-500 mb-1 block">Resource</label>
+            <Select value={filters.resource_id || "__all__"} onValueChange={v => setFilters(p => ({ ...p, resource_id: v === "__all__" ? "" : v }))}>
+              <SelectTrigger className="h-9 text-sm border-slate-200" data-testid="filter-resource">
+                <SelectValue placeholder="All Resources" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All Resources</SelectItem>
+                {resources.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {/* Buttons */}
           <div className="flex items-end gap-2">
             <button onClick={applyFilters}
               className="px-4 py-2 text-sm font-medium text-white bg-slate-800 hover:bg-slate-700 rounded-lg"
@@ -120,20 +192,20 @@ export default function RejectionReport() {
       ) : (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-red-50 border border-red-200 rounded-xl p-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 sm:p-5">
               <div className="flex items-center gap-2 mb-2">
                 <BarChart3 size={16} className="text-red-500" />
-                <span className="text-xs text-red-500 font-semibold uppercase tracking-wider">Total Rejected</span>
+                <span className="text-[10px] sm:text-xs text-red-500 font-semibold uppercase tracking-wider">Total Rejected</span>
               </div>
-              <p className="text-3xl font-bold text-red-600" data-testid="total-rejected-count">{report.total_rejected.toLocaleString()}</p>
+              <p className="text-2xl sm:text-3xl font-bold text-red-600" data-testid="total-rejected-count">{report.total_rejected.toLocaleString()}</p>
               <p className="text-[10px] text-red-400 mt-0.5">bottles</p>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-xl p-5">
+            <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
               <div className="flex items-center gap-2 mb-3">
                 <User size={16} className="text-slate-500" />
-                <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider">By Resource</span>
+                <span className="text-[10px] sm:text-xs text-slate-500 font-semibold uppercase tracking-wider">By Resource</span>
               </div>
               <div className="space-y-1.5 max-h-40 overflow-y-auto">
                 {report.by_resource.map((r, i) => (
@@ -145,10 +217,10 @@ export default function RejectionReport() {
               </div>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-xl p-5">
+            <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5">
               <div className="flex items-center gap-2 mb-3">
                 <Calendar size={16} className="text-slate-500" />
-                <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider">By Date</span>
+                <span className="text-[10px] sm:text-xs text-slate-500 font-semibold uppercase tracking-wider">By Date</span>
               </div>
               <div className="space-y-1.5 max-h-40 overflow-y-auto">
                 {report.by_date.map((d, i) => (
@@ -163,11 +235,11 @@ export default function RejectionReport() {
 
           {/* Detail Table */}
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+            <div className="px-4 sm:px-5 py-3 border-b border-slate-100 flex items-center justify-between">
               <span className="text-sm font-semibold text-slate-800">Rejection Details ({report.rows.length})</span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm min-w-[800px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
                     {['Date', 'Batch', 'SKU', 'Stage', 'Resource', 'Crates Inspected', 'Rejected Count', 'Reason', 'Remarks'].map(h => (

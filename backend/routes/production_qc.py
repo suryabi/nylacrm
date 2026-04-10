@@ -867,9 +867,12 @@ async def delete_rejection_reason(reason_id: str, current_user: dict = Depends(g
 
 @router.get("/rejection-report")
 async def get_rejection_report(
+    month: Optional[int] = None,
+    year: Optional[int] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     batch_id: Optional[str] = None,
+    sku_id: Optional[str] = None,
     resource_id: Optional[str] = None,
     stage_type: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
@@ -885,7 +888,16 @@ async def get_rejection_report(
         query["inspected_by"] = resource_id
     if stage_type:
         query["stage_type"] = stage_type
-    if date_from or date_to:
+
+    # Month/year filter takes precedence over date_from/date_to
+    if month and year:
+        m_start = f"{year}-{month:02d}-01"
+        if month == 12:
+            m_end = f"{year + 1}-01-01"
+        else:
+            m_end = f"{year}-{month + 1:02d}-01"
+        query["inspected_at"] = {"$gte": m_start, "$lt": m_end}
+    elif date_from or date_to:
         date_filter = {}
         if date_from:
             date_filter["$gte"] = date_from
@@ -894,6 +906,15 @@ async def get_rejection_report(
         query["inspected_at"] = date_filter
 
     inspections = await tdb.inspections.find(query, {"_id": 0}).sort("inspected_at", -1).to_list(5000)
+
+    # If sku_id filter, get matching batch IDs first
+    sku_batch_ids = None
+    if sku_id:
+        sku_batches = await tdb.production_batches.find(
+            {"sku_id": sku_id, "tenant_id": tenant_id}, {"_id": 0, "id": 1}
+        ).to_list(5000)
+        sku_batch_ids = {b["id"] for b in sku_batches}
+        inspections = [i for i in inspections if i["batch_id"] in sku_batch_ids]
 
     # Enrich with batch info
     batch_ids = list(set(i["batch_id"] for i in inspections))
