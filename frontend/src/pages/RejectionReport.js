@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
@@ -20,6 +20,7 @@ export default function RejectionReport() {
   const [loading, setLoading] = useState(true);
   const [batches, setBatches] = useState([]);
   const [skus, setSkus] = useState([]);
+  const [rejectionReasons, setRejectionReasons] = useState([]);
   const [filters, setFilters] = useState({
     month: String(now.getMonth() + 1),
     year: String(now.getFullYear()),
@@ -27,6 +28,7 @@ export default function RejectionReport() {
     sku_id: '',
     resource_id: '',
     stage_type: '',
+    rejection_reason: '',
   });
   const [resources, setResources] = useState([]);
 
@@ -40,6 +42,7 @@ export default function RejectionReport() {
       if (f.sku_id) params.set('sku_id', f.sku_id);
       if (f.resource_id) params.set('resource_id', f.resource_id);
       if (f.stage_type) params.set('stage_type', f.stage_type);
+      if (f.rejection_reason) params.set('rejection_reason', f.rejection_reason);
       const { data } = await axios.get(`${API_URL}/production/rejection-report?${params}`, { headers: getAuthHeaders() });
       setReport(data);
       const resMap = {};
@@ -55,20 +58,52 @@ export default function RejectionReport() {
   useEffect(() => {
     const loadMeta = async () => {
       try {
-        const { data } = await axios.get(`${API_URL}/production/batches`, { headers: getAuthHeaders() });
-        setBatches(data);
+        const [batchRes, reasonsRes] = await Promise.all([
+          axios.get(`${API_URL}/production/batches`, { headers: getAuthHeaders() }),
+          axios.get(`${API_URL}/production/rejection-reasons`, { headers: getAuthHeaders() }),
+        ]);
+        setBatches(batchRes.data);
         const skuMap = {};
-        data.forEach(b => { if (b.sku_id && b.sku_name) skuMap[b.sku_id] = b.sku_name; });
+        batchRes.data.forEach(b => { if (b.sku_id && b.sku_name) skuMap[b.sku_id] = b.sku_name; });
         setSkus(Object.entries(skuMap).map(([id, name]) => ({ id, name })));
+        setRejectionReasons(reasonsRes.data || []);
       } catch { }
     };
     loadMeta();
     fetchReport(filters);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Filter batches dynamically based on selected SKU, month, and year
+  const filteredBatches = useMemo(() => {
+    return batches.filter(b => {
+      // Filter by SKU
+      if (filters.sku_id && b.sku_id !== filters.sku_id) return false;
+      // Filter by month/year based on production_date (format: "YYYY-MM-DD")
+      if (filters.year && b.production_date) {
+        const pd = new Date(b.production_date);
+        if (pd.getFullYear() !== parseInt(filters.year)) return false;
+        if (filters.month && (pd.getMonth() + 1) !== parseInt(filters.month)) return false;
+      } else if (filters.month && b.production_date) {
+        const pd = new Date(b.production_date);
+        if ((pd.getMonth() + 1) !== parseInt(filters.month)) return false;
+      }
+      return true;
+    });
+  }, [batches, filters.sku_id, filters.month, filters.year]);
+
+  // When SKU/month/year changes, reset batch_id if it's no longer in the filtered list
+  useEffect(() => {
+    if (filters.batch_id) {
+      const stillExists = filteredBatches.some(b => b.id === filters.batch_id);
+      if (!stillExists) {
+        setFilters(p => ({ ...p, batch_id: '' }));
+      }
+    }
+  }, [filteredBatches, filters.batch_id]);
+
   const applyFilters = () => fetchReport(filters);
   const clearFilters = () => {
-    const empty = { month: '', year: '', batch_id: '', sku_id: '', resource_id: '', stage_type: '' };
+    const empty = { month: '', year: '', batch_id: '', sku_id: '', resource_id: '', stage_type: '', rejection_reason: '' };
     setFilters(empty);
     fetchReport(empty);
   };
@@ -90,7 +125,7 @@ export default function RejectionReport() {
           <Filter size={14} className="text-slate-400" />
           <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Filters</span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-2 sm:gap-3">
           {/* Month */}
           <div>
             <label className="text-[10px] text-slate-500 mb-1 block">Month</label>
@@ -130,7 +165,7 @@ export default function RejectionReport() {
               </SelectContent>
             </Select>
           </div>
-          {/* Batch */}
+          {/* Batch — dynamically filtered by SKU, month, year */}
           <div>
             <label className="text-[10px] text-slate-500 mb-1 block">Batch</label>
             <Select value={filters.batch_id || "__all__"} onValueChange={v => setFilters(p => ({ ...p, batch_id: v === "__all__" ? "" : v }))}>
@@ -139,7 +174,7 @@ export default function RejectionReport() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">All Batches</SelectItem>
-                {batches.map(b => <SelectItem key={b.id} value={b.id}>{b.batch_code}</SelectItem>)}
+                {filteredBatches.map(b => <SelectItem key={b.id} value={b.id}>{b.batch_code}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -168,6 +203,19 @@ export default function RejectionReport() {
               <SelectContent>
                 <SelectItem value="__all__">All Resources</SelectItem>
                 {resources.map(r => <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {/* Rejection Reason */}
+          <div>
+            <label className="text-[10px] text-slate-500 mb-1 block">Reason</label>
+            <Select value={filters.rejection_reason || "__all__"} onValueChange={v => setFilters(p => ({ ...p, rejection_reason: v === "__all__" ? "" : v }))}>
+              <SelectTrigger className="h-9 text-sm border-slate-200" data-testid="filter-rejection-reason">
+                <SelectValue placeholder="All Reasons" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All Reasons</SelectItem>
+                {rejectionReasons.map(r => <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

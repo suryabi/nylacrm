@@ -875,6 +875,7 @@ async def get_rejection_report(
     sku_id: Optional[str] = None,
     resource_id: Optional[str] = None,
     stage_type: Optional[str] = None,
+    rejection_reason: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
 ):
     """Get rejection report: per resource, per date, per stage with totals."""
@@ -992,6 +993,11 @@ async def get_rejection_report(
                     "remarks": ins.get("remarks", ""),
                 })
         total_rejected += ins.get("qty_rejected", 0)
+
+    # Filter by rejection_reason if specified
+    if rejection_reason:
+        rows = [r for r in rows if r.get("rejection_reason", "").lower() == rejection_reason.lower()]
+        total_rejected = sum(r["qty_rejected"] for r in rows)
 
     # Summary by resource
     by_resource = {}
