@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { marketingAPI } from '../utils/api';
 import { toast } from 'sonner';
-import { Plus, Trash2, Save, Palette, Globe, Sparkles, X, Edit2 } from 'lucide-react';
+import { Plus, Trash2, Save, Palette, Globe, Sparkles, X, Edit2, CalendarDays } from 'lucide-react';
 
 const TABS = [
   { id: 'categories', label: 'Categories', icon: Palette },
   { id: 'platforms', label: 'Platforms', icon: Globe },
+  { id: 'event_types', label: 'Event Types', icon: CalendarDays },
   { id: 'events', label: 'Custom Events', icon: Sparkles },
 ];
 
@@ -15,19 +16,24 @@ export default function MarketingMasters() {
   const [categories, setCategories] = useState([]);
   const [platforms, setPlatforms] = useState([]);
   const [events, setEvents] = useState([]);
+  const [eventTypes, setEventTypes] = useState([]);
   const [newCat, setNewCat] = useState({ name: '', color: '#3B82F6' });
   const [newEvent, setNewEvent] = useState({ date: '', name: '' });
+  const [newET, setNewET] = useState({ name: '', color: '#8B5CF6' });
   const [editingCat, setEditingCat] = useState(null);
+  const [editingET, setEditingET] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [catRes, platRes, evRes] = await Promise.all([
+      const [catRes, platRes, evRes, etRes] = await Promise.all([
         marketingAPI.getCategories(), marketingAPI.getPlatforms(), marketingAPI.getEvents(),
+        marketingAPI.getEventTypes(),
       ]);
       setCategories(catRes.data || []);
       setPlatforms(platRes.data || []);
       setEvents(evRes.data || []);
+      setEventTypes(etRes.data || []);
     } catch { toast.error('Failed to load'); }
     finally { setLoading(false); }
   }, []);
@@ -59,6 +65,20 @@ export default function MarketingMasters() {
   };
   const deleteEvent = async (id) => {
     try { await marketingAPI.deleteEvent(id); toast.success('Deleted'); load(); }
+    catch { toast.error('Failed'); }
+  };
+  const addEventType = async () => {
+    if (!newET.name.trim()) { toast.error('Name required'); return; }
+    try { await marketingAPI.createEventType(newET); toast.success('Added'); setNewET({ name: '', color: '#8B5CF6' }); load(); }
+    catch { toast.error('Failed'); }
+  };
+  const updateET = async (id) => {
+    if (!editingET) return;
+    try { await marketingAPI.updateEventType(id, editingET); toast.success('Updated'); setEditingET(null); load(); }
+    catch { toast.error('Failed'); }
+  };
+  const deleteET = async (id) => {
+    try { await marketingAPI.deleteEventType(id); toast.success('Deleted'); load(); }
     catch { toast.error('Failed'); }
   };
 
@@ -156,7 +176,55 @@ export default function MarketingMasters() {
               </div>
             )}
 
-            {/* EVENTS */}
+            {/* EVENT TYPES */}
+            {tab === 'event_types' && (
+              <div className="space-y-3">
+                <div className="border border-slate-200 rounded-lg p-4">
+                  <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400 mb-2 block">Add Event Type</label>
+                  <div className="flex gap-2 items-center">
+                    <input type="text" value={newET.name} onChange={e => setNewET(p => ({ ...p, name: e.target.value }))}
+                      placeholder="e.g. Conference, Trade Show..." onKeyDown={e => { if (e.key === 'Enter') addEventType(); }}
+                      className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 outline-none"
+                      data-testid="new-et-name" />
+                    <input type="color" value={newET.color} onChange={e => setNewET(p => ({ ...p, color: e.target.value }))}
+                      className="w-9 h-9 rounded-lg border border-slate-200 cursor-pointer" data-testid="new-et-color" />
+                    <button onClick={addEventType}
+                      className="bg-violet-600 text-white hover:bg-violet-700 rounded-lg p-2 transition-colors"
+                      data-testid="add-et-btn"><Plus size={18} /></button>
+                  </div>
+                </div>
+                {eventTypes.map(et => (
+                  <div key={et.id} className="border border-slate-200 rounded-lg px-4 py-3 flex items-center justify-between group hover:border-slate-300 transition-all"
+                    data-testid={`et-${et.id}`}>
+                    {editingET?.id === et.id ? (
+                      <div className="flex items-center gap-2 flex-1">
+                        <input type="text" value={editingET.name} onChange={e => setEditingET(p => ({ ...p, name: e.target.value }))}
+                          className="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm" />
+                        <input type="color" value={editingET.color} onChange={e => setEditingET(p => ({ ...p, color: e.target.value }))}
+                          className="w-7 h-7 rounded border border-slate-200 cursor-pointer" />
+                        <button onClick={() => updateET(et.id)} className="text-emerald-600 hover:text-emerald-700 p-1"><Save size={15} /></button>
+                        <button onClick={() => setEditingET(null)} className="text-slate-400 hover:text-slate-600 p-1"><X size={15} /></button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-3">
+                          <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: et.color }} />
+                          <span className="text-sm font-medium text-slate-700">{et.name}</span>
+                        </div>
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => setEditingET({ id: et.id, name: et.name, color: et.color })}
+                            className="text-slate-400 hover:text-slate-600 p-1.5 rounded hover:bg-slate-50"><Edit2 size={13} /></button>
+                          <button onClick={() => deleteET(et.id)} className="text-slate-400 hover:text-red-600 p-1.5 rounded hover:bg-slate-50"><Trash2 size={13} /></button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+                {eventTypes.length === 0 && <p className="text-center text-slate-400 text-sm py-8">No event types yet</p>}
+              </div>
+            )}
+
+            {/* CUSTOM EVENTS */}
             {tab === 'events' && (
               <div className="space-y-4">
                 <div className="border border-slate-200 rounded-lg p-4">

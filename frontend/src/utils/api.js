@@ -214,6 +214,22 @@ export const marketingAPI = {
   exportPosts: (month, year) => axios.get(`${API_URL}/marketing/export?month=${month}&year=${year}`, { headers: getAuthHeaders(), responseType: 'blob' }),
   uploadPreview: (file) => { const fd = new FormData(); fd.append('file', file); const h = getAuthHeaders(); delete h['Content-Type']; return axios.post(`${API_URL}/marketing/upload-preview`, fd, { headers: h }); },
   uploadConfirm: (month, year, rows) => axios.post(`${API_URL}/marketing/upload-confirm`, { month, year, rows }, { headers: getAuthHeaders() }),
+  // Event Types (master data)
+  getEventTypes: () => axios.get(`${API_URL}/marketing/event-types`, { headers: getAuthHeaders() }),
+  createEventType: (data) => axios.post(`${API_URL}/marketing/event-types`, data, { headers: getAuthHeaders() }),
+  updateEventType: (id, data) => axios.put(`${API_URL}/marketing/event-types/${id}`, data, { headers: getAuthHeaders() }),
+  deleteEventType: (id) => axios.delete(`${API_URL}/marketing/event-types/${id}`, { headers: getAuthHeaders() }),
+  // Calendar Events (full events with requirements & tasks)
+  getCalendarEvents: (month, year) => {
+    const q = new URLSearchParams();
+    if (month) q.append('month', month);
+    if (year) q.append('year', year);
+    return axios.get(`${API_URL}/marketing/calendar-events?${q.toString()}`, { headers: getAuthHeaders() });
+  },
+  getCalendarEvent: (id) => axios.get(`${API_URL}/marketing/calendar-events/${id}`, { headers: getAuthHeaders() }),
+  createCalendarEvent: (data) => axios.post(`${API_URL}/marketing/calendar-events`, data, { headers: getAuthHeaders() }),
+  updateCalendarEvent: (id, data) => axios.put(`${API_URL}/marketing/calendar-events/${id}`, data, { headers: getAuthHeaders() }),
+  deleteCalendarEvent: (id) => axios.delete(`${API_URL}/marketing/calendar-events/${id}`, { headers: getAuthHeaders() }),
 };
 
 

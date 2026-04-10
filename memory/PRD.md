@@ -207,6 +207,16 @@
 - `GET /api/distributors/{id}/stock-dashboard`
 - `GET /api/distributors/{id}/monthly-reconciliation`
 
+### Marketing Calendar Events (2026-04-10)
+- [x] **Calendar Events CRUD** - Full events with name, date/time, description, location, budget, attendees, event type (from master), status tracking (Planned → In Progress → Completed / Cancelled)
+- [x] **Requirements list** — Free-text items (e.g. "500 brochures", "2 standees")
+- [x] **Marketing Team Tasks** — Action items assigned to team members with due dates and status (Pending/In Progress/Done)
+- [x] **Event Types Master Data** — Configurable list (Conference, Trade Show, Webinar, Product Launch, Workshop, Meetup, Press Event) with color-coded dots
+- [x] **Calendar display** — Events shown as distinct cards with colored left border (status), type badge, time, location, and task progress
+- [x] **"New Event" button** alongside "New Post" in calendar header
+- [x] **EventPanel** side sheet for creating/editing events with all fields
+- [x] **Event Types tab** added to Marketing Masters page
+
 ### Responsive Production Module (2026-04-10)
 - [x] **ProductionDashboard.js**: Mobile vertical pipeline flow with down arrows, 2-col summary cards on mobile, 4-col on tablet, 7-col on desktop
 - [x] **ProductionBatches.js**: Stacked search/filters on mobile, 2-col stats grid, responsive batch cards with wrapped layout

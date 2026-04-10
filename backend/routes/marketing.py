@@ -65,6 +65,19 @@ DEFAULT_PLATFORMS = [
     {"name": "Facebook", "key": "facebook", "color": "#1877F2", "enabled": True},
 ]
 
+
+DEFAULT_EVENT_TYPES = [
+    {"name": "Conference", "color": "#8B5CF6"},
+    {"name": "Trade Show", "color": "#F59E0B"},
+    {"name": "Webinar", "color": "#3B82F6"},
+    {"name": "Product Launch", "color": "#EC4899"},
+    {"name": "Workshop", "color": "#14B8A6"},
+    {"name": "Meetup", "color": "#F97316"},
+    {"name": "Press Event", "color": "#6366F1"},
+]
+
+VALID_EVENT_STATUSES = ["planned", "in_progress", "completed", "cancelled"]
+
 VALID_STATUSES = ["draft", "review", "scheduled", "published"]
 VALID_CONTENT_TYPES = ["reel", "image", "video", "other"]
 
@@ -113,6 +126,140 @@ async def delete_custom_event(event_id: str, current_user: dict = Depends(get_cu
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Event not found")
     return {"message": "Event deleted"}
+
+
+# ---- Event Types (Master Data) ----
+@router.get("/event-types")
+async def get_event_types(current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    types = await db.marketing_event_types.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(100)
+    if not types:
+        for et in DEFAULT_EVENT_TYPES:
+            doc = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, **et, "created_at": datetime.now(timezone.utc).isoformat()}
+            await db.marketing_event_types.insert_one(doc)
+        types = await db.marketing_event_types.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(100)
+    return types
+
+
+@router.post("/event-types")
+async def create_event_type(data: dict, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    et = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "name": data.get("name", ""),
+        "color": data.get("color", "#8B5CF6"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.marketing_event_types.insert_one(et)
+    et.pop("_id", None)
+    return et
+
+
+@router.put("/event-types/{et_id}")
+async def update_event_type(et_id: str, data: dict, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    update = {k: v for k, v in data.items() if k in ("name", "color")}
+    if not update:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    await db.marketing_event_types.update_one({"id": et_id, "tenant_id": tenant_id}, {"$set": update})
+    return {"message": "Event type updated"}
+
+
+@router.delete("/event-types/{et_id}")
+async def delete_event_type(et_id: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    result = await db.marketing_event_types.delete_one({"id": et_id, "tenant_id": tenant_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Event type not found")
+    return {"message": "Event type deleted"}
+
+
+# ---- Calendar Events (full events with requirements & tasks) ----
+@router.get("/calendar-events")
+async def get_calendar_events(month: int = None, year: int = None, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    query = {"tenant_id": tenant_id}
+    if month and year:
+        start = f"{year}-{month:02d}-01"
+        end = f"{year + 1}-01-01" if month == 12 else f"{year}-{month + 1:02d}-01"
+        query["event_date"] = {"$gte": start, "$lt": end}
+    events = await db.marketing_calendar_events.find(query, {"_id": 0}).sort("event_date", 1).to_list(500)
+    return events
+
+
+@router.get("/calendar-events/{event_id}")
+async def get_calendar_event(event_id: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    ev = await db.marketing_calendar_events.find_one({"id": event_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not ev:
+        raise HTTPException(status_code=404, detail="Calendar event not found")
+    return ev
+
+
+@router.post("/calendar-events")
+async def create_calendar_event(data: dict, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tasks = data.get("tasks", [])
+    for t in tasks:
+        if not t.get("id"):
+            t["id"] = str(uuid.uuid4())
+        t.setdefault("status", "pending")
+    event = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "name": data.get("name", ""),
+        "event_date": data.get("event_date", ""),
+        "start_time": data.get("start_time", ""),
+        "end_time": data.get("end_time", ""),
+        "description": data.get("description", ""),
+        "location": data.get("location", ""),
+        "budget": data.get("budget"),
+        "expected_attendees": data.get("expected_attendees"),
+        "event_type": data.get("event_type", ""),
+        "event_type_color": data.get("event_type_color", "#8B5CF6"),
+        "requirements": data.get("requirements", []),
+        "tasks": tasks,
+        "status": data.get("status", "planned"),
+        "created_by": current_user.get("id"),
+        "created_by_name": current_user.get("name", ""),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.marketing_calendar_events.insert_one(event)
+    event.pop("_id", None)
+    return event
+
+
+@router.put("/calendar-events/{event_id}")
+async def update_calendar_event(event_id: str, data: dict, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    existing = await db.marketing_calendar_events.find_one({"id": event_id, "tenant_id": tenant_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Calendar event not found")
+    allowed = ["name", "event_date", "start_time", "end_time", "description", "location",
+               "budget", "expected_attendees", "event_type", "event_type_color",
+               "requirements", "tasks", "status"]
+    update = {k: v for k, v in data.items() if k in allowed}
+    if "tasks" in update:
+        for t in update["tasks"]:
+            if not t.get("id"):
+                t["id"] = str(uuid.uuid4())
+            t.setdefault("status", "pending")
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.marketing_calendar_events.update_one({"id": event_id, "tenant_id": tenant_id}, {"$set": update})
+    updated = await db.marketing_calendar_events.find_one({"id": event_id, "tenant_id": tenant_id}, {"_id": 0})
+    return updated
+
+
+@router.delete("/calendar-events/{event_id}")
+async def delete_calendar_event(event_id: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    result = await db.marketing_calendar_events.delete_one({"id": event_id, "tenant_id": tenant_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Calendar event not found")
+    return {"message": "Calendar event deleted"}
+
 
 
 # ---- Categories (Master Data) ----
@@ -400,6 +547,20 @@ async def get_calendar_data(month: int = Query(...), year: int = Query(...), cur
     custom = await db.marketing_events.find(custom_query, {"_id": 0}).to_list(100)
     events = auto + [{"date": c.get("date", ""), "name": c["name"], "type": "custom", "id": c.get("id")} for c in custom]
 
+    # Get calendar events (full events with requirements & tasks) for this month
+    cal_events = await db.marketing_calendar_events.find(
+        {"tenant_id": tenant_id, "event_date": {"$gte": start, "$lt": end}},
+        {"_id": 0}
+    ).sort("event_date", 1).to_list(200)
+
+    # Group calendar events by date
+    cal_events_by_date = {}
+    for ce in cal_events:
+        d = ce.get("event_date", "")[:10]
+        if d not in cal_events_by_date:
+            cal_events_by_date[d] = []
+        cal_events_by_date[d].append(ce)
+
     # Stats
     total = len(posts)
     by_status = {}
@@ -417,12 +578,14 @@ async def get_calendar_data(month: int = Query(...), year: int = Query(...), cur
     return {
         "posts_by_date": posts_by_date,
         "events": events,
+        "calendar_events_by_date": cal_events_by_date,
         "stats": {
             "total": total,
             "by_status": by_status,
             "by_category": by_category,
             "by_content_type": by_content_type,
             "events_count": len(events),
+            "calendar_events_count": len(cal_events),
         },
         "month": month,
         "year": year,

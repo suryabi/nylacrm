@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { marketingAPI } from '../utils/api';
 import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
+import EventPanel from '../components/EventPanel';
 import {
   ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon,
   Film, Image, Video, MoreHorizontal, X, Save, Trash2,
   Sparkles, Eye, Send, PenLine, GripVertical, List,
   Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2, Loader2,
+  CalendarDays, MapPin, Users,
 } from 'lucide-react';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -238,6 +240,42 @@ function EventBadge({ event }) {
   );
 }
 
+// --- Calendar Event Card (full events with requirements/tasks) ---
+function CalendarEventCard({ event, onClick }) {
+  const statusColors = {
+    planned: 'border-l-violet-500 bg-violet-50',
+    in_progress: 'border-l-amber-500 bg-amber-50',
+    completed: 'border-l-emerald-500 bg-emerald-50',
+    cancelled: 'border-l-red-400 bg-red-50 opacity-60',
+  };
+  const cls = statusColors[event.status] || statusColors.planned;
+  const tasksDone = (event.tasks || []).filter(t => t.status === 'done').length;
+  const tasksTotal = (event.tasks || []).length;
+
+  return (
+    <div
+      className={`w-full text-left px-2.5 py-2 rounded-lg border border-slate-200 border-l-[3px] ${cls} transition-all hover:shadow-sm cursor-pointer group/evcard mb-1.5`}
+      onClick={(e) => { e.stopPropagation(); onClick(event); }}
+      data-testid={`cal-event-${event.id}`}
+    >
+      <div className="flex items-center gap-1.5 mb-0.5">
+        <CalendarDays size={11} className="text-violet-500 shrink-0" />
+        {event.event_type && (
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: event.event_type_color || '#8B5CF6' }} />
+        )}
+        <span className="text-[10px] font-medium text-violet-500 uppercase tracking-wider truncate">{event.event_type || 'Event'}</span>
+      </div>
+      <p className="text-xs font-semibold text-slate-800 leading-snug line-clamp-1">{event.name}</p>
+      <div className="flex items-center gap-2 mt-0.5 text-[9px] text-slate-400">
+        {event.start_time && <span>{event.start_time}</span>}
+        {event.location && <span className="flex items-center gap-0.5 truncate"><MapPin size={8} />{event.location}</span>}
+        {tasksTotal > 0 && <span>{tasksDone}/{tasksTotal} tasks</span>}
+      </div>
+    </div>
+  );
+}
+
+
 
 // ---- Main Calendar ----
 export default function MarketingCalendar() {
@@ -250,6 +288,9 @@ export default function MarketingCalendar() {
 
   const [postsByDate, setPostsByDate] = useState({});
   const [events, setEvents] = useState([]);
+  const [calEventsByDate, setCalEventsByDate] = useState({});
+  const [eventTypes, setEventTypes] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
   const [stats, setStats] = useState({ total: 0, by_status: {} });
   const [categories, setCategories] = useState([]);
   const [platforms, setPlatforms] = useState([]);
@@ -257,6 +298,10 @@ export default function MarketingCalendar() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [editingPost, setEditingPost] = useState(null);
   const [clickedDate, setClickedDate] = useState('');
+
+  // Event panel state
+  const [eventPanelOpen, setEventPanelOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState(null);
 
   const [weekStart, setWeekStart] = useState(null);
   const [draggingPostId, setDraggingPostId] = useState(null);
@@ -282,17 +327,38 @@ export default function MarketingCalendar() {
   const loadCalendar = useCallback(async () => {
     setLoading(true);
     try {
-      const [calRes, catRes, platRes] = await Promise.all([
+      const [calRes, catRes, platRes, etRes] = await Promise.all([
         marketingAPI.getCalendar(month, year), marketingAPI.getCategories(), marketingAPI.getPlatforms(),
+        marketingAPI.getEventTypes(),
       ]);
       setPostsByDate(calRes.data.posts_by_date || {});
       setEvents(calRes.data.events || []);
+      setCalEventsByDate(calRes.data.calendar_events_by_date || {});
       setStats(calRes.data.stats || { total: 0, by_status: {} });
       setCategories(catRes.data || []);
       setPlatforms(platRes.data || []);
+      setEventTypes(etRes.data || []);
     } catch { toast.error('Failed to load calendar'); }
     finally { setLoading(false); }
   }, [month, year]);
+
+  // Load team members for task assignment
+  useEffect(() => {
+    const loadTeam = async () => {
+      try {
+        const { data } = await require('axios').get(process.env.REACT_APP_BACKEND_URL + '/api/users', {
+          headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}`, 'X-Tenant-ID': localStorage.getItem('tenant_id') }
+        });
+        const marketing = data.filter(u => {
+          if (!u.is_active) return false;
+          const depts = Array.isArray(u.department) ? u.department : [u.department || ''];
+          return depts.some(d => d === 'Marketing' || d === 'Admin');
+        });
+        setTeamMembers(marketing);
+      } catch { }
+    };
+    loadTeam();
+  }, []);
 
   useEffect(() => { loadCalendar(); }, [loadCalendar]);
 
@@ -310,6 +376,16 @@ export default function MarketingCalendar() {
   };
 
   const deletePost = async (id) => { await marketingAPI.deletePost(id); toast.success('Post deleted'); loadCalendar(); };
+
+  // Calendar Event handlers
+  const openNewEvent = (dateStr) => { setEditingEvent(null); setClickedDate(dateStr); setEventPanelOpen(true); };
+  const openEditEvent = (ev) => { setEditingEvent(ev); setClickedDate(ev.event_date); setEventPanelOpen(true); };
+  const saveEvent = async (formData) => {
+    if (editingEvent?.id) { await marketingAPI.updateCalendarEvent(editingEvent.id, formData); toast.success('Event updated'); }
+    else { await marketingAPI.createCalendarEvent(formData); toast.success('Event created'); }
+    loadCalendar();
+  };
+  const deleteEvent = async (id) => { await marketingAPI.deleteCalendarEvent(id); toast.success('Event deleted'); loadCalendar(); };
 
   const handleDrop = async (dateStr) => {
     if (!draggingPostId) return;
@@ -427,6 +503,9 @@ export default function MarketingCalendar() {
               <button onClick={() => openNew(todayStr)}
                 className="bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium px-5 py-2.5 rounded-lg flex items-center gap-2 text-sm"
                 data-testid="new-post-btn"><Plus size={16} /> New Post</button>
+              <button onClick={() => openNewEvent(todayStr)}
+                className="bg-violet-600 text-white hover:bg-violet-700 transition-colors font-medium px-5 py-2.5 rounded-lg flex items-center gap-2 text-sm"
+                data-testid="new-event-btn"><CalendarDays size={16} /> New Event</button>
             </div>
           </div>
 
@@ -475,6 +554,11 @@ export default function MarketingCalendar() {
           <div className="border border-slate-200 rounded-lg px-4 py-3 bg-white" data-testid="metric-events">
             <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Events</div>
             <div className="text-2xl font-semibold text-sky-600 mt-0.5">{stats.events_count || events.length}</div>
+          </div>
+          {/* Calendar Events */}
+          <div className="border border-violet-200/70 rounded-lg px-4 py-3 bg-violet-50/50" data-testid="metric-cal-events">
+            <div className="text-[11px] font-medium uppercase tracking-wider text-violet-500">Calendar Events</div>
+            <div className="text-2xl font-semibold text-violet-600 mt-0.5">{stats.calendar_events_count || 0}</div>
           </div>
           {/* Reels */}
           <div className="border border-slate-200 rounded-lg px-4 py-3 bg-white" data-testid="metric-reels">
@@ -536,6 +620,7 @@ export default function MarketingCalendar() {
                           <Plus size={14} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
                         {dayEvents.map((ev, ei) => <EventBadge key={ei} event={ev} />)}
+                        {(calEventsByDate[dateStr] || []).map(ce => <CalendarEventCard key={ce.id} event={ce} onClick={openEditEvent} />)}
                         <div className="space-y-1.5 mt-1">
                           {posts.slice(0, 3).map(p => (
                             <PostCard key={p.id} post={p} onClick={openEdit} onDelete={deletePost} onDragStart={setDraggingPostId} />
@@ -580,6 +665,7 @@ export default function MarketingCalendar() {
                         onDragLeave={() => setDropTarget(null)}
                         onDrop={(e) => { e.preventDefault(); handleDrop(ds); }}>
                         {dayEvents.map((ev, ei) => <EventBadge key={ei} event={ev} />)}
+                        {(calEventsByDate[ds] || []).map(ce => <CalendarEventCard key={ce.id} event={ce} onClick={openEditEvent} />)}
                         <div className="space-y-1.5 mt-1">
                           {posts.map(p => <PostCard key={p.id} post={p} onClick={openEdit} onDelete={deletePost} onDragStart={setDraggingPostId} />)}
                         </div>
@@ -605,6 +691,14 @@ export default function MarketingCalendar() {
                           <span key={i} className="px-2.5 py-1 bg-sky-50 text-sky-600 rounded-full text-xs font-medium flex items-center gap-1">
                             <Sparkles size={10} /> {ev.name}
                           </span>
+                        ))}
+                      </div>
+                    )}
+                    {/* Calendar Events for today */}
+                    {(calEventsByDate[todayStr] || []).length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {(calEventsByDate[todayStr] || []).map(ce => (
+                          <CalendarEventCard key={ce.id} event={ce} onClick={openEditEvent} />
                         ))}
                       </div>
                     )}
@@ -951,6 +1045,18 @@ export default function MarketingCalendar() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Event Panel */}
+      <EventPanel
+        open={eventPanelOpen}
+        onClose={() => setEventPanelOpen(false)}
+        event={editingEvent}
+        eventTypes={eventTypes}
+        teamMembers={teamMembers}
+        onSave={saveEvent}
+        onDelete={deleteEvent}
+        clickedDate={clickedDate}
+      />
     </div>
   );
 }
