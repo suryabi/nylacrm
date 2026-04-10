@@ -143,7 +143,7 @@ export default function BatchDetail() {
               <p className="text-[9px] text-red-300">bottles</p>
             </div>
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 sm:p-4 text-center">
-              <p className="text-[10px] sm:text-xs text-emerald-400 mb-0.5">Delivery Ready</p>
+              <p className="text-[10px] sm:text-xs text-emerald-400 mb-0.5">Warehouse Ready</p>
               <p className="text-xl sm:text-2xl font-bold text-emerald-600">{batch.total_passed_final || 0}</p>
               <p className="text-[9px] text-emerald-300">crates</p>
             </div>
