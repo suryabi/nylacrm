@@ -85,7 +85,7 @@ const salesNavigationGroups = [
       { name: 'Leaves', href: '/leaves', icon: CalendarOff, moduleKey: 'leaves', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Travel Request', href: '/travel-requests', icon: Plane, moduleKey: 'travel_requests', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Budget Request', href: '/budget-requests', icon: Wallet, moduleKey: 'budget_requests', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
-      { name: 'Tasks', href: '/tasks', icon: ClipboardList, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
+      { name: 'Tasks & Requests', href: '/tasks', icon: ClipboardList, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
     ]
   },
   {
@@ -151,7 +151,7 @@ const productionNavigationGroups = [
     items: [
       { name: 'Company Profile', href: '/company-profile', icon: Building, moduleKey: 'company_profile', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Admin', 'System Admin'] },
       { name: 'Team', href: '/team', icon: UserCog, moduleKey: 'team', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
-      { name: 'Tasks', href: '/tasks', icon: ClipboardList, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
+      { name: 'Tasks & Requests', href: '/tasks', icon: ClipboardList, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
     ]
   },
 ];
@@ -182,7 +182,7 @@ const distributionNavigationGroups = [
     items: [
       { name: 'Company Profile', href: '/company-profile', icon: Building, moduleKey: 'company_profile', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
       { name: 'Team', href: '/team', icon: UserCog, moduleKey: 'team', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
-      { name: 'Tasks', href: '/tasks', icon: ClipboardList, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
+      { name: 'Tasks & Requests', href: '/tasks', icon: ClipboardList, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
     ]
   },
   {
@@ -217,7 +217,7 @@ const marketingNavigationGroups = [
     items: [
       { name: 'Company Profile', href: '/company-profile', icon: Building, moduleKey: 'company_profile', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager'] },
       { name: 'Team', href: '/team', icon: UserCog, moduleKey: 'team', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager'] },
-      { name: 'Tasks', href: '/tasks', icon: ClipboardList, roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator'] },
+      { name: 'Tasks & Requests', href: '/tasks', icon: ClipboardList, roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator'] },
     ]
   },
   {
