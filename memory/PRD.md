@@ -207,6 +207,12 @@
 - `GET /api/distributors/{id}/stock-dashboard`
 - `GET /api/distributors/{id}/monthly-reconciliation`
 
+### Module-Based Department Default Filter (2026-04-10)
+- [x] "All Tasks" tab department filter defaults to the current module's department (Sales→Sales, Production→Production, Distribution→Distribution, Marketing→Marketing)
+- [x] Department filter auto-updates when module is switched via sidebar module selector
+- [x] New Task form defaults department to current module's department
+- [x] Uses `useAppContext()` → `currentContext` mapped via `MODULE_DEPT_MAP`
+
 ### Marketing Comments for Posts & Events (2026-04-10)
 - [x] **Reusable CommentThread component**: Used in both EventPanel (events) and MarketingPostDetail (posts)
 - [x] **Backend**: `GET/POST /api/marketing/comments/{entity_type}/{entity_id}`, `DELETE /api/marketing/comments/{comment_id}` — single `marketing_comments` collection with entity_type (post/event)
