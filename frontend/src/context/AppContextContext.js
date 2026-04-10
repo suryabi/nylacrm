@@ -9,7 +9,7 @@ const ADMIN_ROLES = ['CEO', 'Director'];
 // Module definitions
 const MODULES = {
   sales: { id: 'sales', label: 'Sales', icon: 'Store', defaultRoute: '/home' },
-  production: { id: 'production', label: 'Production', icon: 'Factory', defaultRoute: '/maintenance' },
+  production: { id: 'production', label: 'Production', icon: 'Factory', defaultRoute: '/production-dashboard' },
   distribution: { id: 'distribution', label: 'Distribution', icon: 'Truck', defaultRoute: '/distributors' },
   marketing: { id: 'marketing', label: 'Marketing', icon: 'Megaphone', defaultRoute: '/marketing-calendar' },
 };

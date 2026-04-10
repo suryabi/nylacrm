@@ -116,6 +116,7 @@ const productionNavigationGroups = [
   {
     title: 'Production',
     items: [
+      { name: 'Dashboard', href: '/production-dashboard', icon: BarChart3, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Production Batches', href: '/production-batches', icon: Factory, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'QC Routes', href: '/qc-routes', icon: ArrowRight, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
       { name: 'QC Team', href: '/qc-team', icon: Users, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },

@@ -66,6 +66,95 @@ class RejectionCostRuleUpdate(BaseModel):
     description: Optional[str] = None
 
 
+
+# ──────────────────────────────────────────────
+# Production Dashboard
+# ──────────────────────────────────────────────
+
+@router.get("/dashboard")
+async def production_dashboard(current_user: dict = Depends(get_current_user)):
+    """Aggregate stock across all batches, grouped by SKU and stage."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    batches = await tdb.production_batches.find(
+        {"tenant_id": tenant_id},
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "total_crates": 1, "bottles_per_crate": 1,
+         "total_bottles": 1, "unallocated_crates": 1, "stage_balances": 1,
+         "total_passed_final": 1, "total_rejected": 1, "status": 1, "qc_stages": 1, "ph_value": 1}
+    ).to_list(5000)
+
+    # Aggregate per SKU
+    sku_map = {}
+    total_crates_all = 0
+    total_unallocated_all = 0
+    total_ready_all = 0
+    total_rejected_all = 0
+    active_batches = 0
+
+    for b in batches:
+        sid = b.get("sku_id", "unknown")
+        if sid not in sku_map:
+            sku_map[sid] = {
+                "sku_id": sid,
+                "sku_name": b.get("sku_name", "Unknown"),
+                "total_crates": 0,
+                "total_bottles": 0,
+                "unallocated_crates": 0,
+                "total_passed_final": 0,
+                "total_rejected": 0,
+                "batch_count": 0,
+                "stages": {},  # stage_name -> {pending, passed, rejected, received}
+                "stage_order": [],  # ordered list of stage names
+            }
+
+        sku = sku_map[sid]
+        sku["total_crates"] += b.get("total_crates", 0)
+        sku["total_bottles"] += b.get("total_bottles", 0)
+        sku["unallocated_crates"] += b.get("unallocated_crates", 0)
+        sku["total_passed_final"] += b.get("total_passed_final", 0)
+        sku["total_rejected"] += b.get("total_rejected", 0)
+        sku["batch_count"] += 1
+
+        total_crates_all += b.get("total_crates", 0)
+        total_unallocated_all += b.get("unallocated_crates", 0)
+        total_ready_all += b.get("total_passed_final", 0)
+        total_rejected_all += b.get("total_rejected", 0)
+        if b.get("status") not in ("completed",):
+            active_batches += 1
+
+        # Build stage order from qc_stages (first batch sets the order)
+        if not sku["stage_order"] and b.get("qc_stages"):
+            sorted_stages = sorted(b["qc_stages"], key=lambda s: s.get("order", 0))
+            sku["stage_order"] = [
+                {"id": s["id"], "name": s["name"], "type": s.get("stage_type", "qc"), "order": s.get("order", 0)}
+                for s in sorted_stages
+            ]
+
+        # Accumulate stage balances
+        for stage_id, bal in (b.get("stage_balances") or {}).items():
+            sname = bal.get("stage_name", stage_id)
+            if sname not in sku["stages"]:
+                sku["stages"][sname] = {"pending": 0, "passed": 0, "rejected": 0, "received": 0}
+            for k in ("pending", "passed", "rejected", "received"):
+                sku["stages"][sname][k] += bal.get(k, 0)
+
+    skus = sorted(sku_map.values(), key=lambda s: s["total_crates"], reverse=True)
+
+    return {
+        "summary": {
+            "total_skus": len(skus),
+            "total_batches": len(batches),
+            "active_batches": active_batches,
+            "total_crates": total_crates_all,
+            "unallocated_crates": total_unallocated_all,
+            "ready_for_warehouse": total_ready_all,
+            "total_rejected": total_rejected_all,
+        },
+        "skus": skus,
+    }
+
+
 # ──────────────────────────────────────────────
 # QC Routes
 # ──────────────────────────────────────────────

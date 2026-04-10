@@ -66,6 +66,7 @@ import Maintenance from './pages/Maintenance';
 import Inventory from './pages/Inventory';
 import QualityControl from './pages/QualityControl';
 import ProductionBatches from './pages/ProductionBatches';
+import ProductionDashboard from './pages/ProductionDashboard';
 import BatchDetail from './pages/BatchDetail';
 import QCRouteConfig from './pages/QCRouteConfig';
 import RejectionReasons from './pages/RejectionReasons';
@@ -243,6 +244,7 @@ function AppRouter() {
           <Route path="/lead-scoring-model" element={<ProtectedRoute moduleKey="lead_scoring"><LeadScoringModel /></ProtectedRoute>} />
           
           {/* Production Context Routes */}
+          <Route path="/production-dashboard" element={<ProtectedRoute><ProductionDashboard /></ProtectedRoute>} />
           <Route path="/maintenance" element={<ProtectedRoute moduleKey="maintenance"><Maintenance /></ProtectedRoute>} />
           <Route path="/inventory" element={<ProtectedRoute moduleKey="inventory"><Inventory /></ProtectedRoute>} />
           <Route path="/quality-control" element={<ProtectedRoute moduleKey="quality_control"><QualityControl /></ProtectedRoute>} />

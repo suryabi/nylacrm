@@ -207,6 +207,15 @@
 - `GET /api/distributors/{id}/stock-dashboard`
 - `GET /api/distributors/{id}/monthly-reconciliation`
 
+### Production Dashboard - Landing Page (2026-04-10)
+- [x] **New `/api/production/dashboard` endpoint** aggregating stock by SKU across all batch stages
+- [x] **ProductionDashboard.js** as the landing page for Production module — visual pipeline flow per SKU
+- [x] **Summary cards**: SKUs, Batches, Total Crates, Unallocated, In QC Stages, Ready for Warehouse, Rejected
+- [x] **SKU Pipeline visualization**: Unallocated → QC Stage 1 → QC Stage 2 → Labeling → Final QC → Ready for Warehouse
+- [x] Each stage node shows crates count, pending/passed/rejected breakdown, and progress bar
+- [x] Color-coded: slate (unallocated), amber (QC), violet (labeling), emerald (final QC), teal (warehouse-ready)
+- [x] Set as default route when switching to Production module
+
 ### Batch Creation & pH Tracking (2026-04-10)
 - [x] **Removed Production Line field** from batch creation form and detail page
 - [x] **Added pH Value dropdown** (7.5, 8.5) to batch creation form
