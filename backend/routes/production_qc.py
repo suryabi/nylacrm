@@ -43,13 +43,13 @@ class BatchCreate(BaseModel):
     production_date: str
     total_crates: int
     bottles_per_crate: int
-    production_line: Optional[str] = None
+    ph_value: Optional[float] = None
     notes: Optional[str] = None
 
 class BatchUpdate(BaseModel):
     total_crates: Optional[int] = None
     bottles_per_crate: Optional[int] = None
-    production_line: Optional[str] = None
+    ph_value: Optional[float] = None
     notes: Optional[str] = None
     status: Optional[str] = None
 
@@ -226,7 +226,8 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_curre
         "total_crates": data.total_crates,
         "bottles_per_crate": data.bottles_per_crate,
         "total_bottles": total_bottles,
-        "production_line": data.production_line or "",
+        "production_line": "",
+        "ph_value": data.ph_value,
         "notes": data.notes or "",
         "status": "created",  # created, in_qc, in_labeling, in_final_qc, completed
         "qc_route_id": qc_route_id,
@@ -254,7 +255,7 @@ async def update_batch(batch_id: str, data: BatchUpdate, current_user: dict = De
         raise HTTPException(status_code=404, detail="Batch not found")
 
     updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
-    for field in ["total_crates", "bottles_per_crate", "production_line", "notes", "status"]:
+    for field in ["total_crates", "bottles_per_crate", "ph_value", "notes", "status"]:
         val = getattr(data, field, None)
         if val is not None:
             updates[field] = val

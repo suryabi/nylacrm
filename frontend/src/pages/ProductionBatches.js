@@ -164,11 +164,11 @@ export default function ProductionBatches() {
                     <div className="flex items-center gap-3 text-xs text-slate-500">
                       <span className="flex items-center gap-1"><Tag size={11} /> {batch.sku_name}</span>
                       <span className="flex items-center gap-1"><Calendar size={11} /> {batch.production_date}</span>
-                      {batch.production_line && <span className="flex items-center gap-1"><Factory size={11} /> {batch.production_line}</span>}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-6 text-right">
+                  {batch.ph_value && <PhBadge value={batch.ph_value} />}
                   <div>
                     <p className="text-lg font-bold text-slate-800">{batch.total_crates?.toLocaleString()}</p>
                     <p className="text-[10px] text-slate-400 uppercase">Crates</p>
@@ -206,7 +206,7 @@ export default function ProductionBatches() {
 function CreateBatchModal({ skus, onClose, onSuccess }) {
   const [form, setForm] = useState({
     sku_id: '', sku_name: '', batch_code: '', production_date: new Date().toISOString().split('T')[0],
-    total_crates: '', bottles_per_crate: '', production_line: '', notes: '',
+    total_crates: '', bottles_per_crate: '', ph_value: '', notes: '',
   });
   const [saving, setSaving] = useState(false);
   const [hasQCRoute, setHasQCRoute] = useState(null);
@@ -239,6 +239,7 @@ function CreateBatchModal({ skus, onClose, onSuccess }) {
         ...form,
         total_crates: parseInt(form.total_crates),
         bottles_per_crate: parseInt(form.bottles_per_crate),
+        ph_value: form.ph_value ? parseFloat(form.ph_value) : null,
       }, { headers: getAuthHeaders() });
       toast.success('Batch created successfully');
       onSuccess();
@@ -283,9 +284,13 @@ function CreateBatchModal({ skus, onClose, onSuccess }) {
                 className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" data-testid="batch-date-input" />
             </div>
             <div>
-              <label className="text-xs text-slate-500 font-medium mb-1 block">Production Line</label>
-              <input value={form.production_line} onChange={e => setForm(p => ({ ...p, production_line: e.target.value }))}
-                placeholder="e.g. Line A" className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" data-testid="batch-line-input" />
+              <label className="text-xs text-slate-500 font-medium mb-1 block">pH Value</label>
+              <select value={form.ph_value} onChange={e => setForm(p => ({ ...p, ph_value: e.target.value }))}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-white" data-testid="batch-ph-select">
+                <option value="">Select pH</option>
+                <option value="7.5">7.5</option>
+                <option value="8.5">8.5</option>
+              </select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -326,3 +331,29 @@ function CreateBatchModal({ skus, onClose, onSuccess }) {
     </div>
   );
 }
+
+
+function PhBadge({ value }) {
+  if (!value) return null;
+  // pH 6-10 range visualization; 7.5 = slightly alkaline (teal), 8.5 = more alkaline (blue)
+  const pct = ((value - 6) / 4) * 100; // 6-10 mapped to 0-100%
+  const color = value <= 7.5 ? '#14b8a6' : '#3b82f6';
+  const bg = value <= 7.5 ? 'bg-teal-50 border-teal-200' : 'bg-blue-50 border-blue-200';
+  const text = value <= 7.5 ? 'text-teal-700' : 'text-blue-700';
+  return (
+    <div className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg border ${bg}`} data-testid="ph-badge">
+      <div className="flex flex-col items-center">
+        <span className={`text-sm font-bold tabular-nums ${text}`}>{value}</span>
+        <span className="text-[8px] text-slate-400 uppercase tracking-wider leading-none">pH</span>
+      </div>
+      <div className="w-16 h-2.5 rounded-full bg-gradient-to-r from-amber-400 via-teal-400 to-blue-500 relative overflow-hidden">
+        <div
+          className="absolute top-[-1px] w-3 h-3 rounded-full bg-white border-2 shadow-sm"
+          style={{ left: `calc(${pct}% - 6px)`, borderColor: color }}
+        />
+      </div>
+    </div>
+  );
+}
+
+export { PhBadge };

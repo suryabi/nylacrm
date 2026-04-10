@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import axios from 'axios';
 import {
-  ArrowLeft, Package, Calendar, Factory, Boxes, Tag,
+  ArrowLeft, Package, Calendar, Boxes, Tag,
   Loader2, FlaskConical, Paintbrush, ShieldCheck,
   Trash2, ArrowRight, MoveRight, ClipboardCheck,
   Clock, User, AlertTriangle, ChevronDown, ChevronUp, Plus,
@@ -105,14 +105,13 @@ export default function BatchDetail() {
       </div>
 
       {/* Info Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
         {[
           { label: 'Production Date', value: batch.production_date, icon: Calendar },
           { label: 'Total Crates', value: batch.total_crates?.toLocaleString(), icon: Boxes },
           { label: 'Bottles/Crate', value: batch.bottles_per_crate, icon: Package },
           { label: 'Total Bottles', value: batch.total_bottles?.toLocaleString(), icon: Package },
           { label: 'Unallocated', value: batch.unallocated_crates?.toLocaleString(), icon: Boxes },
-          { label: 'Line', value: batch.production_line || '-', icon: Factory },
         ].map((item, i) => (
           <div key={i} className="bg-white border border-slate-200 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-1"><item.icon className="w-3.5 h-3.5 text-slate-400" /><span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.label}</span></div>
@@ -120,6 +119,9 @@ export default function BatchDetail() {
           </div>
         ))}
       </div>
+
+      {/* pH Scale */}
+      {batch.ph_value && <PhScale value={batch.ph_value} />}
 
       {/* Stage Cards — the core of Phase 2 */}
       {stages.length > 0 ? (
@@ -847,6 +849,45 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
         </div>
         );
       })()}
+    </div>
+  );
+}
+
+
+function PhScale({ value }) {
+  if (!value) return null;
+  const min = 6, max = 10;
+  const pct = ((value - min) / (max - min)) * 100;
+  const color = value <= 7.5 ? '#14b8a6' : '#3b82f6';
+  const label = value <= 7 ? 'Neutral' : value <= 8 ? 'Slightly Alkaline' : 'Alkaline';
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-5 flex items-center gap-5" data-testid="ph-scale">
+      <div className="flex flex-col items-center min-w-[60px]">
+        <span className="text-[10px] text-slate-400 uppercase tracking-wider">pH Level</span>
+        <span className="text-3xl font-black tabular-nums" style={{ color }}>{value}</span>
+        <span className="text-[10px] font-medium mt-0.5" style={{ color }}>{label}</span>
+      </div>
+      <div className="flex-1">
+        <div className="flex justify-between text-[9px] text-slate-400 mb-1 px-1">
+          <span>Acidic</span><span>Neutral</span><span>Alkaline</span>
+        </div>
+        <div className="relative h-4 rounded-full overflow-hidden"
+          style={{ background: 'linear-gradient(to right, #ef4444, #f59e0b, #22c55e, #14b8a6, #3b82f6, #8b5cf6)' }}>
+          {/* Tick marks */}
+          {[6,7,8,9,10].map(v => (
+            <div key={v} className="absolute top-0 h-full w-px bg-white/40"
+              style={{ left: `${((v - min) / (max - min)) * 100}%` }} />
+          ))}
+          {/* Indicator */}
+          <div className="absolute top-[-3px]" style={{ left: `calc(${pct}% - 10px)` }}>
+            <div className="w-5 h-5 rounded-full bg-white border-[3px] shadow-lg"
+              style={{ borderColor: color }} />
+          </div>
+        </div>
+        <div className="flex justify-between text-[9px] text-slate-500 mt-1 px-0.5 font-medium">
+          {[6,7,8,9,10].map(v => <span key={v}>{v}</span>)}
+        </div>
+      </div>
     </div>
   );
 }

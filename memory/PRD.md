@@ -207,6 +207,12 @@
 - `GET /api/distributors/{id}/stock-dashboard`
 - `GET /api/distributors/{id}/monthly-reconciliation`
 
+### Batch Creation & pH Tracking (2026-04-10)
+- [x] **Removed Production Line field** from batch creation form and detail page
+- [x] **Added pH Value dropdown** (7.5, 8.5) to batch creation form
+- [x] **pH Badge in batch list**: Compact colorful scale (amber→teal→blue gradient) with circle indicator and value
+- [x] **pH Scale in batch detail**: Full-width gradient bar (red→green→blue→purple) with Acidic/Neutral/Alkaline labels, tick marks at 6-10, and large pH value display
+
 ## Upcoming Tasks (P1)
 - Auto-generate Provisional Invoice (on shipment -> "delivered")
 - Build Reporting Module
