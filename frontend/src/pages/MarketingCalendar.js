@@ -347,7 +347,7 @@ export default function MarketingCalendar() {
     const loadTeam = async () => {
       try {
         const { data } = await require('axios').get(process.env.REACT_APP_BACKEND_URL + '/api/users', {
-          headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}`, 'X-Tenant-ID': localStorage.getItem('tenant_id') }
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': localStorage.getItem('tenant_id') }
         });
         const marketing = data.filter(u => {
           if (!u.is_active) return false;
