@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { format, parseISO, isValid, isPast, isToday } from 'date-fns';
+import { useAppContext } from '../context/AppContextContext';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -275,6 +276,11 @@ function DeptMultiSelect({ departments, selected, onChange }) {
 export default function TaskManagement() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { currentContext } = useAppContext();
+
+  // Map module context to department name for default filtering
+  const MODULE_DEPT_MAP = { sales: 'Sales', production: 'Production', distribution: 'Distribution', marketing: 'Marketing' };
+  const contextDept = MODULE_DEPT_MAP[currentContext] || 'Sales';
 
   // Core state
   const [loading, setLoading] = useState(true);
@@ -311,6 +317,11 @@ export default function TaskManagement() {
   });
   const [allOverdue, setAllOverdue] = useState(false);
   const [deptInitialized, setDeptInitialized] = useState(false);
+
+  // Reset department filter when module context changes
+  useEffect(() => {
+    setAllFilters(f => ({ ...f, department_ids: [contextDept] }));
+  }, [contextDept]);
 
   // Dialog state
   const [showTaskDialog, setShowTaskDialog] = useState(false);
@@ -381,12 +392,9 @@ export default function TaskManagement() {
       setStats(statsRes.data);
       setUser(meRes.data);
 
-      // Default "All Tasks" department filter to user's departments (once)
-      if (!deptInitialized && meRes.data) {
-        const userDepts = Array.isArray(meRes.data.department) ? meRes.data.department : [meRes.data.department].filter(Boolean);
-        if (userDepts.length > 0) {
-          setAllFilters(f => ({ ...f, department_ids: userDepts }));
-        }
+      // Default "All Tasks" department filter to current module's department (once)
+      if (!deptInitialized) {
+        setAllFilters(f => ({ ...f, department_ids: [contextDept] }));
         setDeptInitialized(true);
       }
     } catch (error) {
@@ -395,7 +403,7 @@ export default function TaskManagement() {
     } finally {
       setLoading(false);
     }
-  }, [primaryTab, myFilters, myOverdue, allFilters, allOverdue, deptInitialized]);
+  }, [primaryTab, myFilters, myOverdue, allFilters, allOverdue, deptInitialized, contextDept]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -477,7 +485,7 @@ export default function TaskManagement() {
   const resetTaskForm = () => {
     setTaskForm({
       title: '', description: '', severity: 'medium', status: 'open',
-      department_id: Array.isArray(user?.department) ? (user.department[0] || '') : (user?.department || ''),
+      department_id: contextDept,
       assignees: [], milestone_id: '', labels: [], due_date: '', reminder_date: '',
       linked_entity_type: '', linked_entity_id: ''
     });
