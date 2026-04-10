@@ -230,7 +230,7 @@ export default function EventPanel({ open, onClose, event, eventTypes, teamMembe
           <div className="bg-indigo-50/50 rounded-xl border border-indigo-200/60 p-4">
             <div className="flex items-center justify-between mb-3">
               <label className="text-[11px] font-medium uppercase tracking-wider text-indigo-600 flex items-center gap-1.5">
-                <ClipboardList size={12} /> Marketing Team Tasks
+                <ClipboardList size={12} /> Marketing Team - Tasks & Requests
               </label>
               <button onClick={addTask} className="px-2.5 py-1 bg-indigo-600 text-white rounded-lg text-[10px] font-medium hover:bg-indigo-700 flex items-center gap-1" data-testid="add-task-btn">
                 <Plus size={10} /> Add Task
