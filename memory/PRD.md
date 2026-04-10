@@ -207,7 +207,14 @@
 - `GET /api/distributors/{id}/stock-dashboard`
 - `GET /api/distributors/{id}/monthly-reconciliation`
 
-### Rejection Report Filters Enhancement (2026-04-10)
+### Tasks & Requests Two-Tab Restructure (2026-04-10)
+- [x] **Renamed** "Tasks" module to "Tasks & Requests" across all sidebar entries
+- [x] **"My Tasks" tab** (default): Shows tasks assigned to or created by the logged-in user. Personal metrics: Total, Assigned to Me, Created by Me, In Progress, Overdue, High Priority
+- [x] **"All Tasks" tab**: Department-level view with multi-select department filter defaulting to user's departments. Department metrics: Total, Open, In Progress, In Review, Overdue, Closed
+- [x] **Department multi-select**: Checkbox-based dropdown with Select All, defaults to user's departments
+- [x] **Backend**: Added `view=mine` (combined assigned+created query), comma-separated `department_id` support, personal stats (my_total, my_overdue, my_in_progress, my_high_severity, my_completed)
+- [x] Both tabs support List and Board sub-views. Milestones and Labels remain under All Tasks
+- [x] Clickable metric cards filter the task list dynamically
 - [x] **Month/Year filters** replace date_from/date_to — defaults to current month/year, uses Shadcn Select
 - [x] **SKU filter** — dropdown populated from batch SKUs, filters rejections by SKU
 - [x] **Backend**: Added `month`, `year`, and `sku_id` query params to `/api/production/rejection-report`
