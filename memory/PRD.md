@@ -207,6 +207,11 @@
 - `GET /api/distributors/{id}/stock-dashboard`
 - `GET /api/distributors/{id}/monthly-reconciliation`
 
+### Responsive Production Module (2026-04-10)
+- [x] **ProductionDashboard.js**: Mobile vertical pipeline flow with down arrows, 2-col summary cards on mobile, 4-col on tablet, 7-col on desktop
+- [x] **ProductionBatches.js**: Stacked search/filters on mobile, 2-col stats grid, responsive batch cards with wrapped layout
+- [x] **BatchDetail.js**: Responsive info cards, stage cards with compact balance row, stacked move/inspect forms, scrollable rejection table, responsive inspection entry grid
+
 ### Production Dashboard - Landing Page (2026-04-10)
 - [x] **New `/api/production/dashboard` endpoint** aggregating stock by SKU across all batch stages
 - [x] **ProductionDashboard.js** as the landing page for Production module — visual pipeline flow per SKU

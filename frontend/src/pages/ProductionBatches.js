@@ -80,21 +80,21 @@ export default function ProductionBatches() {
             <Factory className="h-6 w-6 text-blue-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-800">Production Batches</h1>
-            <p className="text-sm text-slate-500">Create and manage production batches</p>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-800">Production Batches</h1>
+            <p className="text-xs sm:text-sm text-slate-500">Create and manage production batches</p>
           </div>
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm flex items-center gap-2 transition-colors"
+          className="px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm flex items-center gap-1.5 sm:gap-2 transition-colors"
           data-testid="create-batch-btn"
         >
-          <Plus size={16} /> New Batch
+          <Plus size={14} /> New Batch
         </button>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
         {[
           { label: 'Total Batches', value: stats.total_batches || 0, icon: Package, color: 'text-slate-600' },
           { label: 'Active', value: stats.active_batches || 0, icon: FlaskConical, color: 'text-blue-600' },
@@ -102,19 +102,19 @@ export default function ProductionBatches() {
           { label: 'Total Crates', value: (stats.total_crates_produced || 0).toLocaleString(), icon: Boxes, color: 'text-purple-600' },
           { label: 'QC Routes', value: stats.qc_routes_configured || 0, icon: ArrowRight, color: 'text-amber-600' },
         ].map((s, i) => (
-          <div key={i} className="bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-3">
-            <s.icon className={`w-5 h-5 ${s.color}`} />
-            <div>
-              <p className="text-xs text-slate-400 uppercase tracking-wider">{s.label}</p>
-              <p className="text-lg font-bold text-slate-800">{s.value}</p>
+          <div key={i} className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
+            <s.icon className={`w-4 h-4 sm:w-5 sm:h-5 ${s.color} flex-shrink-0`} />
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-xs text-slate-400 uppercase tracking-wider truncate">{s.label}</p>
+              <p className="text-base sm:text-lg font-bold text-slate-800">{s.value}</p>
             </div>
           </div>
         ))}
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             value={search} onChange={e => setSearch(e.target.value)}
@@ -125,7 +125,7 @@ export default function ProductionBatches() {
         </div>
         <select
           value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500/20 outline-none"
+          className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500/20 outline-none flex-shrink-0"
           data-testid="batch-status-filter"
         >
           <option value="">All Status</option>
@@ -148,33 +148,33 @@ export default function ProductionBatches() {
             <div
               key={batch.id}
               onClick={() => navigate(`/production-batches/${batch.id}`)}
-              className="bg-white border border-slate-200 rounded-xl p-5 hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer"
+              className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer"
               data-testid={`batch-card-${batch.id}`}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-lg bg-blue-50 flex items-center justify-center">
-                    <Package className="w-5 h-5 text-blue-600" />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                    <Package className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2.5 mb-0.5">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                       <span className="text-sm font-semibold text-slate-900">{batch.batch_code}</span>
                       <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${st.color}`}>{st.label}</span>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-slate-500">
+                    <div className="flex items-center gap-2 sm:gap-3 text-xs text-slate-500 flex-wrap">
                       <span className="flex items-center gap-1"><Tag size={11} /> {batch.sku_name}</span>
                       <span className="flex items-center gap-1"><Calendar size={11} /> {batch.production_date}</span>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-6 text-right">
+                <div className="flex items-center gap-3 sm:gap-6 ml-13 sm:ml-0">
                   {batch.ph_value && <PhBadge value={batch.ph_value} />}
-                  <div>
-                    <p className="text-lg font-bold text-slate-800">{batch.total_crates?.toLocaleString()}</p>
+                  <div className="text-center">
+                    <p className="text-base sm:text-lg font-bold text-slate-800">{batch.total_crates?.toLocaleString()}</p>
                     <p className="text-[10px] text-slate-400 uppercase">Crates</p>
                   </div>
-                  <div>
-                    <p className="text-lg font-bold text-slate-800">{batch.total_bottles?.toLocaleString()}</p>
+                  <div className="text-center">
+                    <p className="text-base sm:text-lg font-bold text-slate-800">{batch.total_bottles?.toLocaleString()}</p>
                     <p className="text-[10px] text-slate-400 uppercase">Bottles</p>
                   </div>
                   {stageCount > 0 && (

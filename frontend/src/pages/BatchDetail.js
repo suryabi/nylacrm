@@ -84,28 +84,28 @@ export default function BatchDetail() {
   const balances = batch.stage_balances || {};
 
   return (
-    <div className="p-6 lg:p-8 max-w-[1600px] mx-auto space-y-6" data-testid="batch-detail-page">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto space-y-4 sm:space-y-6" data-testid="batch-detail-page">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <button onClick={() => navigate('/production-batches')} className="p-2 hover:bg-slate-100 rounded-lg" data-testid="back-btn">
+      <div className="flex items-start sm:items-center gap-2 sm:gap-3">
+        <button onClick={() => navigate('/production-batches')} className="p-1.5 sm:p-2 hover:bg-slate-100 rounded-lg flex-shrink-0" data-testid="back-btn">
           <ArrowLeft size={18} className="text-slate-600" />
         </button>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-800">{batch.batch_code}</h1>
-            <span className={`px-2.5 py-0.5 rounded-md text-xs font-medium ${st.color}`}>{st.label}</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-slate-800">{batch.batch_code}</h1>
+            <span className={`px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-medium ${st.color}`}>{st.label}</span>
           </div>
-          <p className="text-sm text-slate-500 mt-0.5">{batch.sku_name}</p>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5 truncate">{batch.sku_name}</p>
         </div>
         {batch.status === 'created' && (
-          <button onClick={handleDelete} className="px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-1.5" data-testid="delete-batch-btn">
-            <Trash2 size={14} /> Delete
+          <button onClick={handleDelete} className="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-1 sm:gap-1.5 flex-shrink-0" data-testid="delete-batch-btn">
+            <Trash2 size={14} /> <span className="hidden sm:inline">Delete</span>
           </button>
         )}
       </div>
 
       {/* Info Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
         {[
           { label: 'Production Date', value: batch.production_date, icon: Calendar },
           { label: 'Total Crates', value: batch.total_crates?.toLocaleString(), icon: Boxes },
@@ -113,9 +113,9 @@ export default function BatchDetail() {
           { label: 'Total Bottles', value: batch.total_bottles?.toLocaleString(), icon: Package },
           { label: 'Unallocated', value: batch.unallocated_crates?.toLocaleString(), icon: Boxes },
         ].map((item, i) => (
-          <div key={i} className="bg-white border border-slate-200 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-1"><item.icon className="w-3.5 h-3.5 text-slate-400" /><span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.label}</span></div>
-            <p className="text-lg font-bold text-slate-800">{item.value}</p>
+          <div key={i} className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4">
+            <div className="flex items-center gap-1.5 sm:gap-2 mb-1"><item.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400" /><span className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-wider">{item.label}</span></div>
+            <p className="text-base sm:text-lg font-bold text-slate-800">{item.value}</p>
           </div>
         ))}
       </div>
@@ -125,26 +125,26 @@ export default function BatchDetail() {
 
       {/* Stage Cards — the core of Phase 2 */}
       {stages.length > 0 ? (
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
             <FlaskConical size={16} className="text-blue-500" /> QC Pipeline
           </h2>
 
           {/* Summary Bar */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
-              <p className="text-xs text-slate-400 mb-0.5">Unallocated</p>
-              <p className="text-2xl font-bold text-slate-800">{batch.unallocated_crates || 0}</p>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4 text-center">
+              <p className="text-[10px] sm:text-xs text-slate-400 mb-0.5">Unallocated</p>
+              <p className="text-xl sm:text-2xl font-bold text-slate-800">{batch.unallocated_crates || 0}</p>
               <p className="text-[9px] text-slate-300">crates</p>
             </div>
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
-              <p className="text-xs text-red-400 mb-0.5">Total Rejected</p>
-              <p className="text-2xl font-bold text-red-600">{batch.total_rejected || 0}</p>
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 sm:p-4 text-center">
+              <p className="text-[10px] sm:text-xs text-red-400 mb-0.5">Total Rejected</p>
+              <p className="text-xl sm:text-2xl font-bold text-red-600">{batch.total_rejected || 0}</p>
               <p className="text-[9px] text-red-300">bottles</p>
             </div>
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
-              <p className="text-xs text-emerald-400 mb-0.5">Delivery Ready</p>
-              <p className="text-2xl font-bold text-emerald-600">{batch.total_passed_final || 0}</p>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 sm:p-4 text-center">
+              <p className="text-[10px] sm:text-xs text-emerald-400 mb-0.5">Delivery Ready</p>
+              <p className="text-xl sm:text-2xl font-bold text-emerald-600">{batch.total_passed_final || 0}</p>
               <p className="text-[9px] text-emerald-300">crates</p>
             </div>
           </div>
@@ -262,18 +262,18 @@ export default function BatchDetail() {
         return (
         <div className="space-y-0" data-testid="rejection-summary-section">
           {/* Always-Visible Metrics */}
-          <div className="bg-gradient-to-br from-red-50 to-rose-50 border border-red-200/60 rounded-t-xl p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
-                <AlertTriangle size={16} className="text-red-600" />
+          <div className="bg-gradient-to-br from-red-50 to-rose-50 border border-red-200/60 rounded-t-xl p-4 sm:p-5">
+            <div className="flex items-center gap-2 mb-3 sm:mb-4">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-red-100 flex items-center justify-center">
+                <AlertTriangle size={14} className="text-red-600" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Rejection Summary</h3>
-                <p className="text-[10px] text-slate-500">{rejEntries.length} rejection records across inspections</p>
+                <h3 className="text-xs sm:text-sm font-bold text-slate-900">Rejection Summary</h3>
+                <p className="text-[9px] sm:text-[10px] text-slate-500">{rejEntries.length} rejection records across inspections</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
               {/* Total Rejected */}
               <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-red-100">
                 <p className="text-[10px] text-red-400 uppercase tracking-wider font-medium mb-1">Total Rejected</p>
@@ -347,9 +347,9 @@ export default function BatchDetail() {
             </button>
 
             {showRejections && (
-              <div className="px-5 pb-5 space-y-3">
+              <div className="px-3 sm:px-5 pb-4 sm:pb-5 space-y-3">
                 {/* Filters */}
-                <div className="grid grid-cols-4 gap-3" data-testid="rej-filters">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3" data-testid="rej-filters">
                   <Select value={rejFilter.resource || ""} onValueChange={v => setRejFilter(p => ({ ...p, resource: v === "__all__" ? "" : v }))}>
                     <SelectTrigger className="h-9 text-xs border-slate-200" data-testid="rej-filter-resource">
                       <SelectValue placeholder="All Resources" />
@@ -389,8 +389,8 @@ export default function BatchDetail() {
                 </div>
 
                 {/* Grid */}
-                <div className="rounded-xl border border-slate-200 overflow-hidden">
-                  <table className="w-full text-sm">
+                <div className="overflow-x-auto -mx-3 sm:-mx-0 rounded-xl border border-slate-200">
+                  <table className="w-full text-sm min-w-[640px]">
                     <thead>
                       <tr className="bg-slate-800 text-white">
                         <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider font-semibold">Resource</th>
@@ -645,10 +645,10 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
   return (
     <div className={`bg-white border rounded-xl overflow-hidden ${cfg.border}`} data-testid={`stage-card-${stage.id}`}>
       {/* Stage Header */}
-      <div className={`flex items-center justify-between px-5 py-3 ${cfg.bg}`}>
-        <div className="flex items-center gap-2.5">
+      <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between px-3 sm:px-5 py-3 gap-2 ${cfg.bg}`}>
+        <div className="flex items-center gap-2 sm:gap-2.5">
           <Icon size={16} className={cfg.color} />
-          <span className="text-sm font-semibold text-slate-800">{stage.name}</span>
+          <span className="text-xs sm:text-sm font-semibold text-slate-800">{stage.name}</span>
           <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${cfg.badge}`}>
             {stage.stage_type === 'qc' ? 'QC' : stage.stage_type === 'labeling' ? 'Labeling' : 'Final QC'}
           </span>
@@ -656,16 +656,16 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
         <div className="flex items-center gap-2">
           {canReceive && (
             <button onClick={() => { setShowMove(!showMove); setShowInspect(false); }}
-              className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg flex items-center gap-1 transition-colors"
+              className="px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg flex items-center gap-1 transition-colors"
               data-testid={`move-to-${stage.id}`}>
-              <MoveRight size={12} /> Receive Stock
+              <MoveRight size={12} /> Receive
             </button>
           )}
           {canInspect && (
             <button onClick={() => { setShowInspect(!showInspect); setShowMove(false); }}
-              className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg flex items-center gap-1 transition-colors"
+              className="px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg flex items-center gap-1 transition-colors"
               data-testid={`inspect-${stage.id}`}>
-              <ClipboardCheck size={12} /> Record Inspection
+              <ClipboardCheck size={12} /> Inspect
             </button>
           )}
         </div>
@@ -679,19 +679,19 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
           { label: 'Passed', unit: 'crates', value: bal.passed || 0, cls: 'text-emerald-600' },
           { label: 'Rejected', unit: 'bottles', value: bal.rejected || 0, cls: 'text-red-600' },
         ].map((c, i) => (
-          <div key={i} className="py-3 px-4 text-center">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wider">{c.label}</p>
-            <p className={`text-xl font-bold ${c.cls}`}>{c.value}</p>
-            <p className="text-[9px] text-slate-300 mt-0.5">{c.unit}</p>
+          <div key={i} className="py-2.5 sm:py-3 px-2 sm:px-4 text-center">
+            <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-wider">{c.label}</p>
+            <p className={`text-lg sm:text-xl font-bold ${c.cls}`}>{c.value}</p>
+            <p className="text-[8px] sm:text-[9px] text-slate-300 mt-0.5">{c.unit}</p>
           </div>
         ))}
       </div>
 
       {/* Move Form */}
       {showMove && (
-        <div className="px-5 py-4 bg-blue-50/50 border-t border-blue-100 space-y-3">
-          <p className="text-xs text-blue-700 font-medium">Move crates from <span className="font-bold">{sourceLabel}</span> ({sourceQty} available)</p>
-          <div className="flex items-end gap-3">
+        <div className="px-3 sm:px-5 py-3 sm:py-4 bg-blue-50/50 border-t border-blue-100 space-y-3">
+          <p className="text-xs text-blue-700 font-medium">Move from <span className="font-bold">{sourceLabel}</span> ({sourceQty} available)</p>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 sm:gap-3">
             <div className="flex-1">
               <label className="text-[10px] text-slate-500 mb-1 block">Quantity (crates)</label>
               <input type="number" value={moveQty} onChange={e => setMoveQty(e.target.value)} max={sourceQty}
@@ -702,12 +702,14 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
               <input value={moveNotes} onChange={e => setMoveNotes(e.target.value)}
                 placeholder="Optional notes" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
             </div>
-            <button onClick={handleMove} disabled={saving}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 flex items-center gap-1.5 whitespace-nowrap"
-              data-testid={`move-submit-${stage.id}`}>
-              {saving ? <Loader2 size={13} className="animate-spin" /> : <MoveRight size={13} />} Move
-            </button>
-            <button onClick={() => setShowMove(false)} className="px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 rounded-lg">Cancel</button>
+            <div className="flex gap-2">
+              <button onClick={handleMove} disabled={saving}
+                className="flex-1 sm:flex-none px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 flex items-center justify-center gap-1.5 whitespace-nowrap"
+                data-testid={`move-submit-${stage.id}`}>
+                {saving ? <Loader2 size={13} className="animate-spin" /> : <MoveRight size={13} />} Move
+              </button>
+              <button onClick={() => setShowMove(false)} className="px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 rounded-lg">Cancel</button>
+            </div>
           </div>
         </div>
       )}
@@ -719,11 +721,11 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
         const totalBottles = entries.reduce((s, e) => s + ((parseInt(e.qty_inspected) || 0) * (bottlesPerCrate || 1)), 0);
         const passedBottles = Math.max(0, totalBottles - totalRejected);
         return (
-        <div className="px-5 py-5 bg-emerald-50/50 border-t border-emerald-100 space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-emerald-700 font-medium">Record inspection at <span className="font-bold">{stage.name}</span> <span className="text-slate-400 font-normal">({bal.pending || 0} crates pending, {bottlesPerCrate} bottles/crate)</span></p>
+        <div className="px-3 sm:px-5 py-4 sm:py-5 bg-emerald-50/50 border-t border-emerald-100 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <p className="text-xs sm:text-sm text-emerald-700 font-medium">Record inspection at <span className="font-bold">{stage.name}</span> <span className="text-slate-400 font-normal">({bal.pending || 0} pending, {bottlesPerCrate} b/c)</span></p>
             <button onClick={addEntry}
-              className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg flex items-center gap-1.5 transition-colors"
+              className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg flex items-center gap-1.5 transition-colors self-start sm:self-auto"
               data-testid={`add-entry-${stage.id}`}>
               <Plus size={12} /> Add Entry
             </button>
@@ -740,8 +742,8 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
               <div key={eIdx} className="bg-white border border-slate-200 rounded-xl overflow-hidden" data-testid={`entry-card-${eIdx}`}>
                 {/* Entry Header: Resource + Date + Crates */}
                 <div className="p-3 bg-slate-50/80 border-b border-slate-200">
-                  <div className="grid grid-cols-12 gap-3 items-end">
-                    <div className="col-span-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-3 items-end">
+                    <div className="sm:col-span-4">
                       <label className="text-[10px] text-slate-500 mb-1 block font-medium uppercase tracking-wider">Resource</label>
                       <Select value={entry.resource_id || ""} onValueChange={v => updateEntry(eIdx, 'resource_id', v)}>
                         <SelectTrigger className="h-10 text-sm border-slate-200 bg-white" data-testid={`entry-resource-${eIdx}`}>
@@ -754,18 +756,18 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="col-span-3">
+                    <div className="sm:col-span-3">
                       <label className="text-[10px] text-slate-500 mb-1 block font-medium uppercase tracking-wider">Date</label>
                       <input type="date" value={entry.date} onChange={e => updateEntry(eIdx, 'date', e.target.value)}
                         className="w-full h-10 px-3 border border-slate-200 rounded-md text-sm bg-white" data-testid={`entry-date-${eIdx}`} />
                     </div>
-                    <div className="col-span-2">
+                    <div className="sm:col-span-2">
                       <label className="text-[10px] text-slate-500 mb-1 block font-medium uppercase tracking-wider">Crates Inspected</label>
                       <input type="number" value={entry.qty_inspected} onChange={e => updateEntry(eIdx, 'qty_inspected', e.target.value)}
                         min="1" placeholder="0"
                         className="w-full h-10 px-3 border border-slate-200 rounded-md text-sm text-right bg-white" data-testid={`entry-crates-${eIdx}`} />
                     </div>
-                    <div className="col-span-2 flex items-center gap-3 pb-0.5">
+                    <div className="sm:col-span-2 flex items-center gap-3 pb-0.5">
                       {eCrates > 0 && (
                         <div className="text-xs">
                           <span className="text-red-500 font-medium">{eRejected}</span>
@@ -775,7 +777,7 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
                         </div>
                       )}
                     </div>
-                    <div className="col-span-1 flex justify-end pb-0.5">
+                    <div className="sm:col-span-1 flex justify-end pb-0.5">
                       <button onClick={() => removeEntry(eIdx)} className="p-2 hover:bg-red-50 rounded-lg transition-colors" data-testid={`entry-remove-${eIdx}`}>
                         <Trash2 size={14} className="text-slate-300 hover:text-red-500" />
                       </button>
@@ -795,8 +797,8 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
                   </div>
                   <div className="space-y-2">
                     {entry.rejItems.map((rej, rIdx) => (
-                      <div key={rIdx} className="flex items-center gap-3" data-testid={`rej-item-${eIdx}-${rIdx}`}>
-                        <div className="w-28">
+                      <div key={rIdx} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3" data-testid={`rej-item-${eIdx}-${rIdx}`}>
+                        <div className="w-full sm:w-28">
                           <input type="number" value={rej.qty_rejected} onChange={e => updateRejItem(eIdx, rIdx, 'qty_rejected', e.target.value)}
                             min="0" placeholder="Count"
                             className="w-full h-9 px-3 border border-slate-200 rounded-md text-sm text-right text-red-600 font-medium bg-white" data-testid={`rej-qty-${eIdx}-${rIdx}`} />
@@ -813,7 +815,7 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
                             </SelectContent>
                           </Select>
                         </div>
-                        <button onClick={() => removeRejItem(eIdx, rIdx)} className="p-1.5 hover:bg-red-50 rounded transition-colors" data-testid={`rej-remove-${eIdx}-${rIdx}`}>
+                        <button onClick={() => removeRejItem(eIdx, rIdx)} className="p-1.5 hover:bg-red-50 rounded transition-colors self-end sm:self-auto" data-testid={`rej-remove-${eIdx}-${rIdx}`}>
                           <Trash2 size={12} className="text-slate-300 hover:text-red-400" />
                         </button>
                       </div>
@@ -861,11 +863,11 @@ function PhScale({ value }) {
   const color = value <= 7.5 ? '#14b8a6' : '#3b82f6';
   const label = value <= 7 ? 'Neutral' : value <= 8 ? 'Slightly Alkaline' : 'Alkaline';
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-5 flex items-center gap-5" data-testid="ph-scale">
-      <div className="flex flex-col items-center min-w-[60px]">
-        <span className="text-[10px] text-slate-400 uppercase tracking-wider">pH Level</span>
-        <span className="text-3xl font-black tabular-nums" style={{ color }}>{value}</span>
-        <span className="text-[10px] font-medium mt-0.5" style={{ color }}>{label}</span>
+    <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 flex items-center gap-3 sm:gap-5" data-testid="ph-scale">
+      <div className="flex flex-col items-center min-w-[50px] sm:min-w-[60px]">
+        <span className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-wider">pH Level</span>
+        <span className="text-2xl sm:text-3xl font-black tabular-nums" style={{ color }}>{value}</span>
+        <span className="text-[9px] sm:text-[10px] font-medium mt-0.5" style={{ color }}>{label}</span>
       </div>
       <div className="flex-1">
         <div className="flex justify-between text-[9px] text-slate-400 mb-1 px-1">
