@@ -7,9 +7,9 @@ import { Loader2, AlertTriangle, Filter, BarChart3, User, Calendar, Droplets } f
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
 function getAuthHeaders() {
-  const token = localStorage.getItem('session_token');
+  const token = localStorage.getItem('token');
   const tenantId = localStorage.getItem('tenant_id');
-  return { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId, 'Content-Type': 'application/json' };
+  return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 }
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];

@@ -6,7 +6,7 @@ import { Plus, Pencil, Trash2, Loader2, Users, X, Check } from 'lucide-react';
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
 function getAuthHeaders() {
-  const token = localStorage.getItem('session_token');
+  const token = localStorage.getItem('token');
   const tenantId = localStorage.getItem('tenant_id');
   return { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId, 'Content-Type': 'application/json' };
 }

@@ -11,8 +11,7 @@ const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
 function getAuthHeaders() {
   return {
-    Authorization: `Bearer ${localStorage.getItem('session_token')}`,
-    'X-Tenant-ID': localStorage.getItem('tenant_id'),
+    Authorization: `Bearer ${localStorage.getItem('token')}`,
   };
 }
 

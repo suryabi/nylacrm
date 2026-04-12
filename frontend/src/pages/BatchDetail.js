@@ -13,9 +13,9 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
 function getAuthHeaders() {
-  const token = localStorage.getItem('session_token');
+  const token = localStorage.getItem('token');
   const tenantId = localStorage.getItem('tenant_id');
-  return { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId, 'Content-Type': 'application/json' };
+  return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 }
 
 const STATUS_MAP = {
