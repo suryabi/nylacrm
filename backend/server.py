@@ -3898,9 +3898,15 @@ async def get_leads(
             start_date_str = start_date.isoformat()
             if end_date:
                 end_date_str = end_date.isoformat()
-                query['created_at'] = {'$gte': start_date_str, '$lte': end_date_str}
+                date_range = {'$gte': start_date_str, '$lte': end_date_str}
             else:
-                query['created_at'] = {'$gte': start_date_str}
+                date_range = {'$gte': start_date_str}
+            # Match leads created OR updated within the time period
+            date_or = [{'created_at': date_range}, {'updated_at': date_range}]
+            if '$or' in query:
+                query['$and'] = [{'$or': query.pop('$or')}, {'$or': date_or}]
+            else:
+                query['$or'] = date_or
     
     # Add search filter
     search_filter = None
@@ -3935,15 +3941,23 @@ async def get_leads(
             quadrant_filter = {'scoring.quadrant': {'$in': quadrants}}
     
     # Combine search and quadrant filters properly with $and
-    if search_filter and quadrant_filter:
-        query['$and'] = [search_filter, quadrant_filter]
-    elif search_filter:
-        query['$or'] = search_filter['$or']
-    elif quadrant_filter:
-        if '$or' in quadrant_filter:
-            query['$or'] = quadrant_filter['$or']
-        else:
-            query.update(quadrant_filter)
+    extra_conditions = []
+    if search_filter:
+        extra_conditions.append(search_filter)
+    if quadrant_filter:
+        extra_conditions.append(quadrant_filter)
+    
+    if extra_conditions:
+        if '$and' not in query:
+            query['$and'] = []
+        # Move existing $or into $and if we need to add more $or conditions
+        if '$or' in query and extra_conditions:
+            query['$and'].append({'$or': query.pop('$or')})
+        for cond in extra_conditions:
+            query['$and'].append(cond)
+        # Clean up empty $and
+        if not query['$and']:
+            del query['$and']
     
     # Get total count for pagination
     total = await get_tdb().leads.count_documents(query)
