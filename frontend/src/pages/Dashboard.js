@@ -80,13 +80,6 @@ export default function Dashboard() {
   const [cityFilter, setCityFilter] = useState('all');
   const [salesResource, setSalesResource] = useState('all');
   
-  // Pipeline accounts dialog state
-  const [showPipelineDialog, setShowPipelineDialog] = useState(false);
-  const [pipelineAccounts, setPipelineAccounts] = useState([]);
-  const [pipelineLoading, setPipelineLoading] = useState(false);
-  const [pipelineTotal, setPipelineTotal] = useState(0);
-  const [pipelineTotalValue, setPipelineTotalValue] = useState(0);
-
   const { territories: masterTerritories, getStateNamesByTerritoryName, getCityNamesByStateName } = useMasterLocations();
 
   useEffect(() => { fetchSalesTeam(); }, []);
@@ -179,39 +172,61 @@ export default function Dashboard() {
     navigateTo(url, { label: 'Leads' });
   };
 
-  // Fetch pipeline accounts for the dialog
-  const fetchPipelineAccounts = async () => {
-    setPipelineLoading(true);
-    try {
-      const params = new URLSearchParams({
-        time_filter: timeFilter,
-        ...(territoryFilter !== 'all' && { territory: territoryFilter }),
-        ...(stateFilter !== 'all' && { state: stateFilter }),
-        ...(cityFilter !== 'all' && { city: cityFilter }),
-        ...(salesResource !== 'all' && { sales_resource: salesResource }),
-        page_size: 100
-      });
-      const response = await axios.get(`${API_URL}/analytics/pipeline-accounts?${params}`, { withCredentials: true });
-      setPipelineAccounts(response.data.accounts || []);
-      setPipelineTotal(response.data.total || 0);
-      setPipelineTotalValue(response.data.total_pipeline_value || 0);
-    } catch (error) {
-      toast.error('Failed to load pipeline accounts');
-    } finally {
-      setPipelineLoading(false);
-    }
-  };
-
-  // Handle Pipeline Value tile click
+  // Handle Pipeline Value tile click — navigate directly to leads with target_closure filters
   const handlePipelineClick = () => {
-    setShowPipelineDialog(true);
-    fetchPipelineAccounts();
-  };
+    const now = new Date();
+    // Compute target_closure_month/year conditions based on timeFilter (mirrors backend logic)
+    let tcParams = [];
+    if (timeFilter === 'this_month' || timeFilter === 'this_week') {
+      tcParams = [{ m: now.getMonth() + 1, y: now.getFullYear() }];
+    } else if (timeFilter === 'last_month') {
+      const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      tcParams = [{ m: prev.getMonth() + 1, y: prev.getFullYear() }];
+    } else if (timeFilter === 'last_week') {
+      const lw = new Date(now); lw.setDate(lw.getDate() - lw.getDay() - 6); // approx last week
+      tcParams = [{ m: lw.getMonth() + 1, y: lw.getFullYear() }];
+    } else if (timeFilter === 'this_quarter') {
+      const qStart = Math.floor(now.getMonth() / 3) * 3;
+      for (let i = 0; i < 3; i++) tcParams.push({ m: qStart + i + 1, y: now.getFullYear() });
+    } else if (timeFilter === 'last_quarter') {
+      let q = Math.floor(now.getMonth() / 3) - 1;
+      let yr = now.getFullYear();
+      if (q < 0) { q = 3; yr--; }
+      const qStart = q * 3;
+      for (let i = 0; i < 3; i++) tcParams.push({ m: qStart + i + 1, y: yr });
+    } else if (timeFilter === 'last_3_months') {
+      const seen = new Set();
+      for (let d = new Date(now); seen.size < 3; d.setDate(d.getDate() - 1)) {
+        const key = `${d.getMonth()+1}-${d.getFullYear()}`;
+        if (!seen.has(key)) { seen.add(key); tcParams.push({ m: d.getMonth()+1, y: d.getFullYear() }); }
+      }
+    } else if (timeFilter === 'last_6_months') {
+      const seen = new Set();
+      for (let d = new Date(now); seen.size < 6; d.setDate(d.getDate() - 1)) {
+        const key = `${d.getMonth()+1}-${d.getFullYear()}`;
+        if (!seen.has(key)) { seen.add(key); tcParams.push({ m: d.getMonth()+1, y: d.getFullYear() }); }
+      }
+    } else if (timeFilter === 'this_year') {
+      for (let i = 1; i <= 12; i++) tcParams.push({ m: i, y: now.getFullYear() });
+    }
 
-  // Navigate to lead detail from the dialog
-  const handleAccountClick = (accountId) => {
-    setShowPipelineDialog(false);
-    navigate(`/leads/${accountId}`);
+    // Build URL params — pass comma-separated months and years
+    const params = new URLSearchParams();
+    if (tcParams.length > 0) {
+      params.set('target_closure_months', tcParams.map(t => t.m).join(','));
+      params.set('target_closure_years', tcParams.map(t => t.y).join(','));
+    }
+    // Exclude won/lost statuses — pipeline only includes active leads
+    params.set('status', 'new,contacted,qualified,proposal_shared_with_customer,proposal_internal_review,negotiation,closure');
+    params.set('pipeline_view', 'true');
+    // Add location/resource filters
+    if (territoryFilter && territoryFilter !== 'all' && territoryFilter !== 'All Territories') params.set('territory', territoryFilter);
+    if (stateFilter && stateFilter !== 'all' && stateFilter !== 'All States') params.set('state', stateFilter);
+    if (cityFilter && cityFilter !== 'all' && cityFilter !== 'All Cities') params.set('city', cityFilter);
+    if (salesResource && salesResource !== 'all') params.set('assigned_to', salesResource);
+
+    saveFilters({ timeFilter, territoryFilter, stateFilter, cityFilter, salesResource });
+    navigateTo(`/leads?${params.toString()}`, { label: 'Pipeline Leads' });
   };
 
   const totalLeads = analytics?.status_distribution ? Object.values(analytics.status_distribution).reduce((sum, val) => sum + val, 0) : 0;
@@ -428,109 +443,6 @@ export default function Dashboard() {
           </>
         )}
       </div>
-      
-      {/* Pipeline Accounts Dialog */}
-      <Dialog open={showPipelineDialog} onOpenChange={setShowPipelineDialog}>
-        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
-          <DialogHeader className="pb-4 border-b">
-            <DialogTitle className="flex items-center gap-2 text-xl">
-              <TrendingUp className="h-5 w-5 text-amber-600" />
-              Pipeline Accounts
-            </DialogTitle>
-            <DialogDescription className="flex items-center justify-between">
-              <span>Accounts contributing to your pipeline value</span>
-              <span className="font-semibold text-amber-600">
-                Total: ₹{(pipelineTotalValue / 100000).toFixed(2)}L ({pipelineTotal} accounts)
-              </span>
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="flex-1 overflow-y-auto py-4">
-            {pipelineLoading ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
-                <p className="text-muted-foreground text-sm mt-3">Loading accounts...</p>
-              </div>
-            ) : pipelineAccounts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <Building2 className="h-12 w-12 mb-4 opacity-50" />
-                <p>No accounts with pipeline value found</p>
-                <p className="text-sm">Accounts with estimated value will appear here</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {pipelineAccounts.map((account, index) => (
-                  <div
-                    key={account.id}
-                    onClick={() => handleAccountClick(account.id)}
-                    className="group flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:border-amber-300 dark:hover:border-amber-700 cursor-pointer transition-all duration-200"
-                    data-testid={`pipeline-account-${account.id}`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/20 text-amber-700 dark:text-amber-400 font-semibold">
-                        {index + 1}
-                      </div>
-                      <div>
-                        <p className="font-medium text-slate-800 dark:text-slate-200 group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors">
-                          {account.account_name}
-                        </p>
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                          {account.contact_person && (
-                            <span className="flex items-center gap-1">
-                              <User className="h-3 w-3" />
-                              {account.contact_person}
-                            </span>
-                          )}
-                          {account.city && (
-                            <span className="flex items-center gap-1">
-                              <MapPin className="h-3 w-3" />
-                              {account.city}
-                            </span>
-                          )}
-                          {account.assigned_to_name && (
-                            <span className="text-xs bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">
-                              {account.assigned_to_name}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="font-bold text-lg text-amber-600 dark:text-amber-400">
-                          ₹{(account.estimated_value / 100000).toFixed(2)}L
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {((account.estimated_value / pipelineTotalValue) * 100).toFixed(1)}% of total
-                        </p>
-                      </div>
-                      <ChevronRight className="h-5 w-5 text-slate-400 group-hover:text-amber-600 transition-colors" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          
-          {pipelineAccounts.length > 0 && (
-            <div className="pt-4 border-t flex justify-between items-center">
-              <p className="text-sm text-muted-foreground">
-                Showing top {pipelineAccounts.length} accounts by value
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowPipelineDialog(false);
-                  navigateToLeads({ metric: 'pipeline' });
-                }}
-              >
-                View All in Leads
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -3778,6 +3778,9 @@ async def get_leads(
     quadrant: Optional[str] = None,
     target_closure_month: Optional[int] = None,
     target_closure_year: Optional[int] = None,
+    target_closure_months: Optional[str] = None,
+    target_closure_years: Optional[str] = None,
+    pipeline_view: Optional[bool] = None,
     sort_by: Optional[str] = 'created_at',
     sort_order: Optional[str] = 'desc',
     no_limit: Optional[bool] = False,
@@ -3840,11 +3843,28 @@ async def get_leads(
             query['assigned_to'] = {'$in': assigned_list}
     
     # Add time filter
-    # Add target closure month/year filter
-    if target_closure_month is not None:
+    # Add target closure month/year filter (single or multi for pipeline view)
+    if target_closure_months and target_closure_years:
+        months = [int(m) for m in target_closure_months.split(',') if m.strip()]
+        years = [int(y) for y in target_closure_years.split(',') if y.strip()]
+        # Build $or conditions for each month/year pair
+        tc_conditions = []
+        for i in range(min(len(months), len(years))):
+            tc_conditions.append({'target_closure_month': months[i], 'target_closure_year': years[i]})
+        if len(tc_conditions) == 1:
+            query['target_closure_month'] = tc_conditions[0]['target_closure_month']
+            query['target_closure_year'] = tc_conditions[0]['target_closure_year']
+        elif tc_conditions:
+            if '$or' in query:
+                query['$and'] = query.get('$and', [])
+                query['$and'].append({'$or': query.pop('$or')})
+                query['$and'].append({'$or': tc_conditions})
+            else:
+                query['$or'] = tc_conditions
+    elif target_closure_month is not None:
         query['target_closure_month'] = target_closure_month
-    if target_closure_year is not None:
-        query['target_closure_year'] = target_closure_year
+        if target_closure_year is not None:
+            query['target_closure_year'] = target_closure_year
     
     if time_filter and time_filter != 'all' and time_filter != 'lifetime':
         now = datetime.now(timezone.utc)
