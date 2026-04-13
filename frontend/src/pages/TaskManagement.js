@@ -300,7 +300,7 @@ export default function TaskManagement() {
 
   // "My Tasks" filters
   const [myFilters, setMyFilters] = useState({
-    status: '',
+    status: 'active',
     severity: '',
     activeMetric: '',  // track which metric card is active
   });
@@ -308,7 +308,7 @@ export default function TaskManagement() {
 
   // "All Tasks" filters
   const [allFilters, setAllFilters] = useState({
-    status: '',
+    status: 'active',
     severity: '',
     department_ids: [],
     assignee_id: '',
