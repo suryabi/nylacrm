@@ -3196,8 +3196,9 @@ async def get_sales_roi_summary(
     user_id = current_user['id']
     user_department = current_user.get('department', '')
     
-    # Check if user belongs to Sales department (check if department contains 'sales')
-    if 'sales' not in user_department.lower():
+    # Check if user belongs to Sales department
+    dept_list = user_department if isinstance(user_department, list) else [user_department or '']
+    if not any('sales' in (d or '').lower() for d in dept_list):
         raise HTTPException(
             status_code=403, 
             detail='Sales ROI Summary is only available for Sales department employees'
@@ -3249,7 +3250,12 @@ async def get_sales_roi_summary(
     ).to_list(100)
     
     # Filter only Sales department members for CTC calculation
-    sales_team = [m for m in team_members if (m.get('department') or '').lower() == 'sales']
+    def is_sales_dept(m):
+        d = m.get('department', '')
+        if isinstance(d, list):
+            return any('sales' in (x or '').lower() for x in d)
+        return 'sales' in (d or '').lower()
+    sales_team = [m for m in team_members if is_sales_dept(m)]
     
     # ==================== COST SECTION ====================
     
