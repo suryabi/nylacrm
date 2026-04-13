@@ -6795,9 +6795,13 @@ async def get_dashboard_analytics(
     if city:
         match_stage['city'] = city
     
-    # Add date filter if not lifetime
+    # Add date filter if not lifetime — match leads created OR updated in the period
     if start_date and end_date:
-        match_stage['created_at'] = {'$gte': start_date, '$lte': end_date}
+        date_range = {'$gte': start_date, '$lte': end_date}
+        match_stage['$or'] = [
+            {'created_at': date_range},
+            {'updated_at': date_range}
+        ]
     
     # Activity query with same filters
     activity_query = {}
