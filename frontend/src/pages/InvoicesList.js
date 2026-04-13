@@ -136,7 +136,7 @@ export default function InvoicesList() {
       params.append('limit', pageSize.toString());
       
       const response = await axios.get(`${API_URL}/api/invoices?${params.toString()}`, {
-        withCredentials: true
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       
       setInvoices(response.data.invoices || []);
@@ -196,13 +196,12 @@ export default function InvoicesList() {
     try {
       if (selectedInvoices.length === 1) {
         await axios.delete(`${API_URL}/api/invoices/${selectedInvoices[0]}`, {
-          withCredentials: true
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         });
       } else {
         await axios.delete(`${API_URL}/api/invoices`, {
           data: selectedInvoices,
-          withCredentials: true,
-          headers: { 'Content-Type': 'application/json' }
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' }
         });
       }
       
