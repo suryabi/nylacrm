@@ -4,7 +4,8 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
-import { Building2, User, Phone, Mail, CreditCard, FileText } from 'lucide-react';
+import { Building2, User, Phone, Mail, CreditCard, FileText, Factory } from 'lucide-react';
+import { Checkbox } from '../ui/checkbox';
 import { PAYMENT_TERMS, STATUS_OPTIONS } from './constants';
 
 export default function OverviewTab({ 
@@ -74,6 +75,17 @@ export default function OverviewTab({
                   </SelectContent>
                 </Select>
               </div>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50/60 border border-blue-100">
+                <Checkbox
+                  id="edit_is_self_managed"
+                  checked={editData.is_self_managed || false}
+                  onCheckedChange={(checked) => setEditData(prev => ({ ...prev, is_self_managed: !!checked }))}
+                  data-testid="edit-self-managed-checkbox"
+                />
+                <label htmlFor="edit_is_self_managed" className="text-sm font-medium text-slate-700 cursor-pointer">
+                  Self Managed (Not Third Party)
+                </label>
+              </div>
             </>
           ) : (
             <>
@@ -87,6 +99,12 @@ export default function OverviewTab({
                   <div className="font-medium">{distributor.pan || '-'}</div>
                 </div>
               </div>
+              {distributor.is_self_managed && (
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-50/60 border border-blue-100" data-testid="self-managed-indicator">
+                  <Factory className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-700">Self Managed (Not Third Party)</span>
+                </div>
+              )}
               <div>
                 <div className="text-sm text-muted-foreground">Billing Address</div>
                 <div className="font-medium">{distributor.billing_address || '-'}</div>

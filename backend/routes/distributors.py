@@ -243,6 +243,7 @@ async def create_distributor(
         "credit_days": data.credit_days or 30,
         "credit_limit": data.credit_limit or 0,
         "security_deposit": data.security_deposit or 0,
+        "is_self_managed": data.is_self_managed or False,
         "status": data.status or "active",
         "notes": data.notes,
         "created_at": now,
@@ -327,7 +328,7 @@ async def update_distributor(
                   'billing_address', 'registered_address', 'primary_contact_name', 'primary_contact_mobile',
                   'primary_contact_email', 'secondary_contact_name', 'secondary_contact_mobile',
                   'secondary_contact_email', 'payment_terms', 'credit_days', 'credit_limit',
-                  'security_deposit', 'status', 'notes']:
+                  'security_deposit', 'is_self_managed', 'status', 'notes']:
         value = getattr(data, field, None)
         if value is not None:
             update_data[field] = value
@@ -598,6 +599,7 @@ async def create_distributor_location(
         "contact_number": data.contact_number,
         "email": data.email,
         "is_default": data.is_default or False,
+        "is_factory": data.is_factory or False,
         "status": data.status or "active",
         "created_at": now,
         "updated_at": now
@@ -644,7 +646,7 @@ async def update_distributor_location(
     
     for field in ['location_name', 'location_code', 'address_line_1', 'address_line_2',
                   'state', 'city', 'pincode', 'contact_person', 'contact_number',
-                  'email', 'is_default', 'status']:
+                  'email', 'is_default', 'is_factory', 'status']:
         value = getattr(data, field, None)
         if value is not None:
             update_data[field] = value
@@ -717,7 +719,7 @@ async def get_distributor_locations_dropdown(
     
     locations = await db.distributor_locations.find(
         {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": "active"},
-        {"_id": 0, "id": 1, "location_name": 1, "location_code": 1, "city": 1, "is_default": 1}
+        {"_id": 0, "id": 1, "location_name": 1, "location_code": 1, "city": 1, "is_default": 1, "is_factory": 1}
     ).sort("location_name", 1).to_list(100)
     
     return {"locations": locations}

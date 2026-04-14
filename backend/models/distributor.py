@@ -45,6 +45,7 @@ class DistributorCreate(BaseModel):
     credit_days: Optional[int] = 30
     credit_limit: Optional[float] = 0
     security_deposit: Optional[float] = 0
+    is_self_managed: Optional[bool] = False
     status: Optional[str] = "active"
     notes: Optional[str] = None
 
@@ -67,6 +68,7 @@ class DistributorUpdate(BaseModel):
     credit_days: Optional[int] = None
     credit_limit: Optional[float] = None
     security_deposit: Optional[float] = None
+    is_self_managed: Optional[bool] = None
     status: Optional[str] = None
     notes: Optional[str] = None
 
@@ -145,6 +147,7 @@ class DistributorLocationCreate(BaseModel):
     contact_number: Optional[str] = None
     email: Optional[str] = None
     is_default: Optional[bool] = False
+    is_factory: Optional[bool] = False
     status: Optional[str] = "active"
 
 
@@ -160,6 +163,7 @@ class DistributorLocationUpdate(BaseModel):
     contact_number: Optional[str] = None
     email: Optional[str] = None
     is_default: Optional[bool] = None
+    is_factory: Optional[bool] = None
     status: Optional[str] = None
 
 
@@ -178,6 +182,7 @@ class DistributorLocation(BaseModel):
     contact_number: Optional[str] = None
     email: Optional[str] = None
     is_default: bool = False
+    is_factory: bool = False
     status: str = "active"
     created_at: str
     updated_at: str

@@ -84,7 +84,8 @@ export default function DistributorDetail() {
     contact_person: '',
     contact_number: '',
     email: '',
-    is_default: false
+    is_default: false,
+    is_factory: false
   });
   const [addingLocation, setAddingLocation] = useState(false);
   
@@ -744,7 +745,8 @@ export default function DistributorDetail() {
         contact_person: '',
         contact_number: '',
         email: '',
-        is_default: false
+        is_default: false,
+        is_factory: false
       });
       fetchDistributor();
     } catch (error) {

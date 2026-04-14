@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
+import { Checkbox } from '../components/ui/checkbox';
 import { toast } from 'sonner';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { 
@@ -186,6 +187,7 @@ export default function DistributorList() {
     payment_terms: 'net_30',
     credit_days: 30,
     credit_limit: 0,
+    is_self_managed: false,
     notes: ''
   });
   
@@ -311,6 +313,7 @@ export default function DistributorList() {
         payment_terms: 'net_30',
         credit_days: 30,
         credit_limit: 0,
+        is_self_managed: false,
         notes: ''
       });
       fetchDistributors();
@@ -496,6 +499,18 @@ export default function DistributorList() {
                     className="rounded-lg"
                   />
                 </div>
+
+                <div className="col-span-2 flex items-center gap-3 p-3 rounded-lg bg-blue-50/60 border border-blue-100">
+                  <Checkbox
+                    id="is_self_managed"
+                    checked={newDistributor.is_self_managed}
+                    onCheckedChange={(checked) => setNewDistributor(prev => ({ ...prev, is_self_managed: !!checked }))}
+                    data-testid="distributor-self-managed-checkbox"
+                  />
+                  <label htmlFor="is_self_managed" className="text-sm font-medium text-slate-700 cursor-pointer">
+                    Self Managed (Not Third Party)
+                  </label>
+                </div>
               </div>
               
               <DialogFooter className="gap-2">
@@ -661,8 +676,15 @@ export default function DistributorList() {
                       data-testid={`distributor-row-${dist.id}`}
                     >
                       <td className="p-4">
-                        <div className="font-medium text-slate-900" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>
-                          {dist.distributor_name}
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-slate-900" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>
+                            {dist.distributor_name}
+                          </span>
+                          {dist.is_self_managed && (
+                            <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[10px] px-1.5 py-0" variant="outline" data-testid={`self-managed-badge-${dist.id}`}>
+                              Self Managed
+                            </Badge>
+                          )}
                         </div>
                         {dist.legal_entity_name && (
                           <div className="text-xs text-slate-500 mt-0.5">{dist.legal_entity_name}</div>
