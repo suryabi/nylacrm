@@ -264,6 +264,10 @@
 - [x] **pH Badge in batch list**: Compact colorful scale (amber→teal→blue gradient) with circle indicator and value
 - [x] **pH Scale in batch detail**: Full-width gradient bar (red→green→blue→purple) with Acidic/Neutral/Alkaline labels, tick marks at 6-10, and large pH value display
 
+### Distributor & Warehouse Flags (2026-04-14)
+- [x] **is_self_managed flag**: Added to DistributorCreate/Update/Distributor models. Backend persists on POST/PUT. Frontend: checkbox in create dialog, checkbox in edit mode (OverviewTab), "Self Managed" badge in distributor list table, indicator in distributor detail overview.
+- [x] **is_factory flag**: Added to DistributorLocationCreate/Update/DistributorLocation models. Backend persists on POST/PUT. Frontend: checkbox in add location dialog, "Factory" badge on location cards. Dropdown endpoint returns is_factory field.
+
 ## Upcoming Tasks (P1)
 - Auto-generate Provisional Invoice (on shipment -> "delivered")
 - Build Reporting Module
