@@ -92,6 +92,9 @@ export default function DistributorDetail() {
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteDistributorDialog, setShowDeleteDistributorDialog] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [deletingDistributor, setDeletingDistributor] = useState(false);
   
   // Account Assignment state
   const [assignments, setAssignments] = useState([]);
@@ -668,6 +671,22 @@ export default function DistributorDetail() {
       toast.error(error.response?.data?.detail || 'Failed to update distributor');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteDistributor = async () => {
+    try {
+      setDeletingDistributor(true);
+      await axios.delete(`${API_URL}/api/distributors/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Distributor and all related data deleted permanently');
+      navigate('/distributors');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete distributor');
+    } finally {
+      setDeletingDistributor(false);
     }
   };
 
@@ -2035,10 +2054,23 @@ export default function DistributorDetail() {
         </div>
         
         {canManage && !isEditing && (
-          <Button onClick={() => setIsEditing(true)}>
-            <Edit2 className="h-4 w-4 mr-2" />
-            Edit
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setIsEditing(true)}>
+              <Edit2 className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+            {canDelete && (
+              <Button
+                variant="outline"
+                className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                onClick={() => setShowDeleteDistributorDialog(true)}
+                data-testid="delete-distributor-btn"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
+            )}
+          </div>
         )}
         
         {isEditing && (
@@ -2993,6 +3025,51 @@ export default function DistributorDetail() {
               }}
             >
               {deleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Distributor Confirmation Dialog */}
+      <AlertDialog open={showDeleteDistributorDialog} onOpenChange={(open) => {
+        setShowDeleteDistributorDialog(open);
+        if (!open) setDeleteConfirmName('');
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-600">Delete Distributor Permanently</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <span className="block">
+                This will permanently delete <strong>{distributor?.distributor_name}</strong> and all related data including:
+              </span>
+              <span className="block text-xs text-slate-500 bg-red-50 border border-red-100 rounded-lg p-3 space-y-1">
+                <span className="block">Warehouse locations, Operating coverage, Margin matrix</span>
+                <span className="block">Account assignments, Shipments, Deliveries</span>
+                <span className="block">Settlements, Billing configs, Invoices, Reconciliations</span>
+                <span className="block">Linked user accounts</span>
+              </span>
+              <span className="block font-medium text-red-600">This action cannot be undone.</span>
+              <span className="block text-sm">
+                Type <strong>{distributor?.distributor_name}</strong> to confirm:
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={deleteConfirmName}
+            onChange={(e) => setDeleteConfirmName(e.target.value)}
+            placeholder="Type distributor name to confirm"
+            className="border-red-200 focus:ring-red-500/20"
+            data-testid="delete-confirm-input"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingDistributor}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={deletingDistributor || deleteConfirmName !== distributor?.distributor_name}
+              onClick={handleDeleteDistributor}
+              data-testid="delete-confirm-btn"
+            >
+              {deletingDistributor ? 'Deleting...' : 'Delete Permanently'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

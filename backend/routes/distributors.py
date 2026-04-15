@@ -44,6 +44,11 @@ def is_distributor_admin(user: dict) -> bool:
     return user.get('role') in ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head']
 
 
+def is_delete_authorized(user: dict) -> bool:
+    """Check if user can delete distributors/warehouses (CEO and System Admin only)"""
+    return user.get('role') in ['CEO', 'System Admin']
+
+
 def is_distributor_user(user: dict) -> bool:
     """Check if user is a distributor"""
     return user.get('role') == 'Distributor'
@@ -350,29 +355,76 @@ async def update_distributor(
 
 @router.delete("/{distributor_id}")
 async def delete_distributor(distributor_id: str, current_user: dict = Depends(get_current_user)):
-    """Delete a distributor (soft delete by setting status to inactive)"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required to delete distributors")
+    """Hard delete a distributor and all child data (CEO/System Admin only)"""
+    if not is_delete_authorized(current_user):
+        raise HTTPException(status_code=403, detail="Only CEO and System Admin can delete distributors")
     
     tenant_id = get_current_tenant_id()
     
     distributor = await db.distributors.find_one(
         {"id": distributor_id, "tenant_id": tenant_id},
-        {"_id": 0}
+        {"_id": 0, "distributor_name": 1}
     )
     
     if not distributor:
         raise HTTPException(status_code=404, detail="Distributor not found")
     
-    # Soft delete
-    await db.distributors.update_one(
-        {"id": distributor_id, "tenant_id": tenant_id},
-        {"$set": {"status": "inactive", "updated_at": datetime.now(timezone.utc).isoformat()}}
-    )
+    dist_name = distributor.get('distributor_name', distributor_id)
     
-    logger.info(f"Distributor '{distributor['distributor_name']}' deleted by {current_user['email']}")
+    # Cascading delete all child data
+    child_filter = {"tenant_id": tenant_id, "distributor_id": distributor_id}
     
-    return {"message": f"Distributor '{distributor['distributor_name']}' deleted successfully"}
+    # 1. Get shipment IDs for item cleanup
+    shipment_ids = [s["id"] async for s in db.distributor_shipments.find(child_filter, {"id": 1})]
+    if shipment_ids:
+        await db.distributor_shipment_items.delete_many({"tenant_id": tenant_id, "shipment_id": {"$in": shipment_ids}})
+    
+    # 2. Get delivery IDs for item cleanup
+    delivery_ids = [d["id"] async for d in db.distributor_deliveries.find(child_filter, {"id": 1})]
+    if delivery_ids:
+        await db.distributor_delivery_items.delete_many({"tenant_id": tenant_id, "delivery_id": {"$in": delivery_ids}})
+    
+    # 3. Get settlement IDs for item cleanup
+    settlement_ids = [s["id"] async for s in db.distributor_settlements.find(child_filter, {"id": 1})]
+    if settlement_ids:
+        await db.distributor_settlement_items.delete_many({"tenant_id": tenant_id, "settlement_id": {"$in": settlement_ids}})
+    
+    # 4. Get reconciliation IDs for line item + note cleanup
+    recon_ids = [r["id"] async for r in db.distributor_reconciliations.find(child_filter, {"id": 1})]
+    if recon_ids:
+        await db.distributor_reconciliation_items.delete_many({"tenant_id": tenant_id, "reconciliation_id": {"$in": recon_ids}})
+        await db.distributor_debit_credit_notes.delete_many({"tenant_id": tenant_id, "reconciliation_id": {"$in": recon_ids}})
+    
+    # 5. Delete top-level child collections
+    del_results = {}
+    for coll_name, collection in [
+        ("operating_coverage", db.distributor_operating_coverage),
+        ("locations", db.distributor_locations),
+        ("margin_matrix", db.distributor_margin_matrix),
+        ("account_assignments", db.account_distributor_assignments),
+        ("shipments", db.distributor_shipments),
+        ("deliveries", db.distributor_deliveries),
+        ("settlements", db.distributor_settlements),
+        ("billing_configs", db.distributor_billing_configs),
+        ("provisional_invoices", db.distributor_provisional_invoices),
+        ("reconciliations", db.distributor_reconciliations),
+    ]:
+        result = await collection.delete_many(child_filter)
+        del_results[coll_name] = result.deleted_count
+    
+    # 6. Delete linked user accounts
+    user_result = await db.users.delete_many({"tenant_id": tenant_id, "distributor_id": distributor_id})
+    del_results["users"] = user_result.deleted_count
+    
+    # 7. Delete the distributor itself
+    await db.distributors.delete_one({"id": distributor_id, "tenant_id": tenant_id})
+    
+    logger.info(f"Distributor '{dist_name}' hard-deleted with all child data by {current_user['email']}. Counts: {del_results}")
+    
+    return {
+        "message": f"Distributor '{dist_name}' and all related data deleted permanently",
+        "deleted_counts": del_results
+    }
 
 
 # ============ Operating Coverage CRUD ============
@@ -670,9 +722,9 @@ async def delete_distributor_location(
     location_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Delete a distributor location"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    """Hard delete a distributor location/warehouse and related data (CEO/System Admin only)"""
+    if not is_delete_authorized(current_user):
+        raise HTTPException(status_code=403, detail="Only CEO and System Admin can delete warehouses")
     
     tenant_id = get_current_tenant_id()
     
@@ -685,13 +737,27 @@ async def delete_distributor_location(
     if not location:
         raise HTTPException(status_code=404, detail="Location not found")
     
-    # Soft delete
-    await db.distributor_locations.update_one(
-        {"id": location_id, "tenant_id": tenant_id},
-        {"$set": {"status": "inactive", "updated_at": datetime.now(timezone.utc).isoformat()}}
-    )
+    loc_name = location.get('location_name', location_id)
+    loc_filter = {"tenant_id": tenant_id, "distributor_location_id": location_id}
     
-    return {"message": f"Location '{location['location_name']}' deleted successfully"}
+    # Cascade: delete shipments and their items that target this location
+    shipment_ids = [s["id"] async for s in db.distributor_shipments.find(loc_filter, {"id": 1})]
+    if shipment_ids:
+        await db.distributor_shipment_items.delete_many({"tenant_id": tenant_id, "shipment_id": {"$in": shipment_ids}})
+    await db.distributor_shipments.delete_many(loc_filter)
+    
+    # Cascade: delete deliveries and their items from this location
+    delivery_ids = [d["id"] async for d in db.distributor_deliveries.find(loc_filter, {"id": 1})]
+    if delivery_ids:
+        await db.distributor_delivery_items.delete_many({"tenant_id": tenant_id, "delivery_id": {"$in": delivery_ids}})
+    await db.distributor_deliveries.delete_many(loc_filter)
+    
+    # Hard delete the location
+    await db.distributor_locations.delete_one({"id": location_id, "tenant_id": tenant_id})
+    
+    logger.info(f"Location '{loc_name}' hard-deleted with related data by {current_user['email']}")
+    
+    return {"message": f"Warehouse '{loc_name}' and all related data deleted permanently"}
 
 
 # ============ Dropdown Data ============
