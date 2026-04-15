@@ -100,7 +100,7 @@ export default function MeetingDetail() {
 
       <div className="grid grid-cols-3 gap-6">
         {/* Main content — 2 cols */}
-        <div className="col-span-2 space-y-6">
+        <div className="col-span-2 space-y-6 min-w-0">
           {/* Purpose tags */}
           {(meeting.purpose || []).length > 0 && (
             <div className="flex flex-wrap gap-2">
@@ -112,7 +112,7 @@ export default function MeetingDetail() {
           )}
 
           {/* Meeting Minutes */}
-          <div className="border border-slate-200 rounded-xl p-5" data-testid="section-minutes">
+          <div className="border border-slate-200 rounded-xl p-5 overflow-hidden" data-testid="section-minutes">
             <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2 mb-4">
               <MessageSquare size={16} className="text-blue-500" /> Meeting Minutes
               <span className="text-xs font-normal text-slate-400">({meeting.minutes?.length || 0} points)</span>
@@ -122,7 +122,7 @@ export default function MeetingDetail() {
                 {meeting.minutes.map((m, i) => (
                   <div key={i} className="flex items-start gap-3 py-2 px-3 rounded-lg hover:bg-slate-50 transition-colors" data-testid={`minute-${i}`}>
                     <span className="mt-2 w-2 h-2 rounded-full bg-blue-400 shrink-0" />
-                    <div className="text-sm text-slate-700 leading-relaxed prose prose-sm max-w-none [&>p]:m-0" dangerouslySetInnerHTML={{ __html: m }} />
+                    <div className="text-sm text-slate-700 leading-relaxed prose prose-sm max-w-none [&>p]:m-0 break-words overflow-hidden" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }} dangerouslySetInnerHTML={{ __html: m }} />
                   </div>
                 ))}
               </div>
@@ -145,7 +145,7 @@ export default function MeetingDetail() {
                       <div className="flex items-start gap-3">
                         <span className="mt-1 w-2.5 h-2.5 rounded-full shrink-0 bg-slate-400" />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium leading-relaxed whitespace-pre-wrap text-slate-800">
+                          <p className="text-sm font-medium leading-relaxed whitespace-pre-wrap break-words text-slate-800">
                             {ai.description}
                           </p>
                           <div className="flex items-center flex-wrap gap-3 mt-2">
