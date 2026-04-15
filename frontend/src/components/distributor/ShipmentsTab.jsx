@@ -7,7 +7,7 @@ import { Badge } from '../ui/badge';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
-import { MapPin, Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText } from 'lucide-react';
+import { MapPin, Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Factory } from 'lucide-react';
 
 export default function ShipmentsTab({
   distributor,
@@ -16,6 +16,7 @@ export default function ShipmentsTab({
   shipments,
   shipmentsLoading,
   skus,
+  factoryWarehouses,
   // Dialog state
   showShipmentDialog,
   setShowShipmentDialog,
@@ -61,6 +62,30 @@ export default function ShipmentsTab({
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
+                {/* Source Factory Warehouse */}
+                <div className="p-3 rounded-lg bg-amber-50/60 border border-amber-100 space-y-2">
+                  <Label className="flex items-center gap-1.5 text-sm font-medium text-amber-800">
+                    <Factory className="h-4 w-4" />
+                    From Factory Warehouse *
+                  </Label>
+                  <Select
+                    value={shipmentForm.source_warehouse_id || ''}
+                    onValueChange={(v) => setShipmentForm(prev => ({ ...prev, source_warehouse_id: v }))}
+                  >
+                    <SelectTrigger data-testid="shipment-source-warehouse-select">
+                      <SelectValue placeholder="Select source factory warehouse" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(factoryWarehouses || []).map(wh => (
+                        <SelectItem key={wh.id} value={wh.id}>
+                          {wh.location_name} ({wh.city}) {wh.is_default ? '★' : ''}
+                          {wh.distributor_name ? ` — ${wh.distributor_name}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 {/* Location & Date */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -316,6 +341,7 @@ export default function ShipmentsTab({
                   <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Shipment #</th>
                   <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Date</th>
                   <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Location</th>
+                  <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>From</th>
                   <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Qty</th>
                   <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Base Price</th>
                   <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Margin %</th>
@@ -367,6 +393,16 @@ export default function ShipmentsTab({
                           <MapPin className="h-4 w-4 text-emerald-600/50" />
                           <span className="truncate max-w-[120px] text-slate-700">{shipment.distributor_location_name}</span>
                         </div>
+                      </td>
+                      <td className="p-4">
+                        {shipment.source_warehouse_name ? (
+                          <div className="flex items-center gap-1.5">
+                            <Factory className="h-3.5 w-3.5 text-amber-500" />
+                            <span className="truncate max-w-[120px] text-xs text-slate-600">{shipment.source_warehouse_name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">-</span>
+                        )}
                       </td>
                       <td className="p-4 text-right font-medium text-slate-800">{shipment.total_quantity}</td>
                       <td className="p-4 text-right text-slate-700">

@@ -1817,6 +1817,17 @@ async def create_shipment(
     if not location:
         raise HTTPException(status_code=400, detail="Invalid distributor location")
     
+    # Validate source factory warehouse if provided
+    source_warehouse_name = None
+    if data.source_warehouse_id:
+        source_warehouse = await db.distributor_locations.find_one(
+            {"id": data.source_warehouse_id, "tenant_id": tenant_id, "is_factory": True, "status": "active"},
+            {"_id": 0, "location_name": 1}
+        )
+        if not source_warehouse:
+            raise HTTPException(status_code=400, detail="Invalid source factory warehouse")
+        source_warehouse_name = source_warehouse.get('location_name')
+    
     # Validate items
     if not data.items or len(data.items) == 0:
         raise HTTPException(status_code=400, detail="At least one item is required")
@@ -1886,6 +1897,8 @@ async def create_shipment(
         "distributor_code": distributor.get('distributor_code'),
         "distributor_location_id": data.distributor_location_id,
         "distributor_location_name": location.get('location_name'),
+        "source_warehouse_id": data.source_warehouse_id,
+        "source_warehouse_name": source_warehouse_name,
         "shipment_date": data.shipment_date,
         "expected_delivery_date": data.expected_delivery_date,
         "actual_delivery_date": None,

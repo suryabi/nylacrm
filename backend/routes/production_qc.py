@@ -66,6 +66,11 @@ class RejectionCostRuleUpdate(BaseModel):
     description: Optional[str] = None
 
 
+class WarehouseTransfer(BaseModel):
+    warehouse_location_id: str
+    quantity: int  # crates to transfer
+    notes: Optional[str] = None
+
 
 # ──────────────────────────────────────────────
 # Production Dashboard
@@ -81,7 +86,7 @@ async def production_dashboard(current_user: dict = Depends(get_current_user)):
         {"tenant_id": tenant_id},
         {"_id": 0, "sku_id": 1, "sku_name": 1, "total_crates": 1, "bottles_per_crate": 1,
          "total_bottles": 1, "unallocated_crates": 1, "stage_balances": 1,
-         "total_passed_final": 1, "total_rejected": 1, "status": 1, "qc_stages": 1, "ph_value": 1}
+         "total_passed_final": 1, "transferred_to_warehouse": 1, "total_rejected": 1, "status": 1, "qc_stages": 1, "ph_value": 1}
     ).to_list(5000)
 
     # Aggregate per SKU
@@ -1017,3 +1022,160 @@ async def get_rejection_report(
         "by_resource": [{"name": k, "bottles": v} for k, v in sorted(by_resource.items())],
         "by_date": [{"date": k, "bottles": v} for k, v in sorted(by_date.items())],
     }
+
+
+
+# ──────────────────────────────────────────────
+# Warehouse Transfer (Production → Factory Warehouse)
+# ──────────────────────────────────────────────
+
+@router.get("/factory-warehouses")
+async def list_factory_warehouses(current_user: dict = Depends(get_current_user)):
+    """Get all factory warehouse locations across all distributors."""
+    tenant_id = get_current_tenant_id()
+    locations = await db.distributor_locations.find(
+        {"tenant_id": tenant_id, "is_factory": True, "status": "active"},
+        {"_id": 0, "id": 1, "location_name": 1, "location_code": 1, "city": 1,
+         "state": 1, "distributor_id": 1, "is_default": 1}
+    ).sort("location_name", 1).to_list(100)
+
+    # Enrich with distributor name
+    dist_ids = list(set(loc.get("distributor_id") for loc in locations if loc.get("distributor_id")))
+    dist_map = {}
+    if dist_ids:
+        dists = await db.distributors.find(
+            {"id": {"$in": dist_ids}, "tenant_id": tenant_id},
+            {"_id": 0, "id": 1, "distributor_name": 1}
+        ).to_list(500)
+        dist_map = {d["id"]: d["distributor_name"] for d in dists}
+
+    for loc in locations:
+        loc["distributor_name"] = dist_map.get(loc.get("distributor_id"), "")
+
+    return {"warehouses": locations}
+
+
+@router.get("/factory-warehouse-stock")
+async def get_factory_warehouse_stock(
+    warehouse_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get stock levels in factory warehouses."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    query = {"tenant_id": tenant_id}
+    if warehouse_id:
+        query["warehouse_location_id"] = warehouse_id
+
+    stock_docs = await tdb.factory_warehouse_stock.find(query, {"_id": 0}).to_list(5000)
+    return {"stock": stock_docs}
+
+
+@router.post("/batches/{batch_id}/transfer-to-warehouse")
+async def transfer_to_warehouse(
+    batch_id: str,
+    data: WarehouseTransfer,
+    current_user: dict = Depends(get_current_user)
+):
+    """Transfer warehouse-ready crates from a batch to a factory warehouse."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    batch = await tdb.production_batches.find_one({"id": batch_id, "tenant_id": tenant_id})
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+
+    if data.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be > 0")
+
+    available = (batch.get("total_passed_final", 0) or 0) - (batch.get("transferred_to_warehouse", 0) or 0)
+    if data.quantity > available:
+        raise HTTPException(status_code=400, detail=f"Only {available} crates available for transfer (warehouse-ready minus already transferred)")
+
+    # Validate factory warehouse exists and is_factory
+    warehouse = await db.distributor_locations.find_one(
+        {"id": data.warehouse_location_id, "tenant_id": tenant_id, "is_factory": True, "status": "active"},
+        {"_id": 0, "id": 1, "location_name": 1, "city": 1, "distributor_id": 1}
+    )
+    if not warehouse:
+        raise HTTPException(status_code=400, detail="Invalid factory warehouse location")
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # 1. Update batch: increment transferred_to_warehouse
+    new_transferred = (batch.get("transferred_to_warehouse", 0) or 0) + data.quantity
+    await tdb.production_batches.update_one(
+        {"id": batch_id},
+        {"$set": {"transferred_to_warehouse": new_transferred, "updated_at": now}}
+    )
+
+    # 2. Upsert factory_warehouse_stock (per warehouse + sku)
+    sku_id = batch.get("sku_id")
+    sku_name = batch.get("sku_name")
+    existing_stock = await tdb.factory_warehouse_stock.find_one({
+        "tenant_id": tenant_id,
+        "warehouse_location_id": data.warehouse_location_id,
+        "sku_id": sku_id
+    })
+
+    if existing_stock:
+        new_qty = existing_stock.get("quantity", 0) + data.quantity
+        await tdb.factory_warehouse_stock.update_one(
+            {"id": existing_stock["id"]},
+            {"$set": {"quantity": new_qty, "updated_at": now}}
+        )
+    else:
+        stock_doc = {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "warehouse_location_id": data.warehouse_location_id,
+            "warehouse_name": warehouse.get("location_name"),
+            "sku_id": sku_id,
+            "sku_name": sku_name,
+            "quantity": data.quantity,
+            "created_at": now,
+            "updated_at": now,
+        }
+        await tdb.factory_warehouse_stock.insert_one(stock_doc)
+
+    # 3. Record transfer in history
+    transfer_doc = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "batch_id": batch_id,
+        "batch_code": batch.get("batch_code"),
+        "sku_id": sku_id,
+        "sku_name": sku_name,
+        "warehouse_location_id": data.warehouse_location_id,
+        "warehouse_name": warehouse.get("location_name"),
+        "quantity": data.quantity,
+        "notes": data.notes or "",
+        "transferred_by": current_user.get("id"),
+        "transferred_by_name": current_user.get("name"),
+        "transferred_at": now,
+    }
+    await tdb.warehouse_transfers.insert_one(transfer_doc)
+
+    updated_batch = await tdb.production_batches.find_one({"id": batch_id}, {"_id": 0})
+    return {
+        "batch": updated_batch,
+        "transfer": {k: v for k, v in transfer_doc.items() if k != "_id"},
+    }
+
+
+@router.get("/batches/{batch_id}/warehouse-transfers")
+async def get_batch_warehouse_transfers(
+    batch_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get warehouse transfer history for a batch."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    transfers = await tdb.warehouse_transfers.find(
+        {"batch_id": batch_id, "tenant_id": tenant_id},
+        {"_id": 0}
+    ).sort("transferred_at", -1).to_list(500)
+
+    return {"transfers": transfers, "total": len(transfers)}

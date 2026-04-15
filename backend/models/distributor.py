@@ -374,6 +374,7 @@ class ShipmentItem(BaseModel):
 class PrimaryShipmentCreate(BaseModel):
     distributor_id: str
     distributor_location_id: str
+    source_warehouse_id: Optional[str] = None
     shipment_date: str  # ISO date string
     expected_delivery_date: Optional[str] = None
     reference_number: Optional[str] = None  # External reference like PO number

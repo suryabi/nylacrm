@@ -146,6 +146,7 @@ export default function DistributorDetail() {
   const [showShipmentDialog, setShowShipmentDialog] = useState(false);
   const [shipmentForm, setShipmentForm] = useState({
     distributor_location_id: '',
+    source_warehouse_id: '',
     shipment_date: new Date().toISOString().split('T')[0],
     expected_delivery_date: '',
     reference_number: '',
@@ -158,6 +159,7 @@ export default function DistributorDetail() {
   const [savingShipment, setSavingShipment] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState(null);
   const [showShipmentDetail, setShowShipmentDetail] = useState(false);
+  const [factoryWarehouses, setFactoryWarehouses] = useState([]);
   
   // Delivery state
   const [deliveries, setDeliveries] = useState([]);
@@ -398,6 +400,18 @@ export default function DistributorDetail() {
   useEffect(() => {
     if (activeTab === 'stockin') {
       fetchShipments();
+      // Fetch factory warehouses for "From Warehouse" dropdown
+      axios.get(`${API_URL}/api/production/factory-warehouses`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(res => {
+        const whs = res.data.warehouses || [];
+        setFactoryWarehouses(whs);
+        // Default to first default warehouse
+        const defaultWh = whs.find(w => w.is_default);
+        if (defaultWh && !shipmentForm.source_warehouse_id) {
+          setShipmentForm(prev => ({ ...prev, source_warehouse_id: defaultWh.id }));
+        }
+      }).catch(() => {});
     }
   }, [activeTab, fetchShipments]);
 
@@ -1120,6 +1134,7 @@ export default function DistributorDetail() {
       const shipmentData = {
         distributor_id: id,
         distributor_location_id: shipmentForm.distributor_location_id,
+        source_warehouse_id: shipmentForm.source_warehouse_id || null,
         shipment_date: shipmentForm.shipment_date,
         expected_delivery_date: shipmentForm.expected_delivery_date || null,
         reference_number: shipmentForm.reference_number || null,
@@ -1158,6 +1173,7 @@ export default function DistributorDetail() {
   const resetShipmentForm = () => {
     setShipmentForm({
       distributor_location_id: '',
+      source_warehouse_id: '',
       shipment_date: new Date().toISOString().split('T')[0],
       expected_delivery_date: '',
       reference_number: '',
@@ -2219,6 +2235,7 @@ export default function DistributorDetail() {
             shipments={shipments}
             shipmentsLoading={shipmentsLoading}
             skus={skus}
+            factoryWarehouses={factoryWarehouses}
             showShipmentDialog={showShipmentDialog}
             setShowShipmentDialog={setShowShipmentDialog}
             shipmentForm={shipmentForm}

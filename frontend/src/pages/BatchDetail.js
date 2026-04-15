@@ -6,7 +6,7 @@ import {
   ArrowLeft, Package, Calendar, Boxes, Tag,
   Loader2, FlaskConical, Paintbrush, ShieldCheck,
   Trash2, ArrowRight, MoveRight, ClipboardCheck,
-  Clock, User, AlertTriangle, ChevronDown, ChevronUp, Plus,
+  Clock, User, AlertTriangle, ChevronDown, ChevronUp, Plus, Warehouse, Send,
 } from 'lucide-react';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
 
@@ -146,6 +146,9 @@ export default function BatchDetail() {
               <p className="text-[10px] sm:text-xs text-emerald-400 mb-0.5">Warehouse Ready</p>
               <p className="text-xl sm:text-2xl font-bold text-emerald-600">{batch.total_passed_final || 0}</p>
               <p className="text-[9px] text-emerald-300">crates</p>
+              {(batch.transferred_to_warehouse || 0) > 0 && (
+                <p className="text-[9px] text-teal-500 mt-0.5">{batch.transferred_to_warehouse} transferred</p>
+              )}
             </div>
           </div>
 
@@ -188,6 +191,9 @@ export default function BatchDetail() {
           <p className="text-xs text-amber-600 mt-1">Configure a QC route for "{batch.sku_name}" to start tracking</p>
         </div>
       )}
+
+      {/* Warehouse Transfer Section */}
+      <WarehouseTransferSection batch={batch} batchId={batchId} onUpdate={fetchBatch} />
 
       {/* Rejection Summary — Metrics always visible, expandable detail grid */}
       {history.inspections?.some(i => i.qty_rejected > 0) && (() => {
@@ -851,6 +857,175 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
         </div>
         );
       })()}
+    </div>
+  );
+}
+
+
+function WarehouseTransferSection({ batch, batchId, onUpdate }) {
+  const [factoryWarehouses, setFactoryWarehouses] = useState([]);
+  const [transfers, setTransfers] = useState([]);
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [selectedWarehouse, setSelectedWarehouse] = useState('');
+  const [transferQty, setTransferQty] = useState('');
+  const [transferNotes, setTransferNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [loadingTransfers, setLoadingTransfers] = useState(false);
+
+  const available = (batch?.total_passed_final || 0) - (batch?.transferred_to_warehouse || 0);
+
+  useEffect(() => {
+    const headers = getAuthHeaders();
+    axios.get(`${API_URL}/production/factory-warehouses`, { headers })
+      .then(res => {
+        setFactoryWarehouses(res.data.warehouses || []);
+        const defaultWh = (res.data.warehouses || []).find(w => w.is_default);
+        if (defaultWh) setSelectedWarehouse(defaultWh.id);
+      })
+      .catch(() => {});
+    // Fetch transfer history
+    setLoadingTransfers(true);
+    axios.get(`${API_URL}/production/batches/${batchId}/warehouse-transfers`, { headers })
+      .then(res => setTransfers(res.data.transfers || []))
+      .catch(() => {})
+      .finally(() => setLoadingTransfers(false));
+  }, [batchId]);
+
+  const handleTransfer = async () => {
+    const qty = parseInt(transferQty);
+    if (!qty || qty <= 0) { toast.error('Enter a valid quantity'); return; }
+    if (qty > available) { toast.error(`Only ${available} crates available`); return; }
+    if (!selectedWarehouse) { toast.error('Select a factory warehouse'); return; }
+    try {
+      setSaving(true);
+      const headers = getAuthHeaders();
+      await axios.post(`${API_URL}/production/batches/${batchId}/transfer-to-warehouse`, {
+        warehouse_location_id: selectedWarehouse, quantity: qty, notes: transferNotes,
+      }, { headers });
+      toast.success(`${qty} crates transferred to warehouse`);
+      setTransferQty(''); setTransferNotes(''); setShowTransfer(false);
+      onUpdate();
+      // Refresh transfers
+      const tRes = await axios.get(`${API_URL}/production/batches/${batchId}/warehouse-transfers`, { headers });
+      setTransfers(tRes.data.transfers || []);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Transfer failed');
+    } finally { setSaving(false); }
+  };
+
+  if ((batch?.total_passed_final || 0) === 0 && transfers.length === 0) return null;
+
+  return (
+    <div className="bg-white border border-teal-200 rounded-xl overflow-hidden" data-testid="warehouse-transfer-section">
+      <div className="bg-teal-50 border-b border-teal-200 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Warehouse size={16} className="text-teal-600" />
+          <h3 className="text-sm font-semibold text-teal-800">Transfer to Factory Warehouse</h3>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-xs text-teal-600">
+            <span className="font-medium">{available}</span> crates available
+            {(batch?.transferred_to_warehouse || 0) > 0 && (
+              <span className="text-teal-500 ml-2">({batch.transferred_to_warehouse} already transferred)</span>
+            )}
+          </div>
+          {available > 0 && (
+            <button
+              onClick={() => setShowTransfer(!showTransfer)}
+              className="px-3 py-1.5 text-xs font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-1.5"
+              data-testid="transfer-to-warehouse-btn"
+            >
+              <Send size={12} /> Transfer
+            </button>
+          )}
+        </div>
+      </div>
+
+      {showTransfer && (
+        <div className="p-4 border-b border-teal-100 bg-teal-50/30 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Factory Warehouse *</label>
+              <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
+                <SelectTrigger className="h-10" data-testid="transfer-warehouse-select">
+                  <SelectValue placeholder="Select factory warehouse" />
+                </SelectTrigger>
+                <SelectContent>
+                  {factoryWarehouses.map(w => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.location_name} ({w.city}) {w.is_default ? '★' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Crates to Transfer * (max {available})</label>
+              <input
+                type="number" min="1" max={available} value={transferQty}
+                onChange={e => setTransferQty(e.target.value)}
+                placeholder={`1 - ${available}`}
+                className="w-full h-10 border border-slate-200 rounded-lg px-3 text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400"
+                data-testid="transfer-qty-input"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Notes</label>
+              <input
+                value={transferNotes} onChange={e => setTransferNotes(e.target.value)}
+                placeholder="Optional notes"
+                className="w-full h-10 border border-slate-200 rounded-lg px-3 text-sm"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleTransfer} disabled={saving}
+              className="px-4 py-2 text-sm font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 flex items-center gap-1.5"
+              data-testid="transfer-submit-btn"
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Confirm Transfer
+            </button>
+            <button onClick={() => setShowTransfer(false)} className="px-4 py-2 text-sm text-slate-500 hover:bg-slate-100 rounded-lg">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer History */}
+      {transfers.length > 0 && (
+        <div className="p-4">
+          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Transfer History</h4>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-xs text-slate-500">
+                  <th className="text-left p-2 font-medium">Date</th>
+                  <th className="text-left p-2 font-medium">Warehouse</th>
+                  <th className="text-right p-2 font-medium">Crates</th>
+                  <th className="text-left p-2 font-medium">By</th>
+                  <th className="text-left p-2 font-medium">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transfers.map(t => (
+                  <tr key={t.id} className="border-t border-slate-100 hover:bg-slate-50/50">
+                    <td className="p-2 text-xs text-slate-600">{new Date(t.transferred_at).toLocaleDateString()}</td>
+                    <td className="p-2 text-xs font-medium text-slate-700">{t.warehouse_name}</td>
+                    <td className="p-2 text-xs font-bold text-teal-700 text-right">{t.quantity}</td>
+                    <td className="p-2 text-xs text-slate-500">{t.transferred_by_name}</td>
+                    <td className="p-2 text-xs text-slate-400">{t.notes || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {transfers.length === 0 && !showTransfer && (
+        <div className="p-6 text-center text-xs text-slate-400">
+          No transfers yet. Use the Transfer button to move warehouse-ready stock to a factory warehouse.
+        </div>
+      )}
     </div>
   );
 }
