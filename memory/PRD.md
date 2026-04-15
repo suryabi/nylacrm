@@ -281,6 +281,15 @@
 - [x] **Stock deduction on confirm**: When confirming a shipment with a source warehouse, validates sufficient stock per SKU in `factory_warehouse_stock`. If insufficient, rejects with detailed error. On success, deducts quantities from factory warehouse stock.
 - [x] **Frontend (ShipmentsTab)**: "From Factory Warehouse" dropdown in create shipment dialog, populated with factory warehouses, defaults to default warehouse. "From" column in shipments table showing source warehouse name.
 
+### Cost Cards Module (2026-04-15)
+- [x] **Global Master Pricing**: Cost Card per City + SKU with cost_per_unit (2 decimal places). Single master applicable to all distributors by default.
+- [x] **Inline Editable Grid**: Spreadsheet-style editing — click cell to edit, Save Changes button commits all pending changes. Add Row for new entries with City/SKU dropdowns.
+- [x] **Filters**: City and SKU dropdown filters with Clear button. Entry count shown.
+- [x] **Bulk Save**: Single "Save Changes" with badge showing pending change count. Upserts new and updated rows.
+- [x] **For-Distributor API**: `GET /api/cost-cards/for-distributor/{id}` returns effective prices with override info from distributor margin matrix.
+- [x] **Sidebar**: Added under Distribution module as "Cost Cards" with DollarSign icon.
+- [x] **Backend**: Full CRUD + bulk save at `/api/cost-cards`. Collection: `cost_cards`.
+
 ### Factory Warehouse Stock in Distributor Dashboard (2026-04-15)
 - [x] **Stock Dashboard Integration**: The distributor Stock Dashboard now shows factory warehouse stock (from production transfers). Includes a dedicated "Factory Warehouse Stock" card with per-warehouse per-SKU breakdown, a "Wh. Stock" column in the SKU table, and totals in the footer.
 - [x] **Backend**: `GET /api/distributors/{id}/stock-dashboard` now queries `factory_warehouse_stock` collection for the distributor's factory warehouse locations. Returns `factory_warehouse_stock` in totals, `factory_warehouses` array, and per-SKU `factory_warehouse_stock` field.
