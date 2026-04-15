@@ -2863,6 +2863,30 @@ export default function DistributorDetail() {
                           ₹{invoiceValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
                       </div>
+                      
+                      {/* Net Adjustment */}
+                      {(() => {
+                        const initialBilledWithGst = initialTransfer + (initialTransfer * effectiveGstRate);
+                        const netAdjustment = invoiceValue - initialBilledWithGst;
+                        const isPayableByDist = netAdjustment > 0;
+                        const isPayableToDist = netAdjustment < 0;
+                        return (
+                          <div className={`rounded-lg px-3 py-2.5 border-2 ${isPayableByDist ? 'bg-blue-50 border-blue-300' : isPayableToDist ? 'bg-orange-50 border-orange-300' : 'bg-slate-50 border-slate-200'}`} data-testid="net-adjustment-box">
+                            <div className="flex justify-between items-center text-sm mb-1">
+                              <span className="text-slate-500">Initially Billed (Incl. GST):</span>
+                              <span className="font-medium text-slate-600">₹{initialBilledWithGst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className={`font-bold text-sm ${isPayableByDist ? 'text-blue-800' : isPayableToDist ? 'text-orange-800' : 'text-slate-700'}`}>
+                                {isPayableByDist ? 'Net Adjustment — Payable by Distributor:' : isPayableToDist ? 'Net Adjustment — Payable to Distributor:' : 'Net Adjustment:'}
+                              </span>
+                              <span className={`font-bold text-lg ${isPayableByDist ? 'text-blue-700' : isPayableToDist ? 'text-orange-700' : 'text-slate-600'}`}>
+                                {netAdjustment > 0 ? '+' : netAdjustment < 0 ? '' : ''}₹{Math.abs(netAdjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 );
