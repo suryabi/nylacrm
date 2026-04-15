@@ -281,6 +281,10 @@
 - [x] **Stock deduction on confirm**: When confirming a shipment with a source warehouse, validates sufficient stock per SKU in `factory_warehouse_stock`. If insufficient, rejects with detailed error. On success, deducts quantities from factory warehouse stock.
 - [x] **Frontend (ShipmentsTab)**: "From Factory Warehouse" dropdown in create shipment dialog, populated with factory warehouses, defaults to default warehouse. "From" column in shipments table showing source warehouse name.
 
+### Factory Warehouse Stock in Distributor Dashboard (2026-04-15)
+- [x] **Stock Dashboard Integration**: The distributor Stock Dashboard now shows factory warehouse stock (from production transfers). Includes a dedicated "Factory Warehouse Stock" card with per-warehouse per-SKU breakdown, a "Wh. Stock" column in the SKU table, and totals in the footer.
+- [x] **Backend**: `GET /api/distributors/{id}/stock-dashboard` now queries `factory_warehouse_stock` collection for the distributor's factory warehouse locations. Returns `factory_warehouse_stock` in totals, `factory_warehouses` array, and per-SKU `factory_warehouse_stock` field.
+
 ### Distributor & Warehouse Delete with Cascading (2026-04-15)
 - [x] **Cascading Distributor Delete**: Hard delete distributor + all child data (locations, coverage, margins, assignments, shipments+items, deliveries+items, settlements+items, billing configs, invoices, reconciliations+items, debit/credit notes, linked user accounts). Returns deleted_counts per collection.
 - [x] **Warehouse Hard Delete**: Hard delete warehouse location + related shipments/items and deliveries/items.
