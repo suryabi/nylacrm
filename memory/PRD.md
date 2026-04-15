@@ -281,6 +281,12 @@
 - [x] **Stock deduction on confirm**: When confirming a shipment with a source warehouse, validates sufficient stock per SKU in `factory_warehouse_stock`. If insufficient, rejects with detailed error. On success, deducts quantities from factory warehouse stock.
 - [x] **Frontend (ShipmentsTab)**: "From Factory Warehouse" dropdown in create shipment dialog, populated with factory warehouses, defaults to default warehouse. "From" column in shipments table showing source warehouse name.
 
+### Distributor Billing Approach Configuration (2026-04-15)
+- [x] **Two approaches**: "Margin Applied Upfront with Reconciliation" (margin_upfront) and "No Upfront Margin – Post-Sale Adjustment" (cost_based). Default: margin_upfront.
+- [x] **Profile tab**: Shows billing approach in Commercial Terms section (read-only display + editable dropdown in edit mode).
+- [x] **Commercial tab**: Banner at top of Margin Matrix showing active billing approach with color coding (emerald for margin_upfront, amber for cost_based).
+- [x] **Backend**: `billing_approach` field on Distributor model. Create defaults to margin_upfront. Stored and returned on all CRUD operations.
+
 ### Cost Cards Module (2026-04-15)
 - [x] **Global Master Pricing**: Cost Card per City + SKU with cost_per_unit (2 decimal places). Single master applicable to all distributors by default.
 - [x] **Inline Editable Grid**: Spreadsheet-style editing — click cell to edit, Save Changes button commits all pending changes. Add Row for new entries with City/SKU dropdowns.
