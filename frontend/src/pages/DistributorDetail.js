@@ -2600,9 +2600,10 @@ export default function DistributorDetail() {
                       const customerPrice = item.customer_selling_price || item.unit_price || 0;
                       const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
                       const basePrice = item.base_price || item.transfer_price || 0;
-                      const transferPrice = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
+                      const isCostBased = distributor?.billing_approach === 'cost_based';
+                      const transferPrice = isCostBased ? basePrice : (basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0);
                       const billedToDist = qty * transferPrice;
-                      const newTransferPrice = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
+                      const newTransferPrice = isCostBased ? customerPrice : (customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0);
                       const actualBillable = qty * newTransferPrice;
                       const adjustment = actualBillable - billedToDist;
                       return (
@@ -2634,9 +2635,10 @@ export default function DistributorDetail() {
                         const customerPrice = item.customer_selling_price || item.unit_price || 0;
                         const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
                         const basePrice = item.base_price || item.transfer_price || 0;
-                        const transferPrice = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
+                        const isCB = distributor?.billing_approach === 'cost_based';
+                        const transferPrice = isCB ? basePrice : (basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0);
                         totBilled += qty * transferPrice;
-                        const newTP = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
+                        const newTP = isCB ? customerPrice : (customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0);
                         totActual += qty * newTP;
                         totAdj += (qty * newTP) - (qty * transferPrice);
                       });
@@ -2722,9 +2724,10 @@ export default function DistributorDetail() {
                   const taxPct = item.tax_percent || 0;
                   const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
                   const basePrice = item.base_price || item.transfer_price || 0;
-                  const transferPrice = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
+                  const isCB = distributor?.billing_approach === 'cost_based';
+                  const transferPrice = isCB ? basePrice : (basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0);
                   distBilling += qty * transferPrice;
-                  const newTP = price > 0 ? price * (1 - commissionPct / 100) : 0;
+                  const newTP = isCB ? price : (price > 0 ? price * (1 - commissionPct / 100) : 0);
                   totActual += qty * newTP;
                   const preTax = qty * price * (1 - disc / 100);
                   custBilling += preTax;
