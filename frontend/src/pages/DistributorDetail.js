@@ -2716,54 +2716,153 @@ export default function DistributorDetail() {
               {(() => {
                 const items = selectedDelivery.items || [];
                 const totalCreditApplied = selectedDelivery.total_credit_applied || 0;
-                let distBilling = 0, totActual = 0, custBilling = 0, totalTax = 0;
+                const isCostBased = distributor?.billing_approach === 'cost_based';
+                
+                let totalBasePrice = 0, totalCustomerPrice = 0, totalMarginAtTransfer = 0, totalApplicableMargin = 0;
+                let custBilling = 0, totalTax = 0;
+                let avgMarginPct = 0;
+                let marginPctCount = 0;
+                
                 items.forEach(item => {
                   const qty = item.quantity || 0;
-                  const price = item.customer_selling_price || item.unit_price || 0;
+                  const custPrice = item.customer_selling_price || item.unit_price || 0;
                   const disc = item.discount_percent || 0;
                   const taxPct = item.tax_percent || 0;
-                  const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
+                  const commPct = item.distributor_commission_percent || item.margin_percent || 2.5;
                   const basePrice = item.base_price || item.transfer_price || 0;
-                  const isCB = distributor?.billing_approach === 'cost_based';
-                  const transferPrice = isCB ? basePrice : (basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0);
-                  distBilling += qty * transferPrice;
-                  const newTP = isCB ? price : (price > 0 ? price * (1 - commissionPct / 100) : 0);
-                  totActual += qty * newTP;
-                  const preTax = qty * price * (1 - disc / 100);
+                  
+                  totalBasePrice += qty * basePrice;
+                  totalCustomerPrice += qty * custPrice;
+                  
+                  // Margin considered at transfer (upfront deducted amount)
+                  if (isCostBased) {
+                    totalMarginAtTransfer += 0; // No margin deducted upfront
+                  } else {
+                    totalMarginAtTransfer += qty * basePrice * (commPct / 100);
+                  }
+                  
+                  // Total applicable margin based on customer price
+                  totalApplicableMargin += qty * custPrice * (commPct / 100);
+                  
+                  avgMarginPct += commPct;
+                  marginPctCount += 1;
+                  
+                  const preTax = qty * custPrice * (1 - disc / 100);
                   custBilling += preTax;
                   totalTax += preTax * taxPct / 100;
                 });
-                const priceAdj = totActual - distBilling;
-                const combinedAdj = priceAdj - totalCreditApplied;
-                const totalBillable = distBilling + combinedAdj;
+                
+                const marginPctDisplay = marginPctCount > 0 ? (avgMarginPct / marginPctCount).toFixed(1) : '0';
+                
+                // Adjusted margin = difference between applicable and already-deducted
+                const adjustedMargin = isCostBased ? totalApplicableMargin : (totalApplicableMargin - totalMarginAtTransfer);
+                
+                // Initial transfer price (what distributor was billed at)
+                const initialTransfer = isCostBased ? totalBasePrice : (totalBasePrice - totalMarginAtTransfer);
+                
+                // Adjusted price based on customer price
+                const adjustedPrice = totalCustomerPrice;
+                
+                // Return credit
+                const returnCredit = totalCreditApplied;
+                
+                // Final payable by distributor = customer price - total margin - return credit
+                const totalDistMargin = totalApplicableMargin;
+                const finalPayable = adjustedPrice - totalDistMargin - returnCredit;
+                
                 const effectiveGstRate = custBilling > 0 ? totalTax / custBilling : 0;
-                const gstAmount = totalBillable * effectiveGstRate;
-                const invoiceValue = totalBillable + gstAmount;
+                const gstAmount = finalPayable * effectiveGstRate;
+                const invoiceValue = finalPayable + gstAmount;
                 const gstPctDisplay = (effectiveGstRate * 100).toFixed(1);
+                
                 return (
-                  <div className="border rounded-lg p-4 bg-purple-50/40 space-y-2" data-testid="delivery-distributor-summary">
-                    <h4 className="font-semibold text-sm mb-2 text-purple-800">Distributor Summary</h4>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Distributor Billing Amount:</span>
-                      <span className="font-medium">₹{distBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Adjustment (Customer Price + Return Credit):</span>
-                      <span className={`font-medium ${combinedAdj > 0 ? 'text-emerald-600' : combinedAdj < 0 ? 'text-red-600' : 'text-slate-500'}`}>
-                        {combinedAdj > 0 ? '+' : ''}₹{combinedAdj.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  <div className="border rounded-lg overflow-hidden bg-white" data-testid="delivery-distributor-summary">
+                    {/* Header with billing approach indicator */}
+                    <div className={`px-4 py-2.5 flex items-center justify-between ${isCostBased ? 'bg-amber-50 border-b border-amber-200' : 'bg-purple-50 border-b border-purple-200'}`}>
+                      <h4 className={`font-semibold text-sm ${isCostBased ? 'text-amber-800' : 'text-purple-800'}`}>
+                        Distributor Settlement Summary
+                      </h4>
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${isCostBased ? 'bg-amber-200 text-amber-800' : 'bg-purple-200 text-purple-800'}`}>
+                        {isCostBased ? 'Post-Sale Adjustment' : 'Margin Upfront'}
                       </span>
                     </div>
-                    <div className="flex justify-between text-sm border-t pt-2">
-                      <span className="font-semibold">Total Billable Amount:</span>
-                      <span className="font-bold">₹{totalBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between text-sm text-slate-600">
-                      <span>GST ({gstPctDisplay}%):</span>
-                      <span className="font-medium">₹{gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between text-base border-t pt-2">
-                      <span className="font-bold text-purple-800">Distributor Invoice Value (Incl. GST):</span>
-                      <span className="font-bold text-purple-800">₹{invoiceValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    
+                    <div className="p-4 space-y-3">
+                      {/* Section 1: Transfer & Pricing */}
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-1">Pricing</p>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-600">Initial Transfer Price (Base):</span>
+                          <span className="font-medium">₹{initialTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-600">Adjusted Price (Customer Billing):</span>
+                          <span className="font-medium text-emerald-700">₹{adjustedPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                      
+                      {/* Divider */}
+                      <div className="border-t border-dashed border-slate-200" />
+                      
+                      {/* Section 2: Margin Breakdown */}
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-1">Distributor Margin @ {marginPctDisplay}%</p>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-600">Margin Considered at Transfer:</span>
+                          <span className={`font-medium ${totalMarginAtTransfer > 0 ? 'text-purple-700' : 'text-slate-400'}`}>
+                            ₹{totalMarginAtTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            {isCostBased && <span className="text-[10px] text-amber-500 ml-1">(none — post-sale)</span>}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-600">Total Applicable Margin (on Customer Price):</span>
+                          <span className="font-medium text-purple-700">₹{totalApplicableMargin.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex justify-between text-sm bg-slate-50 rounded px-2 py-1">
+                          <span className="font-medium text-slate-700">
+                            {isCostBased ? 'Margin to be Settled (Post-Sale):' : 'Additional Margin Adjustment:'}
+                          </span>
+                          <span className={`font-semibold ${adjustedMargin > 0 ? 'text-emerald-600' : adjustedMargin < 0 ? 'text-red-600' : 'text-slate-500'}`}>
+                            {adjustedMargin > 0 ? '+' : ''}₹{adjustedMargin.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {/* Divider */}
+                      <div className="border-t border-dashed border-slate-200" />
+                      
+                      {/* Section 3: Credits & Final */}
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-1">Settlement</p>
+                        {returnCredit > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-600">Return Bottle Credit:</span>
+                            <span className="font-medium text-red-500">−₹{returnCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-600">Total Distributor Margin:</span>
+                          <span className="font-medium text-purple-700">−₹{totalDistMargin.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex justify-between text-sm border-t pt-1.5">
+                          <span className="font-semibold text-slate-800">Net Payable by Distributor:</span>
+                          <span className="font-bold text-slate-900">₹{finalPayable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex justify-between text-sm text-slate-500">
+                          <span>GST ({gstPctDisplay}%):</span>
+                          <span>₹{gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                      
+                      {/* Final invoice */}
+                      <div className={`rounded-lg px-3 py-2 flex justify-between items-center ${isCostBased ? 'bg-amber-50 border border-amber-200' : 'bg-purple-50 border border-purple-200'}`}>
+                        <span className={`font-bold text-sm ${isCostBased ? 'text-amber-800' : 'text-purple-800'}`}>
+                          Distributor Invoice Value (Incl. GST):
+                        </span>
+                        <span className={`font-bold text-lg ${isCostBased ? 'text-amber-800' : 'text-purple-800'}`}>
+                          ₹{invoiceValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );
