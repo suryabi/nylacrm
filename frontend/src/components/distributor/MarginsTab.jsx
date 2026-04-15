@@ -20,6 +20,7 @@ export default function MarginsTab({
   setShowOnlyActiveMargins,
   getCoveredCities,
   skus,
+  costCardPrices,
   // Copy dialog
   showCopyDialog,
   setShowCopyDialog,
@@ -340,10 +341,12 @@ export default function MarginsTab({
                 value={newMarginForm.sku_id}
                 onValueChange={(v) => {
                   const sku = skus.find(s => s.id === v);
+                  const costCardPrice = costCardPrices?.[v];
                   setNewMarginForm(prev => ({
                     ...prev,
                     sku_id: v,
-                    sku_name: sku?.name || sku?.sku_name || ''
+                    sku_name: sku?.name || sku?.sku_name || '',
+                    base_price: costCardPrice != null ? costCardPrice.toFixed(2) : prev.base_price
                   }));
                 }}
               >
@@ -368,7 +371,16 @@ export default function MarginsTab({
                   placeholder="100"
                   value={newMarginForm.base_price}
                   onChange={(e) => setNewMarginForm(prev => ({ ...prev, base_price: e.target.value }))}
+                  data-testid="margin-base-price-input"
                 />
+                {newMarginForm.sku_id && costCardPrices?.[newMarginForm.sku_id] != null && (
+                  <p className="text-xs text-emerald-600">
+                    Cost Card: ₹{costCardPrices[newMarginForm.sku_id].toFixed(2)} for {selectedMarginCity}
+                  </p>
+                )}
+                {newMarginForm.sku_id && costCardPrices?.[newMarginForm.sku_id] == null && (
+                  <p className="text-xs text-amber-500">No cost card defined for this SKU in {selectedMarginCity}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Margin % *</Label>

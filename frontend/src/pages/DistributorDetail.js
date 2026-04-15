@@ -121,6 +121,7 @@ export default function DistributorDetail() {
   const [marginsLoading, setMarginsLoading] = useState(false);
   const [selectedMarginCity, setSelectedMarginCity] = useState('');
   const [showOnlyActiveMargins, setShowOnlyActiveMargins] = useState(false);
+  const [costCardPrices, setCostCardPrices] = useState({});
   const [skus, setSkus] = useState([]);
   const [marginGrid, setMarginGrid] = useState({}); // Legacy - for grid view
   const [hasMarginChanges, setHasMarginChanges] = useState(false);
@@ -359,8 +360,18 @@ export default function DistributorDetail() {
   useEffect(() => {
     if (activeTab === 'commercial' && selectedMarginCity) {
       fetchMargins();
+      // Fetch cost card prices for this city
+      axios.get(`${API_URL}/api/cost-cards?city=${encodeURIComponent(selectedMarginCity)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(res => {
+        const priceMap = {};
+        (res.data.cost_cards || []).forEach(cc => {
+          priceMap[cc.sku_id] = cc.cost_per_unit;
+        });
+        setCostCardPrices(priceMap);
+      }).catch(() => {});
     }
-  }, [activeTab, selectedMarginCity, fetchMargins]);
+  }, [activeTab, selectedMarginCity, fetchMargins, token]);
 
   // Fetch account assignments
   const fetchAssignments = useCallback(async () => {
@@ -2206,6 +2217,7 @@ export default function DistributorDetail() {
               setShowOnlyActiveMargins={setShowOnlyActiveMargins}
               getCoveredCities={getCoveredCities}
               skus={skus}
+              costCardPrices={costCardPrices}
               showCopyDialog={showCopyDialog}
               setShowCopyDialog={setShowCopyDialog}
               copyTargetCity={copyTargetCity}
