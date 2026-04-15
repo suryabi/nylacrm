@@ -281,6 +281,12 @@
 - [x] **Stock deduction on confirm**: When confirming a shipment with a source warehouse, validates sufficient stock per SKU in `factory_warehouse_stock`. If insufficient, rejects with detailed error. On success, deducts quantities from factory warehouse stock.
 - [x] **Frontend (ShipmentsTab)**: "From Factory Warehouse" dropdown in create shipment dialog, populated with factory warehouses, defaults to default warehouse. "From" column in shipments table showing source warehouse name.
 
+### Distributor & Warehouse Delete with Cascading (2026-04-15)
+- [x] **Cascading Distributor Delete**: Hard delete distributor + all child data (locations, coverage, margins, assignments, shipments+items, deliveries+items, settlements+items, billing configs, invoices, reconciliations+items, debit/credit notes, linked user accounts). Returns deleted_counts per collection.
+- [x] **Warehouse Hard Delete**: Hard delete warehouse location + related shipments/items and deliveries/items.
+- [x] **Authorization**: Only CEO and System Admin roles can delete (is_delete_authorized check).
+- [x] **Frontend Confirmation**: Delete button visible for CEO/SysAdmin in distributor header. Confirmation dialog lists all data to be deleted, requires typing exact distributor name, shows "cannot be undone" warning.
+
 ## Upcoming Tasks (P1)
 - Auto-generate Provisional Invoice (on shipment -> "delivered")
 - Build Reporting Module
