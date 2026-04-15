@@ -268,6 +268,18 @@
 - [x] **is_self_managed flag**: Added to DistributorCreate/Update/Distributor models. Backend persists on POST/PUT. Frontend: checkbox in create dialog, checkbox in edit mode (OverviewTab), "Self Managed" badge in distributor list table, indicator in distributor detail overview.
 - [x] **is_factory flag**: Added to DistributorLocationCreate/Update/DistributorLocation models. Backend persists on POST/PUT. Frontend: checkbox in add location dialog, "Factory" badge on location cards. Dropdown endpoint returns is_factory field.
 
+### Warehouse Transfer: Production → Factory Warehouse (2026-04-14)
+- [x] **Transfer endpoint**: `POST /api/production/batches/{batch_id}/transfer-to-warehouse` — moves warehouse-ready crates to a selected factory warehouse. Validates quantity <= available (total_passed_final - transferred_to_warehouse).
+- [x] **Factory warehouse stock**: New `factory_warehouse_stock` collection tracks per-warehouse per-SKU stock quantities. Upserted on each transfer.
+- [x] **Transfer history**: New `warehouse_transfers` collection records each transfer with batch, warehouse, quantity, user, timestamp.
+- [x] **Batch tracking**: `transferred_to_warehouse` field on production_batches tracks total crates transferred out.
+- [x] **Factory warehouses listing**: `GET /api/production/factory-warehouses` — returns all locations with is_factory=true, enriched with distributor name.
+- [x] **Frontend (BatchDetail.js)**: WarehouseTransferSection component — shows available crates, factory warehouse dropdown, quantity input, transfer history table. Only visible when warehouse-ready > 0.
+
+### Stock In: From Factory Warehouse (2026-04-14)
+- [x] **Shipment model**: `PrimaryShipmentCreate` now accepts optional `source_warehouse_id`. Backend validates factory warehouse, stores `source_warehouse_id` and `source_warehouse_name` in shipment doc.
+- [x] **Frontend (ShipmentsTab)**: "From Factory Warehouse" dropdown in create shipment dialog, populated with factory warehouses, defaults to default warehouse. "From" column in shipments table showing source warehouse name.
+
 ## Upcoming Tasks (P1)
 - Auto-generate Provisional Invoice (on shipment -> "delivered")
 - Build Reporting Module
