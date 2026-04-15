@@ -249,6 +249,7 @@ async def create_distributor(
         "credit_limit": data.credit_limit or 0,
         "security_deposit": data.security_deposit or 0,
         "is_self_managed": data.is_self_managed or False,
+        "billing_approach": data.billing_approach or "margin_upfront",
         "status": data.status or "active",
         "notes": data.notes,
         "created_at": now,
@@ -333,7 +334,7 @@ async def update_distributor(
                   'billing_address', 'registered_address', 'primary_contact_name', 'primary_contact_mobile',
                   'primary_contact_email', 'secondary_contact_name', 'secondary_contact_mobile',
                   'secondary_contact_email', 'payment_terms', 'credit_days', 'credit_limit',
-                  'security_deposit', 'is_self_managed', 'status', 'notes']:
+                  'security_deposit', 'is_self_managed', 'billing_approach', 'status', 'notes']:
         value = getattr(data, field, None)
         if value is not None:
             update_data[field] = value

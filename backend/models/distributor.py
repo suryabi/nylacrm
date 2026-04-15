@@ -46,6 +46,7 @@ class DistributorCreate(BaseModel):
     credit_limit: Optional[float] = 0
     security_deposit: Optional[float] = 0
     is_self_managed: Optional[bool] = False
+    billing_approach: Optional[str] = "margin_upfront"
     status: Optional[str] = "active"
     notes: Optional[str] = None
 
@@ -69,6 +70,7 @@ class DistributorUpdate(BaseModel):
     credit_limit: Optional[float] = None
     security_deposit: Optional[float] = None
     is_self_managed: Optional[bool] = None
+    billing_approach: Optional[str] = None
     status: Optional[str] = None
     notes: Optional[str] = None
 
@@ -93,6 +95,8 @@ class Distributor(BaseModel):
     credit_days: int = 30
     credit_limit: float = 0
     security_deposit: float = 0
+    is_self_managed: bool = False
+    billing_approach: str = "margin_upfront"
     status: str = "active"
     notes: Optional[str] = None
     created_at: str

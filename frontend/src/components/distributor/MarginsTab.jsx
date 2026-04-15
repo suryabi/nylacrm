@@ -7,7 +7,7 @@ import { Badge } from '../ui/badge';
 import { Switch } from '../ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
-import { MapPin, Plus, Trash2, Package, RefreshCw, Percent, Edit2, FileText } from 'lucide-react';
+import { MapPin, Plus, Trash2, Package, RefreshCw, Percent, Edit2, FileText, Receipt } from 'lucide-react';
 
 export default function MarginsTab({
   distributor,
@@ -55,6 +55,33 @@ export default function MarginsTab({
 
   return (
     <>
+      {/* Billing Approach Banner */}
+      <div className={`flex items-center gap-3 p-3 rounded-xl border mb-4 ${
+        (distributor?.billing_approach || 'margin_upfront') === 'margin_upfront'
+          ? 'bg-emerald-50/60 border-emerald-200'
+          : 'bg-amber-50/60 border-amber-200'
+      }`} data-testid="billing-approach-banner">
+        <Receipt className={`h-5 w-5 ${
+          (distributor?.billing_approach || 'margin_upfront') === 'margin_upfront' ? 'text-emerald-600' : 'text-amber-600'
+        }`} />
+        <div>
+          <span className={`text-sm font-semibold ${
+            (distributor?.billing_approach || 'margin_upfront') === 'margin_upfront' ? 'text-emerald-800' : 'text-amber-800'
+          }`}>
+            {(distributor?.billing_approach || 'margin_upfront') === 'margin_upfront'
+              ? 'Billing: Margin Applied Upfront'
+              : 'Billing: No Upfront Margin – Cost Based'}
+          </span>
+          <p className={`text-xs ${
+            (distributor?.billing_approach || 'margin_upfront') === 'margin_upfront' ? 'text-emerald-600' : 'text-amber-600'
+          }`}>
+            {(distributor?.billing_approach || 'margin_upfront') === 'margin_upfront'
+              ? 'Transfer price = Cost card price − margin%. Differences settled via reconciliation.'
+              : 'Billed at cost card price. Margin calculated post-sale.'}
+          </p>
+        </div>
+      </div>
+
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

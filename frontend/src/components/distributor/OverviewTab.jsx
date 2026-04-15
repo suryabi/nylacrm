@@ -4,7 +4,7 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
-import { Building2, User, Phone, Mail, CreditCard, FileText, Factory } from 'lucide-react';
+import { Building2, User, Phone, Mail, CreditCard, FileText, Factory, Receipt } from 'lucide-react';
 import { Checkbox } from '../ui/checkbox';
 import { PAYMENT_TERMS, STATUS_OPTIONS } from './constants';
 
@@ -279,28 +279,69 @@ export default function OverviewTab({
                   onChange={(e) => setEditData(prev => ({ ...prev, security_deposit: parseFloat(e.target.value) || 0 }))}
                 />
               </div>
+              <div className="space-y-2 col-span-2 md:col-span-4">
+                <Label className="flex items-center gap-1.5">
+                  <Receipt className="h-3.5 w-3.5 text-emerald-600" />
+                  Distributor Billing Approach
+                </Label>
+                <Select
+                  value={editData.billing_approach || 'margin_upfront'}
+                  onValueChange={(v) => setEditData(prev => ({ ...prev, billing_approach: v }))}
+                >
+                  <SelectTrigger data-testid="edit-billing-approach-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="margin_upfront">Margin Applied Upfront with Reconciliation</SelectItem>
+                    <SelectItem value="cost_based">No Upfront Margin – Post-Sale Adjustment</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-500">
+                  {(editData.billing_approach || 'margin_upfront') === 'margin_upfront'
+                    ? 'Distributor margin is applied on cost card price to arrive at transfer price. Differences settled via reconciliation.'
+                    : 'Distributor is billed at cost card price. Margin is calculated post-sale based on actual selling price.'}
+                </p>
+              </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              <div>
-                <div className="text-sm text-muted-foreground">Payment Terms</div>
-                <div className="font-medium">
-                  {PAYMENT_TERMS.find(t => t.value === distributor.payment_terms)?.label || distributor.payment_terms}
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div>
+                  <div className="text-sm text-muted-foreground">Payment Terms</div>
+                  <div className="font-medium">
+                    {PAYMENT_TERMS.find(t => t.value === distributor.payment_terms)?.label || distributor.payment_terms}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Credit Days</div>
+                  <div className="font-medium">{distributor.credit_days} days</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Credit Limit</div>
+                  <div className="font-medium">₹{(distributor.credit_limit || 0).toLocaleString()}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Security Deposit</div>
+                  <div className="font-medium">₹{(distributor.security_deposit || 0).toLocaleString()}</div>
                 </div>
               </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Credit Days</div>
-                <div className="font-medium">{distributor.credit_days} days</div>
+              <div className="mt-4 p-3 rounded-lg border border-emerald-200 bg-emerald-50/40" data-testid="billing-approach-display">
+                <div className="flex items-center gap-2 mb-1">
+                  <Receipt className="h-4 w-4 text-emerald-600" />
+                  <span className="text-sm font-semibold text-emerald-800">Distributor Billing Approach</span>
+                </div>
+                <div className="text-sm font-medium text-slate-800">
+                  {(distributor.billing_approach || 'margin_upfront') === 'margin_upfront'
+                    ? 'Margin Applied Upfront with Reconciliation'
+                    : 'No Upfront Margin – Post-Sale Adjustment'}
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  {(distributor.billing_approach || 'margin_upfront') === 'margin_upfront'
+                    ? 'Transfer price = Cost card price minus distributor margin. Differences settled via reconciliation.'
+                    : 'Billed at cost card price. Margin calculated post-sale based on actual selling price.'}
+                </p>
               </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Credit Limit</div>
-                <div className="font-medium">₹{(distributor.credit_limit || 0).toLocaleString()}</div>
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Security Deposit</div>
-                <div className="font-medium">₹{(distributor.security_deposit || 0).toLocaleString()}</div>
-              </div>
-            </div>
+            </>
           )}
         </CardContent>
       </Card>
