@@ -9,7 +9,7 @@ import logging
 import uuid
 import bcrypt
 
-from database import db
+from database import db, get_tenant_db
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
 from models.distributor import (
@@ -2043,6 +2043,47 @@ async def confirm_shipment(
         raise HTTPException(status_code=400, detail="Cannot confirm shipment without items")
     
     now = datetime.now(timezone.utc).isoformat()
+    
+    # Deduct stock from source factory warehouse if specified
+    source_warehouse_id = shipment.get('source_warehouse_id')
+    if source_warehouse_id:
+        tdb = get_tenant_db()
+        # Get shipment items
+        items = await db.distributor_shipment_items.find(
+            {"shipment_id": shipment_id, "tenant_id": tenant_id},
+            {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1}
+        ).to_list(500)
+        
+        # Validate stock availability before deducting
+        insufficient = []
+        for item in items:
+            stock = await tdb.factory_warehouse_stock.find_one({
+                "tenant_id": tenant_id,
+                "warehouse_location_id": source_warehouse_id,
+                "sku_id": item["sku_id"]
+            })
+            available = stock.get("quantity", 0) if stock else 0
+            if available < item["quantity"]:
+                insufficient.append(f"{item.get('sku_name', item['sku_id'])}: need {item['quantity']}, have {available}")
+        
+        if insufficient:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient stock in factory warehouse: {'; '.join(insufficient)}"
+            )
+        
+        # Deduct stock for each SKU
+        for item in items:
+            await tdb.factory_warehouse_stock.update_one(
+                {
+                    "tenant_id": tenant_id,
+                    "warehouse_location_id": source_warehouse_id,
+                    "sku_id": item["sku_id"]
+                },
+                {"$inc": {"quantity": -item["quantity"]}, "$set": {"updated_at": now}}
+            )
+        
+        logger.info(f"Deducted stock from factory warehouse {source_warehouse_id} for shipment {shipment['shipment_number']}")
     
     await db.distributor_shipments.update_one(
         {"id": shipment_id, "tenant_id": tenant_id},
