@@ -928,10 +928,19 @@ async def create_margin_entry(
         if sku:
             sku_name = sku.get('name')
     
-    # Calculate transfer price for percentage margin type
+    # Calculate transfer price based on billing approach
+    distributor = await db.distributors.find_one(
+        {"id": distributor_id, "tenant_id": tenant_id},
+        {"_id": 0, "billing_approach": 1}
+    )
+    billing_approach = (distributor or {}).get('billing_approach', 'margin_upfront')
+    
     transfer_price = None
-    if data.margin_type == 'percentage' and data.base_price:
-        transfer_price = data.base_price * (1 - data.margin_value / 100)
+    if data.base_price:
+        if billing_approach == 'cost_based':
+            transfer_price = data.base_price
+        elif data.margin_type == 'percentage':
+            transfer_price = data.base_price * (1 - data.margin_value / 100)
     
     margin_doc = {
         "id": str(uuid.uuid4()),
@@ -982,6 +991,7 @@ async def create_bulk_margin_entries(
     if not distributor:
         raise HTTPException(status_code=404, detail="Distributor not found")
     
+    billing_approach = distributor.get('billing_approach', 'margin_upfront')
     added = []
     skipped = []
     
@@ -1016,10 +1026,13 @@ async def create_bulk_margin_entries(
             if sku:
                 sku_name = sku.get('name')
         
-        # Calculate transfer price for percentage margin type
+        # Calculate transfer price based on billing approach
         transfer_price = None
-        if item.margin_type == 'percentage' and item.base_price:
-            transfer_price = item.base_price * (1 - item.margin_value / 100)
+        if item.base_price:
+            if billing_approach == 'cost_based':
+                transfer_price = item.base_price
+            elif item.margin_type == 'percentage':
+                transfer_price = item.base_price * (1 - item.margin_value / 100)
         
         margin_doc = {
             "id": str(uuid.uuid4()),
@@ -1117,13 +1130,22 @@ async def update_margin_entry(
                     detail=f"Date range overlaps with existing entry (ID: {existing.get('id')[:8]}..., Active: {exist_start} to {exist_end if exist_end != '9999-12-31' else 'ongoing'}). Please adjust dates to avoid overlap."
                 )
     
-    # Recalculate transfer price if base_price or margin_value changed
+    # Recalculate transfer price based on billing approach
     base_price = update_data.get('base_price', margin.get('base_price'))
     margin_type = update_data.get('margin_type', margin.get('margin_type'))
     margin_value = update_data.get('margin_value', margin.get('margin_value'))
     
-    if margin_type == 'percentage' and base_price:
-        update_data['transfer_price'] = round(base_price * (1 - margin_value / 100), 2)
+    dist = await db.distributors.find_one(
+        {"id": distributor_id, "tenant_id": tenant_id},
+        {"_id": 0, "billing_approach": 1}
+    )
+    billing_approach = (dist or {}).get('billing_approach', 'margin_upfront')
+    
+    if base_price:
+        if billing_approach == 'cost_based':
+            update_data['transfer_price'] = round(base_price, 2)
+        elif margin_type == 'percentage':
+            update_data['transfer_price'] = round(base_price * (1 - margin_value / 100), 2)
     
     await db.distributor_margin_matrix.update_one(
         {"id": margin_id, "tenant_id": tenant_id},

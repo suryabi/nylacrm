@@ -268,7 +268,9 @@ export default function MarginsTab({
                               </span>
                             </td>
                             <td className="p-3 text-right font-medium text-green-600">
-                              {margin.transfer_price ? `₹${margin.transfer_price.toLocaleString()}` : '-'}
+                              {(distributor?.billing_approach === 'cost_based')
+                                ? (margin.base_price ? `₹${margin.base_price.toLocaleString()}` : '-')
+                                : (margin.transfer_price ? `₹${margin.transfer_price.toLocaleString()}` : '-')}
                             </td>
                             <td className="p-3 text-center text-sm">
                               {margin.active_from || '-'}
@@ -424,8 +426,13 @@ export default function MarginsTab({
               <div className="p-3 bg-green-50 rounded-lg text-center">
                 <p className="text-sm text-muted-foreground">Transfer Price</p>
                 <p className="text-xl font-bold text-green-600">
-                  ₹{(parseFloat(newMarginForm.base_price) * (1 - parseFloat(newMarginForm.margin_value) / 100)).toFixed(2)}
+                  {(distributor?.billing_approach === 'cost_based')
+                    ? `₹${parseFloat(newMarginForm.base_price).toFixed(2)}`
+                    : `₹${(parseFloat(newMarginForm.base_price) * (1 - parseFloat(newMarginForm.margin_value) / 100)).toFixed(2)}`}
                 </p>
+                {(distributor?.billing_approach === 'cost_based') && (
+                  <p className="text-xs text-amber-600 mt-1">Cost-based billing: Transfer price equals base price. Margin applied post-sale.</p>
+                )}
               </div>
             )}
             <div className="grid grid-cols-2 gap-4">
@@ -499,8 +506,13 @@ export default function MarginsTab({
                 <div className="p-3 bg-green-50 rounded-lg text-center">
                   <p className="text-sm text-muted-foreground">Transfer Price</p>
                   <p className="text-xl font-bold text-green-600">
-                    ₹{(parseFloat(editMarginEntry.base_price) * (1 - parseFloat(editMarginEntry.margin_value) / 100)).toFixed(2)}
+                    {(distributor?.billing_approach === 'cost_based')
+                      ? `₹${parseFloat(editMarginEntry.base_price).toFixed(2)}`
+                      : `₹${(parseFloat(editMarginEntry.base_price) * (1 - parseFloat(editMarginEntry.margin_value) / 100)).toFixed(2)}`}
                   </p>
+                  {(distributor?.billing_approach === 'cost_based') && (
+                    <p className="text-xs text-amber-600 mt-1">Cost-based billing: Transfer price equals base price.</p>
+                  )}
                 </div>
               )}
               <div className="grid grid-cols-2 gap-4">
