@@ -39,6 +39,7 @@ from .investor import router as investor_router
 from .marketing import router as marketing_router
 from .meeting_minutes import router as meeting_minutes_router
 from .production_qc import router as production_qc_router
+from .cost_cards import router as cost_cards_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -100,5 +101,8 @@ routes_router.include_router(meeting_minutes_router, tags=["Meeting Minutes"])
 
 # Production QC Module
 routes_router.include_router(production_qc_router, tags=["Production QC"])
+
+# Cost Cards Module
+routes_router.include_router(cost_cards_router, prefix="/cost-cards", tags=["Cost Cards"])
 
 __all__ = ['routes_router']

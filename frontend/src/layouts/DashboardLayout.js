@@ -15,7 +15,7 @@ import {
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
   Kanban, Wrench, Box, ShieldCheck, Boxes,
-  Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle
+  Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle, DollarSign
 } from 'lucide-react';
 
 // Platform Admin emails
@@ -163,6 +163,7 @@ const distributionNavigationGroups = [
     items: [
       { name: 'Distributors', href: '/distributors', icon: Truck, moduleKey: 'distributors', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
       { name: 'Stock Dashboard', href: '/stock-dashboard', icon: Package, moduleKey: 'distributors', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
+      { name: 'Cost Cards', href: '/cost-cards', icon: DollarSign, moduleKey: 'distributors', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Admin', 'System Admin'] },
     ]
   },
   {

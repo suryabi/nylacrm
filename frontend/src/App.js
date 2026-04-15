@@ -40,6 +40,7 @@ import DailyStatusUpdate from './pages/DailyStatusUpdate';
 import MeetingMinutes from './pages/MeetingMinutes';
 import MeetingDetail from './pages/MeetingDetail';
 import MeetingEdit from './pages/MeetingEdit';
+import CostCards from './pages/CostCards';
 import StatusSummary from './pages/StatusSummary';
 import DashboardPreview from './pages/DashboardPreview';
 import BottlePreview from './pages/BottlePreview';
@@ -262,6 +263,7 @@ function AppRouter() {
           <Route path="/distributors/:id" element={<ProtectedRoute moduleKey="distributors"><DistributorDetail /></ProtectedRoute>} />
           <Route path="/distributors/:id/edit" element={<ProtectedRoute moduleKey="distributors"><DistributorDetail /></ProtectedRoute>} />
           <Route path="/stock-dashboard" element={<ProtectedRoute moduleKey="distributors"><StockDashboard /></ProtectedRoute>} />
+          <Route path="/cost-cards" element={<ProtectedRoute moduleKey="distributors"><CostCards /></ProtectedRoute>} />
           
           {/* Task Management */}
           <Route path="/tasks" element={<ProtectedRoute><TaskManagement /></ProtectedRoute>} />
