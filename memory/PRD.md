@@ -278,6 +278,7 @@
 
 ### Stock In: From Factory Warehouse (2026-04-14)
 - [x] **Shipment model**: `PrimaryShipmentCreate` now accepts optional `source_warehouse_id`. Backend validates factory warehouse, stores `source_warehouse_id` and `source_warehouse_name` in shipment doc.
+- [x] **Stock deduction on confirm**: When confirming a shipment with a source warehouse, validates sufficient stock per SKU in `factory_warehouse_stock`. If insufficient, rejects with detailed error. On success, deducts quantities from factory warehouse stock.
 - [x] **Frontend (ShipmentsTab)**: "From Factory Warehouse" dropdown in create shipment dialog, populated with factory warehouses, defaults to default warehouse. "From" column in shipments table showing source warehouse name.
 
 ## Upcoming Tasks (P1)
