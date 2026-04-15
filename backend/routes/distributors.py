@@ -5943,6 +5943,36 @@ async def get_stock_dashboard(
             stock_in_by_sku[sid] = {"sku_id": sid, "sku_name": si.get('sku_name', 'Unknown'), "qty": 0}
         stock_in_by_sku[sid]["qty"] += si.get('quantity', 0)
     
+    # === 1b. FACTORY WAREHOUSE STOCK (from production transfers) ===
+    tdb = get_tenant_db()
+    # Get factory warehouse IDs belonging to this distributor
+    factory_location_ids = await db.distributor_locations.distinct(
+        "id",
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "is_factory": True, "status": "active"}
+    )
+    factory_wh_stock_by_sku = {}
+    factory_wh_by_location = {}  # location_id -> {location_name, skus: [...]}
+    total_factory_wh_stock = 0
+    if factory_location_ids:
+        fws_docs = await tdb.factory_warehouse_stock.find(
+            {"tenant_id": tenant_id, "warehouse_location_id": {"$in": factory_location_ids}},
+            {"_id": 0}
+        ).to_list(5000)
+        for fws in fws_docs:
+            sid = fws.get("sku_id", "")
+            qty = fws.get("quantity", 0)
+            if qty <= 0:
+                continue
+            total_factory_wh_stock += qty
+            if sid not in factory_wh_stock_by_sku:
+                factory_wh_stock_by_sku[sid] = {"sku_id": sid, "sku_name": fws.get("sku_name", "Unknown"), "qty": 0}
+            factory_wh_stock_by_sku[sid]["qty"] += qty
+            # Per-location breakdown
+            wh_id = fws.get("warehouse_location_id", "")
+            if wh_id not in factory_wh_by_location:
+                factory_wh_by_location[wh_id] = {"warehouse_name": fws.get("warehouse_name", ""), "skus": []}
+            factory_wh_by_location[wh_id]["skus"].append({"sku_id": sid, "sku_name": fws.get("sku_name", ""), "quantity": qty})
+    
     # === 2. STOCK OUT: Deliveries to customers (delivered/completed) ===
     delivered_delivery_ids = await db.distributor_deliveries.distinct(
         "id",
@@ -6052,7 +6082,7 @@ async def get_stock_dashboard(
             factory_return_by_sku[sid]["total"] += qty
     
     # === BUILD PER-SKU SUMMARY ===
-    all_sku_ids = set(list(stock_in_by_sku.keys()) + list(stock_out_by_sku.keys()) + list(cust_return_by_sku.keys()) + list(factory_return_by_sku.keys()))
+    all_sku_ids = set(list(stock_in_by_sku.keys()) + list(stock_out_by_sku.keys()) + list(cust_return_by_sku.keys()) + list(factory_return_by_sku.keys()) + list(factory_wh_stock_by_sku.keys()))
     
     sku_summaries = []
     total_stock_in = 0
@@ -6066,11 +6096,13 @@ async def get_stock_dashboard(
         so = stock_out_by_sku.get(sid, {})
         cr_data = cust_return_by_sku.get(sid, {})
         fr_data = factory_return_by_sku.get(sid, {})
+        fws_data = factory_wh_stock_by_sku.get(sid, {})
         
         qty_in = si.get('qty', 0)
         qty_out = so.get('qty', 0)
         qty_cust_returned = cr_data.get('total', 0)
         qty_factory_returned = fr_data.get('total', 0)
+        qty_factory_wh = fws_data.get('qty', 0)
         
         # Stock at hand = received - delivered to customers - returned to factory + customer returns back
         # Customer returns come back to distributor, factory returns leave distributor
@@ -6089,7 +6121,7 @@ async def get_stock_dashboard(
         daily_avg = weekly_avg / 7 if weekly_avg > 0 else 0
         days_remaining = round(stock_at_hand / daily_avg, 0) if daily_avg > 0 and stock_at_hand > 0 else None
         
-        sku_name = si.get('sku_name') or so.get('sku_name') or fr_data.get('sku_name') or 'Unknown'
+        sku_name = si.get('sku_name') or so.get('sku_name') or fr_data.get('sku_name') or fws_data.get('sku_name') or 'Unknown'
         
         sku_summaries.append({
             "sku_id": sid,
@@ -6110,6 +6142,7 @@ async def get_stock_dashboard(
                 "expired": fr_data.get('expired', 0),
             },
             "pending_factory_return": cr_data.get('pending_factory', 0),
+            "factory_warehouse_stock": qty_factory_wh,
             "stock_at_hand": stock_at_hand,
             "pct_stock_at_hand": pct_at_hand,
             "weekly_avg_deliveries": weekly_avg,
@@ -6143,6 +6176,7 @@ async def get_stock_dashboard(
             "stock_at_hand": total_at_hand,
             "customer_returns": total_cust_returns,
             "factory_returns": total_factory_returns,
+            "factory_warehouse_stock": total_factory_wh_stock,
             "pct_stock_at_hand": round((total_at_hand / total_stock_in * 100), 1) if total_stock_in > 0 else 0,
         },
         "bottle_tracking": {
@@ -6151,6 +6185,10 @@ async def get_stock_dashboard(
             "expired": total_expired,
             "pending_factory_return": total_pending_factory,
         },
+        "factory_warehouses": [
+            {"warehouse_id": wh_id, "warehouse_name": wh_data["warehouse_name"], "skus": wh_data["skus"]}
+            for wh_id, wh_data in factory_wh_by_location.items()
+        ],
         "sku_count": len(sku_summaries),
         "skus": sku_summaries,
     }

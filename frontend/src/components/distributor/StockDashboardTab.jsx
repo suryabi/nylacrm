@@ -122,6 +122,46 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
         />
       </div>
 
+      {/* Factory Warehouse Stock */}
+      {(t.factory_warehouse_stock > 0 || (data.factory_warehouses || []).length > 0) && (
+        <Card data-testid="factory-warehouse-stock-card">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Factory className="h-4 w-4 text-teal-600" />
+              Factory Warehouse Stock
+              <Badge className="bg-teal-100 text-teal-700 border-teal-200 ml-2" variant="outline">
+                {fmt(t.factory_warehouse_stock)} crates total
+              </Badge>
+            </CardTitle>
+            <CardDescription>Stock transferred from production, available for dispatch</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {(data.factory_warehouses || []).length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {data.factory_warehouses.map(wh => (
+                  <div key={wh.warehouse_id} className="rounded-lg border border-teal-200 bg-teal-50/30 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Factory className="h-4 w-4 text-teal-600" />
+                      <h4 className="text-sm font-semibold text-teal-800">{wh.warehouse_name || 'Factory Warehouse'}</h4>
+                    </div>
+                    <div className="space-y-1.5">
+                      {wh.skus.map((s, i) => (
+                        <div key={i} className="flex items-center justify-between text-sm px-2 py-1 rounded bg-white/60">
+                          <span className="text-slate-700">{s.sku_name}</span>
+                          <span className="font-bold text-teal-700">{fmt(s.quantity)} crates</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400 italic text-center py-4">No stock in factory warehouses</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Bottle Tracking */}
       <Card data-testid="bottle-tracking-card">
         <CardHeader className="pb-3">
@@ -169,6 +209,9 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                     <span className="text-purple-600">Factory Ret.</span>
                   </th>
                   <th className="text-right p-3">
+                    <span className="text-teal-600">Wh. Stock</span>
+                  </th>
+                  <th className="text-right p-3">
                     <span className="text-indigo-700 font-bold">At Hand</span>
                   </th>
                   <th className="text-right p-3">% At Hand</th>
@@ -211,6 +254,9 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                         <td className={`p-3 text-right font-medium ${sku.factory_returns > 0 ? 'text-purple-600' : 'text-slate-300'}`}>
                           {sku.factory_returns > 0 ? fmt(sku.factory_returns) : '-'}
                         </td>
+                        <td className={`p-3 text-right font-medium ${sku.factory_warehouse_stock > 0 ? 'text-teal-600' : 'text-slate-300'}`}>
+                          {sku.factory_warehouse_stock > 0 ? fmt(sku.factory_warehouse_stock) : '-'}
+                        </td>
                         <td className="p-3 text-right">
                           <span className={`font-bold ${sku.stock_at_hand < 0 ? 'text-red-600' : sku.stock_at_hand === 0 ? 'text-slate-400' : 'text-indigo-700'}`}>
                             {fmt(sku.stock_at_hand)}
@@ -235,7 +281,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                       </tr>
                       {isExpanded && hasReturns && (
                         <tr>
-                          <td colSpan={9} className="p-0">
+                          <td colSpan={10} className="p-0">
                             <div className="bg-slate-50/80 border-b px-6 py-3 grid grid-cols-2 gap-4">
                               {/* Customer Returns Breakdown */}
                               {sku.customer_returns > 0 && (
@@ -304,7 +350,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                 })}
                 {skus.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <td colSpan={10} className="text-center py-8 text-muted-foreground">
                       No stock data available for this distributor
                     </td>
                   </tr>
@@ -318,6 +364,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                     <td className="p-3 text-right text-emerald-700">{fmt(t.stock_delivered)}</td>
                     <td className="p-3 text-right text-amber-700">{fmt(t.customer_returns)}</td>
                     <td className="p-3 text-right text-purple-700">{fmt(t.factory_returns)}</td>
+                    <td className="p-3 text-right text-teal-700">{fmt(t.factory_warehouse_stock)}</td>
                     <td className="p-3 text-right text-indigo-800 text-base">{fmt(t.stock_at_hand)}</td>
                     <td className="p-3 text-right">{pct(t.pct_stock_at_hand)}</td>
                     <td className="p-3 text-right" colSpan={2}></td>
