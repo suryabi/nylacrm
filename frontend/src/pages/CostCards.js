@@ -41,16 +41,19 @@ export default function CostCards() {
       ]);
 
       setCostCards(cardsRes.data.cost_cards || []);
-      setCities(cardsRes.data.cities || []);
-      setSkuOptions(cardsRes.data.skus || []);
 
-      const skus = skuRes.data || [];
-      setAllSkus(Array.isArray(skus) ? skus : skus.skus || []);
+      // Master SKUs
+      const skuData = skuRes.data || [];
+      const skuList = Array.isArray(skuData) ? skuData : skuData.skus || [];
+      const activeSkus = skuList.filter(s => s.is_active !== false);
+      setAllSkus(activeSkus);
+      setSkuOptions(activeSkus.map(s => ({ id: s.id, name: s.sku_name || s.sku || s.name || s.id })));
 
-      const locs = locRes.data || [];
-      const citySet = new Set();
-      (Array.isArray(locs) ? locs : []).forEach(l => { if (l.city) citySet.add(l.city); });
-      setAllCities([...citySet].sort());
+      // Master Cities
+      const locData = locRes.data || {};
+      const masterCities = (locData.cities || []).filter(c => c.is_active !== false).map(c => c.name).sort();
+      setAllCities(masterCities);
+      setCities(masterCities);
     } catch (err) {
       console.error(err);
       toast.error('Failed to load cost cards');
@@ -110,7 +113,7 @@ export default function CostCards() {
         return;
       }
       const sku = allSkus.find(s => s.id === row.sku_id);
-      items.push({ sku_id: row.sku_id, sku_name: sku?.name || row.sku_id, city: row.city, cost_per_unit: numVal });
+      items.push({ sku_id: row.sku_id, sku_name: sku?.sku_name || sku?.sku || row.sku_id, city: row.city, cost_per_unit: numVal });
     }
 
     if (items.length === 0) {
@@ -317,7 +320,7 @@ export default function CostCards() {
                           <SelectValue placeholder="Select SKU" />
                         </SelectTrigger>
                         <SelectContent>
-                          {allSkus.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                          {allSkus.map(s => <SelectItem key={s.id} value={s.id}>{s.sku_name || s.sku}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </td>
