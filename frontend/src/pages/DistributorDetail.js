@@ -1261,8 +1261,10 @@ export default function DistributorDetail() {
       );
       
       if (activeMargin) {
+        // For cost_based distributors, transfer price = base price (no margin deduction)
+        const isCostBased = distributor?.billing_approach === 'cost_based';
         return {
-          transfer_price: activeMargin.transfer_price,
+          transfer_price: isCostBased ? activeMargin.base_price : activeMargin.transfer_price,
           base_price: activeMargin.base_price,
           margin_value: activeMargin.margin_value
         };
