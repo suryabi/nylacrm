@@ -2766,7 +2766,7 @@ def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_
     # Transfer Price: for cost_based, equals base price; for margin_upfront, base × (1 - margin%)
     is_cost_based = billing_approach == 'cost_based'
     if is_cost_based:
-        item_transfer_price = item.get('transfer_price') or item_base_price
+        item_transfer_price = item_base_price  # Cost-based: always use base price (no margin deducted at transfer)
         # Factory's due = customer price × (1 - margin%) — always deduct margin for factory's share
         new_transfer_price = round(customer_selling_price * (1 - commission_percent / 100), 2) if customer_selling_price and commission_percent else customer_selling_price
     else:
