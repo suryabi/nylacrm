@@ -2712,54 +2712,39 @@ export default function DistributorDetail() {
                 const isCostBased = distributor?.billing_approach === 'cost_based';
                 
                 let totalBasePrice = 0, totalCustomerPrice = 0, totalMarginAtTransfer = 0, totalApplicableMargin = 0;
-                let custBilling = 0;
-                let avgMarginPct = 0;
-                let marginPctCount = 0;
+                let totalBilledAtTransfer = 0, totalFactoryDue = 0;
+                let avgMarginPct = 0, marginPctCount = 0;
                 
                 items.forEach(item => {
                   const qty = item.quantity || 0;
                   const custPrice = item.customer_selling_price || item.unit_price || 0;
-                  const disc = item.discount_percent || 0;
                   const commPct = item.distributor_commission_percent || item.margin_percent || 2.5;
                   const basePrice = item.base_price || item.transfer_price || 0;
                   
                   totalBasePrice += qty * basePrice;
                   totalCustomerPrice += qty * custPrice;
                   
-                  // Margin considered at transfer (upfront deducted amount)
-                  if (isCostBased) {
-                    totalMarginAtTransfer += 0; // No margin deducted upfront
-                  } else {
-                    totalMarginAtTransfer += qty * basePrice * (commPct / 100);
-                  }
+                  // What was billed to distributor at transfer
+                  const billedAtTransfer = isCostBased ? (qty * basePrice) : (qty * basePrice * (1 - commPct / 100));
+                  totalBilledAtTransfer += billedAtTransfer;
                   
-                  // Total applicable margin based on customer price
+                  // Factory's due from customer price (always margin-excluded)
+                  const factoryDue = qty * custPrice * (1 - commPct / 100);
+                  totalFactoryDue += factoryDue;
+                  
+                  // Margin info
+                  totalMarginAtTransfer += isCostBased ? 0 : (qty * basePrice * commPct / 100);
                   totalApplicableMargin += qty * custPrice * (commPct / 100);
-                  
                   avgMarginPct += commPct;
                   marginPctCount += 1;
-                  
-                  const preTax = qty * custPrice * (1 - disc / 100);
-                  custBilling += preTax;
                 });
                 
                 const marginPctDisplay = marginPctCount > 0 ? (avgMarginPct / marginPctCount).toFixed(1) : '0';
-                
-                // Adjusted margin = difference between applicable and already-deducted
-                const adjustedMargin = isCostBased ? totalApplicableMargin : (totalApplicableMargin - totalMarginAtTransfer);
-                
-                // Initial transfer price (what distributor was billed at)
-                const initialTransfer = isCostBased ? totalBasePrice : (totalBasePrice - totalMarginAtTransfer);
-                
-                // Adjusted price based on customer price
-                const adjustedPrice = totalCustomerPrice;
-                
-                // Return credit
                 const returnCredit = totalCreditApplied;
                 
-                // Final payable by distributor = customer price - total margin - return credit
-                const totalDistMargin = totalApplicableMargin;
-                const finalPayable = adjustedPrice - totalDistMargin - returnCredit;
+                // Core settlement: Factory's due - Already paid - Return credits
+                const adjustmentToFactory = totalFactoryDue - totalBilledAtTransfer;
+                const netSettlement = -(adjustmentToFactory) + returnCredit;
                 
                 return (
                   <div className="border rounded-lg overflow-hidden bg-white" data-testid="delivery-distributor-summary">
@@ -2774,100 +2759,78 @@ export default function DistributorDetail() {
                     </div>
                     
                     <div className="p-4 space-y-3">
-                      {/* Section 1: Transfer & Pricing */}
+                      {/* Section 1: Transfer & Customer Pricing */}
                       <div className="space-y-1.5">
                         <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-1">Pricing</p>
                         <div className="flex justify-between text-sm">
-                          <span className="text-slate-600">Initial Transfer Price (Base):</span>
-                          <span className="font-medium">₹{initialTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                          <span className="text-slate-600">Billed at Transfer:</span>
+                          <span className="font-medium">₹{totalBilledAtTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-slate-600">Adjusted Price (Customer Billing):</span>
-                          <span className="font-medium text-emerald-700">₹{adjustedPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                          <span className="text-slate-600">Customer Billing:</span>
+                          <span className="font-medium text-emerald-700">₹{totalCustomerPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-600">Factory's Due (Customer − Margin):</span>
+                          <span className="font-medium">₹{totalFactoryDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                         </div>
                       </div>
                       
-                      {/* Divider */}
                       <div className="border-t border-dashed border-slate-200" />
                       
-                      {/* Section 2: Margin Breakdown */}
+                      {/* Section 2: Margin Info */}
                       <div className="space-y-1.5">
                         <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-1">Distributor Margin @ {marginPctDisplay}%</p>
                         <div className="flex justify-between text-sm">
-                          <span className="text-slate-600">Margin Considered at Transfer:</span>
+                          <span className="text-slate-600">
+                            {isCostBased ? 'Margin (post-sale):' : 'Margin at Transfer (already deducted):'}
+                          </span>
                           <span className={`font-medium ${totalMarginAtTransfer > 0 ? 'text-purple-700' : 'text-slate-400'}`}>
                             ₹{totalMarginAtTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                             {isCostBased && <span className="text-[10px] text-amber-500 ml-1">(none — post-sale)</span>}
                           </span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-slate-600">Total Applicable Margin (on Customer Price):</span>
+                          <span className="text-slate-600">Total Margin on Customer Price:</span>
                           <span className="font-medium text-purple-700">₹{totalApplicableMargin.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                         </div>
-                        <div className="flex justify-between text-sm bg-slate-50 rounded px-2 py-1">
-                          <span className="font-medium text-slate-700">
-                            {isCostBased ? 'Margin to be Settled (Post-Sale):' : 'Additional Margin Adjustment:'}
-                          </span>
-                          <span className={`font-semibold ${adjustedMargin > 0 ? 'text-emerald-600' : adjustedMargin < 0 ? 'text-red-600' : 'text-slate-500'}`}>
-                            {adjustedMargin > 0 ? '+' : ''}₹{adjustedMargin.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
+                        <p className="text-[10px] text-slate-400 italic">
+                          {isCostBased
+                            ? 'Full margin settled post-sale. Transfer price was at cost.'
+                            : 'Margin already embedded in transfer pricing. No separate deduction needed.'}
+                        </p>
                       </div>
                       
-                      {/* Divider */}
                       <div className="border-t border-dashed border-slate-200" />
                       
-                      {/* Section 3: Credits & Final */}
+                      {/* Section 3: Settlement */}
                       <div className="space-y-1.5">
                         <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-1">Settlement</p>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-600">Adjustment to Factory:</span>
+                          <span className={`font-medium ${adjustmentToFactory > 0 ? 'text-amber-700' : adjustmentToFactory < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {adjustmentToFactory > 0 ? '' : adjustmentToFactory < 0 ? '-' : ''}₹{Math.abs(adjustmentToFactory).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
                         {returnCredit > 0 && (
                           <div className="flex justify-between text-sm">
                             <span className="text-slate-600">Return Bottle Credit:</span>
-                            <span className="font-medium text-red-500">−₹{returnCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                            <span className="font-medium text-emerald-600">+₹{returnCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                           </div>
                         )}
-                        <div className="flex justify-between text-sm">
-                          <span className="text-slate-600">Total Distributor Margin:</span>
-                          <span className="font-medium text-purple-700">−₹{totalDistMargin.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                        </div>
-                        <div className="flex justify-between text-sm border-t pt-1.5">
-                          <span className="font-semibold text-slate-800">Net Payable by Distributor:</span>
-                          <span className="font-bold text-slate-900">₹{finalPayable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                        </div>
                       </div>
                       
-                      {/* Final invoice */}
-                      <div className={`rounded-lg px-3 py-2 flex justify-between items-center ${isCostBased ? 'bg-amber-50 border border-amber-200' : 'bg-purple-50 border border-purple-200'}`}>
-                        <span className={`font-bold text-sm ${isCostBased ? 'text-amber-800' : 'text-purple-800'}`}>
-                          Distributor Invoice Value:
-                        </span>
-                        <span className={`font-bold text-lg ${isCostBased ? 'text-amber-800' : 'text-purple-800'}`}>
-                          ₹{finalPayable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </span>
+                      {/* Net Settlement Box */}
+                      <div className={`rounded-lg px-3 py-2.5 border-2 ${netSettlement >= 0 ? 'bg-emerald-50 border-emerald-300' : 'bg-blue-50 border-blue-300'}`} data-testid="net-adjustment-box">
+                        <div className="flex justify-between items-center">
+                          <span className={`font-bold text-sm ${netSettlement >= 0 ? 'text-emerald-800' : 'text-blue-800'}`}>
+                            {netSettlement >= 0 ? 'Net Settlement — Payable to Distributor:' : 'Net Settlement — Distributor Owes Factory:'}
+                          </span>
+                          <span className={`font-bold text-lg ${netSettlement >= 0 ? 'text-emerald-700' : 'text-blue-700'}`}>
+                            ₹{Math.abs(netSettlement).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
                       </div>
-                      
-                      {/* Net Adjustment */}
-                      {(() => {
-                        const netAdjustment = finalPayable - initialTransfer;
-                        const isPayableByDist = netAdjustment > 0;
-                        const isPayableToDist = netAdjustment < 0;
-                        return (
-                          <div className={`rounded-lg px-3 py-2.5 border-2 ${isPayableByDist ? 'bg-blue-50 border-blue-300' : isPayableToDist ? 'bg-orange-50 border-orange-300' : 'bg-slate-50 border-slate-200'}`} data-testid="net-adjustment-box">
-                            <div className="flex justify-between items-center text-sm mb-1">
-                              <span className="text-slate-500">Initially Billed:</span>
-                              <span className="font-medium text-slate-600">₹{initialTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className={`font-bold text-sm ${isPayableByDist ? 'text-blue-800' : isPayableToDist ? 'text-orange-800' : 'text-slate-700'}`}>
-                                {isPayableByDist ? 'Net Adjustment — Payable by Distributor:' : isPayableToDist ? 'Net Adjustment — Payable to Distributor:' : 'Net Adjustment:'}
-                              </span>
-                              <span className={`font-bold text-lg ${isPayableByDist ? 'text-blue-700' : isPayableToDist ? 'text-orange-700' : 'text-slate-600'}`}>
-                                {netAdjustment > 0 ? '+' : netAdjustment < 0 ? '' : ''}₹{Math.abs(netAdjustment).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })()}
                       <p className="text-[10px] text-slate-400 text-right italic">All values exclusive of GST</p>
                     </div>
                   </div>
