@@ -73,11 +73,14 @@ export default function SettlementsTab({
       const comm = item.distributor_commission_percent || item.margin_percent || 2.5;
       const bp = item.base_price || item.transfer_price || 0;
       const isCB = distributor?.billing_approach === 'cost_based';
+      // What was already billed to distributor at transfer
       const transferPrice = isCB ? bp : (bp > 0 ? bp * (1 - comm / 100) : 0);
-      const newTP = isCB ? cp : (cp > 0 ? cp * (1 - comm / 100) : 0);
+      // Factory's due from customer billing (always deduct margin)
+      const factoryDue = cp > 0 ? cp * (1 - comm / 100) : 0;
       acc[accountId].total_billing += qty * cp;
       acc[accountId].total_earnings += qty * cp * (comm / 100);
-      acc[accountId].factory_adj += (qty * newTP) - (qty * transferPrice);
+      // Adjustment = Factory's due - Already paid at transfer
+      acc[accountId].factory_adj += (qty * factoryDue) - (qty * transferPrice);
     });
     return acc;
   }, {});
@@ -219,20 +222,25 @@ export default function SettlementsTab({
 
                     {/* === PAYOUT FORMULA === */}
                     <div className="border rounded-lg p-4 bg-slate-900 text-white" data-testid="settlement-payout-formula">
-                      <p className="text-xs text-slate-400 uppercase tracking-wider font-medium mb-2">Net Payout Calculation</p>
+                      <p className="text-xs text-slate-400 uppercase tracking-wider font-medium mb-2">Net Settlement Calculation</p>
                       <div className="flex items-center gap-2 flex-wrap text-sm">
-                        <span className="bg-blue-600/20 text-blue-300 px-2 py-1 rounded font-mono">Earnings ₹{fmt(totalEarnings)}</span>
-                        <Minus className="h-3 w-3 text-amber-400 flex-shrink-0" />
-                        <span className="bg-amber-600/20 text-amber-300 px-2 py-1 rounded font-mono">Price Adj ₹{fmt(Math.abs(totalFactoryAdj))}</span>
+                        <span className="bg-amber-600/20 text-amber-300 px-2 py-1 rounded font-mono">Adj to Factory ₹{fmt(Math.abs(totalFactoryAdj))}</span>
                         <Plus className="h-3 w-3 text-emerald-400 flex-shrink-0" />
                         <span className="bg-emerald-600/20 text-emerald-300 px-2 py-1 rounded font-mono">Credit Notes ₹{fmt(previewSummary.total_credit_note_amount)}</span>
                         <Plus className="h-3 w-3 text-purple-400 flex-shrink-0" />
                         <span className="bg-purple-600/20 text-purple-300 px-2 py-1 rounded font-mono">Factory Returns ₹{fmt(previewSummary.total_factory_return_amount)}</span>
                         <span className="text-slate-500 mx-1">=</span>
-                        <span className="bg-white/10 text-white px-3 py-1 rounded font-bold font-mono">
-                          ₹{fmt(totalEarnings - Math.abs(totalFactoryAdj) + (previewSummary.total_credit_note_amount || 0) + (previewSummary.total_factory_return_amount || 0))}
-                        </span>
+                        {(() => {
+                          const netPayout = -Math.abs(totalFactoryAdj) + (previewSummary.total_credit_note_amount || 0) + (previewSummary.total_factory_return_amount || 0);
+                          return (
+                            <span className={`px-3 py-1 rounded font-bold font-mono ${netPayout >= 0 ? 'bg-emerald-600/20 text-emerald-300' : 'bg-red-600/20 text-red-300'}`}>
+                              {netPayout >= 0 ? `+₹${fmt(netPayout)}` : `-₹${fmt(Math.abs(netPayout))}`}
+                              <span className="text-[10px] ml-1.5 opacity-70">{netPayout >= 0 ? '(to Dist)' : '(Dist owes)'}</span>
+                            </span>
+                          );
+                        })()}
                       </div>
+                      <p className="text-[10px] text-slate-500 mt-2">Distributor margin (₹{fmt(totalEarnings)}) already retained from customer collections</p>
                     </div>
 
                     {/* === DELIVERY DETAILS === */}
@@ -397,7 +405,7 @@ export default function SettlementsTab({
             <div className="border rounded-xl p-5 bg-gradient-to-r from-slate-900 to-slate-800 text-white" data-testid="settlement-grand-totals">
               <div className="flex items-center justify-between mb-4">
                 <p className="text-sm text-slate-400 font-medium uppercase tracking-wider">Settlement Summary ({settlements.length} settlements)</p>
-                <p className="text-xs text-slate-500">Net Payout = Earnings - Price Adj + Credit Notes + Factory Returns</p>
+                <p className="text-xs text-slate-500">Net Settlement = -(Adj to Factory) + Credit Notes + Factory Returns</p>
               </div>
               <div className="grid grid-cols-6 gap-3">
                 <div className="text-center">
@@ -421,8 +429,13 @@ export default function SettlementsTab({
                   <p className="text-lg font-bold text-purple-300">+₹{fmt(grandTotals.fr_credit)}</p>
                 </div>
                 <div className="text-center border-l border-slate-700 pl-3">
-                  <p className="text-xs text-white/60">Net Payout</p>
-                  <p className="text-xl font-bold text-white">₹{fmt(grandTotals.final_payout)}</p>
+                  <p className="text-xs text-white/60">Net Settlement</p>
+                  {(() => {
+                    const netVal = -(grandTotals.factory_adj) + grandTotals.cn_issued + grandTotals.fr_credit;
+                    return <p className={`text-xl font-bold ${netVal >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
+                      {netVal >= 0 ? '+' : '-'}₹{fmt(Math.abs(netVal))}
+                    </p>;
+                  })()}
                 </div>
               </div>
             </div>

@@ -2767,7 +2767,8 @@ def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_
     is_cost_based = billing_approach == 'cost_based'
     if is_cost_based:
         item_transfer_price = item.get('transfer_price') or item_base_price
-        new_transfer_price = customer_selling_price
+        # Factory's due = customer price × (1 - margin%) — always deduct margin for factory's share
+        new_transfer_price = round(customer_selling_price * (1 - commission_percent / 100), 2) if customer_selling_price and commission_percent else customer_selling_price
     else:
         item_transfer_price = item.get('transfer_price') or (round(item_base_price * (1 - commission_percent / 100), 2) if item_base_price and commission_percent else item_base_price)
         new_transfer_price = round(customer_selling_price * (1 - commission_percent / 100), 2) if customer_selling_price and commission_percent else customer_selling_price
@@ -4261,8 +4262,9 @@ async def create_settlement(
             "adjustment_dist_to_factory": delivery.get('total_adjustment_dist_to_factory', 0)
         })
     
-    # Final payout = Margin + Net Adjustments
-    final_payout = total_margin_amount + net_adjustments
+    # Final payout = Net Adjustments only (margin is already retained by distributor from customer collections)
+    # Net = -(Dist→Factory Adj) + Credit Notes + Factory Returns
+    final_payout = net_adjustments
     
     # Create settlement document
     settlement_doc = {
