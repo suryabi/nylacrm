@@ -2737,7 +2737,7 @@ async def generate_delivery_number(tenant_id: str) -> str:
     return f"DEL-{year}-{count + 1:04d}"
 
 
-def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_value: float = None, transfer_price: float = None, base_price: float = None) -> dict:
+def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_value: float = None, transfer_price: float = None, base_price: float = None, billing_approach: str = 'margin_upfront') -> dict:
     """Calculate amounts for a delivery item including margin and adjustment calculations
     
     Columns (in display order):
@@ -2763,11 +2763,14 @@ def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_
     # Get commission/margin percentage from item or margin_value
     commission_percent = item.get('distributor_commission_percent') or margin_value or 0
     
-    # Transfer Price = base_price × (1 - margin%)
-    item_transfer_price = item.get('transfer_price') or (round(item_base_price * (1 - commission_percent / 100), 2) if item_base_price and commission_percent else item_base_price)
-    
-    # New Transfer Price = customer_price × (1 - margin%)
-    new_transfer_price = round(customer_selling_price * (1 - commission_percent / 100), 2) if customer_selling_price and commission_percent else customer_selling_price
+    # Transfer Price: for cost_based, equals base price; for margin_upfront, base × (1 - margin%)
+    is_cost_based = billing_approach == 'cost_based'
+    if is_cost_based:
+        item_transfer_price = item.get('transfer_price') or item_base_price
+        new_transfer_price = customer_selling_price
+    else:
+        item_transfer_price = item.get('transfer_price') or (round(item_base_price * (1 - commission_percent / 100), 2) if item_base_price and commission_percent else item_base_price)
+        new_transfer_price = round(customer_selling_price * (1 - commission_percent / 100), 2) if customer_selling_price and commission_percent else customer_selling_price
     
     # Billed to Distributor = qty × transfer_price (initial billing based on base price)
     billed_to_dist = round(quantity * item_transfer_price, 2) if item_transfer_price else 0
@@ -3140,10 +3143,12 @@ async def create_delivery(
     # Validate distributor exists
     distributor = await db.distributors.find_one(
         {"id": distributor_id, "tenant_id": tenant_id},
-        {"_id": 0, "distributor_name": 1, "distributor_code": 1}
+        {"_id": 0, "distributor_name": 1, "distributor_code": 1, "billing_approach": 1}
     )
     if not distributor:
         raise HTTPException(status_code=404, detail="Distributor not found")
+    
+    billing_approach = distributor.get('billing_approach', 'margin_upfront')
     
     # Validate location
     location = await db.distributor_locations.find_one(
@@ -3254,7 +3259,7 @@ async def create_delivery(
         }
         
         # Calculate amounts with margin and transfer price
-        item_dict = calculate_delivery_item_amounts(item_dict, margin_type, margin_value, transfer_price, base_price)
+        item_dict = calculate_delivery_item_amounts(item_dict, margin_type, margin_value, transfer_price, base_price, billing_approach)
         items_to_insert.append(item_dict)
         
         total_quantity += item_data.quantity

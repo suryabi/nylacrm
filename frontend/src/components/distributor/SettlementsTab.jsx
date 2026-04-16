@@ -72,8 +72,9 @@ export default function SettlementsTab({
       const cp = item.customer_selling_price || item.unit_price || 0;
       const comm = item.distributor_commission_percent || item.margin_percent || 2.5;
       const bp = item.base_price || item.transfer_price || 0;
-      const transferPrice = bp > 0 ? bp * (1 - comm / 100) : 0;
-      const newTP = cp > 0 ? cp * (1 - comm / 100) : 0;
+      const isCB = distributor?.billing_approach === 'cost_based';
+      const transferPrice = isCB ? bp : (bp > 0 ? bp * (1 - comm / 100) : 0);
+      const newTP = isCB ? cp : (cp > 0 ? cp * (1 - comm / 100) : 0);
       acc[accountId].total_billing += qty * cp;
       acc[accountId].total_earnings += qty * cp * (comm / 100);
       acc[accountId].factory_adj += (qty * newTP) - (qty * transferPrice);
