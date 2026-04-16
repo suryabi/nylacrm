@@ -2801,7 +2801,7 @@ def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_
     
     # Legacy calculations (kept for backward compatibility)
     distributor_earnings = round(gross_amount * commission_percent / 100, 2) if commission_percent else 0
-    margin_at_transfer_price = round(quantity * item_base_price * commission_percent / 100, 2) if item_base_price and commission_percent else 0
+    margin_at_transfer_price = 0 if is_cost_based else (round(quantity * item_base_price * commission_percent / 100, 2) if item_base_price and commission_percent else 0)
     adjustment_payable = round(distributor_earnings - margin_at_transfer_price, 2)
     price_premium_payable = round(quantity * (customer_selling_price - item_base_price), 2) if customer_selling_price > item_base_price and item_base_price > 0 else 0
     

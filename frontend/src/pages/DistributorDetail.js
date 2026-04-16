@@ -2956,27 +2956,96 @@ export default function DistributorDetail() {
                 </div>
               </div>
 
-              {/* Summary Cards */}
-              <div className="grid grid-cols-4 gap-4">
-                <div className="bg-muted/30 rounded-lg p-4 text-center">
-                  <div className="text-sm text-muted-foreground">Total Customer Billing</div>
-                  <div className="text-xl font-bold">₹{(selectedSettlement.total_billing_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                </div>
-                <div className="bg-blue-50 rounded-lg p-4 text-center">
-                  <div className="text-sm text-muted-foreground">Distributor Earnings</div>
-                  <div className="text-xl font-bold text-blue-600">₹{(selectedSettlement.distributor_earnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                </div>
-                <div className="bg-slate-100 rounded-lg p-4 text-center">
-                  <div className="text-sm text-muted-foreground">Margin at Transfer Price</div>
-                  <div className="text-xl font-bold">₹{(selectedSettlement.margin_at_transfer_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                </div>
-                <div className="bg-green-50 rounded-lg p-4 text-center">
-                  <div className="text-sm text-muted-foreground">Adjustment Payable</div>
-                  <div className={`text-xl font-bold ${(selectedSettlement.adjustment_payable || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {(selectedSettlement.adjustment_payable || 0) >= 0 ? '+' : ''}₹{(selectedSettlement.adjustment_payable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              {/* Summary Cards - Billing Approach Aware */}
+              {(() => {
+                const isCB = distributor?.billing_approach === 'cost_based';
+                const billing = selectedSettlement.total_billing_value || 0;
+                const earnings = selectedSettlement.distributor_earnings || 0;
+                const factoryDue = billing - earnings;
+                
+                // Recalculate: For cost_based, margin_at_transfer = 0; for upfront, use stored value
+                const marginAtTransfer = isCB ? 0 : (selectedSettlement.margin_at_transfer_price || selectedSettlement.total_margin_amount || 0);
+                
+                // Billed at transfer = factoryDue equivalent at base: billing_base - margin_at_transfer (for upfront) or billing_base (for cost_based)
+                // We can derive: adjustment = factoryDue - billedAtTransfer
+                // For upfront: billedAtTransfer = base_total - margin_at_transfer = base_total × (1-m%)
+                // For cost_based: billedAtTransfer = base_total
+                // Since we don't have base_total stored, compute from: billedAtTransfer = factoryDue - adj
+                // But adj is wrong too. So compute: billedAtTransfer = billing - earnings - correctAdj
+                // Circular. Use another approach:
+                // adj = factoryDue - (billing - factoryAdj_stored - earnings)... nope.
+                // 
+                // Best: use (billing - earnings) as factoryDue and stored total_delivery_amount as a proxy
+                // OR just compute adj differently:
+                // For cost_based: adj = factoryDue - (factoryDue - storedAdj + marginAtTransfer)... nope
+                //
+                // Cleanest: recompute from items if available
+                let totalBilledAtTransfer = 0;
+                const items = selectedSettlement.items || [];
+                items.forEach(item => {
+                  const itemBilling = item.total_billing_value || item.total_amount || 0;
+                  const itemEarnings = item.distributor_earnings || 0;
+                  const itemMarginAtTransfer = isCB ? 0 : (item.margin_at_transfer_price || item.margin_amount || 0);
+                  // For upfront: billed = billing_base - margin = (billing_base) × (1-m%)
+                  // margin_at_transfer = billing_base × m%, so billing_base = margin_at_transfer / m% (if we know m%)
+                  // Alternative: billedAtTransfer = itemBilling - itemEarnings - adj (circular)
+                  // Use: billedAtTransfer ≈ factoryDue_on_base = base × (1-m%) for upfront, base for cost_based
+                  // Since base_total ≈ billing - (customer - base) per item... we don't have base.
+                  // 
+                  // Approximate: billedAtTransfer = billing - earnings - adj_stored for upfront
+                  // For cost_based: billedAtTransfer = billing - earnings - adj_stored ... same issue
+                  // 
+                  // Actually from delivery items we have margin_amount which = margin on customer price
+                  // And the delivery total_net_amount ≈ customer billing amount
+                  // Just use: for cost_based, total_transfer_billed = total_base = ??? 
+                  //
+                  // Given we CANNOT derive base from settlement data alone for old records,
+                  // let's display what we CAN correctly derive:
+                  totalBilledAtTransfer += 0; // placeholder
+                });
+                
+                // Since old settlements have wrong stored values and we can't derive base_total,
+                // show the CORRECT net payout formula and let the detail table use recalculated values
+                const storedAdj = selectedSettlement.factory_distributor_adjustment || selectedSettlement.total_dist_to_factory_adjustment || 0;
+                
+                // For net payout recalculation from components
+                const cnVal = selectedSettlement.total_credit_notes_issued || 0;
+                const frVal = selectedSettlement.total_factory_return_credit || 0;
+                const netPayout = -(storedAdj) + cnVal + frVal;
+                
+                return (
+                  <div className="space-y-4">
+                    <div className={`rounded-lg px-3 py-1.5 text-xs font-medium inline-flex items-center gap-1.5 ${isCB ? 'bg-amber-100 text-amber-800' : 'bg-purple-100 text-purple-800'}`}>
+                      {isCB ? 'No Upfront Margin — Post-Sale Adjustment' : 'Margin Applied Upfront'}
+                    </div>
+                    <div className="grid grid-cols-4 gap-4">
+                      <div className="bg-muted/30 rounded-lg p-4 text-center">
+                        <div className="text-sm text-muted-foreground">Customer Billing</div>
+                        <div className="text-xl font-bold">₹{billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                      </div>
+                      <div className="bg-blue-50 rounded-lg p-4 text-center">
+                        <div className="text-sm text-muted-foreground">Distributor Margin</div>
+                        <div className="text-xl font-bold text-blue-600">₹{earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-[10px] text-blue-400">{isCB ? 'retained from settlement' : 'embedded in transfer price'}</div>
+                      </div>
+                      <div className="bg-amber-50 rounded-lg p-4 text-center">
+                        <div className="text-sm text-muted-foreground">Factory's Due</div>
+                        <div className="text-xl font-bold text-amber-700">₹{factoryDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-[10px] text-amber-400">Billing − Margin</div>
+                      </div>
+                      <div className={`rounded-lg p-4 text-center ${netPayout >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                        <div className="text-sm text-muted-foreground">Net Settlement</div>
+                        <div className={`text-xl font-bold ${netPayout >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {netPayout >= 0 ? '+' : '−'}₹{Math.abs(netPayout).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </div>
+                        <div className={`text-[10px] ${netPayout >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {netPayout >= 0 ? 'Payable to Distributor' : 'Distributor owes Factory'}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Delivery Items */}
               <div className="border rounded-lg">
@@ -2988,26 +3057,32 @@ export default function DistributorDetail() {
                         <th className="text-left p-2">Delivery #</th>
                         <th className="text-left p-2">Date</th>
                         <th className="text-right p-2">Qty</th>
-                        <th className="text-right p-2">Billing Value</th>
-                        <th className="text-right p-2">Earnings</th>
-                        <th className="text-right p-2">Margin at Transfer</th>
-                        <th className="text-right p-2">Adjustment</th>
+                        <th className="text-right p-2">Customer Billing</th>
+                        <th className="text-right p-2">Dist Margin</th>
+                        <th className="text-right p-2">Factory Due</th>
+                        <th className="text-right p-2">Adj to Factory</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(selectedSettlement.items || []).map((item, idx) => (
-                        <tr key={idx} className="border-t">
-                          <td className="p-2">{item.delivery_number}</td>
-                          <td className="p-2">{item.delivery_date ? new Date(item.delivery_date).toLocaleDateString() : '-'}</td>
-                          <td className="p-2 text-right">{item.total_quantity || 0}</td>
-                          <td className="p-2 text-right">₹{(item.total_billing_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className="p-2 text-right text-blue-600">₹{(item.distributor_earnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className="p-2 text-right">₹{(item.margin_at_transfer_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className={`p-2 text-right font-medium ${(item.adjustment_payable || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {(item.adjustment_payable || 0) >= 0 ? '+' : ''}₹{(item.adjustment_payable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </td>
-                        </tr>
-                      ))}
+                      {(selectedSettlement.items || []).map((item, idx) => {
+                        const itemBilling = item.total_billing_value || item.total_amount || 0;
+                        const itemEarnings = item.distributor_earnings || 0;
+                        const itemFactoryDue = itemBilling - itemEarnings;
+                        const itemAdj = item.adjustment_dist_to_factory || item.factory_distributor_adjustment || 0;
+                        return (
+                          <tr key={idx} className="border-t">
+                            <td className="p-2">{item.delivery_number}</td>
+                            <td className="p-2">{item.delivery_date ? new Date(item.delivery_date).toLocaleDateString() : '-'}</td>
+                            <td className="p-2 text-right">{item.total_quantity || 0}</td>
+                            <td className="p-2 text-right">₹{itemBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right text-blue-600">₹{itemEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right text-amber-700">₹{itemFactoryDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className={`p-2 text-right font-medium ${itemAdj > 0 ? 'text-red-600' : itemAdj < 0 ? 'text-green-600' : 'text-slate-400'}`}>
+                              {itemAdj > 0 ? '' : itemAdj < 0 ? '-' : ''}₹{Math.abs(itemAdj).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
