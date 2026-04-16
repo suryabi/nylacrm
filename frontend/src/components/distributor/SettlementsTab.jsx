@@ -100,12 +100,16 @@ export default function SettlementsTab({
       };
     }
     acc[aid].settlements.push(s);
+    const factAdj = s.factory_distributor_adjustment || 0;
+    const cnIssued = s.total_credit_notes_issued || s.credit_notes_applied || 0;
+    const frCredit = s.total_factory_return_credit || 0;
     acc[aid].totals.billing += s.total_billing_value || 0;
     acc[aid].totals.earnings += s.distributor_earnings || 0;
-    acc[aid].totals.factory_adj += s.factory_distributor_adjustment || 0;
-    acc[aid].totals.cn_issued += s.total_credit_notes_issued || s.credit_notes_applied || 0;
-    acc[aid].totals.fr_credit += s.total_factory_return_credit || 0;
-    acc[aid].totals.final_payout += s.final_payout || 0;
+    acc[aid].totals.factory_adj += factAdj;
+    acc[aid].totals.cn_issued += cnIssued;
+    acc[aid].totals.fr_credit += frCredit;
+    // Recalculate: Net = -(Adj to Factory) + CN + FR (margin already in transfer pricing)
+    acc[aid].totals.final_payout += -(factAdj) + cnIssued + frCredit;
     return acc;
   }, {});
   const settlementGroups = Object.values(settlementsByAccount);
@@ -132,7 +136,7 @@ export default function SettlementsTab({
         'Price Adj (Dist->Factory)': s.factory_distributor_adjustment || 0,
         'Credit Notes': s.total_credit_notes_issued || s.credit_notes_applied || 0,
         'Factory Returns': s.total_factory_return_credit || 0,
-        'Net Payout': s.final_payout || 0,
+        'Net Payout': -(s.factory_distributor_adjustment || 0) + (s.total_credit_notes_issued || s.credit_notes_applied || 0) + (s.total_factory_return_credit || 0),
         'Status': s.status
       }));
       if (!rows.length) return;
@@ -493,7 +497,7 @@ export default function SettlementsTab({
                               <td className={`p-3 text-right font-medium ${adjVal > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{adjVal > 0 ? '-' : ''}₹{fmt(Math.abs(adjVal))}</td>
                               <td className={`p-3 text-right font-medium ${cnVal > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{cnVal > 0 ? '+' : ''}₹{fmt(cnVal)}</td>
                               <td className={`p-3 text-right font-medium ${frVal > 0 ? 'text-purple-600' : 'text-slate-400'}`}>{frVal > 0 ? '+' : ''}₹{fmt(frVal)}</td>
-                              <td className="p-3 text-right font-bold">₹{fmt(s.final_payout)}</td>
+                              <td className="p-3 text-right font-bold">₹{fmt(-(adjVal) + cnVal + frVal)}</td>
                               <td className="p-3 text-center">{getSettlementStatusBadge(s.status)}</td>
                               <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex justify-center gap-1">
