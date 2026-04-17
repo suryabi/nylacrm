@@ -43,6 +43,7 @@ export default function ProductionBatches() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '');
   const [stageFilter, setStageFilter] = useState(searchParams.get('stage') || '');
+  const [skuFilter, setSkuFilter] = useState(searchParams.get('sku_id') || '');
   const [showCreate, setShowCreate] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -71,6 +72,7 @@ export default function ProductionBatches() {
   const filtered = batches.filter(b => {
     if (search && !b.batch_code?.toLowerCase().includes(search.toLowerCase()) && !b.sku_name?.toLowerCase().includes(search.toLowerCase())) return false;
     if (statusFilter && b.status !== statusFilter) return false;
+    if (skuFilter && b.sku_id !== skuFilter) return false;
     if (stageFilter) {
       if (stageFilter === 'unallocated' && !(b.unallocated_crates > 0)) return false;
       if (stageFilter === 'in_qc') {
@@ -89,11 +91,16 @@ export default function ProductionBatches() {
   const clearFilters = () => {
     setStatusFilter('');
     setStageFilter('');
+    setSkuFilter('');
     setSearch('');
     setSearchParams({});
   };
 
-  const hasActiveFilter = statusFilter || stageFilter;
+  const hasActiveFilter = statusFilter || stageFilter || skuFilter;
+
+  // Get unique SKU list from batches for the filter dropdown
+  const skuOptions = [...new Map(batches.map(b => [b.sku_id, { id: b.sku_id, name: b.sku_name }])).values()].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const activeSkuName = skuFilter ? (skuOptions.find(s => s.id === skuFilter)?.name || skuFilter) : '';
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -169,6 +176,14 @@ export default function ProductionBatches() {
           <option value="">All Stages</option>
           {Object.entries(STAGE_FILTERS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
+        <select
+          value={skuFilter} onChange={e => setSkuFilter(e.target.value)}
+          className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500/20 outline-none flex-shrink-0 max-w-[200px]"
+          data-testid="batch-sku-filter"
+        >
+          <option value="">All SKUs</option>
+          {skuOptions.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
         {hasActiveFilter && (
           <button onClick={clearFilters} className="flex items-center gap-1 px-3 py-2 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors" data-testid="clear-filters-btn">
             <X size={14} /> Clear
@@ -177,12 +192,33 @@ export default function ProductionBatches() {
       </div>
 
       {/* Active Filter Banner */}
-      {stageFilter && STAGE_FILTERS[stageFilter] && (
-        <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${stageFilter === 'rejected' ? 'bg-red-50 border-red-200' : stageFilter === 'warehouse_ready' ? 'bg-teal-50 border-teal-200' : stageFilter === 'in_qc' ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`} data-testid="active-filter-banner">
-          {React.createElement(STAGE_FILTERS[stageFilter].icon, { size: 14, className: 'flex-shrink-0' })}
-          <span className="text-sm font-medium">Showing: {STAGE_FILTERS[stageFilter].label}</span>
+      {hasActiveFilter && (
+        <div className="flex items-center gap-2 flex-wrap px-4 py-2 rounded-lg border bg-slate-50 border-slate-200" data-testid="active-filter-banner">
+          <Filter size={14} className="text-slate-400 flex-shrink-0" />
+          <span className="text-sm text-slate-500">Filters:</span>
+          {skuFilter && (
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 flex items-center gap-1">
+              SKU: {activeSkuName}
+              <button onClick={() => setSkuFilter('')} className="hover:text-blue-900"><X size={12} /></button>
+            </span>
+          )}
+          {stageFilter && STAGE_FILTERS[stageFilter] && (
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-1 ${STAGE_FILTERS[stageFilter].color}`}>
+              {React.createElement(STAGE_FILTERS[stageFilter].icon, { size: 12 })}
+              {STAGE_FILTERS[stageFilter].label}
+              <button onClick={() => setStageFilter('')}><X size={12} /></button>
+            </span>
+          )}
+          {statusFilter && (
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 flex items-center gap-1">
+              Status: {STATUS_MAP[statusFilter]?.label || statusFilter}
+              <button onClick={() => setStatusFilter('')}><X size={12} /></button>
+            </span>
+          )}
           <span className="text-xs text-slate-400 ml-1">({filtered.length} batches)</span>
-          <button onClick={() => { setStageFilter(''); setSearchParams({}); }} className="ml-auto text-slate-400 hover:text-slate-600"><X size={14} /></button>
+          <button onClick={clearFilters} className="ml-auto text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
+            <X size={12} /> Clear all
+          </button>
         </div>
       )}
 

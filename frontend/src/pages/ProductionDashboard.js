@@ -80,6 +80,14 @@ function StageNode({ name, type, data, total, isLast, vertical }) {
 function SKUPipeline({ sku, onNavigate }) {
   const stages = sku.stage_order || [];
   const total = sku.total_crates || 1;
+  const navigate = useNavigate();
+
+  const navToFiltered = (stage) => {
+    const params = new URLSearchParams();
+    params.set('sku_id', sku.sku_id);
+    if (stage) params.set('stage', stage);
+    navigate(`/production-batches?${params.toString()}`);
+  };
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 hover:shadow-lg transition-shadow" data-testid={`sku-pipeline-${sku.sku_id}`}>
@@ -94,7 +102,7 @@ function SKUPipeline({ sku, onNavigate }) {
             <p className="text-[10px] sm:text-xs text-slate-400">{sku.batch_count} batch{sku.batch_count !== 1 ? 'es' : ''} &middot; {sku.total_crates.toLocaleString()} crates</p>
           </div>
         </div>
-        <button onClick={onNavigate}
+        <button onClick={() => navToFiltered('')}
           className="text-[10px] sm:text-xs text-primary hover:underline flex items-center gap-0.5 flex-shrink-0 whitespace-nowrap" data-testid={`view-batches-${sku.sku_id}`}>
           View <ChevronRight className="w-3 h-3" />
         </button>
@@ -104,7 +112,7 @@ function SKUPipeline({ sku, onNavigate }) {
       <div className="hidden md:flex items-stretch gap-0">
         {/* Unallocated */}
         <div className="flex items-center gap-0 flex-1 min-w-0">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex-1 min-w-[110px]">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex-1 min-w-[110px] cursor-pointer hover:shadow-md transition-shadow" onClick={() => navToFiltered('unallocated')}>
             <div className="flex items-center gap-1.5 mb-2">
               <Boxes className="w-3 h-3 text-slate-500" />
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Unallocated</span>
@@ -126,7 +134,7 @@ function SKUPipeline({ sku, onNavigate }) {
           </div>
         ))}
         <ArrowRight className="w-4 h-4 text-slate-300 mx-1 flex-shrink-0" />
-        <div className="rounded-xl border border-teal-200 bg-teal-50 p-3 flex-1 min-w-[110px]">
+        <div className="rounded-xl border border-teal-200 bg-teal-50 p-3 flex-1 min-w-[110px] cursor-pointer hover:shadow-md transition-shadow" onClick={() => navToFiltered('warehouse_ready')}>
           <div className="flex items-center gap-1.5 mb-2">
             <Truck className="w-3 h-3 text-teal-600" />
             <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600">Warehouse Ready</span>
