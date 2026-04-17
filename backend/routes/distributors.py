@@ -428,6 +428,92 @@ async def delete_distributor(distributor_id: str, current_user: dict = Depends(g
     }
 
 
+@router.post("/cleanup/orphaned-data")
+async def cleanup_orphaned_distributor_data(current_user: dict = Depends(get_current_user)):
+    """Remove all transactional data for distributors that no longer exist. CEO/System Admin only."""
+    if not is_delete_authorized(current_user):
+        raise HTTPException(status_code=403, detail="Only CEO and System Admin can run cleanup")
+    
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    
+    # Get all existing distributor IDs
+    existing_ids = await db.distributors.distinct("id", {"tenant_id": tenant_id})
+    existing_set = set(existing_ids)
+    
+    results = {}
+    
+    # Collections with distributor_id field
+    dist_collections = [
+        ("operating_coverage", db.distributor_operating_coverage),
+        ("locations", db.distributor_locations),
+        ("margin_matrix", db.distributor_margin_matrix),
+        ("account_assignments", db.account_distributor_assignments),
+        ("shipments", db.distributor_shipments),
+        ("deliveries", db.distributor_deliveries),
+        ("settlements", db.distributor_settlements),
+        ("billing_configs", db.distributor_billing_configs),
+        ("provisional_invoices", db.distributor_provisional_invoices),
+        ("reconciliations", db.distributor_reconciliations),
+        ("users", db.users),
+    ]
+    
+    for coll_name, collection in dist_collections:
+        # Find orphaned distributor_ids in this collection
+        all_dist_ids = await collection.distinct("distributor_id", {"tenant_id": tenant_id})
+        orphaned = [did for did in all_dist_ids if did and did not in existing_set]
+        if orphaned:
+            r = await collection.delete_many({"tenant_id": tenant_id, "distributor_id": {"$in": orphaned}})
+            results[coll_name] = r.deleted_count
+    
+    # Clean orphaned shipment items (shipment no longer exists)
+    existing_shipment_ids = await db.distributor_shipments.distinct("id", {"tenant_id": tenant_id})
+    all_item_shipment_ids = await db.distributor_shipment_items.distinct("shipment_id", {"tenant_id": tenant_id})
+    orphaned_ship_items = [sid for sid in all_item_shipment_ids if sid not in set(existing_shipment_ids)]
+    if orphaned_ship_items:
+        r = await db.distributor_shipment_items.delete_many({"tenant_id": tenant_id, "shipment_id": {"$in": orphaned_ship_items}})
+        results["shipment_items"] = r.deleted_count
+    
+    # Clean orphaned delivery items
+    existing_delivery_ids = await db.distributor_deliveries.distinct("id", {"tenant_id": tenant_id})
+    all_del_item_ids = await db.distributor_delivery_items.distinct("delivery_id", {"tenant_id": tenant_id})
+    orphaned_del_items = [did for did in all_del_item_ids if did not in set(existing_delivery_ids)]
+    if orphaned_del_items:
+        r = await db.distributor_delivery_items.delete_many({"tenant_id": tenant_id, "delivery_id": {"$in": orphaned_del_items}})
+        results["delivery_items"] = r.deleted_count
+    
+    # Clean orphaned settlement items
+    existing_settlement_ids = await db.distributor_settlements.distinct("id", {"tenant_id": tenant_id})
+    all_sett_item_ids = await db.distributor_settlement_items.distinct("settlement_id", {"tenant_id": tenant_id})
+    orphaned_sett_items = [sid for sid in all_sett_item_ids if sid not in set(existing_settlement_ids)]
+    if orphaned_sett_items:
+        r = await db.distributor_settlement_items.delete_many({"tenant_id": tenant_id, "settlement_id": {"$in": orphaned_sett_items}})
+        results["settlement_items"] = r.deleted_count
+    
+    # Clean orphaned reconciliation items and debit/credit notes
+    existing_recon_ids = await db.distributor_reconciliations.distinct("id", {"tenant_id": tenant_id})
+    all_recon_item_ids = await db.distributor_reconciliation_items.distinct("reconciliation_id", {"tenant_id": tenant_id})
+    orphaned_recon = [rid for rid in all_recon_item_ids if rid not in set(existing_recon_ids)]
+    if orphaned_recon:
+        r1 = await db.distributor_reconciliation_items.delete_many({"tenant_id": tenant_id, "reconciliation_id": {"$in": orphaned_recon}})
+        r2 = await db.distributor_debit_credit_notes.delete_many({"tenant_id": tenant_id, "reconciliation_id": {"$in": orphaned_recon}})
+        results["reconciliation_items"] = r1.deleted_count
+        results["debit_credit_notes"] = r2.deleted_count
+    
+    # Clean factory warehouse stock for orphaned locations
+    existing_loc_ids = await db.distributor_locations.distinct("id", {"tenant_id": tenant_id})
+    all_fws_loc_ids = await tdb.factory_warehouse_stock.distinct("warehouse_location_id", {"tenant_id": tenant_id})
+    orphaned_fws = [lid for lid in all_fws_loc_ids if lid not in set(existing_loc_ids)]
+    if orphaned_fws:
+        r = await tdb.factory_warehouse_stock.delete_many({"tenant_id": tenant_id, "warehouse_location_id": {"$in": orphaned_fws}})
+        results["factory_warehouse_stock"] = r.deleted_count
+    
+    logger.info(f"Orphaned distributor data cleanup by {current_user['email']}: {results}")
+    
+    return {"message": "Orphaned distributor data cleaned up", "deleted_counts": results}
+
+
+
 # ============ Operating Coverage CRUD ============
 
 @router.get("/{distributor_id}/coverage")
