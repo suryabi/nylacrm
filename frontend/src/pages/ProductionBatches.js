@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 import axios from 'axios';
 import {
   Package, Plus, Search, Filter, ChevronDown, Loader2,
   Factory, Boxes, Calendar, FlaskConical, ArrowRight, X,
-  ShieldCheck, Tag,
+  ShieldCheck, Tag, Truck, AlertTriangle,
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -25,15 +25,24 @@ const STATUS_MAP = {
   completed: { label: 'Completed', color: 'bg-emerald-100 text-emerald-700' },
 };
 
+const STAGE_FILTERS = {
+  unallocated: { label: 'Unallocated', color: 'bg-slate-100 text-slate-700', icon: Boxes },
+  in_qc: { label: 'In QC Stages', color: 'bg-amber-100 text-amber-700', icon: ShieldCheck },
+  warehouse_ready: { label: 'Warehouse Ready', color: 'bg-teal-100 text-teal-700', icon: Truck },
+  rejected: { label: 'Has Rejections', color: 'bg-red-100 text-red-700', icon: AlertTriangle },
+};
+
 export default function ProductionBatches() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const [batches, setBatches] = useState([]);
   const [skus, setSkus] = useState([]);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '');
+  const [stageFilter, setStageFilter] = useState(searchParams.get('stage') || '');
   const [showCreate, setShowCreate] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -62,8 +71,29 @@ export default function ProductionBatches() {
   const filtered = batches.filter(b => {
     if (search && !b.batch_code?.toLowerCase().includes(search.toLowerCase()) && !b.sku_name?.toLowerCase().includes(search.toLowerCase())) return false;
     if (statusFilter && b.status !== statusFilter) return false;
+    if (stageFilter) {
+      if (stageFilter === 'unallocated' && !(b.unallocated_crates > 0)) return false;
+      if (stageFilter === 'in_qc') {
+        const inStages = (b.qc_stages || []).some(s => {
+          const bal = b.stage_balances?.[s.id] || {};
+          return (bal.pending || 0) + (bal.passed || 0) > 0;
+        });
+        if (!inStages) return false;
+      }
+      if (stageFilter === 'warehouse_ready' && !(b.total_passed_final > 0)) return false;
+      if (stageFilter === 'rejected' && !(b.total_rejected > 0)) return false;
+    }
     return true;
   });
+
+  const clearFilters = () => {
+    setStatusFilter('');
+    setStageFilter('');
+    setSearch('');
+    setSearchParams({});
+  };
+
+  const hasActiveFilter = statusFilter || stageFilter;
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -131,7 +161,30 @@ export default function ProductionBatches() {
           <option value="">All Status</option>
           {Object.entries(STATUS_MAP).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
+        <select
+          value={stageFilter} onChange={e => setStageFilter(e.target.value)}
+          className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500/20 outline-none flex-shrink-0"
+          data-testid="batch-stage-filter"
+        >
+          <option value="">All Stages</option>
+          {Object.entries(STAGE_FILTERS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        </select>
+        {hasActiveFilter && (
+          <button onClick={clearFilters} className="flex items-center gap-1 px-3 py-2 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors" data-testid="clear-filters-btn">
+            <X size={14} /> Clear
+          </button>
+        )}
       </div>
+
+      {/* Active Filter Banner */}
+      {stageFilter && STAGE_FILTERS[stageFilter] && (
+        <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${stageFilter === 'rejected' ? 'bg-red-50 border-red-200' : stageFilter === 'warehouse_ready' ? 'bg-teal-50 border-teal-200' : stageFilter === 'in_qc' ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`} data-testid="active-filter-banner">
+          {React.createElement(STAGE_FILTERS[stageFilter].icon, { size: 14, className: 'flex-shrink-0' })}
+          <span className="text-sm font-medium">Showing: {STAGE_FILTERS[stageFilter].label}</span>
+          <span className="text-xs text-slate-400 ml-1">({filtered.length} batches)</span>
+          <button onClick={() => { setStageFilter(''); setSearchParams({}); }} className="ml-auto text-slate-400 hover:text-slate-600"><X size={14} /></button>
+        </div>
+      )}
 
       {/* Batch List */}
       <div className="space-y-3">

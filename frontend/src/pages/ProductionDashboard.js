@@ -21,9 +21,13 @@ const stageColors = {
   final_qc: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', bar: 'bg-emerald-400', icon: ShieldCheck },
 };
 
-function SummaryCard({ label, value, icon: Icon, color, sub }) {
+function SummaryCard({ label, value, icon: Icon, color, sub, onClick }) {
   return (
-    <div className={`rounded-xl border p-4 sm:p-5 ${color}`} data-testid={`summary-${label.toLowerCase().replace(/\s+/g, '-')}`}>
+    <div
+      className={`rounded-xl border p-4 sm:p-5 ${color} ${onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
+      onClick={onClick}
+      data-testid={`summary-${label.toLowerCase().replace(/\s+/g, '-')}`}
+    >
       <div className="flex items-center justify-between mb-1.5 sm:mb-2">
         <span className="text-[9px] sm:text-[10px] uppercase tracking-wider font-semibold opacity-60">{label}</span>
         <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 opacity-40" />
@@ -230,12 +234,18 @@ export default function ProductionDashboard() {
       {/* Summary Cards — 2 cols mobile, 4 cols tablet, 7 cols desktop */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
         <SummaryCard label="SKUs" value={summary.total_skus} icon={Package} color="bg-white border-slate-200 text-slate-800" />
-        <SummaryCard label="Batches" value={summary.total_batches} icon={Boxes} color="bg-white border-slate-200 text-slate-800" sub={`${summary.active_batches} active`} />
-        <SummaryCard label="Total Crates" value={summary.total_crates} icon={Boxes} color="bg-white border-slate-200 text-slate-800" />
-        <SummaryCard label="Unallocated" value={summary.unallocated_crates} icon={Boxes} color="bg-slate-50 border-slate-200 text-slate-600" />
-        <SummaryCard label="In QC Stages" value={(summary.total_crates || 0) - (summary.unallocated_crates || 0) - (summary.ready_for_warehouse || 0)} icon={ShieldCheck} color="bg-amber-50 border-amber-200 text-amber-700" />
-        <SummaryCard label="Warehouse Ready" value={summary.ready_for_warehouse} icon={Truck} color="bg-teal-50 border-teal-200 text-teal-700" />
-        <SummaryCard label="Rejected" value={summary.total_rejected} icon={AlertTriangle} color="bg-red-50 border-red-200 text-red-600" sub="bottles" />
+        <SummaryCard label="Batches" value={summary.total_batches} icon={Boxes} color="bg-white border-slate-200 text-slate-800" sub={`${summary.active_batches} active`}
+          onClick={() => navigate('/production-batches')} />
+        <SummaryCard label="Total Crates" value={summary.total_crates} icon={Boxes} color="bg-white border-slate-200 text-slate-800"
+          onClick={() => navigate('/production-batches')} />
+        <SummaryCard label="Unallocated" value={summary.unallocated_crates} icon={Boxes} color="bg-slate-50 border-slate-200 text-slate-600"
+          onClick={() => navigate('/production-batches?stage=unallocated')} />
+        <SummaryCard label="In QC Stages" value={(summary.total_crates || 0) - (summary.unallocated_crates || 0) - (summary.ready_for_warehouse || 0)} icon={ShieldCheck} color="bg-amber-50 border-amber-200 text-amber-700"
+          onClick={() => navigate('/production-batches?stage=in_qc')} />
+        <SummaryCard label="Warehouse Ready" value={summary.ready_for_warehouse} icon={Truck} color="bg-teal-50 border-teal-200 text-teal-700"
+          onClick={() => navigate('/production-batches?stage=warehouse_ready')} />
+        <SummaryCard label="Rejected" value={summary.total_rejected} icon={AlertTriangle} color="bg-red-50 border-red-200 text-red-600" sub="bottles"
+          onClick={() => navigate('/production-batches?stage=rejected')} />
       </div>
 
       {/* SKU Pipelines */}
