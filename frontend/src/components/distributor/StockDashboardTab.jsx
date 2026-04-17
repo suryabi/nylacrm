@@ -282,65 +282,58 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                       {isExpanded && hasReturns && (
                         <tr>
                           <td colSpan={10} className="p-0">
-                            <div className="bg-slate-50/80 border-b px-6 py-3 grid grid-cols-2 gap-4">
-                              {/* Customer Returns Breakdown */}
-                              {sku.customer_returns > 0 && (
-                                <div>
-                                  <p className="text-xs text-amber-600 font-semibold uppercase tracking-wider mb-2">Customer Returns Breakdown</p>
-                                  <div className="grid grid-cols-2 gap-2 text-xs">
-                                    {sku.customer_returns_breakdown.empty_reusable > 0 && (
-                                      <div className="flex justify-between bg-emerald-50 rounded px-2 py-1">
-                                        <span className="text-emerald-700">Empty/Reusable</span>
-                                        <span className="font-semibold text-emerald-800">{fmt(sku.customer_returns_breakdown.empty_reusable)}</span>
-                                      </div>
-                                    )}
-                                    {sku.customer_returns_breakdown.damaged > 0 && (
-                                      <div className="flex justify-between bg-red-50 rounded px-2 py-1">
-                                        <span className="text-red-700">Damaged</span>
-                                        <span className="font-semibold text-red-800">{fmt(sku.customer_returns_breakdown.damaged)}</span>
-                                      </div>
-                                    )}
-                                    {sku.customer_returns_breakdown.expired > 0 && (
-                                      <div className="flex justify-between bg-amber-50 rounded px-2 py-1">
-                                        <span className="text-amber-700">Expired</span>
-                                        <span className="font-semibold text-amber-800">{fmt(sku.customer_returns_breakdown.expired)}</span>
-                                      </div>
-                                    )}
-                                    {sku.customer_returns_breakdown.promotional > 0 && (
-                                      <div className="flex justify-between bg-slate-100 rounded px-2 py-1">
-                                        <span className="text-slate-700">Promotional</span>
-                                        <span className="font-semibold text-slate-800">{fmt(sku.customer_returns_breakdown.promotional)}</span>
-                                      </div>
-                                    )}
+                            <div className="bg-slate-50/80 border-b px-6 py-3">
+                              <div className="grid grid-cols-2 gap-6">
+                                {/* Customer Returns Breakdown */}
+                                {sku.customer_returns > 0 && (
+                                  <div className="rounded-lg border border-amber-200 overflow-hidden">
+                                    <div className="bg-amber-50 px-3 py-1.5 flex items-center justify-between border-b border-amber-200">
+                                      <span className="text-[11px] font-semibold text-amber-700">Customer Returns</span>
+                                      <span className="text-[11px] font-bold text-amber-800">{fmt(sku.customer_returns)}</span>
+                                    </div>
+                                    <div className="divide-y divide-slate-100">
+                                      {[
+                                        { label: 'Empty / Reusable', val: sku.customer_returns_breakdown.empty_reusable, dot: 'bg-emerald-500' },
+                                        { label: 'Damaged', val: sku.customer_returns_breakdown.damaged, dot: 'bg-red-500' },
+                                        { label: 'Expired', val: sku.customer_returns_breakdown.expired, dot: 'bg-amber-500' },
+                                        { label: 'Promotional', val: sku.customer_returns_breakdown.promotional, dot: 'bg-slate-400' },
+                                      ].filter(r => r.val > 0).map(r => (
+                                        <div key={r.label} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                                          <span className="flex items-center gap-1.5 text-slate-600">
+                                            <span className={`w-1.5 h-1.5 rounded-full ${r.dot}`} />
+                                            {r.label}
+                                          </span>
+                                          <span className="font-semibold text-slate-800">{fmt(r.val)}</span>
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
-                                </div>
-                              )}
-                              {/* Factory Returns Breakdown */}
-                              {sku.factory_returns > 0 && (
-                                <div>
-                                  <p className="text-xs text-purple-600 font-semibold uppercase tracking-wider mb-2">Factory Returns Breakdown</p>
-                                  <div className="grid grid-cols-2 gap-2 text-xs">
-                                    {sku.factory_returns_breakdown.empty_reusable > 0 && (
-                                      <div className="flex justify-between bg-emerald-50 rounded px-2 py-1">
-                                        <span className="text-emerald-700">Empty/Reusable</span>
-                                        <span className="font-semibold text-emerald-800">{fmt(sku.factory_returns_breakdown.empty_reusable)}</span>
-                                      </div>
-                                    )}
-                                    {sku.factory_returns_breakdown.damaged > 0 && (
-                                      <div className="flex justify-between bg-red-50 rounded px-2 py-1">
-                                        <span className="text-red-700">Damaged</span>
-                                        <span className="font-semibold text-red-800">{fmt(sku.factory_returns_breakdown.damaged)}</span>
-                                      </div>
-                                    )}
-                                    {sku.factory_returns_breakdown.expired > 0 && (
-                                      <div className="flex justify-between bg-amber-50 rounded px-2 py-1">
-                                        <span className="text-amber-700">Expired</span>
-                                        <span className="font-semibold text-amber-800">{fmt(sku.factory_returns_breakdown.expired)}</span>
-                                      </div>
-                                    )}
+                                )}
+                                {/* Factory Returns Breakdown */}
+                                {sku.factory_returns > 0 && (
+                                  <div className="rounded-lg border border-purple-200 overflow-hidden">
+                                    <div className="bg-purple-50 px-3 py-1.5 flex items-center justify-between border-b border-purple-200">
+                                      <span className="text-[11px] font-semibold text-purple-700">Factory Returns</span>
+                                      <span className="text-[11px] font-bold text-purple-800">{fmt(sku.factory_returns)}</span>
+                                    </div>
+                                    <div className="divide-y divide-slate-100">
+                                      {[
+                                        { label: 'Empty / Reusable', val: sku.factory_returns_breakdown.empty_reusable, dot: 'bg-emerald-500' },
+                                        { label: 'Damaged', val: sku.factory_returns_breakdown.damaged, dot: 'bg-red-500' },
+                                        { label: 'Expired', val: sku.factory_returns_breakdown.expired, dot: 'bg-amber-500' },
+                                      ].filter(r => r.val > 0).map(r => (
+                                        <div key={r.label} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                                          <span className="flex items-center gap-1.5 text-slate-600">
+                                            <span className={`w-1.5 h-1.5 rounded-full ${r.dot}`} />
+                                            {r.label}
+                                          </span>
+                                          <span className="font-semibold text-slate-800">{fmt(r.val)}</span>
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
-                                </div>
-                              )}
+                                )}
+                              </div>
                             </div>
                           </td>
                         </tr>
