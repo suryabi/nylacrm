@@ -145,9 +145,15 @@ export default function BatchDetail() {
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 sm:p-4 text-center">
               <p className="text-[10px] sm:text-xs text-emerald-400 mb-0.5">Warehouse Ready</p>
               <p className="text-xl sm:text-2xl font-bold text-emerald-600">{batch.total_passed_final || 0}</p>
-              <p className="text-[9px] text-emerald-300">crates</p>
+              <p className="text-[9px] text-emerald-300">bottles</p>
+              {(batch.total_passed_final || 0) > 0 && (batch.bottles_per_crate || 0) > 0 && (
+                <p className="text-[9px] text-emerald-500 mt-0.5">
+                  {Math.floor((batch.total_passed_final || 0) / batch.bottles_per_crate)} crates
+                  {(batch.total_passed_final % batch.bottles_per_crate) > 0 && ` + ${batch.total_passed_final % batch.bottles_per_crate} bottles`}
+                </p>
+              )}
               {(batch.transferred_to_warehouse || 0) > 0 && (
-                <p className="text-[9px] text-teal-500 mt-0.5">{batch.transferred_to_warehouse} transferred</p>
+                <p className="text-[9px] text-teal-500 mt-0.5">{batch.transferred_to_warehouse} bottles transferred</p>
               )}
             </div>
           </div>
@@ -873,6 +879,8 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
   const [loadingTransfers, setLoadingTransfers] = useState(false);
 
   const available = (batch?.total_passed_final || 0) - (batch?.transferred_to_warehouse || 0);
+  const bottlesPerCrate = batch?.bottles_per_crate || 1;
+  const availableCrates = Math.floor(available / bottlesPerCrate);
 
   useEffect(() => {
     const headers = getAuthHeaders();
@@ -902,7 +910,7 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
       await axios.post(`${API_URL}/production/batches/${batchId}/transfer-to-warehouse`, {
         warehouse_location_id: selectedWarehouse, quantity: qty, notes: transferNotes,
       }, { headers });
-      toast.success(`${qty} crates transferred to warehouse`);
+      toast.success(`${qty} bottles transferred to warehouse`);
       setTransferQty(''); setTransferNotes(''); setShowTransfer(false);
       onUpdate();
       // Refresh transfers
@@ -924,9 +932,9 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
         </div>
         <div className="flex items-center gap-3">
           <div className="text-xs text-teal-600">
-            <span className="font-medium">{available}</span> crates available
+            <span className="font-medium">{available}</span> bottles ({availableCrates} crates) available
             {(batch?.transferred_to_warehouse || 0) > 0 && (
-              <span className="text-teal-500 ml-2">({batch.transferred_to_warehouse} already transferred)</span>
+              <span className="text-teal-500 ml-2">({batch.transferred_to_warehouse} bottles transferred)</span>
             )}
           </div>
           {available > 0 && (
@@ -960,7 +968,7 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
               </Select>
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600 mb-1 block">Crates to Transfer * (max {available})</label>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Bottles to Transfer * (max {available})</label>
               <input
                 type="number" min="1" max={available} value={transferQty}
                 onChange={e => setTransferQty(e.target.value)}
@@ -1000,7 +1008,7 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
                 <tr className="bg-slate-50 text-xs text-slate-500">
                   <th className="text-left p-2 font-medium">Date</th>
                   <th className="text-left p-2 font-medium">Warehouse</th>
-                  <th className="text-right p-2 font-medium">Crates</th>
+                  <th className="text-right p-2 font-medium">Bottles</th>
                   <th className="text-left p-2 font-medium">By</th>
                   <th className="text-left p-2 font-medium">Notes</th>
                 </tr>

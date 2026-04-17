@@ -559,7 +559,10 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
     batch_total_rejected = batch.get("total_rejected", 0) + total_rej_bottles
     total_passed_final = batch.get("total_passed_final", 0)
     if stage.get("stage_type") == "final_qc":
-        total_passed_final += total_crates_inspected
+        # Warehouse ready = only bottles that passed (total inspected bottles - rejected bottles)
+        total_bottles_inspected = total_crates_inspected * (batch.get("bottles_per_crate", 1) or 1)
+        passed_bottles_this_inspection = total_bottles_inspected - total_rej_bottles
+        total_passed_final += max(passed_bottles_this_inspection, 0)
 
     sorted_stages = sorted(stages, key=lambda s: s["order"])
     all_done = batch.get("unallocated_crates", 0) == 0
@@ -1091,7 +1094,7 @@ async def transfer_to_warehouse(
 
     available = (batch.get("total_passed_final", 0) or 0) - (batch.get("transferred_to_warehouse", 0) or 0)
     if data.quantity > available:
-        raise HTTPException(status_code=400, detail=f"Only {available} crates available for transfer (warehouse-ready minus already transferred)")
+        raise HTTPException(status_code=400, detail=f"Only {available} bottles available for transfer (warehouse-ready minus already transferred)")
 
     # Validate factory warehouse exists and is_factory
     warehouse = await db.distributor_locations.find_one(
