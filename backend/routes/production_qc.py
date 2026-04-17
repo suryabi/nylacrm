@@ -94,6 +94,7 @@ async def production_dashboard(current_user: dict = Depends(get_current_user)):
     total_crates_all = 0
     total_unallocated_all = 0
     total_ready_all = 0
+    total_transferred_all = 0
     total_rejected_all = 0
     active_batches = 0
 
@@ -107,6 +108,7 @@ async def production_dashboard(current_user: dict = Depends(get_current_user)):
                 "total_bottles": 0,
                 "unallocated_crates": 0,
                 "total_passed_final": 0,
+                "transferred_to_warehouse": 0,
                 "total_rejected": 0,
                 "batch_count": 0,
                 "stages": {},  # stage_name -> {pending, passed, rejected, received}
@@ -118,12 +120,14 @@ async def production_dashboard(current_user: dict = Depends(get_current_user)):
         sku["total_bottles"] += b.get("total_bottles", 0)
         sku["unallocated_crates"] += b.get("unallocated_crates", 0)
         sku["total_passed_final"] += b.get("total_passed_final", 0)
+        sku["transferred_to_warehouse"] += b.get("transferred_to_warehouse", 0) or 0
         sku["total_rejected"] += b.get("total_rejected", 0)
         sku["batch_count"] += 1
 
         total_crates_all += b.get("total_crates", 0)
         total_unallocated_all += b.get("unallocated_crates", 0)
         total_ready_all += b.get("total_passed_final", 0)
+        total_transferred_all += b.get("transferred_to_warehouse", 0) or 0
         total_rejected_all += b.get("total_rejected", 0)
         if b.get("status") not in ("completed",):
             active_batches += 1
@@ -154,6 +158,7 @@ async def production_dashboard(current_user: dict = Depends(get_current_user)):
             "total_crates": total_crates_all,
             "unallocated_crates": total_unallocated_all,
             "ready_for_warehouse": total_ready_all,
+            "transferred_to_warehouse": total_transferred_all,
             "total_rejected": total_rejected_all,
         },
         "skus": skus,

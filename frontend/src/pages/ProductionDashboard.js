@@ -137,15 +137,33 @@ function SKUPipeline({ sku, onNavigate }) {
         <div className="rounded-xl border border-teal-200 bg-teal-50 p-3 flex-1 min-w-[110px] cursor-pointer hover:shadow-md transition-shadow" onClick={() => navToFiltered('warehouse_ready')}>
           <div className="flex items-center gap-1.5 mb-2">
             <Truck className="w-3 h-3 text-teal-600" />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600">Warehouse Ready</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600">Wh. Ready</span>
           </div>
           <div className="flex justify-between items-baseline">
             <span className="text-lg font-black tabular-nums text-teal-700">{sku.total_passed_final}</span>
-            <span className="text-[9px] text-teal-400">crates</span>
+            <span className="text-[9px] text-teal-400">bottles</span>
           </div>
           <div className="h-1.5 bg-teal-100 rounded-full overflow-hidden mt-1">
             <div className="h-full rounded-full bg-teal-500 transition-all duration-500"
               style={{ width: `${total > 0 ? Math.round((sku.total_passed_final / total) * 100) : 0}%` }} />
+          </div>
+        </div>
+
+        <ArrowRight className="w-4 h-4 text-indigo-300 flex-shrink-0 hidden lg:block" />
+
+        {/* Transferred to Warehouse */}
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3 flex-1 min-w-[110px] cursor-pointer hover:shadow-md transition-shadow" onClick={() => navToFiltered('transferred')}>
+          <div className="flex items-center gap-1.5 mb-2">
+            <Factory className="w-3 h-3 text-indigo-600" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Transferred</span>
+          </div>
+          <div className="flex justify-between items-baseline">
+            <span className="text-lg font-black tabular-nums text-indigo-700">{sku.transferred_to_warehouse || 0}</span>
+            <span className="text-[9px] text-indigo-400">bottles</span>
+          </div>
+          <div className="h-1.5 bg-indigo-100 rounded-full overflow-hidden mt-1">
+            <div className="h-full rounded-full bg-indigo-500 transition-all duration-500"
+              style={{ width: `${total > 0 ? Math.round(((sku.transferred_to_warehouse || 0) / total) * 100) : 0}%` }} />
           </div>
         </div>
       </div>
@@ -240,7 +258,7 @@ export default function ProductionDashboard() {
       </div>
 
       {/* Summary Cards — 2 cols mobile, 4 cols tablet, 7 cols desktop */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
         <SummaryCard label="SKUs" value={summary.total_skus} icon={Package} color="bg-white border-slate-200 text-slate-800" />
         <SummaryCard label="Batches" value={summary.total_batches} icon={Boxes} color="bg-white border-slate-200 text-slate-800" sub={`${summary.active_batches} active`}
           onClick={() => navigate('/production-batches')} />
@@ -250,8 +268,10 @@ export default function ProductionDashboard() {
           onClick={() => navigate('/production-batches?stage=unallocated')} />
         <SummaryCard label="In QC Stages" value={(summary.total_crates || 0) - (summary.unallocated_crates || 0) - (summary.ready_for_warehouse || 0)} icon={ShieldCheck} color="bg-amber-50 border-amber-200 text-amber-700"
           onClick={() => navigate('/production-batches?stage=in_qc')} />
-        <SummaryCard label="Warehouse Ready" value={summary.ready_for_warehouse} icon={Truck} color="bg-teal-50 border-teal-200 text-teal-700"
+        <SummaryCard label="Warehouse Ready" value={summary.ready_for_warehouse} icon={Truck} color="bg-teal-50 border-teal-200 text-teal-700" sub="bottles"
           onClick={() => navigate('/production-batches?stage=warehouse_ready')} />
+        <SummaryCard label="Transferred" value={summary.transferred_to_warehouse || 0} icon={Factory} color="bg-indigo-50 border-indigo-200 text-indigo-700" sub="bottles"
+          onClick={() => navigate('/production-batches?stage=transferred')} />
         <SummaryCard label="Rejected" value={summary.total_rejected} icon={AlertTriangle} color="bg-red-50 border-red-200 text-red-600" sub="bottles"
           onClick={() => navigate('/production-batches?stage=rejected')} />
       </div>

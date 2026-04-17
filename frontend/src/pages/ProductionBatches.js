@@ -29,6 +29,7 @@ const STAGE_FILTERS = {
   unallocated: { label: 'Unallocated', color: 'bg-slate-100 text-slate-700', icon: Boxes },
   in_qc: { label: 'In QC Stages', color: 'bg-amber-100 text-amber-700', icon: ShieldCheck },
   warehouse_ready: { label: 'Warehouse Ready', color: 'bg-teal-100 text-teal-700', icon: Truck },
+  transferred: { label: 'Transferred to Warehouse', color: 'bg-indigo-100 text-indigo-700', icon: Factory },
   rejected: { label: 'Has Rejections', color: 'bg-red-100 text-red-700', icon: AlertTriangle },
 };
 
@@ -83,6 +84,7 @@ export default function ProductionBatches() {
         if (!inStages) return false;
       }
       if (stageFilter === 'warehouse_ready' && !(b.total_passed_final > 0)) return false;
+      if (stageFilter === 'transferred' && !((b.transferred_to_warehouse || 0) > 0)) return false;
       if (stageFilter === 'rejected' && !(b.total_rejected > 0)) return false;
     }
     return true;
