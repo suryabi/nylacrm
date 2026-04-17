@@ -892,9 +892,15 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
     const headers = getAuthHeaders();
     axios.get(`${API_URL}/production/factory-warehouses`, { headers })
       .then(res => {
-        setFactoryWarehouses(res.data.warehouses || []);
-        const defaultWh = (res.data.warehouses || []).find(w => w.is_default);
-        if (defaultWh) setSelectedWarehouse(defaultWh.id);
+        const whs = res.data.warehouses || [];
+        setFactoryWarehouses(whs);
+        // Auto-select if only 1, or pick default
+        if (whs.length === 1) {
+          setSelectedWarehouse(whs[0].id);
+        } else {
+          const defaultWh = whs.find(w => w.is_default);
+          if (defaultWh) setSelectedWarehouse(defaultWh.id);
+        }
       })
       .catch(() => {});
     // Fetch transfer history
@@ -934,7 +940,7 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
       <div className="bg-teal-50 border-b border-teal-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Warehouse size={16} className="text-teal-600" />
-          <h3 className="text-sm font-semibold text-teal-800">Transfer to Factory Warehouse</h3>
+          <h3 className="text-sm font-semibold text-teal-800">Transfer to Master Warehouse</h3>
         </div>
         <div className="flex items-center gap-3">
           <div className="text-xs text-teal-600">
@@ -949,7 +955,7 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
               className="px-3 py-1.5 text-xs font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-1.5"
               data-testid="transfer-to-warehouse-btn"
             >
-              <Send size={12} /> Transfer
+              <Send size={12} /> Transfer to Master Warehouse
             </button>
           )}
         </div>
@@ -959,19 +965,25 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
         <div className="p-4 border-b border-teal-100 bg-teal-50/30 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="text-xs font-medium text-slate-600 mb-1 block">Factory Warehouse *</label>
-              <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
-                <SelectTrigger className="h-10" data-testid="transfer-warehouse-select">
-                  <SelectValue placeholder="Select factory warehouse" />
-                </SelectTrigger>
-                <SelectContent>
-                  {factoryWarehouses.map(w => (
-                    <SelectItem key={w.id} value={w.id}>
-                      {w.location_name} ({w.city}) {w.is_default ? '★' : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Master Warehouse *</label>
+              {factoryWarehouses.length > 1 ? (
+                <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
+                  <SelectTrigger className="h-10" data-testid="transfer-warehouse-select">
+                    <SelectValue placeholder="Select master warehouse" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {factoryWarehouses.map(w => (
+                      <SelectItem key={w.id} value={w.id}>
+                        {w.location_name} ({w.city}) {w.is_default ? '★' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="h-10 flex items-center px-3 border border-slate-200 rounded-lg bg-slate-50 text-sm text-slate-700">
+                  {factoryWarehouses[0]?.location_name} ({factoryWarehouses[0]?.city})
+                </div>
+              )}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 mb-1 block">Bottles to Transfer * (max {available})</label>
@@ -1015,20 +1027,29 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
                   <th className="text-left p-2 font-medium">Date</th>
                   <th className="text-left p-2 font-medium">Warehouse</th>
                   <th className="text-right p-2 font-medium">Bottles</th>
+                  <th className="text-right p-2 font-medium">Crates</th>
                   <th className="text-left p-2 font-medium">By</th>
                   <th className="text-left p-2 font-medium">Notes</th>
                 </tr>
               </thead>
               <tbody>
-                {transfers.map(t => (
-                  <tr key={t.id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                    <td className="p-2 text-xs text-slate-600">{new Date(t.transferred_at).toLocaleDateString()}</td>
-                    <td className="p-2 text-xs font-medium text-slate-700">{t.warehouse_name}</td>
-                    <td className="p-2 text-xs font-bold text-teal-700 text-right">{t.quantity}</td>
-                    <td className="p-2 text-xs text-slate-500">{t.transferred_by_name}</td>
-                    <td className="p-2 text-xs text-slate-400">{t.notes || '-'}</td>
-                  </tr>
-                ))}
+                {transfers.map(t => {
+                  const bpc = batch?.bottles_per_crate || 1;
+                  const crates = Math.floor(t.quantity / bpc);
+                  const remainder = t.quantity % bpc;
+                  return (
+                    <tr key={t.id} className="border-t border-slate-100 hover:bg-slate-50/50">
+                      <td className="p-2 text-xs text-slate-600">{new Date(t.transferred_at).toLocaleDateString()}</td>
+                      <td className="p-2 text-xs font-medium text-slate-700">{t.warehouse_name}</td>
+                      <td className="p-2 text-xs font-bold text-teal-700 text-right">{t.quantity}</td>
+                      <td className="p-2 text-xs text-slate-600 text-right">
+                        {crates}{remainder > 0 && <span className="text-slate-400"> +{remainder}b</span>}
+                      </td>
+                      <td className="p-2 text-xs text-slate-500">{t.transferred_by_name}</td>
+                      <td className="p-2 text-xs text-slate-400">{t.notes || '-'}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1037,7 +1058,7 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
 
       {transfers.length === 0 && !showTransfer && (
         <div className="p-6 text-center text-xs text-slate-400">
-          No transfers yet. Use the Transfer button to move warehouse-ready stock to a factory warehouse.
+          No transfers yet. Use the Transfer button to move warehouse-ready stock to a master warehouse.
         </div>
       )}
     </div>
