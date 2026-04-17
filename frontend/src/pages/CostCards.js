@@ -75,7 +75,7 @@ export default function CostCards() {
   };
 
   const addNewRow = () => {
-    setNewRows(prev => [...prev, { _tempId: Date.now(), sku_id: '', city: '', cost_per_unit: '' }]);
+    setNewRows(prev => [...prev, { _tempId: Date.now(), sku_id: '', city: allCities[0] || '', cost_per_unit: '' }]);
   };
 
   const updateNewRow = (tempId, field, value) => {
