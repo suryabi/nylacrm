@@ -157,7 +157,7 @@ async def production_dashboard(current_user: dict = Depends(get_current_user)):
             "active_batches": active_batches,
             "total_crates": total_crates_all,
             "unallocated_crates": total_unallocated_all,
-            "ready_for_warehouse": total_ready_all,
+            "ready_for_warehouse": total_ready_all - total_transferred_all,
             "transferred_to_warehouse": total_transferred_all,
             "total_rejected": total_rejected_all,
         },

@@ -140,12 +140,12 @@ function SKUPipeline({ sku, onNavigate }) {
             <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600">Wh. Ready</span>
           </div>
           <div className="flex justify-between items-baseline">
-            <span className="text-lg font-black tabular-nums text-teal-700">{sku.total_passed_final}</span>
+            <span className="text-lg font-black tabular-nums text-teal-700">{(sku.total_passed_final || 0) - (sku.transferred_to_warehouse || 0)}</span>
             <span className="text-[9px] text-teal-400">bottles</span>
           </div>
           <div className="h-1.5 bg-teal-100 rounded-full overflow-hidden mt-1">
             <div className="h-full rounded-full bg-teal-500 transition-all duration-500"
-              style={{ width: `${total > 0 ? Math.round((sku.total_passed_final / total) * 100) : 0}%` }} />
+              style={{ width: `${total > 0 ? Math.round((((sku.total_passed_final || 0) - (sku.transferred_to_warehouse || 0)) / total) * 100) : 0}%` }} />
           </div>
         </div>
 
