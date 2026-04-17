@@ -8,6 +8,7 @@ import {
   Trash2, ArrowRight, MoveRight, ClipboardCheck,
   Clock, User, AlertTriangle, ChevronDown, ChevronUp, Plus, Warehouse, Send,
 } from 'lucide-react';
+import Breadcrumbs from '../components/Breadcrumbs';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -85,6 +86,11 @@ export default function BatchDetail() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto space-y-4 sm:space-y-6" data-testid="batch-detail-page">
+      <Breadcrumbs items={[
+        { label: 'Production', href: '/production' },
+        { label: 'Batches', href: '/production-batches' },
+        { label: batch.batch_code || 'Detail' },
+      ]} />
       {/* Header */}
       <div className="flex items-start sm:items-center gap-2 sm:gap-3">
         <button onClick={() => navigate('/production-batches')} className="p-1.5 sm:p-2 hover:bg-slate-100 rounded-lg flex-shrink-0" data-testid="back-btn">

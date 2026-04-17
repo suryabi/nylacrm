@@ -38,6 +38,8 @@ import BillingTab from '../components/distributor/BillingTab';
 import StockDashboardTab from '../components/distributor/StockDashboardTab';
 import { PAYMENT_TERMS, STATUS_OPTIONS, MARGIN_TYPES, formatMarginValue } from '../components/distributor/constants';
 
+import Breadcrumbs from '../components/Breadcrumbs';
+
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 // Local helper using imported constants
@@ -2048,6 +2050,11 @@ export default function DistributorDetail() {
 
   return (
     <div className="p-6 space-y-6" data-testid="distributor-detail-page">
+      <Breadcrumbs items={[
+        { label: 'Distribution' },
+        { label: 'Distributors', href: '/distributors' },
+        { label: distributor.distributor_name || 'Detail' },
+      ]} />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">

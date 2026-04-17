@@ -8,6 +8,7 @@ import {
   Factory, Boxes, Calendar, FlaskConical, ArrowRight, X,
   ShieldCheck, Tag, Truck, AlertTriangle,
 } from 'lucide-react';
+import Breadcrumbs from '../components/Breadcrumbs';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -41,11 +42,21 @@ export default function ProductionBatches() {
   const [skus, setSkus] = useState([]);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(searchParams.get('q') || '');
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '');
   const [stageFilter, setStageFilter] = useState(searchParams.get('stage') || '');
   const [skuFilter, setSkuFilter] = useState(searchParams.get('sku_id') || '');
   const [showCreate, setShowCreate] = useState(false);
+
+  // Sync filters to URL params
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (search) params.set('q', search);
+    if (statusFilter) params.set('status', statusFilter);
+    if (stageFilter) params.set('stage', stageFilter);
+    if (skuFilter) params.set('sku_id', skuFilter);
+    setSearchParams(params, { replace: true });
+  }, [search, statusFilter, stageFilter, skuFilter, setSearchParams]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -95,7 +106,6 @@ export default function ProductionBatches() {
     setStageFilter('');
     setSkuFilter('');
     setSearch('');
-    setSearchParams({});
   };
 
   const hasActiveFilter = statusFilter || stageFilter || skuFilter;
@@ -112,6 +122,10 @@ export default function ProductionBatches() {
 
   return (
     <div className="p-6 lg:p-8 max-w-[1600px] mx-auto space-y-6" data-testid="production-batches-page">
+      <Breadcrumbs items={[
+        { label: 'Production', href: '/production' },
+        { label: 'Batches' },
+      ]} />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

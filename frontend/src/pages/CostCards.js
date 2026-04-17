@@ -7,6 +7,7 @@ import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 import { DollarSign, Plus, Save, Trash2, RefreshCw, Filter, X, Check, Loader2 } from 'lucide-react';
+import Breadcrumbs from '../components/Breadcrumbs';
 import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -160,6 +161,10 @@ export default function CostCards() {
 
   return (
     <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6" data-testid="cost-cards-page">
+      <Breadcrumbs items={[
+        { label: 'Distribution' },
+        { label: 'Cost Cards' },
+      ]} />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

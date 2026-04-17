@@ -11,6 +11,7 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Checkbox } from '../components/ui/checkbox';
 import { toast } from 'sonner';
+import Breadcrumbs from '../components/Breadcrumbs';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import { 
   Truck, Users, MapPin, Package, TrendUp, TrendDown, 
@@ -340,6 +341,10 @@ export default function DistributorList() {
 
   return (
     <div className="p-6 lg:p-8 space-y-8 max-w-[1600px] mx-auto" data-testid="distributor-list-page">
+      <Breadcrumbs items={[
+        { label: 'Distribution' },
+        { label: 'Distributors' },
+      ]} />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
