@@ -306,6 +306,14 @@
 - [x] **Authorization**: Only CEO and System Admin roles can delete (is_delete_authorized check).
 - [x] **Frontend Confirmation**: Delete button visible for CEO/SysAdmin in distributor header. Confirmation dialog lists all data to be deleted, requires typing exact distributor name, shows "cannot be undone" warning.
 
+### Production QC: Stage Movement Fix (2026-04-17)
+- [x] **Bug Fix**: Rejected stock was incorrectly propagating to next stages. When moving stock from one stage to another, ALL inspected crates were treated as "passed" regardless of bottle-level rejections.
+- [x] **Root Cause**: In `record_inspection`, `passed = inspected_crates` without deducting rejected crate equivalents.
+- [x] **Fix Applied**: `rejected_crate_equiv = rejected_bottles // bottles_per_crate`, `passed = inspected_crates - rejected_crate_equiv`. Uses floor division so only full crate equivalents of rejected bottles are deducted.
+- [x] **File Changed**: `/app/backend/routes/production_qc.py` (lines 558-563 in `record_inspection`)
+- [x] **Testing**: 10/10 backend tests + all frontend UI tests passed (iteration_137)
+- [x] **Edge Cases Verified**: 0 rejections (all pass), < 1 crate equiv (all pass), exactly 1 crate equiv (1 deducted), > 1 crate equiv (correct deduction), floor division for partial crates
+
 ## Upcoming Tasks (P1)
 - Auto-generate Provisional Invoice (on shipment -> "delivered")
 - Build Reporting Module
