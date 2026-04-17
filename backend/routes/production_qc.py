@@ -555,9 +555,11 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
             if r.qty_rejected < 0:
                 raise HTTPException(status_code=400, detail="Rejected count cannot be negative")
 
-    # All inspected crates pass through; rejected bottles tracked separately
+    # Convert rejected bottles to crate equivalents; only net-passed crates move forward
+    rejected_crate_equiv = total_rej_bottles // bottles_per_crate if bottles_per_crate > 0 else 0
+    passed_crates = max(total_crates_inspected - rejected_crate_equiv, 0)
     bal["pending"] = pending - total_crates_inspected
-    bal["passed"] = bal.get("passed", 0) + total_crates_inspected
+    bal["passed"] = bal.get("passed", 0) + passed_crates
     bal["rejected"] = bal.get("rejected", 0) + total_rej_bottles
     balances[data.stage_id] = bal
 
