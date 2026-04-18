@@ -3,35 +3,33 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import axios from 'axios';
 import {
-  ArrowLeft, Package, Calendar, Boxes, Tag,
+  ArrowLeft, Package, Calendar, Boxes,
   Loader2, FlaskConical, Paintbrush, ShieldCheck,
-  Trash2, ArrowRight, MoveRight, ClipboardCheck,
-  Clock, User, AlertTriangle, ChevronDown, ChevronUp, Plus, Warehouse, Send,
+  Trash2, MoveRight, ClipboardCheck,
+  Clock, User, AlertTriangle, ChevronDown, ChevronUp, Plus, Send,
 } from 'lucide-react';
 import Breadcrumbs from '../components/Breadcrumbs';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-
-function getAuthHeaders() {
-  const token = localStorage.getItem('token');
-  const tenantId = localStorage.getItem('tenant_id');
-  return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+const API = process.env.REACT_APP_BACKEND_URL + '/api';
+function hdrs() {
+  return { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' };
 }
 
 const STATUS_MAP = {
-  created: { label: 'Created', color: 'bg-slate-100 text-slate-700' },
-  in_qc: { label: 'In QC', color: 'bg-blue-100 text-blue-700' },
-  in_labeling: { label: 'Labeling', color: 'bg-purple-100 text-purple-700' },
-  in_final_qc: { label: 'Final QC', color: 'bg-amber-100 text-amber-700' },
-  completed: { label: 'Completed', color: 'bg-emerald-100 text-emerald-700' },
+  created: { label: 'Created', cls: 'bg-slate-100 text-slate-600' },
+  in_qc: { label: 'In QC', cls: 'bg-blue-50 text-blue-700' },
+  in_labeling: { label: 'Labeling', cls: 'bg-violet-50 text-violet-700' },
+  in_final_qc: { label: 'Final QC', cls: 'bg-amber-50 text-amber-700' },
+  completed: { label: 'Completed', cls: 'bg-emerald-50 text-emerald-700' },
 };
 
-const STAGE_CFG = {
-  qc: { icon: FlaskConical, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', badge: 'bg-blue-100 text-blue-700' },
-  labeling: { icon: Paintbrush, color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200', badge: 'bg-purple-100 text-purple-700' },
-  final_qc: { icon: ShieldCheck, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', badge: 'bg-emerald-100 text-emerald-700' },
-};
+/* pH color helper */
+function phColor(v) {
+  if (v <= 7) return { bg: 'bg-teal-50', text: 'text-teal-700', dot: 'bg-teal-500' };
+  if (v <= 8) return { bg: 'bg-sky-50', text: 'text-sky-700', dot: 'bg-sky-500' };
+  return { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' };
+}
 
 export default function BatchDetail() {
   const { batchId } = useParams();
@@ -47,21 +45,19 @@ export default function BatchDetail() {
 
   const fetchBatch = useCallback(async () => {
     try {
-      const headers = getAuthHeaders();
+      const h = hdrs();
       const [bRes, hRes, rrRes, qtRes] = await Promise.allSettled([
-        axios.get(`${API_URL}/production/batches/${batchId}`, { headers }),
-        axios.get(`${API_URL}/production/batches/${batchId}/history`, { headers }),
-        axios.get(`${API_URL}/production/rejection-reasons`, { headers }),
-        axios.get(`${API_URL}/production/qc-team`, { headers }),
+        axios.get(`${API}/production/batches/${batchId}`, { headers: h }),
+        axios.get(`${API}/production/batches/${batchId}/history`, { headers: h }),
+        axios.get(`${API}/production/rejection-reasons`, { headers: h }),
+        axios.get(`${API}/production/qc-team`, { headers: h }),
       ]);
       if (bRes.status === 'fulfilled') setBatch(bRes.value.data);
       else { toast.error('Batch not found'); navigate('/production-batches'); return; }
       if (hRes.status === 'fulfilled') setHistory(hRes.value.data);
       if (rrRes.status === 'fulfilled') setRejectionReasons(rrRes.value.data);
       if (qtRes.status === 'fulfilled') setQcTeam(qtRes.value.data);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, [batchId, navigate]);
 
   useEffect(() => { fetchBatch(); }, [fetchBatch]);
@@ -69,504 +65,396 @@ export default function BatchDetail() {
   const handleDelete = async () => {
     if (!window.confirm('Delete this batch?')) return;
     try {
-      await axios.delete(`${API_URL}/production/batches/${batchId}`, { headers: getAuthHeaders() });
+      await axios.delete(`${API}/production/batches/${batchId}`, { headers: hdrs() });
       toast.success('Batch deleted');
       navigate('/production-batches');
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to delete');
-    }
+    } catch (err) { toast.error(err.response?.data?.detail || 'Failed to delete'); }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>;
+  if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>;
   if (!batch) return null;
 
   const st = STATUS_MAP[batch.status] || STATUS_MAP.created;
   const stages = (batch.qc_stages || []).sort((a, b) => a.order - b.order);
   const balances = batch.stage_balances || {};
+  const totalBottles = batch.total_bottles || 0;
+  const totalRej = batch.total_rejected || 0;
+  const rejPct = totalBottles > 0 ? ((totalRej / totalBottles) * 100).toFixed(1) : '0.0';
+  const passPct = totalBottles > 0 ? (((totalBottles - totalRej) / totalBottles) * 100).toFixed(1) : '100.0';
+
+  // Build rejection entries
+  const rejEntries = [];
+  (history.inspections || []).filter(i => i.qty_rejected > 0).forEach(i => {
+    const entries = i.entries || [];
+    if (entries.length > 0) {
+      entries.forEach(entry => {
+        (entry.rejections || []).filter(r => r.qty_rejected > 0).forEach(r => {
+          rejEntries.push({ resource_name: entry.resource_name, date: entry.date, qty_inspected: entry.qty_inspected, qty_rejected: r.qty_rejected, reason: r.reason, stage_name: i.stage_name });
+        });
+      });
+    } else {
+      const rejs = i.rejections || [];
+      if (rejs.length > 0) {
+        rejs.filter(r => r.qty_rejected > 0).forEach(r => {
+          rejEntries.push({ resource_name: r.resource_name, date: r.date, qty_inspected: r.qty_inspected || i.qty_inspected, qty_rejected: r.qty_rejected, reason: r.reason || '', stage_name: i.stage_name });
+        });
+      } else if (i.qty_rejected > 0) {
+        rejEntries.push({ resource_name: i.inspected_by_name, date: (i.inspected_at || '').slice(0, 10), qty_inspected: i.qty_inspected, qty_rejected: i.qty_rejected, reason: i.rejection_reason || '', stage_name: i.stage_name });
+      }
+    }
+  });
+
+  const byResource = {}, byReason = {}, byStage = {};
+  const uniqueDates = new Set(), uniqueResources = new Set(), uniqueReasons = new Set(), uniqueStages = new Set();
+  rejEntries.forEach(e => {
+    byResource[e.resource_name] = (byResource[e.resource_name] || 0) + e.qty_rejected;
+    byReason[e.reason] = (byReason[e.reason] || 0) + e.qty_rejected;
+    byStage[e.stage_name] = (byStage[e.stage_name] || 0) + e.qty_rejected;
+    if (e.date) uniqueDates.add(e.date);
+    if (e.resource_name) uniqueResources.add(e.resource_name);
+    if (e.reason) uniqueReasons.add(e.reason);
+    if (e.stage_name) uniqueStages.add(e.stage_name);
+  });
+  const topResource = Object.entries(byResource).sort((a, b) => b[1] - a[1]);
+  const topReason = Object.entries(byReason).sort((a, b) => b[1] - a[1]);
+
+  const filtered = rejEntries.filter(e => {
+    if (rejFilter.resource && e.resource_name !== rejFilter.resource) return false;
+    if (rejFilter.date && e.date !== rejFilter.date) return false;
+    if (rejFilter.reason && e.reason !== rejFilter.reason) return false;
+    if (rejFilter.stage && e.stage_name !== rejFilter.stage) return false;
+    return true;
+  });
+  const filteredTotal = filtered.reduce((s, e) => s + (e.qty_rejected || 0), 0);
+  const bpc = batch.bottles_per_crate || 1;
+  const ph = batch.ph_value ? phColor(batch.ph_value) : null;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto space-y-4 sm:space-y-6" data-testid="batch-detail-page">
+    <div className="p-3 sm:p-5 lg:p-6 max-w-[1600px] mx-auto space-y-3" data-testid="batch-detail-page">
       <Breadcrumbs items={[
         { label: 'Production', href: '/production' },
         { label: 'Batches', href: '/production-batches' },
         { label: batch.batch_code || 'Detail' },
       ]} />
-      {/* Header */}
-      <div className="flex items-start sm:items-center gap-2 sm:gap-3">
-        <button onClick={() => navigate('/production-batches')} className="p-1.5 sm:p-2 hover:bg-slate-100 rounded-lg flex-shrink-0" data-testid="back-btn">
-          <ArrowLeft size={18} className="text-slate-600" />
+
+      {/* ── Header ── */}
+      <div className="flex items-center gap-2">
+        <button onClick={() => navigate('/production-batches')} className="p-1.5 hover:bg-slate-100 rounded-md" data-testid="back-btn">
+          <ArrowLeft size={16} className="text-slate-500" />
         </button>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-            <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-slate-800">{batch.batch_code}</h1>
-            <span className={`px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-medium ${st.color}`}>{st.label}</span>
-          </div>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5 truncate">{batch.sku_name}</p>
+        <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
+          <h1 className="text-lg font-bold tracking-tight text-slate-900">{batch.batch_code}</h1>
+          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${st.cls}`}>{st.label}</span>
+          {ph && (
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold ${ph.bg} ${ph.text}`} data-testid="ph-badge">
+              <span className={`w-1.5 h-1.5 rounded-full ${ph.dot}`} />
+              pH {batch.ph_value}
+            </span>
+          )}
+          <span className="text-xs text-slate-400 truncate">{batch.sku_name}</span>
         </div>
         {batch.status === 'created' && (
-          <button onClick={handleDelete} className="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-1 sm:gap-1.5 flex-shrink-0" data-testid="delete-batch-btn">
-            <Trash2 size={14} /> <span className="hidden sm:inline">Delete</span>
+          <button onClick={handleDelete} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md" data-testid="delete-batch-btn">
+            <Trash2 size={14} />
           </button>
         )}
       </div>
 
-      {/* Info Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
+      {/* ── Compact Info Row ── */}
+      <div className="flex items-center gap-1 text-xs overflow-x-auto pb-1" data-testid="batch-info-row">
         {[
-          { label: 'Production Date', value: batch.production_date, icon: Calendar },
-          { label: 'Total Crates', value: batch.total_crates?.toLocaleString(), icon: Boxes },
-          { label: 'Bottles/Crate', value: batch.bottles_per_crate, icon: Package },
-          { label: 'Total Bottles', value: batch.total_bottles?.toLocaleString(), icon: Package },
-          { label: 'Unallocated', value: batch.unallocated_crates?.toLocaleString(), icon: Boxes },
+          { icon: Calendar, label: batch.production_date },
+          { icon: Boxes, label: `${batch.total_crates?.toLocaleString()} crates` },
+          { icon: Package, label: `${bpc} b/c` },
+          { icon: Package, label: `${totalBottles.toLocaleString()} bottles` },
         ].map((item, i) => (
-          <div key={i} className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4">
-            <div className="flex items-center gap-1.5 sm:gap-2 mb-1"><item.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400" /><span className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-wider">{item.label}</span></div>
-            <p className="text-base sm:text-lg font-bold text-slate-800">{item.value}</p>
+          <div key={i} className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-md whitespace-nowrap">
+            <item.icon size={11} className="text-slate-400 flex-shrink-0" />
+            <span className="text-slate-700 font-medium">{item.label}</span>
           </div>
         ))}
+        {(batch.unallocated_crates || 0) > 0 && (
+          <div className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-50 border border-amber-200 rounded-md whitespace-nowrap">
+            <Boxes size={11} className="text-amber-500 flex-shrink-0" />
+            <span className="text-amber-700 font-medium">{batch.unallocated_crates} unallocated</span>
+          </div>
+        )}
       </div>
 
-      {/* pH Scale */}
-      {batch.ph_value && <PhScale value={batch.ph_value} />}
-
-      {/* Stage Cards — the core of Phase 2 */}
-      {stages.length > 0 ? (
-        <div className="space-y-3 sm:space-y-4">
-          <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-            <FlaskConical size={16} className="text-blue-500" /> QC Pipeline
-          </h2>
-
-          {/* Summary Bar with overall % */}
-          {(() => {
-            const totalBottles = batch.total_bottles || 0;
-            const totalRej = batch.total_rejected || 0;
-            const overallRejPct = totalBottles > 0 ? ((totalRej / totalBottles) * 100).toFixed(1) : '0.0';
-            const overallPassPct = totalBottles > 0 ? (((totalBottles - totalRej) / totalBottles) * 100).toFixed(1) : '0.0';
-            return (
-            <div className="space-y-2">
-              <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4 text-center">
-                  <p className="text-[10px] sm:text-xs text-slate-400 mb-0.5">Unallocated</p>
-                  <p className="text-xl sm:text-2xl font-bold text-slate-800">{batch.unallocated_crates || 0}</p>
-                  <p className="text-[9px] text-slate-300">crates</p>
-                </div>
-                <div className="bg-red-50 border border-red-200 rounded-xl p-3 sm:p-4 text-center">
-                  <p className="text-[10px] sm:text-xs text-red-400 mb-0.5">Total Rejected</p>
-                  <p className="text-xl sm:text-2xl font-bold text-red-600">{totalRej}</p>
-                  <p className="text-[9px] text-red-300">bottles</p>
-                  {totalBottles > 0 && <p className="text-[10px] font-semibold text-red-500 mt-1">{overallRejPct}%</p>}
-                </div>
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 sm:p-4 text-center">
-                  <p className="text-[10px] sm:text-xs text-emerald-400 mb-0.5">Warehouse Ready</p>
-                  <p className="text-xl sm:text-2xl font-bold text-emerald-600">{batch.total_passed_final || 0}</p>
-                  <p className="text-[9px] text-emerald-300">bottles</p>
-                  {(batch.total_passed_final || 0) > 0 && (batch.bottles_per_crate || 0) > 0 && (
-                    <p className="text-[9px] text-emerald-500 mt-0.5">
-                      {Math.floor((batch.total_passed_final || 0) / batch.bottles_per_crate)} crates
-                      {(batch.total_passed_final % batch.bottles_per_crate) > 0 && ` + ${batch.total_passed_final % batch.bottles_per_crate} bottles`}
-                    </p>
-                  )}
-                  {(batch.transferred_to_warehouse || 0) > 0 && (
-                    <p className="text-[9px] text-teal-500 mt-0.5">{batch.transferred_to_warehouse} bottles transferred</p>
-                  )}
-                </div>
-              </div>
-              {/* Overall Pass/Reject % bar */}
-              {totalBottles > 0 && (
-                <div className="bg-white border border-slate-200 rounded-xl p-2.5 sm:p-3" data-testid="overall-pass-reject-bar">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">Overall Quality</span>
-                    <span className="text-[10px] text-slate-400">{totalBottles.toLocaleString()} total bottles</span>
-                  </div>
-                  <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden flex">
-                    <div className="bg-emerald-500 h-full transition-all" style={{ width: `${overallPassPct}%` }} />
-                    <div className="bg-red-400 h-full transition-all" style={{ width: `${overallRejPct}%` }} />
-                  </div>
-                  <div className="flex items-center justify-between mt-1.5">
-                    <span className="text-[10px] font-semibold text-emerald-600">{overallPassPct}% pass</span>
-                    <span className="text-[10px] font-semibold text-red-500">{overallRejPct}% rejected</span>
-                  </div>
-                </div>
-              )}
-            </div>
-            );
-          })()}
-
-          {/* Stage-by-stage cards */}
-          {stages.map((stage, idx) => {
-            const cfg = STAGE_CFG[stage.stage_type] || STAGE_CFG.qc;
-            const bal = balances[stage.id] || {};
-            const Icon = cfg.icon;
-            const isFirst = idx === 0;
-            const prevStage = idx > 0 ? stages[idx - 1] : null;
-            const prevBal = prevStage ? (balances[prevStage.id] || {}) : null;
-            const canReceive = isFirst ? (batch.unallocated_crates || 0) > 0 : (prevBal?.passed || 0) > 0;
-            const canInspect = (bal.pending || 0) > 0;
-
-            return (
-              <StageCard
-                key={stage.id}
-                stage={stage}
-                cfg={cfg}
-                Icon={Icon}
-                bal={bal}
-                isFirst={isFirst}
-                canReceive={canReceive}
-                canInspect={canInspect}
-                sourceLabel={isFirst ? 'Unallocated' : prevStage?.name}
-                sourceQty={isFirst ? (batch.unallocated_crates || 0) : (prevBal?.passed || 0)}
-                batchId={batchId}
-                bottlesPerCrate={batch.bottles_per_crate || 1}
-                rejectionReasons={rejectionReasons}
-                qcTeam={qcTeam}
-                onUpdate={fetchBatch}
-              />
-            );
-          })}
-        </div>
-      ) : (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center">
-          <FlaskConical className="w-8 h-8 text-amber-400 mx-auto mb-2" />
-          <p className="text-sm text-amber-700 font-medium">No QC Route Configured</p>
-          <p className="text-xs text-amber-600 mt-1">Configure a QC route for "{batch.sku_name}" to start tracking</p>
+      {/* ── Overall Quality Slim Bar ── */}
+      {totalBottles > 0 && (
+        <div className="flex items-center gap-3 px-3 py-2 bg-white border border-slate-200 rounded-md" data-testid="overall-pass-reject-bar">
+          <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider whitespace-nowrap">Quality</span>
+          <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden flex">
+            <div className="bg-emerald-500 h-full transition-all" style={{ width: `${passPct}%` }} />
+            <div className="bg-red-400 h-full transition-all" style={{ width: `${rejPct}%` }} />
+          </div>
+          <span className="text-[10px] font-semibold text-emerald-600 whitespace-nowrap">{passPct}%</span>
+          <span className="text-[10px] text-slate-300">|</span>
+          <span className="text-[10px] font-semibold text-red-500 whitespace-nowrap">{rejPct}% rej</span>
+          <span className="text-[10px] text-slate-300">|</span>
+          <span className="text-[10px] text-slate-400 whitespace-nowrap">{totalRej} / {totalBottles.toLocaleString()}</span>
         </div>
       )}
 
-      {/* Warehouse Transfer Section */}
-      <WarehouseTransferSection batch={batch} batchId={batchId} onUpdate={fetchBatch} />
-
-      {/* Rejection Summary — Metrics always visible, expandable detail grid */}
-      {history.inspections?.some(i => i.qty_rejected > 0) && (() => {
-        // Flatten all rejection entries
-        const rejEntries = [];
-        history.inspections.filter(i => i.qty_rejected > 0).forEach(i => {
-          const inEntries = i.entries || [];
-          if (inEntries.length > 0) {
-            inEntries.forEach(entry => {
-              (entry.rejections || []).filter(r => r.qty_rejected > 0).forEach(r => {
-                rejEntries.push({
-                  resource_name: entry.resource_name, date: entry.date,
-                  qty_inspected: entry.qty_inspected, qty_rejected: r.qty_rejected,
-                  reason: r.reason, stage_name: i.stage_name, remarks: i.remarks,
-                });
-              });
-            });
-          } else {
-            const rejs = i.rejections || [];
-            if (rejs.length > 0) {
-              rejs.filter(r => r.qty_rejected > 0).forEach(r => {
-                rejEntries.push({
-                  resource_name: r.resource_name, date: r.date,
-                  qty_inspected: r.qty_inspected || i.qty_inspected,
-                  qty_rejected: r.qty_rejected, reason: r.reason || '',
-                  stage_name: i.stage_name, remarks: i.remarks,
-                });
-              });
-            } else {
-              rejEntries.push({
-                resource_name: i.inspected_by_name, date: (i.inspected_at || '').slice(0, 10),
-                qty_inspected: i.qty_inspected, qty_rejected: i.qty_rejected,
-                reason: i.rejection_reason || '', stage_name: i.stage_name, remarks: i.remarks,
-              });
-            }
-          }
-        });
-
-        // Compute metrics
-        const totalRej = rejEntries.reduce((s, e) => s + (e.qty_rejected || 0), 0);
-        const byResource = {};
-        const byReason = {};
-        const byStage = {};
-        const uniqueDates = new Set();
-        const uniqueResources = new Set();
-        const uniqueReasons = new Set();
-        const uniqueStages = new Set();
-        rejEntries.forEach(e => {
-          byResource[e.resource_name] = (byResource[e.resource_name] || 0) + e.qty_rejected;
-          byReason[e.reason] = (byReason[e.reason] || 0) + e.qty_rejected;
-          byStage[e.stage_name] = (byStage[e.stage_name] || 0) + e.qty_rejected;
-          if (e.date) uniqueDates.add(e.date);
-          if (e.resource_name) uniqueResources.add(e.resource_name);
-          if (e.reason) uniqueReasons.add(e.reason);
-          if (e.stage_name) uniqueStages.add(e.stage_name);
-        });
-        const topResource = Object.entries(byResource).sort((a, b) => b[1] - a[1]);
-        const topReason = Object.entries(byReason).sort((a, b) => b[1] - a[1]);
-        const topStage = Object.entries(byStage).sort((a, b) => b[1] - a[1]);
-
-        // Filter
-        const filtered = rejEntries.filter(e => {
-          if (rejFilter.resource && e.resource_name !== rejFilter.resource) return false;
-          if (rejFilter.date && e.date !== rejFilter.date) return false;
-          if (rejFilter.reason && e.reason !== rejFilter.reason) return false;
-          if (rejFilter.stage && e.stage_name !== rejFilter.stage) return false;
-          return true;
-        });
-        const filteredTotal = filtered.reduce((s, e) => s + (e.qty_rejected || 0), 0);
-        const bpc = batch?.bottles_per_crate || 1;
-
-        return (
-        <div className="space-y-0" data-testid="rejection-summary-section">
-          {/* Always-Visible Metrics */}
-          <div className="bg-gradient-to-br from-red-50 to-rose-50 border border-red-200/60 rounded-t-xl p-4 sm:p-5">
-            <div className="flex items-center gap-2 mb-3 sm:mb-4">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-red-100 flex items-center justify-center">
-                <AlertTriangle size={14} className="text-red-600" />
+      {/* ── Two-Column: Stages (Left) + Rejection/Activity (Right) ── */}
+      {stages.length > 0 ? (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+          {/* LEFT: QC Pipeline + Summary */}
+          <div className="lg:col-span-7 xl:col-span-8 space-y-2">
+            {/* Summary chips */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-200 rounded-md">
+                <span className="text-[10px] text-slate-400">Unalloc</span>
+                <span className="text-xs font-bold text-slate-700">{batch.unallocated_crates || 0}</span>
               </div>
-              <div>
-                <h3 className="text-xs sm:text-sm font-bold text-slate-900">Rejection Summary</h3>
-                <p className="text-[9px] sm:text-[10px] text-slate-500">{rejEntries.length} rejection records across inspections</p>
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-red-200 rounded-md">
+                <span className="text-[10px] text-red-400">Rejected</span>
+                <span className="text-xs font-bold text-red-600">{totalRej}</span>
+                {totalBottles > 0 && <span className="text-[10px] text-red-400">({rejPct}%)</span>}
+              </div>
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-emerald-200 rounded-md">
+                <span className="text-[10px] text-emerald-400">Warehouse Ready</span>
+                <span className="text-xs font-bold text-emerald-600">{batch.total_passed_final || 0}</span>
+                {(batch.transferred_to_warehouse || 0) > 0 && <span className="text-[10px] text-slate-400">({batch.transferred_to_warehouse} moved)</span>}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-              {/* Total Rejected */}
-              <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-red-100">
-                <p className="text-[10px] text-red-400 uppercase tracking-wider font-medium mb-1">Total Rejected</p>
-                <p className="text-3xl font-black text-red-600" data-testid="rej-metric-total">{totalRej.toLocaleString()}</p>
-                <p className="text-[10px] text-red-300 mt-0.5">bottles</p>
-              </div>
-
-              {/* By Resource — top 3 */}
-              <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-slate-100">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-2">By Resource</p>
-                <div className="space-y-1.5">
-                  {topResource.slice(0, 3).map(([name, count], i) => (
-                    <div key={i} className="flex items-center justify-between">
-                      <span className="text-xs text-slate-600 truncate mr-2">{name}</span>
-                      <div className="flex items-center gap-1.5">
-                        <div className="h-1.5 rounded-full bg-red-200" style={{ width: `${Math.max(16, (count / totalRej) * 60)}px` }}>
-                          <div className="h-full rounded-full bg-red-500" style={{ width: '100%' }} />
-                        </div>
-                        <span className="text-xs font-bold text-red-600 tabular-nums w-8 text-right">{count}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* By Reason — top 3 */}
-              <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-slate-100">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-2">By Reason</p>
-                <div className="space-y-1.5">
-                  {topReason.slice(0, 3).map(([name, count], i) => (
-                    <div key={i} className="flex items-center justify-between">
-                      <span className="text-xs text-slate-600 truncate mr-2">{name}</span>
-                      <div className="flex items-center gap-1.5">
-                        <div className="h-1.5 rounded-full bg-amber-200" style={{ width: `${Math.max(16, (count / totalRej) * 60)}px` }}>
-                          <div className="h-full rounded-full bg-amber-500" style={{ width: '100%' }} />
-                        </div>
-                        <span className="text-xs font-bold text-amber-600 tabular-nums w-8 text-right">{count}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* By Stage — top 3 */}
-              <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-slate-100">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-2">By Stage</p>
-                <div className="space-y-1.5">
-                  {topStage.slice(0, 3).map(([name, count], i) => (
-                    <div key={i} className="flex items-center justify-between">
-                      <span className="text-xs text-slate-600 truncate mr-2">{name}</span>
-                      <div className="flex items-center gap-1.5">
-                        <div className="h-1.5 rounded-full bg-blue-200" style={{ width: `${Math.max(16, (count / totalRej) * 60)}px` }}>
-                          <div className="h-full rounded-full bg-blue-500" style={{ width: '100%' }} />
-                        </div>
-                        <span className="text-xs font-bold text-blue-600 tabular-nums w-8 text-right">{count}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            {/* Stage Cards */}
+            {stages.map((stage, idx) => {
+              const bal = balances[stage.id] || {};
+              const isFirst = idx === 0;
+              const prevStage = idx > 0 ? stages[idx - 1] : null;
+              const prevBal = prevStage ? (balances[prevStage.id] || {}) : null;
+              const canReceive = isFirst ? (batch.unallocated_crates || 0) > 0 : (prevBal?.passed || 0) > 0;
+              const canInspect = (bal.pending || 0) > 0;
+              return (
+                <StageCard key={stage.id} stage={stage} bal={bal} isFirst={isFirst}
+                  canReceive={canReceive} canInspect={canInspect}
+                  sourceLabel={isFirst ? 'Unallocated' : prevStage?.name}
+                  sourceQty={isFirst ? (batch.unallocated_crates || 0) : (prevBal?.passed || 0)}
+                  batchId={batchId} bottlesPerCrate={bpc}
+                  rejectionReasons={rejectionReasons} qcTeam={qcTeam} onUpdate={fetchBatch} />
+              );
+            })}
           </div>
 
-          {/* Expandable Detail Grid */}
-          <div className="bg-white border border-t-0 border-slate-200 rounded-b-xl">
-            <button onClick={() => setShowRejections(!showRejections)}
-              className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-slate-50 transition-colors"
-              data-testid="toggle-rejections">
-              <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Detail View</span>
-              {showRejections ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
-            </button>
-
-            {showRejections && (
-              <div className="px-3 sm:px-5 pb-4 sm:pb-5 space-y-3">
-                {/* Filters */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3" data-testid="rej-filters">
-                  <Select value={rejFilter.resource || ""} onValueChange={v => setRejFilter(p => ({ ...p, resource: v === "__all__" ? "" : v }))}>
-                    <SelectTrigger className="h-9 text-xs border-slate-200" data-testid="rej-filter-resource">
-                      <SelectValue placeholder="All Resources" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">All Resources</SelectItem>
-                      {[...uniqueResources].sort().map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Select value={rejFilter.date || ""} onValueChange={v => setRejFilter(p => ({ ...p, date: v === "__all__" ? "" : v }))}>
-                    <SelectTrigger className="h-9 text-xs border-slate-200" data-testid="rej-filter-date">
-                      <SelectValue placeholder="All Dates" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">All Dates</SelectItem>
-                      {[...uniqueDates].sort().map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Select value={rejFilter.reason || ""} onValueChange={v => setRejFilter(p => ({ ...p, reason: v === "__all__" ? "" : v }))}>
-                    <SelectTrigger className="h-9 text-xs border-slate-200" data-testid="rej-filter-reason">
-                      <SelectValue placeholder="All Reasons" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">All Reasons</SelectItem>
-                      {[...uniqueReasons].sort().map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Select value={rejFilter.stage || ""} onValueChange={v => setRejFilter(p => ({ ...p, stage: v === "__all__" ? "" : v }))}>
-                    <SelectTrigger className="h-9 text-xs border-slate-200" data-testid="rej-filter-stage">
-                      <SelectValue placeholder="All Stages" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">All Stages</SelectItem>
-                      {[...uniqueStages].sort().map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+          {/* RIGHT: Rejection Summary + Activity */}
+          <div className="lg:col-span-5 xl:col-span-4 space-y-2">
+            {/* Rejection Summary */}
+            {rejEntries.length > 0 && (
+              <div className="bg-white border border-slate-200 rounded-md" data-testid="rejection-summary-section">
+                <div className="px-3 py-2.5 border-b border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={13} className="text-red-500" />
+                    <span className="text-xs font-semibold text-slate-800">Rejections</span>
+                    <span className="text-[10px] text-slate-400">{rejEntries.length} records</span>
+                  </div>
+                  <span className="text-sm font-bold text-red-600" data-testid="rej-metric-total">{totalRej}</span>
                 </div>
 
-                {/* Grid */}
-                <div className="overflow-x-auto -mx-3 sm:-mx-0 rounded-xl border border-slate-200">
-                  <table className="w-full text-sm min-w-[640px]">
-                    <thead>
-                      <tr className="bg-slate-800 text-white">
-                        <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider font-semibold">Resource</th>
-                        <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider font-semibold">Date</th>
-                        <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider font-semibold">Stage</th>
-                        <th className="text-center px-4 py-3 text-[10px] uppercase tracking-wider font-semibold">Crates</th>
-                        <th className="text-center px-4 py-3 text-[10px] uppercase tracking-wider font-semibold text-red-300">Rejected</th>
-                        <th className="text-center px-4 py-3 text-[10px] uppercase tracking-wider font-semibold text-emerald-300">Passed</th>
-                        <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider font-semibold">Reason</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.map((e, idx) => (
-                        <tr key={idx}
-                          className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'} hover:bg-blue-50/50 transition-colors border-b border-slate-100`}
-                          data-testid={`rej-summary-${idx}`}>
-                          <td className="px-4 py-3">
-                            <span className="text-sm font-medium text-slate-800">{e.resource_name}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="text-sm text-slate-600 tabular-nums">{e.date}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{e.stage_name}</span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="text-sm font-semibold text-slate-700 tabular-nums">{e.qty_inspected || '-'}</span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="inline-flex items-center justify-center min-w-[28px] h-6 px-2 text-xs font-bold text-white bg-red-500 rounded-full">{e.qty_rejected}</span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="text-sm font-semibold text-emerald-600 tabular-nums">{e.qty_inspected ? ((e.qty_inspected * bpc) - e.qty_rejected).toLocaleString() : '-'}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">{e.reason || '-'}</span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="bg-slate-800 text-white font-semibold">
-                        <td colSpan={4} className="px-4 py-3 text-right text-xs uppercase tracking-wider">Total ({filtered.length} records)</td>
-                        <td className="px-4 py-3 text-center">
-                          <span className="inline-flex items-center justify-center min-w-[32px] h-6 px-2 text-xs font-bold bg-red-400 rounded-full">{filteredTotal.toLocaleString()}</span>
-                        </td>
-                        <td className="px-4 py-3 text-center text-emerald-300 text-sm">{(filtered.reduce((s, e) => s + ((e.qty_inspected || 0) * bpc), 0) - filteredTotal).toLocaleString()}</td>
-                        <td></td>
-                      </tr>
-                    </tfoot>
-                  </table>
+                {/* Compact breakdown */}
+                <div className="px-3 py-2 space-y-2 border-b border-slate-100">
+                  {topResource.length > 0 && (
+                    <div>
+                      <span className="text-[9px] text-slate-400 uppercase tracking-wider font-medium">By Resource</span>
+                      <div className="mt-1 space-y-1">
+                        {topResource.slice(0, 3).map(([name, count], i) => (
+                          <div key={i} className="flex items-center justify-between text-[11px]">
+                            <span className="text-slate-600 truncate mr-2">{name}</span>
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-12 h-1 bg-slate-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-red-400 rounded-full" style={{ width: `${(count / totalRej) * 100}%` }} />
+                              </div>
+                              <span className="text-red-600 font-semibold tabular-nums w-6 text-right">{count}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {topReason.length > 0 && (
+                    <div>
+                      <span className="text-[9px] text-slate-400 uppercase tracking-wider font-medium">By Reason</span>
+                      <div className="mt-1 space-y-1">
+                        {topReason.slice(0, 3).map(([name, count], i) => (
+                          <div key={i} className="flex items-center justify-between text-[11px]">
+                            <span className="text-slate-600 truncate mr-2">{name}</span>
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-12 h-1 bg-slate-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-amber-400 rounded-full" style={{ width: `${(count / totalRej) * 100}%` }} />
+                              </div>
+                              <span className="text-amber-600 font-semibold tabular-nums w-6 text-right">{count}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+                {/* Expandable detail */}
+                <button onClick={() => setShowRejections(!showRejections)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-slate-50 transition-colors"
+                  data-testid="toggle-rejections">
+                  <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Detail View</span>
+                  {showRejections ? <ChevronUp size={12} className="text-slate-400" /> : <ChevronDown size={12} className="text-slate-400" />}
+                </button>
+
+                {showRejections && (
+                  <div className="px-3 pb-3 space-y-2">
+                    <div className="grid grid-cols-2 gap-1.5" data-testid="rej-filters">
+                      <Select value={rejFilter.resource || ""} onValueChange={v => setRejFilter(p => ({ ...p, resource: v === "__all__" ? "" : v }))}>
+                        <SelectTrigger className="h-7 text-[10px] border-slate-200" data-testid="rej-filter-resource"><SelectValue placeholder="Resource" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__all__">All</SelectItem>
+                          {[...uniqueResources].sort().map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Select value={rejFilter.reason || ""} onValueChange={v => setRejFilter(p => ({ ...p, reason: v === "__all__" ? "" : v }))}>
+                        <SelectTrigger className="h-7 text-[10px] border-slate-200" data-testid="rej-filter-reason"><SelectValue placeholder="Reason" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__all__">All</SelectItem>
+                          {[...uniqueReasons].sort().map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Select value={rejFilter.stage || ""} onValueChange={v => setRejFilter(p => ({ ...p, stage: v === "__all__" ? "" : v }))}>
+                        <SelectTrigger className="h-7 text-[10px] border-slate-200" data-testid="rej-filter-stage"><SelectValue placeholder="Stage" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__all__">All</SelectItem>
+                          {[...uniqueStages].sort().map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Select value={rejFilter.date || ""} onValueChange={v => setRejFilter(p => ({ ...p, date: v === "__all__" ? "" : v }))}>
+                        <SelectTrigger className="h-7 text-[10px] border-slate-200" data-testid="rej-filter-date"><SelectValue placeholder="Date" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__all__">All</SelectItem>
+                          {[...uniqueDates].sort().map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="max-h-64 overflow-y-auto border border-slate-200 rounded">
+                      <table className="w-full text-[11px]">
+                        <thead className="sticky top-0">
+                          <tr className="bg-slate-700 text-white text-[9px] uppercase tracking-wider">
+                            <th className="text-left px-2 py-1.5 font-medium">Resource</th>
+                            <th className="text-left px-2 py-1.5 font-medium">Stage</th>
+                            <th className="text-center px-2 py-1.5 font-medium">Rej</th>
+                            <th className="text-left px-2 py-1.5 font-medium">Reason</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filtered.map((e, idx) => (
+                            <tr key={idx} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'} border-b border-slate-50`} data-testid={`rej-summary-${idx}`}>
+                              <td className="px-2 py-1.5">
+                                <div className="text-slate-700 font-medium">{e.resource_name}</div>
+                                <div className="text-[9px] text-slate-400">{e.date}</div>
+                              </td>
+                              <td className="px-2 py-1.5 text-slate-500">{e.stage_name}</td>
+                              <td className="px-2 py-1.5 text-center">
+                                <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-bold text-white bg-red-500 rounded">{e.qty_rejected}</span>
+                              </td>
+                              <td className="px-2 py-1.5">
+                                <span className="text-[10px] text-amber-700">{e.reason || '-'}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-slate-700 text-white font-medium text-[10px]">
+                            <td colSpan={2} className="px-2 py-1.5 text-right">{filtered.length} records</td>
+                            <td className="px-2 py-1.5 text-center font-bold">{filteredTotal}</td>
+                            <td></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Activity Log */}
+            {history.timeline?.length > 0 && (
+              <div className="bg-white border border-slate-200 rounded-md">
+                <button onClick={() => setShowHistory(!showHistory)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-slate-50 transition-colors"
+                  data-testid="toggle-history">
+                  <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                    <Clock size={12} className="text-slate-400" /> Activity ({history.timeline.length})
+                  </span>
+                  {showHistory ? <ChevronUp size={12} className="text-slate-400" /> : <ChevronDown size={12} className="text-slate-400" />}
+                </button>
+                {showHistory && (
+                  <div className="px-3 pb-3 space-y-2 max-h-80 overflow-y-auto">
+                    {history.timeline.map((item, i) => (
+                      <div key={item.id || i} className="flex items-start gap-2 text-[11px]">
+                        <div className={`mt-0.5 w-5 h-5 rounded flex items-center justify-center shrink-0 ${
+                          item.type === 'movement' ? 'bg-blue-50' : item.qty_rejected > 0 ? 'bg-red-50' : 'bg-emerald-50'
+                        }`}>
+                          {item.type === 'movement' ? <MoveRight size={10} className="text-blue-600" /> :
+                            item.qty_rejected > 0 ? <AlertTriangle size={10} className="text-red-500" /> : <ClipboardCheck size={10} className="text-emerald-600" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          {item.type === 'movement' ? (
+                            <p className="text-slate-700"><span className="font-medium">{item.quantity}</span> crates to <span className="font-medium">{item.to_stage_name}</span></p>
+                          ) : (
+                            <div className="text-slate-700">
+                              <p><span className="font-medium">{item.qty_inspected}</span> crates at <span className="font-medium">{item.stage_name}</span>
+                              {(!item.qty_rejected || item.qty_rejected === 0) && <> &mdash; <span className="text-emerald-600">passed</span></>}
+                              {item.qty_rejected > 0 && <> &mdash; <span className="text-red-500">{item.qty_rejected} rejected</span></>}
+                              </p>
+                              {item.entries?.length > 0 && (
+                                <div className="mt-0.5 ml-2 space-y-0.5">
+                                  {item.entries.map((entry, ei) => (
+                                    <div key={ei}>
+                                      <p className="text-slate-500">{entry.resource_name} &mdash; {entry.qty_inspected}c</p>
+                                      {entry.rejections?.filter(r => r.qty_rejected > 0).map((r, ri) => (
+                                        <p key={ri} className="text-slate-400 ml-2"><span className="text-red-500 font-medium">{r.qty_rejected}</span> {r.reason}</p>
+                                      ))}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {!item.entries && item.rejections?.length > 0 && (
+                                <div className="mt-0.5 ml-2 space-y-0.5">
+                                  {item.rejections.filter(r => r.qty_rejected > 0).map((r, ri) => (
+                                    <p key={ri} className="text-slate-400">{r.resource_name}: <span className="text-red-500">{r.qty_rejected}</span> {r.reason}</p>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          <p className="text-[10px] text-slate-300 mt-0.5">{item.moved_by_name || item.inspected_by_name} &middot; {new Date(item.timestamp).toLocaleString()}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* No rejections placeholder */}
+            {rejEntries.length === 0 && (
+              <div className="bg-white border border-slate-200 rounded-md p-4 text-center">
+                <p className="text-xs text-slate-400">No rejections recorded yet</p>
               </div>
             )}
           </div>
         </div>
-        );
-      })()}
-
-      {/* Activity Timeline */}
-      {history.timeline?.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-xl">
-          <button onClick={() => setShowHistory(!showHistory)}
-            className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors rounded-xl"
-            data-testid="toggle-history">
-            <span className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-              <Clock size={16} className="text-slate-400" /> Activity Log ({history.timeline.length})
-            </span>
-            {showHistory ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
-          </button>
-          {showHistory && (
-            <div className="px-5 pb-5 space-y-3 max-h-96 overflow-y-auto">
-              {history.timeline.map((item, i) => (
-                <div key={item.id || i} className="flex items-start gap-3 text-xs">
-                  <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
-                    item.type === 'movement' ? 'bg-blue-100' : item.qty_rejected > 0 ? 'bg-red-100' : 'bg-emerald-100'
-                  }`}>
-                    {item.type === 'movement' ? <MoveRight size={11} className="text-blue-600" /> :
-                      item.qty_rejected > 0 ? <AlertTriangle size={11} className="text-red-600" /> : <ClipboardCheck size={11} className="text-emerald-600" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    {item.type === 'movement' ? (
-                      <p className="text-slate-700"><span className="font-medium">{item.quantity} crates</span> moved to <span className="font-medium">{item.to_stage_name}</span></p>
-                    ) : (
-                      <div className="text-slate-700">
-                        <p>Inspected <span className="font-medium">{item.qty_inspected} crates</span> at <span className="font-medium">{item.stage_name}</span>
-                        {(!item.qty_rejected || item.qty_rejected === 0) && <> &mdash; <span className="text-emerald-600">all passed</span></>}
-                        {item.qty_rejected > 0 && <> &mdash; <span className="text-red-600">{item.qty_rejected} bottles rejected</span></>}
-                        </p>
-                        {/* New nested entries format */}
-                        {item.entries && item.entries.length > 0 && (
-                          <div className="mt-1 ml-2 space-y-1">
-                            {item.entries.map((entry, ei) => (
-                              <div key={ei}>
-                                <p className="text-xs text-slate-500 font-medium">{entry.resource_name} ({entry.date}) &mdash; {entry.qty_inspected} crates</p>
-                                {entry.rejections?.filter(r => r.qty_rejected > 0).map((r, ri) => (
-                                  <p key={ri} className="text-xs text-slate-400 ml-3">
-                                    <span className="text-red-500 font-medium">{r.qty_rejected}</span> rejected &mdash; {r.reason}
-                                  </p>
-                                ))}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {/* Legacy flat rejections format */}
-                        {!item.entries && item.rejections && item.rejections.length > 0 && (
-                          <div className="mt-1 ml-2 space-y-0.5">
-                            {item.rejections.filter(r => r.qty_rejected > 0).map((r, ri) => (
-                              <p key={ri} className="text-xs text-slate-500">
-                                {r.resource_name} ({r.date}): <span className="text-red-500 font-medium">{r.qty_rejected}</span> &mdash; {r.reason}
-                              </p>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2 mt-0.5 text-slate-400">
-                      <User size={10} /> {item.moved_by_name || item.inspected_by_name}
-                      <span>&middot;</span>
-                      {new Date(item.timestamp).toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+      ) : (
+        <div className="bg-amber-50 border border-amber-200 rounded-md p-4 text-center">
+          <FlaskConical className="w-6 h-6 text-amber-400 mx-auto mb-1" />
+          <p className="text-sm text-amber-700 font-medium">No QC Route Configured</p>
+          <p className="text-xs text-amber-600 mt-0.5">Configure a QC route for "{batch.sku_name}" to start tracking</p>
         </div>
       )}
 
-      <div className="text-xs text-slate-400 flex items-center gap-4">
+      {/* Warehouse Transfer */}
+      <WarehouseTransferSection batch={batch} batchId={batchId} onUpdate={fetchBatch} />
+
+      <div className="text-[10px] text-slate-300 flex items-center gap-3">
         <span>Created by {batch.created_by_name}</span>
         <span>{new Date(batch.created_at).toLocaleDateString()}</span>
       </div>
@@ -575,9 +463,13 @@ export default function BatchDetail() {
 }
 
 
-/* ─── Stage Card with Move & Inspect actions ─── */
+/* ═══════════════════════════════════════════════
+   Stage Card — Compact, monochrome design
+   ═══════════════════════════════════════════════ */
 
-function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sourceLabel, sourceQty, batchId, bottlesPerCrate, rejectionReasons, qcTeam, onUpdate }) {
+const STAGE_ICON = { qc: FlaskConical, labeling: Paintbrush, final_qc: ShieldCheck };
+
+function StageCard({ stage, bal, isFirst, canReceive, canInspect, sourceLabel, sourceQty, batchId, bottlesPerCrate, rejectionReasons, qcTeam, onUpdate }) {
   const [showMove, setShowMove] = useState(false);
   const [showInspect, setShowInspect] = useState(false);
   const [moveQty, setMoveQty] = useState('');
@@ -588,357 +480,250 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
   const [entries, setEntries] = useState([emptyEntry()]);
   const [saving, setSaving] = useState(false);
 
+  const Icon = STAGE_ICON[stage.stage_type] || FlaskConical;
+  const received = bal.received || 0;
+  const pending = bal.pending || 0;
+  const passed = bal.passed || 0;
+  const rejected = bal.rejected || 0;
+  const stageBottles = received * (bottlesPerCrate || 1);
+  const stageRejPct = stageBottles > 0 ? ((rejected / stageBottles) * 100).toFixed(1) : null;
+  const stagePassPct = stageBottles > 0 ? (((stageBottles - rejected) / stageBottles) * 100).toFixed(1) : null;
+
   const handleMove = async () => {
     const qty = parseInt(moveQty);
     if (!qty || qty <= 0) { toast.error('Enter a valid quantity'); return; }
     if (qty > sourceQty) { toast.error(`Only ${sourceQty} available`); return; }
     setSaving(true);
     try {
-      await axios.post(`${API_URL}/production/batches/${batchId}/move`, {
-        to_stage_id: stage.id, quantity: qty, notes: moveNotes,
-      }, { headers: getAuthHeaders() });
+      await axios.post(`${API}/production/batches/${batchId}/move`, { to_stage_id: stage.id, quantity: qty, notes: moveNotes }, { headers: hdrs() });
       toast.success(`${qty} crates moved to ${stage.name}`);
       setShowMove(false); setMoveQty(''); setMoveNotes('');
       onUpdate();
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Move failed');
-    } finally { setSaving(false); }
+    } catch (err) { toast.error(err.response?.data?.detail || 'Move failed'); }
+    finally { setSaving(false); }
   };
 
   const handleInspect = async () => {
-    // Build entries for the API
     const apiEntries = entries.map(e => ({
-      resource_id: e.resource_id,
-      resource_name: e.resource_name,
-      date: e.date,
+      resource_id: e.resource_id, resource_name: e.resource_name, date: e.date,
       qty_inspected: parseInt(e.qty_inspected) || 0,
-      rejections: e.rejItems.filter(r => parseInt(r.qty_rejected) > 0).map(r => ({
-        qty_rejected: parseInt(r.qty_rejected) || 0,
-        reason: r.reason,
-      })),
+      rejections: e.rejItems.filter(r => parseInt(r.qty_rejected) > 0).map(r => ({ qty_rejected: parseInt(r.qty_rejected) || 0, reason: r.reason })),
     }));
-
-    // Validate
     for (const e of apiEntries) {
       if (!e.resource_name) { toast.error('Select a resource for all entries'); return; }
       if (!e.date) { toast.error('Date is required'); return; }
       if (e.qty_inspected <= 0) { toast.error('Crates inspected must be > 0'); return; }
-      for (const r of e.rejections) {
-        if (!r.reason) { toast.error('Select a reason for all rejection rows'); return; }
-      }
+      for (const r of e.rejections) { if (!r.reason) { toast.error('Select a reason for all rejection rows'); return; } }
       const entryRejTotal = e.rejections.reduce((s, r) => s + r.qty_rejected, 0);
-      const maxBottles = e.qty_inspected * (bottlesPerCrate || 1);
-      if (entryRejTotal > maxBottles) { toast.error(`Rejected (${entryRejTotal}) exceeds ${maxBottles} for ${e.resource_name}`); return; }
+      if (entryRejTotal > e.qty_inspected * (bottlesPerCrate || 1)) { toast.error(`Rejected exceeds max for ${e.resource_name}`); return; }
     }
-
     const totalCrates = apiEntries.reduce((s, e) => s + e.qty_inspected, 0);
-    if (totalCrates > (bal.pending || 0)) { toast.error(`Total crates (${totalCrates}) exceeds ${bal.pending} pending`); return; }
+    if (totalCrates > (bal.pending || 0)) { toast.error(`Total crates exceeds ${bal.pending} pending`); return; }
 
     setSaving(true);
     try {
-      await axios.post(`${API_URL}/production/batches/${batchId}/inspect`, {
-        stage_id: stage.id, entries: apiEntries, remarks: inspRemarks,
-      }, { headers: getAuthHeaders() });
+      await axios.post(`${API}/production/batches/${batchId}/inspect`, { stage_id: stage.id, entries: apiEntries, remarks: inspRemarks }, { headers: hdrs() });
       toast.success(`Inspection recorded at ${stage.name}`);
-      setShowInspect(false);
-      setInspRemarks('');
-      setEntries([emptyEntry()]);
+      setShowInspect(false); setInspRemarks(''); setEntries([emptyEntry()]);
       onUpdate();
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Inspection failed');
-    } finally { setSaving(false); }
+    } catch (err) { toast.error(err.response?.data?.detail || 'Inspection failed'); }
+    finally { setSaving(false); }
   };
 
   const updateEntry = (idx, field, value) => {
-    setEntries(prev => {
-      const next = [...prev];
-      next[idx] = { ...next[idx], [field]: value };
-      if (field === 'resource_id') {
-        const member = (qcTeam || []).find(m => m.id === value);
-        next[idx].resource_name = member ? member.name : '';
-      }
+    setEntries(prev => { const next = [...prev]; next[idx] = { ...next[idx], [field]: value };
+      if (field === 'resource_id') { const m = (qcTeam || []).find(m => m.id === value); next[idx].resource_name = m ? m.name : ''; }
       return next;
     });
   };
   const addEntry = () => setEntries(prev => [...prev, emptyEntry()]);
   const removeEntry = (idx) => setEntries(prev => prev.length > 1 ? prev.filter((_, i) => i !== idx) : [emptyEntry()]);
-
-  const updateRejItem = (entryIdx, rejIdx, field, value) => {
-    setEntries(prev => {
-      const next = [...prev];
-      const items = [...next[entryIdx].rejItems];
-      items[rejIdx] = { ...items[rejIdx], [field]: value };
-      next[entryIdx] = { ...next[entryIdx], rejItems: items };
-      return next;
-    });
+  const updateRejItem = (eIdx, rIdx, field, value) => {
+    setEntries(prev => { const next = [...prev]; const items = [...next[eIdx].rejItems]; items[rIdx] = { ...items[rIdx], [field]: value }; next[eIdx] = { ...next[eIdx], rejItems: items }; return next; });
   };
-  const addRejItem = (entryIdx) => {
-    setEntries(prev => {
-      const next = [...prev];
-      next[entryIdx] = { ...next[entryIdx], rejItems: [...next[entryIdx].rejItems, emptyRejItem()] };
-      return next;
-    });
-  };
-  const removeRejItem = (entryIdx, rejIdx) => {
-    setEntries(prev => {
-      const next = [...prev];
-      const items = next[entryIdx].rejItems;
-      next[entryIdx] = { ...next[entryIdx], rejItems: items.length > 1 ? items.filter((_, i) => i !== rejIdx) : [emptyRejItem()] };
-      return next;
-    });
-  };
+  const addRejItem = (eIdx) => { setEntries(prev => { const next = [...prev]; next[eIdx] = { ...next[eIdx], rejItems: [...next[eIdx].rejItems, emptyRejItem()] }; return next; }); };
+  const removeRejItem = (eIdx, rIdx) => { setEntries(prev => { const next = [...prev]; const items = next[eIdx].rejItems; next[eIdx] = { ...next[eIdx], rejItems: items.length > 1 ? items.filter((_, i) => i !== rIdx) : [emptyRejItem()] }; return next; }); };
 
   return (
-    <div className={`bg-white border rounded-xl overflow-hidden ${cfg.border}`} data-testid={`stage-card-${stage.id}`}>
-      {/* Stage Header */}
-      <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between px-3 sm:px-5 py-3 gap-2 ${cfg.bg}`}>
-        <div className="flex items-center gap-2 sm:gap-2.5">
-          <Icon size={16} className={cfg.color} />
-          <span className="text-xs sm:text-sm font-semibold text-slate-800">{stage.name}</span>
-          <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${cfg.badge}`}>
-            {stage.stage_type === 'qc' ? 'QC' : stage.stage_type === 'labeling' ? 'Labeling' : 'Final QC'}
-          </span>
-        </div>
+    <div className="bg-white border border-slate-200 rounded-md overflow-hidden" data-testid={`stage-card-${stage.id}`}>
+      {/* Stage header row */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
         <div className="flex items-center gap-2">
+          <Icon size={13} className="text-slate-400" />
+          <span className="text-xs font-semibold text-slate-800">{stage.name}</span>
+          <span className="text-[9px] text-slate-400 font-medium uppercase">{stage.stage_type === 'qc' ? 'QC' : stage.stage_type === 'labeling' ? 'Label' : 'Final'}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
           {canReceive && (
             <button onClick={() => { setShowMove(!showMove); setShowInspect(false); }}
-              className="px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg flex items-center gap-1 transition-colors"
+              className="px-2 py-1 text-[10px] font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded flex items-center gap-1 transition-colors"
               data-testid={`move-to-${stage.id}`}>
-              <MoveRight size={12} /> Receive
+              <MoveRight size={10} /> Receive
             </button>
           )}
           {canInspect && (
             <button onClick={() => { setShowInspect(!showInspect); setShowMove(false); }}
-              className="px-2 sm:px-3 py-1.5 text-[10px] sm:text-xs font-medium text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg flex items-center gap-1 transition-colors"
+              className="px-2 py-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded flex items-center gap-1 transition-colors"
               data-testid={`inspect-${stage.id}`}>
-              <ClipboardCheck size={12} /> Inspect
+              <ClipboardCheck size={10} /> Inspect
             </button>
           )}
         </div>
       </div>
 
-      {/* Balance Row with % */}
-      {(() => {
-        const received = bal.received || 0;
-        const passed = bal.passed || 0;
-        const rejected = bal.rejected || 0;
-        const totalStageBottles = received * (bottlesPerCrate || 1);
-        // Quality % based on bottles — shows historical quality even after stock moves to next stage
-        const rejPct = totalStageBottles > 0 ? ((rejected / totalStageBottles) * 100).toFixed(1) : null;
-        const passPct = totalStageBottles > 0 ? (((totalStageBottles - rejected) / totalStageBottles) * 100).toFixed(1) : null;
-        return (
-        <div className="border-b border-slate-100">
-          <div className="grid grid-cols-4 divide-x divide-slate-100">
-            {[
-              { label: 'Received', unit: 'crates', value: received, cls: 'text-slate-800', pct: null },
-              { label: 'Pending', unit: 'crates', value: bal.pending || 0, cls: 'text-amber-600', pct: null },
-              { label: 'Passed', unit: 'crates', value: passed, cls: 'text-emerald-600', pct: passPct, pctCls: 'text-emerald-500' },
-              { label: 'Rejected', unit: 'bottles', value: rejected, cls: 'text-red-600', pct: rejPct, pctCls: 'text-red-500' },
-            ].map((c, i) => (
-              <div key={i} className="py-2.5 sm:py-3 px-2 sm:px-4 text-center">
-                <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-wider">{c.label}</p>
-                <p className={`text-lg sm:text-xl font-bold ${c.cls}`}>{c.value}</p>
-                <p className="text-[8px] sm:text-[9px] text-slate-300 mt-0.5">{c.unit}</p>
-                {c.pct !== null && received > 0 && (
-                  <p className={`text-[9px] sm:text-[10px] font-semibold ${c.pctCls} mt-0.5`}>{c.pct}%</p>
-                )}
-              </div>
-            ))}
+      {/* Balance row — compact horizontal */}
+      <div className="flex items-center divide-x divide-slate-100">
+        {[
+          { label: 'RECV', val: received, cls: 'text-slate-700' },
+          { label: 'PEND', val: pending, cls: pending > 0 ? 'text-amber-600' : 'text-slate-400' },
+          { label: 'PASS', val: passed, cls: passed > 0 ? 'text-emerald-600' : 'text-slate-400', pct: stagePassPct, pctCls: 'text-emerald-500' },
+          { label: 'REJ', val: rejected, cls: rejected > 0 ? 'text-red-600' : 'text-slate-400', pct: stageRejPct, pctCls: 'text-red-500', unit: 'bottles' },
+        ].map((c, i) => (
+          <div key={i} className="flex-1 py-2 px-2 text-center">
+            <p className="text-[8px] text-slate-400 font-medium tracking-wider">{c.label}</p>
+            <p className={`text-sm font-bold tabular-nums ${c.cls}`}>{c.val}</p>
+            {c.pct && received > 0 && <p className={`text-[9px] font-semibold ${c.pctCls}`}>{c.pct}%</p>}
           </div>
-          {/* Mini progress bar for pass/reject ratio */}
-          {received > 0 && rejected > 0 && (
-            <div className="px-3 sm:px-5 pb-2">
-              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex">
-                <div className="bg-emerald-400 h-full" style={{ width: `${passPct || 0}%` }} />
-                <div className="bg-red-400 h-full" style={{ width: `${rejPct || 0}%` }} />
-              </div>
-            </div>
-          )}
-        </div>
-        );
-      })()}
+        ))}
+      </div>
 
-      {/* Move Form */}
-      {showMove && (
-        <div className="px-3 sm:px-5 py-3 sm:py-4 bg-blue-50/50 border-t border-blue-100 space-y-3">
-          <p className="text-xs text-blue-700 font-medium">Move from <span className="font-bold">{sourceLabel}</span> ({sourceQty} available)</p>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 sm:gap-3">
-            <div className="flex-1">
-              <label className="text-[10px] text-slate-500 mb-1 block">Quantity (crates)</label>
-              <input type="number" value={moveQty} onChange={e => setMoveQty(e.target.value)} max={sourceQty}
-                placeholder={`Max ${sourceQty}`} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" data-testid={`move-qty-${stage.id}`} />
-            </div>
-            <div className="flex-1">
-              <label className="text-[10px] text-slate-500 mb-1 block">Notes (optional)</label>
-              <input value={moveNotes} onChange={e => setMoveNotes(e.target.value)}
-                placeholder="Optional notes" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-            </div>
-            <div className="flex gap-2">
-              <button onClick={handleMove} disabled={saving}
-                className="flex-1 sm:flex-none px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 flex items-center justify-center gap-1.5 whitespace-nowrap"
-                data-testid={`move-submit-${stage.id}`}>
-                {saving ? <Loader2 size={13} className="animate-spin" /> : <MoveRight size={13} />} Move
-              </button>
-              <button onClick={() => setShowMove(false)} className="px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 rounded-lg">Cancel</button>
-            </div>
+      {/* Quality micro-bar */}
+      {received > 0 && rejected > 0 && (
+        <div className="px-3 pb-1.5">
+          <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden flex">
+            <div className="bg-emerald-400 h-full" style={{ width: `${stagePassPct || 0}%` }} />
+            <div className="bg-red-400 h-full" style={{ width: `${stageRejPct || 0}%` }} />
           </div>
         </div>
       )}
 
-      {/* Inspection Form — Redesigned with better UX */}
-      {showInspect && (() => {
-        const totalCrates = entries.reduce((s, e) => s + (parseInt(e.qty_inspected) || 0), 0);
-        const totalRejected = entries.reduce((s, e) => s + e.rejItems.reduce((rs, r) => rs + (parseInt(r.qty_rejected) || 0), 0), 0);
-        const totalBottles = entries.reduce((s, e) => s + ((parseInt(e.qty_inspected) || 0) * (bottlesPerCrate || 1)), 0);
-        const passedBottles = Math.max(0, totalBottles - totalRejected);
-        const passPct = totalBottles > 0 ? ((passedBottles / totalBottles) * 100).toFixed(1) : '0.0';
-        const rejPct = totalBottles > 0 ? ((totalRejected / totalBottles) * 100).toFixed(1) : '0.0';
-        return (
-        <div className="border-t-2 border-emerald-400">
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 sm:px-5 py-3 bg-gradient-to-r from-emerald-50 to-teal-50">
-            <div>
-              <p className="text-sm font-semibold text-emerald-800" data-testid={`inspect-header-${stage.id}`}>
-                Record Inspection
-              </p>
-              <p className="text-[11px] text-emerald-600 mt-0.5">
-                <span className="font-medium">{stage.name}</span>
-                <span className="mx-1.5 text-emerald-300">|</span>
-                <span className="text-amber-600 font-medium">{bal.pending || 0} pending</span>
-                <span className="mx-1.5 text-emerald-300">|</span>
-                {bottlesPerCrate} bottles/crate
-              </p>
+      {/* Move Form */}
+      {showMove && (
+        <div className="px-3 py-2.5 bg-slate-50 border-t border-slate-100 space-y-2">
+          <p className="text-[10px] text-slate-500">Move from <span className="font-semibold text-slate-700">{sourceLabel}</span> ({sourceQty} available)</p>
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="text-[9px] text-slate-400 mb-0.5 block">Crates</label>
+              <input type="number" value={moveQty} onChange={e => setMoveQty(e.target.value)} max={sourceQty}
+                placeholder={`Max ${sourceQty}`} className="w-full border border-slate-200 rounded px-2.5 py-1.5 text-xs" data-testid={`move-qty-${stage.id}`} />
             </div>
-            <button onClick={addEntry}
-              className="px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"
-              data-testid={`add-entry-${stage.id}`}>
-              <Plus size={12} /> Add Entry
+            <div className="flex-1">
+              <label className="text-[9px] text-slate-400 mb-0.5 block">Notes</label>
+              <input value={moveNotes} onChange={e => setMoveNotes(e.target.value)} placeholder="Optional"
+                className="w-full border border-slate-200 rounded px-2.5 py-1.5 text-xs" />
+            </div>
+            <button onClick={handleMove} disabled={saving}
+              className="px-3 py-1.5 text-xs font-medium text-white bg-slate-800 hover:bg-slate-900 rounded disabled:opacity-50 flex items-center gap-1"
+              data-testid={`move-submit-${stage.id}`}>
+              {saving ? <Loader2 size={11} className="animate-spin" /> : <MoveRight size={11} />} Move
             </button>
+            <button onClick={() => setShowMove(false)} className="px-2 py-1.5 text-xs text-slate-400 hover:bg-slate-100 rounded">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Inspection Form */}
+      {showInspect && (() => {
+        const tc = entries.reduce((s, e) => s + (parseInt(e.qty_inspected) || 0), 0);
+        const tr = entries.reduce((s, e) => s + e.rejItems.reduce((rs, r) => rs + (parseInt(r.qty_rejected) || 0), 0), 0);
+        const tb = entries.reduce((s, e) => s + ((parseInt(e.qty_inspected) || 0) * (bottlesPerCrate || 1)), 0);
+        const tp = Math.max(0, tb - tr);
+        const rp = tb > 0 ? ((tr / tb) * 100).toFixed(1) : '0.0';
+        const pp = tb > 0 ? ((tp / tb) * 100).toFixed(1) : '100.0';
+        return (
+        <div className="border-t border-slate-200">
+          {/* Header */}
+          <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-slate-100">
+            <div>
+              <span className="text-xs font-semibold text-slate-800">Record Inspection</span>
+              <span className="text-[10px] text-slate-400 ml-2">{pending} pending &middot; {bottlesPerCrate} b/c</span>
+            </div>
+            <button onClick={addEntry} className="px-2 py-1 text-[10px] font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded flex items-center gap-1"
+              data-testid={`add-entry-${stage.id}`}><Plus size={10} /> Entry</button>
           </div>
 
-          {/* Live Stats Bar */}
-          {totalCrates > 0 && (
-            <div className="px-4 sm:px-5 py-2.5 bg-white border-b border-slate-100" data-testid={`inspect-stats-${stage.id}`}>
-              <div className="flex items-center gap-4 flex-wrap">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-slate-400" />
-                  <span className="text-xs text-slate-600"><span className="font-bold">{totalCrates}</span> crates</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-blue-400" />
-                  <span className="text-xs text-slate-600"><span className="font-bold">{totalBottles.toLocaleString()}</span> bottles</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-red-400" />
-                  <span className="text-xs text-red-600"><span className="font-bold">{totalRejected}</span> rejected <span className="text-red-400">({rejPct}%)</span></span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span className="text-xs text-emerald-600"><span className="font-bold">{passedBottles.toLocaleString()}</span> passed <span className="text-emerald-400">({passPct}%)</span></span>
-                </div>
-              </div>
-              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex mt-2">
-                <div className="bg-emerald-400 h-full transition-all" style={{ width: `${passPct}%` }} />
-                <div className="bg-red-400 h-full transition-all" style={{ width: `${rejPct}%` }} />
+          {/* Live stats */}
+          {tc > 0 && (
+            <div className="px-3 py-1.5 bg-white border-b border-slate-100 flex items-center gap-3 flex-wrap text-[10px]" data-testid={`inspect-stats-${stage.id}`}>
+              <span className="text-slate-500"><span className="font-bold text-slate-700">{tc}</span> crates</span>
+              <span className="text-slate-500"><span className="font-bold text-slate-700">{tb}</span> bottles</span>
+              <span className="text-red-500"><span className="font-bold">{tr}</span> rej ({rp}%)</span>
+              <span className="text-emerald-600"><span className="font-bold">{tp}</span> pass ({pp}%)</span>
+              <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden flex min-w-[40px]">
+                <div className="bg-emerald-400 h-full" style={{ width: `${pp}%` }} />
+                <div className="bg-red-400 h-full" style={{ width: `${rp}%` }} />
               </div>
             </div>
           )}
 
           {/* Entry Cards */}
-          <div className="px-4 sm:px-5 py-4 space-y-3 bg-slate-50/50">
+          <div className="p-2.5 space-y-2">
             {entries.map((entry, eIdx) => {
-              const eCrates = parseInt(entry.qty_inspected) || 0;
-              const eBottles = eCrates * (bottlesPerCrate || 1);
-              const eRejected = entry.rejItems.reduce((s, r) => s + (parseInt(r.qty_rejected) || 0), 0);
-              const ePassed = Math.max(0, eBottles - eRejected);
-              const ePassPct = eBottles > 0 ? ((ePassed / eBottles) * 100).toFixed(0) : null;
+              const ec = parseInt(entry.qty_inspected) || 0;
+              const eb = ec * (bottlesPerCrate || 1);
+              const er = entry.rejItems.reduce((s, r) => s + (parseInt(r.qty_rejected) || 0), 0);
+              const epct = eb > 0 ? (((eb - er) / eb) * 100).toFixed(0) : null;
               return (
-              <div key={eIdx} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden" data-testid={`entry-card-${eIdx}`}>
-                {/* Entry Header */}
-                <div className="px-4 py-3 border-b border-slate-100 bg-white">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                      <User size={10} className="text-slate-400" /> Inspector Entry {entries.length > 1 && `#${eIdx + 1}`}
+              <div key={eIdx} className="border border-slate-200 rounded bg-white" data-testid={`entry-card-${eIdx}`}>
+                <div className="px-2.5 py-2 border-b border-slate-50">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[9px] font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                      <User size={9} /> Entry {entries.length > 1 && `#${eIdx + 1}`}
                     </span>
-                    <button onClick={() => removeEntry(eIdx)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors group" data-testid={`entry-remove-${eIdx}`}>
-                      <Trash2 size={13} className="text-slate-300 group-hover:text-red-500 transition-colors" />
+                    <button onClick={() => removeEntry(eIdx)} className="p-1 hover:bg-red-50 rounded group" data-testid={`entry-remove-${eIdx}`}>
+                      <Trash2 size={11} className="text-slate-300 group-hover:text-red-500" />
                     </button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <label className="text-[10px] text-slate-400 mb-1 block font-medium">Resource</label>
+                      <label className="text-[9px] text-slate-400 mb-0.5 block">Resource</label>
                       <Select value={entry.resource_id || ""} onValueChange={v => updateEntry(eIdx, 'resource_id', v)}>
-                        <SelectTrigger className="h-9 text-sm border-slate-200 bg-white rounded-lg" data-testid={`entry-resource-${eIdx}`}>
-                          <SelectValue placeholder="Select inspector..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(qcTeam || []).map(m => (
-                            <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                          ))}
-                        </SelectContent>
+                        <SelectTrigger className="h-8 text-xs border-slate-200" data-testid={`entry-resource-${eIdx}`}><SelectValue placeholder="Select..." /></SelectTrigger>
+                        <SelectContent>{(qcTeam || []).map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                     <div>
-                      <label className="text-[10px] text-slate-400 mb-1 block font-medium">Date</label>
+                      <label className="text-[9px] text-slate-400 mb-0.5 block">Date</label>
                       <input type="date" value={entry.date} onChange={e => updateEntry(eIdx, 'date', e.target.value)}
-                        className="w-full h-9 px-3 border border-slate-200 rounded-lg text-sm bg-white" data-testid={`entry-date-${eIdx}`} />
+                        className="w-full h-8 px-2 border border-slate-200 rounded text-xs" data-testid={`entry-date-${eIdx}`} />
                     </div>
                     <div>
-                      <label className="text-[10px] text-slate-400 mb-1 block font-medium">Crates Inspected</label>
+                      <label className="text-[9px] text-slate-400 mb-0.5 block">Crates</label>
                       <input type="number" value={entry.qty_inspected} onChange={e => updateEntry(eIdx, 'qty_inspected', e.target.value)}
-                        min="1" placeholder="0"
-                        className="w-full h-9 px-3 border border-slate-200 rounded-lg text-sm font-medium text-right bg-white" data-testid={`entry-crates-${eIdx}`} />
+                        min="1" placeholder="0" className="w-full h-8 px-2 border border-slate-200 rounded text-xs text-right font-medium" data-testid={`entry-crates-${eIdx}`} />
                     </div>
                   </div>
-                  {/* Per-entry pass summary */}
-                  {eCrates > 0 && (
-                    <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-slate-50">
-                      <span className="text-[10px] text-slate-400">{eBottles} bottles</span>
-                      <span className="text-[10px] text-red-500 font-medium">{eRejected} rejected</span>
-                      <span className="text-[10px] text-emerald-600 font-semibold">{ePassed.toLocaleString()} passed</span>
-                      {ePassPct !== null && (
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${parseFloat(ePassPct) >= 95 ? 'bg-emerald-50 text-emerald-600' : parseFloat(ePassPct) >= 80 ? 'bg-amber-50 text-amber-600' : 'bg-red-50 text-red-600'}`}>
-                          {ePassPct}% pass
-                        </span>
-                      )}
+                  {ec > 0 && (
+                    <div className="flex items-center gap-2 mt-1.5 text-[9px]">
+                      <span className="text-slate-400">{eb}b</span>
+                      <span className="text-red-500">{er} rej</span>
+                      <span className="text-emerald-600">{Math.max(0, eb - er)} pass</span>
+                      {epct !== null && <span className={`font-bold px-1 py-0.5 rounded text-[8px] ${parseFloat(epct) >= 95 ? 'bg-emerald-50 text-emerald-600' : parseFloat(epct) >= 80 ? 'bg-amber-50 text-amber-600' : 'bg-red-50 text-red-600'}`}>{epct}%</span>}
                     </div>
                   )}
                 </div>
 
-                {/* Rejection Details */}
-                <div className="px-4 py-3 bg-slate-50/50">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] text-slate-400 uppercase tracking-wider font-medium flex items-center gap-1">
-                      <AlertTriangle size={9} className="text-red-400" /> Rejection Details
-                    </span>
-                    <button onClick={() => addRejItem(eIdx)}
-                      className="px-2 py-1 text-[10px] font-medium text-red-600 hover:bg-red-50 border border-red-200 rounded-md flex items-center gap-1 transition-colors"
-                      data-testid={`add-rej-${eIdx}`}>
-                      <Plus size={9} /> Add Row
+                {/* Rejections */}
+                <div className="px-2.5 py-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[9px] text-slate-400 uppercase tracking-wider font-medium">Rejections</span>
+                    <button onClick={() => addRejItem(eIdx)} className="text-[9px] text-red-500 hover:text-red-700 font-medium flex items-center gap-0.5" data-testid={`add-rej-${eIdx}`}>
+                      <Plus size={8} /> Row
                     </button>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     {entry.rejItems.map((rej, rIdx) => (
-                      <div key={rIdx} className="flex items-center gap-2 bg-white rounded-lg border border-slate-100 p-2" data-testid={`rej-item-${eIdx}-${rIdx}`}>
-                        <div className="w-20 flex-shrink-0">
-                          <input type="number" value={rej.qty_rejected} onChange={e => updateRejItem(eIdx, rIdx, 'qty_rejected', e.target.value)}
-                            min="0" placeholder="Qty"
-                            className="w-full h-8 px-2.5 border border-red-200 rounded-md text-sm text-center text-red-600 font-semibold bg-red-50/50 focus:ring-1 focus:ring-red-300 focus:border-red-300 outline-none" data-testid={`rej-qty-${eIdx}-${rIdx}`} />
-                        </div>
+                      <div key={rIdx} className="flex items-center gap-1.5" data-testid={`rej-item-${eIdx}-${rIdx}`}>
+                        <input type="number" value={rej.qty_rejected} onChange={e => updateRejItem(eIdx, rIdx, 'qty_rejected', e.target.value)}
+                          min="0" placeholder="Qty" className="w-16 h-7 px-2 border border-slate-200 rounded text-xs text-center text-red-600 font-semibold" data-testid={`rej-qty-${eIdx}-${rIdx}`} />
                         <div className="flex-1">
                           <Select value={rej.reason || ""} onValueChange={v => updateRejItem(eIdx, rIdx, 'reason', v)}>
-                            <SelectTrigger className="h-8 text-sm border-slate-200 bg-white rounded-md" data-testid={`rej-reason-${eIdx}-${rIdx}`}>
-                              <SelectValue placeholder="Select reason..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {(rejectionReasons || []).map(r => (
-                                <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>
-                              ))}
-                            </SelectContent>
+                            <SelectTrigger className="h-7 text-xs border-slate-200" data-testid={`rej-reason-${eIdx}-${rIdx}`}><SelectValue placeholder="Reason..." /></SelectTrigger>
+                            <SelectContent>{(rejectionReasons || []).map(r => <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>)}</SelectContent>
                           </Select>
                         </div>
-                        <button onClick={() => removeRejItem(eIdx, rIdx)} className="p-1.5 hover:bg-red-50 rounded-md transition-colors flex-shrink-0 group" data-testid={`rej-remove-${eIdx}-${rIdx}`}>
-                          <Trash2 size={12} className="text-slate-300 group-hover:text-red-400 transition-colors" />
+                        <button onClick={() => removeRejItem(eIdx, rIdx)} className="p-1 hover:bg-red-50 rounded group" data-testid={`rej-remove-${eIdx}-${rIdx}`}>
+                          <Trash2 size={10} className="text-slate-300 group-hover:text-red-400" />
                         </button>
                       </div>
                     ))}
@@ -949,22 +734,16 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
             })}
           </div>
 
-          {/* Footer: Remarks + Submit */}
-          <div className="px-4 sm:px-5 py-3 bg-white border-t border-slate-100 space-y-3">
-            <div className="max-w-md">
-              <label className="text-[10px] text-slate-400 mb-1 block font-medium uppercase tracking-wider">Remarks</label>
-              <input value={inspRemarks} onChange={e => setInspRemarks(e.target.value)}
-                placeholder="Optional remarks..." className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-            </div>
-            <div className="flex items-center gap-3">
-              <button onClick={handleInspect} disabled={saving}
-                className="px-5 py-2.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg disabled:opacity-50 flex items-center gap-2 transition-colors shadow-sm"
-                data-testid={`insp-submit-${stage.id}`}>
-                {saving ? <Loader2 size={14} className="animate-spin" /> : <ClipboardCheck size={14} />} Submit Inspection
-              </button>
-              <button onClick={() => { setShowInspect(false); setEntries([emptyEntry()]); }}
-                className="px-4 py-2.5 text-sm text-slate-500 hover:bg-slate-100 rounded-lg transition-colors">Cancel</button>
-            </div>
+          {/* Footer */}
+          <div className="px-3 py-2 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
+            <input value={inspRemarks} onChange={e => setInspRemarks(e.target.value)} placeholder="Remarks..."
+              className="flex-1 border border-slate-200 rounded px-2 py-1.5 text-xs" />
+            <button onClick={handleInspect} disabled={saving}
+              className="px-3 py-1.5 text-xs font-medium text-white bg-slate-800 hover:bg-slate-900 rounded disabled:opacity-50 flex items-center gap-1"
+              data-testid={`insp-submit-${stage.id}`}>
+              {saving ? <Loader2 size={11} className="animate-spin" /> : <ClipboardCheck size={11} />} Submit
+            </button>
+            <button onClick={() => { setShowInspect(false); setEntries([emptyEntry()]); }} className="px-2 py-1.5 text-xs text-slate-400 hover:bg-slate-100 rounded">Cancel</button>
           </div>
         </div>
         );
@@ -974,6 +753,10 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
 }
 
 
+/* ═══════════════════════════════════════════════
+   Warehouse Transfer Section
+   ═══════════════════════════════════════════════ */
+
 function WarehouseTransferSection({ batch, batchId, onUpdate }) {
   const [factoryWarehouses, setFactoryWarehouses] = useState([]);
   const [transfers, setTransfers] = useState([]);
@@ -982,224 +765,127 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
   const [transferQty, setTransferQty] = useState('');
   const [transferNotes, setTransferNotes] = useState('');
   const [saving, setSaving] = useState(false);
-  const [loadingTransfers, setLoadingTransfers] = useState(false);
 
   const available = (batch?.total_passed_final || 0) - (batch?.transferred_to_warehouse || 0);
-  const bottlesPerCrate = batch?.bottles_per_crate || 1;
-  const availableCrates = Math.floor(available / bottlesPerCrate);
+  const bpc = batch?.bottles_per_crate || 1;
 
   useEffect(() => {
-    const headers = getAuthHeaders();
-    axios.get(`${API_URL}/production/factory-warehouses`, { headers })
+    const h = hdrs();
+    axios.get(`${API}/production/factory-warehouses`, { headers: h })
       .then(res => {
         const whs = res.data.warehouses || [];
         setFactoryWarehouses(whs);
-        // Auto-select if only 1, or pick default
-        if (whs.length === 1) {
-          setSelectedWarehouse(whs[0].id);
-        } else {
-          const defaultWh = whs.find(w => w.is_default);
-          if (defaultWh) setSelectedWarehouse(defaultWh.id);
-        }
-      })
-      .catch(() => {});
-    // Fetch transfer history
-    setLoadingTransfers(true);
-    axios.get(`${API_URL}/production/batches/${batchId}/warehouse-transfers`, { headers })
-      .then(res => setTransfers(res.data.transfers || []))
-      .catch(() => {})
-      .finally(() => setLoadingTransfers(false));
+        if (whs.length === 1) setSelectedWarehouse(whs[0].id);
+        else { const d = whs.find(w => w.is_default); if (d) setSelectedWarehouse(d.id); }
+      }).catch(() => {});
+    axios.get(`${API}/production/batches/${batchId}/warehouse-transfers`, { headers: h })
+      .then(res => setTransfers(res.data.transfers || [])).catch(() => {});
   }, [batchId]);
 
   const handleTransfer = async () => {
     const qty = parseInt(transferQty);
     if (!qty || qty <= 0) { toast.error('Enter a valid quantity'); return; }
-    if (qty > available) { toast.error(`Only ${available} crates available`); return; }
-    if (!selectedWarehouse) { toast.error('Select a factory warehouse'); return; }
+    if (qty > available) { toast.error(`Only ${available} available`); return; }
+    if (!selectedWarehouse) { toast.error('Select a warehouse'); return; }
     try {
       setSaving(true);
-      const headers = getAuthHeaders();
-      await axios.post(`${API_URL}/production/batches/${batchId}/transfer-to-warehouse`, {
+      await axios.post(`${API}/production/batches/${batchId}/transfer-to-warehouse`, {
         warehouse_location_id: selectedWarehouse, quantity: qty, notes: transferNotes,
-      }, { headers });
-      toast.success(`${qty} bottles transferred to warehouse`);
-      setTransferQty(''); setTransferNotes(''); setShowTransfer(false);
+      }, { headers: hdrs() });
+      toast.success(`${qty} bottles transferred`);
+      setShowTransfer(false); setTransferQty(''); setTransferNotes('');
       onUpdate();
-      // Refresh transfers
-      const tRes = await axios.get(`${API_URL}/production/batches/${batchId}/warehouse-transfers`, { headers });
-      setTransfers(tRes.data.transfers || []);
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Transfer failed');
-    } finally { setSaving(false); }
+      const res = await axios.get(`${API}/production/batches/${batchId}/warehouse-transfers`, { headers: hdrs() });
+      setTransfers(res.data.transfers || []);
+    } catch (err) { toast.error(err.response?.data?.detail || 'Transfer failed'); }
+    finally { setSaving(false); }
   };
 
-  if ((batch?.total_passed_final || 0) === 0 && transfers.length === 0) return null;
+  if (available <= 0 && transfers.length === 0) return null;
 
   return (
-    <div className="bg-white border border-teal-200 rounded-xl overflow-hidden" data-testid="warehouse-transfer-section">
-      <div className="bg-teal-50 border-b border-teal-200 px-4 py-3 flex items-center justify-between">
+    <div className="bg-white border border-slate-200 rounded-md" data-testid="warehouse-transfer-section">
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-100">
         <div className="flex items-center gap-2">
-          <Warehouse size={16} className="text-teal-600" />
-          <h3 className="text-sm font-semibold text-teal-800">Transfer to Master Warehouse</h3>
+          <Send size={13} className="text-teal-500" />
+          <span className="text-xs font-semibold text-slate-800">Warehouse Transfer</span>
+          <span className="text-[10px] text-slate-400">{available} bottles available</span>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-xs text-teal-600">
-            <span className="font-medium">{available}</span> bottles ({availableCrates} crates) available
-            {(batch?.transferred_to_warehouse || 0) > 0 && (
-              <span className="text-teal-500 ml-2">({batch.transferred_to_warehouse} bottles transferred)</span>
-            )}
-          </div>
-          {available > 0 && (
-            <button
-              onClick={() => setShowTransfer(!showTransfer)}
-              className="px-3 py-1.5 text-xs font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-1.5"
-              data-testid="transfer-to-warehouse-btn"
-            >
-              <Send size={12} /> Transfer to Master Warehouse
-            </button>
-          )}
-        </div>
+        {available > 0 && (
+          <button onClick={() => setShowTransfer(!showTransfer)}
+            className="px-2 py-1 text-[10px] font-medium bg-teal-600 text-white rounded hover:bg-teal-700 transition-colors flex items-center gap-1"
+            data-testid="transfer-to-warehouse-btn">
+            <Send size={10} /> Transfer
+          </button>
+        )}
       </div>
 
       {showTransfer && (
-        <div className="p-4 border-b border-teal-100 bg-teal-50/30 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="p-3 bg-slate-50 border-b border-slate-100 space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div>
-              <label className="text-xs font-medium text-slate-600 mb-1 block">Master Warehouse *</label>
+              <label className="text-[9px] text-slate-400 mb-0.5 block font-medium">Warehouse</label>
               {factoryWarehouses.length > 1 ? (
                 <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
-                  <SelectTrigger className="h-10" data-testid="transfer-warehouse-select">
-                    <SelectValue placeholder="Select master warehouse" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {factoryWarehouses.map(w => (
-                      <SelectItem key={w.id} value={w.id}>
-                        {w.location_name} ({w.city}) {w.is_default ? '★' : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                  <SelectTrigger className="h-8 text-xs" data-testid="transfer-warehouse-select"><SelectValue placeholder="Select..." /></SelectTrigger>
+                  <SelectContent>{factoryWarehouses.map(w => <SelectItem key={w.id} value={w.id}>{w.location_name} ({w.city})</SelectItem>)}</SelectContent>
                 </Select>
               ) : (
-                <div className="h-10 flex items-center px-3 border border-slate-200 rounded-lg bg-slate-50 text-sm text-slate-700">
-                  {factoryWarehouses[0]?.location_name} ({factoryWarehouses[0]?.city})
-                </div>
+                <div className="h-8 flex items-center px-2 border border-slate-200 rounded bg-white text-xs text-slate-700">{factoryWarehouses[0]?.location_name}</div>
               )}
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600 mb-1 block">Bottles to Transfer * (max {available})</label>
-              <input
-                type="number" min="1" max={available} value={transferQty}
-                onChange={e => setTransferQty(e.target.value)}
-                placeholder={`1 - ${available}`}
-                className="w-full h-10 border border-slate-200 rounded-lg px-3 text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400"
-                data-testid="transfer-qty-input"
-              />
+              <label className="text-[9px] text-slate-400 mb-0.5 block font-medium">Bottles (max {available})</label>
+              <input type="number" min="1" max={available} value={transferQty} onChange={e => setTransferQty(e.target.value)}
+                placeholder={`1-${available}`} className="w-full h-8 border border-slate-200 rounded px-2 text-xs" data-testid="transfer-qty-input" />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600 mb-1 block">Notes</label>
-              <input
-                value={transferNotes} onChange={e => setTransferNotes(e.target.value)}
-                placeholder="Optional notes"
-                className="w-full h-10 border border-slate-200 rounded-lg px-3 text-sm"
-              />
+              <label className="text-[9px] text-slate-400 mb-0.5 block font-medium">Notes</label>
+              <input value={transferNotes} onChange={e => setTransferNotes(e.target.value)} placeholder="Optional"
+                className="w-full h-8 border border-slate-200 rounded px-2 text-xs" />
             </div>
           </div>
           <div className="flex gap-2">
             <button onClick={handleTransfer} disabled={saving}
-              className="px-4 py-2 text-sm font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 flex items-center gap-1.5"
-              data-testid="transfer-submit-btn"
-            >
-              {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Confirm Transfer
+              className="px-3 py-1.5 text-xs font-medium bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50 flex items-center gap-1"
+              data-testid="transfer-submit-btn">
+              {saving ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />} Confirm
             </button>
-            <button onClick={() => setShowTransfer(false)} className="px-4 py-2 text-sm text-slate-500 hover:bg-slate-100 rounded-lg">Cancel</button>
+            <button onClick={() => setShowTransfer(false)} className="px-2 py-1.5 text-xs text-slate-400 hover:bg-slate-100 rounded">Cancel</button>
           </div>
         </div>
       )}
 
-      {/* Transfer History */}
       {transfers.length > 0 && (
-        <div className="p-4">
-          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Transfer History</h4>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-slate-50 text-xs text-slate-500">
-                  <th className="text-left p-2 font-medium">Date</th>
-                  <th className="text-left p-2 font-medium">Warehouse</th>
-                  <th className="text-right p-2 font-medium">Bottles</th>
-                  <th className="text-right p-2 font-medium">Crates</th>
-                  <th className="text-left p-2 font-medium">By</th>
-                  <th className="text-left p-2 font-medium">Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transfers.map(t => {
-                  const bpc = batch?.bottles_per_crate || 1;
-                  const crates = Math.floor(t.quantity / bpc);
-                  const remainder = t.quantity % bpc;
-                  return (
-                    <tr key={t.id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                      <td className="p-2 text-xs text-slate-600">{new Date(t.transferred_at).toLocaleDateString()}</td>
-                      <td className="p-2 text-xs font-medium text-slate-700">{t.warehouse_name}</td>
-                      <td className="p-2 text-xs font-bold text-teal-700 text-right">{t.quantity}</td>
-                      <td className="p-2 text-xs text-slate-600 text-right">
-                        {crates}{remainder > 0 && <span className="text-slate-400"> +{remainder}b</span>}
-                      </td>
-                      <td className="p-2 text-xs text-slate-500">{t.transferred_by_name}</td>
-                      <td className="p-2 text-xs text-slate-400">{t.notes || '-'}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+        <div className="p-3">
+          <table className="w-full text-[11px]">
+            <thead>
+              <tr className="text-[9px] text-slate-400 uppercase tracking-wider">
+                <th className="text-left p-1.5 font-medium">Date</th>
+                <th className="text-left p-1.5 font-medium">Warehouse</th>
+                <th className="text-right p-1.5 font-medium">Bottles</th>
+                <th className="text-right p-1.5 font-medium">Crates</th>
+                <th className="text-left p-1.5 font-medium">By</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transfers.map(t => {
+                const crates = Math.floor(t.quantity / bpc);
+                const rem = t.quantity % bpc;
+                return (
+                  <tr key={t.id} className="border-t border-slate-50 hover:bg-slate-50/50">
+                    <td className="p-1.5 text-slate-600">{new Date(t.transferred_at).toLocaleDateString()}</td>
+                    <td className="p-1.5 font-medium text-slate-700">{t.warehouse_name}</td>
+                    <td className="p-1.5 font-bold text-teal-700 text-right">{t.quantity}</td>
+                    <td className="p-1.5 text-slate-500 text-right">{crates}{rem > 0 && <span className="text-slate-400">+{rem}b</span>}</td>
+                    <td className="p-1.5 text-slate-400">{t.transferred_by_name}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
-
-      {transfers.length === 0 && !showTransfer && (
-        <div className="p-6 text-center text-xs text-slate-400">
-          No transfers yet. Use the Transfer button to move warehouse-ready stock to a master warehouse.
-        </div>
-      )}
-    </div>
-  );
-}
-
-
-function PhScale({ value }) {
-  if (!value) return null;
-  const min = 6, max = 10;
-  const pct = ((value - min) / (max - min)) * 100;
-  const color = value <= 7.5 ? '#14b8a6' : '#3b82f6';
-  const label = value <= 7 ? 'Neutral' : value <= 8 ? 'Slightly Alkaline' : 'Alkaline';
-  return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 flex items-center gap-3 sm:gap-5" data-testid="ph-scale">
-      <div className="flex flex-col items-center min-w-[50px] sm:min-w-[60px]">
-        <span className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-wider">pH Level</span>
-        <span className="text-2xl sm:text-3xl font-black tabular-nums" style={{ color }}>{value}</span>
-        <span className="text-[9px] sm:text-[10px] font-medium mt-0.5" style={{ color }}>{label}</span>
-      </div>
-      <div className="flex-1">
-        <div className="flex justify-between text-[9px] text-slate-400 mb-1 px-1">
-          <span>Acidic</span><span>Neutral</span><span>Alkaline</span>
-        </div>
-        <div className="relative h-4 rounded-full overflow-hidden"
-          style={{ background: 'linear-gradient(to right, #ef4444, #f59e0b, #22c55e, #14b8a6, #3b82f6, #8b5cf6)' }}>
-          {/* Tick marks */}
-          {[6,7,8,9,10].map(v => (
-            <div key={v} className="absolute top-0 h-full w-px bg-white/40"
-              style={{ left: `${((v - min) / (max - min)) * 100}%` }} />
-          ))}
-          {/* Indicator */}
-          <div className="absolute top-[-3px]" style={{ left: `calc(${pct}% - 10px)` }}>
-            <div className="w-5 h-5 rounded-full bg-white border-[3px] shadow-lg"
-              style={{ borderColor: color }} />
-          </div>
-        </div>
-        <div className="flex justify-between text-[9px] text-slate-500 mt-1 px-0.5 font-medium">
-          {[6,7,8,9,10].map(v => <span key={v}>{v}</span>)}
-        </div>
-      </div>
     </div>
   );
 }
