@@ -136,33 +136,61 @@ export default function BatchDetail() {
             <FlaskConical size={16} className="text-blue-500" /> QC Pipeline
           </h2>
 
-          {/* Summary Bar */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-3">
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4 text-center">
-              <p className="text-[10px] sm:text-xs text-slate-400 mb-0.5">Unallocated</p>
-              <p className="text-xl sm:text-2xl font-bold text-slate-800">{batch.unallocated_crates || 0}</p>
-              <p className="text-[9px] text-slate-300">crates</p>
-            </div>
-            <div className="bg-red-50 border border-red-200 rounded-xl p-3 sm:p-4 text-center">
-              <p className="text-[10px] sm:text-xs text-red-400 mb-0.5">Total Rejected</p>
-              <p className="text-xl sm:text-2xl font-bold text-red-600">{batch.total_rejected || 0}</p>
-              <p className="text-[9px] text-red-300">bottles</p>
-            </div>
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 sm:p-4 text-center">
-              <p className="text-[10px] sm:text-xs text-emerald-400 mb-0.5">Warehouse Ready</p>
-              <p className="text-xl sm:text-2xl font-bold text-emerald-600">{batch.total_passed_final || 0}</p>
-              <p className="text-[9px] text-emerald-300">bottles</p>
-              {(batch.total_passed_final || 0) > 0 && (batch.bottles_per_crate || 0) > 0 && (
-                <p className="text-[9px] text-emerald-500 mt-0.5">
-                  {Math.floor((batch.total_passed_final || 0) / batch.bottles_per_crate)} crates
-                  {(batch.total_passed_final % batch.bottles_per_crate) > 0 && ` + ${batch.total_passed_final % batch.bottles_per_crate} bottles`}
-                </p>
+          {/* Summary Bar with overall % */}
+          {(() => {
+            const totalBottles = batch.total_bottles || 0;
+            const totalRej = batch.total_rejected || 0;
+            const overallRejPct = totalBottles > 0 ? ((totalRej / totalBottles) * 100).toFixed(1) : '0.0';
+            const overallPassPct = totalBottles > 0 ? (((totalBottles - totalRej) / totalBottles) * 100).toFixed(1) : '0.0';
+            return (
+            <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-4 text-center">
+                  <p className="text-[10px] sm:text-xs text-slate-400 mb-0.5">Unallocated</p>
+                  <p className="text-xl sm:text-2xl font-bold text-slate-800">{batch.unallocated_crates || 0}</p>
+                  <p className="text-[9px] text-slate-300">crates</p>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3 sm:p-4 text-center">
+                  <p className="text-[10px] sm:text-xs text-red-400 mb-0.5">Total Rejected</p>
+                  <p className="text-xl sm:text-2xl font-bold text-red-600">{totalRej}</p>
+                  <p className="text-[9px] text-red-300">bottles</p>
+                  {totalBottles > 0 && <p className="text-[10px] font-semibold text-red-500 mt-1">{overallRejPct}%</p>}
+                </div>
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 sm:p-4 text-center">
+                  <p className="text-[10px] sm:text-xs text-emerald-400 mb-0.5">Warehouse Ready</p>
+                  <p className="text-xl sm:text-2xl font-bold text-emerald-600">{batch.total_passed_final || 0}</p>
+                  <p className="text-[9px] text-emerald-300">bottles</p>
+                  {(batch.total_passed_final || 0) > 0 && (batch.bottles_per_crate || 0) > 0 && (
+                    <p className="text-[9px] text-emerald-500 mt-0.5">
+                      {Math.floor((batch.total_passed_final || 0) / batch.bottles_per_crate)} crates
+                      {(batch.total_passed_final % batch.bottles_per_crate) > 0 && ` + ${batch.total_passed_final % batch.bottles_per_crate} bottles`}
+                    </p>
+                  )}
+                  {(batch.transferred_to_warehouse || 0) > 0 && (
+                    <p className="text-[9px] text-teal-500 mt-0.5">{batch.transferred_to_warehouse} bottles transferred</p>
+                  )}
+                </div>
+              </div>
+              {/* Overall Pass/Reject % bar */}
+              {totalBottles > 0 && (
+                <div className="bg-white border border-slate-200 rounded-xl p-2.5 sm:p-3" data-testid="overall-pass-reject-bar">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">Overall Quality</span>
+                    <span className="text-[10px] text-slate-400">{totalBottles.toLocaleString()} total bottles</span>
+                  </div>
+                  <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden flex">
+                    <div className="bg-emerald-500 h-full transition-all" style={{ width: `${overallPassPct}%` }} />
+                    <div className="bg-red-400 h-full transition-all" style={{ width: `${overallRejPct}%` }} />
+                  </div>
+                  <div className="flex items-center justify-between mt-1.5">
+                    <span className="text-[10px] font-semibold text-emerald-600">{overallPassPct}% pass</span>
+                    <span className="text-[10px] font-semibold text-red-500">{overallRejPct}% rejected</span>
+                  </div>
+                </div>
               )}
-              {(batch.transferred_to_warehouse || 0) > 0 && (
-                <p className="text-[9px] text-teal-500 mt-0.5">{batch.transferred_to_warehouse} bottles transferred</p>
-              )}
             </div>
-          </div>
+            );
+          })()}
 
           {/* Stage-by-stage cards */}
           {stages.map((stage, idx) => {
@@ -689,21 +717,46 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
         </div>
       </div>
 
-      {/* Balance Row */}
-      <div className="grid grid-cols-4 divide-x divide-slate-100 border-b border-slate-100">
-        {[
-          { label: 'Received', unit: 'crates', value: bal.received || 0, cls: 'text-slate-800' },
-          { label: 'Pending', unit: 'crates', value: bal.pending || 0, cls: 'text-amber-600' },
-          { label: 'Passed', unit: 'crates', value: bal.passed || 0, cls: 'text-emerald-600' },
-          { label: 'Rejected', unit: 'bottles', value: bal.rejected || 0, cls: 'text-red-600' },
-        ].map((c, i) => (
-          <div key={i} className="py-2.5 sm:py-3 px-2 sm:px-4 text-center">
-            <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-wider">{c.label}</p>
-            <p className={`text-lg sm:text-xl font-bold ${c.cls}`}>{c.value}</p>
-            <p className="text-[8px] sm:text-[9px] text-slate-300 mt-0.5">{c.unit}</p>
+      {/* Balance Row with % */}
+      {(() => {
+        const received = bal.received || 0;
+        const passed = bal.passed || 0;
+        const rejected = bal.rejected || 0;
+        const totalStageBottles = received * (bottlesPerCrate || 1);
+        // Quality % based on bottles — shows historical quality even after stock moves to next stage
+        const rejPct = totalStageBottles > 0 ? ((rejected / totalStageBottles) * 100).toFixed(1) : null;
+        const passPct = totalStageBottles > 0 ? (((totalStageBottles - rejected) / totalStageBottles) * 100).toFixed(1) : null;
+        return (
+        <div className="border-b border-slate-100">
+          <div className="grid grid-cols-4 divide-x divide-slate-100">
+            {[
+              { label: 'Received', unit: 'crates', value: received, cls: 'text-slate-800', pct: null },
+              { label: 'Pending', unit: 'crates', value: bal.pending || 0, cls: 'text-amber-600', pct: null },
+              { label: 'Passed', unit: 'crates', value: passed, cls: 'text-emerald-600', pct: passPct, pctCls: 'text-emerald-500' },
+              { label: 'Rejected', unit: 'bottles', value: rejected, cls: 'text-red-600', pct: rejPct, pctCls: 'text-red-500' },
+            ].map((c, i) => (
+              <div key={i} className="py-2.5 sm:py-3 px-2 sm:px-4 text-center">
+                <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-wider">{c.label}</p>
+                <p className={`text-lg sm:text-xl font-bold ${c.cls}`}>{c.value}</p>
+                <p className="text-[8px] sm:text-[9px] text-slate-300 mt-0.5">{c.unit}</p>
+                {c.pct !== null && received > 0 && (
+                  <p className={`text-[9px] sm:text-[10px] font-semibold ${c.pctCls} mt-0.5`}>{c.pct}%</p>
+                )}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+          {/* Mini progress bar for pass/reject ratio */}
+          {received > 0 && rejected > 0 && (
+            <div className="px-3 sm:px-5 pb-2">
+              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex">
+                <div className="bg-emerald-400 h-full" style={{ width: `${passPct || 0}%` }} />
+                <div className="bg-red-400 h-full" style={{ width: `${rejPct || 0}%` }} />
+              </div>
+            </div>
+          )}
+        </div>
+        );
+      })()}
 
       {/* Move Form */}
       {showMove && (
@@ -732,40 +785,91 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
         </div>
       )}
 
-      {/* Inspection Form — Hierarchical: Entry (Resource + Date + Crates) → Rejection Items (Count + Reason) */}
+      {/* Inspection Form — Redesigned with better UX */}
       {showInspect && (() => {
         const totalCrates = entries.reduce((s, e) => s + (parseInt(e.qty_inspected) || 0), 0);
         const totalRejected = entries.reduce((s, e) => s + e.rejItems.reduce((rs, r) => rs + (parseInt(r.qty_rejected) || 0), 0), 0);
         const totalBottles = entries.reduce((s, e) => s + ((parseInt(e.qty_inspected) || 0) * (bottlesPerCrate || 1)), 0);
         const passedBottles = Math.max(0, totalBottles - totalRejected);
+        const passPct = totalBottles > 0 ? ((passedBottles / totalBottles) * 100).toFixed(1) : '0.0';
+        const rejPct = totalBottles > 0 ? ((totalRejected / totalBottles) * 100).toFixed(1) : '0.0';
         return (
-        <div className="px-3 sm:px-5 py-4 sm:py-5 bg-emerald-50/50 border-t border-emerald-100 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <p className="text-xs sm:text-sm text-emerald-700 font-medium">Record inspection at <span className="font-bold">{stage.name}</span> <span className="text-slate-400 font-normal">({bal.pending || 0} pending, {bottlesPerCrate} b/c)</span></p>
+        <div className="border-t-2 border-emerald-400">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 sm:px-5 py-3 bg-gradient-to-r from-emerald-50 to-teal-50">
+            <div>
+              <p className="text-sm font-semibold text-emerald-800" data-testid={`inspect-header-${stage.id}`}>
+                Record Inspection
+              </p>
+              <p className="text-[11px] text-emerald-600 mt-0.5">
+                <span className="font-medium">{stage.name}</span>
+                <span className="mx-1.5 text-emerald-300">|</span>
+                <span className="text-amber-600 font-medium">{bal.pending || 0} pending</span>
+                <span className="mx-1.5 text-emerald-300">|</span>
+                {bottlesPerCrate} bottles/crate
+              </p>
+            </div>
             <button onClick={addEntry}
-              className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg flex items-center gap-1.5 transition-colors self-start sm:self-auto"
+              className="px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"
               data-testid={`add-entry-${stage.id}`}>
               <Plus size={12} /> Add Entry
             </button>
           </div>
 
+          {/* Live Stats Bar */}
+          {totalCrates > 0 && (
+            <div className="px-4 sm:px-5 py-2.5 bg-white border-b border-slate-100" data-testid={`inspect-stats-${stage.id}`}>
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-slate-400" />
+                  <span className="text-xs text-slate-600"><span className="font-bold">{totalCrates}</span> crates</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-blue-400" />
+                  <span className="text-xs text-slate-600"><span className="font-bold">{totalBottles.toLocaleString()}</span> bottles</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-red-400" />
+                  <span className="text-xs text-red-600"><span className="font-bold">{totalRejected}</span> rejected <span className="text-red-400">({rejPct}%)</span></span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <span className="text-xs text-emerald-600"><span className="font-bold">{passedBottles.toLocaleString()}</span> passed <span className="text-emerald-400">({passPct}%)</span></span>
+                </div>
+              </div>
+              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex mt-2">
+                <div className="bg-emerald-400 h-full transition-all" style={{ width: `${passPct}%` }} />
+                <div className="bg-red-400 h-full transition-all" style={{ width: `${rejPct}%` }} />
+              </div>
+            </div>
+          )}
+
           {/* Entry Cards */}
-          <div className="space-y-3">
+          <div className="px-4 sm:px-5 py-4 space-y-3 bg-slate-50/50">
             {entries.map((entry, eIdx) => {
               const eCrates = parseInt(entry.qty_inspected) || 0;
               const eBottles = eCrates * (bottlesPerCrate || 1);
               const eRejected = entry.rejItems.reduce((s, r) => s + (parseInt(r.qty_rejected) || 0), 0);
               const ePassed = Math.max(0, eBottles - eRejected);
+              const ePassPct = eBottles > 0 ? ((ePassed / eBottles) * 100).toFixed(0) : null;
               return (
-              <div key={eIdx} className="bg-white border border-slate-200 rounded-xl overflow-hidden" data-testid={`entry-card-${eIdx}`}>
-                {/* Entry Header: Resource + Date + Crates */}
-                <div className="p-3 bg-slate-50/80 border-b border-slate-200">
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-3 items-end">
-                    <div className="sm:col-span-4">
-                      <label className="text-[10px] text-slate-500 mb-1 block font-medium uppercase tracking-wider">Resource</label>
+              <div key={eIdx} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden" data-testid={`entry-card-${eIdx}`}>
+                {/* Entry Header */}
+                <div className="px-4 py-3 border-b border-slate-100 bg-white">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <User size={10} className="text-slate-400" /> Inspector Entry {entries.length > 1 && `#${eIdx + 1}`}
+                    </span>
+                    <button onClick={() => removeEntry(eIdx)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors group" data-testid={`entry-remove-${eIdx}`}>
+                      <Trash2 size={13} className="text-slate-300 group-hover:text-red-500 transition-colors" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[10px] text-slate-400 mb-1 block font-medium">Resource</label>
                       <Select value={entry.resource_id || ""} onValueChange={v => updateEntry(eIdx, 'resource_id', v)}>
-                        <SelectTrigger className="h-10 text-sm border-slate-200 bg-white" data-testid={`entry-resource-${eIdx}`}>
-                          <SelectValue placeholder="Select resource..." />
+                        <SelectTrigger className="h-9 text-sm border-slate-200 bg-white rounded-lg" data-testid={`entry-resource-${eIdx}`}>
+                          <SelectValue placeholder="Select inspector..." />
                         </SelectTrigger>
                         <SelectContent>
                           {(qcTeam || []).map(m => (
@@ -774,56 +878,56 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="sm:col-span-3">
-                      <label className="text-[10px] text-slate-500 mb-1 block font-medium uppercase tracking-wider">Date</label>
+                    <div>
+                      <label className="text-[10px] text-slate-400 mb-1 block font-medium">Date</label>
                       <input type="date" value={entry.date} onChange={e => updateEntry(eIdx, 'date', e.target.value)}
-                        className="w-full h-10 px-3 border border-slate-200 rounded-md text-sm bg-white" data-testid={`entry-date-${eIdx}`} />
+                        className="w-full h-9 px-3 border border-slate-200 rounded-lg text-sm bg-white" data-testid={`entry-date-${eIdx}`} />
                     </div>
-                    <div className="sm:col-span-2">
-                      <label className="text-[10px] text-slate-500 mb-1 block font-medium uppercase tracking-wider">Crates Inspected</label>
+                    <div>
+                      <label className="text-[10px] text-slate-400 mb-1 block font-medium">Crates Inspected</label>
                       <input type="number" value={entry.qty_inspected} onChange={e => updateEntry(eIdx, 'qty_inspected', e.target.value)}
                         min="1" placeholder="0"
-                        className="w-full h-10 px-3 border border-slate-200 rounded-md text-sm text-right bg-white" data-testid={`entry-crates-${eIdx}`} />
-                    </div>
-                    <div className="sm:col-span-2 flex items-center gap-3 pb-0.5">
-                      {eCrates > 0 && (
-                        <div className="text-xs">
-                          <span className="text-red-500 font-medium">{eRejected}</span>
-                          <span className="text-slate-300 mx-1">/</span>
-                          <span className="text-emerald-600 font-bold">{ePassed}</span>
-                          <span className="text-slate-300 text-[10px] ml-1">rej/pass</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="sm:col-span-1 flex justify-end pb-0.5">
-                      <button onClick={() => removeEntry(eIdx)} className="p-2 hover:bg-red-50 rounded-lg transition-colors" data-testid={`entry-remove-${eIdx}`}>
-                        <Trash2 size={14} className="text-slate-300 hover:text-red-500" />
-                      </button>
+                        className="w-full h-9 px-3 border border-slate-200 rounded-lg text-sm font-medium text-right bg-white" data-testid={`entry-crates-${eIdx}`} />
                     </div>
                   </div>
+                  {/* Per-entry pass summary */}
+                  {eCrates > 0 && (
+                    <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-slate-50">
+                      <span className="text-[10px] text-slate-400">{eBottles} bottles</span>
+                      <span className="text-[10px] text-red-500 font-medium">{eRejected} rejected</span>
+                      <span className="text-[10px] text-emerald-600 font-semibold">{ePassed.toLocaleString()} passed</span>
+                      {ePassPct !== null && (
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${parseFloat(ePassPct) >= 95 ? 'bg-emerald-50 text-emerald-600' : parseFloat(ePassPct) >= 80 ? 'bg-amber-50 text-amber-600' : 'bg-red-50 text-red-600'}`}>
+                          {ePassPct}% pass
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {/* Rejection Items Sub-Grid */}
-                <div className="p-3">
+                {/* Rejection Details */}
+                <div className="px-4 py-3 bg-slate-50/50">
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">Rejection Details</label>
+                    <span className="text-[10px] text-slate-400 uppercase tracking-wider font-medium flex items-center gap-1">
+                      <AlertTriangle size={9} className="text-red-400" /> Rejection Details
+                    </span>
                     <button onClick={() => addRejItem(eIdx)}
-                      className="px-2 py-0.5 text-[10px] font-medium text-slate-500 hover:text-blue-700 hover:bg-blue-50 rounded flex items-center gap-1 transition-colors"
+                      className="px-2 py-1 text-[10px] font-medium text-red-600 hover:bg-red-50 border border-red-200 rounded-md flex items-center gap-1 transition-colors"
                       data-testid={`add-rej-${eIdx}`}>
-                      <Plus size={9} /> Add Rejection
+                      <Plus size={9} /> Add Row
                     </button>
                   </div>
                   <div className="space-y-2">
                     {entry.rejItems.map((rej, rIdx) => (
-                      <div key={rIdx} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3" data-testid={`rej-item-${eIdx}-${rIdx}`}>
-                        <div className="w-full sm:w-28">
+                      <div key={rIdx} className="flex items-center gap-2 bg-white rounded-lg border border-slate-100 p-2" data-testid={`rej-item-${eIdx}-${rIdx}`}>
+                        <div className="w-20 flex-shrink-0">
                           <input type="number" value={rej.qty_rejected} onChange={e => updateRejItem(eIdx, rIdx, 'qty_rejected', e.target.value)}
-                            min="0" placeholder="Count"
-                            className="w-full h-9 px-3 border border-slate-200 rounded-md text-sm text-right text-red-600 font-medium bg-white" data-testid={`rej-qty-${eIdx}-${rIdx}`} />
+                            min="0" placeholder="Qty"
+                            className="w-full h-8 px-2.5 border border-red-200 rounded-md text-sm text-center text-red-600 font-semibold bg-red-50/50 focus:ring-1 focus:ring-red-300 focus:border-red-300 outline-none" data-testid={`rej-qty-${eIdx}-${rIdx}`} />
                         </div>
                         <div className="flex-1">
                           <Select value={rej.reason || ""} onValueChange={v => updateRejItem(eIdx, rIdx, 'reason', v)}>
-                            <SelectTrigger className="h-9 text-sm border-slate-200 bg-white" data-testid={`rej-reason-${eIdx}-${rIdx}`}>
+                            <SelectTrigger className="h-8 text-sm border-slate-200 bg-white rounded-md" data-testid={`rej-reason-${eIdx}-${rIdx}`}>
                               <SelectValue placeholder="Select reason..." />
                             </SelectTrigger>
                             <SelectContent>
@@ -833,8 +937,8 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
                             </SelectContent>
                           </Select>
                         </div>
-                        <button onClick={() => removeRejItem(eIdx, rIdx)} className="p-1.5 hover:bg-red-50 rounded transition-colors self-end sm:self-auto" data-testid={`rej-remove-${eIdx}-${rIdx}`}>
-                          <Trash2 size={12} className="text-slate-300 hover:text-red-400" />
+                        <button onClick={() => removeRejItem(eIdx, rIdx)} className="p-1.5 hover:bg-red-50 rounded-md transition-colors flex-shrink-0 group" data-testid={`rej-remove-${eIdx}-${rIdx}`}>
+                          <Trash2 size={12} className="text-slate-300 group-hover:text-red-400 transition-colors" />
                         </button>
                       </div>
                     ))}
@@ -845,26 +949,22 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
             })}
           </div>
 
-          {/* Totals Bar */}
-          <div className="flex items-center gap-6 bg-white border border-slate-200 rounded-xl p-3 text-sm">
-            <span className="text-slate-500">Totals:</span>
-            <span className="text-slate-700 font-medium">{totalCrates} crates</span>
-            <span className="text-red-500 font-medium">{totalRejected} rejected</span>
-            <span className="text-emerald-600 font-bold">{passedBottles.toLocaleString()} passed</span>
-          </div>
-
-          <div className="max-w-md">
-            <label className="text-xs text-slate-500 mb-1.5 block font-medium">Remarks</label>
-            <input value={inspRemarks} onChange={e => setInspRemarks(e.target.value)}
-              placeholder="Optional remarks" className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" />
-          </div>
-          <div className="flex items-center gap-3">
-            <button onClick={handleInspect} disabled={saving}
-              className="px-5 py-2.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg disabled:opacity-50 flex items-center gap-2 transition-colors"
-              data-testid={`insp-submit-${stage.id}`}>
-              {saving ? <Loader2 size={14} className="animate-spin" /> : <ClipboardCheck size={14} />} Submit Inspection
-            </button>
-            <button onClick={() => { setShowInspect(false); setEntries([emptyEntry()]); }} className="px-4 py-2.5 text-sm text-slate-500 hover:bg-slate-100 rounded-lg transition-colors">Cancel</button>
+          {/* Footer: Remarks + Submit */}
+          <div className="px-4 sm:px-5 py-3 bg-white border-t border-slate-100 space-y-3">
+            <div className="max-w-md">
+              <label className="text-[10px] text-slate-400 mb-1 block font-medium uppercase tracking-wider">Remarks</label>
+              <input value={inspRemarks} onChange={e => setInspRemarks(e.target.value)}
+                placeholder="Optional remarks..." className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div className="flex items-center gap-3">
+              <button onClick={handleInspect} disabled={saving}
+                className="px-5 py-2.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg disabled:opacity-50 flex items-center gap-2 transition-colors shadow-sm"
+                data-testid={`insp-submit-${stage.id}`}>
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <ClipboardCheck size={14} />} Submit Inspection
+              </button>
+              <button onClick={() => { setShowInspect(false); setEntries([emptyEntry()]); }}
+                className="px-4 py-2.5 text-sm text-slate-500 hover:bg-slate-100 rounded-lg transition-colors">Cancel</button>
+            </div>
           </div>
         </div>
         );
