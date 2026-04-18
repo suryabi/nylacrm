@@ -314,6 +314,20 @@
 - [x] **Testing**: 10/10 backend tests + all frontend UI tests passed (iteration_137)
 - [x] **Edge Cases Verified**: 0 rejections (all pass), < 1 crate equiv (all pass), exactly 1 crate equiv (1 deducted), > 1 crate equiv (correct deduction), floor division for partial crates
 
+### Stage-Level & Overall Pass/Reject Percentages (2026-04-18)
+- [x] **Stage-level %**: Each stage card now shows pass% and reject% under Passed and Rejected values. Calculated as bottle-based quality rates: reject% = (rejected_bottles / (received_crates * bottles_per_crate)) * 100. Shows historical quality even after stock moves to next stage.
+- [x] **Mini progress bars**: Green/red progress bar under each stage's balance row, visible when rejections exist.
+- [x] **Overall Quality bar**: New section below summary cards showing total pass/reject % with full-width progress bar and total bottles count.
+- [x] **Summary bar %**: Total Rejected card now shows rejection percentage.
+
+### Inspection Form Redesign (2026-04-18)
+- [x] **Gradient header**: Emerald gradient background with "Record Inspection" title, stage name, pending count, bottles/crate.
+- [x] **Live stats bar**: Real-time counter showing crates, bottles, rejected (with %), passed (with %) and mini progress bar — updates as user types.
+- [x] **Entry cards**: Clean white cards with "Inspector Entry" label, 3-column layout (Resource, Date, Crates Inspected), per-entry pass summary with color-coded % badge (green >=95%, amber >=80%, red <80%).
+- [x] **Rejection rows**: Red-tinted qty field with red border, bordered row containers, "Add Row" button styled with red accent.
+- [x] **Footer**: Remarks field and Submit button in clean white section.
+- [x] **Testing**: 10/10 frontend features verified (iteration_138)
+
 ## Upcoming Tasks (P1)
 - Auto-generate Provisional Invoice (on shipment -> "delivered")
 - Build Reporting Module
