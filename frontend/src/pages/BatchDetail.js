@@ -152,12 +152,12 @@ export default function BatchDetail() {
               </div>
               <div className="bg-white border border-slate-200 rounded-lg p-3 text-center">
                 <p className="text-[10px] text-red-400 mb-0.5">Total Rejected</p>
-                <p className="text-xl font-bold text-red-600">{totalRej}</p>
-                <p className="text-[9px] text-slate-300">bottles {totalBottles > 0 && <span className="text-red-400">({overallRejPct}%)</span>}</p>
+                <p className="text-xl font-bold text-red-700">{totalRej}</p>
+                <p className="text-[9px] text-slate-300">bottles {totalBottles > 0 && <span className="text-red-500">({overallRejPct}%)</span>}</p>
               </div>
               <div className="bg-white border border-slate-200 rounded-lg p-3 text-center">
                 <p className="text-[10px] text-emerald-400 mb-0.5">Warehouse Ready</p>
-                <p className="text-xl font-bold text-emerald-600">{batch.total_passed_final || 0}</p>
+                <p className="text-xl font-bold text-emerald-700">{batch.total_passed_final || 0}</p>
                 <p className="text-[9px] text-slate-300">bottles</p>
                 {(batch.transferred_to_warehouse || 0) > 0 && (
                   <p className="text-[9px] text-teal-500 mt-0.5">{batch.transferred_to_warehouse} transferred</p>
@@ -170,12 +170,12 @@ export default function BatchDetail() {
               <div className="flex items-center gap-3 px-4 py-2.5 bg-white border border-slate-200 rounded-lg" data-testid="overall-pass-reject-bar">
                 <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Quality</span>
                 <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden flex">
-                  <div className="bg-emerald-500 h-full transition-all" style={{ width: `${overallPassPct}%` }} />
-                  <div className="bg-red-400 h-full transition-all" style={{ width: `${overallRejPct}%` }} />
+                  <div className="bg-emerald-600 h-full transition-all" style={{ width: `${overallPassPct}%` }} />
+                  <div className="bg-red-600 h-full transition-all" style={{ width: `${overallRejPct}%` }} />
                 </div>
-                <span className="text-xs font-semibold text-emerald-600">{overallPassPct}%</span>
+                <span className="text-xs font-semibold text-emerald-700">{overallPassPct}%</span>
                 <span className="text-[10px] text-slate-300">|</span>
-                <span className="text-xs font-semibold text-red-500">{overallRejPct}% rej</span>
+                <span className="text-xs font-semibold text-red-600">{overallRejPct}% rej</span>
               </div>
             )}
 
@@ -387,8 +387,8 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
             {[
               { label: 'Received', unit: 'crates', value: received, cls: 'text-slate-800', pct: null },
               { label: 'Pending', unit: 'crates', value: bal.pending || 0, cls: 'text-amber-600', pct: null },
-              { label: 'Passed', unit: 'crates', value: bal.passed || 0, cls: 'text-emerald-600', pct: passPct, pctCls: 'text-emerald-500' },
-              { label: 'Rejected', unit: 'bottles', value: rejected, cls: 'text-red-600', pct: rejPct, pctCls: 'text-red-500' },
+              { label: 'Passed', unit: 'crates', value: bal.passed || 0, cls: 'text-emerald-700', pct: passPct, pctCls: 'text-emerald-600' },
+              { label: 'Rejected', unit: 'bottles', value: rejected, cls: 'text-red-700', pct: rejPct, pctCls: 'text-red-600' },
             ].map((c, i) => (
               <div key={i} className="py-2 sm:py-2.5 px-2 sm:px-3 text-center">
                 <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-wider">{c.label}</p>
@@ -401,8 +401,8 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
           {received > 0 && rejected > 0 && (
             <div className="px-3 pb-1.5">
               <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex">
-                <div className="bg-emerald-400 h-full" style={{ width: `${passPct || 0}%` }} />
-                <div className="bg-red-400 h-full" style={{ width: `${rejPct || 0}%` }} />
+                <div className="bg-emerald-600 h-full" style={{ width: `${passPct || 0}%` }} />
+                <div className="bg-red-600 h-full" style={{ width: `${rejPct || 0}%` }} />
               </div>
             </div>
           )}
@@ -835,7 +835,7 @@ function RejectionPanel({ history, batch, showRejections, setShowRejections, rej
             <span className="text-sm font-semibold text-slate-800">Rejections</span>
             <span className="text-xs text-slate-400">{rejEntries.length} records</span>
           </div>
-          <span className="text-xl font-bold text-red-600" data-testid="rej-metric-total">{totalRej}</span>
+          <span className="text-xl font-bold text-red-700" data-testid="rej-metric-total">{totalRej}</span>
         </div>
       </div>
 
@@ -916,7 +916,7 @@ function RejectionPanel({ history, batch, showRejections, setShowRejections, rej
                   <tr key={idx} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'} border-b border-slate-50`} data-testid={`rej-summary-${idx}`}>
                     <td className="px-3 py-2"><div className="font-medium text-slate-700">{e.resource_name}</div><div className="text-[9px] text-slate-400">{e.date}</div></td>
                     <td className="px-3 py-2 text-slate-500">{e.stage_name}</td>
-                    <td className="px-3 py-2 text-center"><span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 text-[10px] font-bold text-white bg-red-500 rounded">{e.qty_rejected}</span></td>
+                    <td className="px-3 py-2 text-center"><span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 text-[10px] font-bold text-white bg-red-600 rounded">{e.qty_rejected}</span></td>
                     <td className="px-3 py-2 text-amber-700">{e.reason || '-'}</td>
                   </tr>
                 ))}
