@@ -17,6 +17,7 @@ export default function ShipmentsTab({
   shipmentsLoading,
   skus,
   factoryWarehouses,
+  warehouseStock,
   // Dialog state
   showShipmentDialog,
   setShowShipmentDialog,
@@ -54,7 +55,7 @@ export default function ShipmentsTab({
                 Create Shipment
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create Primary Shipment</DialogTitle>
                 <DialogDescription>
@@ -187,6 +188,7 @@ export default function ShipmentsTab({
                       {/* Header Row */}
                       <div className="flex items-center gap-3 px-3 text-xs font-medium text-muted-foreground">
                         <div className="flex-[3] min-w-0">SKU</div>
+                        <div className="w-16 text-center">Avail</div>
                         <div className="w-20">Qty</div>
                         <div className="w-24">Price (₹)</div>
                         <div className="w-16">Disc %</div>
@@ -194,7 +196,10 @@ export default function ShipmentsTab({
                         <div className="w-28 text-right">Amount</div>
                         <div className="w-10"></div>
                       </div>
-                      {shipmentItems.map((item, index) => (
+                      {shipmentItems.map((item, index) => {
+                        const stockEntry = (warehouseStock || []).find(s => s.sku_id === item.sku_id);
+                        const availableQty = stockEntry ? stockEntry.quantity : 0;
+                        return (
                         <div key={item.id} className="flex items-center gap-3 p-3 border rounded-md bg-muted/30" data-testid={`shipment-item-${index}`}>
                           <div className="flex-[3] min-w-0">
                             <Select
@@ -211,21 +216,42 @@ export default function ShipmentsTab({
                                 <SelectValue placeholder="Select SKU" />
                               </SelectTrigger>
                               <SelectContent>
-                                {skus.map(sku => (
-                                  <SelectItem key={sku.id} value={sku.id}>
-                                    {sku.name || sku.sku_name}
-                                  </SelectItem>
-                                ))}
+                                {skus.map(sku => {
+                                  const skuStock = (warehouseStock || []).find(s => s.sku_id === sku.id);
+                                  return (
+                                    <SelectItem key={sku.id} value={sku.id}>
+                                      {sku.name || sku.sku_name}
+                                      {skuStock ? ` (${skuStock.quantity} avail)` : ''}
+                                    </SelectItem>
+                                  );
+                                })}
                               </SelectContent>
                             </Select>
+                          </div>
+                          <div className="w-16 text-center">
+                            {item.sku_id ? (
+                              <span className={`text-xs font-semibold tabular-nums ${availableQty > 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                                {availableQty}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-slate-300">—</span>
+                            )}
                           </div>
                           <div className="w-20">
                             <Input
                               type="number"
                               min="1"
-                              className="h-9"
+                              max={availableQty || undefined}
+                              className={`h-9 ${item.sku_id && item.quantity > availableQty ? 'border-red-400 text-red-600' : ''}`}
                               value={item.quantity}
-                              onChange={(e) => updateShipmentItem(item.id, 'quantity', e.target.value)}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                if (item.sku_id && availableQty > 0 && val > availableQty) {
+                                  updateShipmentItem(item.id, 'quantity', availableQty);
+                                } else {
+                                  updateShipmentItem(item.id, 'quantity', e.target.value);
+                                }
+                              }}
                             />
                           </div>
                           <div className="w-24">
@@ -274,7 +300,8 @@ export default function ShipmentsTab({
                             </Button>
                           </div>
                         </div>
-                      ))}
+                      );
+                      })}
                       
                       {/* Total */}
                       <div className="flex justify-end pt-2 border-t">

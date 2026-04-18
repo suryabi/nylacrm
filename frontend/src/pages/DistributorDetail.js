@@ -166,6 +166,7 @@ export default function DistributorDetail() {
   const [selectedShipment, setSelectedShipment] = useState(null);
   const [showShipmentDetail, setShowShipmentDetail] = useState(false);
   const [factoryWarehouses, setFactoryWarehouses] = useState([]);
+  const [warehouseStock, setWarehouseStock] = useState([]); // stock for selected source warehouse
   
   // Delivery state
   const [deliveries, setDeliveries] = useState([]);
@@ -430,6 +431,19 @@ export default function DistributorDetail() {
       }).catch(() => {});
     }
   }, [activeTab, fetchShipments]);
+
+  // Fetch stock for selected source warehouse
+  useEffect(() => {
+    if (shipmentForm.source_warehouse_id) {
+      axios.get(`${API_URL}/api/production/factory-warehouse-stock?warehouse_id=${shipmentForm.source_warehouse_id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(res => setWarehouseStock(res.data.stock || []))
+        .catch(() => setWarehouseStock([]));
+    } else {
+      setWarehouseStock([]);
+    }
+  }, [shipmentForm.source_warehouse_id, token]);
+
 
   // Fetch deliveries
   const fetchDeliveries = useCallback(async () => {
@@ -2289,6 +2303,7 @@ export default function DistributorDetail() {
             shipmentsLoading={shipmentsLoading}
             skus={skus}
             factoryWarehouses={factoryWarehouses}
+            warehouseStock={warehouseStock}
             showShipmentDialog={showShipmentDialog}
             setShowShipmentDialog={setShowShipmentDialog}
             shipmentForm={shipmentForm}
