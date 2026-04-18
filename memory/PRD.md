@@ -315,15 +315,15 @@
 - [x] **Edge Cases Verified**: 0 rejections (all pass), < 1 crate equiv (all pass), exactly 1 crate equiv (1 deducted), > 1 crate equiv (correct deduction), floor division for partial crates
 
 ### Production Batch Detail Redesign (2026-04-18)
-- [x] **Two-column layout**: Left side = QC pipeline stages with tracking. Right side = rejection summary + activity log.
-- [x] **pH as inline badge**: Removed large pH slider/scale. pH now shows as a subtle color-coded badge (teal/sky/blue dot + number) next to the batch code in the header.
-- [x] **Compact info row**: Replaced 5 info cards with a single row of small chips (date, crates, b/c, bottles, unallocated).
-- [x] **Slim quality bar**: Single-line bar with pass%, reject%, and bottle counts replacing the large colored summary cards.
-- [x] **Compact stage cards**: Monochrome borders, single-row RECV/PEND/PASS/REJ balance with percentages, quality micro-bar. Removed colorful stage-type backgrounds.
-- [x] **Inline inspection form**: Opens directly within the stage card. Clean compact layout with entry cards, rejection rows, live stats, and inline submit.
-- [x] **Rejection summary sidebar**: By Resource and By Reason breakdowns with mini progress bars. Expandable detail table with filters.
-- [x] **Reduced spacing**: gap-3 instead of gap-6, py-2 instead of py-4, rounded-md instead of rounded-xl throughout.
-- [x] **Testing**: 15/15 backend + 14/14 frontend tests passed (iteration_139)
+- [x] **Two-column layout**: Left = QC pipeline stages (col-span-7). Right = rejection summary + activity log (col-span-5).
+- [x] **pH as inline badge**: Replaced large pH slider/scale with a color-coded badge (teal/sky/blue) next to batch code. Readable text-sm font.
+- [x] **Monochrome stage cards**: Removed colorful stage-type backgrounds (blue/purple/emerald). Headers now use slate/monochrome with slate badge. Numbers stay readable at text-lg.
+- [x] **Stage-level percentages**: Pass% and Reject% shown under Passed/Rejected values with quality micro-bar.
+- [x] **Overall quality bar**: Slim bar with pass/reject % below summary row.
+- [x] **Rejection panel on right**: Extracted RejectionPanel component with By Resource/By Reason breakdowns, expandable detail table with filters.
+- [x] **Activity log on right**: Extracted ActivityLog component, collapsible.
+- [x] **Reduced spacing**: gap-4 instead of gap-6, rounded-lg instead of rounded-xl, summary chips instead of big cards.
+- [x] **Testing**: 14/14 frontend tests passed (iteration_140)
 
 ### Production QC: Stage-Level & Overall Pass/Reject Percentages (2026-04-18)
 - [x] **Stage-level %**: Each stage card now shows pass% and reject% under Passed and Rejected values. Calculated as bottle-based quality rates: reject% = (rejected_bottles / (received_crates * bottles_per_crate)) * 100. Shows historical quality even after stock moves to next stage.
