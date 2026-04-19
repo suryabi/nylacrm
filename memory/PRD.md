@@ -339,6 +339,17 @@
 - [x] **Footer**: Remarks field and Submit button in clean white section.
 - [x] **Testing**: 10/10 frontend features verified (iteration_138)
 
+### Packaging Types — Multi-Context SKU Mapping (2026-04-19)
+- [x] **Moved to Production**: Packaging Types nav now under Production section in sidebar
+- [x] **SKU Packaging Config**: Each SKU has `packaging_config` with 3 contexts:
+  - `production`: Options for production batches (default auto-selected in batch creation)
+  - `stock_in`: Options for distributor delivery (default auto-selected in shipment dialog)
+  - `stock_out`: Options for customer delivery
+- [x] Each context supports multiple packaging types with one marked as default
+- [x] **Production Batches**: Dropdown shows SKU's production packaging options; falls back to all types if none configured
+- [x] **Shipment Dialog**: Added "Packaging" column; shows SKU's stock_in options with default pre-selected
+- [x] **Testing**: 100% backend + frontend (iteration_142)
+
 ### Packaging Types Master (2026-04-19)
 - [x] **New page**: `/packaging-types` — CRUD for packaging formats (Crate - 24, Carton - 6, etc.)
 - [x] **Backend**: `GET/POST/PUT/DELETE /api/packaging-types` with duplicate name validation
