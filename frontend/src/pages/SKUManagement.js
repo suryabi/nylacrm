@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import { skusAPI } from '../utils/api';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -39,6 +40,7 @@ const categoryColors = {
 export default function SKUManagement() {
   const [skus, setSkus] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [packagingTypes, setPackagingTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showInactive, setShowInactive] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -56,12 +58,19 @@ export default function SKUManagement() {
     unit: '',
     description: '',
     is_active: true,
-    sort_order: 0
+    sort_order: 0,
+    packaging_type_id: '',
+    packaging_type_name: '',
+    units_per_package: null,
   });
+
+  const API_URL = process.env.REACT_APP_BACKEND_URL;
+  const getHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
 
   useEffect(() => {
     fetchSkus();
     fetchCategories();
+    fetchPackagingTypes();
   }, [showInactive]);
 
   const fetchSkus = async () => {
@@ -85,6 +94,13 @@ export default function SKUManagement() {
     }
   };
 
+  const fetchPackagingTypes = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/packaging-types`, { headers: getHeaders() });
+      setPackagingTypes(res.data.packaging_types || []);
+    } catch { /* ignore */ }
+  };
+
   const handleOpenCreate = () => {
     setEditingSku(null);
     setFormData({
@@ -93,7 +109,10 @@ export default function SKUManagement() {
       unit: '',
       description: '',
       is_active: true,
-      sort_order: skus.length + 1
+      sort_order: skus.length + 1,
+      packaging_type_id: '',
+      packaging_type_name: '',
+      units_per_package: null,
     });
     setShowModal(true);
   };
@@ -106,7 +125,10 @@ export default function SKUManagement() {
       unit: sku.unit || '',
       description: sku.description || '',
       is_active: sku.is_active !== false,
-      sort_order: sku.sort_order || 0
+      sort_order: sku.sort_order || 0,
+      packaging_type_id: sku.packaging_type_id || '',
+      packaging_type_name: sku.packaging_type_name || '',
+      units_per_package: sku.units_per_package || null,
     });
     setShowModal(true);
   };
@@ -330,6 +352,7 @@ export default function SKUManagement() {
                       </div>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
                         <span>Unit: {sku.unit}</span>
+                        {sku.packaging_type_name && <span>Pkg: {sku.packaging_type_name} ({sku.units_per_package})</span>}
                         {sku.description && <span>• {sku.description}</span>}
                         <span className="text-xs">Order: {sku.sort_order}</span>
                       </div>
@@ -450,6 +473,34 @@ export default function SKUManagement() {
                 placeholder="Optional description"
                 data-testid="sku-description-input"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Packaging Type</Label>
+              <Select
+                value={formData.packaging_type_id || ""}
+                onValueChange={(v) => {
+                  if (v === '__none__') {
+                    setFormData({ ...formData, packaging_type_id: '', packaging_type_name: '', units_per_package: null });
+                  } else {
+                    const pt = packagingTypes.find(p => p.id === v);
+                    if (pt) setFormData({ ...formData, packaging_type_id: pt.id, packaging_type_name: pt.name, units_per_package: pt.units_per_package });
+                  }
+                }}
+              >
+                <SelectTrigger data-testid="sku-packaging-select">
+                  <SelectValue placeholder="Select packaging type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {packagingTypes.map(pt => (
+                    <SelectItem key={pt.id} value={pt.id}>{pt.name} ({pt.units_per_package} units)</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {formData.packaging_type_id && formData.units_per_package && (
+                <p className="text-xs text-blue-600 font-medium">{formData.units_per_package} units per {formData.packaging_type_name}</p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">

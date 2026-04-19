@@ -1704,6 +1704,9 @@ class SKUCreate(BaseModel):
     description: Optional[str] = None
     is_active: bool = True
     sort_order: int = 0
+    packaging_type_id: Optional[str] = None
+    packaging_type_name: Optional[str] = None
+    units_per_package: Optional[int] = None
 
 class SKUUpdate(BaseModel):
     sku_name: Optional[str] = None
@@ -1712,6 +1715,9 @@ class SKUUpdate(BaseModel):
     description: Optional[str] = None
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
+    packaging_type_id: Optional[str] = None
+    packaging_type_name: Optional[str] = None
+    units_per_package: Optional[int] = None
 
 # Default SKUs to seed if database is empty
 DEFAULT_SKUS = [
@@ -1858,6 +1864,77 @@ async def get_sku_categories(current_user: dict = Depends(get_current_user)):
     await seed_default_skus()
     categories = await db.master_skus.distinct('category')
     return {'categories': sorted(categories)}
+
+
+# ── Packaging Types ──────────────────────────────────────────
+
+class PackagingTypeCreate(BaseModel):
+    name: str
+    units_per_package: int
+    description: Optional[str] = None
+
+class PackagingTypeUpdate(BaseModel):
+    name: Optional[str] = None
+    units_per_package: Optional[int] = None
+    description: Optional[str] = None
+
+@api_router.get("/packaging-types")
+async def list_packaging_types(current_user: dict = Depends(get_current_user)):
+    """Get all packaging types"""
+    types = await db.packaging_types.find({}, {"_id": 0}).sort("name", 1).to_list(200)
+    return {"packaging_types": types}
+
+@api_router.post("/packaging-types")
+async def create_packaging_type(data: PackagingTypeCreate, current_user: dict = Depends(get_current_user)):
+    """Create a new packaging type"""
+    existing = await db.packaging_types.find_one({"name": data.name})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Packaging type '{data.name}' already exists")
+    if data.units_per_package <= 0:
+        raise HTTPException(status_code=400, detail="Units per package must be > 0")
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": data.name,
+        "units_per_package": data.units_per_package,
+        "description": data.description or "",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.packaging_types.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/packaging-types/{type_id}")
+async def update_packaging_type(type_id: str, data: PackagingTypeUpdate, current_user: dict = Depends(get_current_user)):
+    """Update a packaging type"""
+    existing = await db.packaging_types.find_one({"id": type_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Packaging type not found")
+    if data.name and data.name != existing.get("name"):
+        dup = await db.packaging_types.find_one({"name": data.name, "id": {"$ne": type_id}})
+        if dup:
+            raise HTTPException(status_code=400, detail=f"Packaging type '{data.name}' already exists")
+    updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if data.name is not None:
+        updates["name"] = data.name
+    if data.units_per_package is not None:
+        if data.units_per_package <= 0:
+            raise HTTPException(status_code=400, detail="Units per package must be > 0")
+        updates["units_per_package"] = data.units_per_package
+    if data.description is not None:
+        updates["description"] = data.description
+    await db.packaging_types.update_one({"id": type_id}, {"$set": updates})
+    updated = await db.packaging_types.find_one({"id": type_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/packaging-types/{type_id}")
+async def delete_packaging_type(type_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a packaging type"""
+    result = await db.packaging_types.delete_one({"id": type_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Packaging type not found")
+    return {"message": "Packaging type deleted"}
 
 @api_router.get("/cogs/{city}")
 async def get_cogs_data(city: str, current_user: dict = Depends(get_current_user)):

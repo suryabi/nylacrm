@@ -315,6 +315,13 @@ function CreateBatchModal({ skus, onClose, onSuccess }) {
   });
   const [saving, setSaving] = useState(false);
   const [hasQCRoute, setHasQCRoute] = useState(null);
+  const [packagingTypes, setPackagingTypes] = useState([]);
+
+  useEffect(() => {
+    axios.get(`${API_URL}/packaging-types`, { headers: getAuthHeaders() })
+      .then(res => setPackagingTypes(res.data.packaging_types || []))
+      .catch(() => {});
+  }, []);
 
   const checkQCRoute = async (skuId) => {
     try {
@@ -327,7 +334,9 @@ function CreateBatchModal({ skus, onClose, onSuccess }) {
 
   const handleSKUChange = (skuId) => {
     const sku = skus.find(s => s.id === skuId);
-    setForm(p => ({ ...p, sku_id: skuId, sku_name: sku?.sku_name || '' }));
+    // Auto-fill packaging type from SKU if defined
+    const bpc = sku?.units_per_package || '';
+    setForm(p => ({ ...p, sku_id: skuId, sku_name: sku?.sku_name || '', bottles_per_crate: bpc ? String(bpc) : p.bottles_per_crate }));
     if (skuId) checkQCRoute(skuId);
     else setHasQCRoute(null);
   };
@@ -336,7 +345,7 @@ function CreateBatchModal({ skus, onClose, onSuccess }) {
     if (!form.sku_id) { toast.error('Select an SKU'); return; }
     if (!form.batch_code.trim()) { toast.error('Batch code is required'); return; }
     if (!form.total_crates || parseInt(form.total_crates) <= 0) { toast.error('Total crates must be > 0'); return; }
-    if (!form.bottles_per_crate || parseInt(form.bottles_per_crate) <= 0) { toast.error('Bottles per crate must be > 0'); return; }
+    if (!form.bottles_per_crate || parseInt(form.bottles_per_crate) <= 0) { toast.error('Select a packaging type'); return; }
 
     setSaving(true);
     try {
@@ -405,9 +414,15 @@ function CreateBatchModal({ skus, onClose, onSuccess }) {
                 placeholder="500" className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" data-testid="batch-crates-input" />
             </div>
             <div>
-              <label className="text-xs text-slate-500 font-medium mb-1 block">Bottles per Crate *</label>
-              <input type="number" value={form.bottles_per_crate} onChange={e => setForm(p => ({ ...p, bottles_per_crate: e.target.value }))}
-                placeholder="48" className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" data-testid="batch-bpc-input" />
+              <label className="text-xs text-slate-500 font-medium mb-1 block">Packaging Type *</label>
+              <select value={form.bottles_per_crate}
+                onChange={e => setForm(p => ({ ...p, bottles_per_crate: e.target.value }))}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-white" data-testid="batch-bpc-input">
+                <option value="">Select packaging</option>
+                {packagingTypes.map(pt => (
+                  <option key={pt.id} value={pt.units_per_package}>{pt.name} ({pt.units_per_package} units)</option>
+                ))}
+              </select>
             </div>
           </div>
           {form.total_crates && form.bottles_per_crate && (

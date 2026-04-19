@@ -138,6 +138,7 @@ const productionNavigationGroups = [
     title: 'Product & SKU',
     items: [
       { name: 'SKU Management', href: '/sku-management', icon: Package, moduleKey: 'sku_management', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
+      { name: 'Packaging Types', href: '/packaging-types', icon: Boxes, moduleKey: 'sku_management', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
     ]
   },
   {

@@ -60,6 +60,7 @@ import AccountPerformance from './pages/AccountPerformance';
 import InvoicesList from './pages/InvoicesList';
 import TransportationCostCalculator from './pages/TransportationCostCalculator';
 import SKUManagement from './pages/SKUManagement';
+import PackagingTypes from './pages/PackagingTypes';
 import CompanyProfile from './pages/CompanyProfile';
 import FilesDocuments from './pages/FilesDocuments';
 // Production Context Pages
@@ -230,6 +231,7 @@ function AppRouter() {
           <Route path="/account-performance" element={<ProtectedRoute moduleKey="report_account_performance"><AccountPerformance /></ProtectedRoute>} />
           <Route path="/transportation-calculator" element={<ProtectedRoute moduleKey="transport_calculator"><TransportationCostCalculator /></ProtectedRoute>} />
           <Route path="/sku-management" element={<ProtectedRoute moduleKey="sku_management"><SKUManagement /></ProtectedRoute>} />
+          <Route path="/packaging-types" element={<ProtectedRoute moduleKey="sku_management"><PackagingTypes /></ProtectedRoute>} />
           <Route path="/company-profile" element={<ProtectedRoute moduleKey="company_profile"><CompanyProfile /></ProtectedRoute>} />
           <Route path="/files-documents" element={<ProtectedRoute moduleKey="files_documents"><FilesDocuments /></ProtectedRoute>} />
           <Route path="/master-locations" element={<ProtectedRoute moduleKey="master_locations"><MasterLocations /></ProtectedRoute>} />
