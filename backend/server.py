@@ -2321,8 +2321,6 @@ async def google_oauth_callback(request: Request, response: Response):
         raise
     except Exception as e:
         logger.error(f'OAuth callback error: {type(e).__name__}: {str(e)}')
-        import traceback
-        logger.error(f'OAuth traceback: {traceback.format_exc()}')
         raise HTTPException(status_code=500, detail=f'Authentication failed: {str(e)}')
 
 @api_router.post("/auth/google-session")
