@@ -2466,7 +2466,7 @@ export default function DistributorDetail() {
 
       {/* Shipment Detail Dialog */}
       <Dialog open={showShipmentDetail} onOpenChange={setShowShipmentDetail}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
               Shipment {selectedShipment?.shipment_number}
@@ -2506,33 +2506,65 @@ export default function DistributorDetail() {
               </div>
 
               {/* Items */}
-              <div className="border rounded-md">
+              <div className="border rounded-md overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-muted/50">
-                      <th className="text-left p-2 font-medium">SKU</th>
-                      <th className="text-right p-2 font-medium">Qty</th>
-                      <th className="text-right p-2 font-medium">Price</th>
-                      <th className="text-right p-2 font-medium">Amount</th>
+                      <th className="text-left p-2.5 font-medium">SKU</th>
+                      <th className="text-right p-2.5 font-medium">Qty</th>
+                      <th className="text-right p-2.5 font-medium">Base Price</th>
+                      <th className="text-right p-2.5 font-medium">Margin %</th>
+                      <th className="text-right p-2.5 font-medium">Transfer Price</th>
+                      <th className="text-right p-2.5 font-medium">Disc %</th>
+                      <th className="text-right p-2.5 font-medium">Amount</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(selectedShipment.items || []).map((item, idx) => (
-                      <tr key={idx} className="border-b">
-                        <td className="p-2">{item.sku_name || item.sku_id}</td>
-                        <td className="p-2 text-right">{item.quantity}</td>
-                        <td className="p-2 text-right">₹{item.unit_price}</td>
-                        <td className="p-2 text-right">₹{item.net_amount?.toFixed(2)}</td>
+                      <tr key={idx} className={`border-b ${idx % 2 === 1 ? 'bg-muted/20' : ''}`}>
+                        <td className="p-2.5">{item.sku_name || item.sku_id}</td>
+                        <td className="p-2.5 text-right tabular-nums">{item.quantity}</td>
+                        <td className="p-2.5 text-right tabular-nums text-muted-foreground">{item.base_price ? `₹${Number(item.base_price).toFixed(2)}` : '-'}</td>
+                        <td className="p-2.5 text-right tabular-nums text-muted-foreground">{item.distributor_margin != null ? `${item.distributor_margin}%` : '-'}</td>
+                        <td className="p-2.5 text-right tabular-nums font-medium">{item.unit_price ? `₹${Number(item.unit_price).toFixed(2)}` : '-'}</td>
+                        <td className="p-2.5 text-right tabular-nums text-muted-foreground">{item.discount_percent ? `${item.discount_percent}%` : '-'}</td>
+                        <td className="p-2.5 text-right tabular-nums font-medium">₹{(item.net_amount || item.gross_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
+                    {(selectedShipment.total_discount_amount || 0) > 0 && (
+                      <tr className="border-t">
+                        <td colSpan="6" className="p-2.5 text-right text-sm text-muted-foreground">Discount:</td>
+                        <td className="p-2.5 text-right text-sm font-medium text-red-600">-₹{selectedShipment.total_discount_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    )}
+                    <tr className="border-t">
+                      <td colSpan="6" className="p-2.5 text-right text-sm text-muted-foreground">Subtotal:</td>
+                      <td className="p-2.5 text-right text-sm font-semibold">₹{((selectedShipment.total_gross_amount || 0) - (selectedShipment.total_discount_amount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                    {(selectedShipment.total_tax_amount || 0) > 0 && (
+                      <tr>
+                        <td colSpan="6" className="p-2.5 text-right text-sm text-muted-foreground">
+                          GST {selectedShipment.gst_percent ? `(${selectedShipment.gst_percent}%)` : ''}:
+                        </td>
+                        <td className="p-2.5 text-right text-sm font-medium">₹{selectedShipment.total_tax_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    )}
                     <tr className="bg-muted/30">
-                      <td colSpan="3" className="p-2 text-right font-medium">Total:</td>
-                      <td className="p-2 text-right font-bold">₹{selectedShipment.total_net_amount?.toLocaleString()}</td>
+                      <td colSpan="6" className="p-2.5 text-right font-bold">Grand Total:</td>
+                      <td className="p-2.5 text-right font-bold text-base">₹{selectedShipment.total_net_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                     </tr>
                   </tfoot>
                 </table>
+              </div>
+
+              {/* Billing Configuration Note */}
+              <div className="bg-amber-50 border border-amber-200 rounded-md px-3 py-2 text-xs text-amber-800">
+                <span className="font-semibold">Billing Config:</span>{' '}
+                {distributor?.billing_approach === 'margin_upfront'
+                  ? 'Margin applied upfront at the time of shipment. Transfer price = Base price - Margin.'
+                  : 'Cost-based pricing. Margin applied at the time of reconciliation based on customer sell-through.'}
               </div>
 
               {/* Actions */}
