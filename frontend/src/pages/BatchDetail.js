@@ -27,6 +27,88 @@ const STATUS_MAP = {
   completed: { label: 'Completed', color: 'bg-emerald-100 text-emerald-700' },
 };
 
+/* ── Inspection Records Table (collapsible) ── */
+function InspectionRecordsTable({ stageInspections, stageId, startEditInspection }) {
+  const [showRecords, setShowRecords] = useState(false);
+  return (
+    <div className="border-t border-slate-100">
+      <button onClick={() => setShowRecords(!showRecords)}
+        className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-50/50 transition-colors text-left"
+        data-testid={`toggle-insp-records-${stageId}`}>
+        <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+          Inspection Records ({stageInspections.length})
+        </span>
+        {showRecords ? <ChevronUp size={12} className="text-slate-400" /> : <ChevronDown size={12} className="text-slate-400" />}
+      </button>
+      {showRecords && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-slate-50 text-[9px] text-slate-500 uppercase tracking-wider">
+                <th className="text-left px-3 py-1.5 font-medium">Date</th>
+                <th className="text-left px-3 py-1.5 font-medium">Resource</th>
+                <th className="text-center px-3 py-1.5 font-medium">Crates</th>
+                <th className="text-center px-3 py-1.5 font-medium">Rejected</th>
+                <th className="text-left px-3 py-1.5 font-medium">Reason</th>
+                <th className="text-left px-3 py-1.5 font-medium">By</th>
+                <th className="text-right px-3 py-1.5 font-medium"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {stageInspections.map((insp) => {
+                const inspEntries = insp.entries || [];
+                return inspEntries.length > 0 ? inspEntries.map((entry, ei) => (
+                  <tr key={`${insp.id}-${ei}`} className="hover:bg-slate-50/50" data-testid={`insp-record-${insp.id}`}>
+                    <td className="px-3 py-1.5 text-slate-600">{entry.date}</td>
+                    <td className="px-3 py-1.5 font-medium text-slate-700">{entry.resource_name}</td>
+                    <td className="px-3 py-1.5 text-center font-semibold text-slate-800">{entry.qty_inspected}</td>
+                    <td className="px-3 py-1.5 text-center">
+                      {(entry.rejections || []).reduce((s, r) => s + (r.qty_rejected || 0), 0) > 0
+                        ? <span className="text-red-600 font-semibold">{(entry.rejections || []).reduce((s, r) => s + (r.qty_rejected || 0), 0)}</span>
+                        : <span className="text-emerald-600">0</span>}
+                    </td>
+                    <td className="px-3 py-1.5 text-slate-500">
+                      {(entry.rejections || []).filter(r => r.qty_rejected > 0).map(r => r.reason).join(', ') || '—'}
+                    </td>
+                    <td className="px-3 py-1.5 text-slate-400">{ei === 0 ? (insp.inspected_by_name || '') : ''}</td>
+                    <td className="px-3 py-1.5 text-right">
+                      {ei === 0 && (
+                        <button onClick={() => startEditInspection(insp)}
+                          className="px-2 py-0.5 text-[10px] font-medium text-blue-600 hover:bg-blue-50 rounded flex items-center gap-1 ml-auto"
+                          data-testid={`edit-insp-${insp.id}`}>
+                          <Pencil size={9} /> Edit
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )) : (
+                  <tr key={insp.id} className="hover:bg-slate-50/50" data-testid={`insp-record-${insp.id}`}>
+                    <td className="px-3 py-1.5 text-slate-600">{new Date(insp.inspected_at || insp.created_at).toLocaleDateString()}</td>
+                    <td className="px-3 py-1.5 font-medium text-slate-700">{insp.inspected_by_name}</td>
+                    <td className="px-3 py-1.5 text-center font-semibold text-slate-800">{insp.qty_inspected}</td>
+                    <td className="px-3 py-1.5 text-center">
+                      {insp.qty_rejected > 0 ? <span className="text-red-600 font-semibold">{insp.qty_rejected}</span> : <span className="text-emerald-600">0</span>}
+                    </td>
+                    <td className="px-3 py-1.5 text-slate-500">—</td>
+                    <td className="px-3 py-1.5 text-slate-400">{insp.inspected_by_name}</td>
+                    <td className="px-3 py-1.5 text-right">
+                      <button onClick={() => startEditInspection(insp)}
+                        className="px-2 py-0.5 text-[10px] font-medium text-blue-600 hover:bg-blue-50 rounded flex items-center gap-1 ml-auto"
+                        data-testid={`edit-insp-${insp.id}`}>
+                        <Pencil size={9} /> Edit
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const STAGE_CFG = {
   qc: { icon: FlaskConical, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', badge: 'bg-blue-100 text-blue-700' },
   labeling: { icon: Paintbrush, color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200', badge: 'bg-purple-100 text-purple-700' },
@@ -122,7 +204,7 @@ export default function BatchDetail() {
         )}
       </div>
 
-      {/* Info Cards */}
+      {/* Info Tiles — Tasks-style with icon + label top, large value */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
         {[
           { label: 'Production Date', value: batch.production_date, icon: Calendar },
@@ -131,9 +213,12 @@ export default function BatchDetail() {
           { label: 'Total Bottles', value: batch.total_bottles?.toLocaleString(), icon: Package },
           { label: 'Unallocated', value: batch.unallocated_crates?.toLocaleString(), icon: Boxes },
         ].map((item, i) => (
-          <div key={i} className="bg-white border border-slate-200 rounded-lg p-3">
-            <div className="flex items-center gap-1.5 mb-0.5"><item.icon className="w-3 h-3 text-slate-400" /><span className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-wider">{item.label}</span></div>
-            <p className="text-base sm:text-lg font-bold text-slate-800">{item.value}</p>
+          <div key={i} className="bg-white border border-slate-200 rounded-lg p-3.5 hover:shadow-sm transition-shadow">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <item.icon className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">{item.label}</span>
+            </div>
+            <p className="text-xl font-bold text-slate-900">{item.value}</p>
           </div>
         ))}
       </div>
@@ -143,39 +228,50 @@ export default function BatchDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           {/* LEFT: Pipeline */}
           <div className="lg:col-span-7 xl:col-span-8 space-y-3">
-            {/* Summary Row — 4 tiles */}
+            {/* Summary Tiles — matching info tile style */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div className="bg-white border border-slate-200 rounded-lg p-3 text-center">
-                <p className="text-[10px] text-slate-400 mb-0.5">Unallocated</p>
-                <p className="text-xl font-bold text-slate-800">{batch.unallocated_crates || 0}</p>
-                <p className="text-[9px] text-slate-300">crates</p>
+              <div className="bg-white border border-slate-200 rounded-lg p-3.5 hover:shadow-sm transition-shadow">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Boxes className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">Unallocated</span>
+                </div>
+                <p className="text-xl font-bold text-slate-900">{batch.unallocated_crates || 0}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">crates</p>
               </div>
-              <div className="bg-white border border-slate-200 rounded-lg p-3 text-center">
-                <p className="text-[10px] text-red-400 mb-0.5">Total Rejected</p>
+              <div className="bg-white border border-slate-200 rounded-lg p-3.5 hover:shadow-sm transition-shadow">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+                  <span className="text-[10px] text-red-500 uppercase tracking-wider font-medium">Total Rejected</span>
+                </div>
                 <p className="text-xl font-bold text-red-700">{totalRej}</p>
-                <p className="text-[9px] text-slate-300">bottles {totalBottles > 0 && <span className="text-red-500">({overallRejPct}%)</span>}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">bottles {totalBottles > 0 && <span className="text-red-500">({overallRejPct}%)</span>}</p>
               </div>
-              <div className="bg-white border border-slate-200 rounded-lg p-3 text-center">
-                <p className="text-[10px] text-emerald-400 mb-0.5">Warehouse Ready</p>
+              <div className="bg-white border border-slate-200 rounded-lg p-3.5 hover:shadow-sm transition-shadow">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Package className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-[10px] text-emerald-600 uppercase tracking-wider font-medium">Warehouse Ready</span>
+                </div>
                 <p className="text-xl font-bold text-emerald-700">{batch.total_passed_final || 0}</p>
-                <p className="text-[9px] text-slate-300">bottles</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">bottles</p>
                 {(batch.transferred_to_warehouse || 0) > 0 && (
-                  <p className="text-[9px] text-teal-500 mt-0.5">{batch.transferred_to_warehouse} transferred</p>
+                  <p className="text-[10px] text-teal-500 mt-0.5">{batch.transferred_to_warehouse} transferred</p>
                 )}
               </div>
               {/* Quality tile */}
-              <div className="bg-white border border-slate-200 rounded-lg p-3" data-testid="overall-pass-reject-bar">
-                <p className="text-[10px] text-slate-400 mb-1 text-center">Quality</p>
+              <div className="bg-white border border-slate-200 rounded-lg p-3.5 hover:shadow-sm transition-shadow" data-testid="overall-pass-reject-bar">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">Quality</span>
+                </div>
                 {totalBottles > 0 ? (
                   <>
-                    <div className="flex items-baseline justify-center gap-1.5">
-                      <span className="text-lg font-bold text-emerald-700">{overallPassPct}%</span>
-                      <span className="text-[10px] text-slate-300">/</span>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-xl font-bold text-emerald-700">{overallPassPct}%</span>
                       <span className="text-sm font-bold text-red-600">{overallRejPct}%</span>
                     </div>
-                    <div className="flex items-center justify-center gap-2 mt-0.5">
-                      <span className="text-[9px] text-emerald-600">pass</span>
-                      <span className="text-[9px] text-red-500">rej</span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] text-emerald-600">pass</span>
+                      <span className="text-[10px] text-red-500">rej</span>
                     </div>
                     <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex mt-1.5">
                       <div className="bg-emerald-600 h-full" style={{ width: `${overallPassPct}%` }} />
@@ -183,7 +279,7 @@ export default function BatchDetail() {
                     </div>
                   </>
                 ) : (
-                  <p className="text-sm text-slate-300 text-center">—</p>
+                  <p className="text-lg text-slate-300">—</p>
                 )}
               </div>
             </div>
@@ -462,52 +558,9 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
         );
       })()}
 
-      {/* Past Inspections */}
+      {/* Past Inspections — collapsible table */}
       {(stageInspections || []).length > 0 && (
-        <div className="border-t border-slate-100">
-          <div className="px-3 py-2 bg-slate-50/50">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">Inspection Records ({stageInspections.length})</p>
-          </div>
-          <div className="divide-y divide-slate-50">
-            {stageInspections.map((insp) => (
-              <div key={insp.id} className="px-3 py-2 hover:bg-slate-50/50 transition-colors" data-testid={`insp-record-${insp.id}`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 flex-wrap flex-1 min-w-0">
-                    <span className="text-xs font-semibold text-slate-700">{insp.qty_inspected} crates</span>
-                    {insp.qty_rejected > 0 && (
-                      <span className="text-xs text-red-600 font-medium">{insp.qty_rejected} rej</span>
-                    )}
-                    {(!insp.qty_rejected || insp.qty_rejected === 0) && (
-                      <span className="text-xs text-emerald-600 font-medium">all passed</span>
-                    )}
-                    <span className="text-[10px] text-slate-400">
-                      {insp.inspected_by_name} &middot; {new Date(insp.inspected_at || insp.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <button onClick={() => startEditInspection(insp)}
-                    className="px-2 py-1 text-[10px] font-medium text-blue-600 hover:bg-blue-50 rounded flex items-center gap-1 flex-shrink-0"
-                    data-testid={`edit-insp-${insp.id}`}>
-                    <Pencil size={10} /> Edit
-                  </button>
-                </div>
-                {(insp.entries || []).length > 0 && (
-                  <div className="mt-1 space-y-0.5 ml-2">
-                    {insp.entries.map((entry, ei) => (
-                      <div key={ei} className="flex items-center gap-2 text-[10px] text-slate-500">
-                        <span className="font-medium">{entry.resource_name}</span>
-                        <span>{entry.qty_inspected}c</span>
-                        <span className="text-slate-300">{entry.date}</span>
-                        {(entry.rejections || []).filter(r => r.qty_rejected > 0).map((r, ri) => (
-                          <span key={ri} className="text-red-500">{r.qty_rejected} {r.reason}</span>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+        <InspectionRecordsTable stageInspections={stageInspections} stageId={stage.id} startEditInspection={startEditInspection} />
       )}
 
       {/* Move Form */}
