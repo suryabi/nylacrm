@@ -2112,7 +2112,7 @@ async def copy_costs_to_all_cities(request: CopyCostsRequest, current_user: dict
         cities_updated += 1
     
     return {
-        'message': f'Values copied successfully',
+        'message': 'Values copied successfully',
         'source_city': source_city,
         'cities_updated': cities_updated
     }
@@ -2224,6 +2224,8 @@ async def google_oauth_callback(request: Request, response: Response):
         if not redirect_uri:
             redirect_uri = os.environ.get('GOOGLE_OAUTH_REDIRECT_URI', '')
         
+        logger.info(f'Google OAuth callback - redirect_uri: {redirect_uri}, client_id: {client_id[:10]}...')
+        
         # Exchange code for tokens
         async with httpx.AsyncClient() as client:
             token_response = await client.post(
@@ -2240,7 +2242,9 @@ async def google_oauth_callback(request: Request, response: Response):
             tokens = token_response.json()
             
             if 'error' in tokens:
-                raise HTTPException(status_code=400, detail=tokens['error'])
+                logger.error(f'Google token exchange error: {tokens}')
+                error_desc = tokens.get('error_description', tokens.get('error', 'Token exchange failed'))
+                raise HTTPException(status_code=400, detail=f'Google auth error: {error_desc}')
             
             # Get user info
             user_info_response = await client.get(
@@ -2316,7 +2320,9 @@ async def google_oauth_callback(request: Request, response: Response):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f'OAuth callback error: {str(e)}')
+        logger.error(f'OAuth callback error: {type(e).__name__}: {str(e)}')
+        import traceback
+        logger.error(f'OAuth traceback: {traceback.format_exc()}')
         raise HTTPException(status_code=500, detail=f'Authentication failed: {str(e)}')
 
 @api_router.post("/auth/google-session")
@@ -7710,7 +7716,7 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
         
         # Otherwise, geocode location and search nearby
         async with httpx.AsyncClient() as client:
-            geocode_url = f"https://maps.googleapis.com/maps/api/geocode/json"
+            geocode_url = "https://maps.googleapis.com/maps/api/geocode/json"
             
             # Use location name or pincode
             search_query = location_name if location_name else f'{pincode}, India'
@@ -10313,7 +10319,7 @@ async def upload_document(
     if file.content_type not in ALLOWED_DOCUMENT_TYPES:
         raise HTTPException(
             status_code=400, 
-            detail=f'File type not allowed. Allowed types: PDF, DOC, DOCX, PNG, JPG, GIF, WEBP'
+            detail='File type not allowed. Allowed types: PDF, DOC, DOCX, PNG, JPG, GIF, WEBP'
         )
     
     # Read file

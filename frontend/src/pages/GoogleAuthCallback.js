@@ -47,7 +47,10 @@ export default function GoogleAuthCallback() {
         window.location.href = '/home';
       } catch (error) {
         console.error('OAuth error:', error);
-        const errorMsg = error.response?.data?.detail || 'Authentication failed';
+        console.error('OAuth error response:', error.response?.data);
+        const errorDetail = error.response?.data?.detail || '';
+        const errorMsg = errorDetail || 'Authentication failed. Please try again.';
+        toast.error(errorMsg);
         navigate('/login', { state: { error: errorMsg } });
       }
     };
