@@ -143,8 +143,8 @@ export default function BatchDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           {/* LEFT: Pipeline */}
           <div className="lg:col-span-7 xl:col-span-8 space-y-3">
-            {/* Summary Row */}
-            <div className="grid grid-cols-3 gap-2">
+            {/* Summary Row — 4 tiles */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <div className="bg-white border border-slate-200 rounded-lg p-3 text-center">
                 <p className="text-[10px] text-slate-400 mb-0.5">Unallocated</p>
                 <p className="text-xl font-bold text-slate-800">{batch.unallocated_crates || 0}</p>
@@ -163,21 +163,30 @@ export default function BatchDetail() {
                   <p className="text-[9px] text-teal-500 mt-0.5">{batch.transferred_to_warehouse} transferred</p>
                 )}
               </div>
-            </div>
-
-            {/* Overall Quality Bar */}
-            {totalBottles > 0 && (
-              <div className="flex items-center gap-3 px-4 py-2.5 bg-white border border-slate-200 rounded-lg" data-testid="overall-pass-reject-bar">
-                <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Quality</span>
-                <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden flex">
-                  <div className="bg-emerald-600 h-full transition-all" style={{ width: `${overallPassPct}%` }} />
-                  <div className="bg-red-600 h-full transition-all" style={{ width: `${overallRejPct}%` }} />
-                </div>
-                <span className="text-xs font-semibold text-emerald-700">{overallPassPct}%</span>
-                <span className="text-[10px] text-slate-300">|</span>
-                <span className="text-xs font-semibold text-red-600">{overallRejPct}% rej</span>
+              {/* Quality tile */}
+              <div className="bg-white border border-slate-200 rounded-lg p-3" data-testid="overall-pass-reject-bar">
+                <p className="text-[10px] text-slate-400 mb-1 text-center">Quality</p>
+                {totalBottles > 0 ? (
+                  <>
+                    <div className="flex items-baseline justify-center gap-1.5">
+                      <span className="text-lg font-bold text-emerald-700">{overallPassPct}%</span>
+                      <span className="text-[10px] text-slate-300">/</span>
+                      <span className="text-sm font-bold text-red-600">{overallRejPct}%</span>
+                    </div>
+                    <div className="flex items-center justify-center gap-2 mt-0.5">
+                      <span className="text-[9px] text-emerald-600">pass</span>
+                      <span className="text-[9px] text-red-500">rej</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex mt-1.5">
+                      <div className="bg-emerald-600 h-full" style={{ width: `${overallPassPct}%` }} />
+                      <div className="bg-red-600 h-full" style={{ width: `${overallRejPct}%` }} />
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-slate-300 text-center">—</p>
+                )}
               </div>
-            )}
+            </div>
 
             {/* Stage Cards */}
             {stages.map((stage, idx) => {
