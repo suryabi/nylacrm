@@ -160,7 +160,7 @@ export default function DistributorDetail() {
     driver_name: '',
     driver_contact: '',
     remarks: '',
-    gst_percent: '5'
+    gst_percent: String(tenantSettings.default_distributor_gst_percent || 5)
   });
   const [shipmentItems, setShipmentItems] = useState([]);
   const [savingShipment, setSavingShipment] = useState(false);
@@ -1235,7 +1235,7 @@ export default function DistributorDetail() {
       driver_name: '',
       driver_contact: '',
       remarks: '',
-      gst_percent: '5'
+      gst_percent: String(tenantSettings.default_distributor_gst_percent || 5)
     });
     setShipmentItems([]);
   };
