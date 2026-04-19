@@ -57,7 +57,7 @@ export default function DistributorDetail() {
   
   // Get default GST from tenant settings
   const tenantSettings = getSettings();
-  const defaultGstPercent = tenantSettings.default_distributor_gst_percent || 18;
+  const defaultGstPercent = tenantSettings.default_distributor_gst_percent ?? 5;
   
   const [loading, setLoading] = useState(true);
   const [distributor, setDistributor] = useState(null);
@@ -160,10 +160,15 @@ export default function DistributorDetail() {
     driver_name: '',
     driver_contact: '',
     remarks: '',
-    gst_percent: String(tenantSettings.default_distributor_gst_percent || 5)
+    gst_percent: String(defaultGstPercent)
   });
   const [shipmentItems, setShipmentItems] = useState([]);
   const [savingShipment, setSavingShipment] = useState(false);
+
+  // Sync GST default when tenant settings load
+  useEffect(() => {
+    setShipmentForm(prev => ({ ...prev, gst_percent: String(defaultGstPercent) }));
+  }, [defaultGstPercent]);
   const [selectedShipment, setSelectedShipment] = useState(null);
   const [showShipmentDetail, setShowShipmentDetail] = useState(false);
   const [factoryWarehouses, setFactoryWarehouses] = useState([]);
@@ -1235,7 +1240,7 @@ export default function DistributorDetail() {
       driver_name: '',
       driver_contact: '',
       remarks: '',
-      gst_percent: String(tenantSettings.default_distributor_gst_percent || 5)
+      gst_percent: String(defaultGstPercent)
     });
     setShipmentItems([]);
   };
