@@ -21,10 +21,14 @@ class CostCardCreate(BaseModel):
     sku_name: Optional[str] = None
     city: str
     cost_per_unit: float
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
 
 
 class CostCardUpdate(BaseModel):
-    cost_per_unit: float
+    cost_per_unit: Optional[float] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
 
 
 class CostCardBulkItem(BaseModel):
@@ -33,9 +37,29 @@ class CostCardBulkItem(BaseModel):
     sku_name: Optional[str] = None
     city: str
     cost_per_unit: float
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
 
 
 ADMIN_ROLES = ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head']
+
+
+async def check_date_overlap(tenant_id: str, sku_id: str, city: str, start_date: str, end_date: str, exclude_id: str = None):
+    """Check if a date range overlaps with any existing cost card for the same SKU+city."""
+    if not start_date or not end_date:
+        return  # No validation if dates not provided
+    query = {"tenant_id": tenant_id, "sku_id": sku_id, "city": city, "start_date": {"$exists": True, "$ne": None}, "end_date": {"$exists": True, "$ne": None}}
+    if exclude_id:
+        query["id"] = {"$ne": exclude_id}
+    existing = await db.cost_cards.find(query, {"_id": 0, "id": 1, "start_date": 1, "end_date": 1}).to_list(500)
+    for ex in existing:
+        ex_start = ex.get("start_date", "")
+        ex_end = ex.get("end_date", "")
+        if not ex_start or not ex_end:
+            continue
+        # Overlap if: new_start <= ex_end AND new_end >= ex_start
+        if start_date <= ex_end and end_date >= ex_start:
+            raise HTTPException(status_code=400, detail=f"Date range overlaps with existing cost card ({ex_start} to {ex_end}). Only one active cost card per SKU is allowed at any time.")
 
 
 @router.get("")
@@ -78,11 +102,21 @@ async def create_cost_card(
     tenant_id = get_current_tenant_id()
     now = datetime.now(timezone.utc).isoformat()
 
-    existing = await db.cost_cards.find_one({
-        "tenant_id": tenant_id, "sku_id": data.sku_id, "city": data.city
-    })
-    if existing:
-        raise HTTPException(status_code=400, detail=f"Cost card already exists for {data.city} + {data.sku_name or data.sku_id}")
+    # Validate dates
+    if data.start_date and data.end_date and data.start_date > data.end_date:
+        raise HTTPException(status_code=400, detail="Start date must be before end date")
+
+    # Check overlap
+    if data.start_date and data.end_date:
+        await check_date_overlap(tenant_id, data.sku_id, data.city, data.start_date, data.end_date)
+    else:
+        # No dates = check for existing without dates
+        existing = await db.cost_cards.find_one({
+            "tenant_id": tenant_id, "sku_id": data.sku_id, "city": data.city,
+            "$or": [{"start_date": None}, {"start_date": {"$exists": False}}]
+        })
+        if existing:
+            raise HTTPException(status_code=400, detail=f"Cost card already exists for {data.city} + {data.sku_name or data.sku_id}. Use dates to create time-bound entries.")
 
     sku_name = data.sku_name
     if not sku_name:
@@ -96,6 +130,8 @@ async def create_cost_card(
         "sku_name": sku_name,
         "city": data.city,
         "cost_per_unit": round(data.cost_per_unit, 2),
+        "start_date": data.start_date,
+        "end_date": data.end_date,
         "created_at": now,
         "updated_at": now,
         "updated_by": current_user.get("id"),
@@ -119,14 +155,33 @@ async def update_cost_card(
     tenant_id = get_current_tenant_id()
     now = datetime.now(timezone.utc).isoformat()
 
+    existing = await db.cost_cards.find_one({"id": card_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Cost card not found")
+
+    updates = {
+        "updated_at": now,
+        "updated_by": current_user.get("id"),
+        "updated_by_name": current_user.get("name"),
+    }
+    if data.cost_per_unit is not None:
+        updates["cost_per_unit"] = round(data.cost_per_unit, 2)
+    if data.start_date is not None:
+        updates["start_date"] = data.start_date
+    if data.end_date is not None:
+        updates["end_date"] = data.end_date
+
+    # Validate dates
+    new_start = data.start_date if data.start_date is not None else existing.get("start_date")
+    new_end = data.end_date if data.end_date is not None else existing.get("end_date")
+    if new_start and new_end and new_start > new_end:
+        raise HTTPException(status_code=400, detail="Start date must be before end date")
+    if new_start and new_end:
+        await check_date_overlap(tenant_id, existing["sku_id"], existing["city"], new_start, new_end, exclude_id=card_id)
+
     result = await db.cost_cards.update_one(
         {"id": card_id, "tenant_id": tenant_id},
-        {"$set": {
-            "cost_per_unit": round(data.cost_per_unit, 2),
-            "updated_at": now,
-            "updated_by": current_user.get("id"),
-            "updated_by_name": current_user.get("name"),
-        }}
+        {"$set": updates}
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Cost card not found")
@@ -170,23 +225,35 @@ async def bulk_save_cost_cards(
             sku_name = sku.get("name") if sku else item.sku_id
 
         if item.id:
-            # Update existing
+            # Update existing — check overlap if dates changed
+            if item.start_date and item.end_date:
+                await check_date_overlap(tenant_id, item.sku_id, item.city, item.start_date, item.end_date, exclude_id=item.id)
+            update_set = {
+                "cost_per_unit": round(item.cost_per_unit, 2),
+                "updated_at": now,
+                "updated_by": current_user.get("id"),
+                "updated_by_name": current_user.get("name"),
+            }
+            if item.start_date is not None:
+                update_set["start_date"] = item.start_date
+            if item.end_date is not None:
+                update_set["end_date"] = item.end_date
             await db.cost_cards.update_one(
                 {"id": item.id, "tenant_id": tenant_id},
-                {"$set": {
-                    "cost_per_unit": round(item.cost_per_unit, 2),
-                    "updated_at": now,
-                    "updated_by": current_user.get("id"),
-                    "updated_by_name": current_user.get("name"),
-                }}
+                {"$set": update_set}
             )
             updated += 1
         else:
-            # Check for existing by city+sku
+            # Check overlap for new entries
+            if item.start_date and item.end_date:
+                await check_date_overlap(tenant_id, item.sku_id, item.city, item.start_date, item.end_date)
+
+            # Check for existing by city+sku (without dates)
             existing = await db.cost_cards.find_one({
-                "tenant_id": tenant_id, "sku_id": item.sku_id, "city": item.city
+                "tenant_id": tenant_id, "sku_id": item.sku_id, "city": item.city,
+                "$or": [{"start_date": None}, {"start_date": {"$exists": False}}]
             })
-            if existing:
+            if existing and not item.start_date:
                 await db.cost_cards.update_one(
                     {"id": existing["id"]},
                     {"$set": {
@@ -205,6 +272,8 @@ async def bulk_save_cost_cards(
                     "sku_name": sku_name,
                     "city": item.city,
                     "cost_per_unit": round(item.cost_per_unit, 2),
+                    "start_date": item.start_date,
+                    "end_date": item.end_date,
                     "created_at": now,
                     "updated_at": now,
                     "updated_by": current_user.get("id"),

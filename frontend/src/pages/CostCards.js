@@ -65,17 +65,15 @@ export default function CostCards() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleCellEdit = (cardId, value) => {
-    const numVal = parseFloat(value);
-    if (value === '' || value === undefined) {
-      setEditedRows(prev => ({ ...prev, [cardId]: value }));
-      return;
-    }
-    setEditedRows(prev => ({ ...prev, [cardId]: isNaN(numVal) ? value : value }));
+  const handleCellEdit = (cardId, field, value) => {
+    setEditedRows(prev => ({
+      ...prev,
+      [cardId]: { ...(prev[cardId] || {}), [field]: value }
+    }));
   };
 
   const addNewRow = () => {
-    setNewRows(prev => [...prev, { _tempId: Date.now(), sku_id: '', city: allCities[0] || '', cost_per_unit: '' }]);
+    setNewRows(prev => [...prev, { _tempId: Date.now(), sku_id: '', city: allCities[0] || '', cost_per_unit: '', start_date: '', end_date: '' }]);
   };
 
   const updateNewRow = (tempId, field, value) => {
@@ -90,15 +88,22 @@ export default function CostCards() {
     const items = [];
 
     // Edited existing rows
-    for (const [cardId, value] of Object.entries(editedRows)) {
-      const numVal = parseFloat(value);
-      if (isNaN(numVal) || numVal < 0) {
-        toast.error('All cost values must be valid positive numbers');
-        return;
+    for (const [cardId, edits] of Object.entries(editedRows)) {
+      if (edits.cost_per_unit !== undefined) {
+        const numVal = parseFloat(edits.cost_per_unit);
+        if (isNaN(numVal) || numVal < 0) {
+          toast.error('All cost values must be valid positive numbers');
+          return;
+        }
       }
       const card = costCards.find(c => c.id === cardId);
       if (card) {
-        items.push({ id: cardId, sku_id: card.sku_id, sku_name: card.sku_name, city: card.city, cost_per_unit: numVal });
+        items.push({
+          id: cardId, sku_id: card.sku_id, sku_name: card.sku_name, city: card.city,
+          cost_per_unit: edits.cost_per_unit !== undefined ? parseFloat(edits.cost_per_unit) : card.cost_per_unit,
+          start_date: edits.start_date !== undefined ? edits.start_date : card.start_date,
+          end_date: edits.end_date !== undefined ? edits.end_date : card.end_date,
+        });
       }
     }
 
@@ -114,7 +119,7 @@ export default function CostCards() {
         return;
       }
       const sku = allSkus.find(s => s.id === row.sku_id);
-      items.push({ sku_id: row.sku_id, sku_name: sku?.sku_name || sku?.sku || row.sku_id, city: row.city, cost_per_unit: numVal });
+      items.push({ sku_id: row.sku_id, sku_name: sku?.sku_name || sku?.sku || row.sku_id, city: row.city, cost_per_unit: numVal, start_date: row.start_date || null, end_date: row.end_date || null });
     }
 
     if (items.length === 0) {
@@ -243,10 +248,12 @@ export default function CostCards() {
             <table className="w-full text-sm" data-testid="cost-cards-table">
               <thead>
                 <tr className="bg-slate-50 border-b text-xs text-slate-500 uppercase tracking-wider">
-                  <th className="text-left p-3 pl-4 font-semibold w-[250px]">City</th>
+                  <th className="text-left p-3 pl-4 font-semibold w-[180px]">City</th>
                   <th className="text-left p-3 font-semibold">SKU</th>
-                  <th className="text-right p-3 font-semibold w-[160px]">Cost / Unit (INR)</th>
-                  <th className="text-right p-3 font-semibold w-[140px]">Last Updated</th>
+                  <th className="text-right p-3 font-semibold w-[140px]">Cost / Unit (INR)</th>
+                  <th className="text-center p-3 font-semibold w-[130px]">Start Date</th>
+                  <th className="text-center p-3 font-semibold w-[130px]">End Date</th>
+                  <th className="text-right p-3 font-semibold w-[120px]">Last Updated</th>
                   {canEdit && <th className="text-center p-3 font-semibold w-[60px]"></th>}
                 </tr>
               </thead>
@@ -254,8 +261,13 @@ export default function CostCards() {
                 {Object.entries(groupedByCity).map(([city, cards], gi) => (
                   <React.Fragment key={city}>
                     {cards.map((card, ci) => {
-                      const isEdited = editedRows[card.id] !== undefined;
-                      const displayVal = isEdited ? editedRows[card.id] : card.cost_per_unit?.toFixed(2);
+                      const edits = editedRows[card.id] || {};
+                      const isEdited = Object.keys(edits).length > 0;
+                      const displayCost = edits.cost_per_unit !== undefined ? edits.cost_per_unit : card.cost_per_unit?.toFixed(2);
+                      const displayStart = edits.start_date !== undefined ? edits.start_date : (card.start_date || '');
+                      const displayEnd = edits.end_date !== undefined ? edits.end_date : (card.end_date || '');
+                      const today = new Date().toISOString().split('T')[0];
+                      const isActive = displayStart && displayEnd ? (today >= displayStart && today <= displayEnd) : !displayStart;
                       return (
                         <tr
                           key={card.id}
@@ -269,20 +281,44 @@ export default function CostCards() {
                               <span className="text-slate-300">&mdash;</span>
                             )}
                           </td>
-                          <td className="p-3 text-slate-700">{card.sku_name}</td>
+                          <td className="p-3">
+                            <span className="text-slate-700">{card.sku_name}</span>
+                            {isActive && displayStart && <span className="ml-1.5 text-[9px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">Active</span>}
+                            {!isActive && displayStart && <span className="ml-1.5 text-[9px] font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">Inactive</span>}
+                          </td>
                           <td className="p-3 text-right">
                             {canEdit ? (
                               <input
                                 type="number"
                                 step="0.01"
                                 min="0"
-                                value={displayVal}
-                                onChange={(e) => handleCellEdit(card.id, e.target.value)}
+                                value={displayCost}
+                                onChange={(e) => handleCellEdit(card.id, 'cost_per_unit', e.target.value)}
                                 className={`w-28 text-right px-2 py-1.5 rounded-lg border text-sm font-mono ${isEdited ? 'border-amber-400 bg-amber-50 ring-1 ring-amber-200' : 'border-slate-200 bg-white'} focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400`}
                                 data-testid={`cost-input-${card.id}`}
                               />
                             ) : (
                               <span className="font-mono font-medium text-slate-800">{Number(card.cost_per_unit).toFixed(2)}</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            {canEdit ? (
+                              <input type="date" value={displayStart}
+                                onChange={(e) => handleCellEdit(card.id, 'start_date', e.target.value)}
+                                className={`w-[120px] px-2 py-1.5 rounded-lg border text-xs ${isEdited ? 'border-amber-400 bg-amber-50' : 'border-slate-200 bg-white'} focus:outline-none focus:ring-2 focus:ring-emerald-500/30`}
+                                data-testid={`start-date-${card.id}`} />
+                            ) : (
+                              <span className="text-xs text-slate-600">{card.start_date || '—'}</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            {canEdit ? (
+                              <input type="date" value={displayEnd}
+                                onChange={(e) => handleCellEdit(card.id, 'end_date', e.target.value)}
+                                className={`w-[120px] px-2 py-1.5 rounded-lg border text-xs ${isEdited ? 'border-amber-400 bg-amber-50' : 'border-slate-200 bg-white'} focus:outline-none focus:ring-2 focus:ring-emerald-500/30`}
+                                data-testid={`end-date-${card.id}`} />
+                            ) : (
+                              <span className="text-xs text-slate-600">{card.end_date || '—'}</span>
                             )}
                           </td>
                           <td className="p-3 text-right text-xs text-slate-400">
@@ -311,7 +347,7 @@ export default function CostCards() {
                   <tr key={row._tempId} className="border-b bg-emerald-50/30" data-testid={`new-row-${row._tempId}`}>
                     <td className="p-3 pl-4">
                       <Select value={row.city} onValueChange={(v) => updateNewRow(row._tempId, 'city', v)}>
-                        <SelectTrigger className="h-9 w-[200px] bg-white" data-testid={`new-city-${row._tempId}`}>
+                        <SelectTrigger className="h-9 w-[160px] bg-white" data-testid={`new-city-${row._tempId}`}>
                           <SelectValue placeholder="Select city" />
                         </SelectTrigger>
                         <SelectContent>
@@ -331,15 +367,24 @@ export default function CostCards() {
                     </td>
                     <td className="p-3 text-right">
                       <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={row.cost_per_unit}
+                        type="number" step="0.01" min="0" value={row.cost_per_unit}
                         onChange={(e) => updateNewRow(row._tempId, 'cost_per_unit', e.target.value)}
                         placeholder="0.00"
                         className="w-28 text-right px-2 py-1.5 rounded-lg border border-emerald-300 bg-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
                         data-testid={`new-cost-${row._tempId}`}
                       />
+                    </td>
+                    <td className="p-3 text-center">
+                      <input type="date" value={row.start_date || ''}
+                        onChange={(e) => updateNewRow(row._tempId, 'start_date', e.target.value)}
+                        className="w-[120px] px-2 py-1.5 rounded-lg border border-emerald-300 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                        data-testid={`new-start-${row._tempId}`} />
+                    </td>
+                    <td className="p-3 text-center">
+                      <input type="date" value={row.end_date || ''}
+                        onChange={(e) => updateNewRow(row._tempId, 'end_date', e.target.value)}
+                        className="w-[120px] px-2 py-1.5 rounded-lg border border-emerald-300 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                        data-testid={`new-end-${row._tempId}`} />
                     </td>
                     <td className="p-3 text-right text-xs text-emerald-500">New</td>
                     {canEdit && (
@@ -354,7 +399,7 @@ export default function CostCards() {
 
                 {costCards.length === 0 && newRows.length === 0 && (
                   <tr>
-                    <td colSpan={canEdit ? 5 : 4} className="text-center py-16 text-slate-400">
+                    <td colSpan={canEdit ? 7 : 6} className="text-center py-16 text-slate-400">
                       <DollarSign className="h-10 w-10 mx-auto mb-3 opacity-30" />
                       <p className="font-medium">No cost cards defined</p>
                       <p className="text-xs mt-1">Click "Add Row" to create your first cost card entry</p>
