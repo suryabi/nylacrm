@@ -12222,19 +12222,15 @@ default_origins = [
     'http://127.0.0.1:3000'
 ]
 
-if cors_origins_env == '*':
-    cors_origins = ['*']
-    use_credentials = False
-elif cors_origins_env:
+if cors_origins_env and cors_origins_env != '*':
     cors_origins = [origin.strip() for origin in cors_origins_env.split(',')]
-    use_credentials = True
 else:
     cors_origins = default_origins
-    use_credentials = True
 
 # Add the preview URL if set
 preview_url = os.environ.get('REACT_APP_BACKEND_URL', '')
-if preview_url and cors_origins != ['*']:
+if preview_url and preview_url not in cors_origins:
+    # Extract just the origin (protocol + host)
     from urllib.parse import urlparse
     parsed = urlparse(preview_url)
     origin = f"{parsed.scheme}://{parsed.netloc}"
@@ -12243,7 +12239,7 @@ if preview_url and cors_origins != ['*']:
 
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=use_credentials,
+    allow_credentials=True,
     allow_origins=cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
