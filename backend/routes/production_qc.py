@@ -614,6 +614,82 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
     return updated
 
 
+
+@router.put("/batches/{batch_id}/inspections/{inspection_id}")
+async def update_inspection(batch_id: str, inspection_id: str, data: InspectionRecord, current_user: dict = Depends(get_current_user)):
+    """Update an existing inspection record and recalculate stage balances."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    batch = await tdb.production_batches.find_one({"id": batch_id, "tenant_id": tenant_id})
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+
+    old_insp = await tdb.inspections.find_one({"id": inspection_id, "batch_id": batch_id, "tenant_id": tenant_id})
+    if not old_insp:
+        raise HTTPException(status_code=404, detail="Inspection not found")
+
+    stage_id = old_insp["stage_id"]
+    stage = next((s for s in batch.get("qc_stages", []) if s["id"] == stage_id), None)
+    if not stage:
+        raise HTTPException(status_code=400, detail="Stage not found")
+
+    bottles_per_crate = batch.get("bottles_per_crate", 1) or 1
+
+    # Calculate old totals
+    old_crates = old_insp.get("qty_inspected", 0)
+    old_rej = old_insp.get("qty_rejected", 0)
+    old_rej_crate_equiv = old_rej // bottles_per_crate if bottles_per_crate > 0 else 0
+    old_passed = max(old_crates - old_rej_crate_equiv, 0)
+
+    # Calculate new totals
+    new_crates = sum(int(e.qty_inspected) for e in data.entries)
+    new_rej = sum(sum(int(r.qty_rejected) for r in e.rejections) for e in data.entries)
+    new_rej_crate_equiv = new_rej // bottles_per_crate if bottles_per_crate > 0 else 0
+    new_passed = max(new_crates - new_rej_crate_equiv, 0)
+
+    # Update stage balances: reverse old, apply new
+    balances = batch.get("stage_balances", {})
+    bal = balances.get(stage_id, {})
+    bal["pending"] = bal.get("pending", 0) + old_crates - new_crates
+    bal["passed"] = bal.get("passed", 0) - old_passed + new_passed
+    bal["rejected"] = bal.get("rejected", 0) - old_rej + new_rej
+    balances[stage_id] = bal
+
+    # Update total_rejected on batch
+    total_rejected = (batch.get("total_rejected", 0) or 0) - old_rej + new_rej
+
+    # Update total_passed_final if final_qc stage
+    total_passed_final = batch.get("total_passed_final", 0) or 0
+    if stage.get("stage_type") == "final_qc":
+        old_final_passed = old_crates * bottles_per_crate - old_rej
+        new_final_passed = new_crates * bottles_per_crate - new_rej
+        total_passed_final = max(0, total_passed_final - old_final_passed + new_final_passed)
+
+    # Update inspection document
+    await tdb.inspections.update_one({"id": inspection_id}, {"$set": {
+        "qty_inspected": new_crates,
+        "qty_passed": new_crates,
+        "qty_rejected": new_rej,
+        "entries": [e.model_dump() for e in data.entries],
+        "remarks": data.remarks or "",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_by": current_user.get("id"),
+        "updated_by_name": current_user.get("name"),
+    }})
+
+    # Update batch
+    await tdb.production_batches.update_one({"id": batch_id}, {"$set": {
+        "stage_balances": balances,
+        "total_rejected": total_rejected,
+        "total_passed_final": total_passed_final,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
+
+    updated = await tdb.production_batches.find_one({"id": batch_id}, {"_id": 0})
+    return updated
+
+
 @router.get("/batches/{batch_id}/history")
 async def get_batch_history(batch_id: str, current_user: dict = Depends(get_current_user)):
     """Get movement and inspection history for a batch."""

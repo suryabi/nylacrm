@@ -6,7 +6,7 @@ import {
   ArrowLeft, Package, Calendar, Boxes, Tag,
   Loader2, FlaskConical, Paintbrush, ShieldCheck,
   Trash2, ArrowRight, MoveRight, ClipboardCheck,
-  Clock, User, AlertTriangle, ChevronDown, ChevronUp, Plus, Warehouse, Send,
+  Clock, User, AlertTriangle, ChevronDown, ChevronUp, Plus, Warehouse, Send, Pencil,
 } from 'lucide-react';
 import Breadcrumbs from '../components/Breadcrumbs';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
@@ -198,6 +198,7 @@ export default function BatchDetail() {
               const prevBal = prevStage ? (balances[prevStage.id] || {}) : null;
               const canReceive = isFirst ? (batch.unallocated_crates || 0) > 0 : (prevBal?.passed || 0) > 0;
               const canInspect = (bal.pending || 0) > 0;
+              const stageInspections = (history.inspections || []).filter(i => i.stage_id === stage.id);
 
               return (
                 <StageCard
@@ -207,6 +208,7 @@ export default function BatchDetail() {
                   sourceQty={isFirst ? (batch.unallocated_crates || 0) : (prevBal?.passed || 0)}
                   batchId={batchId} bottlesPerCrate={batch.bottles_per_crate || 1}
                   rejectionReasons={rejectionReasons} qcTeam={qcTeam} onUpdate={fetchBatch}
+                  stageInspections={stageInspections}
                 />
               );
             })}
@@ -243,9 +245,10 @@ export default function BatchDetail() {
 
 /* ─── Stage Card with Move & Inspect actions ─── */
 
-function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sourceLabel, sourceQty, batchId, bottlesPerCrate, rejectionReasons, qcTeam, onUpdate }) {
+function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sourceLabel, sourceQty, batchId, bottlesPerCrate, rejectionReasons, qcTeam, onUpdate, stageInspections }) {
   const [showMove, setShowMove] = useState(false);
   const [showInspect, setShowInspect] = useState(false);
+  const [editingInspection, setEditingInspection] = useState(null);
   const [moveQty, setMoveQty] = useState('');
   const [moveNotes, setMoveNotes] = useState('');
   const [inspRemarks, setInspRemarks] = useState('');
@@ -313,6 +316,46 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Inspection failed');
     } finally { setSaving(false); }
+  };
+
+  const startEditInspection = (insp) => {
+    const inspEntries = (insp.entries || []).map(e => ({
+      resource_id: e.resource_id || '',
+      resource_name: e.resource_name || '',
+      date: e.date || '',
+      qty_inspected: String(e.qty_inspected || ''),
+      rejItems: (e.rejections || []).length > 0
+        ? e.rejections.map(r => ({ qty_rejected: String(r.qty_rejected || ''), reason: r.reason || '' }))
+        : [emptyRejItem()],
+    }));
+    setEntries(inspEntries.length > 0 ? inspEntries : [emptyEntry()]);
+    setInspRemarks(insp.remarks || '');
+    setEditingInspection(insp);
+    setShowInspect(true);
+    setShowMove(false);
+  };
+
+  const handleUpdateInspection = async () => {
+    const apiEntries = entries.map(e => ({
+      resource_id: e.resource_id, resource_name: e.resource_name, date: e.date,
+      qty_inspected: parseInt(e.qty_inspected) || 0,
+      rejections: e.rejItems.filter(r => parseInt(r.qty_rejected) > 0).map(r => ({ qty_rejected: parseInt(r.qty_rejected) || 0, reason: r.reason })),
+    }));
+    for (const e of apiEntries) {
+      if (!e.resource_name) { toast.error('Select a resource'); return; }
+      if (e.qty_inspected <= 0) { toast.error('Crates must be > 0'); return; }
+      for (const r of e.rejections) { if (!r.reason) { toast.error('Select reason for all rejections'); return; } }
+    }
+    setSaving(true);
+    try {
+      await axios.put(`${API_URL}/production/batches/${batchId}/inspections/${editingInspection.id}`, {
+        stage_id: stage.id, entries: apiEntries, remarks: inspRemarks,
+      }, { headers: getAuthHeaders() });
+      toast.success('Inspection updated');
+      setShowInspect(false); setEditingInspection(null); setEntries([emptyEntry()]); setInspRemarks('');
+      onUpdate();
+    } catch (err) { toast.error(err.response?.data?.detail || 'Update failed'); }
+    finally { setSaving(false); }
   };
 
   const updateEntry = (idx, field, value) => {
@@ -419,6 +462,54 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
         );
       })()}
 
+      {/* Past Inspections */}
+      {(stageInspections || []).length > 0 && (
+        <div className="border-t border-slate-100">
+          <div className="px-3 py-2 bg-slate-50/50">
+            <p className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">Inspection Records ({stageInspections.length})</p>
+          </div>
+          <div className="divide-y divide-slate-50">
+            {stageInspections.map((insp) => (
+              <div key={insp.id} className="px-3 py-2 hover:bg-slate-50/50 transition-colors" data-testid={`insp-record-${insp.id}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 flex-wrap flex-1 min-w-0">
+                    <span className="text-xs font-semibold text-slate-700">{insp.qty_inspected} crates</span>
+                    {insp.qty_rejected > 0 && (
+                      <span className="text-xs text-red-600 font-medium">{insp.qty_rejected} rej</span>
+                    )}
+                    {(!insp.qty_rejected || insp.qty_rejected === 0) && (
+                      <span className="text-xs text-emerald-600 font-medium">all passed</span>
+                    )}
+                    <span className="text-[10px] text-slate-400">
+                      {insp.inspected_by_name} &middot; {new Date(insp.inspected_at || insp.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <button onClick={() => startEditInspection(insp)}
+                    className="px-2 py-1 text-[10px] font-medium text-blue-600 hover:bg-blue-50 rounded flex items-center gap-1 flex-shrink-0"
+                    data-testid={`edit-insp-${insp.id}`}>
+                    <Pencil size={10} /> Edit
+                  </button>
+                </div>
+                {(insp.entries || []).length > 0 && (
+                  <div className="mt-1 space-y-0.5 ml-2">
+                    {insp.entries.map((entry, ei) => (
+                      <div key={ei} className="flex items-center gap-2 text-[10px] text-slate-500">
+                        <span className="font-medium">{entry.resource_name}</span>
+                        <span>{entry.qty_inspected}c</span>
+                        <span className="text-slate-300">{entry.date}</span>
+                        {(entry.rejections || []).filter(r => r.qty_rejected > 0).map((r, ri) => (
+                          <span key={ri} className="text-red-500">{r.qty_rejected} {r.reason}</span>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Move Form */}
       {showMove && (
         <div className="px-3 sm:px-5 py-3 sm:py-4 bg-blue-50/50 border-t border-blue-100 space-y-3">
@@ -455,7 +546,7 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
         return (
         <div className="px-3 sm:px-5 py-4 sm:py-5 bg-emerald-50/50 border-t border-emerald-100 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <p className="text-xs sm:text-sm text-emerald-700 font-medium">Record inspection at <span className="font-bold">{stage.name}</span> <span className="text-slate-400 font-normal">({bal.pending || 0} pending, {bottlesPerCrate} b/c)</span></p>
+            <p className="text-xs sm:text-sm text-emerald-700 font-medium">{editingInspection ? 'Edit inspection' : 'Record inspection'} at <span className="font-bold">{stage.name}</span> <span className="text-slate-400 font-normal">({bal.pending || 0} pending, {bottlesPerCrate} b/c)</span></p>
             <button onClick={addEntry}
               className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg flex items-center gap-1.5 transition-colors self-start sm:self-auto"
               data-testid={`add-entry-${stage.id}`}>
@@ -573,12 +664,12 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
               placeholder="Optional remarks" className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" />
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={handleInspect} disabled={saving}
+            <button onClick={editingInspection ? handleUpdateInspection : handleInspect} disabled={saving}
               className="px-5 py-2.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg disabled:opacity-50 flex items-center gap-2 transition-colors"
               data-testid={`insp-submit-${stage.id}`}>
-              {saving ? <Loader2 size={14} className="animate-spin" /> : <ClipboardCheck size={14} />} Submit Inspection
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <ClipboardCheck size={14} />} {editingInspection ? 'Update Inspection' : 'Submit Inspection'}
             </button>
-            <button onClick={() => { setShowInspect(false); setEntries([emptyEntry()]); }} className="px-4 py-2.5 text-sm text-slate-500 hover:bg-slate-100 rounded-lg transition-colors">Cancel</button>
+            <button onClick={() => { setShowInspect(false); setEditingInspection(null); setEntries([emptyEntry()]); }} className="px-4 py-2.5 text-sm text-slate-500 hover:bg-slate-100 rounded-lg transition-colors">Cancel</button>
           </div>
         </div>
         );
