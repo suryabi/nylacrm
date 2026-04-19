@@ -2059,8 +2059,12 @@ async def create_shipment(
         total_quantity += item_data.quantity
         total_gross_amount += item_dict['gross_amount']
         total_discount_amount += item_dict['discount_amount']
-        total_tax_amount += item_dict['tax_amount']
-        total_net_amount += item_dict['net_amount']
+    
+    # Calculate GST at shipment level (not per-item)
+    subtotal_after_discount = total_gross_amount - total_discount_amount
+    gst_pct = data.gst_percent or 0
+    total_tax_amount = round(subtotal_after_discount * (gst_pct / 100), 2)
+    total_net_amount = round(subtotal_after_discount + total_tax_amount, 2)
     
     # Create shipment document
     shipment_doc = {
@@ -2088,6 +2092,7 @@ async def create_shipment(
         "total_discount_amount": round(total_discount_amount, 2),
         "total_tax_amount": round(total_tax_amount, 2),
         "total_net_amount": round(total_net_amount, 2),
+        "gst_percent": data.gst_percent or 0,
         "remarks": data.remarks,
         "created_at": now,
         "updated_at": now,

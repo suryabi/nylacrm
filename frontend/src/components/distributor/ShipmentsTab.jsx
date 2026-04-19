@@ -366,24 +366,19 @@ export default function ShipmentsTab({
                   <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Location</th>
                   <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>From</th>
                   <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Qty</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Base Price</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Margin %</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Transfer Price</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Total Transfer</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Subtotal</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Discount</th>
                   <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>GST %</th>
                   <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>GST Amt</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Total (incl GST)</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Total</th>
                   <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Status</th>
                   <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {shipments.map((shipment, index) => {
-                  // Calculate average/first item values for display
-                  const avgBasePrice = shipment.avg_base_price || shipment.base_price || '-';
-                  const avgMargin = shipment.avg_distributor_margin || shipment.distributor_margin;
-                  const avgTransferPrice = shipment.avg_transfer_price || shipment.transfer_price;
-                  const avgGstPercent = shipment.avg_gst_percent || shipment.gst_percent;
+                  const gstPct = shipment.gst_percent ?? shipment.avg_gst_percent ?? (shipment.total_tax_amount > 0 && shipment.total_gross_amount > 0 ? ((shipment.total_tax_amount / shipment.total_gross_amount) * 100).toFixed(1) : null);
+                  const discountAmt = shipment.total_discount_amount || 0;
                   
                   return (
                     <tr 
@@ -428,18 +423,12 @@ export default function ShipmentsTab({
                         )}
                       </td>
                       <td className="p-4 text-right font-medium text-slate-800">{shipment.total_quantity}</td>
-                      <td className="p-4 text-right text-slate-700">
-                        {avgBasePrice !== '-' ? `₹${Number(avgBasePrice).toFixed(2)}` : '-'}
-                      </td>
-                      <td className="p-4 text-right text-slate-700">
-                        {avgMargin != null ? `${avgMargin}%` : '-'}
-                      </td>
-                      <td className="p-4 text-right text-slate-700">
-                        {avgTransferPrice != null ? `₹${Number(avgTransferPrice).toFixed(2)}` : '-'}
-                      </td>
                       <td className="p-4 text-right font-medium text-slate-800">₹{shipment.total_gross_amount?.toLocaleString()}</td>
                       <td className="p-4 text-right text-slate-700">
-                        {avgGstPercent != null ? `${avgGstPercent}%` : (shipment.total_tax_amount > 0 ? '18%' : '-')}
+                        {discountAmt > 0 ? <span className="text-red-600">-₹{discountAmt.toLocaleString()}</span> : <span className="text-slate-400">-</span>}
+                      </td>
+                      <td className="p-4 text-right text-slate-700">
+                        {gstPct != null ? `${gstPct}%` : <span className="text-slate-400">-</span>}
                       </td>
                       <td className="p-4 text-right text-slate-700">₹{shipment.total_tax_amount?.toLocaleString()}</td>
                       <td className="p-4 text-right font-medium text-emerald-600">₹{shipment.total_net_amount?.toLocaleString()}</td>

@@ -387,6 +387,7 @@ class PrimaryShipmentCreate(BaseModel):
     driver_contact: Optional[str] = None
     shipping_address: Optional[str] = None
     remarks: Optional[str] = None
+    gst_percent: Optional[float] = 0
     items: List[ShipmentItemCreate]
 
 
