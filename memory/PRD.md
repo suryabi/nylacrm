@@ -359,11 +359,28 @@
 - [x] **Seeded data**: Crate - 24, Crate - 12, Carton - 6, Carton - 48
 - [x] **Testing**: 13/13 tests passed (iteration_141)
 
+### server.py Refactor — Phase 1 (2026-04-19)
+- [x] **Extracted 7 new router modules** to reduce monolithic `server.py`:
+  - `routes/target_planning.py` — Target plans, allocations, dashboards
+  - `routes/master_locations.py` — Territory/State/City CRUD
+  - `routes/proxies.py` — Quotes, weather proxy endpoints
+  - `routes/reports.py` — SKU / Resource / Account performance + target allocation reports
+  - `routes/daily_status.py` — Daily status CRUD, AI revision, team rollup
+  - `routes/analytics.py` — Dashboard, pipeline-accounts, activity-metrics
+  - `routes/bottle_preview.py` — Bottle preview image proxy + history
+- [x] **server.py reduced**: 12,284 → 9,140 lines (~25.6% reduction, -3,144 lines)
+- [x] **Preserves `init_master_locations` startup event** for seed data
+- [x] **All route registrations consolidated** in `routes/__init__.py`
+- [x] **Regression Test**: 41/41 backend tests pass via `/app/backend/tests/test_refactor_regression.py` (iteration_143)
+- [x] **Status**: Safe to redeploy to production
+
 ## Upcoming Tasks (P1)
 - Auto-generate Provisional Invoice (on shipment -> "delivered")
 - Build Reporting Module
 - Manager Dashboard (team-wise comparison, activity vs outcome)
 - Leadership Dashboard (territory trends, pipeline health)
+- **Continue server.py refactor Phase 2**: Extract accounts/leads/invoices/production/meetings/tasks routes (current: 9,140 lines, target <2,000)
+- **Google Workspace OAuth fix**: Once prod is stable, debug `/api/auth/google-callback` errors (likely `redirect_uri_mismatch`)
 
 ## Pipeline Value Logic (2026-04-09)
 - Pipeline value is now based on `target_closure_month`/`target_closure_year` matching the time filter
@@ -373,5 +390,5 @@
 
 ## Backlog (P2)
 - Task email notifications, First-login Password Change, Email Invoice Sharing
-- Settlement Auto-scheduling, Dashboard analytics, server.py refactoring
+- Settlement Auto-scheduling, Dashboard analytics
 - Alerts: low achievement, high outstanding, activity drops, no new accounts
