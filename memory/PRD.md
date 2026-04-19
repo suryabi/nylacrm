@@ -339,6 +339,15 @@
 - [x] **Footer**: Remarks field and Submit button in clean white section.
 - [x] **Testing**: 10/10 frontend features verified (iteration_138)
 
+### Packaging Types Master (2026-04-19)
+- [x] **New page**: `/packaging-types` — CRUD for packaging formats (Crate - 24, Carton - 6, etc.)
+- [x] **Backend**: `GET/POST/PUT/DELETE /api/packaging-types` with duplicate name validation
+- [x] **SKU Management**: Added packaging type dropdown to SKU create/edit form (stores `packaging_type_id`, `packaging_type_name`, `units_per_package`)
+- [x] **Production Batches**: Replaced `bottles_per_crate` text input with Packaging Type dropdown. Auto-fills units from selected packaging type. SKU selection auto-fills packaging if defined.
+- [x] **Sidebar**: Added "Packaging Types" nav item under "Product & SKU"
+- [x] **Seeded data**: Crate - 24, Crate - 12, Carton - 6, Carton - 48
+- [x] **Testing**: 13/13 tests passed (iteration_141)
+
 ## Upcoming Tasks (P1)
 - Auto-generate Provisional Invoice (on shipment -> "delivered")
 - Build Reporting Module
