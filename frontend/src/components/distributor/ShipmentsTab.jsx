@@ -230,8 +230,8 @@ export default function ShipmentsTab({
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
-                          {/* Row 2: Avail | Qty | Price | Disc | Amount — all aligned on same baseline */}
-                          <div className="flex items-end gap-3 mt-3">
+                          {/* Row 2: Avail | Qty | Price | Disc | Amount — fixed height, top-aligned */}
+                          <div className="flex items-start gap-3 mt-3">
                             <div className="w-16 flex-shrink-0 text-center">
                               <Label className="text-xs text-muted-foreground">Avail</Label>
                               {item.sku_id ? (
@@ -251,21 +251,26 @@ export default function ShipmentsTab({
                                   if (item.sku_id && maxPkgs > 0 && val > maxPkgs) updateShipmentItem(item.id, 'quantity', maxPkgs);
                                   else updateShipmentItem(item.id, 'quantity', e.target.value);
                                 }} />
-                              {totalUnits > 0 && pkgUnits > 1 && <p className="text-xs text-blue-600 font-medium text-center mt-0.5">{totalUnits} units</p>}
+                              <p className="text-xs text-blue-600 font-medium text-center mt-0.5 h-4">
+                                {totalUnits > 0 && pkgUnits > 1 ? `${totalUnits} units` : '\u00A0'}
+                              </p>
                             </div>
                             <div className="flex-1 min-w-[100px]">
                               <Label className="text-xs text-muted-foreground">Price/unit (₹)</Label>
                               <Input type="number" min="0" step="0.01" className="h-10 mt-1 text-base" value={item.unit_price}
                                 onChange={(e) => updateShipmentItem(item.id, 'unit_price', e.target.value)} />
+                              <p className="h-4"></p>
                             </div>
                             <div className="w-20 flex-shrink-0">
                               <Label className="text-xs text-muted-foreground">Disc %</Label>
                               <Input type="number" min="0" max="100" className="h-10 mt-1 text-base" value={item.discount_percent}
                                 onChange={(e) => updateShipmentItem(item.id, 'discount_percent', e.target.value)} />
+                              <p className="h-4"></p>
                             </div>
                             <div className="w-28 flex-shrink-0 text-right">
                               <Label className="text-xs text-muted-foreground">Amount</Label>
                               <p className="text-base font-bold tabular-nums mt-2.5">₹{lineSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                              <p className="h-4"></p>
                             </div>
                           </div>
                         </div>
