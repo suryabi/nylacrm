@@ -1294,9 +1294,15 @@ export default function DistributorDetail() {
 
   // Enhanced function to update shipment item with price lookup
   const updateShipmentItemWithPrice = async (itemId, skuId, skuName) => {
-    // First update the SKU info immediately
+    // Find the SKU's default stock_in packaging
+    const selectedSku = skus.find(s => s.id === skuId);
+    const stockInPkg = selectedSku?.packaging_config?.stock_in || [];
+    const defaultPkg = stockInPkg.find(p => p.is_default) || stockInPkg[0];
+    const pkgUnits = defaultPkg?.units_per_package || '';
+
+    // First update the SKU info + packaging immediately
     setShipmentItems(prev => prev.map(item => 
-      item.id === itemId ? { ...item, sku_id: skuId, sku_name: skuName } : item
+      item.id === itemId ? { ...item, sku_id: skuId, sku_name: skuName, packaging_units: pkgUnits ? String(pkgUnits) : '' } : item
     ));
     
     // Then look up the transfer price if we have a location selected

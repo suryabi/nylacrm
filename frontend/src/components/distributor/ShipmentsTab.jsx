@@ -189,6 +189,7 @@ export default function ShipmentsTab({
                       <div className="flex items-center gap-3 px-3 text-xs font-medium text-muted-foreground">
                         <div className="flex-[3] min-w-0">SKU</div>
                         <div className="w-16 text-center">Avail</div>
+                        <div className="w-32">Packaging</div>
                         <div className="w-20">Qty</div>
                         <div className="w-24">Price (₹)</div>
                         <div className="w-16">Disc %</div>
@@ -236,6 +237,23 @@ export default function ShipmentsTab({
                             ) : (
                               <span className="text-xs text-slate-300">—</span>
                             )}
+                          </div>
+                          <div className="w-32">
+                            {(() => {
+                              const selectedSku = skus.find(s => s.id === item.sku_id);
+                              const stockInPkg = selectedSku?.packaging_config?.stock_in || [];
+                              if (!item.sku_id || stockInPkg.length === 0) return <span className="text-xs text-slate-300">—</span>;
+                              return (
+                                <select className="w-full h-9 px-2 border rounded text-xs"
+                                  value={item.packaging_units || ''}
+                                  onChange={e => updateShipmentItem(item.id, 'packaging_units', e.target.value)}
+                                  data-testid={`shipment-pkg-${index}`}>
+                                  {stockInPkg.map((pkg, pi) => (
+                                    <option key={pi} value={pkg.units_per_package}>{pkg.packaging_type_name} ({pkg.units_per_package})</option>
+                                  ))}
+                                </select>
+                              );
+                            })()}
                           </div>
                           <div className="w-20">
                             <Input

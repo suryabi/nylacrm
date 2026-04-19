@@ -1704,9 +1704,7 @@ class SKUCreate(BaseModel):
     description: Optional[str] = None
     is_active: bool = True
     sort_order: int = 0
-    packaging_type_id: Optional[str] = None
-    packaging_type_name: Optional[str] = None
-    units_per_package: Optional[int] = None
+    packaging_config: Optional[dict] = None  # {production: [{id,name,units,is_default}], stock_in: [...], stock_out: [...]}
 
 class SKUUpdate(BaseModel):
     sku_name: Optional[str] = None
@@ -1715,9 +1713,7 @@ class SKUUpdate(BaseModel):
     description: Optional[str] = None
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
-    packaging_type_id: Optional[str] = None
-    packaging_type_name: Optional[str] = None
-    units_per_package: Optional[int] = None
+    packaging_config: Optional[dict] = None
 
 # Default SKUs to seed if database is empty
 DEFAULT_SKUS = [
@@ -1772,7 +1768,8 @@ async def get_master_skus(
             'unit': sku.get('unit'),
             'description': sku.get('description'),
             'is_active': sku.get('is_active', True),
-            'sort_order': sku.get('sort_order', 0)
+            'sort_order': sku.get('sort_order', 0),
+            'packaging_config': sku.get('packaging_config')
         })
     
     return {'skus': formatted_skus}
@@ -1792,6 +1789,9 @@ async def create_sku(
     doc = sku.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
+    # Add packaging_config if provided
+    if sku_data.packaging_config:
+        doc['packaging_config'] = sku_data.packaging_config
     
     await db.master_skus.insert_one(doc)
     
@@ -1803,7 +1803,8 @@ async def create_sku(
         'unit': sku.unit,
         'description': sku.description,
         'is_active': sku.is_active,
-        'sort_order': sku.sort_order
+        'sort_order': sku.sort_order,
+        'packaging_config': doc.get('packaging_config')
     }
 
 @api_router.put("/master-skus/{sku_id}")
@@ -1837,7 +1838,8 @@ async def update_sku(
         'unit': updated.get('unit'),
         'description': updated.get('description'),
         'is_active': updated.get('is_active', True),
-        'sort_order': updated.get('sort_order', 0)
+        'sort_order': updated.get('sort_order', 0),
+        'packaging_config': updated.get('packaging_config')
     }
 
 @api_router.delete("/master-skus/{sku_id}")

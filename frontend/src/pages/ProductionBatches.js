@@ -334,9 +334,11 @@ function CreateBatchModal({ skus, onClose, onSuccess }) {
 
   const handleSKUChange = (skuId) => {
     const sku = skus.find(s => s.id === skuId);
-    // Auto-fill packaging type from SKU if defined
-    const bpc = sku?.units_per_package || '';
-    setForm(p => ({ ...p, sku_id: skuId, sku_name: sku?.sku_name || '', bottles_per_crate: bpc ? String(bpc) : p.bottles_per_crate }));
+    // Auto-fill default production packaging from SKU config
+    const prodPkg = (sku?.packaging_config?.production || []);
+    const defaultPkg = prodPkg.find(p => p.is_default) || prodPkg[0];
+    const bpc = defaultPkg?.units_per_package || '';
+    setForm(p => ({ ...p, sku_id: skuId, sku_name: sku?.sku_name || '', bottles_per_crate: bpc ? String(bpc) : '' }));
     if (skuId) checkQCRoute(skuId);
     else setHasQCRoute(null);
   };
@@ -415,14 +417,21 @@ function CreateBatchModal({ skus, onClose, onSuccess }) {
             </div>
             <div>
               <label className="text-xs text-slate-500 font-medium mb-1 block">Packaging Type *</label>
-              <select value={form.bottles_per_crate}
-                onChange={e => setForm(p => ({ ...p, bottles_per_crate: e.target.value }))}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-white" data-testid="batch-bpc-input">
-                <option value="">Select packaging</option>
-                {packagingTypes.map(pt => (
-                  <option key={pt.id} value={pt.units_per_package}>{pt.name} ({pt.units_per_package} units)</option>
-                ))}
-              </select>
+              {(() => {
+                const selectedSku = skus.find(s => s.id === form.sku_id);
+                const skuProdPkg = selectedSku?.packaging_config?.production || [];
+                const options = skuProdPkg.length > 0 ? skuProdPkg : packagingTypes.map(pt => ({ packaging_type_name: pt.name, units_per_package: pt.units_per_package }));
+                return (
+                  <select value={form.bottles_per_crate}
+                    onChange={e => setForm(p => ({ ...p, bottles_per_crate: e.target.value }))}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-white" data-testid="batch-bpc-input">
+                    <option value="">Select packaging</option>
+                    {options.map((opt, i) => (
+                      <option key={i} value={opt.units_per_package}>{opt.packaging_type_name} ({opt.units_per_package} units)</option>
+                    ))}
+                  </select>
+                );
+              })()}
             </div>
           </div>
           {form.total_crates && form.bottles_per_crate && (
