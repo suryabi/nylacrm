@@ -194,7 +194,8 @@ export default function DistributorDetail() {
     vehicle_number: '',
     driver_name: '',
     driver_contact: '',
-    remarks: ''
+    remarks: '',
+    gst_percent: String(defaultGstPercent)
   });
   const [deliveryItems, setDeliveryItems] = useState([]);
   const [savingDelivery, setSavingDelivery] = useState(false);
@@ -1471,15 +1472,22 @@ export default function DistributorDetail() {
         driver_name: deliveryForm.driver_name || null,
         driver_contact: deliveryForm.driver_contact || null,
         remarks: deliveryForm.remarks || null,
-        items: deliveryItems.map(item => ({
-          sku_id: item.sku_id,
-          sku_name: item.sku_name,
-          quantity: parseInt(item.quantity),
-          unit_price: parseFloat(item.unit_price),
-          customer_selling_price: parseFloat(item.unit_price), // unit_price is the customer selling price
-          discount_percent: parseFloat(item.discount_percent) || 0,
-          tax_percent: parseFloat(item.tax_percent) || 0
-        })),
+        gst_percent: parseFloat(deliveryForm.gst_percent) || 0,
+        items: deliveryItems.map(item => {
+          const pkgUnits = parseInt(item.packaging_units) || 1;
+          const totalUnits = (parseInt(item.quantity) || 0) * pkgUnits;
+          return {
+            sku_id: item.sku_id,
+            sku_name: item.sku_name,
+            quantity: totalUnits,
+            packaging_units: pkgUnits,
+            packages: parseInt(item.quantity) || 0,
+            unit_price: parseFloat(item.unit_price),
+            customer_selling_price: parseFloat(item.unit_price),
+            discount_percent: parseFloat(item.discount_percent) || 0,
+            tax_percent: 0
+          };
+        }),
         // Include credit notes if any
         credit_notes_to_apply: creditNotesToApply.length > 0 ? creditNotesToApply : null
       };
@@ -1515,7 +1523,8 @@ export default function DistributorDetail() {
       vehicle_number: '',
       driver_name: '',
       driver_contact: '',
-      remarks: ''
+      remarks: '',
+      gst_percent: String(defaultGstPercent)
     });
     setDeliveryItems([]);
     setSelectedDeliveryAccount(null);
@@ -1530,7 +1539,7 @@ export default function DistributorDetail() {
       quantity: 1,
       unit_price: 0,
       discount_percent: 0,
-      tax_percent: defaultGstPercent
+      tax_percent: 0
     }]);
   };
 
