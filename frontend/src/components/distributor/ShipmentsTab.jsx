@@ -184,7 +184,8 @@ export default function ShipmentsTab({
                       <p className="text-sm">No items added. Click "Add Item" to start.</p>
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="border rounded-lg overflow-hidden">
+                      <div className="divide-y divide-slate-200">
                       {shipmentItems.map((item, index) => {
                         const stockEntry = (warehouseStock || []).find(s => s.sku_id === item.sku_id);
                         const availableQty = stockEntry ? stockEntry.quantity : 0;
@@ -194,16 +195,17 @@ export default function ShipmentsTab({
                         const lineSubtotal = totalUnits * (parseFloat(item.unit_price) || 0) * (1 - ((parseFloat(item.discount_percent) || 0) / 100));
                         const selectedSku = skus.find(s => s.id === item.sku_id);
                         const stockInPkg = selectedSku?.packaging_config?.stock_in || [];
+                        const isOdd = index % 2 === 1;
                         return (
-                        <div key={item.id} className="border rounded-lg p-3 bg-muted/20 space-y-2" data-testid={`shipment-item-${index}`}>
+                        <div key={item.id} className={`border-b last:border-b-0 px-4 py-3 ${isOdd ? 'bg-slate-50' : 'bg-white'}`} data-testid={`shipment-item-${index}`}>
                           {/* Row 1: SKU + Packaging + Remove */}
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-3">
                             <div className="flex-1 min-w-0">
                               <Select value={item.sku_id} onValueChange={(v) => {
                                 const s = skus.find(s => s.id === v);
                                 if (s) updateShipmentItemWithPrice(item.id, v, s.name || s.sku_name);
                               }}>
-                                <SelectTrigger className="h-9"><SelectValue placeholder="Select SKU" /></SelectTrigger>
+                                <SelectTrigger className="h-10"><SelectValue placeholder="Select SKU" /></SelectTrigger>
                                 <SelectContent>
                                   {skus.map(sku => {
                                     const st = (warehouseStock || []).find(s => s.sku_id === sku.id);
@@ -212,9 +214,9 @@ export default function ShipmentsTab({
                                 </SelectContent>
                               </Select>
                             </div>
-                            <div className="w-36">
+                            <div className="w-40 flex-shrink-0">
                               {stockInPkg.length > 0 ? (
-                                <select className="w-full h-9 px-2 border rounded text-xs bg-background"
+                                <select className="w-full h-10 px-3 border rounded-md text-sm bg-background"
                                   value={item.packaging_units || ''}
                                   onChange={e => updateShipmentItem(item.id, 'packaging_units', e.target.value)}
                                   data-testid={`shipment-pkg-${index}`}>
@@ -222,53 +224,54 @@ export default function ShipmentsTab({
                                     <option key={pi} value={pkg.units_per_package}>{pkg.packaging_type_name} ({pkg.units_per_package})</option>
                                   ))}
                                 </select>
-                              ) : <span className="text-xs text-muted-foreground">—</span>}
+                              ) : <span className="text-sm text-muted-foreground">—</span>}
                             </div>
-                            <Button variant="ghost" size="sm" className="h-9 w-9 p-0 text-destructive flex-shrink-0" onClick={() => removeShipmentItem(item.id)}>
+                            <Button variant="ghost" size="sm" className="h-10 w-10 p-0 text-destructive flex-shrink-0" onClick={() => removeShipmentItem(item.id)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
-                          {/* Row 2: Avail | Qty | Price | Disc | Amount */}
-                          <div className="flex items-start gap-2">
-                            <div className="w-14 text-center flex-shrink-0">
-                              <p className="text-[9px] text-muted-foreground">Avail</p>
+                          {/* Row 2: Avail | Qty | Price | Disc | Amount — all aligned on same baseline */}
+                          <div className="flex items-end gap-3 mt-3">
+                            <div className="w-16 flex-shrink-0 text-center">
+                              <Label className="text-xs text-muted-foreground">Avail</Label>
                               {item.sku_id ? (
-                                <>
-                                  <p className={`text-xs font-bold tabular-nums ${maxPkgs > 0 ? 'text-emerald-700' : 'text-red-600'}`}>{maxPkgs}</p>
-                                  <p className="text-[8px] text-muted-foreground">{availableQty} units</p>
-                                </>
-                              ) : <p className="text-xs text-muted-foreground">—</p>}
+                                <div className="mt-1">
+                                  <p className={`text-base font-bold tabular-nums ${maxPkgs > 0 ? 'text-emerald-700' : 'text-red-600'}`}>{maxPkgs}</p>
+                                  <p className="text-[10px] text-muted-foreground leading-tight">{availableQty} units</p>
+                                </div>
+                              ) : <p className="text-sm text-muted-foreground mt-1">—</p>}
                             </div>
-                            <div className="w-20 flex-shrink-0">
-                              <p className="text-[9px] text-muted-foreground">Qty (pkgs)</p>
+                            <div className="w-24 flex-shrink-0">
+                              <Label className="text-xs text-muted-foreground">Qty (pkgs)</Label>
                               <Input type="number" min="1" max={maxPkgs || undefined}
-                                className={`h-8 text-sm ${item.sku_id && (parseInt(item.quantity) || 0) > maxPkgs ? 'border-red-400 text-red-600' : ''}`}
+                                className={`h-10 mt-1 text-base font-medium ${item.sku_id && (parseInt(item.quantity) || 0) > maxPkgs ? 'border-red-400 text-red-600' : ''}`}
                                 value={item.quantity}
                                 onChange={(e) => {
                                   const val = parseInt(e.target.value) || 0;
                                   if (item.sku_id && maxPkgs > 0 && val > maxPkgs) updateShipmentItem(item.id, 'quantity', maxPkgs);
                                   else updateShipmentItem(item.id, 'quantity', e.target.value);
                                 }} />
-                              {totalUnits > 0 && pkgUnits > 1 && <p className="text-[9px] text-blue-600 font-medium text-center">{totalUnits} units</p>}
+                              {totalUnits > 0 && pkgUnits > 1 && <p className="text-xs text-blue-600 font-medium text-center mt-0.5">{totalUnits} units</p>}
                             </div>
-                            <div className="w-24 flex-shrink-0">
-                              <p className="text-[9px] text-muted-foreground">Price/unit (₹)</p>
-                              <Input type="number" min="0" step="0.01" className="h-8 text-sm" value={item.unit_price}
+                            <div className="flex-1 min-w-[100px]">
+                              <Label className="text-xs text-muted-foreground">Price/unit (₹)</Label>
+                              <Input type="number" min="0" step="0.01" className="h-10 mt-1 text-base" value={item.unit_price}
                                 onChange={(e) => updateShipmentItem(item.id, 'unit_price', e.target.value)} />
                             </div>
-                            <div className="w-16 flex-shrink-0">
-                              <p className="text-[9px] text-muted-foreground">Disc %</p>
-                              <Input type="number" min="0" max="100" className="h-8 text-sm" value={item.discount_percent}
+                            <div className="w-20 flex-shrink-0">
+                              <Label className="text-xs text-muted-foreground">Disc %</Label>
+                              <Input type="number" min="0" max="100" className="h-10 mt-1 text-base" value={item.discount_percent}
                                 onChange={(e) => updateShipmentItem(item.id, 'discount_percent', e.target.value)} />
                             </div>
-                            <div className="flex-1 text-right flex-shrink-0">
-                              <p className="text-[9px] text-muted-foreground">Amount</p>
-                              <p className="text-sm font-semibold tabular-nums mt-1">₹{lineSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <div className="w-28 flex-shrink-0 text-right">
+                              <Label className="text-xs text-muted-foreground">Amount</Label>
+                              <p className="text-base font-bold tabular-nums mt-2.5">₹{lineSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                             </div>
                           </div>
                         </div>
                         );
                       })}
+                      </div>
                       
                       {/* Totals: Subtotal → GST → Grand Total */}
                       {(() => {
