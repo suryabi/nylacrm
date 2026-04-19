@@ -184,61 +184,37 @@ export default function ShipmentsTab({
                       <p className="text-sm">No items added. Click "Add Item" to start.</p>
                     </div>
                   ) : (
-                    <div className="space-y-3">
-                      {/* Header Row */}
-                      <div className="flex items-center gap-3 px-3 text-xs font-medium text-muted-foreground">
-                        <div className="flex-[3] min-w-0">SKU</div>
-                        <div className="w-32">Packaging</div>
-                        <div className="w-16 text-center">Avail</div>
-                        <div className="w-24">Qty (pkgs)</div>
-                        <div className="w-24">Price/unit (₹)</div>
-                        <div className="w-16">Disc %</div>
-                        <div className="w-16">Tax %</div>
-                        <div className="w-28 text-right">Amount</div>
-                        <div className="w-10"></div>
-                      </div>
+                    <div className="space-y-2">
                       {shipmentItems.map((item, index) => {
                         const stockEntry = (warehouseStock || []).find(s => s.sku_id === item.sku_id);
                         const availableQty = stockEntry ? stockEntry.quantity : 0;
                         const pkgUnits = parseInt(item.packaging_units) || 1;
                         const maxPkgs = pkgUnits > 0 ? Math.floor(availableQty / pkgUnits) : availableQty;
                         const totalUnits = (parseInt(item.quantity) || 0) * pkgUnits;
-                        const lineAmount = (totalUnits * (parseFloat(item.unit_price) || 0) * (1 - ((parseFloat(item.discount_percent) || 0) / 100))) * (1 + ((parseFloat(item.tax_percent) || 0) / 100));
+                        const lineSubtotal = totalUnits * (parseFloat(item.unit_price) || 0) * (1 - ((parseFloat(item.discount_percent) || 0) / 100));
+                        const selectedSku = skus.find(s => s.id === item.sku_id);
+                        const stockInPkg = selectedSku?.packaging_config?.stock_in || [];
                         return (
-                        <div key={item.id} className="flex items-start gap-3 p-3 border rounded-md bg-muted/30" data-testid={`shipment-item-${index}`}>
-                          <div className="flex-[3] min-w-0">
-                            <Select
-                              value={item.sku_id}
-                              onValueChange={(v) => {
-                                const selectedSku = skus.find(s => s.id === v);
-                                if (selectedSku) {
-                                  updateShipmentItemWithPrice(item.id, v, selectedSku.name || selectedSku.sku_name);
-                                }
-                              }}
-                            >
-                              <SelectTrigger className="h-9">
-                                <SelectValue placeholder="Select SKU" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {skus.map(sku => {
-                                  const skuStock = (warehouseStock || []).find(s => s.sku_id === sku.id);
-                                  return (
-                                    <SelectItem key={sku.id} value={sku.id}>
-                                      {sku.name || sku.sku_name}
-                                      {skuStock ? ` (${skuStock.quantity} avail)` : ''}
-                                    </SelectItem>
-                                  );
-                                })}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="w-32">
-                            {(() => {
-                              const selectedSku = skus.find(s => s.id === item.sku_id);
-                              const stockInPkg = selectedSku?.packaging_config?.stock_in || [];
-                              if (!item.sku_id || stockInPkg.length === 0) return <span className="text-xs text-slate-300">—</span>;
-                              return (
-                                <select className="w-full h-9 px-2 border rounded text-xs"
+                        <div key={item.id} className="border rounded-lg p-3 bg-muted/20 space-y-2" data-testid={`shipment-item-${index}`}>
+                          {/* Row 1: SKU + Packaging + Remove */}
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 min-w-0">
+                              <Select value={item.sku_id} onValueChange={(v) => {
+                                const s = skus.find(s => s.id === v);
+                                if (s) updateShipmentItemWithPrice(item.id, v, s.name || s.sku_name);
+                              }}>
+                                <SelectTrigger className="h-9"><SelectValue placeholder="Select SKU" /></SelectTrigger>
+                                <SelectContent>
+                                  {skus.map(sku => {
+                                    const st = (warehouseStock || []).find(s => s.sku_id === sku.id);
+                                    return <SelectItem key={sku.id} value={sku.id}>{sku.name || sku.sku_name}{st ? ` (${st.quantity})` : ''}</SelectItem>;
+                                  })}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="w-36">
+                              {stockInPkg.length > 0 ? (
+                                <select className="w-full h-9 px-2 border rounded text-xs bg-background"
                                   value={item.packaging_units || ''}
                                   onChange={e => updateShipmentItem(item.id, 'packaging_units', e.target.value)}
                                   data-testid={`shipment-pkg-${index}`}>
@@ -246,104 +222,89 @@ export default function ShipmentsTab({
                                     <option key={pi} value={pkg.units_per_package}>{pkg.packaging_type_name} ({pkg.units_per_package})</option>
                                   ))}
                                 </select>
-                              );
-                            })()}
-                          </div>
-                          <div className="w-16 text-center">
-                            {item.sku_id ? (
-                              <div>
-                                <span className={`text-xs font-semibold tabular-nums ${maxPkgs > 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-                                  {maxPkgs}
-                                </span>
-                                <p className="text-[9px] text-slate-400">{availableQty} units</p>
-                              </div>
-                            ) : (
-                              <span className="text-xs text-slate-300">—</span>
-                            )}
-                          </div>
-                          <div className="w-24">
-                            <Input
-                              type="number"
-                              min="1"
-                              max={maxPkgs || undefined}
-                              className={`h-9 ${item.sku_id && (parseInt(item.quantity) || 0) > maxPkgs ? 'border-red-400 text-red-600' : ''}`}
-                              value={item.quantity}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value) || 0;
-                                if (item.sku_id && maxPkgs > 0 && val > maxPkgs) {
-                                  updateShipmentItem(item.id, 'quantity', maxPkgs);
-                                } else {
-                                  updateShipmentItem(item.id, 'quantity', e.target.value);
-                                }
-                              }}
-                            />
-                            {(parseInt(item.quantity) || 0) > 0 && pkgUnits > 1 && (
-                              <p className="text-[9px] text-blue-600 mt-0.5 text-center font-medium">{totalUnits} units</p>
-                            )}
-                          </div>
-                          <div className="w-24">
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              className="h-9"
-                              value={item.unit_price}
-                              onChange={(e) => updateShipmentItem(item.id, 'unit_price', e.target.value)}
-                            />
-                          </div>
-                          <div className="w-16">
-                            <Input
-                              type="number"
-                              min="0"
-                              max="100"
-                              className="h-9"
-                              value={item.discount_percent}
-                              onChange={(e) => updateShipmentItem(item.id, 'discount_percent', e.target.value)}
-                            />
-                          </div>
-                          <div className="w-16">
-                            <Input
-                              type="number"
-                              min="0"
-                              max="100"
-                              className="h-9"
-                              value={item.tax_percent}
-                              onChange={(e) => updateShipmentItem(item.id, 'tax_percent', e.target.value)}
-                            />
-                          </div>
-                          <div className="w-28 text-right">
-                            <div className="h-9 flex items-center justify-end text-sm font-semibold whitespace-nowrap">
-                              ₹{lineAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              ) : <span className="text-xs text-muted-foreground">—</span>}
                             </div>
-                          </div>
-                          <div className="w-10 flex justify-end">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-9 w-9 p-0 text-destructive"
-                              onClick={() => removeShipmentItem(item.id)}
-                            >
+                            <Button variant="ghost" size="sm" className="h-9 w-9 p-0 text-destructive flex-shrink-0" onClick={() => removeShipmentItem(item.id)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
+                          {/* Row 2: Avail | Qty | Price | Disc | Amount */}
+                          <div className="flex items-start gap-2">
+                            <div className="w-14 text-center flex-shrink-0">
+                              <p className="text-[9px] text-muted-foreground">Avail</p>
+                              {item.sku_id ? (
+                                <>
+                                  <p className={`text-xs font-bold tabular-nums ${maxPkgs > 0 ? 'text-emerald-700' : 'text-red-600'}`}>{maxPkgs}</p>
+                                  <p className="text-[8px] text-muted-foreground">{availableQty} units</p>
+                                </>
+                              ) : <p className="text-xs text-muted-foreground">—</p>}
+                            </div>
+                            <div className="w-20 flex-shrink-0">
+                              <p className="text-[9px] text-muted-foreground">Qty (pkgs)</p>
+                              <Input type="number" min="1" max={maxPkgs || undefined}
+                                className={`h-8 text-sm ${item.sku_id && (parseInt(item.quantity) || 0) > maxPkgs ? 'border-red-400 text-red-600' : ''}`}
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value) || 0;
+                                  if (item.sku_id && maxPkgs > 0 && val > maxPkgs) updateShipmentItem(item.id, 'quantity', maxPkgs);
+                                  else updateShipmentItem(item.id, 'quantity', e.target.value);
+                                }} />
+                              {totalUnits > 0 && pkgUnits > 1 && <p className="text-[9px] text-blue-600 font-medium text-center">{totalUnits} units</p>}
+                            </div>
+                            <div className="w-24 flex-shrink-0">
+                              <p className="text-[9px] text-muted-foreground">Price/unit (₹)</p>
+                              <Input type="number" min="0" step="0.01" className="h-8 text-sm" value={item.unit_price}
+                                onChange={(e) => updateShipmentItem(item.id, 'unit_price', e.target.value)} />
+                            </div>
+                            <div className="w-16 flex-shrink-0">
+                              <p className="text-[9px] text-muted-foreground">Disc %</p>
+                              <Input type="number" min="0" max="100" className="h-8 text-sm" value={item.discount_percent}
+                                onChange={(e) => updateShipmentItem(item.id, 'discount_percent', e.target.value)} />
+                            </div>
+                            <div className="flex-1 text-right flex-shrink-0">
+                              <p className="text-[9px] text-muted-foreground">Amount</p>
+                              <p className="text-sm font-semibold tabular-nums mt-1">₹{lineSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            </div>
+                          </div>
                         </div>
-                      );
+                        );
                       })}
                       
-                      {/* Total */}
-                      <div className="flex justify-end pt-2 border-t">
-                        <div className="text-right">
-                          <span className="text-muted-foreground mr-4">Total Amount:</span>
-                          <span className="text-lg font-bold">
-                            ₹{shipmentItems.reduce((sum, item) => {
-                              const gross = item.quantity * item.unit_price;
-                              const afterDiscount = gross * (1 - (item.discount_percent || 0) / 100);
-                              const withTax = afterDiscount * (1 + (item.tax_percent || 0) / 100);
-                              return sum + withTax;
-                            }, 0).toFixed(2)}
-                          </span>
-                        </div>
-                      </div>
+                      {/* Totals: Subtotal → GST → Grand Total */}
+                      {(() => {
+                        const subtotal = shipmentItems.reduce((sum, item) => {
+                          const pu = parseInt(item.packaging_units) || 1;
+                          const tu = (parseInt(item.quantity) || 0) * pu;
+                          const ls = tu * (parseFloat(item.unit_price) || 0) * (1 - ((parseFloat(item.discount_percent) || 0) / 100));
+                          return sum + ls;
+                        }, 0);
+                        const gstPercent = parseFloat(shipmentForm.gst_percent) || 0;
+                        const gstAmount = subtotal * (gstPercent / 100);
+                        const grandTotal = subtotal + gstAmount;
+                        return (
+                          <div className="border-t pt-3 mt-2 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-muted-foreground">Subtotal</span>
+                              <span className="text-sm font-semibold tabular-nums">₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-muted-foreground">GST</span>
+                                <Input type="number" min="0" max="100" step="0.5" className="h-7 w-16 text-xs"
+                                  value={shipmentForm.gst_percent || ''}
+                                  onChange={(e) => setShipmentForm(prev => ({ ...prev, gst_percent: e.target.value }))}
+                                  placeholder="%" data-testid="shipment-gst-input" />
+                                <span className="text-xs text-muted-foreground">%</span>
+                              </div>
+                              <span className="text-sm font-semibold tabular-nums">₹{gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex items-center justify-between pt-2 border-t">
+                              <span className="text-base font-bold">Grand Total</span>
+                              <span className="text-lg font-bold tabular-nums" data-testid="shipment-grand-total">₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>

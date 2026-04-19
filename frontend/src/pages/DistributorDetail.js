@@ -159,7 +159,8 @@ export default function DistributorDetail() {
     vehicle_number: '',
     driver_name: '',
     driver_contact: '',
-    remarks: ''
+    remarks: '',
+    gst_percent: '5'
   });
   const [shipmentItems, setShipmentItems] = useState([]);
   const [savingShipment, setSavingShipment] = useState(false);
@@ -1188,6 +1189,7 @@ export default function DistributorDetail() {
         driver_name: shipmentForm.driver_name || null,
         driver_contact: shipmentForm.driver_contact || null,
         remarks: shipmentForm.remarks || null,
+        gst_percent: parseFloat(shipmentForm.gst_percent) || 0,
         items: shipmentItems.map(item => {
           const pkgUnits = parseInt(item.packaging_units) || 1;
           const totalUnits = (parseInt(item.quantity) || 0) * pkgUnits;
@@ -1201,7 +1203,7 @@ export default function DistributorDetail() {
             distributor_margin: item.distributor_margin ? parseFloat(item.distributor_margin) : null,
             unit_price: parseFloat(item.unit_price),
             discount_percent: parseFloat(item.discount_percent) || 0,
-            tax_percent: parseFloat(item.tax_percent) || 0
+            tax_percent: 0
           };
         })
       };
@@ -1232,7 +1234,8 @@ export default function DistributorDetail() {
       vehicle_number: '',
       driver_name: '',
       driver_contact: '',
-      remarks: ''
+      remarks: '',
+      gst_percent: '5'
     });
     setShipmentItems([]);
   };
