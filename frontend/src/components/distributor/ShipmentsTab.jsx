@@ -188,10 +188,10 @@ export default function ShipmentsTab({
                       {/* Header Row */}
                       <div className="flex items-center gap-3 px-3 text-xs font-medium text-muted-foreground">
                         <div className="flex-[3] min-w-0">SKU</div>
-                        <div className="w-16 text-center">Avail</div>
                         <div className="w-32">Packaging</div>
-                        <div className="w-20">Qty</div>
-                        <div className="w-24">Price (₹)</div>
+                        <div className="w-16 text-center">Avail</div>
+                        <div className="w-24">Qty (pkgs)</div>
+                        <div className="w-24">Price/unit (₹)</div>
                         <div className="w-16">Disc %</div>
                         <div className="w-16">Tax %</div>
                         <div className="w-28 text-right">Amount</div>
@@ -200,15 +200,18 @@ export default function ShipmentsTab({
                       {shipmentItems.map((item, index) => {
                         const stockEntry = (warehouseStock || []).find(s => s.sku_id === item.sku_id);
                         const availableQty = stockEntry ? stockEntry.quantity : 0;
+                        const pkgUnits = parseInt(item.packaging_units) || 1;
+                        const maxPkgs = pkgUnits > 0 ? Math.floor(availableQty / pkgUnits) : availableQty;
+                        const totalUnits = (parseInt(item.quantity) || 0) * pkgUnits;
+                        const lineAmount = (totalUnits * (parseFloat(item.unit_price) || 0) * (1 - ((parseFloat(item.discount_percent) || 0) / 100))) * (1 + ((parseFloat(item.tax_percent) || 0) / 100));
                         return (
-                        <div key={item.id} className="flex items-center gap-3 p-3 border rounded-md bg-muted/30" data-testid={`shipment-item-${index}`}>
+                        <div key={item.id} className="flex items-start gap-3 p-3 border rounded-md bg-muted/30" data-testid={`shipment-item-${index}`}>
                           <div className="flex-[3] min-w-0">
                             <Select
                               value={item.sku_id}
                               onValueChange={(v) => {
                                 const selectedSku = skus.find(s => s.id === v);
                                 if (selectedSku) {
-                                  // Use the enhanced function that looks up the transfer price
                                   updateShipmentItemWithPrice(item.id, v, selectedSku.name || selectedSku.sku_name);
                                 }
                               }}
@@ -229,15 +232,6 @@ export default function ShipmentsTab({
                               </SelectContent>
                             </Select>
                           </div>
-                          <div className="w-16 text-center">
-                            {item.sku_id ? (
-                              <span className={`text-xs font-semibold tabular-nums ${availableQty > 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-                                {availableQty}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-slate-300">—</span>
-                            )}
-                          </div>
                           <div className="w-32">
                             {(() => {
                               const selectedSku = skus.find(s => s.id === item.sku_id);
@@ -255,22 +249,37 @@ export default function ShipmentsTab({
                               );
                             })()}
                           </div>
-                          <div className="w-20">
+                          <div className="w-16 text-center">
+                            {item.sku_id ? (
+                              <div>
+                                <span className={`text-xs font-semibold tabular-nums ${maxPkgs > 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                                  {maxPkgs}
+                                </span>
+                                <p className="text-[9px] text-slate-400">{availableQty} units</p>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-300">—</span>
+                            )}
+                          </div>
+                          <div className="w-24">
                             <Input
                               type="number"
                               min="1"
-                              max={availableQty || undefined}
-                              className={`h-9 ${item.sku_id && item.quantity > availableQty ? 'border-red-400 text-red-600' : ''}`}
+                              max={maxPkgs || undefined}
+                              className={`h-9 ${item.sku_id && (parseInt(item.quantity) || 0) > maxPkgs ? 'border-red-400 text-red-600' : ''}`}
                               value={item.quantity}
                               onChange={(e) => {
                                 const val = parseInt(e.target.value) || 0;
-                                if (item.sku_id && availableQty > 0 && val > availableQty) {
-                                  updateShipmentItem(item.id, 'quantity', availableQty);
+                                if (item.sku_id && maxPkgs > 0 && val > maxPkgs) {
+                                  updateShipmentItem(item.id, 'quantity', maxPkgs);
                                 } else {
                                   updateShipmentItem(item.id, 'quantity', e.target.value);
                                 }
                               }}
                             />
+                            {(parseInt(item.quantity) || 0) > 0 && pkgUnits > 1 && (
+                              <p className="text-[9px] text-blue-600 mt-0.5 text-center font-medium">{totalUnits} units</p>
+                            )}
                           </div>
                           <div className="w-24">
                             <Input
@@ -304,7 +313,7 @@ export default function ShipmentsTab({
                           </div>
                           <div className="w-28 text-right">
                             <div className="h-9 flex items-center justify-end text-sm font-semibold whitespace-nowrap">
-                              ₹{((item.quantity * item.unit_price * (1 - (item.discount_percent || 0) / 100)) * (1 + (item.tax_percent || 0) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              ₹{lineAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
                           </div>
                           <div className="w-10 flex justify-end">

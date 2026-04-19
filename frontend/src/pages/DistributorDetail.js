@@ -1188,16 +1188,22 @@ export default function DistributorDetail() {
         driver_name: shipmentForm.driver_name || null,
         driver_contact: shipmentForm.driver_contact || null,
         remarks: shipmentForm.remarks || null,
-        items: shipmentItems.map(item => ({
-          sku_id: item.sku_id,
-          sku_name: item.sku_name,
-          quantity: parseInt(item.quantity),
-          base_price: item.base_price ? parseFloat(item.base_price) : null,
-          distributor_margin: item.distributor_margin ? parseFloat(item.distributor_margin) : null,
-          unit_price: parseFloat(item.unit_price),
-          discount_percent: parseFloat(item.discount_percent) || 0,
-          tax_percent: parseFloat(item.tax_percent) || 0
-        }))
+        items: shipmentItems.map(item => {
+          const pkgUnits = parseInt(item.packaging_units) || 1;
+          const totalUnits = (parseInt(item.quantity) || 0) * pkgUnits;
+          return {
+            sku_id: item.sku_id,
+            sku_name: item.sku_name,
+            quantity: totalUnits,
+            packaging_units: pkgUnits,
+            packages: parseInt(item.quantity) || 0,
+            base_price: item.base_price ? parseFloat(item.base_price) : null,
+            distributor_margin: item.distributor_margin ? parseFloat(item.distributor_margin) : null,
+            unit_price: parseFloat(item.unit_price),
+            discount_percent: parseFloat(item.discount_percent) || 0,
+            tax_percent: parseFloat(item.tax_percent) || 0
+          };
+        })
       };
       
       const response = await axios.post(`${API_URL}/api/distributors/${id}/shipments`, shipmentData, {
