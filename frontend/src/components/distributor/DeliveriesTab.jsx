@@ -1049,16 +1049,31 @@ export default function DeliveriesTab({
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm" data-testid="deliveries-table">
               <thead>
+                {/* Group headers */}
+                <tr className="border-b border-slate-200">
+                  <th colSpan="3" className="p-0"></th>
+                  <th colSpan="3" className="text-center px-2 pt-2 pb-0">
+                    <span className="text-[9px] uppercase tracking-widest font-bold text-blue-500 bg-blue-50 px-3 py-0.5 rounded-full">Customer</span>
+                  </th>
+                  <th colSpan="3" className="text-center px-2 pt-2 pb-0">
+                    <span className="text-[9px] uppercase tracking-widest font-bold text-purple-500 bg-purple-50 px-3 py-0.5 rounded-full">Distributor</span>
+                  </th>
+                  <th colSpan="2" className="p-0"></th>
+                </tr>
                 <tr className="border-b-2 border-emerald-200 bg-gradient-to-r from-emerald-50 to-slate-50">
-                  <th className="text-left p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Delivery</th>
-                  <th className="text-left p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Account</th>
-                  <th className="text-center p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Items</th>
-                  <th className="text-right p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Customer Billing</th>
-                  <th className="text-right p-4 font-semibold text-emerald-700 uppercase tracking-wider text-xs">Return Credit</th>
-                  <th className="text-right p-4 font-semibold text-indigo-700 uppercase tracking-wider text-xs">Net Customer Billing</th>
-                  <th className="text-right p-4 font-semibold text-purple-700 uppercase tracking-wider text-xs">Billable to Dist</th>
-                  <th className="text-center p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Status</th>
-                  <th className="text-center p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Actions</th>
+                  <th className="text-left p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Delivery</th>
+                  <th className="text-left p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Account</th>
+                  <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Items</th>
+                  {/* Customer columns */}
+                  <th className="text-right p-3 font-semibold text-blue-700 uppercase tracking-wider text-xs bg-blue-50/40">Billing</th>
+                  <th className="text-right p-3 font-semibold text-blue-700 uppercase tracking-wider text-xs bg-blue-50/40">Return Credit</th>
+                  <th className="text-right p-3 font-semibold text-blue-700 uppercase tracking-wider text-xs bg-blue-50/40">Net Billing</th>
+                  {/* Distributor columns */}
+                  <th className="text-right p-3 font-semibold text-purple-700 uppercase tracking-wider text-xs bg-purple-50/40">Margin Amt</th>
+                  <th className="text-right p-3 font-semibold text-purple-700 uppercase tracking-wider text-xs bg-purple-50/40">Billable</th>
+                  <th className="text-right p-3 font-semibold text-purple-700 uppercase tracking-wider text-xs bg-purple-50/40">Net Billable</th>
+                  <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Status</th>
+                  <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1081,6 +1096,15 @@ export default function DeliveriesTab({
                   // Net Customer Billing (pre-tax, after credit)
                   const netCustomerBilling = Math.max(0, customerBilling - totalCreditApplied);
                   
+                  // Total margin amount (customer price - transfer price per item)
+                  const totalMarginAmount = items.reduce((sum, item) => {
+                    const qty = item.quantity || 0;
+                    const customerPrice = item.customer_selling_price || item.unit_price || 0;
+                    const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
+                    const marginPerUnit = customerPrice * (commissionPct / 100);
+                    return sum + (qty * marginPerUnit);
+                  }, 0);
+                  
                   // Actual Billable to Dist (pre-tax, without GST)
                   const totalActualBillable = items.reduce((sum, item) => {
                     const qty = item.quantity || 0;
@@ -1101,7 +1125,7 @@ export default function DeliveriesTab({
                       data-testid={`delivery-row-${delivery.id}`}
                     >
                       {/* Delivery # and Date */}
-                      <td className="p-4">
+                      <td className="p-3">
                         <button 
                           className="font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
                           onClick={(e) => { e.stopPropagation(); viewDeliveryDetail(delivery.id); }}
@@ -1114,27 +1138,27 @@ export default function DeliveriesTab({
                       </td>
                       
                       {/* Account */}
-                      <td className="p-4">
+                      <td className="p-3">
                         <p className="font-medium text-slate-700">{delivery.account_name}</p>
                         <p className="text-xs text-slate-500">{delivery.account_city || ''}</p>
                       </td>
                       
                       {/* Items Count */}
-                      <td className="p-4 text-center">
+                      <td className="p-3 text-center">
                         <span className="inline-flex items-center justify-center bg-slate-100 text-slate-700 text-sm font-medium px-2.5 py-1 rounded-full">
                           {items.length} {items.length === 1 ? 'item' : 'items'}
                         </span>
                       </td>
                       
-                      {/* Customer Billing (pre-tax) */}
-                      <td className="p-4 text-right">
+                      {/* Customer: Billing */}
+                      <td className="p-3 text-right bg-blue-50/20">
                         <span className="font-medium text-slate-800">
                           ₹{customerBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
                       </td>
                       
-                      {/* Return Credit */}
-                      <td className="p-4 text-right">
+                      {/* Customer: Return Credit */}
+                      <td className="p-3 text-right bg-blue-50/20">
                         {hasCreditNotes ? (
                           <div className="flex flex-col items-end gap-0.5">
                             <span className="inline-flex items-center bg-emerald-100 text-emerald-700 text-xs font-medium px-2 py-0.5 rounded-full">
@@ -1149,32 +1173,44 @@ export default function DeliveriesTab({
                         )}
                       </td>
                       
-                      {/* Net Billing (pre-tax, after credit) */}
-                      <td className="p-4 text-right">
-                        <span className={`font-bold ${hasCreditNotes ? 'text-indigo-600' : 'text-slate-700'}`}>
+                      {/* Customer: Net Billing */}
+                      <td className="p-3 text-right bg-blue-50/20">
+                        <span className={`font-bold ${hasCreditNotes ? 'text-blue-600' : 'text-slate-700'}`}>
                           ₹{netCustomerBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
                       </td>
                       
-                      {/* Billable to Dist (pre-tax, after credit) */}
-                      <td className="p-4 text-right">
+                      {/* Distributor: Margin Amount */}
+                      <td className="p-3 text-right bg-purple-50/20">
+                        <span className="font-medium text-purple-600">
+                          ₹{totalMarginAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </td>
+                      
+                      {/* Distributor: Billable (before credit) */}
+                      <td className="p-3 text-right bg-purple-50/20">
+                        <span className="text-slate-700">
+                          ₹{totalActualBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </td>
+                      
+                      {/* Distributor: Net Billable (after credit) */}
+                      <td className="p-3 text-right bg-purple-50/20">
                         <span className="font-bold text-purple-700">
                           ₹{finalBillableToDist.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
                         {hasCreditNotes && (
-                          <p className="text-xs text-purple-500 mt-0.5">
-                            (after CN)
-                          </p>
+                          <p className="text-xs text-purple-500 mt-0.5">(after CN)</p>
                         )}
                       </td>
                       
                       {/* Status */}
-                      <td className="p-4 text-center">
+                      <td className="p-3 text-center">
                         {getDeliveryStatusBadge(delivery.status)}
                       </td>
                       
                       {/* Actions */}
-                      <td className="p-4 text-center">
+                      <td className="p-3 text-center">
                         <div className="flex justify-center gap-1">
                           <Button
                             variant="ghost"
