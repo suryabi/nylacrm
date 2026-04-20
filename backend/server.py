@@ -185,22 +185,55 @@ security = HTTPBearer()
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
-# Health check endpoint for deployment - must be at root level
+# ============= HEALTH CHECK ENDPOINTS =============
+# These MUST be defined FIRST and kept simple to guarantee availability
+# for Kubernetes probes, Cloudflare checks, and deployment orchestrators.
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint for Kubernetes/deployment health probes"""
     return {"status": "healthy", "service": "backend"}
+
+@app.get("/healthz")
+async def healthz():
+    """K8s-style health probe"""
+    return {"status": "healthy"}
+
+@app.get("/ready")
+async def ready():
+    """K8s-style readiness probe"""
+    return {"status": "ready"}
+
+@app.get("/livez")
+async def livez():
+    """K8s-style liveness probe"""
+    return {"status": "alive"}
 
 @app.get("/")
 async def root():
     """Root endpoint"""
     return {"status": "ok", "service": "nyla-crm-api"}
 
-# Also add health check under /api prefix for ingress routing
+# Health checks also under /api prefix (in case ingress strips or requires /api)
+@api_router.get("/")
+async def api_root():
+    """API root endpoint"""
+    return {"status": "ok", "service": "nyla-crm-api"}
+
 @api_router.get("/health")
 async def api_health_check():
     """Health check endpoint under /api prefix"""
     return {"status": "healthy", "service": "backend"}
+
+@api_router.get("/healthz")
+async def api_healthz():
+    """K8s-style health probe under /api prefix"""
+    return {"status": "healthy"}
+
+@api_router.get("/ping")
+async def api_ping():
+    """Simple ping endpoint"""
+    return {"pong": True}
 
 # Import modular routes
 from routes import routes_router
@@ -219,12 +252,19 @@ async def tenant_context_middleware(request: Request, call_next):
 # As we migrate more routes to the modular structure, we'll remove them from here
 # Keeping both during transition to ensure backward compatibility
 
-# Static files for logos
+# Static files for logos - resilient to read-only filesystems (best-effort)
 from fastapi.staticfiles import StaticFiles
 import os
 logos_dir = '/app/backend/static/logos'
-os.makedirs(logos_dir, exist_ok=True)
-app.mount("/api/static", StaticFiles(directory="/app/backend/static"), name="static")
+try:
+    os.makedirs(logos_dir, exist_ok=True)
+except OSError as _mkdir_err:
+    # Filesystem may be read-only in some deployment environments; ignore
+    logger.warning(f"Could not create static dir {logos_dir}: {_mkdir_err}")
+try:
+    app.mount("/api/static", StaticFiles(directory="/app/backend/static"), name="static")
+except Exception as _mount_err:
+    logger.warning(f"Static mount failed: {_mount_err}")
 
 # ============= HELPER FUNCTIONS =============
 
@@ -8931,8 +8971,13 @@ async def review_account_contract(
     return {'contract': updated, 'message': f'Contract {action.replace("_", " ")}'}
 
 @app.on_event("startup")
-async def init_master_locations():
-    """Initialize default Indian territories, states, and cities"""
+async def init_master_locations_startup():
+    """Kick off location seeding in the background so startup stays fast"""
+    asyncio.create_task(_init_master_locations_async())
+
+
+async def _init_master_locations_async():
+    """Initialize default Indian territories, states, and cities (background task)"""
     try:
         # Check if territories already exist
         existing_count = await db.master_territories.count_documents({})
@@ -9073,7 +9118,6 @@ cors_origins_env = os.environ.get('CORS_ORIGINS', '')
 # Default allowed origins for production and development
 default_origins = [
     'https://crm.nylaairwater.earth',
-    'https://pipeline-master-14.emergent.host',
     'http://localhost:3000',
     'http://127.0.0.1:3000'
 ]
@@ -9081,22 +9125,23 @@ default_origins = [
 if cors_origins_env and cors_origins_env != '*':
     cors_origins = [origin.strip() for origin in cors_origins_env.split(',')]
 else:
-    cors_origins = default_origins
+    cors_origins = list(default_origins)
 
-# Add the preview URL if set
-preview_url = os.environ.get('REACT_APP_BACKEND_URL', '')
-if preview_url and preview_url not in cors_origins:
-    # Extract just the origin (protocol + host)
-    from urllib.parse import urlparse
-    parsed = urlparse(preview_url)
-    origin = f"{parsed.scheme}://{parsed.netloc}"
-    if origin not in cors_origins:
-        cors_origins.append(origin)
+# Regex to allow any subdomain under our known production/preview domains.
+# This covers:
+#   - https://*.emergent.host (Emergent native deployment URLs)
+#   - https://*.emergentagent.com and https://*.preview.emergentagent.com (preview URLs)
+#   - https://*.nylaairwater.earth (custom tenant domains)
+cors_origin_regex = (
+    r"https://([a-zA-Z0-9\-]+\.)*"
+    r"(emergent\.host|emergentagent\.com|nylaairwater\.earth)$"
+)
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
     allow_origins=cors_origins,
+    allow_origin_regex=cors_origin_regex,
     allow_methods=["*"],
     allow_headers=["*"],
 )
