@@ -4201,7 +4201,310 @@ async def get_leads(
         total_pages=total_pages
     )
 
-@api_router.get("/leads/{lead_id}", response_model=Lead)
+
+@api_router.get("/leads/export")
+async def export_leads_csv(
+    status: Optional[str] = None,
+    city: Optional[str] = None,
+    state: Optional[str] = None,
+    territory: Optional[str] = None,
+    country: Optional[str] = None,
+    region: Optional[str] = None,
+    search: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    time_filter: Optional[str] = None,
+    quadrant: Optional[str] = None,
+    target_closure_month: Optional[int] = None,
+    target_closure_year: Optional[int] = None,
+    target_closure_months: Optional[str] = None,
+    target_closure_years: Optional[str] = None,
+    sort_by: Optional[str] = 'created_at',
+    sort_order: Optional[str] = 'desc',
+    current_user: dict = Depends(get_current_user)
+):
+    """Export all leads matching the filters as a CSV spreadsheet."""
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse
+
+    # Build same query as GET /leads
+    query = {}
+    if current_user['role'] == 'sales_rep':
+        query['assigned_to'] = current_user['id']
+
+    if status and status != 'all':
+        status_list = [s.strip() for s in status.split(',') if s.strip()]
+        if len(status_list) == 1:
+            query['status'] = status_list[0]
+        elif len(status_list) > 1:
+            query['status'] = {'$in': status_list}
+    if city and city != 'all':
+        query['city'] = city
+    if state and state != 'all':
+        query['state'] = state
+    if territory and territory != 'all':
+        query['region'] = territory
+    if country and country != 'all':
+        query['country'] = country
+    if region and region != 'all':
+        query['region'] = region
+
+    if assigned_to and assigned_to != 'all':
+        assigned_list = [a.strip() for a in assigned_to.split(',') if a.strip()]
+        if len(assigned_list) == 1:
+            query['assigned_to'] = assigned_list[0]
+        elif len(assigned_list) > 1:
+            query['assigned_to'] = {'$in': assigned_list}
+
+    if target_closure_months and target_closure_years:
+        months = [int(m) for m in target_closure_months.split(',') if m.strip()]
+        years = [int(y) for y in target_closure_years.split(',') if y.strip()]
+        tc_conditions = [
+            {'target_closure_month': months[i], 'target_closure_year': years[i]}
+            for i in range(min(len(months), len(years)))
+        ]
+        if len(tc_conditions) == 1:
+            query['target_closure_month'] = tc_conditions[0]['target_closure_month']
+            query['target_closure_year'] = tc_conditions[0]['target_closure_year']
+        elif tc_conditions:
+            query['$or'] = tc_conditions
+    elif target_closure_month is not None:
+        query['target_closure_month'] = target_closure_month
+        if target_closure_year is not None:
+            query['target_closure_year'] = target_closure_year
+
+    if time_filter and time_filter not in ('all', 'lifetime'):
+        now = datetime.now(timezone.utc)
+        start_date, end_date = None, None
+        if time_filter == 'this_week':
+            start_date = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == 'last_week':
+            start_date = (now - timedelta(days=now.weekday() + 7)).replace(hour=0, minute=0, second=0, microsecond=0)
+            end_date = start_date + timedelta(days=6, hours=23, minutes=59, seconds=59)
+        elif time_filter == 'this_month':
+            start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == 'last_month':
+            first_of_this_month = now.replace(day=1)
+            last_month = first_of_this_month - timedelta(days=1)
+            start_date = last_month.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_date = first_of_this_month - timedelta(seconds=1)
+        elif time_filter == 'last_3_months':
+            start_date = (now - timedelta(days=90)).replace(hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == 'last_6_months':
+            start_date = (now - timedelta(days=180)).replace(hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == 'this_year':
+            start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        if start_date:
+            date_range = {'$gte': start_date.isoformat()}
+            if end_date:
+                date_range['$lte'] = end_date.isoformat()
+            query['$or'] = [{'created_at': date_range}, {'updated_at': date_range}]
+
+    extra = []
+    if search:
+        extra.append({'$or': [
+            {'company': {'$regex': search, '$options': 'i'}},
+            {'contact_person': {'$regex': search, '$options': 'i'}},
+            {'lead_id': {'$regex': search, '$options': 'i'}},
+        ]})
+    if quadrant:
+        quadrants = [q for q in quadrant.split(',') if q]
+        if 'unscored' in quadrants:
+            quadrants.remove('unscored')
+            if quadrants:
+                extra.append({'$or': [
+                    {'scoring.quadrant': {'$in': quadrants}},
+                    {'scoring.quadrant': {'$exists': False}},
+                    {'scoring': {'$exists': False}},
+                ]})
+            else:
+                extra.append({'$or': [
+                    {'scoring.quadrant': {'$exists': False}},
+                    {'scoring': {'$exists': False}},
+                ]})
+        else:
+            extra.append({'scoring.quadrant': {'$in': quadrants}})
+    if extra:
+        if '$or' in query:
+            query.setdefault('$and', []).append({'$or': query.pop('$or')})
+        query.setdefault('$and', []).extend(extra)
+
+    # Fetch all matching leads (export has no pagination cap beyond a safety 50k)
+    sort_direction = -1 if sort_order == 'desc' else 1
+    leads = await get_tdb().leads.find(query, {'_id': 0}).sort(sort_by, sort_direction).limit(50000).to_list(50000)
+
+    # Build user lookup for assigned-to name + created_by name
+    user_ids = {l.get('assigned_to') for l in leads if l.get('assigned_to')} | \
+               {l.get('created_by') for l in leads if l.get('created_by')}
+    users_map = {}
+    if user_ids:
+        users_docs = await get_tdb().users.find({'id': {'$in': list(user_ids)}}, {'_id': 0, 'id': 1, 'name': 1, 'email': 1}).to_list(len(user_ids))
+        users_map = {u['id']: u.get('name') or u.get('email') or '' for u in users_docs}
+
+    # Latest activity per lead for last_contacted_date / method
+    lead_ids = [l['id'] for l in leads]
+    last_activity_map = {}
+    if lead_ids:
+        activities = await get_tdb().activities.find(
+            {'lead_id': {'$in': lead_ids}},
+            {'_id': 0, 'lead_id': 1, 'created_at': 1, 'interaction_method': 1, 'activity_type': 1}
+        ).sort('created_at', -1).to_list(len(lead_ids) * 5)
+        for a in activities:
+            lid = a['lead_id']
+            if lid not in last_activity_map:
+                method = a.get('interaction_method') or a.get('activity_type') or ''
+                ts = a['created_at'] if isinstance(a['created_at'], str) else a['created_at'].isoformat()
+                last_activity_map[lid] = (ts, method)
+
+    # CSV columns - comprehensive list
+    columns = [
+        ('lead_id', 'Lead ID'),
+        ('company', 'Company'),
+        ('contact_person', 'Contact Person'),
+        ('email', 'Email'),
+        ('phone', 'Phone'),
+        ('category', 'Category'),
+        ('tier', 'Tier'),
+        ('rank', 'Rank'),
+        ('city', 'City'),
+        ('state', 'State'),
+        ('region', 'Territory / Region'),
+        ('country', 'Country'),
+        ('status', 'Status'),
+        ('source', 'Source'),
+        ('priority', 'Priority'),
+        ('assigned_to_name', 'Assigned To'),
+        ('created_by_name', 'Created By'),
+        ('current_water_brand', 'Current Brand'),
+        ('current_landing_price', 'Current Landing Price'),
+        ('current_volume', 'Current Volume'),
+        ('current_selling_price', 'Current Selling Price'),
+        ('current_brands_summary', 'All Current Brands'),
+        ('interested_skus_summary', 'Interested SKUs'),
+        ('proposed_sku_pricing_summary', 'Proposed SKU Pricing'),
+        ('estimated_monthly_bottles', 'Est. Monthly Bottles'),
+        ('estimated_monthly_revenue', 'Est. Monthly Revenue'),
+        ('estimated_value', 'Estimated Value'),
+        ('onboarded_month', 'Onboarded Month'),
+        ('onboarded_year', 'Onboarded Year'),
+        ('target_closure_month', 'Target Closure Month'),
+        ('target_closure_year', 'Target Closure Year'),
+        ('next_followup_date', 'Next Follow-up Date'),
+        ('last_contacted_date', 'Last Contacted Date'),
+        ('last_contact_method', 'Last Contact Method'),
+        ('total_gross_invoice_value', 'Total Gross Invoice Value'),
+        ('total_net_invoice_value', 'Total Net Invoice Value'),
+        ('total_credit_note_value', 'Total Credit Note Value'),
+        ('invoice_count', 'Invoice Count'),
+        ('last_invoice_date', 'Last Invoice Date'),
+        ('last_invoice_no', 'Last Invoice No'),
+        ('scoring_quadrant', 'Scoring Quadrant'),
+        ('scoring_score', 'Scoring Score'),
+        ('notes', 'Notes'),
+        ('created_at', 'Created At'),
+        ('updated_at', 'Updated At'),
+    ]
+
+    def _flatten(lead):
+        """Flatten a lead doc into a dict of primitive values for CSV."""
+        current_brands = lead.get('current_brands') or []
+        current_brands_summary = '; '.join(
+            f"{b.get('brand_name','')} ({b.get('volume','')} @ {b.get('selling_price','')})"
+            for b in current_brands if isinstance(b, dict)
+        )
+        interested = lead.get('interested_skus') or []
+        interested_summary = ', '.join(str(s) for s in interested)
+
+        proposed = lead.get('proposed_sku_pricing') or []
+        proposed_summary = '; '.join(
+            f"{p.get('sku_name','')}: {p.get('selling_price','')} ({p.get('percentage','')}%)"
+            for p in proposed if isinstance(p, dict)
+        )
+
+        opp = lead.get('opportunity_estimation') or {}
+        est_monthly_bottles = opp.get('final_monthly') or opp.get('calculated_monthly') or ''
+        est_monthly_revenue = opp.get('estimated_monthly_revenue') or ''
+
+        scoring = lead.get('scoring') or {}
+
+        last_contacted = lead.get('last_contacted_date')
+        last_method = lead.get('last_contact_method')
+        if not last_contacted:
+            la = last_activity_map.get(lead['id'])
+            if la:
+                last_contacted, last_method = la
+
+        def _iso(v):
+            if v is None:
+                return ''
+            if isinstance(v, datetime):
+                return v.isoformat()
+            return str(v)
+
+        return {
+            'lead_id': lead.get('lead_id') or lead.get('id') or '',
+            'company': lead.get('company') or '',
+            'contact_person': lead.get('contact_person') or lead.get('name') or '',
+            'email': lead.get('email') or '',
+            'phone': lead.get('phone') or '',
+            'category': lead.get('category') or '',
+            'tier': lead.get('tier') or '',
+            'rank': lead.get('rank') or '',
+            'city': lead.get('city') or '',
+            'state': lead.get('state') or '',
+            'region': lead.get('region') or '',
+            'country': lead.get('country') or '',
+            'status': lead.get('status') or '',
+            'source': lead.get('source') or '',
+            'priority': lead.get('priority') or '',
+            'assigned_to_name': users_map.get(lead.get('assigned_to'), '') if lead.get('assigned_to') else '',
+            'created_by_name': users_map.get(lead.get('created_by'), '') if lead.get('created_by') else '',
+            'current_water_brand': lead.get('current_water_brand') or '',
+            'current_landing_price': lead.get('current_landing_price') or '',
+            'current_volume': lead.get('current_volume') or '',
+            'current_selling_price': lead.get('current_selling_price') or '',
+            'current_brands_summary': current_brands_summary,
+            'interested_skus_summary': interested_summary,
+            'proposed_sku_pricing_summary': proposed_summary,
+            'estimated_monthly_bottles': est_monthly_bottles,
+            'estimated_monthly_revenue': est_monthly_revenue,
+            'estimated_value': lead.get('estimated_value') or '',
+            'onboarded_month': lead.get('onboarded_month') or '',
+            'onboarded_year': lead.get('onboarded_year') or '',
+            'target_closure_month': lead.get('target_closure_month') or '',
+            'target_closure_year': lead.get('target_closure_year') or '',
+            'next_followup_date': lead.get('next_followup_date') or '',
+            'last_contacted_date': last_contacted or '',
+            'last_contact_method': last_method or '',
+            'total_gross_invoice_value': lead.get('total_gross_invoice_value') or '',
+            'total_net_invoice_value': lead.get('total_net_invoice_value') or '',
+            'total_credit_note_value': lead.get('total_credit_note_value') or '',
+            'invoice_count': lead.get('invoice_count') or '',
+            'last_invoice_date': lead.get('last_invoice_date') or '',
+            'last_invoice_no': lead.get('last_invoice_no') or '',
+            'scoring_quadrant': scoring.get('quadrant') or '',
+            'scoring_score': scoring.get('total_score') or scoring.get('score') or '',
+            'notes': (lead.get('notes') or '').replace('\r\n', ' ').replace('\n', ' '),
+            'created_at': _iso(lead.get('created_at')),
+            'updated_at': _iso(lead.get('updated_at')),
+        }
+
+    # Stream CSV
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, quoting=csv.QUOTE_MINIMAL)
+    writer.writerow([header for _, header in columns])
+    for lead in leads:
+        row = _flatten(lead)
+        writer.writerow([row.get(key, '') for key, _ in columns])
+
+    buffer.seek(0)
+    filename = f"leads_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type='text/csv',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+    )
 async def get_lead(lead_id: str, current_user: dict = Depends(get_current_user)):
     lead = await get_tdb().leads.find_one({'id': lead_id}, {'_id': 0})
     if not lead:

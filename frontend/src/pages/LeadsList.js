@@ -21,7 +21,7 @@ import {
   FilterGrid, 
   FilterSearch 
 } from '../components/ui/filter-bar';
-import { Plus, Search, Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid, List, Filter, Users, Loader2, Check, MapPin, Calendar, Target, UserCircle, RotateCcw, Star, TrendingUp, DollarSign, BarChart3, Flame, Snowflake, ThermometerSun, Sparkles, Award, Layers, HelpCircle, X } from 'lucide-react';
+import { Plus, Search, Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid, List, Filter, Users, Loader2, Check, MapPin, Calendar, Target, UserCircle, RotateCcw, Star, TrendingUp, DollarSign, BarChart3, Flame, Snowflake, ThermometerSun, Sparkles, Award, Layers, HelpCircle, X, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Table,
@@ -246,6 +246,55 @@ export default function LeadsList() {
     finally { setDeleteDialogOpen(false); setLeadToDelete(null); }
   };
 
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.append('search', debouncedSearch);
+      if (statusFilter.length > 0) params.append('status', statusFilter.join(','));
+      if (cityFilter !== 'all') params.append('city', cityFilter);
+      if (stateFilter !== 'all') params.append('state', stateFilter);
+      if (territoryFilter !== 'all') params.append('territory', territoryFilter);
+      if (assignedToFilter.length > 0) params.append('assigned_to', assignedToFilter.join(','));
+      if (!pipelineView && timeFilter !== 'lifetime') params.append('time_filter', timeFilter);
+      if (selectedQuadrants.length > 0) params.append('quadrant', selectedQuadrants.join(','));
+      if (targetClosureMonth) params.append('target_closure_month', targetClosureMonth);
+      if (targetClosureYear) params.append('target_closure_year', targetClosureYear);
+      if (pipelineView && pipelineClosureMonths) {
+        params.append('target_closure_months', pipelineClosureMonths);
+        params.append('target_closure_years', pipelineClosureYears);
+      }
+      params.append('sort_by', sortField);
+      params.append('sort_order', sortDirection);
+
+      const url = `${process.env.REACT_APP_BACKEND_URL}/api/leads/export?${params.toString()}`;
+      const response = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true,
+        responseType: 'blob',
+      });
+
+      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      link.setAttribute('download', `leads_export_${stamp}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+      toast.success('Leads exported successfully');
+    } catch (error) {
+      console.error('Failed to export leads:', error);
+      toast.error(error.response?.data?.detail || 'Failed to export leads');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleSort = (field) => {
     if (sortField === field) setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     else { setSortField(field); setSortDirection('desc'); }
@@ -467,6 +516,22 @@ export default function LeadsList() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExport}
+                disabled={exporting || loading || totalLeads === 0}
+                data-testid="download-leads-button"
+                className="gap-1 sm:gap-2 border-slate-200 dark:border-slate-700 text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
+                title="Download all filtered leads as CSV (opens in Excel/Google Sheets)"
+              >
+                {exporting ? (
+                  <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                )}
+                <span className="hidden sm:inline">{exporting ? 'Exporting…' : 'Download'}</span>
+              </Button>
               <Button variant="outline" size="sm" onClick={() => navigate('/leads/kanban')} data-testid="kanban-view-button" className="gap-1 sm:gap-2 border-slate-200 dark:border-slate-700 text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3">
                 <LayoutGrid className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> 
                 <span className="hidden sm:inline">Kanban</span>
