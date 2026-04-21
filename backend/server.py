@@ -4393,17 +4393,6 @@ async def export_leads_csv(
         ('next_followup_date', 'Next Follow-up Date'),
         ('last_contacted_date', 'Last Contacted Date'),
         ('last_contact_method', 'Last Contact Method'),
-        ('total_gross_invoice_value', 'Total Gross Invoice Value'),
-        ('total_net_invoice_value', 'Total Net Invoice Value'),
-        ('total_credit_note_value', 'Total Credit Note Value'),
-        ('invoice_count', 'Invoice Count'),
-        ('last_invoice_date', 'Last Invoice Date'),
-        ('last_invoice_no', 'Last Invoice No'),
-        ('scoring_quadrant', 'Scoring Quadrant'),
-        ('scoring_score', 'Scoring Score'),
-        ('notes', 'Notes'),
-        ('created_at', 'Created At'),
-        ('updated_at', 'Updated At'),
     ]
 
     def _flatten(lead):
