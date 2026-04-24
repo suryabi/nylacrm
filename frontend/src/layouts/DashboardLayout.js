@@ -107,6 +107,7 @@ const salesNavigationGroups = [
     items: [
       { name: 'Lead Scoring Model', href: '/lead-scoring-model', icon: Gauge, moduleKey: 'lead_scoring', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
       { name: 'Tenant Settings', href: '/tenant-settings', icon: Settings, roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
+      { name: 'Replace SKU', href: '/admin/sku-migrate', icon: ArrowLeftRight, roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
       { name: 'Platform Admin', href: '/platform-admin', icon: Crown, isPlatformAdminOnly: true },
     ]
   },

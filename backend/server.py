@@ -1499,6 +1499,154 @@ async def get_current_user(request: Request):
     """Get user from cookie or JWT token"""
     return await get_current_user_from_cookie_or_header(request)
 
+@api_router.post("/admin/migrate-sku")
+async def admin_migrate_sku(request: Request, current_user: dict = Depends(get_current_user)):
+    """
+    Migrate all references from `from_sku_id` to `to_sku_id` across every
+    collection that references SKUs. Supports dry_run=True to preview.
+    Body: { from_sku_id, to_sku_id, dry_run: bool }
+    """
+    if current_user.get('role') not in ('CEO', 'Director', 'System Admin', 'Admin'):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    body = await request.json()
+    from_sku_id = body.get('from_sku_id')
+    to_sku_id = body.get('to_sku_id')
+    dry_run = bool(body.get('dry_run', True))
+
+    if not from_sku_id or not to_sku_id:
+        raise HTTPException(status_code=400, detail="from_sku_id and to_sku_id are required")
+    if from_sku_id == to_sku_id:
+        raise HTTPException(status_code=400, detail="from_sku_id and to_sku_id must differ")
+
+    tdb = get_tdb()
+    from_sku = await tdb.master_skus.find_one({'id': from_sku_id}, {'_id': 0})
+    to_sku = await tdb.master_skus.find_one({'id': to_sku_id}, {'_id': 0})
+    if not from_sku:
+        raise HTTPException(status_code=404, detail=f"from_sku_id {from_sku_id} not found")
+    if not to_sku:
+        raise HTTPException(status_code=404, detail=f"to_sku_id {to_sku_id} not found")
+
+    from_name = from_sku.get('name') or from_sku.get('sku') or from_sku.get('sku_name')
+    to_name = to_sku.get('name') or to_sku.get('sku') or to_sku.get('sku_name')
+    counts = {}
+
+    # 1) accounts.sku_pricing[] (name-based)
+    counts['accounts.sku_pricing'] = await tdb.accounts.count_documents({'sku_pricing.sku': from_name})
+    if not dry_run and counts['accounts.sku_pricing']:
+        await tdb.accounts.update_many(
+            {'sku_pricing.sku': from_name},
+            {'$set': {'sku_pricing.$[elem].sku': to_name}},
+            array_filters=[{'elem.sku': from_name}],
+        )
+
+    # 2) leads.proposed_sku_pricing[] (id-based)
+    counts['leads.proposed_sku_pricing'] = await tdb.leads.count_documents({'proposed_sku_pricing.sku_id': from_sku_id})
+    if not dry_run and counts['leads.proposed_sku_pricing']:
+        await tdb.leads.update_many(
+            {'proposed_sku_pricing.sku_id': from_sku_id},
+            {'$set': {
+                'proposed_sku_pricing.$[elem].sku_id': to_sku_id,
+                'proposed_sku_pricing.$[elem].sku_name': to_name,
+            }},
+            array_filters=[{'elem.sku_id': from_sku_id}],
+        )
+
+    # 3) leads.interested_skus[] (id-based, plain or object)
+    interest_str = await tdb.leads.count_documents({'interested_skus': from_sku_id})
+    interest_obj = await tdb.leads.count_documents({'interested_skus.sku_id': from_sku_id})
+    counts['leads.interested_skus'] = interest_str + interest_obj
+    if not dry_run:
+        if interest_str:
+            await tdb.leads.update_many(
+                {'interested_skus': from_sku_id},
+                {'$set': {'interested_skus.$[elem]': to_sku_id}},
+                array_filters=[{'elem': from_sku_id}],
+            )
+        if interest_obj:
+            await tdb.leads.update_many(
+                {'interested_skus.sku_id': from_sku_id},
+                {'$set': {
+                    'interested_skus.$[elem].sku_id': to_sku_id,
+                    'interested_skus.$[elem].sku_name': to_name,
+                }},
+                array_filters=[{'elem.sku_id': from_sku_id}],
+            )
+
+    # 4) cost_cards
+    counts['cost_cards'] = await tdb.cost_cards.count_documents({'sku_id': from_sku_id})
+    if not dry_run and counts['cost_cards']:
+        await tdb.cost_cards.update_many(
+            {'sku_id': from_sku_id},
+            {'$set': {'sku_id': to_sku_id, 'sku_name': to_name}},
+        )
+
+    # 5) cogs_data (by name, optionally by id)
+    cogs_by_name = await tdb.cogs_data.count_documents({'sku_name': from_name})
+    cogs_by_id = await tdb.cogs_data.count_documents({'sku_id': from_sku_id})
+    counts['cogs_data'] = cogs_by_name + cogs_by_id
+    if not dry_run:
+        if cogs_by_name:
+            await tdb.cogs_data.update_many(
+                {'sku_name': from_name},
+                {'$set': {'sku_name': to_name, 'sku_id': to_sku_id}},
+            )
+        if cogs_by_id:
+            await tdb.cogs_data.update_many(
+                {'sku_id': from_sku_id},
+                {'$set': {'sku_id': to_sku_id, 'sku_name': to_name}},
+            )
+
+    # 6) production_batches
+    counts['production_batches'] = await tdb.production_batches.count_documents({'sku_id': from_sku_id})
+    if not dry_run and counts['production_batches']:
+        await tdb.production_batches.update_many(
+            {'sku_id': from_sku_id},
+            {'$set': {'sku_id': to_sku_id, 'sku_name': to_name}},
+        )
+
+    # 7) account_sku_pricing
+    counts['account_sku_pricing'] = await tdb.account_sku_pricing.count_documents({'sku_id': from_sku_id})
+    if not dry_run and counts['account_sku_pricing']:
+        await tdb.account_sku_pricing.update_many(
+            {'sku_id': from_sku_id},
+            {'$set': {'sku_id': to_sku_id, 'sku_name': to_name}},
+        )
+
+    # 8, 9, 10) shipments / deliveries / invoices items[]
+    for coll_name in ('primary_shipments', 'deliveries', 'provisional_invoices', 'invoices'):
+        try:
+            coll = tdb[coll_name]
+            key = f'{coll_name}.items'
+            counts[key] = await coll.count_documents({'items.sku_id': from_sku_id})
+            if not dry_run and counts[key]:
+                await coll.update_many(
+                    {'items.sku_id': from_sku_id},
+                    {'$set': {
+                        'items.$[elem].sku_id': to_sku_id,
+                        'items.$[elem].sku_name': to_name,
+                    }},
+                    array_filters=[{'elem.sku_id': from_sku_id}],
+                )
+        except Exception:
+            counts[f'{coll_name}.items'] = 0
+
+    total_affected = sum(counts.values())
+    return {
+        'dry_run': dry_run,
+        'from': {'id': from_sku_id, 'name': from_name},
+        'to': {'id': to_sku_id, 'name': to_name},
+        'counts': counts,
+        'total_affected': total_affected,
+        'message': (
+            f"DRY RUN — would update {total_affected} reference(s). Set dry_run=false to apply."
+            if dry_run else
+            f"Migration complete. Updated {total_affected} reference(s) across "
+            f"{sum(1 for v in counts.values() if v > 0)} collection(s)."
+        ),
+    }
+
+
 @api_router.post("/admin/backdate-won-leads")
 async def backdate_won_leads(request: Request):
     """Admin endpoint to backdate won leads to a specific date"""

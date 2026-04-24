@@ -56,6 +56,7 @@ import SKUPerformance from './pages/SKUPerformance';
 import ResourcePerformance from './pages/ResourcePerformance';
 import AccountsList from './pages/AccountsList';
 import AccountSKUPricing from './pages/AccountSKUPricing';
+import AdminSkuMigrate from './pages/AdminSkuMigrate';
 import AccountDetail from './pages/AccountDetail';
 import AccountPerformance from './pages/AccountPerformance';
 import InvoicesList from './pages/InvoicesList';
@@ -228,6 +229,7 @@ function AppRouter() {
           <Route path="/resource-performance" element={<ProtectedRoute moduleKey="report_resource_performance"><ResourcePerformance /></ProtectedRoute>} />
           <Route path="/accounts" element={<ProtectedRoute moduleKey="accounts"><AccountsList /></ProtectedRoute>} />
           <Route path="/accounts/sku-pricing" element={<ProtectedRoute moduleKey="accounts"><AccountSKUPricing /></ProtectedRoute>} />
+          <Route path="/admin/sku-migrate" element={<ProtectedRoute moduleKey="admin"><AdminSkuMigrate /></ProtectedRoute>} />
           <Route path="/accounts/:id" element={<ProtectedRoute moduleKey="accounts"><AccountDetail /></ProtectedRoute>} />
           <Route path="/invoices" element={<ProtectedRoute moduleKey="invoices"><InvoicesList /></ProtectedRoute>} />
           <Route path="/account-performance" element={<ProtectedRoute moduleKey="report_account_performance"><AccountPerformance /></ProtectedRoute>} />
