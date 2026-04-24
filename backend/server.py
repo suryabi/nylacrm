@@ -916,6 +916,7 @@ class Activity(BaseModel):
     description: str
     interaction_method: Optional[str] = None  # 'phone_call', 'customer_visit', 'email', 'whatsapp', 'sms', 'other'
     created_by: str
+    created_by_name: Optional[str] = None  # User's display name at time of creation
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ActivityCreate(BaseModel):
@@ -6013,6 +6014,7 @@ async def delete_account_logo(account_id: str, current_user: dict = Depends(get_
 async def create_activity(activity_input: ActivityCreate, current_user: dict = Depends(get_current_user)):
     activity_data = activity_input.model_dump()
     activity_data['created_by'] = current_user['id']
+    activity_data['created_by_name'] = current_user.get('name') or current_user.get('email') or ''
     
     # Extract optional fields before creating activity object
     new_status = activity_data.pop('new_status', None)
@@ -6094,6 +6096,7 @@ async def create_activity(activity_input: ActivityCreate, current_user: dict = D
                     'description': ' '.join(target_description_parts),
                     'interaction_method': activity_data.get('interaction_method'),
                     'created_by': current_user['id'],
+                    'created_by_name': current_user.get('name') or current_user.get('email') or '',
                     'created_at': doc['created_at'],
                     'is_shared_copy': True,
                     'original_activity_id': original_activity_id,
@@ -6123,11 +6126,23 @@ async def get_activities(
     current_user: dict = Depends(get_current_user)
 ):
     activities = await get_tdb().activities.find({'lead_id': lead_id}, {'_id': 0}).sort('created_at', -1).skip(skip).limit(limit).to_list(limit)
-    
+
+    # Backfill missing created_by_name from users collection
+    missing_ids = [a['created_by'] for a in activities if not a.get('created_by_name') and a.get('created_by')]
+    if missing_ids:
+        users_docs = await get_tdb().users.find(
+            {'id': {'$in': list(set(missing_ids))}},
+            {'_id': 0, 'id': 1, 'name': 1, 'email': 1}
+        ).to_list(len(missing_ids))
+        users_map = {u['id']: u.get('name') or u.get('email') or '' for u in users_docs}
+        for a in activities:
+            if not a.get('created_by_name'):
+                a['created_by_name'] = users_map.get(a.get('created_by'), '')
+
     for activity in activities:
         if isinstance(activity['created_at'], str):
             activity['created_at'] = datetime.fromisoformat(activity['created_at'])
-    
+
     return activities
 
 # ============= FOLLOW-UPS ROUTES =============
