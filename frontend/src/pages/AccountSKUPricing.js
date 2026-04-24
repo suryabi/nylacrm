@@ -22,6 +22,7 @@ export default function AccountSKUPricing() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [accountsCount, setAccountsCount] = useState(0);
+  const [cogsBySku, setCogsBySku] = useState({});
   const [exporting, setExporting] = useState(false);
 
   // Cascading filters (same pattern as Leads)
@@ -101,6 +102,7 @@ export default function AccountSKUPricing() {
       });
       setRows(data.rows || []);
       setAccountsCount(data.accounts_count || 0);
+      setCogsBySku(data.cogs_by_sku || {});
     } catch (err) {
       console.error(err);
       toast.error('Failed to load account SKU pricing');
@@ -293,6 +295,19 @@ export default function AccountSKUPricing() {
               const priceSpread = sku.max - sku.min;
               const hasSpread = sku.count > 1 && priceSpread > 0;
 
+              // Gross margin computation from COGS calculator
+              const cogsInfo = cogsBySku[sku.name];
+              const hasCogs = cogsInfo && cogsInfo.avg_cogs > 0;
+              const grossMarginRs = hasCogs ? sku.avg - cogsInfo.avg_cogs : null;
+              const grossMarginPct = hasCogs && sku.avg > 0 ? (grossMarginRs / sku.avg) * 100 : null;
+              const marginColor = grossMarginPct == null
+                ? 'text-muted-foreground'
+                : grossMarginPct >= 40
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : grossMarginPct >= 20
+                    ? 'text-amber-600 dark:text-amber-400'
+                    : 'text-rose-600 dark:text-rose-400';
+
               return (
                 <div
                   key={sku.name}
@@ -322,6 +337,38 @@ export default function AccountSKUPricing() {
                       </span>
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-0.5">avg. across {sku.count} {sku.count === 1 ? 'account' : 'accounts'}</p>
+                  </div>
+
+                  {/* Gross Margin block */}
+                  <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-700/50 relative">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Gross Margin</p>
+                        {hasCogs ? (
+                          <div className="flex items-baseline gap-1.5 mt-0.5">
+                            <span className={`text-lg font-bold tabular-nums ${marginColor}`}>
+                              ₹{grossMarginRs.toFixed(2)}
+                            </span>
+                            <span className={`text-xs font-semibold tabular-nums ${marginColor}`}>
+                              ({grossMarginPct.toFixed(1)}%)
+                            </span>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground italic mt-0.5">COGS not set</p>
+                        )}
+                      </div>
+                      {hasCogs && (
+                        <div className="text-right">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">COGS</p>
+                          <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 tabular-nums mt-0.5">
+                            ₹{cogsInfo.avg_cogs.toFixed(2)}
+                          </p>
+                          {cogsInfo.cities_count > 1 && (
+                            <p className="text-[10px] text-muted-foreground">avg of {cogsInfo.cities_count} cities</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {hasSpread && (

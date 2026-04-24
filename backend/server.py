@@ -5615,7 +5615,55 @@ async def get_accounts_sku_pricing_grid(
                 'return_bottle_credit': p.get('return_bottle_credit') or p.get('return_credit_per_unit') or 0,
             })
 
-    return {'rows': rows, 'total': len(rows), 'accounts_count': len(accounts)}
+    return {'rows': rows, 'total': len(rows), 'accounts_count': len(accounts), 'cogs_by_sku': await _build_cogs_by_sku(tdb, accounts)}
+
+
+async def _build_cogs_by_sku(tdb, accounts):
+    """
+    Return a map of { sku_name: { avg_cogs, cities: [...], cities_count } }
+    averaged across the cities that the in-scope accounts belong to.
+    COGS data is stored per (sku_name, city) and uses the COGS calculator's
+    `total_cogs` field (primary + secondary + manufacturing).
+    """
+    cities_in_scope = sorted({a.get('city') for a in accounts if a.get('city')})
+    if not cities_in_scope:
+        return {}
+
+    cogs_docs = await tdb.cogs_data.find(
+        {'city': {'$in': cities_in_scope}},
+        {'_id': 0, 'sku_name': 1, 'city': 1, 'total_cogs': 1,
+         'primary_packaging_cost': 1, 'secondary_packaging_cost': 1,
+         'manufacturing_variable_cost': 1}
+    ).to_list(5000)
+
+    # Aggregate by sku_name
+    by_sku = {}
+    for c in cogs_docs:
+        name = c.get('sku_name')
+        if not name:
+            continue
+        total_cogs = c.get('total_cogs')
+        if total_cogs is None or total_cogs == 0:
+            # Fallback: compute from parts
+            total_cogs = (c.get('primary_packaging_cost') or 0) \
+                + (c.get('secondary_packaging_cost') or 0) \
+                + (c.get('manufacturing_variable_cost') or 0)
+        if total_cogs <= 0:
+            continue
+
+        if name not in by_sku:
+            by_sku[name] = {'sum': 0.0, 'cities': []}
+        by_sku[name]['sum'] += total_cogs
+        by_sku[name]['cities'].append(c.get('city'))
+
+    return {
+        name: {
+            'avg_cogs': round(v['sum'] / len(v['cities']), 2),
+            'cities': v['cities'],
+            'cities_count': len(v['cities']),
+        }
+        for name, v in by_sku.items()
+    }
 
 
 @api_router.get("/accounts/{account_id}")
