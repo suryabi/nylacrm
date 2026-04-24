@@ -155,8 +155,8 @@ export default function ActivityTimeline({ activities }) {
               <p className="text-sm leading-relaxed">{renderDescriptionWithStatus(activity.description)}</p>
 
               {activity.created_by_name && (
-                <p className="text-xs text-muted-foreground mt-2 pt-2 border-t border-border/60" data-testid={`activity-creator-${activity.id}`}>
-                  Logged by <span className="font-medium text-foreground">{activity.created_by_name}</span>
+                <p className="text-[11px] text-muted-foreground/70 mt-1.5" data-testid={`activity-creator-${activity.id}`}>
+                  — {activity.created_by_name}
                 </p>
               )}
             </div>
