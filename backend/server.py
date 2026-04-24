@@ -5503,6 +5503,100 @@ async def get_accounts_stats(
         'by_category': by_category
     }
 
+
+@api_router.get("/accounts/sku-pricing-grid")
+async def get_accounts_sku_pricing_grid(current_user: dict = Depends(get_current_user)):
+    """
+    Return a flat grid of (account, SKU, pricing) rows — one row per
+    SKU per account. Used by the Account SKU Pricing page.
+    """
+    from core.tenant import get_current_tenant_id
+    tdb = get_tdb()
+    tenant_id = get_current_tenant_id()
+
+    # Visibility: sales_rep only sees accounts assigned to them
+    account_filter = {}
+    if current_user.get('role') == 'sales_rep':
+        account_filter['assigned_to'] = current_user['id']
+
+    accounts = await tdb.accounts.find(account_filter, {'_id': 0}).sort('account_name', 1).to_list(5000)
+
+    # Build SKU lookup for enrichment
+    sku_docs = await tdb.master_skus.find(
+        {}, {'_id': 0, 'id': 1, 'name': 1, 'sku_code': 1, 'hsn_code': 1, 'base_price': 1, 'category': 1}
+    ).to_list(2000)
+    sku_by_id = {s['id']: s for s in sku_docs}
+    sku_by_name = {s.get('name', '').lower(): s for s in sku_docs if s.get('name')}
+
+    # Fetch per-account SKU pricing in one shot
+    per_account_pricing = await tdb.account_sku_pricing.find(
+        {'tenant_id': tenant_id}, {'_id': 0}
+    ).to_list(20000)
+    pricing_by_account = {}
+    for p in per_account_pricing:
+        pricing_by_account.setdefault(p.get('account_id'), []).append(p)
+
+    rows = []
+    for account in accounts:
+        account_id = account.get('id')
+        account_rows = pricing_by_account.get(account_id) or []
+
+        # Fallback to account's embedded sku_pricing field
+        if not account_rows:
+            for p in (account.get('sku_pricing') or []):
+                account_rows.append({
+                    'sku_name': p.get('sku') or p.get('sku_name'),
+                    'price_per_unit': p.get('price_per_unit', 0),
+                    'return_bottle_credit': p.get('return_bottle_credit', 0),
+                })
+
+        if not account_rows:
+            rows.append({
+                'account_id': account_id,
+                'account_code': account.get('account_id'),
+                'account_name': account.get('account_name'),
+                'account_type': account.get('account_type'),
+                'city': account.get('city'),
+                'state': account.get('state'),
+                'territory': account.get('territory'),
+                'sku_id': None,
+                'sku_name': None,
+                'sku_code': None,
+                'hsn_code': None,
+                'sku_category': None,
+                'base_price': None,
+                'price_per_unit': None,
+                'return_bottle_credit': None,
+            })
+            continue
+
+        for p in account_rows:
+            sku_id = p.get('sku_id')
+            sku = sku_by_id.get(sku_id) if sku_id else None
+            if not sku and p.get('sku_name'):
+                sku = sku_by_name.get(str(p.get('sku_name')).lower())
+
+            rows.append({
+                'account_id': account_id,
+                'account_code': account.get('account_id'),
+                'account_name': account.get('account_name'),
+                'account_type': account.get('account_type'),
+                'city': account.get('city'),
+                'state': account.get('state'),
+                'territory': account.get('territory'),
+                'sku_id': sku_id or (sku.get('id') if sku else None),
+                'sku_name': (sku.get('name') if sku else None) or p.get('sku_name') or p.get('sku'),
+                'sku_code': (sku.get('sku_code') if sku else None) or p.get('sku_code'),
+                'hsn_code': (sku.get('hsn_code') if sku else None) or p.get('hsn_code'),
+                'sku_category': sku.get('category') if sku else p.get('category'),
+                'base_price': sku.get('base_price') if sku else None,
+                'price_per_unit': p.get('price_per_unit') or p.get('price') or 0,
+                'return_bottle_credit': p.get('return_bottle_credit') or p.get('return_credit_per_unit') or 0,
+            })
+
+    return {'rows': rows, 'total': len(rows), 'accounts_count': len(accounts)}
+
+
 @api_router.get("/accounts/{account_id}")
 async def get_account(account_id: str, current_user: dict = Depends(get_current_user)):
     """Get single account by ID or account_id"""
