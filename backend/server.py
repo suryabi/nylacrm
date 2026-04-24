@@ -5505,10 +5505,17 @@ async def get_accounts_stats(
 
 
 @api_router.get("/accounts/sku-pricing-grid")
-async def get_accounts_sku_pricing_grid(current_user: dict = Depends(get_current_user)):
+async def get_accounts_sku_pricing_grid(
+    territory: Optional[str] = None,
+    state: Optional[str] = None,
+    city: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
     """
     Return a flat grid of (account, SKU, pricing) rows — one row per
     SKU per account. Used by the Account SKU Pricing page.
+    Supports filters: territory, state, city, assigned_to.
     """
     from core.tenant import get_current_tenant_id
     tdb = get_tdb()
@@ -5518,6 +5525,20 @@ async def get_accounts_sku_pricing_grid(current_user: dict = Depends(get_current
     account_filter = {}
     if current_user.get('role') == 'sales_rep':
         account_filter['assigned_to'] = current_user['id']
+
+    # Apply filters
+    if territory and territory != 'all':
+        account_filter['territory'] = territory
+    if state and state != 'all':
+        account_filter['state'] = state
+    if city and city != 'all':
+        account_filter['city'] = city
+    if assigned_to and assigned_to != 'all':
+        assigned_list = [a.strip() for a in assigned_to.split(',') if a.strip()]
+        if len(assigned_list) == 1:
+            account_filter['assigned_to'] = assigned_list[0]
+        elif len(assigned_list) > 1:
+            account_filter['assigned_to'] = {'$in': assigned_list}
 
     accounts = await tdb.accounts.find(account_filter, {'_id': 0}).sort('account_name', 1).to_list(5000)
 

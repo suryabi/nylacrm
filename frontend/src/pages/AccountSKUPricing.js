@@ -4,16 +4,17 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { Badge } from '../components/ui/badge';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '../components/ui/table';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../components/ui/select';
-import { Building2, Search, Download, Loader2, ArrowUpDown, Package } from 'lucide-react';
+import { MultiSelect } from '../components/ui/multi-select';
+import { Building2, Search, Download, Loader2, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import AppBreadcrumb from '../components/AppBreadcrumb';
+import { useMasterLocations } from '../hooks/useMasterLocations';
 
 export default function AccountSKUPricing() {
   const navigate = useNavigate();
@@ -21,23 +22,83 @@ export default function AccountSKUPricing() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [accountsCount, setAccountsCount] = useState(0);
-  const [territoryFilter, setTerritoryFilter] = useState('all');
-  const [tierFilter, setTierFilter] = useState('all');
-  const [skuFilter, setSkuFilter] = useState('all');
   const [exporting, setExporting] = useState(false);
+
+  // Cascading filters (same pattern as Leads)
+  const [territoryFilter, setTerritoryFilter] = useState('all');
+  const [stateFilter, setStateFilter] = useState('all');
+  const [cityFilter, setCityFilter] = useState('all');
+  const [assignedToFilter, setAssignedToFilter] = useState([]);
+  const [skuFilter, setSkuFilter] = useState('all');
+
+  const {
+    territories: masterTerritories,
+    getStateNamesByTerritoryName,
+    getCityNamesByStateName,
+    stateNames: allStates,
+    cityNames: allCities,
+  } = useMasterLocations();
+
+  const [users, setUsers] = useState([]);
+
+  // Cascaded state/city lists based on current territory/state selection
+  const stateOptions = useMemo(() => {
+    if (territoryFilter === 'all') return allStates || [];
+    return getStateNamesByTerritoryName ? getStateNamesByTerritoryName(territoryFilter) : [];
+  }, [territoryFilter, allStates, getStateNamesByTerritoryName]);
+
+  const cityOptions = useMemo(() => {
+    if (stateFilter !== 'all') {
+      return getCityNamesByStateName ? getCityNamesByStateName(stateFilter) : [];
+    }
+    if (territoryFilter !== 'all') {
+      const stateList = getStateNamesByTerritoryName ? getStateNamesByTerritoryName(territoryFilter) : [];
+      const cities = [];
+      stateList.forEach((s) => {
+        (getCityNamesByStateName ? getCityNamesByStateName(s) : []).forEach((c) => cities.push(c));
+      });
+      return Array.from(new Set(cities));
+    }
+    return allCities || [];
+  }, [territoryFilter, stateFilter, allStates, allCities, getStateNamesByTerritoryName, getCityNamesByStateName]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
   useEffect(() => {
     fetchGrid();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [territoryFilter, stateFilter, cityFilter, assignedToFilter]);
+
+  const fetchUsers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const { data } = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}/api/users`,
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      setUsers(data || []);
+    } catch {
+      // non-blocking
+    }
+  };
 
   const fetchGrid = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const { data } = await axios.get(
-        `${process.env.REACT_APP_BACKEND_URL}/api/accounts/sku-pricing-grid`,
-        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
-      );
+      const params = new URLSearchParams();
+      if (territoryFilter !== 'all') params.append('territory', territoryFilter);
+      if (stateFilter !== 'all') params.append('state', stateFilter);
+      if (cityFilter !== 'all') params.append('city', cityFilter);
+      if (assignedToFilter.length > 0) params.append('assigned_to', assignedToFilter.join(','));
+
+      const url = `${process.env.REACT_APP_BACKEND_URL}/api/accounts/sku-pricing-grid${params.toString() ? '?' + params.toString() : ''}`;
+      const { data } = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true,
+      });
       setRows(data.rows || []);
       setAccountsCount(data.accounts_count || 0);
     } catch (err) {
@@ -48,36 +109,39 @@ export default function AccountSKUPricing() {
     }
   };
 
-  const { territories, tiers, skus } = useMemo(() => {
-    const t = new Set(), tier = new Set(), sk = new Set();
-    rows.forEach((r) => {
-      if (r.territory) t.add(r.territory);
-      if (r.account_type) tier.add(r.account_type);
-      if (r.sku_name) sk.add(r.sku_name);
-    });
-    return {
-      territories: Array.from(t).sort(),
-      tiers: Array.from(tier).sort(),
-      skus: Array.from(sk).sort(),
-    };
+  // Reset downstream filters when parent changes
+  useEffect(() => {
+    if (territoryFilter === 'all') return;
+    const allowedStates = getStateNamesByTerritoryName ? getStateNamesByTerritoryName(territoryFilter) : [];
+    if (stateFilter !== 'all' && !allowedStates.includes(stateFilter)) setStateFilter('all');
+  }, [territoryFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (stateFilter === 'all') return;
+    const allowedCities = getCityNamesByStateName ? getCityNamesByStateName(stateFilter) : [];
+    if (cityFilter !== 'all' && !allowedCities.includes(cityFilter)) setCityFilter('all');
+  }, [stateFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Client-side filtering (only SKU dropdown + search remain client-side)
+  const skus = useMemo(() => {
+    const set = new Set();
+    rows.forEach((r) => r.sku_name && set.add(r.sku_name));
+    return Array.from(set).sort();
   }, [rows]);
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
-      if (territoryFilter !== 'all' && r.territory !== territoryFilter) return false;
-      if (tierFilter !== 'all' && r.account_type !== tierFilter) return false;
       if (skuFilter !== 'all' && r.sku_name !== skuFilter) return false;
       if (!q) return true;
       return (
         (r.account_name || '').toLowerCase().includes(q) ||
         (r.account_code || '').toLowerCase().includes(q) ||
         (r.city || '').toLowerCase().includes(q) ||
-        (r.sku_name || '').toLowerCase().includes(q) ||
-        (r.sku_code || '').toLowerCase().includes(q)
+        (r.sku_name || '').toLowerCase().includes(q)
       );
     });
-  }, [rows, search, territoryFilter, tierFilter, skuFilter]);
+  }, [rows, search, skuFilter]);
 
   // Group consecutive rows by account so we only render the account cell once
   const groupedRows = useMemo(() => {
@@ -156,6 +220,11 @@ export default function AccountSKUPricing() {
       setExporting(false);
     }
   };
+
+  const userOptions = useMemo(
+    () => (users || []).map((u) => ({ value: u.id, label: u.name || u.email })),
+    [users]
+  );
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6" data-testid="account-sku-pricing-page">
@@ -238,8 +307,8 @@ export default function AccountSKUPricing() {
 
       {/* Filters */}
       <Card className="p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="relative">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+          <div className="relative xl:col-span-1">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search account, SKU, city…"
@@ -254,17 +323,35 @@ export default function AccountSKUPricing() {
             <SelectTrigger data-testid="territory-filter"><SelectValue placeholder="Territory" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Territories</SelectItem>
-              {territories.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+              {(masterTerritories || []).map((t) => (
+                <SelectItem key={t.id || t.name} value={t.name}>{t.name}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
-          <Select value={tierFilter} onValueChange={setTierFilter}>
-            <SelectTrigger data-testid="tier-filter"><SelectValue placeholder="Tier" /></SelectTrigger>
+          <Select value={stateFilter} onValueChange={setStateFilter}>
+            <SelectTrigger data-testid="state-filter"><SelectValue placeholder="State" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Tiers</SelectItem>
-              {tiers.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+              <SelectItem value="all">All States</SelectItem>
+              {stateOptions.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
+
+          <Select value={cityFilter} onValueChange={setCityFilter}>
+            <SelectTrigger data-testid="city-filter"><SelectValue placeholder="City" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Cities</SelectItem>
+              {cityOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          <MultiSelect
+            options={userOptions}
+            value={assignedToFilter}
+            onChange={setAssignedToFilter}
+            placeholder="Sales Resource"
+            data-testid="resource-filter"
+          />
 
           <Select value={skuFilter} onValueChange={setSkuFilter}>
             <SelectTrigger data-testid="sku-filter"><SelectValue placeholder="SKU" /></SelectTrigger>
@@ -309,7 +396,7 @@ export default function AccountSKUPricing() {
                     onClick={() => navigate(`/accounts/${r.account_id}`)}
                     data-testid={`pricing-row-${idx}`}
                   >
-                    <TableCell className={`font-medium align-top ${r._showAccount ? '' : 'text-muted-foreground/0'}`}>
+                    <TableCell className="font-medium align-top">
                       {r._showAccount ? (
                         <div className="flex flex-col">
                           <span className="text-slate-800 dark:text-white">{r.account_name}</span>
