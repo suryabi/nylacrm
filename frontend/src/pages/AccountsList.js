@@ -22,12 +22,13 @@ import {
 } from '../components/ui/select';
 import { 
   Search, Building2, ChevronLeft, ChevronRight, Loader2, 
-  Filter, Users, Calendar, Phone, User, MapPin, LayoutGrid, List, Image as ImageIcon, Download, Layers, Trash2
+  Filter, Users, Calendar, Phone, User, MapPin, LayoutGrid, List, Image as ImageIcon, Download, Layers, Trash2, Award, Package
 } from 'lucide-react';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import AppBreadcrumb from '../components/AppBreadcrumb';
+import StatTile from '../components/StatTile';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const ACCOUNT_TYPES = ['Tier 1', 'Tier 2', 'Tier 3'];
@@ -161,10 +162,10 @@ export default function AccountsList() {
   const availableCities = stateFilter !== 'all' ? ['All Cities', ...getCityNamesByStateName(stateFilter)] : ['All Cities'];
 
   const statCards = [
-    { label: 'Total', value: stats.total_accounts || 0, sub: 'accounts', gradient: 'from-slate-500 to-slate-600', bgGradient: 'from-slate-50 to-slate-100 dark:from-slate-900/30 dark:to-slate-800/20', textColor: 'text-slate-700 dark:text-slate-300' },
-    { label: 'Tier 1', value: stats.by_type?.['Tier 1'] || 0, sub: 'premium', gradient: 'from-emerald-500 to-teal-600', bgGradient: 'from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20', textColor: 'text-emerald-700 dark:text-emerald-300' },
-    { label: 'Tier 2', value: stats.by_type?.['Tier 2'] || 0, sub: 'standard', gradient: 'from-blue-500 to-indigo-600', bgGradient: 'from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20', textColor: 'text-blue-700 dark:text-blue-300' },
-    { label: 'Tier 3', value: stats.by_type?.['Tier 3'] || 0, sub: 'basic', gradient: 'from-gray-500 to-gray-600', bgGradient: 'from-gray-50 to-gray-100 dark:from-gray-900/30 dark:to-gray-800/20', textColor: 'text-gray-700 dark:text-gray-300' },
+    { label: 'Total', value: stats.total_accounts || 0, sub: 'accounts', icon: Building2, colorIndex: 0 /* indigo */ },
+    { label: 'Tier 1', value: stats.by_type?.['Tier 1'] || 0, sub: 'premium', icon: Award, colorIndex: 1 /* emerald */ },
+    { label: 'Tier 2', value: stats.by_type?.['Tier 2'] || 0, sub: 'standard', icon: Layers, colorIndex: 3 /* sky */ },
+    { label: 'Tier 3', value: stats.by_type?.['Tier 3'] || 0, sub: 'basic', icon: Package, colorIndex: 5 /* violet */ },
   ];
 
   return (
@@ -273,14 +274,14 @@ export default function AccountsList() {
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {statCards.map((stat) => (
-            <Card key={stat.label} className={`relative overflow-hidden border-0 bg-gradient-to-br ${stat.bgGradient} backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5`}>
-              <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.gradient}`} />
-              <div className="p-4">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{stat.label}</p>
-                <p className={`text-2xl font-bold ${stat.textColor} tabular-nums`}>{stat.value}</p>
-                <p className="text-xs text-muted-foreground">{stat.sub}</p>
-              </div>
-            </Card>
+            <StatTile
+              key={stat.label}
+              label={stat.label}
+              value={stat.value}
+              subtitle={stat.sub}
+              icon={stat.icon}
+              colorIndex={stat.colorIndex}
+            />
           ))}
         </div>
 

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { Card } from '../components/ui/card';
+import StatTile from '../components/StatTile';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { toast } from 'sonner';
@@ -232,10 +233,10 @@ export default function Dashboard() {
   const totalLeads = analytics?.status_distribution ? Object.values(analytics.status_distribution).reduce((sum, val) => sum + val, 0) : 0;
 
   const activityStats = [
-    { label: 'Visits', value: analytics?.total_visits || 0, sub: `${analytics?.unique_visits || 0} unique`, icon: MapPin, gradient: 'from-teal-500 to-cyan-600', bgGradient: 'from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/20', iconBg: 'bg-teal-100 dark:bg-teal-900/50', textColor: 'text-teal-700 dark:text-teal-300' },
-    { label: 'Calls', value: analytics?.total_calls || 0, sub: `${analytics?.unique_calls || 0} unique`, icon: Phone, gradient: 'from-cyan-500 to-blue-600', bgGradient: 'from-cyan-50 to-blue-50 dark:from-cyan-950/30 dark:to-blue-950/20', iconBg: 'bg-cyan-100 dark:bg-cyan-900/50', textColor: 'text-cyan-700 dark:text-cyan-300' },
-    { label: 'New Leads', value: analytics?.new_leads_added || 0, sub: 'this period', icon: UserPlus, gradient: 'from-violet-500 to-purple-600', bgGradient: 'from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/20', iconBg: 'bg-violet-100 dark:bg-violet-900/50', textColor: 'text-violet-700 dark:text-violet-300' },
-    { label: 'Pipeline Value', value: `₹${((analytics?.pipeline_value || 0) / 100000).toFixed(1)}L`, sub: 'total value', icon: TrendingUp, gradient: 'from-amber-500 to-orange-600', bgGradient: 'from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20', iconBg: 'bg-amber-100 dark:bg-amber-900/50', textColor: 'text-amber-700 dark:text-amber-300', clickable: true, onClick: handlePipelineClick }
+    { label: 'Visits', value: analytics?.total_visits || 0, sub: `${analytics?.unique_visits || 0} unique`, icon: MapPin, colorIndex: 3 /* sky */ },
+    { label: 'Calls', value: analytics?.total_calls || 0, sub: `${analytics?.unique_calls || 0} unique`, icon: Phone, colorIndex: 1 /* emerald */ },
+    { label: 'New Leads', value: analytics?.new_leads_added || 0, sub: 'this period', icon: UserPlus, colorIndex: 5 /* violet */ },
+    { label: 'Pipeline Value', value: analytics?.pipeline_value || 0, sub: 'total value · click for details', icon: TrendingUp, colorIndex: 2 /* amber */, clickable: true, onClick: handlePipelineClick, format: 'currency' }
   ];
 
   return (
@@ -315,32 +316,19 @@ export default function Dashboard() {
           <>
             {/* Activity Metrics */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              {activityStats.map((stat) => {
-                const Icon = stat.icon;
-                return (
-                  <Card 
-                    key={stat.label} 
-                    className={`relative overflow-hidden border-0 bg-gradient-to-br ${stat.bgGradient} backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5 ${stat.clickable ? 'cursor-pointer ring-2 ring-transparent hover:ring-amber-400/50' : ''}`}
-                    onClick={stat.onClick}
-                    data-testid={`stat-card-${stat.label.toLowerCase().replace(/\s+/g, '-')}`}
-                  >
-                    <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.gradient}`} />
-                    <div className="p-5">
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-2">
-                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                            {stat.label}
-                            {stat.clickable && <span className="ml-1 text-amber-600">(click for details)</span>}
-                          </p>
-                          <p className={`text-2xl lg:text-3xl font-bold ${stat.textColor} tabular-nums`}>{stat.value}</p>
-                          <p className="text-xs text-muted-foreground">{stat.sub}</p>
-                        </div>
-                        <div className={`p-2.5 rounded-xl ${stat.iconBg}`}><Icon className={`h-5 w-5 ${stat.textColor}`} /></div>
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
+              {activityStats.map((stat) => (
+                <StatTile
+                  key={stat.label}
+                  label={stat.label}
+                  value={stat.value}
+                  subtitle={stat.sub}
+                  icon={stat.icon}
+                  colorIndex={stat.colorIndex}
+                  format={stat.format}
+                  onClick={stat.onClick}
+                  testId={`stat-card-${stat.label.toLowerCase().replace(/\s+/g, '-')}`}
+                />
+              ))}
             </div>
 
             {/* Lead Status Distribution */}
@@ -390,55 +378,24 @@ export default function Dashboard() {
 
             {/* Quick Summary - Won/Lost */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card 
-                className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/20 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer"
+              <StatTile
+                label="Won Deals"
+                value={analytics?.status_distribution?.won || 0}
+                subtitle={`${totalLeads > 0 ? ((analytics?.status_distribution?.won || 0) / totalLeads * 100).toFixed(0) : 0}% win rate`}
+                icon={CheckCircle}
+                colorIndex={1 /* emerald */}
                 onClick={() => navigateToLeads({ status: 'won' })}
-                data-testid="won-summary-card"
-              >
-                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-green-600" />
-                <div className="p-5">
-                  <div className="flex items-center gap-4">
-                    <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-emerald-100 to-green-200 dark:from-emerald-900/50 dark:to-green-900/30 flex items-center justify-center shadow-sm">
-                      <CheckCircle className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Won Deals</p>
-                      <p className="text-3xl font-bold text-emerald-700 dark:text-emerald-300">{analytics?.status_distribution?.won || 0}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
-                        {totalLeads > 0 ? ((analytics?.status_distribution?.won || 0) / totalLeads * 100).toFixed(0) : 0}%
-                      </p>
-                      <p className="text-xs text-emerald-600 dark:text-emerald-400">win rate</p>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-
-              <Card 
-                className="relative overflow-hidden border-0 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/20 backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer"
+                testId="won-summary-card"
+              />
+              <StatTile
+                label="Lost Deals"
+                value={analytics?.status_distribution?.lost || 0}
+                subtitle={`${totalLeads > 0 ? ((analytics?.status_distribution?.lost || 0) / totalLeads * 100).toFixed(0) : 0}% loss rate`}
+                icon={XCircle}
+                colorIndex={4 /* rose */}
                 onClick={() => navigateToLeads({ status: 'lost' })}
-                data-testid="lost-summary-card"
-              >
-                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-rose-600" />
-                <div className="p-5">
-                  <div className="flex items-center gap-4">
-                    <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-red-100 to-rose-200 dark:from-red-900/50 dark:to-rose-900/30 flex items-center justify-center shadow-sm">
-                      <XCircle className="h-7 w-7 text-red-600 dark:text-red-400" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-xs font-medium text-red-600 dark:text-red-400 uppercase tracking-wider">Lost Deals</p>
-                      <p className="text-3xl font-bold text-red-700 dark:text-red-300">{analytics?.status_distribution?.lost || 0}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-red-700 dark:text-red-300">
-                        {totalLeads > 0 ? ((analytics?.status_distribution?.lost || 0) / totalLeads * 100).toFixed(0) : 0}%
-                      </p>
-                      <p className="text-xs text-red-600 dark:text-red-400">loss rate</p>
-                    </div>
-                  </div>
-                </div>
-              </Card>
+                testId="lost-summary-card"
+              />
             </div>
           </>
         )}

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { Card } from '../components/ui/card';
+import StatTile from '../components/StatTile';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
@@ -114,10 +115,10 @@ export default function SalesRevenueDashboard() {
     : ['All Cities'];
 
   const stats = [
-    { label: 'Won Deals', value: data.summary.total_leads || 0, icon: Target, gradient: 'from-emerald-500 to-teal-600', bgGradient: 'from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20', iconBg: 'bg-emerald-100 dark:bg-emerald-900/50', textColor: 'text-emerald-700 dark:text-emerald-300' },
-    { label: 'Gross Revenue', value: formatCurrency(data.summary.total_gross), icon: DollarSign, gradient: 'from-green-500 to-emerald-600', bgGradient: 'from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/20', iconBg: 'bg-green-100 dark:bg-green-900/50', textColor: 'text-green-700 dark:text-green-300' },
-    { label: 'Net Revenue', value: formatCurrency(data.summary.total_net), icon: Receipt, gradient: 'from-blue-500 to-indigo-600', bgGradient: 'from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20', iconBg: 'bg-blue-100 dark:bg-blue-900/50', textColor: 'text-blue-700 dark:text-blue-300' },
-    { label: 'Credit Notes', value: formatCurrency(data.summary.total_credit), icon: CreditCard, gradient: 'from-amber-500 to-orange-600', bgGradient: 'from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20', iconBg: 'bg-amber-100 dark:bg-amber-900/50', textColor: 'text-amber-700 dark:text-amber-300' }
+    { label: 'Won Deals', value: data.summary.total_leads || 0, icon: Target, colorIndex: 1 /* emerald */ },
+    { label: 'Gross Revenue', value: data.summary.total_gross || 0, format: 'currency', icon: DollarSign, colorIndex: 1 /* emerald */ },
+    { label: 'Net Revenue', value: data.summary.total_net || 0, format: 'currency', icon: Receipt, colorIndex: 0 /* indigo */ },
+    { label: 'Credit Notes', value: data.summary.total_credit || 0, format: 'currency', icon: CreditCard, colorIndex: 2 /* amber */ }
   ];
 
   return (
@@ -199,25 +200,16 @@ export default function SalesRevenueDashboard() {
 
         {/* Summary Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {stats.map((stat, index) => {
-            const Icon = stat.icon;
-            return (
-              <Card key={stat.label} className={`relative overflow-hidden border-0 bg-gradient-to-br ${stat.bgGradient} backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5`}>
-                <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.gradient}`} />
-                <div className="p-5">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{stat.label}</p>
-                      <p className={`text-2xl lg:text-3xl font-bold ${stat.textColor} tabular-nums`}>{stat.value}</p>
-                    </div>
-                    <div className={`p-2.5 rounded-xl ${stat.iconBg}`}>
-                      <Icon className={`h-5 w-5 ${stat.textColor}`} />
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
+          {stats.map((stat) => (
+            <StatTile
+              key={stat.label}
+              label={stat.label}
+              value={stat.value}
+              format={stat.format}
+              icon={stat.icon}
+              colorIndex={stat.colorIndex}
+            />
+          ))}
         </div>
 
         {/* Data Table */}
