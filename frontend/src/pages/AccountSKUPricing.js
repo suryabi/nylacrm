@@ -261,18 +261,6 @@ export default function AccountSKUPricing() {
         </Button>
       </div>
 
-      {/* Summary tiles */}
-      <div className="grid grid-cols-2 gap-3">
-        <Card className="p-4">
-          <p className="text-xs text-muted-foreground">Accounts shown</p>
-          <p className="text-2xl font-bold text-slate-800 dark:text-white mt-1">{summary.uniqueAccounts}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs text-muted-foreground">SKU pricing rows</p>
-          <p className="text-2xl font-bold text-slate-800 dark:text-white mt-1">{summary.totalSkuAssignments}</p>
-        </Card>
-      </div>
-
       {/* Per-SKU average price tiles */}
       {skuAverages.length > 0 && (
         <div>
