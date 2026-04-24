@@ -155,19 +155,21 @@ export default function AccountSKUPricing() {
     return out;
   }, [filteredRows]);
 
-  // Per-SKU average price (across all filtered rows)
+  // Per-SKU stats: average, min, max price
   const skuAverages = useMemo(() => {
     const agg = {};
     filteredRows.forEach((r) => {
       if (!r.sku_name) return;
       const price = Number(r.price_per_unit || 0);
       if (!price) return;
-      if (!agg[r.sku_name]) agg[r.sku_name] = { sum: 0, count: 0 };
+      if (!agg[r.sku_name]) agg[r.sku_name] = { sum: 0, count: 0, min: price, max: price };
       agg[r.sku_name].sum += price;
       agg[r.sku_name].count += 1;
+      agg[r.sku_name].min = Math.min(agg[r.sku_name].min, price);
+      agg[r.sku_name].max = Math.max(agg[r.sku_name].max, price);
     });
     return Object.entries(agg)
-      .map(([name, { sum, count }]) => ({ name, avg: sum / count, count }))
+      .map(([name, { sum, count, min, max }]) => ({ name, avg: sum / count, count, min, max }))
       .sort((a, b) => b.avg - a.avg);
   }, [filteredRows]);
 
@@ -260,7 +262,7 @@ export default function AccountSKUPricing() {
       </div>
 
       {/* Summary tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <Card className="p-4">
           <p className="text-xs text-muted-foreground">Accounts shown</p>
           <p className="text-2xl font-bold text-slate-800 dark:text-white mt-1">{summary.uniqueAccounts}</p>
@@ -269,38 +271,89 @@ export default function AccountSKUPricing() {
           <p className="text-xs text-muted-foreground">SKU pricing rows</p>
           <p className="text-2xl font-bold text-slate-800 dark:text-white mt-1">{summary.totalSkuAssignments}</p>
         </Card>
-        <Card className="p-4">
-          <p className="text-xs text-muted-foreground">Avg. price / unit (all SKUs)</p>
-          <p className="text-2xl font-bold text-slate-800 dark:text-white mt-1">
-            ₹{summary.avgPrice.toFixed(2)}
-          </p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs text-muted-foreground">Unique SKUs</p>
-          <p className="text-2xl font-bold text-slate-800 dark:text-white mt-1">{skus.length}</p>
-        </Card>
       </div>
 
       {/* Per-SKU average price tiles */}
       {skuAverages.length > 0 && (
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
-            Average price per SKU
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3" data-testid="sku-average-tiles">
-            {skuAverages.map((sku) => (
-              <Card key={sku.name} className="p-3 border-l-4 border-l-primary/70">
-                <p className="text-xs text-muted-foreground truncate" title={sku.name}>{sku.name}</p>
-                <div className="flex items-baseline justify-between mt-1">
-                  <p className="text-xl font-bold text-slate-800 dark:text-white">
-                    ₹{sku.avg.toFixed(2)}
-                  </p>
-                  <span className="text-[11px] text-muted-foreground">
-                    {sku.count} {sku.count === 1 ? 'account' : 'accounts'}
-                  </span>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.12em]">
+              Average price per SKU
+            </p>
+            <span className="text-[11px] text-muted-foreground">{skuAverages.length} {skuAverages.length === 1 ? 'SKU' : 'SKUs'}</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" data-testid="sku-average-tiles">
+            {skuAverages.map((sku, idx) => {
+              const gradients = [
+                'from-indigo-50 via-indigo-50/50 to-white dark:from-indigo-950/40 dark:via-indigo-950/20 dark:to-slate-900',
+                'from-emerald-50 via-emerald-50/50 to-white dark:from-emerald-950/40 dark:via-emerald-950/20 dark:to-slate-900',
+                'from-amber-50 via-amber-50/50 to-white dark:from-amber-950/40 dark:via-amber-950/20 dark:to-slate-900',
+                'from-sky-50 via-sky-50/50 to-white dark:from-sky-950/40 dark:via-sky-950/20 dark:to-slate-900',
+                'from-rose-50 via-rose-50/50 to-white dark:from-rose-950/40 dark:via-rose-950/20 dark:to-slate-900',
+                'from-violet-50 via-violet-50/50 to-white dark:from-violet-950/40 dark:via-violet-950/20 dark:to-slate-900',
+              ];
+              const accents = [
+                'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10',
+                'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10',
+                'text-amber-600 dark:text-amber-400 bg-amber-500/10',
+                'text-sky-600 dark:text-sky-400 bg-sky-500/10',
+                'text-rose-600 dark:text-rose-400 bg-rose-500/10',
+                'text-violet-600 dark:text-violet-400 bg-violet-500/10',
+              ];
+              const grad = gradients[idx % gradients.length];
+              const accent = accents[idx % accents.length];
+              const priceSpread = sku.max - sku.min;
+              const hasSpread = sku.count > 1 && priceSpread > 0;
+
+              return (
+                <div
+                  key={sku.name}
+                  className={`relative group rounded-2xl border border-slate-200/70 dark:border-slate-700/60 bg-gradient-to-br ${grad} p-4 overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-lg`}
+                  data-testid={`sku-tile-${idx}`}
+                >
+                  {/* Decorative icon */}
+                  <div className={`absolute -top-4 -right-4 h-20 w-20 rounded-full ${accent.split(' ').find(c => c.startsWith('bg-'))} blur-2xl opacity-40 transition-opacity group-hover:opacity-60`} />
+
+                  <div className="flex items-start justify-between gap-2 relative">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">SKU</p>
+                      <p className="text-sm font-semibold text-slate-800 dark:text-white mt-0.5 truncate" title={sku.name}>
+                        {sku.name}
+                      </p>
+                    </div>
+                    <div className={`shrink-0 h-9 w-9 rounded-xl flex items-center justify-center ${accent}`}>
+                      <Package className="h-4 w-4" />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 relative">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-[13px] text-muted-foreground">₹</span>
+                      <span className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">
+                        {sku.avg.toFixed(2)}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">avg. across {sku.count} {sku.count === 1 ? 'account' : 'accounts'}</p>
+                  </div>
+
+                  {hasSpread && (
+                    <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-700/50 flex items-center justify-between text-[11px] relative">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-muted-foreground">Min</span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">₹{sku.min.toFixed(0)}</span>
+                      </div>
+                      <div className={`px-1.5 py-0.5 rounded-md ${accent} font-medium tabular-nums`}>
+                        ±₹{priceSpread.toFixed(0)}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-muted-foreground">Max</span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">₹{sku.max.toFixed(0)}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </Card>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
