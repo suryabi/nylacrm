@@ -79,6 +79,34 @@ export default function AccountSKUPricing() {
     });
   }, [rows, search, territoryFilter, tierFilter, skuFilter]);
 
+  // Group consecutive rows by account so we only render the account cell once
+  const groupedRows = useMemo(() => {
+    const out = [];
+    let prevAccountId = null;
+    filteredRows.forEach((r, idx) => {
+      const sameAsPrev = r.account_id === prevAccountId;
+      out.push({ ...r, _showAccount: !sameAsPrev, _idx: idx });
+      prevAccountId = r.account_id;
+    });
+    return out;
+  }, [filteredRows]);
+
+  // Per-SKU average price (across all filtered rows)
+  const skuAverages = useMemo(() => {
+    const agg = {};
+    filteredRows.forEach((r) => {
+      if (!r.sku_name) return;
+      const price = Number(r.price_per_unit || 0);
+      if (!price) return;
+      if (!agg[r.sku_name]) agg[r.sku_name] = { sum: 0, count: 0 };
+      agg[r.sku_name].sum += price;
+      agg[r.sku_name].count += 1;
+    });
+    return Object.entries(agg)
+      .map(([name, { sum, count }]) => ({ name, avg: sum / count, count }))
+      .sort((a, b) => b.avg - a.avg);
+  }, [filteredRows]);
+
   const summary = useMemo(() => {
     const uniqueAccounts = new Set(filteredRows.map((r) => r.account_id)).size;
     const skuRows = filteredRows.filter((r) => r.sku_name);
@@ -95,16 +123,16 @@ export default function AccountSKUPricing() {
     try {
       setExporting(true);
       const headers = [
-        'Account Code', 'Account Name', 'Tier', 'City', 'State', 'Territory',
-        'SKU Code', 'SKU Name', 'SKU Category', 'HSN Code',
+        'Account Code', 'Account Name', 'City', 'State', 'Territory',
+        'SKU Name', 'SKU Category', 'HSN Code',
         'Base Price', 'Price Per Unit', 'Return Bottle Credit',
       ];
       const csvRows = [headers.join(',')];
       filteredRows.forEach((r) => {
         const row = [
-          r.account_code, r.account_name, r.account_type,
+          r.account_code, r.account_name,
           r.city, r.state, r.territory,
-          r.sku_code, r.sku_name, r.sku_category, r.hsn_code,
+          r.sku_name, r.sku_category, r.hsn_code,
           r.base_price, r.price_per_unit, r.return_bottle_credit,
         ].map((v) => {
           if (v === null || v === undefined) return '';
@@ -173,7 +201,7 @@ export default function AccountSKUPricing() {
           <p className="text-2xl font-bold text-slate-800 dark:text-white mt-1">{summary.totalSkuAssignments}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs text-muted-foreground">Avg. price / unit</p>
+          <p className="text-xs text-muted-foreground">Avg. price / unit (all SKUs)</p>
           <p className="text-2xl font-bold text-slate-800 dark:text-white mt-1">
             ₹{summary.avgPrice.toFixed(2)}
           </p>
@@ -183,6 +211,30 @@ export default function AccountSKUPricing() {
           <p className="text-2xl font-bold text-slate-800 dark:text-white mt-1">{skus.length}</p>
         </Card>
       </div>
+
+      {/* Per-SKU average price tiles */}
+      {skuAverages.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">
+            Average price per SKU
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3" data-testid="sku-average-tiles">
+            {skuAverages.map((sku) => (
+              <Card key={sku.name} className="p-3 border-l-4 border-l-primary/70">
+                <p className="text-xs text-muted-foreground truncate" title={sku.name}>{sku.name}</p>
+                <div className="flex items-baseline justify-between mt-1">
+                  <p className="text-xl font-bold text-slate-800 dark:text-white">
+                    ₹{sku.avg.toFixed(2)}
+                  </p>
+                  <span className="text-[11px] text-muted-foreground">
+                    {sku.count} {sku.count === 1 ? 'account' : 'accounts'}
+                  </span>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <Card className="p-4">
@@ -240,41 +292,40 @@ export default function AccountSKUPricing() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="min-w-[200px]">Account</TableHead>
-                  <TableHead>Tier</TableHead>
+                  <TableHead className="min-w-[220px]">Account</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead className="min-w-[220px]">SKU</TableHead>
-                  <TableHead>SKU Code</TableHead>
                   <TableHead className="text-right">Price / Unit (₹)</TableHead>
                   <TableHead className="text-right">Return Credit (₹)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRows.map((r, idx) => (
+                {groupedRows.map((r, idx) => (
                   <TableRow
                     key={`${r.account_id}-${r.sku_id || r.sku_name || idx}`}
-                    className="cursor-pointer hover:bg-muted/50"
+                    className={`cursor-pointer hover:bg-muted/50 ${
+                      r._showAccount && idx > 0 ? 'border-t-2 border-t-muted-foreground/10' : ''
+                    }`}
                     onClick={() => navigate(`/accounts/${r.account_id}`)}
                     data-testid={`pricing-row-${idx}`}
                   >
-                    <TableCell className="font-medium">
-                      <div className="flex flex-col">
-                        <span className="text-slate-800 dark:text-white">{r.account_name}</span>
-                        {r.account_code && (
-                          <span className="text-xs text-muted-foreground font-mono">{r.account_code}</span>
-                        )}
-                      </div>
+                    <TableCell className={`font-medium align-top ${r._showAccount ? '' : 'text-muted-foreground/0'}`}>
+                      {r._showAccount ? (
+                        <div className="flex flex-col">
+                          <span className="text-slate-800 dark:text-white">{r.account_name}</span>
+                          {r.account_code && (
+                            <span className="text-xs text-muted-foreground font-mono">{r.account_code}</span>
+                          )}
+                        </div>
+                      ) : null}
                     </TableCell>
-                    <TableCell>
-                      {r.account_type ? (
-                        <Badge variant="outline" className="text-xs">{r.account_type}</Badge>
-                      ) : <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <div>{r.city || '—'}</div>
-                        <div className="text-xs text-muted-foreground">{r.territory || ''}</div>
-                      </div>
+                    <TableCell className="align-top">
+                      {r._showAccount ? (
+                        <div className="text-sm">
+                          <div>{r.city || '—'}</div>
+                          <div className="text-xs text-muted-foreground">{r.territory || ''}</div>
+                        </div>
+                      ) : null}
                     </TableCell>
                     <TableCell>
                       {r.sku_name ? (
@@ -285,11 +336,8 @@ export default function AccountSKUPricing() {
                           )}
                         </div>
                       ) : (
-                        <Badge variant="secondary" className="text-xs">No SKU pricing set</Badge>
+                        <span className="text-xs text-muted-foreground italic">No SKU pricing set</span>
                       )}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {r.sku_code || '—'}
                     </TableCell>
                     <TableCell className="text-right font-semibold">
                       {r.price_per_unit != null ? `₹${Number(r.price_per_unit).toFixed(2)}` : '—'}
