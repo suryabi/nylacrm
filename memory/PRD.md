@@ -403,12 +403,12 @@
 - [x] **New page** `/sales/neck-tag-designer` (Sales module sidebar entry "Neck Tag Designer", `Tag` lucide icon).
 - [x] **Logo upload**: PNG / JPG / SVG / WebP. Sliders for size (20–90% of body width) and vertical position (30–80% from top).
 - [x] **Gradient editor**: linear (with 0–360° angle slider) or radial; 2 to 4 color stops with native color picker, hex input, and offset (%); 6 preset palettes (Classic White, Sunset, Ocean, Royal, Forest, Gold Leaf).
-- [x] **Template overlay**: User-supplied template (`/public/neck-tag/template.png`) composited via `mix-blend-mode: multiply` so the white area is replaced by the gradient while gold decorative lines, "Green Innovation" seal, and "Air Water — The Purest Water on Earth" tagline are preserved. Toggle + opacity slider.
+- [x] **Defragmented template layers** (2026-04-25 update): Original template split into three independent PNG layers — `layer_waves.png` (gold decorative lines, with red/green chroma cleanup), `layer_seal.png` (Green Innovation seal), `layer_tagline.png` ("air water — The Purest Water on Earth"). Each has its own visibility checkbox + opacity slider, so users can keep or remove any element.
+- [x] **Composite via `mix-blend-mode: multiply`** so the gradient shows through white areas of each layer.
 - [x] **SVG-based preview** with rounded corners + circular hang-hole cut-out (mask), drop shadow, live updates.
-- [x] **High-resolution PNG export** (4× viewBox, ~1600×4864) using Canvas with the same gradient + template multiply blend + logo composite + destination-out cutout for the hole. Auto-named `neck-tag_<timestamp>.png`.
-- [x] **Reset** button restores defaults.
-- [x] **Files**: `frontend/src/pages/NeckTagDesigner.js` (new), `frontend/src/App.js` (route), `frontend/src/layouts/DashboardLayout.js` (nav), `frontend/public/neck-tag/template.png` (asset).
-- [x] **Lint clean**, frontend webpack compile clean (preview URL was in idle hibernation during smoke screenshot — not a code issue).
+- [x] **High-resolution PNG export** (4× viewBox) using Canvas with the same per-layer composite + logo + destination-out cutout for the hole. Auto-named `neck-tag_<timestamp>.png`.
+- [x] **Reset** button restores defaults (gradient preset + all layers ON 100%).
+- [x] **Files**: `frontend/src/pages/NeckTagDesigner.js`, `frontend/src/App.js` (route), `frontend/src/layouts/DashboardLayout.js` (nav), `frontend/public/neck-tag/{template_full,layer_waves,layer_seal,layer_tagline}.png` (assets).
 
 
 ### Account GOP Metrics — GOP Coverage Tile (2026-04-25)

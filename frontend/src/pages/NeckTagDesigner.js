@@ -11,8 +11,10 @@ import { Plus, Trash2, Download, Upload, Image as ImageIcon, RefreshCw, Tag as T
 import { toast } from 'sonner';
 import AppBreadcrumb from '../components/AppBreadcrumb';
 
-// Template asset (placed at /app/frontend/public/neck-tag/template.png)
-const TEMPLATE_URL = '/neck-tag/template.png';
+// Defragmented template layers — each toggleable & positioned independently
+const LAYER_WAVES_URL = '/neck-tag/layer_waves.png';
+const LAYER_SEAL_URL = '/neck-tag/layer_seal.png';
+const LAYER_TAGLINE_URL = '/neck-tag/layer_tagline.png';
 
 // On-screen design dimensions (kept consistent with template aspect 220:668 ≈ 1:3.04).
 // We render the design at 400 x 1216 viewBox; for high-res print we scale up.
@@ -46,22 +48,30 @@ export default function NeckTagDesigner() {
   const [logoScale, setLogoScale] = useState(60); // % of body width
   const [logoOffsetY, setLogoOffsetY] = useState(48); // % from top
 
-  // Template overlay
-  const [showTemplate, setShowTemplate] = useState(true);
-  const [templateOpacity, setTemplateOpacity] = useState(100);
+  // Template overlay — defragmented into independently toggleable layers
+  const [layerWaves, setLayerWaves] = useState({ visible: true, opacity: 100 });
+  const [layerSeal, setLayerSeal] = useState({ visible: true, opacity: 100 });
+  const [layerTagline, setLayerTagline] = useState({ visible: true, opacity: 100 });
 
   // Refs
   const fileInputRef = useRef(null);
 
-  // Load image bitmap for canvas export
-  const [templateImg, setTemplateImg] = useState(null);
+  // Load image bitmaps for canvas export
+  const [wavesImg, setWavesImg] = useState(null);
+  const [sealImg, setSealImg] = useState(null);
+  const [taglineImg, setTaglineImg] = useState(null);
   const [logoImg, setLogoImg] = useState(null);
 
   useEffect(() => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => setTemplateImg(img);
-    img.src = TEMPLATE_URL;
+    const load = (url, setter) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => setter(img);
+      img.src = url;
+    };
+    load(LAYER_WAVES_URL, setWavesImg);
+    load(LAYER_SEAL_URL, setSealImg);
+    load(LAYER_TAGLINE_URL, setTaglineImg);
   }, []);
 
   useEffect(() => {
@@ -200,14 +210,26 @@ export default function NeckTagDesigner() {
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, W, H);
 
-      // 3. Template overlay (multiply blend so white→transparent visually)
-      if (showTemplate && templateImg) {
+      // 3. Template layers (multiply blend so white→transparent visually)
+      const drawLayer = (img, layer, x, y, w, h) => {
+        if (!layer.visible || !img) return;
         ctx.save();
-        ctx.globalAlpha = templateOpacity / 100;
+        ctx.globalAlpha = layer.opacity / 100;
         ctx.globalCompositeOperation = 'multiply';
-        ctx.drawImage(templateImg, 0, 0, W, H);
+        ctx.drawImage(img, x, y, w, h);
         ctx.restore();
-      }
+      };
+      // Waves: full body
+      drawLayer(wavesImg, layerWaves, 0, 0, W, H);
+      // Tagline: bottom band — proportional to original (tagline png is 195x104 from a 195x644 source = bottom 16%)
+      const taglineH = H * (104 / 644);
+      drawLayer(taglineImg, layerTagline, 0, H - taglineH, W, taglineH);
+      // Seal: bottom-right (86x103 within 195x644 source, positioned at x≈55%, y≈62%)
+      const sealW = W * (86 / 195);
+      const sealH = H * (103 / 644);
+      const sealX = W * (0.55);
+      const sealY = H * (0.62);
+      drawLayer(sealImg, layerSeal, sealX, sealY, sealW, sealH);
 
       // 4. Logo (centered)
       if (logoImg) {
@@ -252,8 +274,9 @@ export default function NeckTagDesigner() {
     setLogoDataUrl(null);
     setLogoScale(60);
     setLogoOffsetY(48);
-    setShowTemplate(true);
-    setTemplateOpacity(100);
+    setLayerWaves({ visible: true, opacity: 100 });
+    setLayerSeal({ visible: true, opacity: 100 });
+    setLayerTagline({ visible: true, opacity: 100 });
   };
 
   return (
@@ -424,32 +447,43 @@ export default function NeckTagDesigner() {
             </div>
           </Card>
 
-          {/* Template Overlay */}
+          {/* Template Layers — defragmented, individually toggleable */}
           <Card className="p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Template Overlay</h2>
-              <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showTemplate}
-                  onChange={(e) => setShowTemplate(e.target.checked)}
-                  data-testid="toggle-template"
-                />
-                <span>Show decorative artwork</span>
-              </label>
-            </div>
-            {showTemplate && (
-              <div className="space-y-1">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Template Layers</h2>
+            <p className="text-[11px] text-muted-foreground italic">
+              Toggle individual artwork pieces from the original template. White areas of each layer pass the gradient through.
+            </p>
+
+            {[
+              { key: 'waves', label: 'Gold Decorative Waves', state: layerWaves, setter: setLayerWaves },
+              { key: 'seal', label: 'Green Innovation Seal', state: layerSeal, setter: setLayerSeal },
+              { key: 'tagline', label: '"Air Water" Tagline', state: layerTagline, setter: setLayerTagline },
+            ].map(({ key, label, state, setter }) => (
+              <div key={key} className="space-y-1.5 pb-2 border-b border-slate-200/60 dark:border-slate-700/60 last:border-0 last:pb-0">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs">Overlay Opacity</Label>
-                  <span className="text-xs text-muted-foreground tabular-nums">{templateOpacity}%</span>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={state.visible}
+                      onChange={(e) => setter({ ...state, visible: e.target.checked })}
+                      data-testid={`toggle-layer-${key}`}
+                    />
+                    <span>{label}</span>
+                  </label>
+                  <span className="text-xs text-muted-foreground tabular-nums">{state.opacity}%</span>
                 </div>
-                <Slider value={[templateOpacity]} min={0} max={100} step={1} onValueChange={(v) => setTemplateOpacity(v[0])} data-testid="template-opacity-slider" />
-                <p className="text-[11px] text-muted-foreground italic mt-2">
-                  The brand artwork (gold lines, "air water", "Green Innovation") is preserved from your template; the white area becomes your gradient.
-                </p>
+                {state.visible && (
+                  <Slider
+                    value={[state.opacity]}
+                    min={0}
+                    max={100}
+                    step={1}
+                    onValueChange={(v) => setter({ ...state, opacity: v[0] })}
+                    data-testid={`opacity-layer-${key}`}
+                  />
+                )}
               </div>
-            )}
+            ))}
           </Card>
         </div>
 
@@ -483,16 +517,38 @@ export default function NeckTagDesigner() {
                   {/* Gradient background */}
                   <rect x="0" y="0" width={VIEW_W} height={VIEW_H} fill="url(#bgGrad)" />
 
-                  {/* Template artwork (multiply blend turns white → transparent) */}
-                  {showTemplate && (
+                  {/* Defragmented template layers — multiply blend turns white → transparent */}
+                  {layerWaves.visible && (
                     <image
-                      href={TEMPLATE_URL}
+                      href={LAYER_WAVES_URL}
                       x="0"
                       y="0"
                       width={VIEW_W}
                       height={VIEW_H}
                       preserveAspectRatio="xMidYMid slice"
-                      style={{ mixBlendMode: 'multiply', opacity: templateOpacity / 100 }}
+                      style={{ mixBlendMode: 'multiply', opacity: layerWaves.opacity / 100 }}
+                    />
+                  )}
+                  {layerTagline.visible && (
+                    <image
+                      href={LAYER_TAGLINE_URL}
+                      x="0"
+                      y={VIEW_H - VIEW_H * (104 / 644)}
+                      width={VIEW_W}
+                      height={VIEW_H * (104 / 644)}
+                      preserveAspectRatio="xMidYMid slice"
+                      style={{ mixBlendMode: 'multiply', opacity: layerTagline.opacity / 100 }}
+                    />
+                  )}
+                  {layerSeal.visible && (
+                    <image
+                      href={LAYER_SEAL_URL}
+                      x={VIEW_W * 0.55}
+                      y={VIEW_H * 0.62}
+                      width={VIEW_W * (86 / 195)}
+                      height={VIEW_H * (103 / 644)}
+                      preserveAspectRatio="xMidYMid meet"
+                      style={{ mixBlendMode: 'multiply', opacity: layerSeal.opacity / 100 }}
                     />
                   )}
 
