@@ -1,0 +1,91 @@
+{
+  "summary": "Rejection Features testing complete. Backend: 15/15 tests passed (100%). Frontend: All UI elements verified - Rejection Reasons CRUD page, Rejection Report page with filters and summary cards, Batch Detail rejection summary section, and inspection form with rejection reason dropdown.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rejection_features.py",
+    "/app/test_reports/pytest/rejection_features_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_rejection_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 tests passed)",
+    "frontend": "100% - All UI elements and integrations verified"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_id": "nyla-air-water"
+  },
+  "seed_data_creation": "Used existing test batch: BATCH-TEST-001 (ID: 5833eb23-8664-4a53-8fc7-eedb9ff18178)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Rejection Features fully tested. Key features: 1) Rejection Reasons Master Data at /rejection-reasons - CRUD operations with duplicate name validation (400 error). 2) Rejection Report at /rejection-report - filters (date_from, date_to, batch_id, stage_type), summary cards (Total Rejected, By Resource, By Date), detail table with totals footer. 3) Batch Detail rejection summary - collapsible section showing Resource | Date | Stage | Bottles Rejected | Reason with totals row. 4) Inspection form now has rejection reason dropdown populated from master data (appears when qty_rejected > 0). 5) Navigation: 'Rejection Reasons' and 'Rejection Report' appear in Production sidebar under PRODUCTION group.",
+  "features_tested": {
+    "Backend_API_Tests": {
+      "GET_rejection_reasons_list": "PASSED - Returns list of rejection reasons",
+      "POST_rejection_reasons_create": "PASSED - Creates new reason with id, name, description",
+      "POST_rejection_reasons_duplicate_name": "PASSED - Returns 400 'already exists'",
+      "PUT_rejection_reasons_update": "PASSED - Updates name and description",
+      "DELETE_rejection_reasons": "PASSED - Deletes reason successfully",
+      "DELETE_rejection_reasons_nonexistent": "PASSED - Returns 404",
+      "GET_rejection_report_no_filters": "PASSED - Returns rows, total_rejected, by_resource, by_date",
+      "GET_rejection_report_batch_filter": "PASSED - Filters by batch_id",
+      "GET_rejection_report_date_filter": "PASSED - Filters by date_from/date_to",
+      "GET_rejection_report_stage_type_filter": "PASSED - Filters by stage_type",
+      "GET_rejection_report_row_structure": "PASSED - Contains all expected fields",
+      "GET_rejection_report_by_resource_structure": "PASSED - Contains name and bottles",
+      "GET_rejection_report_by_date_structure": "PASSED - Contains date and bottles",
+      "GET_batch_history_inspections": "PASSED - Contains rejection data in inspections",
+      "POST_inspection_with_master_reason": "PASSED - Records rejection reason from master data"
+    },
+    "Frontend_UI_Tests": {
+      "Rejection_Reasons_page_loads": "PASSED - data-testid='rejection-reasons-page' found",
+      "Add_Reason_button": "PASSED - Opens form with name/description inputs",
+      "Add_Reason_form_submission": "PASSED - Creates reason, shows success toast",
+      "Rejection_Reasons_table": "PASSED - Shows Name, Description, Actions columns",
+      "Edit_Delete_buttons": "PASSED - Edit and delete buttons present in table rows",
+      "Rejection_Report_page_loads": "PASSED - data-testid='rejection-report-page' found",
+      "Rejection_Report_filters": "PASSED - date_from, date_to, batch, stage_type, apply button",
+      "Total_Rejected_card": "PASSED - Shows count (80 bottles)",
+      "By_Resource_summary": "PASSED - Shows resource names with rejection counts",
+      "By_Date_summary": "PASSED - Shows dates with rejection counts",
+      "Rejection_Details_table": "PASSED - Shows all columns with totals footer",
+      "Batch_Detail_rejection_summary": "PASSED - Collapsible section with rejection records",
+      "Rejection_Summary_headers": "PASSED - Resource, Date, Stage, Bottles Rejected, Reason",
+      "Inspection_form_rejection_dropdown": "PASSED - Dropdown appears when rejected > 0",
+      "Sidebar_navigation": "PASSED - 'Rejection Reasons' and 'Rejection Report' nav items present"
+    }
+  },
+  "data_testids_verified": [
+    "rejection-reasons-page",
+    "add-reason-btn",
+    "reason-name-input",
+    "reason-desc-input",
+    "reason-save-btn",
+    "edit-reason-{id}",
+    "delete-reason-{id}",
+    "rejection-report-page",
+    "filter-date-from",
+    "filter-date-to",
+    "filter-batch",
+    "filter-stage-type",
+    "apply-filters-btn",
+    "total-rejected-count",
+    "rejection-row-{id}",
+    "batch-detail-page",
+    "toggle-rejections",
+    "rej-summary-{id}",
+    "insp-reason-{stage_id}"
+  ]
+}

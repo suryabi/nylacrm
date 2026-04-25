@@ -122,6 +122,46 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
         />
       </div>
 
+      {/* Factory Warehouse Stock */}
+      {(t.factory_warehouse_stock > 0 || (data.factory_warehouses || []).length > 0) && (
+        <Card data-testid="factory-warehouse-stock-card">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Factory className="h-4 w-4 text-teal-600" />
+              Factory Warehouse Stock
+              <Badge className="bg-teal-100 text-teal-700 border-teal-200 ml-2" variant="outline">
+                {fmt(t.factory_warehouse_stock)} crates total
+              </Badge>
+            </CardTitle>
+            <CardDescription>Stock transferred from production, available for dispatch</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {(data.factory_warehouses || []).length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {data.factory_warehouses.map(wh => (
+                  <div key={wh.warehouse_id} className="rounded-lg border border-teal-200 bg-teal-50/30 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Factory className="h-4 w-4 text-teal-600" />
+                      <h4 className="text-sm font-semibold text-teal-800">{wh.warehouse_name || 'Factory Warehouse'}</h4>
+                    </div>
+                    <div className="space-y-1.5">
+                      {wh.skus.map((s, i) => (
+                        <div key={i} className="flex items-center justify-between text-sm px-2 py-1 rounded bg-white/60">
+                          <span className="text-slate-700">{s.sku_name}</span>
+                          <span className="font-bold text-teal-700">{fmt(s.quantity)} crates</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400 italic text-center py-4">No stock in factory warehouses</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Bottle Tracking */}
       <Card data-testid="bottle-tracking-card">
         <CardHeader className="pb-3">
@@ -169,6 +209,9 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                     <span className="text-purple-600">Factory Ret.</span>
                   </th>
                   <th className="text-right p-3">
+                    <span className="text-teal-600">Wh. Stock</span>
+                  </th>
+                  <th className="text-right p-3">
                     <span className="text-indigo-700 font-bold">At Hand</span>
                   </th>
                   <th className="text-right p-3">% At Hand</th>
@@ -211,6 +254,9 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                         <td className={`p-3 text-right font-medium ${sku.factory_returns > 0 ? 'text-purple-600' : 'text-slate-300'}`}>
                           {sku.factory_returns > 0 ? fmt(sku.factory_returns) : '-'}
                         </td>
+                        <td className={`p-3 text-right font-medium ${sku.factory_warehouse_stock > 0 ? 'text-teal-600' : 'text-slate-300'}`}>
+                          {sku.factory_warehouse_stock > 0 ? fmt(sku.factory_warehouse_stock) : '-'}
+                        </td>
                         <td className="p-3 text-right">
                           <span className={`font-bold ${sku.stock_at_hand < 0 ? 'text-red-600' : sku.stock_at_hand === 0 ? 'text-slate-400' : 'text-indigo-700'}`}>
                             {fmt(sku.stock_at_hand)}
@@ -235,66 +281,59 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                       </tr>
                       {isExpanded && hasReturns && (
                         <tr>
-                          <td colSpan={9} className="p-0">
-                            <div className="bg-slate-50/80 border-b px-6 py-3 grid grid-cols-2 gap-4">
-                              {/* Customer Returns Breakdown */}
-                              {sku.customer_returns > 0 && (
-                                <div>
-                                  <p className="text-xs text-amber-600 font-semibold uppercase tracking-wider mb-2">Customer Returns Breakdown</p>
-                                  <div className="grid grid-cols-2 gap-2 text-xs">
-                                    {sku.customer_returns_breakdown.empty_reusable > 0 && (
-                                      <div className="flex justify-between bg-emerald-50 rounded px-2 py-1">
-                                        <span className="text-emerald-700">Empty/Reusable</span>
-                                        <span className="font-semibold text-emerald-800">{fmt(sku.customer_returns_breakdown.empty_reusable)}</span>
-                                      </div>
-                                    )}
-                                    {sku.customer_returns_breakdown.damaged > 0 && (
-                                      <div className="flex justify-between bg-red-50 rounded px-2 py-1">
-                                        <span className="text-red-700">Damaged</span>
-                                        <span className="font-semibold text-red-800">{fmt(sku.customer_returns_breakdown.damaged)}</span>
-                                      </div>
-                                    )}
-                                    {sku.customer_returns_breakdown.expired > 0 && (
-                                      <div className="flex justify-between bg-amber-50 rounded px-2 py-1">
-                                        <span className="text-amber-700">Expired</span>
-                                        <span className="font-semibold text-amber-800">{fmt(sku.customer_returns_breakdown.expired)}</span>
-                                      </div>
-                                    )}
-                                    {sku.customer_returns_breakdown.promotional > 0 && (
-                                      <div className="flex justify-between bg-slate-100 rounded px-2 py-1">
-                                        <span className="text-slate-700">Promotional</span>
-                                        <span className="font-semibold text-slate-800">{fmt(sku.customer_returns_breakdown.promotional)}</span>
-                                      </div>
-                                    )}
+                          <td colSpan={10} className="p-0">
+                            <div className="bg-slate-50/80 border-b px-6 py-3">
+                              <div className="grid grid-cols-2 gap-6">
+                                {/* Customer Returns Breakdown */}
+                                {sku.customer_returns > 0 && (
+                                  <div className="rounded-lg border border-amber-200 overflow-hidden">
+                                    <div className="bg-amber-50 px-3 py-1.5 flex items-center justify-between border-b border-amber-200">
+                                      <span className="text-[11px] font-semibold text-amber-700">Customer Returns</span>
+                                      <span className="text-[11px] font-bold text-amber-800">{fmt(sku.customer_returns)}</span>
+                                    </div>
+                                    <div className="divide-y divide-slate-100">
+                                      {[
+                                        { label: 'Empty / Reusable', val: sku.customer_returns_breakdown.empty_reusable, dot: 'bg-emerald-500' },
+                                        { label: 'Damaged', val: sku.customer_returns_breakdown.damaged, dot: 'bg-red-500' },
+                                        { label: 'Expired', val: sku.customer_returns_breakdown.expired, dot: 'bg-amber-500' },
+                                        { label: 'Promotional', val: sku.customer_returns_breakdown.promotional, dot: 'bg-slate-400' },
+                                      ].filter(r => r.val > 0).map(r => (
+                                        <div key={r.label} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                                          <span className="flex items-center gap-1.5 text-slate-600">
+                                            <span className={`w-1.5 h-1.5 rounded-full ${r.dot}`} />
+                                            {r.label}
+                                          </span>
+                                          <span className="font-semibold text-slate-800">{fmt(r.val)}</span>
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
-                                </div>
-                              )}
-                              {/* Factory Returns Breakdown */}
-                              {sku.factory_returns > 0 && (
-                                <div>
-                                  <p className="text-xs text-purple-600 font-semibold uppercase tracking-wider mb-2">Factory Returns Breakdown</p>
-                                  <div className="grid grid-cols-2 gap-2 text-xs">
-                                    {sku.factory_returns_breakdown.empty_reusable > 0 && (
-                                      <div className="flex justify-between bg-emerald-50 rounded px-2 py-1">
-                                        <span className="text-emerald-700">Empty/Reusable</span>
-                                        <span className="font-semibold text-emerald-800">{fmt(sku.factory_returns_breakdown.empty_reusable)}</span>
-                                      </div>
-                                    )}
-                                    {sku.factory_returns_breakdown.damaged > 0 && (
-                                      <div className="flex justify-between bg-red-50 rounded px-2 py-1">
-                                        <span className="text-red-700">Damaged</span>
-                                        <span className="font-semibold text-red-800">{fmt(sku.factory_returns_breakdown.damaged)}</span>
-                                      </div>
-                                    )}
-                                    {sku.factory_returns_breakdown.expired > 0 && (
-                                      <div className="flex justify-between bg-amber-50 rounded px-2 py-1">
-                                        <span className="text-amber-700">Expired</span>
-                                        <span className="font-semibold text-amber-800">{fmt(sku.factory_returns_breakdown.expired)}</span>
-                                      </div>
-                                    )}
+                                )}
+                                {/* Factory Returns Breakdown */}
+                                {sku.factory_returns > 0 && (
+                                  <div className="rounded-lg border border-purple-200 overflow-hidden">
+                                    <div className="bg-purple-50 px-3 py-1.5 flex items-center justify-between border-b border-purple-200">
+                                      <span className="text-[11px] font-semibold text-purple-700">Factory Returns</span>
+                                      <span className="text-[11px] font-bold text-purple-800">{fmt(sku.factory_returns)}</span>
+                                    </div>
+                                    <div className="divide-y divide-slate-100">
+                                      {[
+                                        { label: 'Empty / Reusable', val: sku.factory_returns_breakdown.empty_reusable, dot: 'bg-emerald-500' },
+                                        { label: 'Damaged', val: sku.factory_returns_breakdown.damaged, dot: 'bg-red-500' },
+                                        { label: 'Expired', val: sku.factory_returns_breakdown.expired, dot: 'bg-amber-500' },
+                                      ].filter(r => r.val > 0).map(r => (
+                                        <div key={r.label} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                                          <span className="flex items-center gap-1.5 text-slate-600">
+                                            <span className={`w-1.5 h-1.5 rounded-full ${r.dot}`} />
+                                            {r.label}
+                                          </span>
+                                          <span className="font-semibold text-slate-800">{fmt(r.val)}</span>
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
-                                </div>
-                              )}
+                                )}
+                              </div>
                             </div>
                           </td>
                         </tr>
@@ -304,7 +343,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                 })}
                 {skus.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <td colSpan={10} className="text-center py-8 text-muted-foreground">
                       No stock data available for this distributor
                     </td>
                   </tr>
@@ -318,6 +357,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                     <td className="p-3 text-right text-emerald-700">{fmt(t.stock_delivered)}</td>
                     <td className="p-3 text-right text-amber-700">{fmt(t.customer_returns)}</td>
                     <td className="p-3 text-right text-purple-700">{fmt(t.factory_returns)}</td>
+                    <td className="p-3 text-right text-teal-700">{fmt(t.factory_warehouse_stock)}</td>
                     <td className="p-3 text-right text-indigo-800 text-base">{fmt(t.stock_at_hand)}</td>
                     <td className="p-3 text-right">{pct(t.pct_stock_at_hand)}</td>
                     <td className="p-3 text-right" colSpan={2}></td>

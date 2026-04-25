@@ -37,6 +37,10 @@ import Reports from './pages/Reports';
 import LocationAnalytics from './pages/LocationAnalytics';
 import TeamManagement from './pages/TeamManagement';
 import DailyStatusUpdate from './pages/DailyStatusUpdate';
+import MeetingMinutes from './pages/MeetingMinutes';
+import MeetingDetail from './pages/MeetingDetail';
+import MeetingEdit from './pages/MeetingEdit';
+import CostCards from './pages/CostCards';
 import StatusSummary from './pages/StatusSummary';
 import DashboardPreview from './pages/DashboardPreview';
 import BottlePreview from './pages/BottlePreview';
@@ -56,12 +60,20 @@ import AccountPerformance from './pages/AccountPerformance';
 import InvoicesList from './pages/InvoicesList';
 import TransportationCostCalculator from './pages/TransportationCostCalculator';
 import SKUManagement from './pages/SKUManagement';
+import PackagingTypes from './pages/PackagingTypes';
 import CompanyProfile from './pages/CompanyProfile';
 import FilesDocuments from './pages/FilesDocuments';
 // Production Context Pages
 import Maintenance from './pages/Maintenance';
 import Inventory from './pages/Inventory';
 import QualityControl from './pages/QualityControl';
+import ProductionBatches from './pages/ProductionBatches';
+import ProductionDashboard from './pages/ProductionDashboard';
+import BatchDetail from './pages/BatchDetail';
+import QCRouteConfig from './pages/QCRouteConfig';
+import RejectionReasons from './pages/RejectionReasons';
+import RejectionReport from './pages/RejectionReport';
+import QCTeam from './pages/QCTeam';
 import Assets from './pages/Assets';
 import Vendors from './pages/Vendors';
 import MasterLocations from './pages/MasterLocations';
@@ -84,6 +96,11 @@ import StockDashboard from './pages/StockDashboard';
 import TaskManagement from './pages/TaskManagement';
 import TaskDetail from './pages/TaskDetail';
 import PerformanceTracker from './pages/PerformanceTracker';
+import InvestorDashboard from './pages/InvestorDashboard';
+// Marketing Module
+import MarketingCalendar from './pages/MarketingCalendar';
+import MarketingMasters from './pages/MarketingMasters';
+import MarketingPostDetail from './pages/MarketingPostDetail';
 import '@/App.css';
 import { useActivityTracker } from './hooks/useActivityTracker';
 import { NavigationProvider } from './context/NavigationContext';
@@ -190,6 +207,10 @@ function AppRouter() {
           <Route path="/locations" element={<ProtectedRoute><LocationAnalytics /></ProtectedRoute>} />
           <Route path="/team" element={<ProtectedRoute moduleKey="team"><TeamManagement /></ProtectedRoute>} />
           <Route path="/daily-status" element={<ProtectedRoute moduleKey="daily_status"><DailyStatusUpdate /></ProtectedRoute>} />
+          <Route path="/meeting-minutes" element={<ProtectedRoute moduleKey="meeting_minutes"><MeetingMinutes /></ProtectedRoute>} />
+          <Route path="/meeting-minutes/new" element={<ProtectedRoute moduleKey="meeting_minutes"><MeetingEdit /></ProtectedRoute>} />
+          <Route path="/meeting-minutes/:id" element={<ProtectedRoute moduleKey="meeting_minutes"><MeetingDetail /></ProtectedRoute>} />
+          <Route path="/meeting-minutes/:id/edit" element={<ProtectedRoute moduleKey="meeting_minutes"><MeetingEdit /></ProtectedRoute>} />
           <Route path="/status-summary" element={<ProtectedRoute moduleKey="status_summary"><StatusSummary /></ProtectedRoute>} />
           <Route path="/bottle-preview" element={<ProtectedRoute moduleKey="bottle_preview"><BottlePreview /></ProtectedRoute>} />
           <Route path="/leaves" element={<ProtectedRoute moduleKey="leaves"><LeaveManagement /></ProtectedRoute>} />
@@ -210,6 +231,7 @@ function AppRouter() {
           <Route path="/account-performance" element={<ProtectedRoute moduleKey="report_account_performance"><AccountPerformance /></ProtectedRoute>} />
           <Route path="/transportation-calculator" element={<ProtectedRoute moduleKey="transport_calculator"><TransportationCostCalculator /></ProtectedRoute>} />
           <Route path="/sku-management" element={<ProtectedRoute moduleKey="sku_management"><SKUManagement /></ProtectedRoute>} />
+          <Route path="/packaging-types" element={<ProtectedRoute moduleKey="sku_management"><PackagingTypes /></ProtectedRoute>} />
           <Route path="/company-profile" element={<ProtectedRoute moduleKey="company_profile"><CompanyProfile /></ProtectedRoute>} />
           <Route path="/files-documents" element={<ProtectedRoute moduleKey="files_documents"><FilesDocuments /></ProtectedRoute>} />
           <Route path="/master-locations" element={<ProtectedRoute moduleKey="master_locations"><MasterLocations /></ProtectedRoute>} />
@@ -225,9 +247,16 @@ function AppRouter() {
           <Route path="/lead-scoring-model" element={<ProtectedRoute moduleKey="lead_scoring"><LeadScoringModel /></ProtectedRoute>} />
           
           {/* Production Context Routes */}
+          <Route path="/production-dashboard" element={<ProtectedRoute><ProductionDashboard /></ProtectedRoute>} />
           <Route path="/maintenance" element={<ProtectedRoute moduleKey="maintenance"><Maintenance /></ProtectedRoute>} />
           <Route path="/inventory" element={<ProtectedRoute moduleKey="inventory"><Inventory /></ProtectedRoute>} />
           <Route path="/quality-control" element={<ProtectedRoute moduleKey="quality_control"><QualityControl /></ProtectedRoute>} />
+          <Route path="/production-batches" element={<ProtectedRoute><ProductionBatches /></ProtectedRoute>} />
+          <Route path="/production-batches/:batchId" element={<ProtectedRoute><BatchDetail /></ProtectedRoute>} />
+          <Route path="/qc-routes" element={<ProtectedRoute><QCRouteConfig /></ProtectedRoute>} />
+          <Route path="/rejection-reasons" element={<ProtectedRoute><RejectionReasons /></ProtectedRoute>} />
+          <Route path="/rejection-report" element={<ProtectedRoute><RejectionReport /></ProtectedRoute>} />
+          <Route path="/qc-team" element={<ProtectedRoute><QCTeam /></ProtectedRoute>} />
           <Route path="/assets" element={<ProtectedRoute moduleKey="assets"><Assets /></ProtectedRoute>} />
           <Route path="/vendors" element={<ProtectedRoute moduleKey="vendors"><Vendors /></ProtectedRoute>} />
           
@@ -236,11 +265,17 @@ function AppRouter() {
           <Route path="/distributors/:id" element={<ProtectedRoute moduleKey="distributors"><DistributorDetail /></ProtectedRoute>} />
           <Route path="/distributors/:id/edit" element={<ProtectedRoute moduleKey="distributors"><DistributorDetail /></ProtectedRoute>} />
           <Route path="/stock-dashboard" element={<ProtectedRoute moduleKey="distributors"><StockDashboard /></ProtectedRoute>} />
+          <Route path="/cost-cards" element={<ProtectedRoute moduleKey="distributors"><CostCards /></ProtectedRoute>} />
           
           {/* Task Management */}
           <Route path="/tasks" element={<ProtectedRoute><TaskManagement /></ProtectedRoute>} />
           <Route path="/tasks/:taskId" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />
-          <Route path="/performance" element={<ProtectedRoute><PerformanceTracker /></ProtectedRoute>} />
+          <Route path="/performance" element={<ProtectedRoute moduleKey="performance_tracker"><PerformanceTracker /></ProtectedRoute>} />
+          <Route path="/investor-dashboard" element={<ProtectedRoute moduleKey="investor_dashboard"><InvestorDashboard /></ProtectedRoute>} />
+          {/* Marketing Module */}
+          <Route path="/marketing-calendar" element={<ProtectedRoute moduleKey="marketing_calendar"><MarketingCalendar /></ProtectedRoute>} />
+          <Route path="/marketing-post/:postId" element={<ProtectedRoute moduleKey="marketing_calendar"><MarketingPostDetail /></ProtectedRoute>} />
+          <Route path="/marketing-masters" element={<ProtectedRoute moduleKey="marketing_masters"><MarketingMasters /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </>

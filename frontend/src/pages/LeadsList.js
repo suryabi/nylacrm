@@ -21,7 +21,7 @@ import {
   FilterGrid, 
   FilterSearch 
 } from '../components/ui/filter-bar';
-import { Plus, Search, Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid, List, Filter, Users, Loader2, Check, MapPin, Calendar, Target, UserCircle, RotateCcw, Star, TrendingUp, DollarSign, BarChart3, Flame, Snowflake, ThermometerSun, Sparkles, Award, Layers, HelpCircle } from 'lucide-react';
+import { Plus, Search, Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid, List, Filter, Users, Loader2, Check, MapPin, Calendar, Target, UserCircle, RotateCcw, Star, TrendingUp, DollarSign, BarChart3, Flame, Snowflake, ThermometerSun, Sparkles, Award, Layers, HelpCircle, X, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Table,
@@ -87,7 +87,7 @@ export default function LeadsList() {
   
   const getInitialArrayFilter = (key, urlKey = null) => {
     const urlValue = urlKey ? urlParams.get(urlKey) : null;
-    if (urlValue) return [urlValue];
+    if (urlValue) return urlValue.split(',').map(v => v.trim()).filter(Boolean);
     if (hasUrlFilters) return []; // If coming from dashboard, don't use localStorage
     const saved = localStorage.getItem(`leads_filter_${key}`);
     if (saved) {
@@ -104,9 +104,21 @@ export default function LeadsList() {
   const [stateFilter, setStateFilter] = useState(() => getInitialFilter('state', 'all', 'state'));
   const [cityFilter, setCityFilter] = useState(() => getInitialFilter('city', 'all', 'city'));
   const [assignedToFilter, setAssignedToFilter] = useState(() => getInitialArrayFilter('assigned_to', 'assigned_to'));
+  const [targetClosureMonth, setTargetClosureMonth] = useState(() => {
+    const v = urlParams.get('target_closure_month');
+    return v ? parseInt(v) : null;
+  });
+  const [targetClosureYear, setTargetClosureYear] = useState(() => {
+    const v = urlParams.get('target_closure_year');
+    return v ? parseInt(v) : null;
+  });
+  // Pipeline view state (multi-month target_closure from dashboard)
+  const [pipelineView, setPipelineView] = useState(() => urlParams.get('pipeline_view') === 'true');
+  const [pipelineClosureMonths, setPipelineClosureMonths] = useState(() => urlParams.get('target_closure_months') || '');
+  const [pipelineClosureYears, setPipelineClosureYears] = useState(() => urlParams.get('target_closure_years') || '');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState(null);
-  const [timeFilter, setTimeFilter] = useState(() => getInitialFilter('time', 'lifetime', 'time_filter'));
+  const [timeFilter, setTimeFilter] = useState(() => pipelineView ? 'lifetime' : getInitialFilter('time', 'lifetime', 'time_filter'));
   
   const { territories, stateNames, cityNames, getStateNamesByTerritoryName, getCityNamesByStateName } = useMasterLocations();
   
@@ -152,7 +164,7 @@ export default function LeadsList() {
     fetchUsers();
   }, []);
   
-  useEffect(() => { fetchLeads(); }, [currentPage, itemsPerPage, debouncedSearch, statusFilter, cityFilter, stateFilter, territoryFilter, assignedToFilter, timeFilter, selectedQuadrants, sortField, sortDirection]);
+  useEffect(() => { fetchLeads(); }, [currentPage, itemsPerPage, debouncedSearch, statusFilter, cityFilter, stateFilter, territoryFilter, assignedToFilter, timeFilter, selectedQuadrants, sortField, sortDirection, targetClosureMonth, targetClosureYear, pipelineView, pipelineClosureMonths, pipelineClosureYears]);
 
   const fetchQuadrantMetrics = async () => {
     try {
@@ -201,11 +213,23 @@ export default function LeadsList() {
         state: stateFilter !== 'all' ? stateFilter : undefined, 
         territory: territoryFilter !== 'all' ? territoryFilter : undefined,
         assigned_to: assignedToFilter.length > 0 ? assignedToFilter.join(',') : undefined, 
-        time_filter: timeFilter !== 'lifetime' ? timeFilter : undefined,
+        time_filter: (!pipelineView && timeFilter !== 'lifetime') ? timeFilter : undefined,
         quadrant: selectedQuadrants.length > 0 ? selectedQuadrants.join(',') : undefined,
+        target_closure_month: targetClosureMonth || undefined,
+        target_closure_year: targetClosureYear || undefined,
         sort_by: sortField,
         sort_order: sortDirection,
       };
+      // Pipeline view params (multi-month target closure)
+      if (pipelineView && pipelineClosureMonths) {
+        params.target_closure_months = pipelineClosureMonths;
+        params.target_closure_years = pipelineClosureYears;
+        params.pipeline_view = true;
+        // Remove single-month params to avoid conflict
+        delete params.target_closure_month;
+        delete params.target_closure_year;
+        delete params.time_filter;
+      }
       const response = await leadsAPI.getAll(params);
       const { data, total, total_pages } = response.data;
       setLeads(data); setTotalLeads(total); setTotalPages(total_pages);
@@ -222,6 +246,55 @@ export default function LeadsList() {
     finally { setDeleteDialogOpen(false); setLeadToDelete(null); }
   };
 
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.append('search', debouncedSearch);
+      if (statusFilter.length > 0) params.append('status', statusFilter.join(','));
+      if (cityFilter !== 'all') params.append('city', cityFilter);
+      if (stateFilter !== 'all') params.append('state', stateFilter);
+      if (territoryFilter !== 'all') params.append('territory', territoryFilter);
+      if (assignedToFilter.length > 0) params.append('assigned_to', assignedToFilter.join(','));
+      if (!pipelineView && timeFilter !== 'lifetime') params.append('time_filter', timeFilter);
+      if (selectedQuadrants.length > 0) params.append('quadrant', selectedQuadrants.join(','));
+      if (targetClosureMonth) params.append('target_closure_month', targetClosureMonth);
+      if (targetClosureYear) params.append('target_closure_year', targetClosureYear);
+      if (pipelineView && pipelineClosureMonths) {
+        params.append('target_closure_months', pipelineClosureMonths);
+        params.append('target_closure_years', pipelineClosureYears);
+      }
+      params.append('sort_by', sortField);
+      params.append('sort_order', sortDirection);
+
+      const url = `${process.env.REACT_APP_BACKEND_URL}/api/leads/export?${params.toString()}`;
+      const response = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true,
+        responseType: 'blob',
+      });
+
+      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      link.setAttribute('download', `leads_export_${stamp}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+      toast.success('Leads exported successfully');
+    } catch (error) {
+      console.error('Failed to export leads:', error);
+      toast.error(error.response?.data?.detail || 'Failed to export leads');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleSort = (field) => {
     if (sortField === field) setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     else { setSortField(field); setSortDirection('desc'); }
@@ -236,7 +309,7 @@ export default function LeadsList() {
   const handleResetFilters = () => {
     setSearchQuery(''); setStatusFilter([]); setTerritoryFilter('all'); setStateFilter('all');
     setCityFilter('all'); setAssignedToFilter([]); setTimeFilter('lifetime'); setCurrentPage(1);
-    setSelectedQuadrants([]); // Clear quadrant selection
+    setSelectedQuadrants([]); setTargetClosureMonth(null); setTargetClosureYear(null);
     // Clear sessionStorage
     sessionStorage.removeItem('leads_filter_search');
     sessionStorage.removeItem('leads_filter_status');
@@ -417,7 +490,7 @@ export default function LeadsList() {
 
   // Use leads directly since sorting is now server-side
   const displayLeads = leads;
-  const hasActiveFilters = searchQuery || statusFilter.length > 0 || territoryFilter !== 'all' || stateFilter !== 'all' || cityFilter !== 'all' || assignedToFilter.length > 0 || timeFilter !== 'lifetime' || selectedQuadrants.length > 0;
+  const hasActiveFilters = searchQuery || statusFilter.length > 0 || territoryFilter !== 'all' || stateFilter !== 'all' || cityFilter !== 'all' || assignedToFilter.length > 0 || timeFilter !== 'lifetime' || selectedQuadrants.length > 0 || targetClosureMonth != null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="leads-list-page">
@@ -443,6 +516,22 @@ export default function LeadsList() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExport}
+                disabled={exporting || loading || totalLeads === 0}
+                data-testid="download-leads-button"
+                className="gap-1 sm:gap-2 border-slate-200 dark:border-slate-700 text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
+                title="Download all filtered leads as CSV (opens in Excel/Google Sheets)"
+              >
+                {exporting ? (
+                  <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                )}
+                <span className="hidden sm:inline">{exporting ? 'Exporting…' : 'Download'}</span>
+              </Button>
               <Button variant="outline" size="sm" onClick={() => navigate('/leads/kanban')} data-testid="kanban-view-button" className="gap-1 sm:gap-2 border-slate-200 dark:border-slate-700 text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3">
                 <LayoutGrid className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> 
                 <span className="hidden sm:inline">Kanban</span>
@@ -455,8 +544,50 @@ export default function LeadsList() {
           </div>
         </header>
 
+        {/* Pipeline View Banner */}
+        {pipelineView && (
+          <Card className="mb-4 sm:mb-6 p-3 sm:p-4 border-amber-200 bg-amber-50/80 dark:bg-amber-950/30 dark:border-amber-800 shadow-sm" data-testid="pipeline-view-banner">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/50">
+                  <TrendingUp className="h-4 w-4 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Pipeline View</p>
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Showing {totalLeads} leads matching pipeline criteria (target closure months, active statuses). Filters are locked.
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/30 gap-1.5"
+                data-testid="reset-pipeline-view-btn"
+                onClick={() => {
+                  setPipelineView(false);
+                  setPipelineClosureMonths('');
+                  setPipelineClosureYears('');
+                  setStatusFilter([]);
+                  setTimeFilter('lifetime');
+                  // Clean URL params
+                  const url = new URL(window.location);
+                  url.searchParams.delete('pipeline_view');
+                  url.searchParams.delete('target_closure_months');
+                  url.searchParams.delete('target_closure_years');
+                  url.searchParams.delete('status');
+                  window.history.replaceState({}, '', url);
+                }}
+              >
+                <X className="h-3.5 w-3.5" />
+                Reset Filters
+              </Button>
+            </div>
+          </Card>
+        )}
+
         {/* Lead Scoring Quadrant Metrics Bar */}
-        <Card className="mb-4 sm:mb-6 p-3 sm:p-4 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="quadrant-metrics-bar">
+        <Card className={`mb-4 sm:mb-6 p-3 sm:p-4 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 ${pipelineView ? 'pointer-events-none opacity-50' : ''}`} data-testid="quadrant-metrics-bar">
           <div className="flex items-center justify-between mb-2 sm:mb-3">
             <div className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-500" />
@@ -599,7 +730,7 @@ export default function LeadsList() {
         </Card>
 
         {/* Contemporary Filters - Collapsible on Mobile */}
-        <div className="mb-4 sm:mb-6">
+        <div className={`mb-4 sm:mb-6 ${pipelineView ? 'pointer-events-none opacity-50' : ''}`}>
           {/* Mobile Filter Toggle */}
           <div className="flex items-center justify-between mb-3 sm:hidden">
             <Button
@@ -610,9 +741,9 @@ export default function LeadsList() {
             >
               <Filter className="h-4 w-4" />
               Filters
-              {[searchQuery, statusFilter.length > 0, territoryFilter !== 'all', stateFilter !== 'all', cityFilter !== 'all', assignedToFilter.length > 0, timeFilter !== 'lifetime'].filter(Boolean).length > 0 && (
+              {[searchQuery, statusFilter.length > 0, territoryFilter !== 'all', stateFilter !== 'all', cityFilter !== 'all', assignedToFilter.length > 0, timeFilter !== 'lifetime', targetClosureMonth != null].filter(Boolean).length > 0 && (
                 <Badge variant="secondary" className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
-                  {[searchQuery, statusFilter.length > 0, territoryFilter !== 'all', stateFilter !== 'all', cityFilter !== 'all', assignedToFilter.length > 0, timeFilter !== 'lifetime'].filter(Boolean).length}
+                  {[searchQuery, statusFilter.length > 0, territoryFilter !== 'all', stateFilter !== 'all', cityFilter !== 'all', assignedToFilter.length > 0, timeFilter !== 'lifetime', targetClosureMonth != null].filter(Boolean).length}
                 </Badge>
               )}
             </Button>
@@ -739,7 +870,8 @@ export default function LeadsList() {
                 stateFilter !== 'all', 
                 cityFilter !== 'all', 
                 assignedToFilter.length > 0, 
-                timeFilter !== 'lifetime'
+                timeFilter !== 'lifetime',
+                targetClosureMonth != null
               ].filter(Boolean).length}
               onReset={handleResetFilters}
             >
@@ -842,6 +974,16 @@ export default function LeadsList() {
             </FilterContainer>
           </div>
         </div>
+
+        {/* Target Closure Filter Banner */}
+        {targetClosureMonth != null && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl text-sm" data-testid="target-closure-filter-banner">
+            <span className="text-amber-700 dark:text-amber-400 font-medium">
+              Filtered by Target Closure: {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][targetClosureMonth - 1]} {targetClosureYear}
+            </span>
+            <button onClick={() => { setTargetClosureMonth(null); setTargetClosureYear(null); window.history.replaceState({}, '', '/leads'); }} className="ml-auto text-amber-600 hover:text-amber-800 text-xs font-medium underline" data-testid="clear-target-closure-filter">Clear</button>
+          </div>
+        )}
 
         {/* Leads Table/Cards */}
         <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">

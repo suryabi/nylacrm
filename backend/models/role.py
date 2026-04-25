@@ -218,10 +218,11 @@ def get_default_roles(tenant_id: str) -> List[dict]:
 MODULE_CATEGORIES = {
     "Core": ["home", "dashboard", "leads", "pipeline", "accounts", "contacts", "sales_portal"],
     "Reports": ["report_sales_overview", "report_revenue", "report_sku_performance", "report_resource_performance", "report_account_performance"],
-    "Operations": ["lead_discovery", "target_planning", "daily_status", "status_summary"],
+    "Operations": ["lead_discovery", "target_planning", "daily_status", "status_summary", "meeting_minutes"],
     "Tools": ["cogs_calculator", "transport_calculator", "sku_management", "bottle_preview", "lead_scoring_model"],
     "Documents": ["company_documents", "files_documents"],
     "Requests": ["leaves", "travel_requests", "budget_requests"],
+    "Marketing": ["marketing_calendar", "marketing_masters"],
     "Organization": ["company_profile", "team", "master_locations", "lead_statuses", "business_categories", "contact_categories", "expense_categories"],
     "Admin": ["tenant_settings"],
     "Distribution": ["distributors", "distributor_coverage", "distributor_locations", "distributor_margins", "distributor_assignments", "distributor_shipments", "distributor_deliveries", "distributor_stock"],
@@ -280,4 +281,7 @@ MODULE_LABELS = {
     "task_management": "Tasks",
     "task_milestones": "Milestones",
     "task_labels": "Labels",
+    "marketing_calendar": "Content Calendar",
+    "marketing_masters": "Marketing Masters",
+    "meeting_minutes": "Meeting Minutes",
 }

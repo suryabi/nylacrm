@@ -7,7 +7,7 @@ import { Badge } from '../ui/badge';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
-import { MapPin, Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText } from 'lucide-react';
+import { MapPin, Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Factory } from 'lucide-react';
 
 export default function ShipmentsTab({
   distributor,
@@ -16,6 +16,8 @@ export default function ShipmentsTab({
   shipments,
   shipmentsLoading,
   skus,
+  factoryWarehouses,
+  warehouseStock,
   // Dialog state
   showShipmentDialog,
   setShowShipmentDialog,
@@ -53,7 +55,7 @@ export default function ShipmentsTab({
                 Create Shipment
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create Primary Shipment</DialogTitle>
                 <DialogDescription>
@@ -61,6 +63,30 @@ export default function ShipmentsTab({
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
+                {/* Source Factory Warehouse */}
+                <div className="p-3 rounded-lg bg-amber-50/60 border border-amber-100 space-y-2">
+                  <Label className="flex items-center gap-1.5 text-sm font-medium text-amber-800">
+                    <Factory className="h-4 w-4" />
+                    From Factory Warehouse *
+                  </Label>
+                  <Select
+                    value={shipmentForm.source_warehouse_id || ''}
+                    onValueChange={(v) => setShipmentForm(prev => ({ ...prev, source_warehouse_id: v }))}
+                  >
+                    <SelectTrigger data-testid="shipment-source-warehouse-select">
+                      <SelectValue placeholder="Select source factory warehouse" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(factoryWarehouses || []).map(wh => (
+                        <SelectItem key={wh.id} value={wh.id}>
+                          {wh.location_name} ({wh.city}) {wh.is_default ? '★' : ''}
+                          {wh.distributor_name ? ` — ${wh.distributor_name}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 {/* Location & Date */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -158,113 +184,135 @@ export default function ShipmentsTab({
                       <p className="text-sm">No items added. Click "Add Item" to start.</p>
                     </div>
                   ) : (
-                    <div className="space-y-3">
-                      {/* Header Row */}
-                      <div className="flex items-center gap-3 px-3 text-xs font-medium text-muted-foreground">
-                        <div className="flex-[3] min-w-0">SKU</div>
-                        <div className="w-20">Qty</div>
-                        <div className="w-24">Price (₹)</div>
-                        <div className="w-16">Disc %</div>
-                        <div className="w-16">Tax %</div>
-                        <div className="w-28 text-right">Amount</div>
-                        <div className="w-10"></div>
-                      </div>
-                      {shipmentItems.map((item, index) => (
-                        <div key={item.id} className="flex items-center gap-3 p-3 border rounded-md bg-muted/30" data-testid={`shipment-item-${index}`}>
-                          <div className="flex-[3] min-w-0">
-                            <Select
-                              value={item.sku_id}
-                              onValueChange={(v) => {
-                                const selectedSku = skus.find(s => s.id === v);
-                                if (selectedSku) {
-                                  // Use the enhanced function that looks up the transfer price
-                                  updateShipmentItemWithPrice(item.id, v, selectedSku.name || selectedSku.sku_name);
-                                }
-                              }}
-                            >
-                              <SelectTrigger className="h-9">
-                                <SelectValue placeholder="Select SKU" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {skus.map(sku => (
-                                  <SelectItem key={sku.id} value={sku.id}>
-                                    {sku.name || sku.sku_name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="w-20">
-                            <Input
-                              type="number"
-                              min="1"
-                              className="h-9"
-                              value={item.quantity}
-                              onChange={(e) => updateShipmentItem(item.id, 'quantity', e.target.value)}
-                            />
-                          </div>
-                          <div className="w-24">
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              className="h-9"
-                              value={item.unit_price}
-                              onChange={(e) => updateShipmentItem(item.id, 'unit_price', e.target.value)}
-                            />
-                          </div>
-                          <div className="w-16">
-                            <Input
-                              type="number"
-                              min="0"
-                              max="100"
-                              className="h-9"
-                              value={item.discount_percent}
-                              onChange={(e) => updateShipmentItem(item.id, 'discount_percent', e.target.value)}
-                            />
-                          </div>
-                          <div className="w-16">
-                            <Input
-                              type="number"
-                              min="0"
-                              max="100"
-                              className="h-9"
-                              value={item.tax_percent}
-                              onChange={(e) => updateShipmentItem(item.id, 'tax_percent', e.target.value)}
-                            />
-                          </div>
-                          <div className="w-28 text-right">
-                            <div className="h-9 flex items-center justify-end text-sm font-semibold whitespace-nowrap">
-                              ₹{((item.quantity * item.unit_price * (1 - (item.discount_percent || 0) / 100)) * (1 + (item.tax_percent || 0) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <div className="border rounded-lg overflow-hidden">
+                      <div className="divide-y divide-slate-200">
+                      {shipmentItems.map((item, index) => {
+                        const stockEntry = (warehouseStock || []).find(s => s.sku_id === item.sku_id);
+                        const availableQty = stockEntry ? stockEntry.quantity : 0;
+                        const pkgUnits = parseInt(item.packaging_units) || 1;
+                        const maxPkgs = pkgUnits > 0 ? Math.floor(availableQty / pkgUnits) : availableQty;
+                        const totalUnits = (parseInt(item.quantity) || 0) * pkgUnits;
+                        const lineSubtotal = totalUnits * (parseFloat(item.unit_price) || 0) * (1 - ((parseFloat(item.discount_percent) || 0) / 100));
+                        const selectedSku = skus.find(s => s.id === item.sku_id);
+                        const stockInPkg = selectedSku?.packaging_config?.stock_in || [];
+                        const isOdd = index % 2 === 1;
+                        return (
+                        <div key={item.id} className={`border-b last:border-b-0 px-4 py-3 ${isOdd ? 'bg-slate-50' : 'bg-white'}`} data-testid={`shipment-item-${index}`}>
+                          {/* Row 1: SKU + Packaging + Remove */}
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1 min-w-0">
+                              <Select value={item.sku_id} onValueChange={(v) => {
+                                const s = skus.find(s => s.id === v);
+                                if (s) updateShipmentItemWithPrice(item.id, v, s.name || s.sku_name);
+                              }}>
+                                <SelectTrigger className="h-10"><SelectValue placeholder="Select SKU" /></SelectTrigger>
+                                <SelectContent>
+                                  {skus.map(sku => {
+                                    const st = (warehouseStock || []).find(s => s.sku_id === sku.id);
+                                    return <SelectItem key={sku.id} value={sku.id}>{sku.name || sku.sku_name}{st ? ` (${st.quantity})` : ''}</SelectItem>;
+                                  })}
+                                </SelectContent>
+                              </Select>
                             </div>
-                          </div>
-                          <div className="w-10 flex justify-end">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-9 w-9 p-0 text-destructive"
-                              onClick={() => removeShipmentItem(item.id)}
-                            >
+                            <div className="w-40 flex-shrink-0">
+                              {stockInPkg.length > 0 ? (
+                                <select className="w-full h-10 px-3 border rounded-md text-sm bg-background"
+                                  value={item.packaging_units || ''}
+                                  onChange={e => updateShipmentItem(item.id, 'packaging_units', e.target.value)}
+                                  data-testid={`shipment-pkg-${index}`}>
+                                  {stockInPkg.map((pkg, pi) => (
+                                    <option key={pi} value={pkg.units_per_package}>{pkg.packaging_type_name} ({pkg.units_per_package})</option>
+                                  ))}
+                                </select>
+                              ) : <span className="text-sm text-muted-foreground">—</span>}
+                            </div>
+                            <Button variant="ghost" size="sm" className="h-10 w-10 p-0 text-destructive flex-shrink-0" onClick={() => removeShipmentItem(item.id)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
+                          {/* Row 2: Avail | Qty | Price | Disc | Amount — fixed height, top-aligned */}
+                          <div className="flex items-start gap-3 mt-3">
+                            <div className="w-16 flex-shrink-0 text-center">
+                              <Label className="text-xs text-muted-foreground">Avail</Label>
+                              {item.sku_id ? (
+                                <div className="mt-1">
+                                  <p className={`text-base font-bold tabular-nums ${maxPkgs > 0 ? 'text-emerald-700' : 'text-red-600'}`}>{maxPkgs}</p>
+                                  <p className="text-[10px] text-muted-foreground leading-tight">{availableQty} units</p>
+                                </div>
+                              ) : <p className="text-sm text-muted-foreground mt-1">—</p>}
+                            </div>
+                            <div className="w-24 flex-shrink-0">
+                              <Label className="text-xs text-muted-foreground">Qty (pkgs)</Label>
+                              <Input type="number" min="1" max={maxPkgs || undefined}
+                                className={`h-10 mt-1 text-base font-medium ${item.sku_id && (parseInt(item.quantity) || 0) > maxPkgs ? 'border-red-400 text-red-600' : ''}`}
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value) || 0;
+                                  if (item.sku_id && maxPkgs > 0 && val > maxPkgs) updateShipmentItem(item.id, 'quantity', maxPkgs);
+                                  else updateShipmentItem(item.id, 'quantity', e.target.value);
+                                }} />
+                              <p className="text-xs text-blue-600 font-medium text-center mt-0.5 h-4">
+                                {totalUnits > 0 && pkgUnits > 1 ? `${totalUnits} units` : '\u00A0'}
+                              </p>
+                            </div>
+                            <div className="flex-1 min-w-[100px]">
+                              <Label className="text-xs text-muted-foreground">Price/unit (₹)</Label>
+                              <Input type="number" min="0" step="0.01" className="h-10 mt-1 text-base" value={item.unit_price}
+                                onChange={(e) => updateShipmentItem(item.id, 'unit_price', e.target.value)} />
+                              <p className="h-4"></p>
+                            </div>
+                            <div className="w-20 flex-shrink-0">
+                              <Label className="text-xs text-muted-foreground">Disc %</Label>
+                              <Input type="number" min="0" max="100" className="h-10 mt-1 text-base" value={item.discount_percent}
+                                onChange={(e) => updateShipmentItem(item.id, 'discount_percent', e.target.value)} />
+                              <p className="h-4"></p>
+                            </div>
+                            <div className="w-28 flex-shrink-0 text-right">
+                              <Label className="text-xs text-muted-foreground">Amount</Label>
+                              <p className="text-base font-bold tabular-nums mt-2.5">₹{lineSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                              <p className="h-4"></p>
+                            </div>
+                          </div>
                         </div>
-                      ))}
-                      
-                      {/* Total */}
-                      <div className="flex justify-end pt-2 border-t">
-                        <div className="text-right">
-                          <span className="text-muted-foreground mr-4">Total Amount:</span>
-                          <span className="text-lg font-bold">
-                            ₹{shipmentItems.reduce((sum, item) => {
-                              const gross = item.quantity * item.unit_price;
-                              const afterDiscount = gross * (1 - (item.discount_percent || 0) / 100);
-                              const withTax = afterDiscount * (1 + (item.tax_percent || 0) / 100);
-                              return sum + withTax;
-                            }, 0).toFixed(2)}
-                          </span>
-                        </div>
+                        );
+                      })}
                       </div>
+                      
+                      {/* Totals: Subtotal → GST → Grand Total */}
+                      {(() => {
+                        const subtotal = shipmentItems.reduce((sum, item) => {
+                          const pu = parseInt(item.packaging_units) || 1;
+                          const tu = (parseInt(item.quantity) || 0) * pu;
+                          const ls = tu * (parseFloat(item.unit_price) || 0) * (1 - ((parseFloat(item.discount_percent) || 0) / 100));
+                          return sum + ls;
+                        }, 0);
+                        const gstPercent = parseFloat(shipmentForm.gst_percent) || 0;
+                        const gstAmount = subtotal * (gstPercent / 100);
+                        const grandTotal = subtotal + gstAmount;
+                        return (
+                          <div className="border-t pt-3 mt-2 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-muted-foreground">Subtotal</span>
+                              <span className="text-sm font-semibold tabular-nums">₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-muted-foreground">GST</span>
+                                <Input type="number" min="0" max="100" step="0.5" className="h-7 w-16 text-xs"
+                                  value={shipmentForm.gst_percent || ''}
+                                  onChange={(e) => setShipmentForm(prev => ({ ...prev, gst_percent: e.target.value }))}
+                                  placeholder="%" data-testid="shipment-gst-input" />
+                                <span className="text-xs text-muted-foreground">%</span>
+                              </div>
+                              <span className="text-sm font-semibold tabular-nums">₹{gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex items-center justify-between pt-2 border-t">
+                              <span className="text-base font-bold">Grand Total</span>
+                              <span className="text-lg font-bold tabular-nums" data-testid="shipment-grand-total">₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
@@ -316,25 +364,21 @@ export default function ShipmentsTab({
                   <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Shipment #</th>
                   <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Date</th>
                   <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Location</th>
+                  <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>From</th>
                   <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Qty</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Base Price</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Margin %</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Transfer Price</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Total Transfer</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Subtotal</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Discount</th>
                   <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>GST %</th>
                   <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>GST Amt</th>
-                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Total (incl GST)</th>
+                  <th className="text-right p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Total</th>
                   <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Status</th>
                   <th className="text-center p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {shipments.map((shipment, index) => {
-                  // Calculate average/first item values for display
-                  const avgBasePrice = shipment.avg_base_price || shipment.base_price || '-';
-                  const avgMargin = shipment.avg_distributor_margin || shipment.distributor_margin;
-                  const avgTransferPrice = shipment.avg_transfer_price || shipment.transfer_price;
-                  const avgGstPercent = shipment.avg_gst_percent || shipment.gst_percent;
+                  const gstPct = shipment.gst_percent ?? shipment.avg_gst_percent ?? (shipment.total_tax_amount > 0 && shipment.total_gross_amount > 0 ? ((shipment.total_tax_amount / shipment.total_gross_amount) * 100).toFixed(1) : null);
+                  const discountAmt = shipment.total_discount_amount || 0;
                   
                   return (
                     <tr 
@@ -368,19 +412,23 @@ export default function ShipmentsTab({
                           <span className="truncate max-w-[120px] text-slate-700">{shipment.distributor_location_name}</span>
                         </div>
                       </td>
+                      <td className="p-4">
+                        {shipment.source_warehouse_name ? (
+                          <div className="flex items-center gap-1.5">
+                            <Factory className="h-3.5 w-3.5 text-amber-500" />
+                            <span className="truncate max-w-[120px] text-xs text-slate-600">{shipment.source_warehouse_name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">-</span>
+                        )}
+                      </td>
                       <td className="p-4 text-right font-medium text-slate-800">{shipment.total_quantity}</td>
-                      <td className="p-4 text-right text-slate-700">
-                        {avgBasePrice !== '-' ? `₹${Number(avgBasePrice).toFixed(2)}` : '-'}
-                      </td>
-                      <td className="p-4 text-right text-slate-700">
-                        {avgMargin != null ? `${avgMargin}%` : '-'}
-                      </td>
-                      <td className="p-4 text-right text-slate-700">
-                        {avgTransferPrice != null ? `₹${Number(avgTransferPrice).toFixed(2)}` : '-'}
-                      </td>
                       <td className="p-4 text-right font-medium text-slate-800">₹{shipment.total_gross_amount?.toLocaleString()}</td>
                       <td className="p-4 text-right text-slate-700">
-                        {avgGstPercent != null ? `${avgGstPercent}%` : (shipment.total_tax_amount > 0 ? '18%' : '-')}
+                        {discountAmt > 0 ? <span className="text-red-600">-₹{discountAmt.toLocaleString()}</span> : <span className="text-slate-400">-</span>}
+                      </td>
+                      <td className="p-4 text-right text-slate-700">
+                        {gstPct != null ? `${gstPct}%` : <span className="text-slate-400">-</span>}
                       </td>
                       <td className="p-4 text-right text-slate-700">₹{shipment.total_tax_amount?.toLocaleString()}</td>
                       <td className="p-4 text-right font-medium text-emerald-600">₹{shipment.total_net_amount?.toLocaleString()}</td>

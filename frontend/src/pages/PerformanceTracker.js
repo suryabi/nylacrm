@@ -8,6 +8,8 @@ import { MultiSelect } from '../components/ui/multi-select';
 import { Textarea } from '../components/ui/textarea';
 import { Input } from '../components/ui/input';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
+import { useAuth } from '../context/AuthContext';
+import AppBreadcrumb from '../components/AppBreadcrumb';
 import {
   Target, TrendingUp, TrendingDown, Users, Phone, MapPin, DollarSign,
   BarChart3, RefreshCw, Save, Send, Check, RotateCcw, AlertTriangle,
@@ -26,15 +28,35 @@ const MONTHS = [
 ];
 const SUPPORT_CATEGORIES = ['Pricing', 'Logistics', 'Marketing', 'Collections', 'Management Intervention', 'Product / Supply Support'];
 
+const MONTH_NAMES = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// Default to last month
+const getLastMonth = () => {
+  const now = new Date();
+  const m = now.getMonth(); // 0-indexed, so getMonth() gives last month number in 1-indexed
+  return m === 0 ? 12 : m;
+};
+const getLastMonthYear = () => {
+  const now = new Date();
+  return now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+};
+
+// Session storage helpers for filter persistence
+const ssGet = (key, fallback) => { try { const v = sessionStorage.getItem(`perf_${key}`); return v !== null ? JSON.parse(v) : fallback; } catch { return fallback; } };
+const ssSet = (key, val) => { sessionStorage.setItem(`perf_${key}`, JSON.stringify(val)); };
+
 export default function PerformanceTracker() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { statuses: leadStatuses, getStatusLabel, getStatusById } = useLeadStatuses();
   const [plans, setPlans] = useState([]);
-  const [selectedPlan, setSelectedPlan] = useState('');
+  const [selectedPlan, setSelectedPlan] = useState(() => ssGet('plan', ''));
   const [resources, setResources] = useState([]);
-  const [selectedResource, setSelectedResource] = useState([]);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [territoryFilter, setTerritoryFilter] = useState(() => ssGet('territory', 'all'));
+  const [cityFilter, setCityFilter] = useState(() => ssGet('city', 'all'));
+  const [selectedResource, setSelectedResource] = useState(() => ssGet('resource', []));
+  const [selectedMonth, setSelectedMonth] = useState(() => ssGet('month', getLastMonth()));
+  const [selectedYear, setSelectedYear] = useState(() => ssGet('year', getLastMonthYear()));
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -48,29 +70,96 @@ export default function PerformanceTracker() {
   // Revenue overrides
   const [revenueOverrides, setRevenueOverrides] = useState({ lifetime: '', this_month: '', new_accounts: '' });
   const [revenueEditing, setRevenueEditing] = useState({ lifetime: false, this_month: false, new_accounts: false });
+  const [defaultsApplied, setDefaultsApplied] = useState(false);
 
   const token = localStorage.getItem('token');
   const tenantId = localStorage.getItem('selectedTenant') || localStorage.getItem('tenant_id') || 'nyla-air-water';
   const headers = { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId, 'Content-Type': 'application/json' };
 
+  // Persist filters to sessionStorage on change
+  useEffect(() => { ssSet('plan', selectedPlan); }, [selectedPlan]);
+  useEffect(() => { ssSet('territory', territoryFilter); }, [territoryFilter]);
+  useEffect(() => { ssSet('city', cityFilter); }, [cityFilter]);
+  useEffect(() => { ssSet('resource', selectedResource); }, [selectedResource]);
+  useEffect(() => { ssSet('month', selectedMonth); }, [selectedMonth]);
+  useEffect(() => { ssSet('year', selectedYear); }, [selectedYear]);
+
+  // Load all sales resources on mount (independent of plan)
   useEffect(() => {
+    fetch(`${API_URL}/api/performance/all-sales-resources`, { headers })
+      .then(r => r.json()).then(setResources).catch(() => {});
     fetch(`${API_URL}/api/performance/target-plans`, { headers })
       .then(r => r.json()).then(setPlans).catch(() => {});
   }, []);
 
+  // Auto-select the logged-in user as default resource (only once, when resources load and no session state exists)
+  useEffect(() => {
+    if (defaultsApplied || !user?.id || resources.length === 0) return;
+    // Only apply defaults if no resource was restored from session
+    const savedResource = ssGet('resource', []);
+    if (savedResource.length === 0) {
+      const match = resources.find(r => r.resource_id === user.id);
+      if (match) {
+        setSelectedResource([match.resource_id]);
+      }
+    }
+    setDefaultsApplied(true);
+  }, [resources, user, defaultsApplied]);
+
+  // When plan changes, reload plan-specific resources if plan is selected (for target amounts)
   useEffect(() => {
     if (!selectedPlan) return;
     fetch(`${API_URL}/api/performance/resources-for-plan/${selectedPlan}`, { headers })
-      .then(r => r.json()).then(setResources).catch(() => {});
+      .then(r => r.json()).then(planRes => {
+        // Merge plan resources with all resources — plan resources have target amounts
+        setResources(prev => {
+          const planMap = new Map(planRes.map(r => [r.resource_id, r]));
+          // If plan has specific resource allocations, use those (they contain territory_id, city, amount)
+          if (planRes.length > 0) return planRes;
+          return prev;
+        });
+      }).catch(() => {});
   }, [selectedPlan]);
 
+  // Derive unique territories and cities from the plan's resource allocations
+  const planTerritories = [...new Map(resources.map(r => [r.territory_id, { id: r.territory_id, name: r.territory_name || r.territory_id }])).values()];
+  const planCities = [...new Set(
+    resources
+      .filter(r => territoryFilter === 'all' || r.territory_id === territoryFilter)
+      .map(r => r.city)
+      .filter(Boolean)
+  )];
+
+  // Filter resources based on territory/city selection
+  const filteredResources = resources.filter(r => {
+    if (territoryFilter !== 'all' && r.territory_id !== territoryFilter) return false;
+    if (cityFilter !== 'all' && r.city !== cityFilter) return false;
+    return true;
+  });
+
+  const hasSelection = selectedResource.length > 0 || filteredResources.length > 0;
+
+  // Resolve to resource_ids: use selectedResource if any, otherwise all filtered resources  
+  const resolveResourceIds = () => {
+    if (selectedResource.length > 0) return selectedResource;
+    return filteredResources.map(r => r.resource_id).filter(Boolean);
+  };
+
   const generate = useCallback(async () => {
-    if (!selectedPlan || selectedResource.length === 0) return;
+    const resourceIds = selectedResource.length > 0
+      ? selectedResource
+      : resources.filter(r => {
+          if (territoryFilter !== 'all' && r.territory_id !== territoryFilter) return false;
+          if (cityFilter !== 'all' && r.city !== cityFilter) return false;
+          return true;
+        }).map(r => r.resource_id).filter(Boolean);
+    if (resourceIds.length === 0) return;
     setLoading(true);
     try {
-      const resourceParam = selectedResource.join(',');
+      const resourceParam = resourceIds.join(',');
+      const planParam = selectedPlan ? `&plan_id=${selectedPlan}` : '';
       const res = await fetch(
-        `${API_URL}/api/performance/generate?plan_id=${selectedPlan}&resource_id=${resourceParam}&month=${selectedMonth}&year=${selectedYear}`,
+        `${API_URL}/api/performance/generate?resource_id=${resourceParam}${planParam}&month=${selectedMonth}&year=${selectedYear}`,
         { headers }
       );
       const d = await res.json();
@@ -90,18 +179,22 @@ export default function PerformanceTracker() {
         setRevenueOverrides({ lifetime: '', this_month: '', new_accounts: '' });
       }
       setRevenueEditing({ lifetime: false, this_month: false, new_accounts: false });
-      // Fetch comparison
-      const compRes = await fetch(
-        `${API_URL}/api/performance/comparison?resource_id=${resourceParam}&plan_id=${selectedPlan}&months=3&month=${selectedMonth}&year=${selectedYear}`,
-        { headers }
-      );
-      setComparison(await compRes.json());
+      // Fetch comparison (only if plan selected)
+      if (selectedPlan) {
+        const compRes = await fetch(
+          `${API_URL}/api/performance/comparison?resource_id=${resourceParam}&plan_id=${selectedPlan}&months=3&month=${selectedMonth}&year=${selectedYear}`,
+          { headers }
+        );
+        setComparison(await compRes.json());
+      } else {
+        setComparison(null);
+      }
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  }, [selectedPlan, selectedResource, selectedMonth, selectedYear]);
+  }, [selectedPlan, selectedMonth, selectedYear, selectedResource, resources, territoryFilter, cityFilter]);
 
   useEffect(() => { generate(); }, [generate]);
 
@@ -159,45 +252,68 @@ export default function PerformanceTracker() {
   const isLocked = data?.status === 'approved';
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-5 sm:space-y-6" data-testid="performance-tracker">
+    <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 bg-slate-50 min-h-screen" data-testid="performance-tracker">
+      <AppBreadcrumb />
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 dark:text-white flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-900/50 dark:to-violet-900/30">
-              <BarChart3 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-            </div>
-            Monthly Performance Tracker
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">Track sales outcomes, activity, pipeline, and collections per resource</p>
-        </div>
+      <div>
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2 sm:gap-3">
+          <div className="p-1.5 sm:p-2 bg-slate-100 rounded-sm">
+            <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5 text-slate-700" />
+          </div>
+          Monthly Performance Tracker
+        </h1>
+        <p className="text-xs sm:text-sm text-slate-500 mt-1 ml-9 sm:ml-12">Track sales outcomes, activity, pipeline, and collections per resource</p>
       </div>
 
       {/* Selectors */}
-      <Card className="border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="performance-selectors">
-        <CardContent className="p-4 sm:p-5">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="bg-white border border-slate-200 rounded-sm p-3 sm:p-4 lg:p-5 space-y-3" data-testid="performance-selectors">
+          {/* Row 1: Location & Resource filters */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
             <div>
-              <label className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Target Plan</label>
-              <Select value={selectedPlan} onValueChange={setSelectedPlan}>
-                <SelectTrigger data-testid="select-plan"><SelectValue placeholder="Select plan" /></SelectTrigger>
+              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Territory</label>
+              <Select value={territoryFilter} onValueChange={(v) => { setTerritoryFilter(v); setCityFilter('all'); setSelectedResource([]); }}>
+                <SelectTrigger data-testid="select-territory"><SelectValue placeholder="All" /></SelectTrigger>
                 <SelectContent>
-                  {plans.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                  <SelectItem value="all">All Territories</SelectItem>
+                  {planTerritories.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <label className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Sales Resource</label>
+              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">City</label>
+              <Select value={cityFilter} onValueChange={(v) => { setCityFilter(v); setSelectedResource([]); }}>
+                <SelectTrigger data-testid="select-city"><SelectValue placeholder="All" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Cities</SelectItem>
+                  {planCities.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Resource</label>
               <MultiSelect
-                options={resources.map(r => ({ value: r.resource_id, label: `${r.resource_name} (${r.city})` }))}
+                options={filteredResources.map(r => ({ value: r.resource_id, label: `${r.resource_name}` }))}
                 selected={selectedResource}
                 onChange={setSelectedResource}
-                placeholder="Select resource(s)"
+                placeholder="All Resources"
                 data-testid="select-resource"
               />
             </div>
             <div>
-              <label className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Month</label>
+              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Target Plan <span className="text-slate-400 normal-case">(optional)</span></label>
+              <Select value={selectedPlan || '__none__'} onValueChange={v => setSelectedPlan(v === '__none__' ? '' : v)}>
+                <SelectTrigger data-testid="select-plan"><SelectValue placeholder="No plan selected" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No Plan</SelectItem>
+                  {plans.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {/* Row 2: Time period & Generate */}
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 items-end">
+            <div>
+              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Month</label>
               <Select value={String(selectedMonth)} onValueChange={v => setSelectedMonth(parseInt(v))}>
                 <SelectTrigger data-testid="select-month"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -206,7 +322,7 @@ export default function PerformanceTracker() {
               </Select>
             </div>
             <div>
-              <label className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 block">Year</label>
+              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Year</label>
               <Select value={String(selectedYear)} onValueChange={v => setSelectedYear(parseInt(v))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -214,45 +330,70 @@ export default function PerformanceTracker() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-end">
-              <Button onClick={generate} disabled={loading || !selectedPlan || selectedResource.length === 0} className="w-full bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white shadow-sm border-0" data-testid="generate-btn">
+            <div>
+              <Button onClick={generate} disabled={loading || !hasSelection} className="w-full bg-slate-900 hover:bg-slate-800 text-white border-0 rounded-sm" data-testid="generate-btn">
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Generate
               </Button>
             </div>
           </div>
-        </CardContent>
-      </Card>
+      </div>
 
       {loading && (
         <div className="flex items-center justify-center py-20">
-          <RefreshCw className="h-6 w-6 animate-spin text-indigo-500" />
+          <RefreshCw className="h-6 w-6 animate-spin text-slate-400" />
         </div>
       )}
 
       {data && !loading && (
         <>
           {/* Status bar */}
-          <div className="flex items-center justify-between bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm rounded-xl p-3 sm:p-4 border border-slate-100 dark:border-slate-800 shadow-sm">
-            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-              <span className="text-sm font-semibold text-slate-800 dark:text-white">{data.resource_name}</span>
-              {data.resource_city && <Badge variant="outline" className="bg-slate-50 dark:bg-slate-800 text-xs">{data.resource_city}</Badge>}
-              <Badge variant="outline" className="bg-slate-50 dark:bg-slate-800 text-xs">{data.plan_name}</Badge>
-              {selectedResource.length === 1 && <StatusBadge status={data.status} />}
-              {selectedResource.length > 1 && <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-xs border-indigo-200">{selectedResource.length} resources combined</Badge>}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white rounded-sm p-3 sm:p-4 border border-slate-200 gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Show resource initials for multi-resource, full name for single */}
+              {(() => {
+                const names = (data.resource_name || '').split(', ').filter(Boolean);
+                if (names.length === 1) {
+                  return <span className="text-sm font-bold text-slate-900">{names[0]}</span>;
+                }
+                return (
+                  <div className="flex items-center gap-1">
+                    {names.slice(0, 5).map((name, i) => {
+                      const parts = name.trim().split(' ').filter(Boolean);
+                      const initials = parts.length >= 2 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : parts[0]?.[0] || '?';
+                      return (
+                        <span key={i} className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-800 text-white text-[10px] font-bold cursor-default" title={name}>
+                          {initials.toUpperCase()}
+                        </span>
+                      );
+                    })}
+                    {names.length > 5 && (
+                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-300 text-slate-700 text-[10px] font-bold" title={names.slice(5).join(', ')}>
+                        +{names.length - 5}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+              {data.resource_city && <Badge variant="outline" className="bg-slate-50 text-xs rounded-sm border-slate-200">{data.resource_city}</Badge>}
+              {data.plan_name && <Badge variant="outline" className="bg-slate-50 text-xs rounded-sm border-slate-200">{data.plan_name}</Badge>}
+              {territoryFilter !== 'all' && <Badge className="bg-slate-900 text-white text-xs rounded-sm">{planTerritories.find(t => t.id === territoryFilter)?.name}</Badge>}
+              {cityFilter !== 'all' && <Badge className="bg-slate-900 text-white text-xs rounded-sm">{cityFilter}</Badge>}
+              {resolveResourceIds().length === 1 && <StatusBadge status={data.status} />}
+              {resolveResourceIds().length > 1 && <Badge className="bg-slate-100 text-slate-700 text-xs rounded-sm">{resolveResourceIds().length} resources</Badge>}
             </div>
             <div className="flex items-center gap-2">
-              {selectedResource.length === 1 && !isLocked && data.status !== 'submitted' && (
+              {resolveResourceIds().length === 1 && !isLocked && data.status !== 'submitted' && (
                 <>
-                  <Button variant="outline" size="sm" onClick={() => saveRecord(false)} disabled={saving} data-testid="save-draft-btn">
+                  <Button variant="outline" size="sm" className="rounded-sm" onClick={() => saveRecord(false)} disabled={saving} data-testid="save-draft-btn">
                     <Save className="h-4 w-4 mr-1" />{saving ? 'Saving...' : 'Save Draft'}
                   </Button>
-                  <Button size="sm" onClick={() => saveRecord(true)} disabled={saving} data-testid="submit-btn">
+                  <Button size="sm" className="rounded-sm bg-slate-900 hover:bg-slate-800" onClick={() => saveRecord(true)} disabled={saving} data-testid="submit-btn">
                     <Send className="h-4 w-4 mr-1" />Submit
                   </Button>
                 </>
               )}
-              {selectedResource.length === 1 && data.status === 'submitted' && (
+              {resolveResourceIds().length === 1 && data.status === 'submitted' && (
                 <>
                   <Button variant="outline" size="sm" onClick={returnRecord} data-testid="return-btn">
                     <RotateCcw className="h-4 w-4 mr-1" />Return
@@ -265,82 +406,76 @@ export default function PerformanceTracker() {
             </div>
           </div>
 
-          {/* Summary Cards Row - TaskMetricsWidget Style */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3" data-testid="summary-cards">
-            <SummaryTile label="Target" value={`₹${fmt(data.revenue?.target)}`} icon={Target} gradient="from-slate-500 to-slate-700" bgGradient="from-slate-50 to-gray-50 dark:from-slate-950/30 dark:to-gray-950/20" iconBg="bg-slate-100 dark:bg-slate-900/50" textColor="text-slate-700 dark:text-slate-300" testId="metric-target" />
-            <SummaryTile label="Revenue" value={`₹${fmt(data.revenue?.this_month)}`} icon={DollarSign} gradient="from-blue-500 to-indigo-600" bgGradient="from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20" iconBg="bg-blue-100 dark:bg-blue-900/50" textColor="text-blue-700 dark:text-blue-300" sub={fmtPct(data.revenue?.achievement_pct)} testId="metric-achieved" />
-            <SummaryTile label="Existing A/C" value={data.accounts?.existing_count} icon={Users} gradient="from-emerald-500 to-teal-600" bgGradient="from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20" iconBg="bg-emerald-100 dark:bg-emerald-900/50" textColor="text-emerald-700 dark:text-emerald-300" testId="metric-existing" />
-            <SummaryTile label="New A/C" value={data.accounts?.new_onboarded} icon={Building2} gradient="from-teal-500 to-cyan-600" bgGradient="from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/20" iconBg="bg-teal-100 dark:bg-teal-900/50" textColor="text-teal-700 dark:text-teal-300" testId="metric-new" />
-            <SummaryTile label="Pipeline" value={`₹${fmt(data.pipeline?.total_value)}`} icon={TrendingUp} gradient="from-amber-500 to-orange-600" bgGradient="from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20" iconBg="bg-amber-100 dark:bg-amber-900/50" textColor="text-amber-700 dark:text-amber-300" sub={`${data.pipeline?.total_count} leads`} testId="metric-pipeline" />
-            <SummaryTile label="Outstanding" value={`₹${fmt(data.collections?.total_outstanding)}`} icon={AlertTriangle} gradient="from-red-500 to-rose-600" bgGradient="from-red-50 to-rose-50 dark:from-red-950/30 dark:to-rose-950/20" iconBg="bg-red-100 dark:bg-red-900/50" textColor="text-red-700 dark:text-red-300" testId="metric-outstanding" />
-            <SummaryTile label="Activities" value={data.activities?.total || 0} icon={Phone} gradient="from-violet-500 to-purple-600" bgGradient="from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/20" iconBg="bg-violet-100 dark:bg-violet-900/50" textColor="text-violet-700 dark:text-violet-300" sub={`${data.activities?.unique_visits || 0} visits`} testId="metric-activity" />
+          {/* Summary Cards Row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-px bg-slate-200 border border-slate-200 overflow-hidden rounded-sm" data-testid="summary-cards">
+            <SummaryTile label="Target" value={`₹${fmt(data.revenue?.target)}`} icon={Target} testId="metric-target" />
+            <SummaryTile label="Revenue" value={`₹${fmt(data.revenue?.this_month)}`} icon={DollarSign} sub={fmtPct(data.revenue?.achievement_pct)} testId="metric-achieved" />
+            <SummaryTile label="Existing A/C" value={data.accounts?.existing_count} icon={Users} testId="metric-existing" />
+            <SummaryTile label="New A/C" value={data.accounts?.new_onboarded} icon={Building2} testId="metric-new" />
+            <SummaryTile label={`${MONTH_NAMES[data.pipeline?.next_month] || 'Next'} Pipeline`} value={`₹${fmt(data.pipeline?.next_month_pipeline_value)}`} icon={TrendingUp} sub={`${data.pipeline?.next_month_leads_count || 0} leads`} testId="metric-pipeline" />
+            <SummaryTile label="Outstanding" value={`₹${fmt(data.collections?.total_outstanding)}`} icon={AlertTriangle} testId="metric-outstanding" />
+            <SummaryTile label="Activities" value={data.activities?.total || 0} icon={Phone} sub={`${data.activities?.unique_visits || 0} visits`} testId="metric-activity" />
           </div>
 
           {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
             {/* Revenue Section */}
-            <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="revenue-section">
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500" style={{position:'relative'}} />
-              <div className="p-4 sm:p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/30">
-                    <DollarSign className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Revenue Metrics</h3>
+            <div className="bg-white border border-slate-200 rounded-sm" data-testid="revenue-section">
+              <div className="flex items-center gap-2.5 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100">
+                <div className="p-1.5 bg-slate-100 rounded-sm">
+                  <DollarSign className="h-4 w-4 text-slate-700" />
                 </div>
-                <div className="space-y-3">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">Revenue Metrics</h3>
+              </div>
+              <div className="p-4 sm:p-5 pt-3 sm:pt-4">
+                <div className="space-y-1">
                   <div className="grid grid-cols-2 gap-3">
                     <InfoRow label="Monthly Target" value={`₹${fmt(data.revenue?.target)}`} />
                     <InfoRow label="Achievement %" value={fmtPct(data.revenue?.achievement_pct)} highlight={data.revenue?.achievement_pct < 50 ? 'red' : data.revenue?.achievement_pct >= 100 ? 'green' : 'amber'} />
                   </div>
-                  <div className="space-y-2 border-t border-slate-100 dark:border-slate-800 pt-3">
+                  <div className="space-y-1 border-t border-slate-100 pt-3 mt-3">
                     <OverridableRow label="Revenue Lifetime (As-on-date)" autoValue={data.revenue?.lifetime} overrideValue={revenueOverrides.lifetime} editing={revenueEditing.lifetime} locked={isLocked} onEdit={() => setRevenueEditing(p => ({ ...p, lifetime: true }))} onChange={(v) => setRevenueOverrides(p => ({ ...p, lifetime: v }))} onSave={() => setRevenueEditing(p => ({ ...p, lifetime: false }))} onReset={() => { setRevenueOverrides(p => ({ ...p, lifetime: '' })); setRevenueEditing(p => ({ ...p, lifetime: false })); }} testId="revenue-lifetime" />
                     <OverridableRow label="Revenue This Month (All Accounts)" autoValue={data.revenue?.this_month} overrideValue={revenueOverrides.this_month} editing={revenueEditing.this_month} locked={isLocked} onEdit={() => setRevenueEditing(p => ({ ...p, this_month: true }))} onChange={(v) => setRevenueOverrides(p => ({ ...p, this_month: v }))} onSave={() => setRevenueEditing(p => ({ ...p, this_month: false }))} onReset={() => { setRevenueOverrides(p => ({ ...p, this_month: '' })); setRevenueEditing(p => ({ ...p, this_month: false })); }} testId="revenue-this-month" />
                     <OverridableRow label="Revenue from New Accounts" autoValue={data.revenue?.from_new_accounts} overrideValue={revenueOverrides.new_accounts} editing={revenueEditing.new_accounts} locked={isLocked} onEdit={() => setRevenueEditing(p => ({ ...p, new_accounts: true }))} onChange={(v) => setRevenueOverrides(p => ({ ...p, new_accounts: v }))} onSave={() => setRevenueEditing(p => ({ ...p, new_accounts: false }))} onReset={() => { setRevenueOverrides(p => ({ ...p, new_accounts: '' })); setRevenueEditing(p => ({ ...p, new_accounts: false })); }} testId="revenue-new-accounts" />
                   </div>
                 </div>
               </div>
-            </Card>
+            </div>
 
             {/* Accounts Section */}
-            <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="accounts-section">
-              <div className="h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
-              <div className="p-4 sm:p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/50 dark:to-teal-900/30">
-                    <Users className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Account Metrics</h3>
+            <div className="bg-white border border-slate-200 rounded-sm" data-testid="accounts-section">
+              <div className="flex items-center gap-2.5 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100">
+                <div className="p-1.5 bg-slate-100 rounded-sm">
+                  <Users className="h-4 w-4 text-slate-700" />
                 </div>
-              <div className="space-y-4">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">Account Metrics</h3>
+              </div>
+              <div className="p-4 sm:p-5 pt-3 sm:pt-4 space-y-4">
                 {/* Existing Accounts */}
                 <div data-testid="existing-accounts-tile">
-                  <div className="flex justify-between items-center py-2.5 px-3.5 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/10 border border-emerald-100 dark:border-emerald-900/30">
-                    <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Existing Accounts (Lifetime)</span>
-                    <span className="text-lg font-bold text-emerald-700 dark:text-emerald-400">{data.accounts?.existing_count}</span>
+                  <div className="flex justify-between items-center py-2 sm:py-2.5 px-3 sm:px-3.5 bg-slate-50 border border-slate-200 rounded-sm">
+                    <span className="text-[10px] sm:text-xs font-semibold text-slate-600 uppercase tracking-wide">Existing Accounts (Lifetime)</span>
+                    <span className="text-lg sm:text-xl font-light text-slate-900 tabular-nums">{data.accounts?.existing_count}</span>
                   </div>
                   {(data.accounts?.existing_accounts || []).length > 0 && (
-                    <div className="mt-1.5 space-y-1">
+                    <div className="mt-2 space-y-px">
                       {(expandedAccountList.existing
                         ? data.accounts.existing_accounts
                         : data.accounts.existing_accounts.slice(0, 3)
                       ).map((acc, idx) => (
-                        <div key={acc.id || idx} className="flex items-center justify-between py-1.5 px-3 text-xs rounded-lg bg-white/70 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-all duration-200">
-                          <span className="font-medium text-slate-700 dark:text-slate-300">{acc.name || 'Unknown'}</span>
-                          <div className="flex items-center gap-2">
-                            {acc.city && <span className="text-slate-400 dark:text-slate-500">{acc.city}</span>}
-                            {acc.status && <Badge variant="outline" className="text-[10px] capitalize py-0 h-4">{acc.status.replace(/_/g, ' ')}</Badge>}
-                          </div>
+                        <div key={acc.id || idx} className="flex items-center justify-between py-2 px-3 text-sm bg-white border-b border-slate-100 hover:bg-slate-50 transition-colors group">
+                          <span className="font-medium text-slate-700">{acc.name || 'Unknown'}</span>
+                          <AccountValueCell account={acc} planId={selectedPlan} onRefresh={generate} />
                         </div>
                       ))}
                       {data.accounts.existing_accounts.length > 3 && (
                         <button
                           onClick={() => setExpandedAccountList(p => ({ ...p, existing: !p.existing }))}
-                          className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 px-3 py-0.5 flex items-center gap-1 font-medium"
+                          className="text-xs text-slate-600 hover:text-slate-900 px-3 py-1.5 flex items-center gap-1 font-semibold uppercase tracking-wide"
                           data-testid="expand-existing-accounts"
                         >
                           {expandedAccountList.existing ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                          {expandedAccountList.existing ? 'Show less' : `Show all ${data.accounts.existing_accounts.length} accounts`}
+                          {expandedAccountList.existing ? 'Show less' : `Show all ${data.accounts.existing_accounts.length}`}
                         </button>
                       )}
                     </div>
@@ -348,116 +483,137 @@ export default function PerformanceTracker() {
                 </div>
                 {/* New Accounts This Month */}
                 <div data-testid="new-accounts-tile">
-                  <div className={`flex justify-between items-center py-2.5 px-3.5 rounded-xl border ${data.accounts?.new_onboarded > 0 ? 'bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/20 dark:to-cyan-950/10 border-teal-100 dark:border-teal-900/30' : 'bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/20 dark:to-rose-950/10 border-red-100 dark:border-red-900/30'}`}>
-                    <span className="text-xs font-medium text-slate-600 dark:text-slate-400">New Accounts Onboarded This Month</span>
-                    <span className={`text-lg font-bold ${data.accounts?.new_onboarded > 0 ? 'text-teal-700 dark:text-teal-400' : 'text-red-600 dark:text-red-400'}`}>{data.accounts?.new_onboarded}</span>
+                  <div className={`flex justify-between items-center py-2 sm:py-2.5 px-3 sm:px-3.5 border rounded-sm ${data.accounts?.new_onboarded > 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                    <span className="text-[10px] sm:text-xs font-semibold text-slate-600 uppercase tracking-wide">New Accounts This Month</span>
+                    <span className={`text-lg sm:text-xl font-light tabular-nums ${data.accounts?.new_onboarded > 0 ? 'text-emerald-800' : 'text-red-700'}`}>{data.accounts?.new_onboarded}</span>
                   </div>
                   {(data.accounts?.new_accounts || []).length > 0 && (
-                    <div className="mt-1.5 space-y-1">
+                    <div className="mt-2 space-y-px">
                       {(expandedAccountList.new
                         ? data.accounts.new_accounts
                         : data.accounts.new_accounts.slice(0, 3)
                       ).map((acc, idx) => (
-                        <div key={acc.id || idx} className="flex items-center justify-between py-1.5 px-3 text-xs rounded-lg bg-white/70 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-all duration-200">
-                          <span className="font-medium text-slate-700 dark:text-slate-300">{acc.name || 'Unknown'}</span>
-                          {acc.city && <span className="text-slate-400 dark:text-slate-500">{acc.city}</span>}
+                        <div key={acc.id || idx} className="flex items-center justify-between py-2 px-3 text-sm bg-white border-b border-slate-100 hover:bg-slate-50 transition-colors group">
+                          <span className="font-medium text-slate-700">{acc.name || 'Unknown'}</span>
+                          <AccountValueCell account={acc} planId={selectedPlan} onRefresh={generate} />
                         </div>
                       ))}
                       {data.accounts.new_accounts.length > 3 && (
                         <button
                           onClick={() => setExpandedAccountList(p => ({ ...p, new: !p.new }))}
-                          className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 px-3 py-0.5 flex items-center gap-1 font-medium"
+                          className="text-xs text-slate-600 hover:text-slate-900 px-3 py-1.5 flex items-center gap-1 font-semibold uppercase tracking-wide"
                           data-testid="expand-new-accounts"
                         >
                           {expandedAccountList.new ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                          {expandedAccountList.new ? 'Show less' : `Show all ${data.accounts.new_accounts.length} accounts`}
+                          {expandedAccountList.new ? 'Show less' : `Show all ${data.accounts.new_accounts.length}`}
                         </button>
                       )}
                     </div>
                   )}
                 </div>
               </div>
-              </div>
-            </Card>
+            </div>
 
             {/* Pipeline Section */}
-            <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="pipeline-section">
-              <div className="h-1 bg-gradient-to-r from-amber-500 to-orange-500" />
-              <div className="p-4 sm:p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/50 dark:to-orange-900/30">
-                    <TrendingUp className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Pipeline Metrics</h3>
+            <div className="bg-white border border-slate-200 rounded-sm" data-testid="pipeline-section">
+              <div className="flex items-center gap-2.5 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100">
+                <div className="p-1.5 bg-slate-100 rounded-sm">
+                  <TrendingUp className="h-4 w-4 text-slate-700" />
                 </div>
-              <div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm" data-testid="pipeline-status-table">
-                    <thead>
-                      <tr className="bg-gradient-to-r from-amber-50/80 to-orange-50/80 dark:from-amber-950/20 dark:to-orange-950/10 border-b border-amber-100 dark:border-amber-900/30 text-xs text-slate-500 dark:text-slate-400 uppercase">
-                        <th className="text-left p-2.5">Status</th>
-                        <th className="text-right p-2.5">No of Leads</th>
-                        <th className="text-right p-2.5">Pipeline Value</th>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">Pipeline Metrics</h3>
+              </div>
+              <div className="p-4 sm:p-5 pt-3 sm:pt-4">
+                <table className="w-full text-left border-collapse" data-testid="pipeline-status-table">
+                  <thead>
+                    <tr>
+                      <th className="pb-3 border-b border-slate-200 text-[10px] uppercase tracking-wider font-semibold text-slate-500">Status</th>
+                      <th className="pb-3 border-b border-slate-200 text-[10px] uppercase tracking-wider font-semibold text-slate-500 text-right">Leads</th>
+                      <th className="pb-3 border-b border-slate-200 text-[10px] uppercase tracking-wider font-semibold text-slate-500 text-right">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data.pipeline?.by_status || []).map((row) => {
+                      const statusInfo = getStatusById(row.status);
+                      const dotColor = statusInfo?.bg || 'bg-slate-400';
+                      return (
+                      <tr
+                        key={row.status}
+                        className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
+                        onClick={() => {
+                          const params = new URLSearchParams();
+                          params.set('status', row.status);
+                          const rids = resolveResourceIds();
+                          if (rids.length > 0) params.set('assigned_to', rids.join(','));
+                          navigate(`/leads?${params.toString()}`);
+                        }}
+                        data-testid={`pipeline-row-${row.status}`}
+                      >
+                        <td className="py-3 text-sm font-medium text-slate-900 capitalize flex items-center gap-2.5">
+                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
+                          {getStatusLabel(row.status)}
+                          <ChevronRight className="h-3 w-3 opacity-0 group-hover:opacity-100 text-slate-300 ml-auto" />
+                        </td>
+                        <td className="py-3 text-right text-sm font-medium text-slate-700 tabular-nums">{row.count}</td>
+                        <td className="py-3 text-right text-sm font-medium text-slate-700 tabular-nums">₹{fmt(row.value)}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {(data.pipeline?.by_status || []).map((row) => {
-                        const statusInfo = getStatusById(row.status);
-                        const dotColor = statusInfo?.bg || 'bg-slate-400';
-                        return (
-                        <tr
-                          key={row.status}
-                          className="border-b border-slate-100 dark:border-slate-800 hover:bg-amber-50/50 dark:hover:bg-amber-950/10 cursor-pointer transition-all duration-200 group"
-                          onClick={() => navigate(`/leads?status=${row.status}${selectedResource.length === 1 ? `&assigned_to=${selectedResource[0]}` : ''}`)}
-                          data-testid={`pipeline-row-${row.status}`}
-                        >
-                          <td className="p-2.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 capitalize flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full ${dotColor}`} />
-                            {getStatusLabel(row.status)}
-                            <ChevronRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400" />
-                          </td>
-                          <td className="p-2.5 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">{row.count}</td>
-                          <td className="p-2.5 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">₹{fmt(row.value)}</td>
-                        </tr>
-                        );
-                      })}
-                      {(data.pipeline?.by_status || []).length === 0 && (
-                        <tr><td colSpan={3} className="text-center py-4 text-xs text-muted-foreground">No active pipeline leads</td></tr>
-                      )}
-                      <tr className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-800/50 dark:to-gray-800/30 font-semibold border-t-2 border-slate-200 dark:border-slate-700">
-                        <td className="p-2.5 text-xs text-slate-700 dark:text-slate-300">Total</td>
-                        <td className="p-2.5 text-right text-sm text-slate-800 dark:text-white">{data.pipeline?.total_count || 0}</td>
-                        <td className="p-2.5 text-right text-sm text-slate-800 dark:text-white">₹{fmt(data.pipeline?.total_value)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                      );
+                    })}
+                    {(data.pipeline?.by_status || []).length === 0 && (
+                      <tr><td colSpan={3} className="text-center py-6 text-xs text-slate-400">No active pipeline leads</td></tr>
+                    )}
+                    <tr className="bg-slate-50 font-semibold border-t-2 border-slate-200">
+                      <td className="py-3 text-xs text-slate-700 uppercase tracking-wide">Total</td>
+                      <td className="py-3 text-right text-sm text-slate-900 tabular-nums">{data.pipeline?.total_count || 0}</td>
+                      <td className="py-3 text-right text-sm text-slate-900 tabular-nums">₹{fmt(data.pipeline?.total_value)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                {/* Leads Targeting Next Month - Block CTA */}
+                <div
+                  className="flex justify-between items-center p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-sm mt-4 sm:mt-5 hover:border-slate-400 hover:bg-slate-100 transition-colors cursor-pointer group"
+                  onClick={() => {
+                    const nm = data.pipeline?.next_month;
+                    const ny = data.pipeline?.next_year;
+                    const params = new URLSearchParams();
+                    params.set('target_closure_month', nm);
+                    params.set('target_closure_year', ny);
+                    const rids = resolveResourceIds();
+                    if (rids.length > 0) params.set('assigned_to', rids.join(','));
+                    navigate(`/leads?${params.toString()}`);
+                  }}
+                  data-testid="leads-targeting-next-month-link"
+                >
+                  <span className="text-[10px] sm:text-xs font-semibold text-slate-900 uppercase tracking-wide">Leads Targeting {MONTH_NAMES[data.pipeline?.next_month] || 'Next Month'}</span>
+                  <span className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2 tabular-nums">
+                    {data.pipeline?.next_month_leads_count || 0}
+                    <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-slate-700 transition-colors" />
+                  </span>
                 </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-3">
-                  <InfoRow label="Leads Targeting Next Month" value={data.pipeline?.next_month_leads_count || 0} />
-                  <InfoRow label="Next Month Pipeline Value" value={`₹${fmt(data.pipeline?.next_month_pipeline_value)}`} />
+
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <InfoRow label={`${MONTH_NAMES[data.pipeline?.next_month] || 'Next'} Pipeline Value`} value={`₹${fmt(data.pipeline?.next_month_pipeline_value)}`} />
                   <InfoRow label="Coverage Ratio" value={fmtPct(data.pipeline?.coverage_ratio)} highlight={data.pipeline?.coverage_ratio < 50 ? 'red' : 'green'} />
                 </div>
               </div>
-              </div>
-            </Card>
+            </div>
 
             {/* Outstanding Section */}
-            <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="outstanding-section">
-              <div className="h-1 bg-gradient-to-r from-red-500 to-rose-500" />
-              <div className="p-4 sm:p-5">
-                <div className="flex items-center gap-2 mb-4 cursor-pointer" onClick={() => toggleSection('outstanding')}>
-                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-red-100 to-rose-100 dark:from-red-900/50 dark:to-rose-900/30">
-                    <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Collections / Outstanding</h3>
-                  {expandedSections.outstanding ? <ChevronDown className="h-4 w-4 ml-auto text-slate-400" /> : <ChevronRight className="h-4 w-4 ml-auto text-slate-400" />}
+            <div className="bg-white border border-slate-200 rounded-sm" data-testid="outstanding-section">
+              <div className="flex items-center gap-2.5 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100 cursor-pointer" onClick={() => toggleSection('outstanding')}>
+                <div className="p-1.5 bg-slate-100 rounded-sm">
+                  <AlertTriangle className="h-4 w-4 text-slate-700" />
                 </div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">Collections / Outstanding</h3>
+                {expandedSections.outstanding ? <ChevronDown className="h-4 w-4 ml-auto text-slate-400" /> : <ChevronRight className="h-4 w-4 ml-auto text-slate-400" />}
+              </div>
+              <div className="p-4 sm:p-5 pt-3 sm:pt-4">
                 <div className="grid grid-cols-2 gap-3">
                   <InfoRow label="Total Outstanding" value={`₹${fmt(data.collections?.total_outstanding)}`} highlight={data.collections?.total_outstanding > 0 ? 'red' : 'green'} />
                   <InfoRow label="Outstanding Ratio" value={fmtPct(data.collections?.outstanding_ratio)} />
                 </div>
                 {data.collections?.aging && (
-                  <div className="mt-3 grid grid-cols-4 gap-2">
+                  <div className="mt-3 sm:mt-4 grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
                     <AgingBucket label="0-30d" value={data.collections.aging['0_30']} color="emerald" />
                     <AgingBucket label="31-60d" value={data.collections.aging['31_60']} color="amber" />
                     <AgingBucket label="61-90d" value={data.collections.aging['61_90']} color="orange" />
@@ -465,117 +621,109 @@ export default function PerformanceTracker() {
                   </div>
                 )}
                 {expandedSections.outstanding && data.collections?.account_details?.length > 0 && (
-                  <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-2">
-                    <p className="text-xs font-semibold text-red-600 dark:text-red-400 uppercase mb-1">Account-Level Outstanding</p>
+                  <div className="mt-4 border-t border-slate-100 pt-3">
+                    <p className="text-[10px] font-semibold text-red-700 uppercase tracking-wider mb-2">Account-Level Outstanding</p>
                     {data.collections.account_details.slice(0, 10).map(a => (
-                      <div key={a.account_id} className="text-xs flex justify-between py-0.5">
-                        <span className="text-slate-600 dark:text-slate-400">{a.account_id?.slice(0, 12)}... ({a.invoices} inv)</span>
-                        <span className="font-medium text-red-600 dark:text-red-400">₹{fmt(a.outstanding)}</span>
+                      <div key={a.account_id} className="text-sm flex justify-between py-1.5 border-b border-slate-100">
+                        <span className="text-slate-600">{a.account_id?.slice(0, 12)}... ({a.invoices} inv)</span>
+                        <span className="font-semibold text-red-700 tabular-nums">₹{fmt(a.outstanding)}</span>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-            </Card>
+            </div>
 
             {/* Activity Section */}
-            <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="activity-section">
-              <div className="h-1 bg-gradient-to-r from-violet-500 to-purple-500" />
-              <div className="p-4 sm:p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-900/50 dark:to-purple-900/30">
-                    <Phone className="h-4 w-4 text-violet-600 dark:text-violet-400" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Activity Metrics</h3>
+            <div className="bg-white border border-slate-200 rounded-sm" data-testid="activity-section">
+              <div className="flex items-center gap-2.5 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100">
+                <div className="p-1.5 bg-slate-100 rounded-sm">
+                  <Phone className="h-4 w-4 text-slate-700" />
                 </div>
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Total Activities</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-gradient-to-br from-purple-50/60 to-violet-50/40 dark:from-purple-950/20 dark:to-violet-950/10 border border-purple-100/60 dark:border-purple-900/20">
-                        <span className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1.5"><MessageSquare className="h-3 w-3 text-purple-500 dark:text-purple-400" />Messages</span>
-                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{data.activities?.messages || 0}</span>
-                      </div>
-                      <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-gradient-to-br from-blue-50/60 to-indigo-50/40 dark:from-blue-950/20 dark:to-indigo-950/10 border border-blue-100/60 dark:border-blue-900/20">
-                        <span className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1.5"><Phone className="h-3 w-3 text-blue-500 dark:text-blue-400" />Calls</span>
-                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{data.activities?.calls || 0}</span>
-                      </div>
-                      <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-gradient-to-br from-emerald-50/60 to-teal-50/40 dark:from-emerald-950/20 dark:to-teal-950/10 border border-emerald-100/60 dark:border-emerald-900/20">
-                        <span className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1.5"><MapPin className="h-3 w-3 text-emerald-500 dark:text-emerald-400" />Customer Visits</span>
-                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{data.activities?.visits || 0}</span>
-                      </div>
-                      <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-gradient-to-br from-amber-50/60 to-orange-50/40 dark:from-amber-950/20 dark:to-orange-950/10 border border-amber-100/60 dark:border-amber-900/20">
-                        <span className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1.5"><Mail className="h-3 w-3 text-amber-500 dark:text-amber-400" />Emails</span>
-                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{data.activities?.emails || 0}</span>
-                      </div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">Activity Metrics</h3>
+              </div>
+              <div className="p-3 sm:p-4 lg:p-5 pt-3 sm:pt-4 space-y-4">
+                <div>
+                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-2 sm:mb-3">Total Activities</p>
+                  <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+                    <div className="flex items-center justify-between py-2 sm:py-2.5 px-2.5 sm:px-3 bg-slate-50 border border-slate-200 rounded-sm">
+                      <span className="text-xs sm:text-sm text-slate-600 flex items-center gap-1.5"><MessageSquare className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-400" />Messages</span>
+                      <span className="text-sm sm:text-base font-semibold text-slate-900 tabular-nums">{data.activities?.messages || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2 sm:py-2.5 px-2.5 sm:px-3 bg-slate-50 border border-slate-200 rounded-sm">
+                      <span className="text-xs sm:text-sm text-slate-600 flex items-center gap-1.5"><Phone className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-400" />Calls</span>
+                      <span className="text-sm sm:text-base font-semibold text-slate-900 tabular-nums">{data.activities?.calls || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2 sm:py-2.5 px-2.5 sm:px-3 bg-slate-50 border border-slate-200 rounded-sm">
+                      <span className="text-xs sm:text-sm text-slate-600 flex items-center gap-1.5"><MapPin className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-400" />Visits</span>
+                      <span className="text-sm sm:text-base font-semibold text-slate-900 tabular-nums">{data.activities?.visits || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2 sm:py-2.5 px-2.5 sm:px-3 bg-slate-50 border border-slate-200 rounded-sm">
+                      <span className="text-xs sm:text-sm text-slate-600 flex items-center gap-1.5"><Mail className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-400" />Emails</span>
+                      <span className="text-sm sm:text-base font-semibold text-slate-900 tabular-nums">{data.activities?.emails || 0}</span>
                     </div>
                   </div>
-                  <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
-                    <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Unique Customers Reached</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50/80 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800">
-                        <span className="text-xs text-slate-600 dark:text-slate-400">Unique Visits</span>
-                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{data.activities?.unique_visits || 0}</span>
-                      </div>
-                      <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50/80 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800">
-                        <span className="text-xs text-slate-600 dark:text-slate-400">Unique Messages</span>
-                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{data.activities?.unique_messages || 0}</span>
-                      </div>
-                      <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50/80 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800">
-                        <span className="text-xs text-slate-600 dark:text-slate-400">Unique Calls</span>
-                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{data.activities?.unique_calls || 0}</span>
-                      </div>
-                      <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50/80 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800">
-                        <span className="text-xs text-slate-600 dark:text-slate-400">Unique Emails</span>
-                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{data.activities?.unique_emails || 0}</span>
-                      </div>
+                </div>
+                <div className="border-t border-slate-100 pt-3 sm:pt-4">
+                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-2 sm:mb-3">Unique Customers Reached</p>
+                  <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+                    <div className="flex items-center justify-between py-2 sm:py-2.5 px-2.5 sm:px-3 border border-slate-200 rounded-sm">
+                      <span className="text-xs sm:text-sm text-slate-600">Visits</span>
+                      <span className="text-sm sm:text-base font-semibold text-slate-900 tabular-nums">{data.activities?.unique_visits || 0}</span>
                     </div>
-                  </div>
-                  <div className="border-t border-slate-100 dark:border-slate-800 pt-3 grid grid-cols-2 gap-3">
-                    <InfoRow label="Visit Productivity" value={data.activities?.visit_productivity > 0 ? `₹${fmt(data.activities?.visit_productivity)}/visit` : '-'} />
-                    <InfoRow label="Call Productivity" value={data.activities?.call_productivity > 0 ? `₹${fmt(data.activities?.call_productivity)}/call` : '-'} />
+                    <div className="flex items-center justify-between py-2 sm:py-2.5 px-2.5 sm:px-3 border border-slate-200 rounded-sm">
+                      <span className="text-xs sm:text-sm text-slate-600">Messages</span>
+                      <span className="text-sm sm:text-base font-semibold text-slate-900 tabular-nums">{data.activities?.unique_messages || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2 sm:py-2.5 px-2.5 sm:px-3 border border-slate-200 rounded-sm">
+                      <span className="text-xs sm:text-sm text-slate-600">Calls</span>
+                      <span className="text-sm sm:text-base font-semibold text-slate-900 tabular-nums">{data.activities?.unique_calls || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2 sm:py-2.5 px-2.5 sm:px-3 border border-slate-200 rounded-sm">
+                      <span className="text-xs sm:text-sm text-slate-600">Emails</span>
+                      <span className="text-sm sm:text-base font-semibold text-slate-900 tabular-nums">{data.activities?.unique_emails || 0}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </Card>
+            </div>
 
             {/* Support Section */}
-            <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="support-section">
-              <div className="h-1 bg-gradient-to-r from-indigo-500 to-blue-500" />
-              <div className="p-4 sm:p-5">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-indigo-100 to-blue-100 dark:from-indigo-900/50 dark:to-blue-900/30">
-                    <MapPin className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Support Needed</h3>
+            <div className="bg-white border border-slate-200 rounded-sm" data-testid="support-section">
+              <div className="flex items-center gap-2.5 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100">
+                <div className="p-1.5 bg-slate-100 rounded-sm">
+                  <MapPin className="h-4 w-4 text-slate-700" />
                 </div>
-                <p className="text-xs text-muted-foreground mb-3 ml-9">Select areas where team support is required</p>
-                <div className="space-y-3">
-                  <div className="flex flex-wrap gap-2">
-                    {SUPPORT_CATEGORIES.map(cat => (
-                      <Badge
-                        key={cat}
-                        variant={supportNeeded.includes(cat) ? 'default' : 'outline'}
-                        className={`cursor-pointer transition-all duration-200 ${supportNeeded.includes(cat) ? 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 border-0 text-white shadow-sm' : 'hover:bg-indigo-50 dark:hover:bg-indigo-950/30 hover:border-indigo-200'} ${isLocked ? 'pointer-events-none' : ''}`}
-                        onClick={() => !isLocked && toggleSupport(cat)}
-                        data-testid={`support-${cat.toLowerCase().replace(/\s+/g, '-')}`}
-                      >
-                        {cat}
-                      </Badge>
-                    ))}
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-500 dark:text-slate-400">Remarks</label>
-                    <Textarea
-                      value={remarks} onChange={e => setRemarks(e.target.value)}
-                      placeholder="Additional comments or observations..."
-                      className="mt-1 bg-white/50 dark:bg-slate-800/30" rows={3} disabled={isLocked}
-                      data-testid="remarks"
-                    />
-                  </div>
+                <div>
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">Support Needed</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Select areas where team support is required</p>
                 </div>
               </div>
-            </Card>
+              <div className="p-4 sm:p-5 pt-3 sm:pt-4 space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {SUPPORT_CATEGORIES.map(cat => (
+                    <Badge
+                      key={cat}
+                      variant={supportNeeded.includes(cat) ? 'default' : 'outline'}
+                      className={`cursor-pointer transition-all rounded-sm ${supportNeeded.includes(cat) ? 'bg-slate-900 hover:bg-slate-800 text-white border-slate-900' : 'hover:bg-slate-50 border-slate-300 text-slate-600'} ${isLocked ? 'pointer-events-none' : ''}`}
+                      onClick={() => !isLocked && toggleSupport(cat)}
+                      data-testid={`support-${cat.toLowerCase().replace(/\s+/g, '-')}`}
+                    >
+                      {cat}
+                    </Badge>
+                  ))}
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-500">Remarks</label>
+                  <Textarea
+                    value={remarks} onChange={e => setRemarks(e.target.value)}
+                    placeholder="Additional comments or observations..."
+                    className="mt-1.5 bg-slate-50 border-slate-200 rounded-sm" rows={3} disabled={isLocked}
+                    data-testid="remarks"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Month-on-Month Comparison */}
@@ -590,32 +738,22 @@ export default function PerformanceTracker() {
           )}
 
           {/* Calculated KPIs */}
-          <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="kpi-section">
-            <div className="h-1 bg-gradient-to-r from-teal-500 to-cyan-500" />
-            <div className="p-4 sm:p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="p-1.5 rounded-lg bg-gradient-to-br from-teal-100 to-cyan-100 dark:from-teal-900/50 dark:to-cyan-900/30">
-                  <Target className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-                </div>
-                <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Performance KPIs</h3>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="bg-white border border-slate-200 rounded-sm p-3 sm:p-4 lg:p-5" data-testid="kpi-section">
+            <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-900 mb-3 sm:mb-4">Performance KPIs</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <KPICard label="Achievement %" value={fmtPct(data.calculated?.achievement_pct)} good={data.calculated?.achievement_pct >= 80} bad={data.calculated?.achievement_pct < 50} />
                 <KPICard label="Pipeline Coverage" value={fmtPct(data.calculated?.pipeline_coverage)} good={data.calculated?.pipeline_coverage >= 100} bad={data.calculated?.pipeline_coverage < 50} />
                 <KPICard label="Outstanding Ratio" value={fmtPct(data.calculated?.outstanding_ratio)} good={data.calculated?.outstanding_ratio < 20} bad={data.calculated?.outstanding_ratio > 50} invert />
-                <KPICard label="Visit Productivity" value={data.calculated?.visit_productivity > 0 ? `₹${fmt(data.calculated.visit_productivity)}` : '-'} />
-                <KPICard label="Call Productivity" value={data.calculated?.call_productivity > 0 ? `₹${fmt(data.calculated.call_productivity)}` : '-'} />
                 <KPICard label="Conversion Rate" value={fmtPct(data.calculated?.account_conversion_rate)} good={data.calculated?.account_conversion_rate >= 20} />
               </div>
-            </div>
-          </Card>
+          </div>
         </>
       )}
 
-      {!data && !loading && selectedPlan && selectedResource && (
-        <div className="text-center py-16 text-muted-foreground">
-          <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-30" />
-          <p>Click "Generate" to compute performance metrics</p>
+      {!data && !loading && (
+        <div className="text-center py-20 text-slate-400">
+          <BarChart3 className="h-10 w-10 mx-auto mb-4 opacity-30" />
+          <p className="text-sm">Select filters and click "Generate" to compute performance metrics</p>
         </div>
       )}
     </div>
@@ -626,8 +764,8 @@ function OverridableRow({ label, autoValue, overrideValue, editing, locked, onEd
   const displayValue = overrideValue !== '' ? parseFloat(overrideValue) : autoValue;
   const hasOverride = overrideValue !== '' && overrideValue !== null && overrideValue !== undefined;
   return (
-    <div className={`flex items-center justify-between py-1.5 px-2 rounded ${hasOverride ? 'bg-amber-50/60' : ''}`} data-testid={testId}>
-      <span className="text-xs text-slate-500 flex items-center gap-1">
+    <div className={`flex items-center justify-between py-2.5 px-2 rounded ${hasOverride ? 'bg-amber-50/60' : ''}`} data-testid={testId}>
+      <span className="text-sm text-slate-500 flex items-center gap-1">
         {label}
         {hasOverride && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" title="Manual override" />}
       </span>
@@ -636,7 +774,7 @@ function OverridableRow({ label, autoValue, overrideValue, editing, locked, onEd
           <>
             <input
               type="number"
-              className="w-28 text-right text-sm font-medium border rounded px-2 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+              className="w-28 text-right text-base font-bold border rounded px-2 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
               value={overrideValue}
               onChange={e => onChange(e.target.value)}
               autoFocus
@@ -648,7 +786,7 @@ function OverridableRow({ label, autoValue, overrideValue, editing, locked, onEd
           </>
         ) : (
           <>
-            <span className={`text-sm font-semibold ${hasOverride ? 'text-amber-700' : 'text-slate-700'}`}>₹{fmt(displayValue)}</span>
+            <span className={`text-base font-bold tabular-nums ${hasOverride ? 'text-amber-700' : 'text-slate-900'}`}>₹{fmt(displayValue)}</span>
             {!locked && (
               <button onClick={() => { onChange(String(autoValue || 0)); onEdit(); }} className="p-0.5 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600" title="Override" data-testid={`${testId}-edit`}>
                 <Pencil className="h-3 w-3" />
@@ -669,23 +807,16 @@ function OverridableRow({ label, autoValue, overrideValue, editing, locked, onEd
 
 // --- Sub-components ---
 
-function SummaryTile({ label, value, icon: Icon, gradient, bgGradient, iconBg, textColor, sub, testId }) {
+function SummaryTile({ label, value, icon: Icon, sub, testId }) {
   return (
-    <Card className={`relative overflow-hidden border-0 bg-gradient-to-br ${bgGradient} backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5 group`} data-testid={testId}>
-      <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${gradient}`} />
-      <div className="p-3 sm:p-4">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <p className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider line-clamp-1">{label}</p>
-            <p className={`text-lg sm:text-xl font-bold ${textColor} tabular-nums`}>{value}</p>
-            {sub && <p className="text-[10px] sm:text-xs text-muted-foreground">{sub}</p>}
-          </div>
-          <div className={`p-1.5 rounded-lg ${iconBg} group-hover:scale-110 transition-transform duration-300`}>
-            <Icon className={`h-4 w-4 ${textColor}`} />
-          </div>
-        </div>
+    <div className="bg-white p-3 sm:p-4 relative group flex flex-col justify-between min-h-[80px] sm:min-h-[90px] hover:bg-slate-50 transition-colors overflow-hidden" data-testid={testId}>
+      <p className="text-[9px] sm:text-[10px] font-semibold text-slate-400 uppercase tracking-[0.15em] leading-tight pr-5">{label}</p>
+      <Icon className="h-3.5 w-3.5 text-slate-300 absolute top-3 right-3 sm:top-4 sm:right-4" />
+      <div className="min-w-0 mt-auto">
+        <p className="text-base sm:text-lg font-bold tracking-tight text-slate-900 tabular-nums truncate" title={String(value)}>{value}</p>
+        <p className="text-[9px] sm:text-[10px] text-slate-400 font-medium h-4 truncate">{sub || '\u00A0'}</p>
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -714,26 +845,26 @@ function MetricCard({ label, value, icon, color, sub, testId }) {
 }
 
 function InfoRow({ label, value, highlight }) {
-  const hlMap = { red: 'text-red-600 dark:text-red-400', green: 'text-emerald-600 dark:text-emerald-400', amber: 'text-amber-600 dark:text-amber-400' };
+  const hlMap = { red: 'text-red-700', green: 'text-emerald-700', amber: 'text-amber-700' };
   return (
-    <div className="flex justify-between items-center py-1.5 border-b border-dashed border-slate-100 dark:border-slate-800">
-      <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
-      <span className={`text-sm font-semibold ${highlight ? hlMap[highlight] : 'text-slate-700 dark:text-slate-300'}`}>{value}</span>
+    <div className="flex justify-between items-center py-2.5 border-b border-slate-100">
+      <span className="text-sm font-medium text-slate-500">{label}</span>
+      <span className={`text-base font-bold tabular-nums ${highlight ? hlMap[highlight] : 'text-slate-900'}`}>{value}</span>
     </div>
   );
 }
 
 function AgingBucket({ label, value, color }) {
   const styles = {
-    emerald: 'bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/10 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30',
-    amber: 'bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/20 dark:to-yellow-950/10 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900/30',
-    orange: 'bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/10 text-orange-700 dark:text-orange-400 border border-orange-100 dark:border-orange-900/30',
-    red: 'bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/20 dark:to-rose-950/10 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-900/30'
+    emerald: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
+    amber: 'bg-amber-50 text-amber-800 border border-amber-200',
+    orange: 'bg-orange-50 text-orange-800 border border-orange-200',
+    red: 'bg-red-50 text-red-800 border border-red-200'
   };
   return (
-    <div className={`rounded-lg p-2 text-center ${styles[color]}`}>
-      <p className="text-[10px] font-medium uppercase">{label}</p>
-      <p className="text-sm font-bold">₹{fmt(value)}</p>
+    <div className={`rounded-sm p-2 sm:p-2.5 text-center ${styles[color]}`}>
+      <p className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider">{label}</p>
+      <p className="text-xs sm:text-sm font-bold tabular-nums mt-0.5 sm:mt-1 truncate">₹{fmt(value)}</p>
     </div>
   );
 }
@@ -741,15 +872,12 @@ function AgingBucket({ label, value, color }) {
 function KPICard({ label, value, good, bad, invert }) {
   const isGood = invert ? bad : good;
   const isBad = invert ? good : bad;
-  const gradient = isGood ? 'from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/10' : isBad ? 'from-red-50 to-rose-50 dark:from-red-950/20 dark:to-rose-950/10' : 'from-slate-50 to-gray-50 dark:from-slate-950/20 dark:to-gray-950/10';
-  const border = isGood ? 'border-emerald-200 dark:border-emerald-900/30' : isBad ? 'border-red-200 dark:border-red-900/30' : 'border-slate-200 dark:border-slate-800';
-  const text = isGood ? 'text-emerald-700 dark:text-emerald-400' : isBad ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300';
-  const topGrad = isGood ? 'from-emerald-500 to-teal-500' : isBad ? 'from-red-500 to-rose-500' : 'from-slate-400 to-gray-500';
+  const bg = isGood ? 'bg-emerald-50 border-emerald-200' : isBad ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200';
+  const text = isGood ? 'text-emerald-800' : isBad ? 'text-red-700' : 'text-slate-900';
   return (
-    <div className={`relative overflow-hidden rounded-xl border bg-gradient-to-br ${gradient} ${border} p-3 text-center`}>
-      <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${topGrad}`} />
-      <p className="text-[10px] uppercase tracking-wider font-medium mb-1 text-muted-foreground">{label}</p>
-      <p className={`text-xl font-bold ${text}`}>{value}</p>
+    <div className={`border rounded-sm p-3 sm:p-4 text-center ${bg}`}>
+      <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.15em] font-semibold text-slate-500 mb-1.5">{label}</p>
+      <p className={`text-lg sm:text-xl lg:text-2xl font-semibold tracking-tight tabular-nums ${text}`}>{value}</p>
     </div>
   );
 }
@@ -761,18 +889,18 @@ function CompRow({ label, months, field, prefix = '', suffix = '', rowIndex = 0 
   const change = prev > 0 ? ((last - prev) / prev * 100) : 0;
   const isEven = rowIndex % 2 === 0;
   return (
-    <tr className={`border-b border-slate-100 dark:border-slate-800 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/10 transition-colors ${isEven ? 'bg-slate-50/50 dark:bg-slate-800/20' : ''}`}>
-      <td className="p-2.5 text-xs font-medium text-slate-600 dark:text-slate-400">{label}</td>
+    <tr className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${isEven ? 'bg-slate-50/60' : ''}`}>
+      <td className="p-2.5 text-xs font-semibold text-slate-700">{label}</td>
       {values.map((v, i) => (
-        <td key={i} className="p-2.5 text-right text-sm font-medium text-slate-700 dark:text-slate-300">{prefix}{fmt(v)}{suffix}</td>
+        <td key={i} className="p-2.5 text-right text-sm font-medium text-slate-700 tabular-nums">{prefix}{fmt(v)}{suffix}</td>
       ))}
       <td className="p-2.5 text-right">
         {change !== 0 ? (
-          <span className={`text-xs font-semibold flex items-center justify-end gap-0.5 ${change > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+          <span className={`text-xs font-semibold flex items-center justify-end gap-0.5 ${change > 0 ? 'text-emerald-700' : 'text-red-700'}`}>
             {change > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
             {Math.abs(change).toFixed(1)}%
           </span>
-        ) : <Minus className="h-3 w-3 text-slate-300 dark:text-slate-600 ml-auto" />}
+        ) : <Minus className="h-3 w-3 text-slate-300 ml-auto" />}
       </td>
       <td className="p-2.5"></td>
     </tr>
@@ -843,25 +971,22 @@ function ComparisonTable({ comparison, selectedResource, selectedPlan, headers, 
   };
 
   return (
-    <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50" data-testid="comparison-section">
-      <div className="h-1 bg-gradient-to-r from-indigo-500 to-violet-500" />
+    <div className="bg-white border border-slate-200 rounded-sm" data-testid="comparison-section">
       <div className="p-4 sm:p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="p-1.5 rounded-lg bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-900/50 dark:to-violet-900/30">
-            <BarChart3 className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-          </div>
-          <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Month-on-Month Comparison (Last 3 Months)</h3>
-        </div>
+        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 mb-4 flex items-center gap-2.5">
+          <div className="p-1.5 bg-slate-100 rounded-sm"><BarChart3 className="h-4 w-4 text-slate-700" /></div>
+          Month-on-Month Comparison
+        </h3>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm border-collapse">
             <thead>
-              <tr className="bg-gradient-to-r from-indigo-50/80 to-violet-50/80 dark:from-indigo-950/20 dark:to-violet-950/10 border-b border-indigo-100 dark:border-indigo-900/30 text-xs text-slate-500 dark:text-slate-400 uppercase">
-                <th className="text-left p-2.5">Metric</th>
+              <tr className="border-b-2 border-slate-200 text-[10px] text-slate-500 uppercase tracking-wider">
+                <th className="text-left p-2.5 font-semibold">Metric</th>
                 {comparison.months.map(m => (
                   <th key={`${m.month}-${m.year}`} className="text-right p-2.5">{m.label}</th>
                 ))}
-                <th className="text-right p-2.5">Trend</th>
-                <th className="text-center p-2.5 w-24">Actions</th>
+                <th className="text-right p-2.5 font-semibold">Trend</th>
+                <th className="text-center p-2.5 w-24 font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -893,7 +1018,7 @@ function ComparisonTable({ comparison, selectedResource, selectedPlan, headers, 
           </table>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -907,8 +1032,8 @@ function EditableCompRow({ label, months, field, autoField, overrideFlag, prefix
   const isEven = rowIndex % 2 === 0;
 
   return (
-    <tr className={`border-b border-slate-100 dark:border-slate-800 ${isEditing ? 'bg-blue-50/50 dark:bg-blue-950/20' : hasOverride ? 'bg-amber-50/30 dark:bg-amber-950/10' : isEven ? 'bg-slate-50/50 dark:bg-slate-800/20' : ''} hover:bg-indigo-50/40 dark:hover:bg-indigo-950/10 transition-colors`} data-testid={`comp-row-${rowKey}`}>
-      <td className="p-2.5 text-xs font-medium text-slate-600 flex items-center gap-1.5">
+    <tr className={`border-b border-slate-100 ${isEditing ? 'bg-blue-50' : hasOverride ? 'bg-amber-50/40' : isEven ? 'bg-slate-50/60' : ''} hover:bg-slate-50 transition-colors`} data-testid={`comp-row-${rowKey}`}>
+      <td className="p-2.5 text-xs font-semibold text-slate-700 flex items-center gap-1.5">
         {label}
         {hasOverride && !isEditing && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" title="Manual override applied" />}
       </td>
@@ -966,3 +1091,82 @@ function EditableCompRow({ label, months, field, autoField, overrideFlag, prefix
     </tr>
   );
 }
+
+function AccountValueCell({ account, planId, onRefresh }) {
+  const [editing, setEditing] = React.useState(false);
+  const [val, setVal] = React.useState('');
+  const token = localStorage.getItem('token');
+  const tenantId = localStorage.getItem('selectedTenant') || localStorage.getItem('tenant_id') || 'nyla-air-water';
+  const headers = { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId, 'Content-Type': 'application/json' };
+
+  const hasManual = account.manual_value != null;
+  const displayVal = account.display_value || 0;
+
+  const save = async () => {
+    const num = parseFloat(val);
+    if (isNaN(num)) { setEditing(false); return; }
+    await fetch(`${API_URL}/api/performance/account-value-override`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ account_id: account.id, value: num, plan_id: planId })
+    });
+    setEditing(false);
+    onRefresh();
+  };
+
+  const reset = async () => {
+    await fetch(`${API_URL}/api/performance/account-value-override?account_id=${account.id}&plan_id=${planId}`, {
+      method: 'DELETE', headers
+    });
+    onRefresh();
+  };
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1">
+        <input
+          type="number"
+          className="w-20 text-right text-xs border rounded px-1.5 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          autoFocus
+          onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+          data-testid={`account-override-input-${account.id}`}
+        />
+        <button onClick={save} className="p-0.5 rounded hover:bg-blue-100 text-blue-600" data-testid={`account-override-save-${account.id}`}>
+          <Check className="h-3 w-3" />
+        </button>
+        <button onClick={() => setEditing(false)} className="p-0.5 rounded hover:bg-slate-100 text-slate-400" data-testid={`account-override-cancel-${account.id}`}>
+          <X className="h-3 w-3" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <span className={`text-xs font-semibold tabular-nums ${hasManual ? 'text-amber-700' : 'text-slate-600'}`} data-testid={`account-value-${account.id}`}>
+        {displayVal > 0 ? `₹${fmt(displayVal)}` : '-'}
+      </span>
+      {hasManual && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" title="Manual override" />}
+      <button
+        onClick={() => { setVal(String(displayVal || 0)); setEditing(true); }}
+        className="p-0.5 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
+        title="Override value"
+        data-testid={`account-override-edit-${account.id}`}
+      >
+        <Pencil className="h-2.5 w-2.5" />
+      </button>
+      {hasManual && (
+        <button
+          onClick={reset}
+          className="p-0.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+          title="Reset to auto"
+          data-testid={`account-override-reset-${account.id}`}
+        >
+          <RotateCcw className="h-2.5 w-2.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+

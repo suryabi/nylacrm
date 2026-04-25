@@ -1,9 +1,57 @@
-from fastapi import File, UploadFile, HTTPException
-from PIL import Image
-import io
+"""
+Bottle Preview module - proxy images, logo upload, preview save/history.
+"""
+from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, Response
+from typing import Optional
+from datetime import datetime, timezone
+import httpx
+import uuid
 import base64
 
-@api_router.post("/bottle-preview/upload-logo")
+from database import db, get_tenant_db
+from deps import get_current_user
+
+router = APIRouter()
+
+
+def get_tdb():
+    return get_tenant_db()
+
+
+# ============= BOTTLE PREVIEW ROUTES =============
+
+@router.get("/bottle-preview/proxy-image")
+async def proxy_bottle_image(url: str, current_user: dict = Depends(get_current_user)):
+    """Proxy external bottle images to avoid CORS issues"""
+    
+    # Validate URL - only allow specific domains
+    allowed_domains = ['customer-assets.emergentagent.com']
+    from urllib.parse import urlparse
+    parsed_url = urlparse(url)
+    
+    if parsed_url.netloc not in allowed_domains:
+        raise HTTPException(status_code=400, detail='URL domain not allowed')
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            
+            # Determine content type
+            content_type = response.headers.get('content-type', 'image/jpeg')
+            
+            return Response(
+                content=response.content,
+                media_type=content_type,
+                headers={
+                    'Cache-Control': 'public, max-age=86400',  # Cache for 24 hours
+                    'Access-Control-Allow-Origin': '*'
+                }
+            )
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=500, detail=f'Failed to fetch image: {str(e)}')
+
+@router.post("/bottle-preview/upload-logo")
 async def upload_customer_logo(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     """Upload customer logo for bottle preview"""
     
@@ -29,7 +77,10 @@ async def upload_customer_logo(file: UploadFile = File(...), current_user: dict 
                 background = Image.new('RGB', img.size, (255, 255, 255))
                 if img.mode == 'P':
                     img = img.convert('RGBA')
-                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                if img.mode == 'RGBA':
+                    background.paste(img, mask=img.split()[-1])
+                else:
+                    background.paste(img)
                 img = background
             
             # Resize if too large (max 1000px width)
@@ -53,7 +104,7 @@ async def upload_customer_logo(file: UploadFile = File(...), current_user: dict 
         'content_type': file.content_type
     }
 
-@api_router.post("/bottle-preview/save")
+@router.post("/bottle-preview/save")
 async def save_bottle_preview(preview_data: dict, current_user: dict = Depends(get_current_user)):
     """Save bottle preview for later reference"""
     
@@ -73,7 +124,7 @@ async def save_bottle_preview(preview_data: dict, current_user: dict = Depends(g
         'message': 'Preview saved successfully'
     }
 
-@api_router.get("/bottle-preview/history")
+@router.get("/bottle-preview/history")
 async def get_preview_history(current_user: dict = Depends(get_current_user)):
     """Get saved bottle previews"""
     
@@ -83,3 +134,4 @@ async def get_preview_history(current_user: dict = Depends(get_current_user)):
     ).sort('created_at', -1).limit(20).to_list(20)
     
     return {'previews': previews}
+

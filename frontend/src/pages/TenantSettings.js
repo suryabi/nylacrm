@@ -17,7 +17,7 @@ import {
   Globe, Clock, DollarSign, Calendar, RefreshCw, MapPin,
   Users, Kanban, Target, CalendarDays, Contact, Plane, Wallet, FolderOpen,
   Wrench, Boxes, ShieldCheck, Box, Landmark, Phone, Mail, FileText,
-  Plus, Trash2, User, Shield, Edit2, Truck, Package, Tag, RotateCcw
+  Plus, Trash2, User, Shield, Edit2, Truck, Package, Tag, RotateCcw, ClipboardList
 } from 'lucide-react';
 import axios from 'axios';
 import RoleManagement from '../components/RoleManagement';
@@ -56,6 +56,8 @@ const MODULE_CONFIG = {
     modules: [
       { key: 'lead_discovery', label: 'Lead Discovery', icon: Users, description: 'Find & import new leads' },
       { key: 'target_planning', label: 'Target Planning', icon: Target, description: 'Sales target management' },
+      { key: 'performance_tracker', label: 'Performance Tracker', icon: Target, description: 'Monthly performance tracking & KPIs' },
+      { key: 'investor_dashboard', label: 'Investor Dashboard', icon: DollarSign, description: 'Investor-facing annual plan & monthly updates' },
       { key: 'daily_status', label: 'Daily Status', icon: CalendarDays, description: 'Daily activity updates' },
       { key: 'status_summary', label: 'Status Summary', icon: Users, description: 'Team status aggregation' },
     ]
@@ -140,6 +142,15 @@ const MODULE_CONFIG = {
       { key: 'distributor_shipments', label: 'Primary Shipments', icon: Truck, description: 'Stock shipments to distributors' },
       { key: 'distributor_deliveries', label: 'Account Deliveries', icon: Package, description: 'Deliveries to end accounts' },
       { key: 'distributor_stock', label: 'Stock Management', icon: Boxes, description: 'Distributor inventory levels' },
+    ]
+  },
+  marketing: {
+    title: 'Marketing',
+    description: 'Content calendar and social media planning',
+    modules: [
+      { key: 'marketing_calendar', label: 'Content Calendar', icon: CalendarDays, description: 'Plan & schedule marketing content' },
+      { key: 'marketing_masters', label: 'Marketing Masters', icon: Settings, description: 'Categories, platforms & events' },
+      { key: 'meeting_minutes', label: 'Meeting Minutes', icon: ClipboardList, description: 'Record meeting notes & action items' },
     ]
   }
 };

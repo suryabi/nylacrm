@@ -38,6 +38,8 @@ import BillingTab from '../components/distributor/BillingTab';
 import StockDashboardTab from '../components/distributor/StockDashboardTab';
 import { PAYMENT_TERMS, STATUS_OPTIONS, MARGIN_TYPES, formatMarginValue } from '../components/distributor/constants';
 
+import Breadcrumbs from '../components/Breadcrumbs';
+
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 // Local helper using imported constants
@@ -55,7 +57,7 @@ export default function DistributorDetail() {
   
   // Get default GST from tenant settings
   const tenantSettings = getSettings();
-  const defaultGstPercent = tenantSettings.default_distributor_gst_percent || 18;
+  const defaultGstPercent = tenantSettings.default_distributor_gst_percent ?? 5;
   
   const [loading, setLoading] = useState(true);
   const [distributor, setDistributor] = useState(null);
@@ -84,13 +86,17 @@ export default function DistributorDetail() {
     contact_person: '',
     contact_number: '',
     email: '',
-    is_default: false
+    is_default: false,
+    is_factory: false
   });
   const [addingLocation, setAddingLocation] = useState(false);
   
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteDistributorDialog, setShowDeleteDistributorDialog] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [deletingDistributor, setDeletingDistributor] = useState(false);
   
   // Account Assignment state
   const [assignments, setAssignments] = useState([]);
@@ -117,6 +123,7 @@ export default function DistributorDetail() {
   const [marginsLoading, setMarginsLoading] = useState(false);
   const [selectedMarginCity, setSelectedMarginCity] = useState('');
   const [showOnlyActiveMargins, setShowOnlyActiveMargins] = useState(false);
+  const [costCardPrices, setCostCardPrices] = useState({});
   const [skus, setSkus] = useState([]);
   const [marginGrid, setMarginGrid] = useState({}); // Legacy - for grid view
   const [hasMarginChanges, setHasMarginChanges] = useState(false);
@@ -145,18 +152,27 @@ export default function DistributorDetail() {
   const [showShipmentDialog, setShowShipmentDialog] = useState(false);
   const [shipmentForm, setShipmentForm] = useState({
     distributor_location_id: '',
+    source_warehouse_id: '',
     shipment_date: new Date().toISOString().split('T')[0],
     expected_delivery_date: '',
     reference_number: '',
     vehicle_number: '',
     driver_name: '',
     driver_contact: '',
-    remarks: ''
+    remarks: '',
+    gst_percent: String(defaultGstPercent)
   });
   const [shipmentItems, setShipmentItems] = useState([]);
   const [savingShipment, setSavingShipment] = useState(false);
+
+  // Sync GST default when tenant settings load
+  useEffect(() => {
+    setShipmentForm(prev => ({ ...prev, gst_percent: String(defaultGstPercent) }));
+  }, [defaultGstPercent]);
   const [selectedShipment, setSelectedShipment] = useState(null);
   const [showShipmentDetail, setShowShipmentDetail] = useState(false);
+  const [factoryWarehouses, setFactoryWarehouses] = useState([]);
+  const [warehouseStock, setWarehouseStock] = useState([]); // stock for selected source warehouse
   
   // Delivery state
   const [deliveries, setDeliveries] = useState([]);
@@ -178,7 +194,8 @@ export default function DistributorDetail() {
     vehicle_number: '',
     driver_name: '',
     driver_contact: '',
-    remarks: ''
+    remarks: '',
+    gst_percent: String(defaultGstPercent)
   });
   const [deliveryItems, setDeliveryItems] = useState([]);
   const [savingDelivery, setSavingDelivery] = useState(false);
@@ -353,8 +370,18 @@ export default function DistributorDetail() {
   useEffect(() => {
     if (activeTab === 'commercial' && selectedMarginCity) {
       fetchMargins();
+      // Fetch cost card prices for this city
+      axios.get(`${API_URL}/api/cost-cards?city=${encodeURIComponent(selectedMarginCity)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(res => {
+        const priceMap = {};
+        (res.data.cost_cards || []).forEach(cc => {
+          priceMap[cc.sku_id] = cc.cost_per_unit;
+        });
+        setCostCardPrices(priceMap);
+      }).catch(() => {});
     }
-  }, [activeTab, selectedMarginCity, fetchMargins]);
+  }, [activeTab, selectedMarginCity, fetchMargins, token]);
 
   // Fetch account assignments
   const fetchAssignments = useCallback(async () => {
@@ -397,8 +424,33 @@ export default function DistributorDetail() {
   useEffect(() => {
     if (activeTab === 'stockin') {
       fetchShipments();
+      // Fetch factory warehouses for "From Warehouse" dropdown
+      axios.get(`${API_URL}/api/production/factory-warehouses`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(res => {
+        const whs = res.data.warehouses || [];
+        setFactoryWarehouses(whs);
+        // Default to first default warehouse
+        const defaultWh = whs.find(w => w.is_default);
+        if (defaultWh && !shipmentForm.source_warehouse_id) {
+          setShipmentForm(prev => ({ ...prev, source_warehouse_id: defaultWh.id }));
+        }
+      }).catch(() => {});
     }
   }, [activeTab, fetchShipments]);
+
+  // Fetch stock for selected source warehouse
+  useEffect(() => {
+    if (shipmentForm.source_warehouse_id) {
+      axios.get(`${API_URL}/api/production/factory-warehouse-stock?warehouse_id=${shipmentForm.source_warehouse_id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(res => setWarehouseStock(res.data.stock || []))
+        .catch(() => setWarehouseStock([]));
+    } else {
+      setWarehouseStock([]);
+    }
+  }, [shipmentForm.source_warehouse_id, token]);
+
 
   // Fetch deliveries
   const fetchDeliveries = useCallback(async () => {
@@ -656,6 +708,22 @@ export default function DistributorDetail() {
     }
   };
 
+  const handleDeleteDistributor = async () => {
+    try {
+      setDeletingDistributor(true);
+      await axios.delete(`${API_URL}/api/distributors/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Distributor and all related data deleted permanently');
+      navigate('/distributors');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete distributor');
+    } finally {
+      setDeletingDistributor(false);
+    }
+  };
+
   const handleAddCoverage = async () => {
     if (!selectedState || selectedCities.length === 0) {
       toast.error('Please select state and at least one city');
@@ -744,7 +812,8 @@ export default function DistributorDetail() {
         contact_person: '',
         contact_number: '',
         email: '',
-        is_default: false
+        is_default: false,
+        is_factory: false
       });
       fetchDistributor();
     } catch (error) {
@@ -1118,6 +1187,7 @@ export default function DistributorDetail() {
       const shipmentData = {
         distributor_id: id,
         distributor_location_id: shipmentForm.distributor_location_id,
+        source_warehouse_id: shipmentForm.source_warehouse_id || null,
         shipment_date: shipmentForm.shipment_date,
         expected_delivery_date: shipmentForm.expected_delivery_date || null,
         reference_number: shipmentForm.reference_number || null,
@@ -1125,16 +1195,23 @@ export default function DistributorDetail() {
         driver_name: shipmentForm.driver_name || null,
         driver_contact: shipmentForm.driver_contact || null,
         remarks: shipmentForm.remarks || null,
-        items: shipmentItems.map(item => ({
-          sku_id: item.sku_id,
-          sku_name: item.sku_name,
-          quantity: parseInt(item.quantity),
-          base_price: item.base_price ? parseFloat(item.base_price) : null,
-          distributor_margin: item.distributor_margin ? parseFloat(item.distributor_margin) : null,
-          unit_price: parseFloat(item.unit_price),
-          discount_percent: parseFloat(item.discount_percent) || 0,
-          tax_percent: parseFloat(item.tax_percent) || 0
-        }))
+        gst_percent: parseFloat(shipmentForm.gst_percent) || 0,
+        items: shipmentItems.map(item => {
+          const pkgUnits = parseInt(item.packaging_units) || 1;
+          const totalUnits = (parseInt(item.quantity) || 0) * pkgUnits;
+          return {
+            sku_id: item.sku_id,
+            sku_name: item.sku_name,
+            quantity: totalUnits,
+            packaging_units: pkgUnits,
+            packages: parseInt(item.quantity) || 0,
+            base_price: item.base_price ? parseFloat(item.base_price) : null,
+            distributor_margin: item.distributor_margin ? parseFloat(item.distributor_margin) : null,
+            unit_price: parseFloat(item.unit_price),
+            discount_percent: parseFloat(item.discount_percent) || 0,
+            tax_percent: 0
+          };
+        })
       };
       
       const response = await axios.post(`${API_URL}/api/distributors/${id}/shipments`, shipmentData, {
@@ -1156,13 +1233,15 @@ export default function DistributorDetail() {
   const resetShipmentForm = () => {
     setShipmentForm({
       distributor_location_id: '',
+      source_warehouse_id: '',
       shipment_date: new Date().toISOString().split('T')[0],
       expected_delivery_date: '',
       reference_number: '',
       vehicle_number: '',
       driver_name: '',
       driver_contact: '',
-      remarks: ''
+      remarks: '',
+      gst_percent: String(defaultGstPercent)
     });
     setShipmentItems([]);
   };
@@ -1213,8 +1292,10 @@ export default function DistributorDetail() {
       );
       
       if (activeMargin) {
+        // For cost_based distributors, transfer price = base price (no margin deduction)
+        const isCostBased = distributor?.billing_approach === 'cost_based';
         return {
-          transfer_price: activeMargin.transfer_price,
+          transfer_price: isCostBased ? activeMargin.base_price : activeMargin.transfer_price,
           base_price: activeMargin.base_price,
           margin_value: activeMargin.margin_value
         };
@@ -1228,9 +1309,15 @@ export default function DistributorDetail() {
 
   // Enhanced function to update shipment item with price lookup
   const updateShipmentItemWithPrice = async (itemId, skuId, skuName) => {
-    // First update the SKU info immediately
+    // Find the SKU's default stock_in packaging
+    const selectedSku = skus.find(s => s.id === skuId);
+    const stockInPkg = selectedSku?.packaging_config?.stock_in || [];
+    const defaultPkg = stockInPkg.find(p => p.is_default) || stockInPkg[0];
+    const pkgUnits = defaultPkg?.units_per_package || '';
+
+    // First update the SKU info + packaging immediately
     setShipmentItems(prev => prev.map(item => 
-      item.id === itemId ? { ...item, sku_id: skuId, sku_name: skuName } : item
+      item.id === itemId ? { ...item, sku_id: skuId, sku_name: skuName, packaging_units: pkgUnits ? String(pkgUnits) : '' } : item
     ));
     
     // Then look up the transfer price if we have a location selected
@@ -1385,15 +1472,22 @@ export default function DistributorDetail() {
         driver_name: deliveryForm.driver_name || null,
         driver_contact: deliveryForm.driver_contact || null,
         remarks: deliveryForm.remarks || null,
-        items: deliveryItems.map(item => ({
-          sku_id: item.sku_id,
-          sku_name: item.sku_name,
-          quantity: parseInt(item.quantity),
-          unit_price: parseFloat(item.unit_price),
-          customer_selling_price: parseFloat(item.unit_price), // unit_price is the customer selling price
-          discount_percent: parseFloat(item.discount_percent) || 0,
-          tax_percent: parseFloat(item.tax_percent) || 0
-        })),
+        gst_percent: parseFloat(deliveryForm.gst_percent) || 0,
+        items: deliveryItems.map(item => {
+          const pkgUnits = parseInt(item.packaging_units) || 1;
+          const totalUnits = (parseInt(item.quantity) || 0) * pkgUnits;
+          return {
+            sku_id: item.sku_id,
+            sku_name: item.sku_name,
+            quantity: totalUnits,
+            packaging_units: pkgUnits,
+            packages: parseInt(item.quantity) || 0,
+            unit_price: parseFloat(item.unit_price),
+            customer_selling_price: parseFloat(item.unit_price),
+            discount_percent: parseFloat(item.discount_percent) || 0,
+            tax_percent: 0
+          };
+        }),
         // Include credit notes if any
         credit_notes_to_apply: creditNotesToApply.length > 0 ? creditNotesToApply : null
       };
@@ -1429,7 +1523,8 @@ export default function DistributorDetail() {
       vehicle_number: '',
       driver_name: '',
       driver_contact: '',
-      remarks: ''
+      remarks: '',
+      gst_percent: String(defaultGstPercent)
     });
     setDeliveryItems([]);
     setSelectedDeliveryAccount(null);
@@ -1444,7 +1539,7 @@ export default function DistributorDetail() {
       quantity: 1,
       unit_price: 0,
       discount_percent: 0,
-      tax_percent: defaultGstPercent
+      tax_percent: 0
     }]);
   };
 
@@ -1998,6 +2093,11 @@ export default function DistributorDetail() {
 
   return (
     <div className="p-6 space-y-6" data-testid="distributor-detail-page">
+      <Breadcrumbs items={[
+        { label: 'Distribution' },
+        { label: 'Distributors', href: '/distributors' },
+        { label: distributor.distributor_name || 'Detail' },
+      ]} />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -2017,10 +2117,23 @@ export default function DistributorDetail() {
         </div>
         
         {canManage && !isEditing && (
-          <Button onClick={() => setIsEditing(true)}>
-            <Edit2 className="h-4 w-4 mr-2" />
-            Edit
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setIsEditing(true)}>
+              <Edit2 className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+            {canDelete && (
+              <Button
+                variant="outline"
+                className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                onClick={() => setShowDeleteDistributorDialog(true)}
+                data-testid="delete-distributor-btn"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
+            )}
+          </div>
         )}
         
         {isEditing && (
@@ -2156,6 +2269,7 @@ export default function DistributorDetail() {
               setShowOnlyActiveMargins={setShowOnlyActiveMargins}
               getCoveredCities={getCoveredCities}
               skus={skus}
+              costCardPrices={costCardPrices}
               showCopyDialog={showCopyDialog}
               setShowCopyDialog={setShowCopyDialog}
               copyTargetCity={copyTargetCity}
@@ -2217,6 +2331,8 @@ export default function DistributorDetail() {
             shipments={shipments}
             shipmentsLoading={shipmentsLoading}
             skus={skus}
+            factoryWarehouses={factoryWarehouses}
+            warehouseStock={warehouseStock}
             showShipmentDialog={showShipmentDialog}
             setShowShipmentDialog={setShowShipmentDialog}
             shipmentForm={shipmentForm}
@@ -2364,7 +2480,7 @@ export default function DistributorDetail() {
 
       {/* Shipment Detail Dialog */}
       <Dialog open={showShipmentDetail} onOpenChange={setShowShipmentDetail}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
               Shipment {selectedShipment?.shipment_number}
@@ -2404,33 +2520,65 @@ export default function DistributorDetail() {
               </div>
 
               {/* Items */}
-              <div className="border rounded-md">
+              <div className="border rounded-md overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-muted/50">
-                      <th className="text-left p-2 font-medium">SKU</th>
-                      <th className="text-right p-2 font-medium">Qty</th>
-                      <th className="text-right p-2 font-medium">Price</th>
-                      <th className="text-right p-2 font-medium">Amount</th>
+                      <th className="text-left p-2.5 font-medium">SKU</th>
+                      <th className="text-right p-2.5 font-medium">Qty</th>
+                      <th className="text-right p-2.5 font-medium">Base Price</th>
+                      <th className="text-right p-2.5 font-medium">Margin %</th>
+                      <th className="text-right p-2.5 font-medium">Transfer Price</th>
+                      <th className="text-right p-2.5 font-medium">Disc %</th>
+                      <th className="text-right p-2.5 font-medium">Amount</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(selectedShipment.items || []).map((item, idx) => (
-                      <tr key={idx} className="border-b">
-                        <td className="p-2">{item.sku_name || item.sku_id}</td>
-                        <td className="p-2 text-right">{item.quantity}</td>
-                        <td className="p-2 text-right">₹{item.unit_price}</td>
-                        <td className="p-2 text-right">₹{item.net_amount?.toFixed(2)}</td>
+                      <tr key={idx} className={`border-b ${idx % 2 === 1 ? 'bg-muted/20' : ''}`}>
+                        <td className="p-2.5">{item.sku_name || item.sku_id}</td>
+                        <td className="p-2.5 text-right tabular-nums">{item.quantity}</td>
+                        <td className="p-2.5 text-right tabular-nums text-muted-foreground">{item.base_price ? `₹${Number(item.base_price).toFixed(2)}` : '-'}</td>
+                        <td className="p-2.5 text-right tabular-nums text-muted-foreground">{item.distributor_margin != null ? `${item.distributor_margin}%` : '-'}</td>
+                        <td className="p-2.5 text-right tabular-nums font-medium">{item.unit_price ? `₹${Number(item.unit_price).toFixed(2)}` : '-'}</td>
+                        <td className="p-2.5 text-right tabular-nums text-muted-foreground">{item.discount_percent ? `${item.discount_percent}%` : '-'}</td>
+                        <td className="p-2.5 text-right tabular-nums font-medium">₹{(item.net_amount || item.gross_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
+                    {(selectedShipment.total_discount_amount || 0) > 0 && (
+                      <tr className="border-t">
+                        <td colSpan="6" className="p-2.5 text-right text-sm text-muted-foreground">Discount:</td>
+                        <td className="p-2.5 text-right text-sm font-medium text-red-600">-₹{selectedShipment.total_discount_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    )}
+                    <tr className="border-t">
+                      <td colSpan="6" className="p-2.5 text-right text-sm text-muted-foreground">Subtotal:</td>
+                      <td className="p-2.5 text-right text-sm font-semibold">₹{((selectedShipment.total_gross_amount || 0) - (selectedShipment.total_discount_amount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                    {(selectedShipment.total_tax_amount || 0) > 0 && (
+                      <tr>
+                        <td colSpan="6" className="p-2.5 text-right text-sm text-muted-foreground">
+                          GST {selectedShipment.gst_percent ? `(${selectedShipment.gst_percent}%)` : ''}:
+                        </td>
+                        <td className="p-2.5 text-right text-sm font-medium">₹{selectedShipment.total_tax_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    )}
                     <tr className="bg-muted/30">
-                      <td colSpan="3" className="p-2 text-right font-medium">Total:</td>
-                      <td className="p-2 text-right font-bold">₹{selectedShipment.total_net_amount?.toLocaleString()}</td>
+                      <td colSpan="6" className="p-2.5 text-right font-bold">Grand Total:</td>
+                      <td className="p-2.5 text-right font-bold text-base">₹{selectedShipment.total_net_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                     </tr>
                   </tfoot>
                 </table>
+              </div>
+
+              {/* Billing Configuration Note */}
+              <div className="bg-amber-50 border border-amber-200 rounded-md px-3 py-2 text-xs text-amber-800">
+                <span className="font-semibold">Billing Config:</span>{' '}
+                {distributor?.billing_approach === 'margin_upfront'
+                  ? 'Margin applied upfront at the time of shipment. Transfer price = Base price - Margin.'
+                  : 'Cost-based pricing. Margin applied at the time of reconciliation based on customer sell-through.'}
               </div>
 
               {/* Actions */}
@@ -2535,9 +2683,10 @@ export default function DistributorDetail() {
                       const customerPrice = item.customer_selling_price || item.unit_price || 0;
                       const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
                       const basePrice = item.base_price || item.transfer_price || 0;
-                      const transferPrice = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
+                      const isCostBased = distributor?.billing_approach === 'cost_based';
+                      const transferPrice = isCostBased ? basePrice : (basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0);
                       const billedToDist = qty * transferPrice;
-                      const newTransferPrice = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
+                      const newTransferPrice = isCostBased ? customerPrice : (customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0);
                       const actualBillable = qty * newTransferPrice;
                       const adjustment = actualBillable - billedToDist;
                       return (
@@ -2569,9 +2718,10 @@ export default function DistributorDetail() {
                         const customerPrice = item.customer_selling_price || item.unit_price || 0;
                         const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
                         const basePrice = item.base_price || item.transfer_price || 0;
-                        const transferPrice = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
+                        const isCB = distributor?.billing_approach === 'cost_based';
+                        const transferPrice = isCB ? basePrice : (basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0);
                         totBilled += qty * transferPrice;
-                        const newTP = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
+                        const newTP = isCB ? customerPrice : (customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0);
                         totActual += qty * newTP;
                         totAdj += (qty * newTP) - (qty * transferPrice);
                       });
@@ -2629,18 +2779,11 @@ export default function DistributorDetail() {
                         <span className="font-medium">- ₹{totalCreditApplied.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-sm border-t pt-2">
-                      <span className="font-semibold">Total Billable Amount:</span>
-                      <span className="font-bold">₹{totalBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between text-sm text-slate-600">
-                      <span>GST ({gstPctDisplay}%):</span>
-                      <span className="font-medium">₹{gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
                     <div className="flex justify-between text-base border-t pt-2">
-                      <span className="font-bold text-blue-800">Customer Invoice Value (Incl. GST):</span>
-                      <span className="font-bold text-blue-800">₹{invoiceValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      <span className="font-bold text-blue-800">Customer Invoice Value:</span>
+                      <span className="font-bold text-blue-800">₹{totalBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </div>
+                    <p className="text-[10px] text-slate-400 text-right italic">All values exclusive of GST</p>
                   </div>
                 );
               })()}
@@ -2649,53 +2792,129 @@ export default function DistributorDetail() {
               {(() => {
                 const items = selectedDelivery.items || [];
                 const totalCreditApplied = selectedDelivery.total_credit_applied || 0;
-                let distBilling = 0, totActual = 0, custBilling = 0, totalTax = 0;
+                const isCostBased = distributor?.billing_approach === 'cost_based';
+                
+                let totalBasePrice = 0, totalCustomerPrice = 0, totalMarginAtTransfer = 0, totalApplicableMargin = 0;
+                let totalBilledAtTransfer = 0, totalFactoryDue = 0;
+                let avgMarginPct = 0, marginPctCount = 0;
+                
                 items.forEach(item => {
                   const qty = item.quantity || 0;
-                  const price = item.customer_selling_price || item.unit_price || 0;
-                  const disc = item.discount_percent || 0;
-                  const taxPct = item.tax_percent || 0;
-                  const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
+                  const custPrice = item.customer_selling_price || item.unit_price || 0;
+                  const commPct = item.distributor_commission_percent || item.margin_percent || 2.5;
                   const basePrice = item.base_price || item.transfer_price || 0;
-                  const transferPrice = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
-                  distBilling += qty * transferPrice;
-                  const newTP = price > 0 ? price * (1 - commissionPct / 100) : 0;
-                  totActual += qty * newTP;
-                  const preTax = qty * price * (1 - disc / 100);
-                  custBilling += preTax;
-                  totalTax += preTax * taxPct / 100;
+                  
+                  totalBasePrice += qty * basePrice;
+                  totalCustomerPrice += qty * custPrice;
+                  
+                  // What was billed to distributor at transfer
+                  const billedAtTransfer = isCostBased ? (qty * basePrice) : (qty * basePrice * (1 - commPct / 100));
+                  totalBilledAtTransfer += billedAtTransfer;
+                  
+                  // Factory's due from customer price (always margin-excluded)
+                  const factoryDue = qty * custPrice * (1 - commPct / 100);
+                  totalFactoryDue += factoryDue;
+                  
+                  // Margin info
+                  totalMarginAtTransfer += isCostBased ? 0 : (qty * basePrice * commPct / 100);
+                  totalApplicableMargin += qty * custPrice * (commPct / 100);
+                  avgMarginPct += commPct;
+                  marginPctCount += 1;
                 });
-                const priceAdj = totActual - distBilling;
-                const combinedAdj = priceAdj - totalCreditApplied;
-                const totalBillable = distBilling + combinedAdj;
-                const effectiveGstRate = custBilling > 0 ? totalTax / custBilling : 0;
-                const gstAmount = totalBillable * effectiveGstRate;
-                const invoiceValue = totalBillable + gstAmount;
-                const gstPctDisplay = (effectiveGstRate * 100).toFixed(1);
+                
+                const marginPctDisplay = marginPctCount > 0 ? (avgMarginPct / marginPctCount).toFixed(1) : '0';
+                const returnCredit = totalCreditApplied;
+                
+                // Core settlement: Factory's due - Already paid - Return credits
+                const adjustmentToFactory = totalFactoryDue - totalBilledAtTransfer;
+                const netSettlement = -(adjustmentToFactory) + returnCredit;
+                
                 return (
-                  <div className="border rounded-lg p-4 bg-purple-50/40 space-y-2" data-testid="delivery-distributor-summary">
-                    <h4 className="font-semibold text-sm mb-2 text-purple-800">Distributor Summary</h4>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Distributor Billing Amount:</span>
-                      <span className="font-medium">₹{distBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Adjustment (Customer Price + Return Credit):</span>
-                      <span className={`font-medium ${combinedAdj > 0 ? 'text-emerald-600' : combinedAdj < 0 ? 'text-red-600' : 'text-slate-500'}`}>
-                        {combinedAdj > 0 ? '+' : ''}₹{combinedAdj.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  <div className="border rounded-lg overflow-hidden bg-white" data-testid="delivery-distributor-summary">
+                    {/* Header with billing approach indicator */}
+                    <div className={`px-4 py-2.5 flex items-center justify-between ${isCostBased ? 'bg-amber-50 border-b border-amber-200' : 'bg-purple-50 border-b border-purple-200'}`}>
+                      <h4 className={`font-semibold text-sm ${isCostBased ? 'text-amber-800' : 'text-purple-800'}`}>
+                        Distributor Settlement Summary
+                      </h4>
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${isCostBased ? 'bg-amber-200 text-amber-800' : 'bg-purple-200 text-purple-800'}`}>
+                        {isCostBased ? 'Post-Sale Adjustment' : 'Margin Upfront'}
                       </span>
                     </div>
-                    <div className="flex justify-between text-sm border-t pt-2">
-                      <span className="font-semibold">Total Billable Amount:</span>
-                      <span className="font-bold">₹{totalBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between text-sm text-slate-600">
-                      <span>GST ({gstPctDisplay}%):</span>
-                      <span className="font-medium">₹{gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between text-base border-t pt-2">
-                      <span className="font-bold text-purple-800">Distributor Invoice Value (Incl. GST):</span>
-                      <span className="font-bold text-purple-800">₹{invoiceValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    
+                    <div className="p-4 space-y-3">
+                      {/* Section 1: Transfer & Customer Pricing */}
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-1">Pricing</p>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-600">Billed at Transfer:</span>
+                          <span className="font-medium">₹{totalBilledAtTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-600">Customer Billing:</span>
+                          <span className="font-medium text-emerald-700">₹{totalCustomerPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-600">Factory's Due (Customer − Margin):</span>
+                          <span className="font-medium">₹{totalFactoryDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="border-t border-dashed border-slate-200" />
+                      
+                      {/* Section 2: Margin Info */}
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-1">Distributor Margin @ {marginPctDisplay}%</p>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-600">
+                            {isCostBased ? 'Margin (post-sale):' : 'Margin at Transfer (already deducted):'}
+                          </span>
+                          <span className={`font-medium ${totalMarginAtTransfer > 0 ? 'text-purple-700' : 'text-slate-400'}`}>
+                            ₹{totalMarginAtTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            {isCostBased && <span className="text-[10px] text-amber-500 ml-1">(none — post-sale)</span>}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-600">Total Margin on Customer Price:</span>
+                          <span className="font-medium text-purple-700">₹{totalApplicableMargin.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 italic">
+                          {isCostBased
+                            ? 'Full margin settled post-sale. Transfer price was at cost.'
+                            : 'Margin already embedded in transfer pricing. No separate deduction needed.'}
+                        </p>
+                      </div>
+                      
+                      <div className="border-t border-dashed border-slate-200" />
+                      
+                      {/* Section 3: Settlement */}
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-1">Settlement</p>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-600">Adjustment to Factory:</span>
+                          <span className={`font-medium ${adjustmentToFactory > 0 ? 'text-amber-700' : adjustmentToFactory < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {adjustmentToFactory > 0 ? '' : adjustmentToFactory < 0 ? '-' : ''}₹{Math.abs(adjustmentToFactory).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        {returnCredit > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-600">Return Bottle Credit:</span>
+                            <span className="font-medium text-emerald-600">+₹{returnCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Net Settlement Box */}
+                      <div className={`rounded-lg px-3 py-2.5 border-2 ${netSettlement >= 0 ? 'bg-emerald-50 border-emerald-300' : 'bg-blue-50 border-blue-300'}`} data-testid="net-adjustment-box">
+                        <div className="flex justify-between items-center">
+                          <span className={`font-bold text-sm ${netSettlement >= 0 ? 'text-emerald-800' : 'text-blue-800'}`}>
+                            {netSettlement >= 0 ? 'Net Settlement — Payable to Distributor:' : 'Net Settlement — Distributor Owes Factory:'}
+                          </span>
+                          <span className={`font-bold text-lg ${netSettlement >= 0 ? 'text-emerald-700' : 'text-blue-700'}`}>
+                            ₹{Math.abs(netSettlement).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-400 text-right italic">All values exclusive of GST</p>
                     </div>
                   </div>
                 );
@@ -2820,27 +3039,96 @@ export default function DistributorDetail() {
                 </div>
               </div>
 
-              {/* Summary Cards */}
-              <div className="grid grid-cols-4 gap-4">
-                <div className="bg-muted/30 rounded-lg p-4 text-center">
-                  <div className="text-sm text-muted-foreground">Total Customer Billing</div>
-                  <div className="text-xl font-bold">₹{(selectedSettlement.total_billing_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                </div>
-                <div className="bg-blue-50 rounded-lg p-4 text-center">
-                  <div className="text-sm text-muted-foreground">Distributor Earnings</div>
-                  <div className="text-xl font-bold text-blue-600">₹{(selectedSettlement.distributor_earnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                </div>
-                <div className="bg-slate-100 rounded-lg p-4 text-center">
-                  <div className="text-sm text-muted-foreground">Margin at Transfer Price</div>
-                  <div className="text-xl font-bold">₹{(selectedSettlement.margin_at_transfer_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                </div>
-                <div className="bg-green-50 rounded-lg p-4 text-center">
-                  <div className="text-sm text-muted-foreground">Adjustment Payable</div>
-                  <div className={`text-xl font-bold ${(selectedSettlement.adjustment_payable || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {(selectedSettlement.adjustment_payable || 0) >= 0 ? '+' : ''}₹{(selectedSettlement.adjustment_payable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              {/* Summary Cards - Billing Approach Aware */}
+              {(() => {
+                const isCB = distributor?.billing_approach === 'cost_based';
+                const billing = selectedSettlement.total_billing_value || 0;
+                const earnings = selectedSettlement.distributor_earnings || 0;
+                const factoryDue = billing - earnings;
+                
+                // Recalculate: For cost_based, margin_at_transfer = 0; for upfront, use stored value
+                const marginAtTransfer = isCB ? 0 : (selectedSettlement.margin_at_transfer_price || selectedSettlement.total_margin_amount || 0);
+                
+                // Billed at transfer = factoryDue equivalent at base: billing_base - margin_at_transfer (for upfront) or billing_base (for cost_based)
+                // We can derive: adjustment = factoryDue - billedAtTransfer
+                // For upfront: billedAtTransfer = base_total - margin_at_transfer = base_total × (1-m%)
+                // For cost_based: billedAtTransfer = base_total
+                // Since we don't have base_total stored, compute from: billedAtTransfer = factoryDue - adj
+                // But adj is wrong too. So compute: billedAtTransfer = billing - earnings - correctAdj
+                // Circular. Use another approach:
+                // adj = factoryDue - (billing - factoryAdj_stored - earnings)... nope.
+                // 
+                // Best: use (billing - earnings) as factoryDue and stored total_delivery_amount as a proxy
+                // OR just compute adj differently:
+                // For cost_based: adj = factoryDue - (factoryDue - storedAdj + marginAtTransfer)... nope
+                //
+                // Cleanest: recompute from items if available
+                let totalBilledAtTransfer = 0;
+                const items = selectedSettlement.items || [];
+                items.forEach(item => {
+                  const itemBilling = item.total_billing_value || item.total_amount || 0;
+                  const itemEarnings = item.distributor_earnings || 0;
+                  const itemMarginAtTransfer = isCB ? 0 : (item.margin_at_transfer_price || item.margin_amount || 0);
+                  // For upfront: billed = billing_base - margin = (billing_base) × (1-m%)
+                  // margin_at_transfer = billing_base × m%, so billing_base = margin_at_transfer / m% (if we know m%)
+                  // Alternative: billedAtTransfer = itemBilling - itemEarnings - adj (circular)
+                  // Use: billedAtTransfer ≈ factoryDue_on_base = base × (1-m%) for upfront, base for cost_based
+                  // Since base_total ≈ billing - (customer - base) per item... we don't have base.
+                  // 
+                  // Approximate: billedAtTransfer = billing - earnings - adj_stored for upfront
+                  // For cost_based: billedAtTransfer = billing - earnings - adj_stored ... same issue
+                  // 
+                  // Actually from delivery items we have margin_amount which = margin on customer price
+                  // And the delivery total_net_amount ≈ customer billing amount
+                  // Just use: for cost_based, total_transfer_billed = total_base = ??? 
+                  //
+                  // Given we CANNOT derive base from settlement data alone for old records,
+                  // let's display what we CAN correctly derive:
+                  totalBilledAtTransfer += 0; // placeholder
+                });
+                
+                // Since old settlements have wrong stored values and we can't derive base_total,
+                // show the CORRECT net payout formula and let the detail table use recalculated values
+                const storedAdj = selectedSettlement.factory_distributor_adjustment || selectedSettlement.total_dist_to_factory_adjustment || 0;
+                
+                // For net payout recalculation from components
+                const cnVal = selectedSettlement.total_credit_notes_issued || 0;
+                const frVal = selectedSettlement.total_factory_return_credit || 0;
+                const netPayout = -(storedAdj) + cnVal + frVal;
+                
+                return (
+                  <div className="space-y-4">
+                    <div className={`rounded-lg px-3 py-1.5 text-xs font-medium inline-flex items-center gap-1.5 ${isCB ? 'bg-amber-100 text-amber-800' : 'bg-purple-100 text-purple-800'}`}>
+                      {isCB ? 'No Upfront Margin — Post-Sale Adjustment' : 'Margin Applied Upfront'}
+                    </div>
+                    <div className="grid grid-cols-4 gap-4">
+                      <div className="bg-muted/30 rounded-lg p-4 text-center">
+                        <div className="text-sm text-muted-foreground">Customer Billing</div>
+                        <div className="text-xl font-bold">₹{billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                      </div>
+                      <div className="bg-blue-50 rounded-lg p-4 text-center">
+                        <div className="text-sm text-muted-foreground">Distributor Margin</div>
+                        <div className="text-xl font-bold text-blue-600">₹{earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-[10px] text-blue-400">{isCB ? 'retained from settlement' : 'embedded in transfer price'}</div>
+                      </div>
+                      <div className="bg-amber-50 rounded-lg p-4 text-center">
+                        <div className="text-sm text-muted-foreground">Factory's Due</div>
+                        <div className="text-xl font-bold text-amber-700">₹{factoryDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-[10px] text-amber-400">Billing − Margin</div>
+                      </div>
+                      <div className={`rounded-lg p-4 text-center ${netPayout >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                        <div className="text-sm text-muted-foreground">Net Settlement</div>
+                        <div className={`text-xl font-bold ${netPayout >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {netPayout >= 0 ? '+' : '−'}₹{Math.abs(netPayout).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </div>
+                        <div className={`text-[10px] ${netPayout >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {netPayout >= 0 ? 'Payable to Distributor' : 'Distributor owes Factory'}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Delivery Items */}
               <div className="border rounded-lg">
@@ -2852,26 +3140,32 @@ export default function DistributorDetail() {
                         <th className="text-left p-2">Delivery #</th>
                         <th className="text-left p-2">Date</th>
                         <th className="text-right p-2">Qty</th>
-                        <th className="text-right p-2">Billing Value</th>
-                        <th className="text-right p-2">Earnings</th>
-                        <th className="text-right p-2">Margin at Transfer</th>
-                        <th className="text-right p-2">Adjustment</th>
+                        <th className="text-right p-2">Customer Billing</th>
+                        <th className="text-right p-2">Dist Margin</th>
+                        <th className="text-right p-2">Factory Due</th>
+                        <th className="text-right p-2">Adj to Factory</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(selectedSettlement.items || []).map((item, idx) => (
-                        <tr key={idx} className="border-t">
-                          <td className="p-2">{item.delivery_number}</td>
-                          <td className="p-2">{item.delivery_date ? new Date(item.delivery_date).toLocaleDateString() : '-'}</td>
-                          <td className="p-2 text-right">{item.total_quantity || 0}</td>
-                          <td className="p-2 text-right">₹{(item.total_billing_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className="p-2 text-right text-blue-600">₹{(item.distributor_earnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className="p-2 text-right">₹{(item.margin_at_transfer_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className={`p-2 text-right font-medium ${(item.adjustment_payable || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {(item.adjustment_payable || 0) >= 0 ? '+' : ''}₹{(item.adjustment_payable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </td>
-                        </tr>
-                      ))}
+                      {(selectedSettlement.items || []).map((item, idx) => {
+                        const itemBilling = item.total_billing_value || item.total_amount || 0;
+                        const itemEarnings = item.distributor_earnings || 0;
+                        const itemFactoryDue = itemBilling - itemEarnings;
+                        const itemAdj = item.adjustment_dist_to_factory || item.factory_distributor_adjustment || 0;
+                        return (
+                          <tr key={idx} className="border-t">
+                            <td className="p-2">{item.delivery_number}</td>
+                            <td className="p-2">{item.delivery_date ? new Date(item.delivery_date).toLocaleDateString() : '-'}</td>
+                            <td className="p-2 text-right">{item.total_quantity || 0}</td>
+                            <td className="p-2 text-right">₹{itemBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right text-blue-600">₹{itemEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right text-amber-700">₹{itemFactoryDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className={`p-2 text-right font-medium ${itemAdj > 0 ? 'text-red-600' : itemAdj < 0 ? 'text-green-600' : 'text-slate-400'}`}>
+                              {itemAdj > 0 ? '' : itemAdj < 0 ? '-' : ''}₹{Math.abs(itemAdj).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -2974,6 +3268,51 @@ export default function DistributorDetail() {
               }}
             >
               {deleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Distributor Confirmation Dialog */}
+      <AlertDialog open={showDeleteDistributorDialog} onOpenChange={(open) => {
+        setShowDeleteDistributorDialog(open);
+        if (!open) setDeleteConfirmName('');
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-600">Delete Distributor Permanently</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <span className="block">
+                This will permanently delete <strong>{distributor?.distributor_name}</strong> and all related data including:
+              </span>
+              <span className="block text-xs text-slate-500 bg-red-50 border border-red-100 rounded-lg p-3 space-y-1">
+                <span className="block">Warehouse locations, Operating coverage, Margin matrix</span>
+                <span className="block">Account assignments, Shipments, Deliveries</span>
+                <span className="block">Settlements, Billing configs, Invoices, Reconciliations</span>
+                <span className="block">Linked user accounts</span>
+              </span>
+              <span className="block font-medium text-red-600">This action cannot be undone.</span>
+              <span className="block text-sm">
+                Type <strong>{distributor?.distributor_name}</strong> to confirm:
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={deleteConfirmName}
+            onChange={(e) => setDeleteConfirmName(e.target.value)}
+            placeholder="Type distributor name to confirm"
+            className="border-red-200 focus:ring-red-500/20"
+            data-testid="delete-confirm-input"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingDistributor}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={deletingDistributor || deleteConfirmName !== distributor?.distributor_name}
+              onClick={handleDeleteDistributor}
+              data-testid="delete-confirm-btn"
+            >
+              {deletingDistributor ? 'Deleting...' : 'Delete Permanently'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

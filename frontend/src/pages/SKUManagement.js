@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import { skusAPI } from '../utils/api';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -39,6 +40,7 @@ const categoryColors = {
 export default function SKUManagement() {
   const [skus, setSkus] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [packagingTypes, setPackagingTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showInactive, setShowInactive] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -56,12 +58,17 @@ export default function SKUManagement() {
     unit: '',
     description: '',
     is_active: true,
-    sort_order: 0
+    sort_order: 0,
+    packaging_config: { production: [], stock_in: [], stock_out: [] },
   });
+
+  const API_URL = process.env.REACT_APP_BACKEND_URL;
+  const getHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
 
   useEffect(() => {
     fetchSkus();
     fetchCategories();
+    fetchPackagingTypes();
   }, [showInactive]);
 
   const fetchSkus = async () => {
@@ -85,15 +92,19 @@ export default function SKUManagement() {
     }
   };
 
+  const fetchPackagingTypes = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/packaging-types`, { headers: getHeaders() });
+      setPackagingTypes(res.data.packaging_types || []);
+    } catch { /* ignore */ }
+  };
+
   const handleOpenCreate = () => {
     setEditingSku(null);
     setFormData({
-      sku_name: '',
-      category: '',
-      unit: '',
-      description: '',
-      is_active: true,
-      sort_order: skus.length + 1
+      sku_name: '', category: '', unit: '', description: '',
+      is_active: true, sort_order: skus.length + 1,
+      packaging_config: { production: [], stock_in: [], stock_out: [] },
     });
     setShowModal(true);
   };
@@ -106,7 +117,8 @@ export default function SKUManagement() {
       unit: sku.unit || '',
       description: sku.description || '',
       is_active: sku.is_active !== false,
-      sort_order: sku.sort_order || 0
+      sort_order: sku.sort_order || 0,
+      packaging_config: sku.packaging_config || { production: [], stock_in: [], stock_out: [] },
     });
     setShowModal(true);
   };
@@ -330,6 +342,10 @@ export default function SKUManagement() {
                       </div>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
                         <span>Unit: {sku.unit}</span>
+                        {sku.packaging_config && (() => {
+                          const prod = (sku.packaging_config.production || []).find(p => p.is_default);
+                          return prod ? <span>Prod: {prod.packaging_type_name} ({prod.units_per_package})</span> : null;
+                        })()}
                         {sku.description && <span>• {sku.description}</span>}
                         <span className="text-xs">Order: {sku.sort_order}</span>
                       </div>
@@ -378,7 +394,7 @@ export default function SKUManagement() {
 
       {/* Create/Edit Modal */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingSku ? 'Edit SKU' : 'Create New SKU'}
@@ -450,6 +466,81 @@ export default function SKUManagement() {
                 placeholder="Optional description"
                 data-testid="sku-description-input"
               />
+            </div>
+
+            {/* Packaging Configuration — 3 contexts */}
+            <div className="space-y-3 pt-2 border-t">
+              <Label className="text-sm font-semibold">Packaging Configuration</Label>
+              {[
+                { key: 'production', label: 'Production', desc: 'Packaging used during production batches' },
+                { key: 'stock_in', label: 'Stock In (Distributor Delivery)', desc: 'Packaging for shipments to distributors' },
+                { key: 'stock_out', label: 'Stock Out (Customer Delivery)', desc: 'Packaging for customer deliveries' },
+              ].map(ctx => {
+                const items = formData.packaging_config?.[ctx.key] || [];
+                return (
+                  <div key={ctx.key} className="border rounded-lg p-3 space-y-2" data-testid={`pkg-config-${ctx.key}`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-semibold text-slate-700">{ctx.label}</p>
+                        <p className="text-[10px] text-slate-400">{ctx.desc}</p>
+                      </div>
+                      <Select
+                        value=""
+                        onValueChange={(ptId) => {
+                          if (items.find(i => i.packaging_type_id === ptId)) return;
+                          const pt = packagingTypes.find(p => p.id === ptId);
+                          if (!pt) return;
+                          const newItem = { packaging_type_id: pt.id, packaging_type_name: pt.name, units_per_package: pt.units_per_package, is_default: items.length === 0 };
+                          setFormData(prev => ({
+                            ...prev,
+                            packaging_config: { ...prev.packaging_config, [ctx.key]: [...items, newItem] }
+                          }));
+                        }}
+                      >
+                        <SelectTrigger className="h-7 w-40 text-[10px]" data-testid={`pkg-add-${ctx.key}`}>
+                          <SelectValue placeholder="+ Add packaging" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {packagingTypes.filter(pt => !items.find(i => i.packaging_type_id === pt.id)).map(pt => (
+                            <SelectItem key={pt.id} value={pt.id}>{pt.name} ({pt.units_per_package})</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {items.length === 0 && <p className="text-[10px] text-slate-300 italic">No packaging types assigned</p>}
+                    {items.map((item, idx) => (
+                      <div key={item.packaging_type_id} className="flex items-center gap-2 bg-slate-50 rounded px-2.5 py-1.5" data-testid={`pkg-item-${ctx.key}-${idx}`}>
+                        <span className="text-xs font-medium text-slate-700 flex-1">{item.packaging_type_name}</span>
+                        <span className="text-[10px] text-blue-600 font-bold">{item.units_per_package} units</span>
+                        <button type="button"
+                          className={`px-2 py-0.5 text-[9px] font-semibold rounded ${item.is_default ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500 hover:bg-slate-300'}`}
+                          onClick={() => {
+                            setFormData(prev => ({
+                              ...prev,
+                              packaging_config: {
+                                ...prev.packaging_config,
+                                [ctx.key]: items.map((it, i) => ({ ...it, is_default: i === idx }))
+                              }
+                            }));
+                          }}
+                          data-testid={`pkg-default-${ctx.key}-${idx}`}>
+                          {item.is_default ? 'Default' : 'Set Default'}
+                        </button>
+                        <button type="button" onClick={() => {
+                          const updated = items.filter((_, i) => i !== idx);
+                          if (item.is_default && updated.length > 0) updated[0].is_default = true;
+                          setFormData(prev => ({
+                            ...prev,
+                            packaging_config: { ...prev.packaging_config, [ctx.key]: updated }
+                          }));
+                        }} className="p-0.5 text-slate-400 hover:text-red-500" data-testid={`pkg-remove-${ctx.key}-${idx}`}>
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
 
             <div className="grid grid-cols-2 gap-4">

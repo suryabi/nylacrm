@@ -35,6 +35,18 @@ from .customer_returns import router as customer_returns_router
 from .credit_notes import router as credit_notes_router
 from .factory_returns import router as factory_returns_router
 from .performance import router as performance_router
+from .investor import router as investor_router
+from .marketing import router as marketing_router
+from .meeting_minutes import router as meeting_minutes_router
+from .production_qc import router as production_qc_router
+from .cost_cards import router as cost_cards_router
+from .target_planning import router as target_planning_router
+from .proxies import router as proxies_router
+from .master_locations import router as master_locations_router
+from .reports import router as reports_router
+from .daily_status import router as daily_status_router
+from .analytics import router as analytics_router
+from .bottle_preview import router as bottle_preview_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -84,5 +96,41 @@ routes_router.include_router(factory_returns_router, prefix="/distributors", tag
 
 # Performance Tracking
 routes_router.include_router(performance_router, prefix="/performance", tags=["Performance Tracking"])
+
+# Investor Module
+routes_router.include_router(investor_router, prefix="/investor", tags=["Investor Module"])
+
+# Marketing Module
+routes_router.include_router(marketing_router, prefix="/marketing", tags=["Marketing Module"])
+
+# Meeting Minutes Module
+routes_router.include_router(meeting_minutes_router, tags=["Meeting Minutes"])
+
+# Production QC Module
+routes_router.include_router(production_qc_router, tags=["Production QC"])
+
+# Cost Cards Module
+routes_router.include_router(cost_cards_router, prefix="/cost-cards", tags=["Cost Cards"])
+
+# Target Planning (V2)
+routes_router.include_router(target_planning_router, tags=["Target Planning V2"])
+
+# External Proxies (quotes, weather)
+routes_router.include_router(proxies_router, tags=["Proxies"])
+
+# Master Locations (Territories, States, Cities)
+routes_router.include_router(master_locations_router, tags=["Master Locations"])
+
+# Performance Reports
+routes_router.include_router(reports_router, tags=["Reports"])
+
+# Daily Status
+routes_router.include_router(daily_status_router, tags=["Daily Status"])
+
+# Analytics
+routes_router.include_router(analytics_router, tags=["Analytics"])
+
+# Bottle Preview
+routes_router.include_router(bottle_preview_router, tags=["Bottle Preview"])
 
 __all__ = ['routes_router']

@@ -1,0 +1,83 @@
+{
+  "summary": "Tested Factory Warehouse Stock feature in Stock Dashboard. All 7 backend API tests passed. Frontend UI verified: Factory Warehouse Stock card displays correctly with 90 crates total, 'Wh. Stock' column visible in SKU table, per-warehouse breakdown shows 'Default master' with 90 crates of 'Nyla - 660 ml / Sparkling'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_stock_dashboard_factory_warehouse.py",
+    "/app/test_reports/pytest/stock_dashboard_factory_warehouse_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_stock_dashboard_factory_warehouse.py"
+  ],
+  "success_rate": {
+    "backend": "100% (7/7 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_id": "nyla-air-water",
+    "distributor_id": "b8876367-df64-4c55-a382-d5eb3b4b2380",
+    "distributor_name": "Surya 1"
+  },
+  "seed_data_creation": "Used existing factory warehouse stock (90 crates of 'Nyla - 660 ml / Sparkling' in 'Default master' warehouse) for distributor 'Surya 1'",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Factory Warehouse Stock feature in Stock Dashboard is fully implemented and working. Backend: GET /api/distributors/{id}/stock-dashboard returns factory_warehouse_stock in totals (line 6179), factory_warehouses array with per-warehouse per-SKU breakdown (line 6188), and each SKU in skus[] has factory_warehouse_stock field (line 6145). Frontend: StockDashboardTab.jsx displays Factory Warehouse Stock card (data-testid='factory-warehouse-stock-card') when factory_warehouse_stock > 0, shows 'Wh. Stock' column in SKU table, and footer totals include factory warehouse stock. Test distributor 'Surya 1' (ID: b8876367-df64-4c55-a382-d5eb3b4b2380) has 90 crates in 'Default master' factory warehouse.",
+  "features_tested": {
+    "backend_api_tests": [
+      "GET /api/distributors/{id}/stock-dashboard returns 200 - PASSED",
+      "Response totals include factory_warehouse_stock field - PASSED",
+      "Response includes factory_warehouses array - PASSED",
+      "factory_warehouse_stock value is 90 (as per test data) - PASSED",
+      "factory_warehouses includes 'Default master' warehouse with SKU breakdown - PASSED",
+      "Each SKU in skus[] has factory_warehouse_stock field - PASSED",
+      "Full response structure is correct (all required fields present) - PASSED"
+    ],
+    "frontend_ui_tests": [
+      "Stock Dashboard loads correctly (data-testid='stock-dashboard') - PASSED",
+      "Factory Warehouse Stock card visible (data-testid='factory-warehouse-stock-card') - PASSED",
+      "Factory Warehouse Stock card shows '90 crates total' badge - PASSED",
+      "Per-warehouse breakdown shows 'Default master' warehouse - PASSED",
+      "SKU 'Nyla - 660 ml / Sparkling' shows 90 crates in warehouse - PASSED",
+      "'Wh. Stock' column visible in SKU table - PASSED",
+      "SKU row shows 90 in Wh. Stock column - PASSED",
+      "Footer totals show 90 in Wh. Stock column - PASSED",
+      "Summary cards grid renders correctly - PASSED"
+    ]
+  },
+  "api_response_sample": {
+    "totals": {
+      "stock_received": 0,
+      "stock_delivered": 0,
+      "stock_at_hand": 0,
+      "customer_returns": 0,
+      "factory_returns": 0,
+      "factory_warehouse_stock": 90,
+      "pct_stock_at_hand": 0
+    },
+    "factory_warehouses": [
+      {
+        "warehouse_id": "6eb87219-5585-4d73-8bc4-3c563da62233",
+        "warehouse_name": "Default master",
+        "skus": [
+          {
+            "sku_id": "ee1e5f58-5509-4691-ae93-d3e3badc3442",
+            "sku_name": "Nyla - 660 ml / Sparkling",
+            "quantity": 90
+          }
+        ]
+      }
+    ],
+    "sku_count": 1
+  }
+}

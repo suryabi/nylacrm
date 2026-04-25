@@ -1,0 +1,58 @@
+{
+  "summary": "Tested is_factory flag for warehouse locations and is_self_managed flag for distributors. All 14 backend API tests passed. All frontend UI elements verified working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_distributor_flags.py",
+    "/app/test_reports/pytest/distributor_flags_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_distributor_flags.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_id": "nyla-air-water",
+    "test_distributor_id": "99fb55dc-532c-4e85-b618-6b8a5e552c04"
+  },
+  "seed_data_creation": "Created test distributors and locations with TEST_FLAG_ prefix during testing, cleaned up after tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "is_factory and is_self_managed flags are fully implemented and working. Backend APIs support create/update/get for both flags. Frontend shows Self Managed badge in distributor list, Self Managed checkbox in create/edit dialogs, Factory badge on location cards, and Factory checkbox in add location dialog.",
+  "features_tested": {
+    "backend_api_tests": [
+      "POST /api/distributors with is_self_managed=true - PASSED",
+      "POST /api/distributors with is_self_managed=false - PASSED",
+      "POST /api/distributors without is_self_managed (defaults to false) - PASSED",
+      "PUT /api/distributors/{id} to update is_self_managed - PASSED",
+      "GET /api/distributors returns is_self_managed field - PASSED",
+      "GET /api/distributors/{id} returns is_self_managed field - PASSED",
+      "POST /api/distributors/{id}/locations with is_factory=true - PASSED",
+      "POST /api/distributors/{id}/locations with is_factory=false - PASSED",
+      "POST /api/distributors/{id}/locations without is_factory (defaults to false) - PASSED",
+      "PUT /api/distributors/{id}/locations/{loc_id} to update is_factory - PASSED",
+      "GET /api/distributors/{id} returns is_factory on locations - PASSED",
+      "GET /api/distributors/{id}/locations/dropdown returns is_factory - PASSED"
+    ],
+    "frontend_ui_tests": [
+      "Distributor List - Self Managed badge displayed (3 badges found) - PASSED",
+      "Create Distributor Dialog - Self Managed checkbox present (data-testid: distributor-self-managed-checkbox) - PASSED",
+      "Profile Tab Edit Mode - Self Managed checkbox present (data-testid: edit-self-managed-checkbox) - PASSED",
+      "Location Cards - Factory badge displayed (3 badges found) - PASSED",
+      "Add Location Dialog - Factory checkbox present (data-testid: location-factory-checkbox) - PASSED"
+    ]
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "summary": "Marketing Spreadsheet Upload/Download Feature - All tests passed. Backend: 17/17 tests passed (100%). Frontend: All UI elements verified - Export button, Upload button, Download Template, File upload, Preview table, Remove row, Back button, Confirm button, Warning message.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Upload Sheet",
+        "issues": ["Minor: Missing aria-describedby for DialogContent (accessibility warning in console)"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_marketing_spreadsheet.py",
+    "/app/test_reports/pytest/marketing_spreadsheet_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_marketing_spreadsheet.py"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17 tests passed)",
+    "frontend": "100% - All UI elements verified"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_id": "nyla-air-water"
+  },
+  "seed_data_creation": "Test posts created and cleaned up during backend tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Spreadsheet Upload/Download feature fully tested. GET /api/marketing/template returns xlsx template with sample row and instructions sheet. GET /api/marketing/export?month=X&year=Y returns xlsx with existing posts. POST /api/marketing/upload-preview parses xlsx/csv and returns rows with validation (missing date, missing concept, invalid content type marked as errors). POST /api/marketing/upload-confirm replaces all posts for the month with uploaded data, returns deleted and inserted counts. Frontend: Export button downloads xlsx, Upload button opens slide-out sheet, Download Template button downloads template, File upload accepts xlsx/csv and shows preview, Preview table shows parsed rows with status badges and platform icons, Remove row button (X) removes rows from preview, Back button returns to choose step, Confirm button saves data.",
+  "features_tested": {
+    "Backend_API_Tests": {
+      "GET_template_returns_xlsx": "PASSED - Returns xlsx file with proper content-type and disposition",
+      "GET_template_requires_auth": "PASSED - Returns 401/403 without auth",
+      "GET_export_returns_xlsx": "PASSED - Returns xlsx for April 2026 with filename marketing_calendar_2026_04.xlsx",
+      "GET_export_requires_month_year": "PASSED - Returns 422 for missing params",
+      "GET_export_empty_month": "PASSED - Returns valid xlsx even for months with no posts",
+      "POST_upload_preview_parses_xlsx": "PASSED - Parses exported xlsx and returns rows with validation",
+      "POST_upload_preview_parses_template": "PASSED - Parses template file with sample row",
+      "POST_upload_preview_validates_missing_date": "PASSED - Marks rows with missing date as invalid",
+      "POST_upload_preview_validates_missing_concept": "PASSED - Marks rows with missing concept as invalid",
+      "POST_upload_preview_validates_invalid_content_type": "PASSED - Marks rows with invalid content type as invalid",
+      "POST_upload_preview_requires_file": "PASSED - Returns 422 for missing file",
+      "POST_upload_preview_handles_csv": "PASSED - Parses CSV files correctly",
+      "POST_upload_confirm_replaces_posts": "PASSED - Deletes existing posts and inserts new ones",
+      "POST_upload_confirm_requires_month_year": "PASSED - Returns 400 for missing month/year",
+      "POST_upload_confirm_requires_rows": "PASSED - Returns 400 for empty rows",
+      "POST_upload_confirm_returns_counts": "PASSED - Returns deleted and inserted counts",
+      "End_to_end_upload_flow": "PASSED - Export -> Preview -> Confirm flow works"
+    },
+    "Frontend_UI_Tests": {
+      "Export_button_visible": "PASSED - data-testid='export-btn' found",
+      "Export_button_triggers_download": "PASSED - Toast shows 'Calendar exported'",
+      "Upload_button_visible": "PASSED - data-testid='upload-btn' found",
+      "Upload_button_opens_sheet": "PASSED - Sheet opens with title 'Upload Calendar'",
+      "Download_Template_button_visible": "PASSED - data-testid='download-template-btn' found",
+      "Download_Template_triggers_download": "PASSED - Toast shows 'Template downloaded'",
+      "File_upload_input_visible": "PASSED - data-testid='upload-file-input' found",
+      "Warning_message_visible": "PASSED - Warning about replacing posts is visible",
+      "Preview_table_shows_parsed_rows": "PASSED - data-testid='upload-preview-table' found with 3 rows",
+      "Preview_shows_status_badges": "PASSED - Status badges (Draft, Review, Scheduled) visible",
+      "Preview_shows_platform_icons": "PASSED - Platform icons visible in preview",
+      "Remove_row_button_works": "PASSED - Clicking X removes row from preview (3 -> 2 rows)",
+      "Back_button_visible": "PASSED - data-testid='upload-back-btn' found",
+      "Back_button_returns_to_choose": "PASSED - Returns to choose step with Download Template visible",
+      "Confirm_button_visible": "PASSED - data-testid='upload-confirm-btn' found",
+      "Confirm_button_shows_count": "PASSED - Shows 'Confirm & Replace (2 posts)'"
+    }
+  },
+  "data_testids_verified": [
+    "marketing-calendar",
+    "export-btn",
+    "upload-btn",
+    "download-template-btn",
+    "upload-file-input",
+    "close-upload-btn",
+    "upload-preview-table",
+    "preview-row-{row_num}",
+    "remove-row-{row_num}",
+    "upload-back-btn",
+    "upload-confirm-btn",
+    "upload-done-btn"
+  ]
+}

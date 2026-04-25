@@ -6,7 +6,7 @@ import json
 
 
 class NylaCRMTester:
-    def __init__(self, base_url="https://tracker-glass-ui.preview.emergentagent.com"):
+    def __init__(self, base_url="https://warehouse-qc-engine.preview.emergentagent.com"):
         self.base_url = base_url
         self.tokens = {}
         self.users = {}

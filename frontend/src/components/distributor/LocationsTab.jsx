@@ -7,7 +7,7 @@ import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
-import { MapPin, Plus, Trash2, Package, User, Phone } from 'lucide-react';
+import { MapPin, Plus, Trash2, Package, User, Phone, Factory } from 'lucide-react';
 
 export default function LocationsTab({
   distributor,
@@ -151,6 +151,18 @@ export default function LocationsTab({
                   />
                   <label htmlFor="is_default" className="text-sm">Set as default location</label>
                 </div>
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50/60 border border-amber-100">
+                  <Checkbox
+                    id="is_factory"
+                    checked={newLocation.is_factory}
+                    onCheckedChange={(checked) => setNewLocation(prev => ({ ...prev, is_factory: !!checked }))}
+                    data-testid="location-factory-checkbox"
+                  />
+                  <label htmlFor="is_factory" className="text-sm font-medium text-slate-700 cursor-pointer flex items-center gap-1.5">
+                    <Factory className="h-4 w-4 text-amber-600" />
+                    Mark as Factory Warehouse
+                  </label>
+                </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShowLocationDialog(false)}>Cancel</Button>
@@ -183,6 +195,12 @@ export default function LocationsTab({
                         <h4 className="font-semibold">{location.location_name}</h4>
                         <Badge variant="outline">{location.location_code}</Badge>
                         {location.is_default && <Badge className="bg-primary">Default</Badge>}
+                        {location.is_factory && (
+                          <Badge className="bg-amber-100 text-amber-700 border-amber-200" variant="outline" data-testid={`factory-badge-${location.id}`}>
+                            <Factory className="h-3 w-3 mr-1" />
+                            Factory
+                          </Badge>
+                        )}
                       </div>
                       <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                         {location.address_line_1 && <p>{location.address_line_1}</p>}

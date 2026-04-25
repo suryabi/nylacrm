@@ -260,13 +260,15 @@ export default function DeliveriesTab({
   // Calculate total credit to be applied
   const totalCreditToApply = Object.values(selectedCreditNotes).reduce((sum, amt) => sum + (parseFloat(amt) || 0), 0);
   
-  // Calculate delivery total amount
-  const deliveryTotalAmount = deliveryItems.reduce((sum, item) => {
-    const gross = item.quantity * item.unit_price;
-    const afterDiscount = gross * (1 - (item.discount_percent || 0) / 100);
-    const withTax = afterDiscount * (1 + (item.tax_percent || 0) / 100);
-    return sum + withTax;
+  // Calculate delivery total amount (subtotal without GST — GST shown separately)
+  const deliverySubtotal = deliveryItems.reduce((sum, item) => {
+    const pu = parseInt(item.packaging_units) || 1;
+    const tu = (parseInt(item.quantity) || 0) * pu;
+    const afterDiscount = tu * (parseFloat(item.unit_price) || 0) * (1 - (parseFloat(item.discount_percent) || 0) / 100);
+    return sum + afterDiscount;
   }, 0);
+  const deliveryGstPct = parseFloat(deliveryForm.gst_percent) || 0;
+  const deliveryTotalAmount = deliverySubtotal + deliverySubtotal * (deliveryGstPct / 100);
   
   // Calculate net billing amount
   const netBillingAmount = Math.max(0, deliveryTotalAmount - totalCreditToApply);
@@ -676,116 +678,132 @@ export default function DeliveriesTab({
                       <p className="text-sm">No items added. Click "Add Item" to start.</p>
                     </div>
                   ) : (
-                    <div className="space-y-3">
-                      {/* Header Row */}
-                      <div className="flex items-center gap-3 px-3 text-xs font-medium text-muted-foreground">
-                        <div className="flex-[3] min-w-0">SKU</div>
-                        <div className="w-20">Qty</div>
-                        <div className="w-24">Price (₹)</div>
-                        <div className="w-16">Disc %</div>
-                        <div className="w-16">Tax %</div>
-                        <div className="w-28 text-right">Amount</div>
-                        <div className="w-10"></div>
-                      </div>
-                      {deliveryItems.map((item, index) => (
-                        <div key={item.id} className="flex items-center gap-3 p-3 border rounded-md bg-muted/30" data-testid={`delivery-item-${index}`}>
-                          <div className="flex-[3] min-w-0">
-                            <Select
-                              value={item.sku_id}
-                              onValueChange={(v) => {
-                                const accountSkus = selectedDeliveryAccount?.sku_pricing || [];
-                                const selectedSku = accountSkus.find(s => s.id === v) || skus.find(s => s.id === v);
-                                updateDeliveryItem(item.id, 'sku_id', v);
-                                if (selectedSku) {
-                                  updateDeliveryItem(item.id, 'sku_name', selectedSku.name || selectedSku.sku_name);
-                                  if (selectedSku.price_per_unit) {
-                                    updateDeliveryItem(item.id, 'unit_price', selectedSku.price_per_unit);
+                    <div className="border rounded-lg overflow-hidden">
+                      <div className="divide-y divide-slate-200">
+                      {deliveryItems.map((item, index) => {
+                        const pkgUnits = parseInt(item.packaging_units) || 1;
+                        const totalUnits = (parseInt(item.quantity) || 0) * pkgUnits;
+                        const lineSubtotal = totalUnits * (parseFloat(item.unit_price) || 0) * (1 - ((parseFloat(item.discount_percent) || 0) / 100));
+                        const accountSkus = selectedDeliveryAccount?.sku_pricing || [];
+                        const allSkuOptions = accountSkus.length > 0 ? accountSkus : skus;
+                        const selectedSku = skus.find(s => s.id === item.sku_id);
+                        const stockOutPkg = selectedSku?.packaging_config?.stock_out || [];
+                        const isOdd = index % 2 === 1;
+                        return (
+                        <div key={item.id} className={`px-4 py-3 ${isOdd ? 'bg-slate-50' : 'bg-white'}`} data-testid={`delivery-item-${index}`}>
+                          {/* Row 1: SKU + Packaging + Remove */}
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1 min-w-0">
+                              <Select
+                                value={item.sku_id}
+                                onValueChange={(v) => {
+                                  const matchedSku = accountSkus.find(s => s.id === v) || skus.find(s => s.id === v);
+                                  updateDeliveryItem(item.id, 'sku_id', v);
+                                  if (matchedSku) {
+                                    updateDeliveryItem(item.id, 'sku_name', matchedSku.name || matchedSku.sku_name);
+                                    if (matchedSku.price_per_unit) updateDeliveryItem(item.id, 'unit_price', matchedSku.price_per_unit);
+                                    // Auto-select default stock_out packaging
+                                    const fullSku = skus.find(s => s.id === v);
+                                    const soPkg = fullSku?.packaging_config?.stock_out || [];
+                                    const defPkg = soPkg.find(p => p.is_default) || soPkg[0];
+                                    if (defPkg) updateDeliveryItem(item.id, 'packaging_units', String(defPkg.units_per_package));
                                   }
-                                }
-                              }}
-                            >
-                              <SelectTrigger className="h-9">
-                                <SelectValue placeholder="Select SKU" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {(selectedDeliveryAccount?.sku_pricing?.length > 0 
-                                  ? selectedDeliveryAccount.sku_pricing 
-                                  : skus
-                                ).map(sku => (
-                                  <SelectItem key={sku.id} value={sku.id}>
-                                    {sku.name || sku.sku_name}
-                                    {sku.price_per_unit && ` - ₹${sku.price_per_unit}`}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="w-20">
-                            <Input
-                              type="number"
-                              min="1"
-                              className="h-9"
-                              value={item.quantity}
-                              onChange={(e) => updateDeliveryItem(item.id, 'quantity', e.target.value)}
-                            />
-                          </div>
-                          <div className="w-24">
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              className="h-9"
-                              value={item.unit_price}
-                              onChange={(e) => updateDeliveryItem(item.id, 'unit_price', e.target.value)}
-                            />
-                          </div>
-                          <div className="w-16">
-                            <Input
-                              type="number"
-                              min="0"
-                              max="100"
-                              className="h-9"
-                              value={item.discount_percent}
-                              onChange={(e) => updateDeliveryItem(item.id, 'discount_percent', e.target.value)}
-                            />
-                          </div>
-                          <div className="w-16">
-                            <Input
-                              type="number"
-                              min="0"
-                              max="100"
-                              className="h-9"
-                              value={item.tax_percent}
-                              onChange={(e) => updateDeliveryItem(item.id, 'tax_percent', e.target.value)}
-                            />
-                          </div>
-                          <div className="w-28 text-right">
-                            <div className="h-9 flex items-center justify-end text-sm font-semibold whitespace-nowrap">
-                              ₹{((item.quantity * item.unit_price * (1 - (item.discount_percent || 0) / 100)) * (1 + (item.tax_percent || 0) / 100)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                }}
+                              >
+                                <SelectTrigger className="h-10"><SelectValue placeholder="Select SKU" /></SelectTrigger>
+                                <SelectContent>
+                                  {allSkuOptions.map(sku => (
+                                    <SelectItem key={sku.id} value={sku.id}>
+                                      {sku.name || sku.sku_name}{sku.price_per_unit && ` - ₹${sku.price_per_unit}`}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
-                          </div>
-                          <div className="w-10 flex justify-end">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-9 w-9 p-0 text-destructive"
-                              onClick={() => removeDeliveryItem(item.id)}
-                            >
+                            <div className="w-40 flex-shrink-0">
+                              {stockOutPkg.length > 0 ? (
+                                <select className="w-full h-10 px-3 border rounded-md text-sm bg-background"
+                                  value={item.packaging_units || ''}
+                                  onChange={e => updateDeliveryItem(item.id, 'packaging_units', e.target.value)}
+                                  data-testid={`delivery-pkg-${index}`}>
+                                  {stockOutPkg.map((pkg, pi) => (
+                                    <option key={pi} value={pkg.units_per_package}>{pkg.packaging_type_name} ({pkg.units_per_package})</option>
+                                  ))}
+                                </select>
+                              ) : <span className="text-sm text-muted-foreground">—</span>}
+                            </div>
+                            <Button variant="ghost" size="sm" className="h-10 w-10 p-0 text-destructive flex-shrink-0" onClick={() => removeDeliveryItem(item.id)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
+                          {/* Row 2: Qty | Price | Disc | Amount — top-aligned with fixed spacers */}
+                          <div className="flex items-start gap-3 mt-3">
+                            <div className="w-24 flex-shrink-0">
+                              <Label className="text-xs text-muted-foreground">Qty (pkgs)</Label>
+                              <Input type="number" min="1" className="h-10 mt-1 text-base font-medium"
+                                value={item.quantity}
+                                onChange={(e) => updateDeliveryItem(item.id, 'quantity', e.target.value)} />
+                              <p className="text-xs text-blue-600 font-medium text-center mt-0.5 h-4">
+                                {totalUnits > 0 && pkgUnits > 1 ? `${totalUnits} units` : '\u00A0'}
+                              </p>
+                            </div>
+                            <div className="flex-1 min-w-[100px]">
+                              <Label className="text-xs text-muted-foreground">Price/unit (₹)</Label>
+                              <Input type="number" min="0" step="0.01" className="h-10 mt-1 text-base" value={item.unit_price}
+                                onChange={(e) => updateDeliveryItem(item.id, 'unit_price', e.target.value)} />
+                              <p className="h-4"></p>
+                            </div>
+                            <div className="w-20 flex-shrink-0">
+                              <Label className="text-xs text-muted-foreground">Disc %</Label>
+                              <Input type="number" min="0" max="100" className="h-10 mt-1 text-base" value={item.discount_percent}
+                                onChange={(e) => updateDeliveryItem(item.id, 'discount_percent', e.target.value)} />
+                              <p className="h-4"></p>
+                            </div>
+                            <div className="w-28 flex-shrink-0 text-right">
+                              <Label className="text-xs text-muted-foreground">Amount</Label>
+                              <p className="text-base font-bold tabular-nums mt-2.5">₹{lineSubtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                              <p className="h-4"></p>
+                            </div>
+                          </div>
                         </div>
-                      ))}
-                      
-                      {/* Total */}
-                      <div className="flex justify-end pt-2 border-t">
-                        <div className="text-right">
-                          <span className="text-muted-foreground mr-4">Total Amount:</span>
-                          <span className="text-lg font-bold">
-                            ₹{deliveryTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                        </div>
+                        );
+                      })}
                       </div>
+                      
+                      {/* Totals: Subtotal → GST → Grand Total */}
+                      {(() => {
+                        const subtotal = deliveryItems.reduce((sum, item) => {
+                          const pu = parseInt(item.packaging_units) || 1;
+                          const tu = (parseInt(item.quantity) || 0) * pu;
+                          return sum + tu * (parseFloat(item.unit_price) || 0) * (1 - ((parseFloat(item.discount_percent) || 0) / 100));
+                        }, 0);
+                        const gstPct = parseFloat(deliveryForm.gst_percent) || 0;
+                        const gstAmt = subtotal * (gstPct / 100);
+                        const grandTotal = subtotal + gstAmt;
+                        return (
+                          <div className="border-t px-4 py-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-muted-foreground">Subtotal</span>
+                              <span className="text-sm font-semibold tabular-nums">₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-muted-foreground">GST</span>
+                                <Input type="number" min="0" max="100" step="0.5" className="h-7 w-16 text-xs"
+                                  value={deliveryForm.gst_percent || ''}
+                                  onChange={(e) => setDeliveryForm(prev => ({ ...prev, gst_percent: e.target.value }))}
+                                  placeholder="%" data-testid="delivery-gst-input" />
+                                <span className="text-xs text-muted-foreground">%</span>
+                              </div>
+                              <span className="text-sm font-semibold tabular-nums">₹{gstAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex items-center justify-between pt-2 border-t">
+                              <span className="text-base font-bold">Grand Total</span>
+                              <span className="text-lg font-bold tabular-nums" data-testid="delivery-grand-total">₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
@@ -1031,16 +1049,31 @@ export default function DeliveriesTab({
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm" data-testid="deliveries-table">
               <thead>
+                {/* Group headers */}
+                <tr className="border-b border-slate-200">
+                  <th colSpan="3" className="p-0"></th>
+                  <th colSpan="3" className="text-center px-2 pt-2 pb-0">
+                    <span className="text-[9px] uppercase tracking-widest font-bold text-blue-500 bg-blue-50 px-3 py-0.5 rounded-full">Customer</span>
+                  </th>
+                  <th colSpan="3" className="text-center px-2 pt-2 pb-0">
+                    <span className="text-[9px] uppercase tracking-widest font-bold text-purple-500 bg-purple-50 px-3 py-0.5 rounded-full">Distributor</span>
+                  </th>
+                  <th colSpan="2" className="p-0"></th>
+                </tr>
                 <tr className="border-b-2 border-emerald-200 bg-gradient-to-r from-emerald-50 to-slate-50">
-                  <th className="text-left p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Delivery</th>
-                  <th className="text-left p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Account</th>
-                  <th className="text-center p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Items</th>
-                  <th className="text-right p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Customer Billing</th>
-                  <th className="text-right p-4 font-semibold text-emerald-700 uppercase tracking-wider text-xs">Return Credit</th>
-                  <th className="text-right p-4 font-semibold text-indigo-700 uppercase tracking-wider text-xs">Net Customer Billing</th>
-                  <th className="text-right p-4 font-semibold text-purple-700 uppercase tracking-wider text-xs">Billable to Dist</th>
-                  <th className="text-center p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Status</th>
-                  <th className="text-center p-4 font-semibold text-slate-700 uppercase tracking-wider text-xs">Actions</th>
+                  <th className="text-left p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Delivery</th>
+                  <th className="text-left p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Account</th>
+                  <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Items</th>
+                  {/* Customer columns */}
+                  <th className="text-right p-3 font-semibold text-blue-700 uppercase tracking-wider text-xs bg-blue-50/40">Billing</th>
+                  <th className="text-right p-3 font-semibold text-blue-700 uppercase tracking-wider text-xs bg-blue-50/40">Return Credit</th>
+                  <th className="text-right p-3 font-semibold text-blue-700 uppercase tracking-wider text-xs bg-blue-50/40">Net Billing</th>
+                  {/* Distributor columns */}
+                  <th className="text-right p-3 font-semibold text-purple-700 uppercase tracking-wider text-xs bg-purple-50/40">Margin Amt</th>
+                  <th className="text-right p-3 font-semibold text-purple-700 uppercase tracking-wider text-xs bg-purple-50/40">Billable</th>
+                  <th className="text-right p-3 font-semibold text-purple-700 uppercase tracking-wider text-xs bg-purple-50/40">Net Billable</th>
+                  <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Status</th>
+                  <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1063,6 +1096,15 @@ export default function DeliveriesTab({
                   // Net Customer Billing (pre-tax, after credit)
                   const netCustomerBilling = Math.max(0, customerBilling - totalCreditApplied);
                   
+                  // Total margin amount (customer price - transfer price per item)
+                  const totalMarginAmount = items.reduce((sum, item) => {
+                    const qty = item.quantity || 0;
+                    const customerPrice = item.customer_selling_price || item.unit_price || 0;
+                    const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
+                    const marginPerUnit = customerPrice * (commissionPct / 100);
+                    return sum + (qty * marginPerUnit);
+                  }, 0);
+                  
                   // Actual Billable to Dist (pre-tax, without GST)
                   const totalActualBillable = items.reduce((sum, item) => {
                     const qty = item.quantity || 0;
@@ -1083,7 +1125,7 @@ export default function DeliveriesTab({
                       data-testid={`delivery-row-${delivery.id}`}
                     >
                       {/* Delivery # and Date */}
-                      <td className="p-4">
+                      <td className="p-3">
                         <button 
                           className="font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
                           onClick={(e) => { e.stopPropagation(); viewDeliveryDetail(delivery.id); }}
@@ -1096,27 +1138,27 @@ export default function DeliveriesTab({
                       </td>
                       
                       {/* Account */}
-                      <td className="p-4">
+                      <td className="p-3">
                         <p className="font-medium text-slate-700">{delivery.account_name}</p>
                         <p className="text-xs text-slate-500">{delivery.account_city || ''}</p>
                       </td>
                       
                       {/* Items Count */}
-                      <td className="p-4 text-center">
+                      <td className="p-3 text-center">
                         <span className="inline-flex items-center justify-center bg-slate-100 text-slate-700 text-sm font-medium px-2.5 py-1 rounded-full">
                           {items.length} {items.length === 1 ? 'item' : 'items'}
                         </span>
                       </td>
                       
-                      {/* Customer Billing (pre-tax) */}
-                      <td className="p-4 text-right">
+                      {/* Customer: Billing */}
+                      <td className="p-3 text-right bg-blue-50/20">
                         <span className="font-medium text-slate-800">
                           ₹{customerBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
                       </td>
                       
-                      {/* Return Credit */}
-                      <td className="p-4 text-right">
+                      {/* Customer: Return Credit */}
+                      <td className="p-3 text-right bg-blue-50/20">
                         {hasCreditNotes ? (
                           <div className="flex flex-col items-end gap-0.5">
                             <span className="inline-flex items-center bg-emerald-100 text-emerald-700 text-xs font-medium px-2 py-0.5 rounded-full">
@@ -1131,32 +1173,44 @@ export default function DeliveriesTab({
                         )}
                       </td>
                       
-                      {/* Net Billing (pre-tax, after credit) */}
-                      <td className="p-4 text-right">
-                        <span className={`font-bold ${hasCreditNotes ? 'text-indigo-600' : 'text-slate-700'}`}>
+                      {/* Customer: Net Billing */}
+                      <td className="p-3 text-right bg-blue-50/20">
+                        <span className={`font-bold ${hasCreditNotes ? 'text-blue-600' : 'text-slate-700'}`}>
                           ₹{netCustomerBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
                       </td>
                       
-                      {/* Billable to Dist (pre-tax, after credit) */}
-                      <td className="p-4 text-right">
+                      {/* Distributor: Margin Amount */}
+                      <td className="p-3 text-right bg-purple-50/20">
+                        <span className="font-medium text-purple-600">
+                          ₹{totalMarginAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </td>
+                      
+                      {/* Distributor: Billable (before credit) */}
+                      <td className="p-3 text-right bg-purple-50/20">
+                        <span className="text-slate-700">
+                          ₹{totalActualBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </td>
+                      
+                      {/* Distributor: Net Billable (after credit) */}
+                      <td className="p-3 text-right bg-purple-50/20">
                         <span className="font-bold text-purple-700">
                           ₹{finalBillableToDist.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
                         {hasCreditNotes && (
-                          <p className="text-xs text-purple-500 mt-0.5">
-                            (after CN)
-                          </p>
+                          <p className="text-xs text-purple-500 mt-0.5">(after CN)</p>
                         )}
                       </td>
                       
                       {/* Status */}
-                      <td className="p-4 text-center">
+                      <td className="p-3 text-center">
                         {getDeliveryStatusBadge(delivery.status)}
                       </td>
                       
                       {/* Actions */}
-                      <td className="p-4 text-center">
+                      <td className="p-3 text-center">
                         <div className="flex justify-center gap-1">
                           <Button
                             variant="ghost"

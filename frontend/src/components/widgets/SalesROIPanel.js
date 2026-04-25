@@ -50,7 +50,7 @@ export default function SalesROIPanel() {
   });
 
   // Check if user is in Sales department (check if department contains 'sales')
-  const isSalesDepartment = user?.department?.toLowerCase()?.includes('sales');
+  const isSalesDepartment = Array.isArray(user?.department) ? user.department.some(d => d?.toLowerCase() === 'sales') : user?.department?.toLowerCase()?.includes('sales');
 
   useEffect(() => {
     if (!isSalesDepartment) {

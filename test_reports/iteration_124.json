@@ -1,0 +1,78 @@
+{
+  "summary": "Inspection Grid with Crates Inspected per Row - All features tested and verified. Backend: 8/8 tests passed (100%). Frontend: All UI elements verified - Grid columns (Resource, Date, Crates Inspected, Rejected Count, Passed, Reason), h-10 input sizing, Totals footer row, Add Row button, Rejection Summary table with new columns, Rejection Report page with 'Rejected Count' column header.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_inspection_crates_per_row.py",
+    "/app/test_reports/pytest/inspection_crates_per_row_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_inspection_crates_per_row.py"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 tests passed)",
+    "frontend": "100% - All UI elements and integrations verified"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_id": "nyla-air-water"
+  },
+  "seed_data_creation": "Used existing test batch: BATCH-TEST-001 (ID: 5833eb23-8664-4a53-8fc7-eedb9ff18178). Created test QC team members and rejection reasons during tests (cleaned up after).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Inspection Grid with Crates Inspected per Row fully tested. Key changes: 1) RejectionEntry now has qty_inspected field per row (crates inspected at resource level). 2) InspectionRecord no longer has top-level qty_inspected - derived from sum of entries. 3) Validation: total crates from all rows cannot exceed pending, each row qty_inspected > 0, rejected cannot exceed row's crates × bottles_per_crate. 4) Grid columns: Resource | Date | Crates Inspected | Rejected Count | Passed (auto) | Reason. 5) Passed column auto-calculates per row and shows green. 6) Totals footer row sums crates, rejected, and passed. 7) Grid inputs are h-10 size matching COGS calculator style. 8) Rejection Summary table includes Crates Inspected and Rejected Count columns. 9) Rejection Report page shows 'Rejected Count' column header. Data-testids: rej-grid-row-{idx}, rej-resource-{idx}, rej-date-{idx}, rej-crates-{idx} (NEW), rej-qty-{idx}, rej-reason-{idx}, rej-remove-{idx}, add-rej-row-{stage_id}, insp-submit-{stage_id}.",
+  "features_tested": {
+    "Backend_API_Tests": {
+      "test_get_batch_details": "PASSED - Batch has stage_balances, qc_stages, bottles_per_crate",
+      "test_inspection_with_per_row_crates": "PASSED - Inspection with qty_inspected per row works",
+      "test_inspection_multiple_rows_with_crates": "PASSED - Multi-row inspection with different crates per row",
+      "test_validation_total_crates_exceeds_pending": "PASSED - Returns 400 when total crates exceed pending",
+      "test_validation_row_crates_must_be_positive": "PASSED - Returns 400 when qty_inspected is 0",
+      "test_validation_rejected_exceeds_row_max": "PASSED - Returns 400 when rejected exceeds row's max bottles",
+      "test_rejection_report_has_qty_inspected": "PASSED - Report rows include qty_inspected field",
+      "test_history_inspections_have_rejections_array": "PASSED - History inspections include rejections array with qty_inspected"
+    },
+    "Frontend_UI_Tests": {
+      "Batch_Detail_page_loads": "PASSED - data-testid='batch-detail-page' found",
+      "Record_Inspection_button": "PASSED - data-testid='inspect-{stage_id}' found",
+      "Grid_row": "PASSED - data-testid='rej-grid-row-0' found",
+      "Crates_Inspected_input": "PASSED - data-testid='rej-crates-0' found (NEW)",
+      "Rejected_Count_input": "PASSED - data-testid='rej-qty-0' found",
+      "Resource_dropdown": "PASSED - data-testid='rej-resource-0' found",
+      "Date_input": "PASSED - data-testid='rej-date-0' found",
+      "Reason_dropdown": "PASSED - data-testid='rej-reason-0' found",
+      "Add_Row_button": "PASSED - data-testid='add-rej-row-{stage_id}' found",
+      "Grid_column_headers": "PASSED - Resource, Date, Crates Inspected, Rejected Count, Passed, Reason",
+      "Passed_column_green_styling": "PASSED - Emerald/green styled cells found",
+      "Totals_footer_row": "PASSED - Footer row with 'Total' text found",
+      "Input_h10_sizing": "PASSED - Inputs have h-10 class",
+      "Rejection_Summary_columns": "PASSED - Crates Inspected and Rejected Count columns found",
+      "Rejection_Report_columns": "PASSED - Crates Inspected and Rejected Count columns found"
+    }
+  },
+  "data_testids_verified": [
+    "batch-detail-page",
+    "inspect-{stage_id}",
+    "rej-grid-row-{idx}",
+    "rej-resource-{idx}",
+    "rej-date-{idx}",
+    "rej-crates-{idx}",
+    "rej-qty-{idx}",
+    "rej-reason-{idx}",
+    "rej-remove-{idx}",
+    "add-rej-row-{stage_id}",
+    "insp-submit-{stage_id}",
+    "toggle-rejections",
+    "rejection-report-page"
+  ]
+}

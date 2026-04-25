@@ -651,9 +651,14 @@ export default function PlatformAdmin() {
                         { key: 'sales_portal', label: 'Sales Portal' },
                         { key: 'lead_discovery', label: 'Lead Discovery' },
                         { key: 'target_planning', label: 'Target Planning' },
+                        { key: 'performance_tracker', label: 'Performance Tracker' },
+                        { key: 'investor_dashboard', label: 'Investor Dashboard' },
                         { key: 'cogs_calculator', label: 'COGS Calculator' },
                         { key: 'team', label: 'Team Management' },
                         { key: 'contacts', label: 'Contacts' },
+                        { key: 'marketing_calendar', label: 'Marketing Calendar' },
+                        { key: 'marketing_masters', label: 'Marketing Masters' },
+                        { key: 'meeting_minutes', label: 'Meeting Minutes' },
                       ].map(({ key, label }) => (
                         <div key={key} className="flex items-center justify-between p-3 border rounded-lg">
                           <span className="text-sm">{label}</span>

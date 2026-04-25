@@ -108,6 +108,7 @@ export const MODULE_ROUTE_MAP = {
   lead_discovery: ['/lead-discovery'],
   target_planning: ['/target-planning'],
   performance_tracker: ['/performance'],
+  investor_dashboard: ['/investor-dashboard'],
   daily_status: ['/daily-status'],
   status_summary: ['/status-summary'],
   
@@ -158,6 +159,10 @@ export const MODULE_ROUTE_MAP = {
   distributor_shipments: ['/distributors'],
   distributor_deliveries: ['/distributors'],
   distributor_stock: ['/distributors'],
+
+  // Marketing Modules
+  marketing_calendar: ['/marketing-calendar'],
+  marketing_masters: ['/marketing-masters'],
 };
 
 // Mapping from navigation href to module key

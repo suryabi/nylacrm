@@ -16,9 +16,11 @@ cryptography==46.0.4
 distro==1.9.0
 dnspython==2.8.0
 docopt==0.6.2
+docx2pdf==0.1.8
 ecdsa==0.19.1
 email-validator==2.3.0
 #emergentintegrations==0.1.0
+et_xmlfile==2.0.0
 fastapi==0.110.1
 fastuuid==0.14.0
 filelock==3.20.3
@@ -54,6 +56,7 @@ jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 librt==0.7.8
 litellm==1.80.0
+lxml==6.0.2
 markdown-it-py==4.0.0
 MarkupSafe==3.0.3
 mccabe==0.7.0
@@ -65,6 +68,7 @@ mypy_extensions==1.1.0
 numpy==2.4.2
 oauthlib==3.3.1
 openai==1.99.9
+openpyxl==3.1.5
 packaging==26.0
 pandas==3.0.0
 passlib==1.7.4
@@ -91,6 +95,7 @@ pyparsing==3.3.2
 PyPDF2==3.0.1
 pytest==9.0.2
 python-dateutil==2.9.0.post0
+python-docx==1.2.0
 python-dotenv==1.2.1
 python-jose==3.5.0
 python-multipart==0.0.22
@@ -101,6 +106,7 @@ regex==2026.1.15
 reportlab==4.4.10
 requests==2.32.5
 requests-oauthlib==2.0.0
+resend==2.23.0
 rich==14.3.2
 rpds-py==0.30.0
 rsa==4.9.1
@@ -129,5 +135,3 @@ websocket-client==1.9.0
 websockets==15.0.1
 yarl==1.22.0
 zipp==3.23.0
-resend>=2.0.0
-httpx==0.28.1

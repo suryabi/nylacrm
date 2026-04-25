@@ -31,15 +31,29 @@ async def compute_metrics(tenant_id: str, resource_ids: list, plan_id: str, mont
     resource_filter = {"$in": resource_ids} if len(resource_ids) > 1 else resource_ids[0]
     
     # === A. REVENUE METRICS (from accounts/invoices) ===
-    # Get target from plan — sum across all selected resources
-    target_allocs = await db.target_allocations_v2.find(
-        {"plan_id": plan_id, "resource_id": resource_filter, "level": "resource"},
-        {"_id": 0, "amount": 1, "city": 1, "resource_name": 1}
-    ).to_list(100)
-    monthly_target = sum(t.get("amount", 0) for t in target_allocs)
-    resource_names = [t.get("resource_name", "") for t in target_allocs]
-    resource_name = ", ".join(resource_names) if resource_names else ""
-    resource_city = ", ".join(sorted(set(t.get("city", "") for t in target_allocs if t.get("city")))) if target_allocs else ""
+    monthly_target = 0
+    resource_name = ""
+    resource_city = ""
+    
+    if plan_id:
+        # Get target from plan — sum across all selected resources
+        target_allocs = await db.target_allocations_v2.find(
+            {"plan_id": plan_id, "resource_id": resource_filter, "level": "resource"},
+            {"_id": 0, "amount": 1, "city": 1, "resource_name": 1}
+        ).to_list(100)
+        monthly_target = sum(t.get("amount", 0) for t in target_allocs)
+        resource_names = [t.get("resource_name", "") for t in target_allocs]
+        resource_name = ", ".join(resource_names) if resource_names else ""
+        resource_city = ", ".join(sorted(set(t.get("city", "") for t in target_allocs if t.get("city")))) if target_allocs else ""
+    
+    # Fallback: get resource names/cities from users collection if not found via plan
+    if not resource_name:
+        users = await db.users.find(
+            {"id": resource_filter},
+            {"_id": 0, "id": 1, "name": 1, "city": 1}
+        ).to_list(100)
+        resource_name = ", ".join(u.get("name", "") for u in users)
+        resource_city = ", ".join(sorted(set(u.get("city", "") for u in users if u.get("city"))))
     
     # All invoices this month for these resources
     invoices_this_month = await db.invoices.find(
@@ -75,8 +89,54 @@ async def compute_metrics(tenant_id: str, resource_ids: list, plan_id: str, mont
     ).to_list(1000)
     
     existing_accounts_count = len(all_accounts)
+    
+    # Compute average monthly sales per account from invoices
+    account_avg_sales = {}
+    for inv in all_invoices:
+        acc_id = inv.get("account_uuid") or inv.get("account_id")
+        if acc_id:
+            account_avg_sales.setdefault(acc_id, []).append(inv.get("net_invoice_value") or inv.get("gross_invoice_value") or 0)
+    # Average across all invoices for each account
+    for acc_id, values in account_avg_sales.items():
+        account_avg_sales[acc_id] = round(sum(values) / len(values), 2) if values else 0
+    
+    # Get estimated opportunity value from leads for each account
+    account_leads = await db.leads.find(
+        {"tenant_id": tenant_id, "assigned_to": resource_filter, "status": "active_customer"},
+        {"_id": 0, "id": 1, "account_id": 1, "estimated_value": 1, "opportunity_estimation": 1}
+    ).to_list(1000)
+    account_estimated = {}
+    for lead in account_leads:
+        acc_id = lead.get("account_id")
+        if acc_id:
+            opp = lead.get("opportunity_estimation", {})
+            est_val = (opp.get("estimated_monthly_revenue") if opp else None) or lead.get("estimated_value") or 0
+            if est_val:
+                account_estimated[acc_id] = round(est_val, 2)
+    
+    # Get manual account value overrides
+    account_overrides = {}
+    override_query = {"tenant_id": tenant_id}
+    if plan_id:
+        override_query["plan_id"] = plan_id
+    override_docs = await db.account_value_overrides.find(
+        override_query,
+        {"_id": 0, "account_id": 1, "manual_value": 1}
+    ).to_list(1000)
+    for ov in override_docs:
+        account_overrides[ov["account_id"]] = ov["manual_value"]
+    
     existing_accounts_list = [
-        {"id": a["id"], "name": a.get("account_name", "Unknown"), "city": a.get("city", ""), "status": a.get("account_type", "")}
+        {
+            "id": a["id"],
+            "name": a.get("account_name", "Unknown"),
+            "city": a.get("city", ""),
+            "status": a.get("account_type", ""),
+            "avg_sales": account_avg_sales.get(a["id"], 0),
+            "estimated_value": account_estimated.get(a["id"], 0),
+            "manual_value": account_overrides.get(a["id"]),
+            "display_value": account_overrides.get(a["id"]) or account_avg_sales.get(a["id"], 0) or account_estimated.get(a["id"], 0),
+        }
         for a in all_accounts
     ]
     
@@ -86,7 +146,15 @@ async def compute_metrics(tenant_id: str, resource_ids: list, plan_id: str, mont
         if a.get("onboarded_month") == month and a.get("onboarded_year") == year
     ]
     new_accounts_list = [
-        {"id": a["id"], "name": a.get("account_name", "Unknown"), "city": a.get("city", "")}
+        {
+            "id": a["id"],
+            "name": a.get("account_name", "Unknown"),
+            "city": a.get("city", ""),
+            "avg_sales": account_avg_sales.get(a["id"], 0),
+            "estimated_value": account_estimated.get(a["id"], 0),
+            "manual_value": account_overrides.get(a["id"]),
+            "display_value": account_overrides.get(a["id"]) or account_avg_sales.get(a["id"], 0) or account_estimated.get(a["id"], 0),
+        }
         for a in new_accounts
     ]
     new_account_ids = set(a.get("id") for a in new_accounts)
@@ -231,6 +299,8 @@ async def compute_metrics(tenant_id: str, resource_ids: list, plan_id: str, mont
             "by_status": pipeline_by_status,
             "total_value": round(pipeline_total_value, 2),
             "total_count": pipeline_total_count,
+            "next_month": next_month,
+            "next_year": next_year,
             "next_month_leads_count": len(next_month_leads),
             "next_month_pipeline_value": round(next_month_pipeline_value, 2),
             "coverage_ratio": pipeline_coverage,
@@ -288,15 +358,76 @@ async def get_resources_for_plan(plan_id: str, current_user: dict = Depends(get_
     return allocations
 
 
+@router.get("/territories-for-plan/{plan_id}")
+async def get_territories_for_plan(plan_id: str, current_user: dict = Depends(get_current_user)):
+    """Get all territories allocated under a target plan."""
+    allocations = await db.target_allocations_v2.find(
+        {"plan_id": plan_id, "level": "territory"},
+        {"_id": 0, "id": 1, "territory_id": 1, "territory_name": 1, "amount": 1}
+    ).to_list(100)
+    return allocations
+
+
+@router.get("/cities-for-plan/{plan_id}")
+async def get_cities_for_plan(plan_id: str, current_user: dict = Depends(get_current_user)):
+    """Get all cities allocated under a target plan."""
+    allocations = await db.target_allocations_v2.find(
+        {"plan_id": plan_id, "level": "city"},
+        {"_id": 0, "id": 1, "territory_id": 1, "territory_name": 1, "city": 1, "state": 1, "amount": 1}
+    ).to_list(100)
+    return allocations
+
+
+@router.get("/resources-by-territory/{plan_id}/{territory_id}")
+async def get_resources_by_territory(plan_id: str, territory_id: str, current_user: dict = Depends(get_current_user)):
+    """Get all resource IDs under a territory for a plan."""
+    resources = await db.target_allocations_v2.find(
+        {"plan_id": plan_id, "territory_id": territory_id, "level": "resource"},
+        {"_id": 0, "resource_id": 1}
+    ).to_list(100)
+    return [r["resource_id"] for r in resources if r.get("resource_id")]
+
+
+@router.get("/resources-by-city/{plan_id}/{city}")
+async def get_resources_by_city(plan_id: str, city: str, current_user: dict = Depends(get_current_user)):
+    """Get all resource IDs under a city for a plan."""
+    resources = await db.target_allocations_v2.find(
+        {"plan_id": plan_id, "city": city, "level": "resource"},
+        {"_id": 0, "resource_id": 1}
+    ).to_list(100)
+    return [r["resource_id"] for r in resources if r.get("resource_id")]
+
+
+@router.get("/all-sales-resources")
+async def get_all_sales_resources(current_user: dict = Depends(get_current_user)):
+    """Get all sales/admin team members with territory and city info, independent of any plan."""
+    tenant_id = get_current_tenant_id()
+    users = await db.users.find(
+        {"tenant_id": tenant_id, "department": {"$in": ["Sales", "Admin"]}, "is_active": {"$ne": False}},
+        {"_id": 0, "id": 1, "name": 1, "territory": 1, "city": 1, "role": 1, "department": 1}
+    ).to_list(500)
+    # Return in a format compatible with the plan-based resource list
+    return [
+        {
+            "resource_id": u["id"],
+            "resource_name": u.get("name", ""),
+            "territory_id": u.get("territory", ""),
+            "territory_name": u.get("territory", ""),
+            "city": u.get("city", ""),
+        }
+        for u in users
+    ]
+
+
 @router.get("/generate")
 async def generate_performance(
-    plan_id: str,
     resource_id: str,
     month: int,
     year: int,
+    plan_id: str = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Generate/compute monthly performance metrics for one or more resources."""
+    """Generate/compute monthly performance metrics for one or more resources. Plan is optional."""
     tenant_id = get_current_tenant_id()
     
     # Parse comma-separated resource_ids
@@ -304,17 +435,20 @@ async def generate_performance(
     if not resource_ids:
         raise HTTPException(status_code=400, detail="No resource IDs provided")
     
-    # Validate plan exists
-    plan = await db.target_plans_v2.find_one(
-        {"id": plan_id}, {"_id": 0, "name": 1}
-    )
-    if not plan:
-        raise HTTPException(status_code=404, detail="Target plan not found")
+    # Validate plan if provided
+    plan_name = ""
+    if plan_id:
+        plan = await db.target_plans_v2.find_one(
+            {"id": plan_id}, {"_id": 0, "name": 1}
+        )
+        if not plan:
+            raise HTTPException(status_code=404, detail="Target plan not found")
+        plan_name = plan.get("name", "")
     
     metrics = await compute_metrics(tenant_id, resource_ids, plan_id, month, year)
     
-    # Check for existing saved record (only for single resource)
-    if len(resource_ids) == 1:
+    # Check for existing saved record (only for single resource with a plan)
+    if len(resource_ids) == 1 and plan_id:
         existing = await db.monthly_performance.find_one(
             {
                 "tenant_id": tenant_id,
@@ -345,7 +479,7 @@ async def generate_performance(
         metrics["record_id"] = None
         metrics["status"] = "multi_resource"
     
-    metrics["plan_name"] = plan.get("name", "")
+    metrics["plan_name"] = plan_name
     return metrics
 
 
@@ -385,6 +519,9 @@ async def save_performance(
         "manual_revenue": data.get("manual_revenue"),
         "manual_visits": data.get("manual_visits"),
         "manual_calls": data.get("manual_calls"),
+        "revenue_lifetime_override": data.get("revenue_lifetime_override"),
+        "revenue_this_month_override": data.get("revenue_this_month_override"),
+        "revenue_new_accounts_override": data.get("revenue_new_accounts_override"),
         # Snapshot of auto-computed metrics at save time
         "snapshot": {
             "revenue_achieved": data.get("revenue_achieved", 0),
@@ -665,3 +802,47 @@ async def reset_comparison_override(
     )
     
     return {"message": f"{field} override reset for {month}/{year}"}
+
+
+
+@router.post("/account-value-override")
+async def save_account_value_override(
+    data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Save a manual value override for an account in performance tracking."""
+    tenant_id = get_current_tenant_id()
+    account_id = data.get("account_id")
+    value = data.get("value")
+    plan_id = data.get("plan_id")
+    
+    if not account_id or value is None or not plan_id:
+        raise HTTPException(status_code=400, detail="account_id, value, and plan_id required")
+    
+    await db.account_value_overrides.update_one(
+        {"tenant_id": tenant_id, "account_id": account_id, "plan_id": plan_id},
+        {"$set": {
+            "tenant_id": tenant_id,
+            "account_id": account_id,
+            "plan_id": plan_id,
+            "manual_value": float(value),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": current_user.get("id")
+        }},
+        upsert=True
+    )
+    return {"message": "Account value saved"}
+
+
+@router.delete("/account-value-override")
+async def reset_account_value_override(
+    account_id: str,
+    plan_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Reset a manual account value override."""
+    tenant_id = get_current_tenant_id()
+    await db.account_value_overrides.delete_one(
+        {"tenant_id": tenant_id, "account_id": account_id, "plan_id": plan_id}
+    )
+    return {"message": "Account value override reset"}

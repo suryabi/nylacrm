@@ -1,0 +1,140 @@
+{
+  "summary": "Performance Tracker page features tested successfully. All 3 requested tweaks are working: 1) Next Month Pipeline tile shows dynamic month name (e.g., 'Apr Pipeline' for March view), 2) Account Metrics section shows display_value (cascading: avg_sales → estimated_value → manual_value) with inline editable overrides via AccountValueCell component, 3) Leads Targeting Next Month row is clickable and navigates to /leads with target_closure_month and target_closure_year query params.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_performance_tracker_features.py",
+    "/app/test_reports/pytest/performance_tracker_features_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_performance_tracker_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% - All 10 tests passed (generate endpoint, account-value-override POST/DELETE, save with revenue overrides, comparison, resources-for-plan, target-plans)",
+    "frontend": "100% - All UI features verified (Next Month Pipeline tile, Leads Targeting link navigation, Pipeline status row clicks)"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_id": "nyla-air-water",
+    "plan_id": "813fbe91-8434-4bd6-bc7b-49bd1ebca9b5"
+  },
+  "seed_data_creation": "None - used existing data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Performance Tracker features fully tested. Key test data: Plan 'H2 2026 Sales Target' (id: 813fbe91-8434-4bd6-bc7b-49bd1ebca9b5), Bengaluru resources (0ac4067e-e75e-4b24-8016-c3b5b6759bc3, a4abf0ac-3dd3-432e-b5d5-af08e5bf8da1). The page route is /performance (NOT /performance-tracker). Login returns session_token not token.",
+  "features_tested": {
+    "Test_1_Next_Month_Pipeline_Tile": {
+      "status": "PASSED",
+      "description": "Summary tile shows dynamic 'Next Month Pipeline' with correct month name",
+      "evidence": "For March view, tile shows 'APR PIPELINE'. For April view, tile shows 'MAY PIPELINE'. Backend returns pipeline.next_month=4 for March."
+    },
+    "Test_2_Account_Metrics_Display_Value": {
+      "status": "PASSED",
+      "description": "Account Metrics section shows account value (display_value) instead of city",
+      "evidence": "Backend returns accounts with display_value field (cascading: manual_value → avg_sales → estimated_value). AccountValueCell component renders ₹ values with edit/save/reset buttons."
+    },
+    "Test_3_Account_Value_Override_POST": {
+      "status": "PASSED",
+      "description": "POST /api/performance/account-value-override creates/updates account value override",
+      "evidence": "API returns 200 with message 'Account value saved'. Validation correctly rejects requests missing account_id, value, or plan_id."
+    },
+    "Test_4_Account_Value_Override_DELETE": {
+      "status": "PASSED",
+      "description": "DELETE /api/performance/account-value-override removes account value override",
+      "evidence": "API returns 200 with message 'Account value override reset'."
+    },
+    "Test_5_Leads_Targeting_Next_Month_Click": {
+      "status": "PASSED",
+      "description": "Leads Targeting Next Month row is clickable and navigates to /leads with correct query params",
+      "evidence": "Clicking 'Leads Targeting Apr' navigates to /leads?target_closure_month=4&target_closure_year=2026"
+    },
+    "Test_6_Pipeline_Status_Row_Click": {
+      "status": "PASSED",
+      "description": "Pipeline status rows are clickable and navigate to /leads with status filter",
+      "evidence": "Clicking 'Qualified' row navigates to /leads?status=qualified"
+    },
+    "Test_7_Revenue_Override_Fields_Save": {
+      "status": "PASSED",
+      "description": "Revenue override fields (lifetime, this_month, new_accounts) are saved via save endpoint",
+      "evidence": "POST /api/performance/save accepts revenue_lifetime_override, revenue_this_month_override, revenue_new_accounts_override. Values correctly persisted and returned in generate endpoint."
+    },
+    "Test_8_Generate_Endpoint_Structure": {
+      "status": "PASSED",
+      "description": "Generate endpoint returns proper pipeline.next_month, pipeline.next_month_pipeline_value, pipeline.next_month_leads_count fields",
+      "evidence": "API returns pipeline object with next_month=4, next_year=2026, next_month_pipeline_value (numeric), next_month_leads_count (int)"
+    },
+    "Test_9_Cascading_Filters": {
+      "status": "PASSED",
+      "description": "Territory → City → Resource cascading filters work correctly",
+      "evidence": "Selecting South India territory shows Bengaluru city option. Selecting Bengaluru shows 2 resources."
+    },
+    "Test_10_Comparison_Table": {
+      "status": "PASSED",
+      "description": "Month-on-Month Comparison table renders with zebra striping",
+      "evidence": "Comparison endpoint returns 3 months of data with revenue_achieved, monthly_target, achievement_pct fields."
+    }
+  },
+  "data_testids_verified": [
+    "performance-tracker",
+    "performance-selectors",
+    "select-plan",
+    "select-territory",
+    "select-city",
+    "select-resource",
+    "select-month",
+    "generate-btn",
+    "summary-cards",
+    "metric-target",
+    "metric-achieved",
+    "metric-existing",
+    "metric-new",
+    "metric-pipeline",
+    "metric-outstanding",
+    "metric-activity",
+    "revenue-section",
+    "accounts-section",
+    "existing-accounts-tile",
+    "new-accounts-tile",
+    "pipeline-section",
+    "pipeline-status-table",
+    "pipeline-row-{status}",
+    "leads-targeting-next-month-link",
+    "account-value-{id}",
+    "account-override-edit-{id}",
+    "account-override-input-{id}",
+    "account-override-save-{id}",
+    "account-override-reset-{id}"
+  ],
+  "api_verification": {
+    "generate_endpoint": {
+      "endpoint": "GET /api/performance/generate",
+      "params": "plan_id, resource_id, month, year",
+      "response_includes": "pipeline.next_month, pipeline.next_month_pipeline_value, pipeline.next_month_leads_count, accounts.existing_accounts[].display_value"
+    },
+    "account_value_override_post": {
+      "endpoint": "POST /api/performance/account-value-override",
+      "payload": "{account_id, value, plan_id}",
+      "response": "{message: 'Account value saved'}"
+    },
+    "account_value_override_delete": {
+      "endpoint": "DELETE /api/performance/account-value-override",
+      "params": "account_id, plan_id",
+      "response": "{message: 'Account value override reset'}"
+    },
+    "save_endpoint": {
+      "endpoint": "POST /api/performance/save",
+      "payload_includes": "revenue_lifetime_override, revenue_this_month_override, revenue_new_accounts_override",
+      "response": "{id, status}"
+    }
+  }
+}

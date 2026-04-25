@@ -13,13 +13,11 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Mail, Lock, Loader2, Building2, ArrowRight } from 'lucide-react';
+import { Mail, Lock, Loader2, Building2, ArrowRight, BarChart3, Users, TrendingUp, Target, PieChart, Zap } from 'lucide-react';
 import { motion } from 'framer-motion';
 import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
-const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
-const MOUNTAIN_BG = 'https://customer-assets.emergentagent.com/job_502e229f-6a7a-4839-9c1b-794f252b0a40/artifacts/xww990sj_WhatsApp%20Image%202026-03-13%20at%201.29.28%20AM.jpeg';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -204,19 +202,136 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex" data-testid="login-page">
-      {/* Left side - Background Image */}
+      {/* Left side - CRM Illustration Panel */}
       <div 
         className="hidden lg:flex lg:w-1/2 relative items-center justify-center overflow-hidden"
+        style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)' }}
       >
-        {/* Background Image */}
-        <div 
-          className="absolute inset-0"
-          style={{
-            backgroundImage: `url(${MOUNTAIN_BG})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center'
-          }}
-        />
+        {/* Subtle grid */}
+        <div className="absolute inset-0 opacity-[0.04]" style={{
+          backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
+          backgroundSize: '48px 48px',
+        }} />
+        
+        {/* Ambient glow */}
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px]" style={{
+          background: 'radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%)',
+          filter: 'blur(60px)',
+        }} />
+
+        <div className="relative z-10 px-16 max-w-lg">
+          {/* Icon cluster illustration */}
+          <div className="relative mb-12 flex justify-center">
+            {/* Main card */}
+            <motion.div 
+              className="w-56 h-40 bg-white/[0.07] backdrop-blur-sm rounded-2xl border border-white/10 p-5 relative"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+            >
+              {/* Mini bar chart */}
+              <div className="flex items-end gap-2 h-20 mb-3">
+                {[40, 65, 45, 80, 55, 70, 90].map((h, i) => (
+                  <motion.div 
+                    key={i} 
+                    className="flex-1 rounded-t-sm"
+                    style={{ height: `${h}%`, background: i === 6 ? '#3b82f6' : i === 3 ? '#3b82f6' : 'rgba(148,163,184,0.3)' }}
+                    initial={{ height: 0 }}
+                    animate={{ height: `${h}%` }}
+                    transition={{ delay: 0.8 + i * 0.08, duration: 0.4 }}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Revenue Pipeline</span>
+                <span className="text-xs text-emerald-400 font-semibold">+24%</span>
+              </div>
+            </motion.div>
+
+            {/* Floating metric cards */}
+            <motion.div 
+              className="absolute -top-6 -right-4 bg-white/[0.08] backdrop-blur-sm rounded-xl border border-white/10 px-4 py-3"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.4, type: "spring" }}
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                  <TrendingUp size={14} className="text-emerald-400" />
+                </div>
+                <div>
+                  <div className="text-white text-sm font-bold">127</div>
+                  <div className="text-[9px] text-slate-400 uppercase">Deals Won</div>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div 
+              className="absolute -bottom-5 -left-6 bg-white/[0.08] backdrop-blur-sm rounded-xl border border-white/10 px-4 py-3"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.6, type: "spring" }}
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                  <Users size={14} className="text-blue-400" />
+                </div>
+                <div>
+                  <div className="text-white text-sm font-bold">2,840</div>
+                  <div className="text-[9px] text-slate-400 uppercase">Contacts</div>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div 
+              className="absolute top-8 -left-10 bg-white/[0.08] backdrop-blur-sm rounded-xl border border-white/10 px-3 py-2"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.8, type: "spring" }}
+            >
+              <div className="flex items-center gap-1.5">
+                <div className="w-6 h-6 rounded-md bg-amber-500/20 flex items-center justify-center">
+                  <Target size={11} className="text-amber-400" />
+                </div>
+                <span className="text-[10px] text-slate-300 font-medium">94% hit</span>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Text content */}
+          <motion.div 
+            className="text-center"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.6 }}
+          >
+            <h2 className="text-3xl font-bold text-white tracking-tight leading-tight">
+              Your Sales,<br />Supercharged.
+            </h2>
+            <p className="text-slate-400 mt-4 text-sm leading-relaxed max-w-sm mx-auto">
+              Track leads, manage pipelines, close deals faster. Everything your team needs to grow revenue — in one place.
+            </p>
+          </motion.div>
+
+          {/* Feature pills */}
+          <motion.div 
+            className="flex flex-wrap justify-center gap-2 mt-8"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6, duration: 0.6 }}
+          >
+            {[
+              { icon: BarChart3, label: 'Analytics' },
+              { icon: Users, label: 'Team CRM' },
+              { icon: PieChart, label: 'Reports' },
+              { icon: Zap, label: 'Automation' },
+            ].map(({ icon: Icon, label }, i) => (
+              <span key={label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-[11px] text-slate-300 font-medium">
+                <Icon size={11} className="text-blue-400" /> {label}
+              </span>
+            ))}
+          </motion.div>
+        </div>
       </div>
 
       {/* Right side - Login form */}

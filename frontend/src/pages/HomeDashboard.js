@@ -73,7 +73,7 @@ export default function HomeDashboard() {
       const response = await axios.get(`${API_URL}/dashboard`, { withCredentials: true });
       setDashboardData(response.data);
     } catch (error) {
-      toast.error('Failed to load dashboard data');
+      console.error('Failed to load dashboard data:', error);
     } finally {
       setLoading(false);
     }
@@ -281,8 +281,9 @@ export default function HomeDashboard() {
 
   const { upcoming_leads, upcoming_meetings, pipeline } = dashboardData || {};
   
-  // Check if user is in Sales department for ROI Panel (check if department contains 'sales')
-  const showSalesROIPanel = user?.department?.toLowerCase()?.includes('sales');
+  // Check if user is in Sales department for ROI Panel
+  const userDepts = Array.isArray(user?.department) ? user.department : [user?.department || ''];
+  const showSalesROIPanel = userDepts.some(d => d?.toLowerCase() === 'sales');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex flex-col lg:flex-row" data-testid="home-dashboard">

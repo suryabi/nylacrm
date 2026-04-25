@@ -6,6 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '../context/NavigationContext';
 import { useTenantConfig } from '../context/TenantConfigContext';
 import { Button } from '../components/ui/button';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
 import AISalesAssistant from '../components/AISalesAssistant';
 import { 
   LogOut, Menu, ChevronDown, ChevronRight, 
@@ -14,13 +15,13 @@ import {
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
   Kanban, Wrench, Box, ShieldCheck, Boxes,
-  Factory, ArrowLeftRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3
+  Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle, DollarSign
 } from 'lucide-react';
 
 // Platform Admin emails
 const PLATFORM_ADMIN_EMAILS = ['surya.yadavalli@gmail.com', 'surya.yadavalli@nylaairwater.earth'];
 
-const NYLA_LOGO = 'https://customer-assets.emergentagent.com/job_pipeline-master-14/artifacts/6tqxvtds_WhatsApp%20Image%202026-02-04%20at%2011.26.46%20PM.jpeg';
+const NYLA_LOGO = null;
 
 // Dashboard submenu items
 const dashboardSubmenu = [
@@ -51,7 +52,9 @@ const salesNavigationGroups = [
       { name: 'Lead Discovery', href: '/lead-discovery', icon: Search, moduleKey: 'lead_discovery', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Target Planning', href: '/target-planning', icon: Target, moduleKey: 'target_planning', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Performance Tracker', href: '/performance', icon: BarChart3, moduleKey: 'performance_tracker', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
+      { name: 'Investor Dashboard', href: '/investor-dashboard', icon: LineChart, moduleKey: 'investor_dashboard', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Investor'] },
       { name: 'Daily Status', href: '/daily-status', icon: CalendarDays, moduleKey: 'daily_status', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
+      { name: 'Meeting Minutes', href: '/meeting-minutes', icon: NotebookPen, moduleKey: 'meeting_minutes', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Status Summary', href: '/status-summary', icon: UsersRound, moduleKey: 'status_summary', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
     ]
   },
@@ -82,7 +85,7 @@ const salesNavigationGroups = [
       { name: 'Leaves', href: '/leaves', icon: CalendarOff, moduleKey: 'leaves', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Travel Request', href: '/travel-requests', icon: Plane, moduleKey: 'travel_requests', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Budget Request', href: '/budget-requests', icon: Wallet, moduleKey: 'budget_requests', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
-      { name: 'Tasks', href: '/tasks', icon: ClipboardList, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
+      { name: 'Tasks & Requests', href: '/tasks', icon: ClipboardList, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
     ]
   },
   {
@@ -113,6 +116,13 @@ const productionNavigationGroups = [
   {
     title: 'Production',
     items: [
+      { name: 'Dashboard', href: '/production-dashboard', icon: BarChart3, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
+      { name: 'Production Batches', href: '/production-batches', icon: Factory, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
+      { name: 'QC Routes', href: '/qc-routes', icon: ArrowRight, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
+      { name: 'QC Team', href: '/qc-team', icon: Users, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
+      { name: 'Rejection Reasons', href: '/rejection-reasons', icon: AlertTriangle, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
+      { name: 'Rejection Report', href: '/rejection-report', icon: BarChart3, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
+      { name: 'Packaging Types', href: '/packaging-types', icon: Boxes, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
       { name: 'Maintenance', href: '/maintenance', icon: Wrench, moduleKey: 'maintenance', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Inventory', href: '/inventory', icon: Boxes, moduleKey: 'inventory', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Quality Control', href: '/quality-control', icon: ShieldCheck, moduleKey: 'quality_control', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
@@ -142,7 +152,7 @@ const productionNavigationGroups = [
     items: [
       { name: 'Company Profile', href: '/company-profile', icon: Building, moduleKey: 'company_profile', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Admin', 'System Admin'] },
       { name: 'Team', href: '/team', icon: UserCog, moduleKey: 'team', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
-      { name: 'Tasks', href: '/tasks', icon: ClipboardList, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
+      { name: 'Tasks & Requests', href: '/tasks', icon: ClipboardList, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
     ]
   },
 ];
@@ -154,6 +164,7 @@ const distributionNavigationGroups = [
     items: [
       { name: 'Distributors', href: '/distributors', icon: Truck, moduleKey: 'distributors', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
       { name: 'Stock Dashboard', href: '/stock-dashboard', icon: Package, moduleKey: 'distributors', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
+      { name: 'Cost Cards', href: '/cost-cards', icon: DollarSign, moduleKey: 'distributors', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Admin', 'System Admin'] },
     ]
   },
   {
@@ -173,7 +184,7 @@ const distributionNavigationGroups = [
     items: [
       { name: 'Company Profile', href: '/company-profile', icon: Building, moduleKey: 'company_profile', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
       { name: 'Team', href: '/team', icon: UserCog, moduleKey: 'team', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
-      { name: 'Tasks', href: '/tasks', icon: ClipboardList, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
+      { name: 'Tasks & Requests', href: '/tasks', icon: ClipboardList, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
     ]
   },
   {
@@ -194,6 +205,31 @@ const distributorUserNavigationGroups = [
   },
 ];
 
+// Marketing Context Navigation
+const marketingNavigationGroups = [
+  {
+    title: 'Marketing',
+    items: [
+      { name: 'Content Calendar', href: '/marketing-calendar', icon: CalendarRange, moduleKey: 'marketing_calendar', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator'] },
+      { name: 'Masters', href: '/marketing-masters', icon: Layers, moduleKey: 'marketing_masters', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager'] },
+    ]
+  },
+  {
+    title: 'Organization',
+    items: [
+      { name: 'Company Profile', href: '/company-profile', icon: Building, moduleKey: 'company_profile', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager'] },
+      { name: 'Team', href: '/team', icon: UserCog, moduleKey: 'team', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager'] },
+      { name: 'Tasks & Requests', href: '/tasks', icon: ClipboardList, roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator'] },
+    ]
+  },
+  {
+    title: 'Admin',
+    items: [
+      { name: 'Tenant Settings', href: '/tenant-settings', icon: Settings, roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
+    ]
+  },
+];
+
 export default function DashboardLayout({ children }) {
   const { user, logout } = useAuth();
   const { currentContext, switchContext, canAccessMultipleModules, getAccessibleModules, modules, isDistributorUser, getDistributorId } = useAppContext();
@@ -204,9 +240,9 @@ export default function DashboardLayout({ children }) {
   const navigate = useNavigate();
   
   // Get branding values with fallbacks
-  const logoUrl = branding?.logo_url || NYLA_LOGO;
-  const appName = branding?.app_name || 'Nyla Air Water';
-  const tagline = branding?.tagline || (currentContext === 'production' ? 'Production' : currentContext === 'distribution' ? 'Distribution' : 'Sales CRM');
+  const logoUrl = branding?.logo_url || null;
+  const appName = branding?.app_name || 'Sales CRM';
+  const tagline = branding?.tagline || (currentContext === 'production' ? 'Production' : currentContext === 'distribution' ? 'Distribution' : currentContext === 'marketing' ? 'Marketing' : 'Sales CRM');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(
     location.pathname === '/dashboard' || location.pathname === '/sales-revenue' || 
@@ -270,6 +306,8 @@ export default function DashboardLayout({ children }) {
         return productionNavigationGroups;
       case 'distribution':
         return distributionNavigationGroups;
+      case 'marketing':
+        return marketingNavigationGroups;
       default:
         return salesNavigationGroups;
     }
@@ -344,26 +382,31 @@ export default function DashboardLayout({ children }) {
               <label className="text-[10px] font-semibold uppercase tracking-wider text-white/40 mb-2 block">
                 Module
               </label>
-              <div className="relative">
-                <select
-                  value={currentContext}
-                  onChange={(e) => handleContextSwitch(e.target.value)}
-                  className="w-full appearance-none bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm font-medium text-white cursor-pointer hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+              <Select value={currentContext} onValueChange={handleContextSwitch}>
+                <SelectTrigger
+                  className="w-full bg-white/5 border-white/10 text-white hover:bg-white/10 focus:ring-primary/50 transition-all [&>svg]:text-white/50"
                   data-testid="module-selector"
                 >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
                   {getAccessibleModules().map((module) => (
-                    <option key={module.id} value={module.id} className="bg-slate-800 text-white">
+                    <SelectItem
+                      key={module.id}
+                      value={module.id}
+                      className="text-white focus:bg-white/10 focus:text-white"
+                    >
                       {module.label}
-                    </option>
+                    </SelectItem>
                   ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50 pointer-events-none" />
-              </div>
+                </SelectContent>
+              </Select>
               {/* Active Module Indicator */}
               <div className="mt-2 flex items-center gap-2">
                 {currentContext === 'sales' && <Store className="w-4 h-4 text-primary" />}
                 {currentContext === 'production' && <Factory className="w-4 h-4 text-primary" />}
                 {currentContext === 'distribution' && <Truck className="w-4 h-4 text-primary" />}
+                {currentContext === 'marketing' && <Megaphone className="w-4 h-4 text-primary" />}
                 <span className="text-xs text-primary font-medium">
                   {modules[currentContext]?.label || 'Sales'} Module Active
                 </span>

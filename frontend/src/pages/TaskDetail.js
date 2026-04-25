@@ -801,7 +801,7 @@ export default function TaskDetail() {
                         </div>
                         <div>
                           <p className="text-sm font-medium">{assignee.name}</p>
-                          <p className="text-xs text-slate-500">{assignee.department}</p>
+                          <p className="text-xs text-slate-500">{Array.isArray(assignee.department) ? assignee.department.join(', ') : assignee.department}</p>
                         </div>
                       </div>
                       {canEdit && (
@@ -836,7 +836,11 @@ export default function TaskDetail() {
                   <DropdownMenuContent className="w-56 max-h-64 overflow-y-auto">
                     {users
                       .filter(u => !task.assignees?.includes(u.id))
-                      .filter(u => u.department === task.department_id || !task.department_id)
+                      .filter(u => {
+                        if (!task.department_id) return true;
+                        const uDepts = Array.isArray(u.department) ? u.department : [u.department || ''];
+                        return uDepts.some(d => d?.toLowerCase() === task.department_id?.toLowerCase());
+                      })
                       .map(u => (
                         <DropdownMenuItem
                           key={u.id}
@@ -848,7 +852,7 @@ export default function TaskDetail() {
                             </div>
                             <div>
                               <p className="text-sm">{u.name}</p>
-                              <p className="text-xs text-slate-400">{u.role || u.department}</p>
+                              <p className="text-xs text-slate-400">{u.role || (Array.isArray(u.department) ? u.department.join(', ') : u.department)}</p>
                             </div>
                           </div>
                         </DropdownMenuItem>
