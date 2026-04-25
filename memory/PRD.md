@@ -399,6 +399,18 @@
 - [x] **Files**: `backend/server.py`, `backend/routes/leads.py`, `frontend/src/pages/AddEditLead.js`, `frontend/src/pages/LeadDetail.js`, `frontend/src/pages/AccountDetail.js`
 
 
+### Neck Tag Designer (2026-04-25)
+- [x] **New page** `/sales/neck-tag-designer` (Sales module sidebar entry "Neck Tag Designer", `Tag` lucide icon).
+- [x] **Logo upload**: PNG / JPG / SVG / WebP. Sliders for size (20–90% of body width) and vertical position (30–80% from top).
+- [x] **Gradient editor**: linear (with 0–360° angle slider) or radial; 2 to 4 color stops with native color picker, hex input, and offset (%); 6 preset palettes (Classic White, Sunset, Ocean, Royal, Forest, Gold Leaf).
+- [x] **Template overlay**: User-supplied template (`/public/neck-tag/template.png`) composited via `mix-blend-mode: multiply` so the white area is replaced by the gradient while gold decorative lines, "Green Innovation" seal, and "Air Water — The Purest Water on Earth" tagline are preserved. Toggle + opacity slider.
+- [x] **SVG-based preview** with rounded corners + circular hang-hole cut-out (mask), drop shadow, live updates.
+- [x] **High-resolution PNG export** (4× viewBox, ~1600×4864) using Canvas with the same gradient + template multiply blend + logo composite + destination-out cutout for the hole. Auto-named `neck-tag_<timestamp>.png`.
+- [x] **Reset** button restores defaults.
+- [x] **Files**: `frontend/src/pages/NeckTagDesigner.js` (new), `frontend/src/App.js` (route), `frontend/src/layouts/DashboardLayout.js` (nav), `frontend/public/neck-tag/template.png` (asset).
+- [x] **Lint clean**, frontend webpack compile clean (preview URL was in idle hibernation during smoke screenshot — not a code issue).
+
+
 ### Account GOP Metrics — GOP Coverage Tile (2026-04-25)
 - [x] **New "GOP Coverage" tile** at the top of `/accounts/sku-pricing` (Account GOP Metrics page). Shows `<included> of <total> accounts counted in GOP` with an excluded-count amber pill, a large color-tiered coverage % (≥80% emerald, ≥50% amber, else rose), and a slim progress bar.
 - [x] **Test IDs**: `gop-coverage-tile`, `gop-coverage-included`, `gop-coverage-total`, `gop-coverage-pct`.
