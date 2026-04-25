@@ -84,6 +84,36 @@ export default function DeliveriesTab({
   const [savingFactory, setSavingFactory] = useState(false);
   const [marginSkus, setMarginSkus] = useState([]);
   const [returnReasons, setReturnReasons] = useState([]);
+  const [availableStock, setAvailableStock] = useState({});  // sku_id -> {warehouse_available, customer_pending_factory, total_available, sku_name}
+
+  // Fetch available stock at distributor (caps factory return quantities)
+  const fetchAvailableStock = useCallback(async () => {
+    if (!distributor?.id) return;
+    try {
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/available-stock`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const map = {};
+        (data.available_stock || []).forEach(s => { map[s.sku_id] = s; });
+        setAvailableStock(map);
+      }
+    } catch (err) {
+      console.error('Error fetching available stock:', err);
+    }
+  }, [distributor?.id, API_URL, token]);
+
+  useEffect(() => {
+    if (showFactoryDialog) fetchAvailableStock();
+  }, [showFactoryDialog, fetchAvailableStock]);
+
+  // Helper: compute the cap for a given SKU based on selected source
+  const skuCap = useCallback((skuId) => {
+    const s = availableStock[skuId];
+    if (!s) return 0;
+    return factoryForm.source === 'customer_return' ? s.customer_pending_factory : s.warehouse_available;
+  }, [availableStock, factoryForm.source]);
 
   // Fetch master return reasons (active only)
   const fetchReturnReasons = useCallback(async () => {
@@ -211,9 +241,18 @@ export default function DeliveriesTab({
         setFactoryForm({ distributor_location_id: '', reason: 'expired', reason_id: '', reason_name: '', source: 'warehouse', customer_return_id: '', return_date: new Date().toISOString().split('T')[0], remarks: '' });
         setFactoryItems([{ sku_id: '', quantity: 1 }]);
         fetchFactoryReturns();
+        fetchAvailableStock();
+      } else {
+        let detail = 'Failed to create factory return';
+        try {
+          const err = await res.json();
+          detail = err.detail || detail;
+        } catch (_) { /* ignore */ }
+        alert(detail);
       }
     } catch (err) {
       console.error('Error creating factory return:', err);
+      alert('Network error while creating factory return');
     } finally {
       setSavingFactory(false);
     }
@@ -1502,43 +1541,70 @@ export default function DeliveriesTab({
                     <div className="space-y-2">
                       <Label>Items *</Label>
                       <div className="space-y-2">
-                        {factoryItems.map((item, idx) => (
-                          <div key={idx} className="flex items-center gap-2">
-                            <select
-                              value={item.sku_id}
-                              onChange={(e) => {
-                                const updated = [...factoryItems];
-                                updated[idx].sku_id = e.target.value;
-                                setFactoryItems(updated);
-                              }}
-                              className="flex-1 text-sm border rounded-md px-3 py-2 bg-background"
-                              data-testid={`factory-sku-select-${idx}`}
-                            >
-                              <option value="">Select SKU</option>
-                              {marginSkus.map(sku => (
-                                <option key={sku.id} value={sku.id}>{sku.sku_name}{sku.transfer_price ? ` (TP: ₹${sku.transfer_price})` : ''}</option>
-                              ))}
-                            </select>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={item.quantity}
-                              onChange={(e) => {
-                                const updated = [...factoryItems];
-                                updated[idx].quantity = parseInt(e.target.value) || 1;
-                                setFactoryItems(updated);
-                              }}
-                              className="w-24"
-                              placeholder="Qty"
-                              data-testid={`factory-qty-input-${idx}`}
-                            />
-                            {factoryItems.length > 1 && (
-                              <Button variant="ghost" size="sm" onClick={() => setFactoryItems(factoryItems.filter((_, i) => i !== idx))}>
-                                <Trash2 className="h-4 w-4 text-red-500" />
-                              </Button>
+                        {factoryItems.map((item, idx) => {
+                          const cap = item.sku_id ? skuCap(item.sku_id) : null;
+                          const overLimit = cap !== null && item.quantity > cap;
+                          return (
+                          <div key={idx} className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={item.sku_id}
+                                onChange={(e) => {
+                                  const updated = [...factoryItems];
+                                  updated[idx].sku_id = e.target.value;
+                                  // Snap quantity down to cap if needed
+                                  const newCap = skuCap(e.target.value);
+                                  if (newCap > 0 && updated[idx].quantity > newCap) {
+                                    updated[idx].quantity = newCap;
+                                  }
+                                  setFactoryItems(updated);
+                                }}
+                                className="flex-1 text-sm border rounded-md px-3 py-2 bg-background"
+                                data-testid={`factory-sku-select-${idx}`}
+                              >
+                                <option value="">Select SKU</option>
+                                {marginSkus.map(sku => {
+                                  const skuStock = availableStock[sku.id];
+                                  const availLabel = skuStock
+                                    ? ` — Available: ${factoryForm.source === 'customer_return' ? skuStock.customer_pending_factory : skuStock.warehouse_available}`
+                                    : ' — Available: 0';
+                                  return (
+                                    <option key={sku.id} value={sku.id}>
+                                      {sku.sku_name}{sku.transfer_price ? ` (TP: ₹${sku.transfer_price})` : ''}{availLabel}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                              <Input
+                                type="number"
+                                min="1"
+                                max={cap || undefined}
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  const updated = [...factoryItems];
+                                  updated[idx].quantity = parseInt(e.target.value) || 1;
+                                  setFactoryItems(updated);
+                                }}
+                                className={`w-24 ${overLimit ? 'border-red-500 focus-visible:ring-red-400' : ''}`}
+                                placeholder="Qty"
+                                data-testid={`factory-qty-input-${idx}`}
+                              />
+                              {factoryItems.length > 1 && (
+                                <Button variant="ghost" size="sm" onClick={() => setFactoryItems(factoryItems.filter((_, i) => i !== idx))}>
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              )}
+                            </div>
+                            {item.sku_id && (
+                              <p className={`text-xs pl-1 ${overLimit ? 'text-red-600 font-medium' : 'text-muted-foreground'}`} data-testid={`factory-qty-hint-${idx}`}>
+                                {overLimit
+                                  ? `Exceeds available ${factoryForm.source === 'customer_return' ? 'customer-return' : 'warehouse'} stock (${cap}). Reduce quantity.`
+                                  : `Max ${cap} available at this distributor (${factoryForm.source === 'customer_return' ? 'pending customer returns' : 'warehouse stock'}).`}
+                              </p>
                             )}
                           </div>
-                        ))}
+                          );
+                        })}
                         <Button variant="outline" size="sm" onClick={() => setFactoryItems([...factoryItems, { sku_id: '', quantity: 1 }])}>
                           <Plus className="h-4 w-4 mr-1" /> Add Item
                         </Button>
@@ -1559,7 +1625,7 @@ export default function DeliveriesTab({
                     <Button variant="outline" onClick={() => setShowFactoryDialog(false)}>Cancel</Button>
                     <Button
                       onClick={handleCreateFactoryReturn}
-                      disabled={savingFactory || !factoryForm.distributor_location_id || !factoryForm.reason_id || factoryItems.every(i => !i.sku_id)}
+                      disabled={savingFactory || !factoryForm.distributor_location_id || !factoryForm.reason_id || factoryItems.every(i => !i.sku_id) || factoryItems.some(i => i.sku_id && i.quantity > skuCap(i.sku_id))}
                       data-testid="save-factory-return-btn"
                     >
                       {savingFactory ? 'Saving...' : 'Create Factory Return'}

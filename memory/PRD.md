@@ -390,6 +390,17 @@
 - [x] **Empty-state hint**: When no active reasons, dropdown shows guidance to add them in Settings → Returns.
 - [x] **Files**: `frontend/src/components/distributor/DeliveriesTab.jsx`, `backend/routes/factory_returns.py`
 
+### Factory Return — Stock Cap Per SKU (2026-04-25)
+- [x] **Goal**: Stock-Out (Distributor → Factory) cannot exceed quantities at hand at the distributor.
+- [x] **New backend endpoint** `GET /api/distributors/{id}/available-stock` returns per-SKU `warehouse_available`, `customer_pending_factory`, `total_available`.
+  - `warehouse_available = shipped_in − delivered_out − factory_returned(source=warehouse)`
+  - `customer_pending_factory = customer_returned − factory_returned(source=customer_return)`
+- [x] **Server-side validation** in `POST /factory-returns` rejects items where requested qty exceeds the source-appropriate cap with a clear 400 message (including SKU name and remaining qty).
+- [x] **Dialog UI**: SKU dropdown shows " — Available: N" inline; quantity input is capped via `max`, highlighted red when over-limit, and shows a per-row hint ("Max N available… reduce quantity"). Save button is disabled when any line breaches its cap.
+- [x] **Auto-snap**: switching SKU snaps quantity down to the new cap. Errors from server are surfaced to the user.
+- [x] **Tested**: warehouse-over-limit rejected (38 cap), customer-pending-factory rejected (0 cap), valid 5-qty success, available-stock GET returns correct values for nyla-air-water tenant.
+
+
 ## Pipeline Value Logic (2026-04-09)
 - Pipeline value is now based on `target_closure_month`/`target_closure_year` matching the time filter
 - Value = sum of `opportunity_estimation.estimated_monthly_revenue` (from proposed SKU section) for active leads
