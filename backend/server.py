@@ -9731,7 +9731,7 @@ else:
 # Regex to allow any subdomain under our known production/preview domains.
 # This covers:
 #   - https://*.emergent.host (Emergent native deployment URLs)
-#   - https://*.emergentagent.com and https://*.preview.emergentagent.com (preview URLs)
+#   - https://*.emergentagent.com and https://return-reasons-mgr.preview.emergentagent.com (preview URLs)
 #   - https://*.nylaairwater.earth (custom tenant domains)
 cors_origin_regex = (
     r"https://([a-zA-Z0-9\-]+\.)*"

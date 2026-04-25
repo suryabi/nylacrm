@@ -1,154 +1,175 @@
 <analysis>**original_problem_statement**: 
-The user requested the completion of the Marketing List View and Post Details Page. Subsequently, several major features were requested and implemented: Analytics & Platform Links, Generic Branding, Marketing Bulk Upload/Download, Multi-Department Users, and a Meeting Minutes Module. 
-
-Recently, the user provided a massive requirement document for a new **Production QC Tracking Module**. The module requires batch creation, SKU-based QC flows, stage-wise movement tracking (partial batch movement), rejection recording, labeling, and final QC tracking.
+The application requires tracking of Production QC (phases for labeling, final QC, rejection cost calculations), dynamic Distributor & Warehouse configuration (Factory flags, self-managed toggles), standardizing billing approaches (Margin Upfront vs. Cost-Based), automated settlement generation, and detailed reporting modules. Additionally, the user requires robust Master Data management tools (SKU migration, Return Reasons), UI modernizations (contemporary stat tiles), and data export capabilities (Leads CSV).
 
 **PRODUCT REQUIREMENTS**:
-- Complete the Production QC Tracking Module phases.
-- Continue with pending features (Provisional Invoicing, Reporting Module).
+- Complete Production QC Tracking Module phases.
+- Distributor Billing Configuration.
+- Auto-generate Provisional Invoices on shipment delivery.
+- Build Comprehensive Reporting Module.
+- Refactor  to prevent memory bloat.
+- Modernize key dashboard UI tiles.
+- Admin tool to safely bulk-migrate mismatched SKUs across all collections.
+- Master screen to manage Return Reasons.
 
 **User's preferred language**: English
 (INSTRUCT next agent to respond in English only)
 
 **what currently exists?** 
-A comprehensive, multi-tenant Sales & Distribution CRM. The Marketing and Meeting Minutes modules are complete (Meeting minutes now include rich text via , participant-only visibility, and smart task linkage). Phase 1 of the Production QC Tracking Module is complete (QC Routes configuration and Production Batch creation linked to Master SKUs). 
+A robust multi-tenant Sales, Production & Distribution CRM. The app features advanced Production QC tracking, dynamic stock/packaging mapping, Cost Cards, automated delivery pipelines, and comprehensive dashboards. In this session,  was reduced from ~12.2k lines to ~9.1k lines by extracting routes. A new  component modernizes dashboards. New capabilities include Leads CSV export, an Account SKU Pricing Grid (with COGS-based margin calculations), and an Admin SKU Migration utility.
 
-**Last working item**:
-    - **Last item agent was working**: Implementing Phase 2 of the Production QC Tracking Module: Stage movement, rejection recording, and stage balance tracking. The agent added backend endpoints (, ) and overwrote  with the new UI logic. 
-    - **Status**: IN PROGRESS
-    - **Agent Testing Done**: Y (Backend logic tested via python script successfully. Frontend UI rendering has NOT been tested yet).
-    - **Which testing method agent to use?** Frontend testing agent / screenshot tool (to ensure  loads correctly and modals/forms for moving stock function properly).
-    - **User Testing Done**: N
+**Last working item**: 
+    - Last item agent was working: The user requested a master screen to manage Return Reasons because they are not populated in production. The agent had just run a bash command to locate , , and related files to begin implementation.
+    - Status: IN PROGRESS
+    - Agent Testing Done: N
+    - Which testing method agent to use? both (Frontend/Backend) -> Use screenshot tool for UI rendering and curl/browser for CRUD operations, then testing agent if multiple endpoints are added.
+    - User Testing Done: N
 
-**All Pending/In progress Issue list**: 
-  Issue 1: Export Production DB to AWS (P1)
-     - **Attempted fixes**: Previous attempts failed due to AWS IP whitelisting restrictions.
-     - **Next debug checklist**: Wait for user confirmation of IP whitelist.
-     - **Why fix this issue and what will be achieved with the fix?** Syncs production data.
-     - **Status**: BLOCKED (on user IP whitelisting)
-     - **Is recurring issue?** N
-     - **Should Test frontend/backend/both after fix?** Backend
-     - **Blocked on other issue**: User IP Whitelisting
+**All Pending/In progress Issue list**:
+  Issue 1: Production Deployment Failure / 520 Outage (P0 Blocked)
+     - Attempted fixes: Agent verified CORS, tenant middleware, and health endpoints. Pod is stuck in timeout waiting for container to be ready state (Pending/Init).
+     - Next debug checklist: DO NOT attempt further code fixes for this. This was identified as a Kubernetes infrastructure issue (likely OOMKilled due to memory limits) and the user has escalated it to Emergent Support. Await their response/instructions.
+     - Why fix this issue and what will be achieved with the fix?: Restores production access.
+     - Status: BLOCKED
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? Both
+     - Blocked on other issue: Emergent Support Platform Engineering
+
+  Issue 2: Google Workspace OAuth Authentication failed (P1)
+     - Attempted fixes: Improved error logging in previous fork.
+     - Next debug checklist: Review error trace once backend is stable. Likely a  in Google Cloud Console.
+     - Why fix this issue and what will be achieved with the fix?: Fixes SSO for Google Workspace users.
+     - Status: BLOCKED
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix? Both
 
 **In progress Task List**:
-  Task 1: Production QC Tracking - Phase 2 (P0)
-     - **Where to resume**: The frontend file  was just completely rewritten to include forms and logic for Stage Movement and Inspections. You need to verify that this page compiles, renders correctly, and that a user can successfully move stock between stages and record inspections via the UI.
-     - **What will be achieved with this?** Allows the production team to move partial quantities of a batch through different QC stages and record passes/rejects.
-     - **Status**: IN PROGRESS
-     - **Should Test frontend/backend/both after fix?** Both (E2E via UI screenshot/testing agent).
-     - **Blocked on something**: None.
+  Task 1: Build Return Reasons Master Screen (P0)
+     - Where to resume: Review  and  (or create a new master page). Implement full CRUD for return reasons so they populate correctly in production drop-downs.
+     - What will be achieved with this?: Users can manage return reasons dynamically rather than relying on hardcoded or missing data.
+     - Status: IN PROGRESS
+     - Should Test frontend/backend/both after fix? Both
+     - Blocked on something: No
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
-    - **P1**: Production QC Phase 3: Labeling & Final QC detailed tracking.
-    - **P1**: Production QC Phase 4: Rejection cost calculation & reports.
-    - **P1**: Auto-generate Provisional Invoice (Trigger automatically when a primary shipment's status is updated to delivered).
-    - **P1**: Build Reporting Module (Comprehensive reports for stock balance, deliveries, settlements, and distributor performance).
+    - P1: Auto-generate Provisional Invoice (Trigger automatically when a primary shipment's status is updated to delivered).
+    - P1: Build Reporting Module (Comprehensive reports for stock balance, deliveries, settlements, and distributor performance).
     
     Future Tasks:
-    - **P2**: Task email notifications (Notify users via Resend on assignment or due dates).
-    - **P2**: First-login Force Password Change Modal.
-    - **P2**: Email Invoice Sharing.
-    - **P2**: Settlement Period Auto-scheduling.
-    - **P2**: Dashboard analytics for distribution module.
-    - **P2**: Refactor  (Modularize routes into separate files).
+    - P2: Task email notifications (Notify users via Resend on assignment or due dates).
+    - P2: First-login Force Password Change Modal.
+    - P2: Email Invoice Sharing.
+    - P2: Settlement Period Auto-scheduling.
+    - P0: Continue refactoring  (Still at ~9.1k lines, needs further breakdown).
 
 **Completed work in this session**
-- Fixed P0 Application Crash on Login ( string vs array mismatch in Dashboard/Tasks). (DONE)
-- Meeting Minutes Assignee UI: Replaced standard select with Avatar/Role rich dropdown. (DONE)
-- Meeting Minutes Task Linkage: Action items auto-create tasks in open status; if a task is modified externally, the action item becomes read-only in the meeting notes. (DONE)
-- Meeting Minutes Visibility: Only participants and admins can view specific meeting records. (DONE)
-- Meeting Minutes Rich Text: Implemented  for discussion points formatting. (DONE)
-- RBAC Matrix: Added 'Marketing' and 'Meeting Minutes' permissions to backend models and UI. (DONE)
-- Bug Fix:  Pydantic model in  was rejecting array values for departments; fixed to accept . (DONE)
-- Production QC Phase 1: Built QC Route Master () and Production Batches () pages. (DONE)
-- Bug Fix: Task Management titles now truncate with ellipses after ~60 chars to prevent column squeezing. (DONE)
-- Bug Fix: Silenced global Failed to load data toast leaking from . (DONE)
+-  Refactor (Phase 1): Extracted target_planning, master_locations, proxies, reports, daily_status, analytics, and bottle_preview to . Reduced file by ~3.1k lines (DONE)
+- Leads CSV Export: Added  and UI button. Tailored down to 17 specific columns based on user feedback (DONE)
+- Activity Timeline Creator Info: Added  to Activities and updated UI to show a subtle — User Name text (DONE)
+- Account SKU Pricing Grid: Created new submenu under Accounts. Shows pricing grid with dynamic territory/state/city filters. Includes dynamic COGS-based Gross Margin calculation tiles (DONE)
+- Contemporary Stat Tiles: Created reusable  and applied it to Dashboard, Accounts List, Sales Revenue Dashboard, and SKU Performance pages (DONE)
+- Admin SKU Migration Tool: Built  and frontend UI () to safely bulk-replace incorrect SKUs across 10 different database collections (DONE)
 
 **Earlier issues found/mentioned but not fixed**
-- None apparent.
+None (excluding the production infra outage).
 
 **Known issue recurrence from previous fork**
-  - Issue recurrence in previous fork:  monolith refactoring. 
-  - Recurrence count: 14
-  - Status: NOT STARTED
+  - Issue recurrence in previous fork: Production 520 Error / Deployment timeout.
+  - Recurrence count: 18+
+  - Status: BLOCKED (Escalated to Emergent support. Pod never reaches Ready state).
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- React frontend, FastAPI backend, MongoDB.
--  used for React 19 compatible rich text editing.
+- React frontend with Shadcn UI, Tailwind CSS.
+- FastAPI backend with MongoDB (Motor).
+- Aggregation pipelines for dynamic COGS calculation.
+- Modularized routing via FastAPI .
 
 **key DB schema**
-- : Defines stages for SKUs.
-- : Core tracking entity.
-- : Tracks partial quantity movements.
-- : Tracks passes/rejects.
+  - : 
+  - : 
+  - : Needs verification/creation.
 
 **changes in tech stack**
-- Added  via yarn. Removed older incompatible .
+  - None
 
 **All files of reference** 
--  (Current focus point)
--  (Backend logic for current task)
--  (Reference for rich text implementation if needed)
--  (Contains core Pydantic models)
+- 
+-  (New)
+-  (New)
+-  (New)
+-  (Updated export)
+-  (Target for current task)
+-  (Updated with standard test users)
 
-**Areas that need refactoring**:
--  (Monolith requires breaking down).
+**Areas that need refactoring**: 
+-  is still over 9,100 lines. Continue modularizing  when possible.
 
 **key api endpoints**
 - 
 - 
+- 
+-  (Upcoming)
 
-**Critical Info for New Agent**
-- **Immediate Task**: The previous agent wrote a massive update to  to implement Phase 2 of the Production QC module (Stage Movement & Inspection). The backend logic was verified via python script, but the **Frontend UI was not tested**. Start by navigating to  in the browser, taking a screenshot, and verifying that the modal forms for moving and inspecting stock are rendering and functioning correctly. 
-- Ensure you read the PRD.md for the full scope of the Production QC Tracking Module phases.
+**Critical Info for New Agent** 
+- **DO NOT troubleshoot the 520 Deployment Error:** The agent properly deduced this is a Kubernetes node/limit scheduling issue (timeout waiting for container to be ready). The user has emailed Emergent support. Do not edit  or  to attempt a fix for this. Wait for the user to provide feedback from support.
+- **Login Credentials:** Standard test users have been generated and work without Google Auth (, ,  with password ).
+- **Current Task:** The user's very last message requested a master screen to manage Return Reasons. Start there.
 
-**documents and test reports created in this job**
--  (Continuously updated)
-- No testing subagent JSON reports were generated in this immediate session (self-tested via bash/curl).
+**documents and test reports created in this job** 
+  -  (Updated)
+  - 
+  -  (Updated)
 
 **Last 10 User Messages and any pending HUMAN messages** 
-1. : in production module , We need to manage the batches and QC based on the following requirement... (Provided massive PRD for Production QC) (DONE - Planning)
-2. : Lets build Phase 1 User master SKU data (DONE)
-3. : In production - the SKU dropdown is not loading. Failed to load data message is still coming p. (DONE)
-4. : also failed to load data upon going to production batches screen or qc routers screen. this is in. production (DONE)
-5. : after 60 charaters of the task it should show elipses, otherwise the other columns are geting shrink (DONE)
-6. : Implement Phase 2: Stage movement, rejection recording, stage balance tracking (IN PROGRESS)
+ 1. : Remove all the following columns from the download... (DONE)
+ 2. : Current Brand Current Landing Price... Also remove the above columns. (DONE)
+ 3. : Onboarded Month Onboarded Year Estimated Value Remove the above also (DONE)
+ 4. : Tier, territory , source, Created by, Assigned TO , state and rank Remove the above, (DONE)
+ 5. : In Log activity , for leads, please also include the name who updated the activity (DONE)
+ 6. : make it subtle, not like this. (DONE)
+ 7. : I want a sub menu item under accounts, which gives me all the accounts , the SKUs and the pricing offered... (DONE)
+ 8. : Remove Tier drop down... Make average price per SKU tiles more contempaory wigh good look and feel (DONE)
+ 9. : I need to replace wrong SKU with the correct SKU. Give me a feature or browser console script... (DONE)
+ 10. : IN production return reasons are not populated. I need to have a master screen to manage the return reasons (IN PROGRESS / PENDING)
 
 **Project Health Check:**
-- Broken: None known, but  is freshly written and untested.
-- Mocked: None.
+Broken (Production Deployment is failing due to cluster infra/memory timeouts). Preview works fine.
+Mocked: None.
 
-**3rd Party Integrations**
+**3rd Party Integrations** 
 - Amazon MQ (ActiveMQ)
-- Emergent Object Storage (via Integration Playbook)
-- Gemini (via Emergent LLM Key)
-- Zoom API
-- Resend
-- Claude Sonnet 4.5 (via Emergent LLM Key)
+- Emergent Object Storage
+- Google Auth (Requires User API Key)
+- Zoom API (Requires User API Key)
+- Resend (Requires User API Key)
 
 **Testing status**
-- Testing agent used after significant changes: NO (Agent self-tested via bash scripts and screenshots to save context).
-- Troubleshoot agent used after agent stuck in loop: NO
-- Test files created: None.
-- Known regressions: None.
+  - Testing agent used after significant changes: YES (iteration 143)
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created: None
+  - Known regressions: Production environment down.
 
 **Credentials to test flow:**
-- Admin Email: 
+- Email:  or 
 - Password: 
 - Tenant ID: 
 
 **What agent forgot to execute**
-The agent overwrote  to implement Phase 2 UI logic but ended their turn without taking a screenshot or verifying the UI actually compiles and works in the browser. 
+The agent received the request to build the Return Reasons Master Screen at the very end of its context limit and only executed a preliminary search for files before ending. 
 
 **Debugging checklist for current issue**
-    Issue: Verify Phase 2 Implementation (BatchDetail.js UI)
+    Issue: Build Master Screen for Return Reasons
     
     Frontend files to check: 
-    - : Verify that the  and  components render correctly, and that state updates properly when submitting to the new backend endpoints.
+    -  (Check if we can add a tab here, or create a new dedicated page )
+    -  (Check how return reasons are currently fetched/used)
   
     Backend files to check:
-    - : Logic is complete, but verify if UI integration triggers any unforeseen 422/500 errors.</analysis>
+    -  (Ensure GET/POST/PUT/DELETE endpoints exist and work)
+    -  (Ensure  is included if not already)
+
+    Database to check:
+    -  collection (Verify schema: uid=0(root) gid=0(root) groups=0(root), , , , etc.)</analysis>

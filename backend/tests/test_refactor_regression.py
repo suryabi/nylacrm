@@ -10,7 +10,7 @@ from datetime import datetime
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL") or "https://warehouse-qc-engine.preview.emergentagent.com"
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL") or "https://return-reasons-mgr.preview.emergentagent.com"
 BASE_URL = BASE_URL.rstrip("/")
 
 ADMIN_EMAIL = "surya.yadavalli@nylaairwater.earth"
