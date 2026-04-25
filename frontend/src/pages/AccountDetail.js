@@ -10,6 +10,7 @@ import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
+import { Switch } from '../components/ui/switch';
 import { toast } from 'sonner';
 import { 
   ArrowLeft, Building2, Phone, MapPin, Save, Loader2, Plus, Trash2, FileText,
@@ -201,6 +202,7 @@ export default function AccountDetail() {
   const [skuPricing, setSkuPricing] = useState([]);
   const [onboardedMonth, setOnboardedMonth] = useState('');
   const [onboardedYear, setOnboardedYear] = useState('');
+  const [includeInGopMetrics, setIncludeInGopMetrics] = useState(true);
   
   // Delivery Address state
   const [deliveryAddress, setDeliveryAddress] = useState({
@@ -444,6 +446,12 @@ ${googleMapsLink}`;
       setSkuPricing(data.sku_pricing || []);
       setOnboardedMonth(data.onboarded_month || '');
       setOnboardedYear(data.onboarded_year || '');
+      // Default B2B → include, Retail → exclude when unset
+      if (typeof data.include_in_gop_metrics === 'boolean') {
+        setIncludeInGopMetrics(data.include_in_gop_metrics);
+      } else {
+        setIncludeInGopMetrics((data.lead_type || 'B2B').toLowerCase() !== 'retail');
+      }
       
       // Update breadcrumb with account name
       if (data.account_name) {
@@ -714,6 +722,7 @@ ${googleMapsLink}`;
         sku_pricing: skuPricing,
         onboarded_month: onboardedMonth ? parseInt(onboardedMonth) : null,
         onboarded_year: onboardedYear ? parseInt(onboardedYear) : null,
+        include_in_gop_metrics: includeInGopMetrics,
       });
       toast.success('Account updated successfully');
       setIsEditing(false);
@@ -959,6 +968,23 @@ ${googleMapsLink}`;
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="md:col-span-2 flex items-start justify-between gap-4 p-4 rounded-lg border bg-muted/30">
+                  <div className="space-y-1">
+                    <Label htmlFor="include-gop-toggle" className="text-sm font-medium">
+                      Include in Account GOP Metrics
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      When ON, this account is considered in the top-tile averages on Account GOP Metrics.
+                      Default: B2B = On, Retail = Off.
+                    </p>
+                  </div>
+                  <Switch
+                    id="include-gop-toggle"
+                    checked={includeInGopMetrics}
+                    onCheckedChange={setIncludeInGopMetrics}
+                    data-testid="toggle-include-in-gop"
+                  />
+                </div>
                 <div className="md:col-span-2 pt-4 border-t">
                   <LogoUploader
                     entityType="accounts"
@@ -984,6 +1010,17 @@ ${googleMapsLink}`;
                 <div>
                   <p className="text-sm text-muted-foreground">Lead Type</p>
                   <p className="font-medium" data-testid="account-lead-type-display">{account.lead_type || 'B2B'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Include in GOP Metrics</p>
+                  <p className="font-medium" data-testid="account-include-gop-display">
+                    {(() => {
+                      const val = typeof account.include_in_gop_metrics === 'boolean'
+                        ? account.include_in_gop_metrics
+                        : (account.lead_type || 'B2B').toLowerCase() !== 'retail';
+                      return val ? 'Yes' : 'No';
+                    })()}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Contact Name</p>

@@ -390,14 +390,25 @@
 - [x] **Empty-state hint**: When no active reasons, dropdown shows guidance to add them in Settings → Returns.
 - [x] **Files**: `frontend/src/components/distributor/DeliveriesTab.jsx`, `backend/routes/factory_returns.py`
 
-### Lead Type (B2B / Retail) — Lead → Account Propagation (2026-04-25)
-- [x] **Field added**: `lead_type` (default `'B2B'`, accepts `'Retail'`) on `Lead`, `LeadCreate`, `LeadUpdate` (server.py + routes/leads.py duplicates kept in sync) and on `Account`, `AccountUpdate`.
+### Lead Type (B2B / Retail) — Lead → Account Propagation (2026-04-25)- [x] **Field added**: `lead_type` (default `'B2B'`, accepts `'Retail'`) on `Lead`, `LeadCreate`, `LeadUpdate` (server.py + routes/leads.py duplicates kept in sync) and on `Account`, `AccountUpdate`.
 - [x] **Conversion propagation**: `POST /api/accounts/convert-lead` copies `lead.lead_type` to the new account; falls back to `'B2B'` if missing.
 - [x] **Frontend — Add/Edit Lead form**: New "Lead Type *" Shadcn select (B2B / Retail) shown next to Business Category. Defaults to B2B for new leads; loads existing value in edit mode.
 - [x] **Frontend — Lead Detail header**: Color-coded badge (`sky` for B2B, `violet` for Retail) next to status & category, `data-testid="lead-type-badge"`.
 - [x] **Frontend — Account Detail**: Same color-coded badge in header next to account type + a "Lead Type" row in the account info grid.
 - [x] **Tested via curl**: B2B default on create, explicit Retail accepted, PUT update flips B2B → Retail, lead → account conversion preserves Retail value, all temp records cleaned up.
 - [x] **Files**: `backend/server.py`, `backend/routes/leads.py`, `frontend/src/pages/AddEditLead.js`, `frontend/src/pages/LeadDetail.js`, `frontend/src/pages/AccountDetail.js`
+
+
+### Account GOP Metrics (renamed from Account SKU Pricing) + Include-in-GOP Toggle (2026-04-25)
+- [x] **Rename**: Page title + sidebar label renamed to **"Account GOP Metrics"** (URL `/accounts/sku-pricing` retained for backwards-compatible deep links).
+- [x] **New Account field**: `include_in_gop_metrics` (bool). Defaults set **on conversion** based on lead_type: B2B → `True`, Retail → `False`. Explicit override saved via PUT `/api/accounts/{id}` (AccountUpdate now accepts this field).
+- [x] **Top tile scoping**: Per-SKU average-price tiles and the Accounts summary counter now only consider `include_in_gop_metrics !== false` rows. Excluded accounts remain fully visible in the grid; header shows "· N excluded from GOP" badge.
+- [x] **Row indicator**: Account rows excluded from GOP display a subtle amber "Not in GOP" pill next to the account name.
+- [x] **Account Detail — View**: New "Include in GOP Metrics" label shows Yes / No (falls back to lead_type default if unset).
+- [x] **Account Detail — Edit**: Full-width toggle card with Shadcn `Switch` (`data-testid="toggle-include-in-gop"`) and helper text explaining B2B/Retail defaults.
+- [x] **Grid endpoint**: `GET /api/accounts/sku-pricing-grid` now emits `lead_type` + `include_in_gop_metrics` per row (falls back to lead_type-derived default when field is absent on legacy accounts).
+- [x] **Tested via curl end-to-end**: Retail conversion → `False`, B2B conversion → `True`, PUT override works, grid endpoint returns the flag correctly; all temp data cleaned up.
+- [x] **Files**: `backend/server.py` (Account/AccountUpdate models + convert_lead_to_account + sku-pricing-grid), `frontend/src/pages/AccountSKUPricing.js`, `frontend/src/pages/AccountDetail.js`, `frontend/src/layouts/DashboardLayout.js`
 
 
 ### Factory Return — Stock Cap Per SKU (2026-04-25)

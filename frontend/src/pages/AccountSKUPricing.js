@@ -157,10 +157,16 @@ export default function AccountSKUPricing() {
     return out;
   }, [filteredRows]);
 
-  // Per-SKU stats: average, min, max price
+  // Rows used for top tiles & summary — EXCLUDE accounts marked as not-in-GOP
+  const gopRows = useMemo(
+    () => filteredRows.filter((r) => r.include_in_gop_metrics !== false),
+    [filteredRows]
+  );
+
+  // Per-SKU stats: average, min, max price (GOP-eligible rows only)
   const skuAverages = useMemo(() => {
     const agg = {};
-    filteredRows.forEach((r) => {
+    gopRows.forEach((r) => {
       if (!r.sku_name) return;
       const price = Number(r.price_per_unit || 0);
       if (!price) return;
@@ -173,19 +179,23 @@ export default function AccountSKUPricing() {
     return Object.entries(agg)
       .map(([name, { sum, count, min, max }]) => ({ name, avg: sum / count, count, min, max }))
       .sort((a, b) => b.avg - a.avg);
-  }, [filteredRows]);
+  }, [gopRows]);
 
   const summary = useMemo(() => {
-    const uniqueAccounts = new Set(filteredRows.map((r) => r.account_id)).size;
-    const skuRows = filteredRows.filter((r) => r.sku_name);
+    const uniqueAccounts = new Set(gopRows.map((r) => r.account_id)).size;
+    const skuRows = gopRows.filter((r) => r.sku_name);
     const prices = skuRows.map((r) => Number(r.price_per_unit || 0)).filter((x) => x > 0);
     const avg = prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : 0;
+    const excludedAccounts = new Set(
+      filteredRows.filter((r) => r.include_in_gop_metrics === false).map((r) => r.account_id)
+    ).size;
     return {
       uniqueAccounts,
       totalSkuAssignments: skuRows.length,
       avgPrice: avg,
+      excludedAccounts,
     };
-  }, [filteredRows]);
+  }, [gopRows, filteredRows]);
 
   const handleExport = () => {
     try {
@@ -242,10 +252,15 @@ export default function AccountSKUPricing() {
           </div>
           <div>
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-slate-800 dark:text-white">
-              Account SKU Pricing
+              Account GOP Metrics
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              {filteredRows.length} rows · {summary.uniqueAccounts} accounts · {accountsCount} total accounts
+              {filteredRows.length} rows · {summary.uniqueAccounts} accounts in GOP · {accountsCount} total accounts
+              {summary.excludedAccounts > 0 && (
+                <span className="ml-1 text-amber-600 dark:text-amber-400">
+                  · {summary.excludedAccounts} excluded from GOP
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -487,7 +502,18 @@ export default function AccountSKUPricing() {
                     <TableCell className="font-medium align-top">
                       {r._showAccount ? (
                         <div className="flex flex-col">
-                          <span className="text-slate-800 dark:text-white">{r.account_name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-800 dark:text-white">{r.account_name}</span>
+                            {r.include_in_gop_metrics === false && (
+                              <span
+                                className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                                title="Excluded from GOP top-tile metrics"
+                                data-testid={`row-not-in-gop-${idx}`}
+                              >
+                                Not in GOP
+                              </span>
+                            )}
+                          </div>
                           {r.account_code && (
                             <span className="text-xs text-muted-foreground font-mono">{r.account_code}</span>
                           )}

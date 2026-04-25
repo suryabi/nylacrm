@@ -852,6 +852,10 @@ class Account(BaseModel):
     # Lead Type — B2B or Retail (propagated from lead on conversion)
     lead_type: Optional[str] = 'B2B'
     
+    # Include in GOP (Gross Operating Profit) metrics
+    # Default: B2B=True, Retail=False (handled on conversion; explicit override allowed via update)
+    include_in_gop_metrics: Optional[bool] = True
+    
     # Contact Info
     contact_name: Optional[str] = None
     contact_number: Optional[str] = None
@@ -900,6 +904,7 @@ class AccountUpdate(BaseModel):
     account_name: Optional[str] = None
     account_type: Optional[str] = None
     lead_type: Optional[str] = None  # B2B or Retail
+    include_in_gop_metrics: Optional[bool] = None
     contact_name: Optional[str] = None
     contact_number: Optional[str] = None
     gst_number: Optional[str] = None
@@ -5494,11 +5499,15 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
             ))
     
     # Create account with category and contact info from lead
+    lead_type_val = lead.get('lead_type') or 'B2B'
+    # Default include_in_gop_metrics: B2B → True, Retail → False
+    default_include_gop = lead_type_val.lower() != 'retail'
     account = Account(
         account_id=account_id,
         lead_id=lead.get('lead_id') or data.lead_id,
         account_name=account_name,
-        lead_type=lead.get('lead_type') or 'B2B',
+        lead_type=lead_type_val,
+        include_in_gop_metrics=default_include_gop,
         city=city,
         state=lead.get('state', ''),
         territory=lead.get('region', ''),
@@ -5735,6 +5744,8 @@ async def get_accounts_sku_pricing_grid(
                 'account_code': account.get('account_id'),
                 'account_name': account.get('account_name'),
                 'account_type': account.get('account_type'),
+                'lead_type': account.get('lead_type') or 'B2B',
+                'include_in_gop_metrics': account.get('include_in_gop_metrics', (account.get('lead_type', 'B2B') or 'B2B').lower() != 'retail'),
                 'city': account.get('city'),
                 'state': account.get('state'),
                 'territory': account.get('territory'),
@@ -5760,6 +5771,8 @@ async def get_accounts_sku_pricing_grid(
                 'account_code': account.get('account_id'),
                 'account_name': account.get('account_name'),
                 'account_type': account.get('account_type'),
+                'lead_type': account.get('lead_type') or 'B2B',
+                'include_in_gop_metrics': account.get('include_in_gop_metrics', (account.get('lead_type', 'B2B') or 'B2B').lower() != 'retail'),
                 'city': account.get('city'),
                 'state': account.get('state'),
                 'territory': account.get('territory'),
