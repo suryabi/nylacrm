@@ -705,6 +705,9 @@ class Lead(BaseModel):
     # Lead Category
     category: Optional[str] = None  # Restaurant, Bar & Kitchen, Star Hotel, etc.
     
+    # Lead Type — B2B or Retail (defaults to B2B)
+    lead_type: Optional[str] = 'B2B'
+    
     # Customer Tier
     tier: Optional[str] = None  # Tier 1, Tier 2, Tier 3, Tier 4, Tier 5
     
@@ -768,6 +771,7 @@ class LeadCreate(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     category: Optional[str] = None
+    lead_type: Optional[str] = 'B2B'  # B2B or Retail
     tier: Optional[str] = None
     rank: Optional[str] = None  # A+, A, B, C, D
     city: str
@@ -797,6 +801,7 @@ class LeadUpdate(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     category: Optional[str] = None
+    lead_type: Optional[str] = None  # B2B or Retail
     tier: Optional[str] = None
     rank: Optional[str] = None  # A+, A, B, C, D
     city: Optional[str] = None
@@ -843,6 +848,9 @@ class Account(BaseModel):
     # Account Info
     account_name: str
     account_type: Optional[str] = None  # Tier 1, Tier 2, Tier 3
+    
+    # Lead Type — B2B or Retail (propagated from lead on conversion)
+    lead_type: Optional[str] = 'B2B'
     
     # Contact Info
     contact_name: Optional[str] = None
@@ -891,6 +899,7 @@ class DeliveryAddress(BaseModel):
 class AccountUpdate(BaseModel):
     account_name: Optional[str] = None
     account_type: Optional[str] = None
+    lead_type: Optional[str] = None  # B2B or Retail
     contact_name: Optional[str] = None
     contact_number: Optional[str] = None
     gst_number: Optional[str] = None
@@ -5489,6 +5498,7 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
         account_id=account_id,
         lead_id=lead.get('lead_id') or data.lead_id,
         account_name=account_name,
+        lead_type=lead.get('lead_type') or 'B2B',
         city=city,
         state=lead.get('state', ''),
         territory=lead.get('region', ''),

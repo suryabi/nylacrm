@@ -390,6 +390,16 @@
 - [x] **Empty-state hint**: When no active reasons, dropdown shows guidance to add them in Settings → Returns.
 - [x] **Files**: `frontend/src/components/distributor/DeliveriesTab.jsx`, `backend/routes/factory_returns.py`
 
+### Lead Type (B2B / Retail) — Lead → Account Propagation (2026-04-25)
+- [x] **Field added**: `lead_type` (default `'B2B'`, accepts `'Retail'`) on `Lead`, `LeadCreate`, `LeadUpdate` (server.py + routes/leads.py duplicates kept in sync) and on `Account`, `AccountUpdate`.
+- [x] **Conversion propagation**: `POST /api/accounts/convert-lead` copies `lead.lead_type` to the new account; falls back to `'B2B'` if missing.
+- [x] **Frontend — Add/Edit Lead form**: New "Lead Type *" Shadcn select (B2B / Retail) shown next to Business Category. Defaults to B2B for new leads; loads existing value in edit mode.
+- [x] **Frontend — Lead Detail header**: Color-coded badge (`sky` for B2B, `violet` for Retail) next to status & category, `data-testid="lead-type-badge"`.
+- [x] **Frontend — Account Detail**: Same color-coded badge in header next to account type + a "Lead Type" row in the account info grid.
+- [x] **Tested via curl**: B2B default on create, explicit Retail accepted, PUT update flips B2B → Retail, lead → account conversion preserves Retail value, all temp records cleaned up.
+- [x] **Files**: `backend/server.py`, `backend/routes/leads.py`, `frontend/src/pages/AddEditLead.js`, `frontend/src/pages/LeadDetail.js`, `frontend/src/pages/AccountDetail.js`
+
+
 ### Factory Return — Stock Cap Per SKU (2026-04-25)
 - [x] **Goal**: Stock-Out (Distributor → Factory) cannot exceed quantities at hand at the distributor.
 - [x] **New backend endpoint** `GET /api/distributors/{id}/available-stock` returns per-SKU `warehouse_available`, `customer_pending_factory`, `total_available`.

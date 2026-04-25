@@ -31,6 +31,7 @@ class Lead(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     category: Optional[str] = None
+    lead_type: Optional[str] = 'B2B'  # B2B or Retail
     tier: Optional[str] = None
     rank: Optional[str] = None
     city: str
@@ -77,6 +78,7 @@ class LeadCreate(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     category: Optional[str] = None
+    lead_type: Optional[str] = 'B2B'  # B2B or Retail
     tier: Optional[str] = None
     rank: Optional[str] = None
     city: str
@@ -107,6 +109,7 @@ class LeadUpdate(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     category: Optional[str] = None
+    lead_type: Optional[str] = None  # B2B or Retail
     tier: Optional[str] = None
     rank: Optional[str] = None
     city: Optional[str] = None

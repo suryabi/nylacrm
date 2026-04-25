@@ -75,6 +75,7 @@ export default function AddEditLead() {
     email: '',
     phone: '',
     category: '',
+    lead_type: 'B2B',
     city: '',
     state: '',
     country: 'India',
@@ -144,6 +145,7 @@ export default function AddEditLead() {
         email: lead.email || '',
         phone: lead.phone || '',
         category: lead.category || '',
+        lead_type: lead.lead_type || 'B2B',
         city: lead.city || '',
         state: lead.state || '',
         country: lead.country || 'India',
@@ -311,6 +313,18 @@ export default function AddEditLead() {
                   {businessCategories.map(cat => (
                     <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lead_type">Lead Type *</Label>
+              <Select value={formData.lead_type} onValueChange={(v) => updateField('lead_type', v)} required>
+                <SelectTrigger data-testid="lead-type-select">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="B2B">B2B</SelectItem>
+                  <SelectItem value="Retail">Retail</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -924,6 +924,19 @@ ${userEmail}`;
                 {lead.category}
               </Badge>
             )}
+            {lead.lead_type && (
+              <Badge
+                variant="outline"
+                className={`text-[10px] sm:text-sm hidden sm:inline-flex ${
+                  lead.lead_type === 'Retail'
+                    ? 'bg-violet-50 text-violet-700 border-violet-300'
+                    : 'bg-sky-50 text-sky-700 border-sky-300'
+                }`}
+                data-testid="lead-type-badge"
+              >
+                {lead.lead_type}
+              </Badge>
+            )}
           </div>
           
           {/* Second row - Temperature, ID, Follow-up */}

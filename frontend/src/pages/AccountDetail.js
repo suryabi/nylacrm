@@ -798,6 +798,19 @@ ${googleMapsLink}`;
                 {account.account_type}
               </Badge>
             )}
+            {account.lead_type && (
+              <Badge
+                variant="outline"
+                className={
+                  account.lead_type === 'Retail'
+                    ? 'bg-violet-50 text-violet-700 border-violet-300'
+                    : 'bg-sky-50 text-sky-700 border-sky-300'
+                }
+                data-testid="account-lead-type-badge"
+              >
+                {account.lead_type}
+              </Badge>
+            )}
           </div>
           <p className="text-sm font-mono text-muted-foreground mt-1" data-testid="account-unique-id">
             ID: {account.account_id}
@@ -967,6 +980,10 @@ ${googleMapsLink}`;
                 <div>
                   <p className="text-sm text-muted-foreground">Account Type</p>
                   <p className="font-medium">{account.account_type || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Lead Type</p>
+                  <p className="font-medium" data-testid="account-lead-type-display">{account.lead_type || 'B2B'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Contact Name</p>
