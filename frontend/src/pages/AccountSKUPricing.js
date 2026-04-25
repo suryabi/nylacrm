@@ -189,11 +189,15 @@ export default function AccountSKUPricing() {
     const excludedAccounts = new Set(
       filteredRows.filter((r) => r.include_in_gop_metrics === false).map((r) => r.account_id)
     ).size;
+    const allAccounts = new Set(filteredRows.map((r) => r.account_id)).size;
+    const coveragePct = allAccounts > 0 ? Math.round((uniqueAccounts / allAccounts) * 100) : 0;
     return {
       uniqueAccounts,
       totalSkuAssignments: skuRows.length,
       avgPrice: avg,
       excludedAccounts,
+      allAccounts,
+      coveragePct,
     };
   }, [gopRows, filteredRows]);
 
@@ -277,6 +281,68 @@ export default function AccountSKUPricing() {
           <span>{exporting ? 'Exporting…' : 'Download CSV'}</span>
         </Button>
       </div>
+
+      {/* GOP Coverage tile */}
+      {summary.allAccounts > 0 && (
+        <div
+          className="relative overflow-hidden rounded-2xl border border-slate-200/70 dark:border-slate-700/60 bg-gradient-to-br from-emerald-50 via-white to-white dark:from-emerald-950/30 dark:via-slate-900 dark:to-slate-900 p-4 sm:p-5"
+          data-testid="gop-coverage-tile"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="h-12 w-12 shrink-0 rounded-xl flex items-center justify-center bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <Package className="h-6 w-6" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.12em]">
+                  GOP Coverage
+                </p>
+                <p className="text-base sm:text-lg font-semibold text-slate-800 dark:text-white tabular-nums mt-0.5">
+                  <span data-testid="gop-coverage-included">{summary.uniqueAccounts}</span>
+                  <span className="text-muted-foreground font-normal"> of </span>
+                  <span data-testid="gop-coverage-total">{summary.allAccounts}</span>
+                  <span className="text-muted-foreground font-normal"> accounts counted in GOP</span>
+                  {summary.excludedAccounts > 0 && (
+                    <span className="ml-2 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-100/70 dark:bg-amber-900/30 px-2 py-0.5 rounded">
+                      {summary.excludedAccounts} excluded
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="text-right">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.12em]">Coverage</p>
+                <p
+                  className={`text-2xl sm:text-3xl font-bold tabular-nums ${
+                    summary.coveragePct >= 80
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : summary.coveragePct >= 50
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-rose-600 dark:text-rose-400'
+                  }`}
+                  data-testid="gop-coverage-pct"
+                >
+                  {summary.coveragePct}%
+                </p>
+              </div>
+            </div>
+          </div>
+          {/* Progress bar */}
+          <div className="mt-3 h-1.5 w-full rounded-full bg-slate-200/70 dark:bg-slate-700/60 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${
+                summary.coveragePct >= 80
+                  ? 'bg-emerald-500'
+                  : summary.coveragePct >= 50
+                    ? 'bg-amber-500'
+                    : 'bg-rose-500'
+              }`}
+              style={{ width: `${summary.coveragePct}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Per-SKU average price tiles */}
       {skuAverages.length > 0 && (

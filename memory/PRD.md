@@ -399,6 +399,11 @@
 - [x] **Files**: `backend/server.py`, `backend/routes/leads.py`, `frontend/src/pages/AddEditLead.js`, `frontend/src/pages/LeadDetail.js`, `frontend/src/pages/AccountDetail.js`
 
 
+### Account GOP Metrics — GOP Coverage Tile (2026-04-25)
+- [x] **New "GOP Coverage" tile** at the top of `/accounts/sku-pricing` (Account GOP Metrics page). Shows `<included> of <total> accounts counted in GOP` with an excluded-count amber pill, a large color-tiered coverage % (≥80% emerald, ≥50% amber, else rose), and a slim progress bar.
+- [x] **Test IDs**: `gop-coverage-tile`, `gop-coverage-included`, `gop-coverage-total`, `gop-coverage-pct`.
+- [x] **Reuses** `summary.coveragePct = uniqueAccountsInGOP / totalAccounts` derived from existing filteredRows; no extra API calls.
+
 ### Account GOP Metrics (renamed from Account SKU Pricing) + Include-in-GOP Toggle (2026-04-25)
 - [x] **Rename**: Page title + sidebar label renamed to **"Account GOP Metrics"** (URL `/accounts/sku-pricing` retained for backwards-compatible deep links).
 - [x] **New Account field**: `include_in_gop_metrics` (bool). Defaults set **on conversion** based on lead_type: B2B → `True`, Retail → `False`. Explicit override saved via PUT `/api/accounts/{id}` (AccountUpdate now accepts this field).
