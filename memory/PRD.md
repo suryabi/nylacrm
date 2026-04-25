@@ -382,6 +382,14 @@
 - **Continue server.py refactor Phase 2**: Extract accounts/leads/invoices/production/meetings/tasks routes (current: 9,140 lines, target <2,000)
 - **Google Workspace OAuth fix**: Once prod is stable, debug `/api/auth/google-callback` errors (likely `redirect_uri_mismatch`)
 
+### Factory Return — Master-Driven Reason Dropdown (2026-04-25)
+- [x] **DeliveriesTab "New Factory Return" dialog**: Reason dropdown now pulls from master `Return Reasons` (`/api/return-reasons?is_active=true`) instead of hardcoded `expired/damaged/empty_reusable` options.
+- [x] **Source-aware filtering**: For `source=customer_return` shows reasons in categories [empty_reusable, expired, damaged]; for `source=warehouse` shows [expired, damaged].
+- [x] **Backend contract preserved**: Submits the master reason's `category` as the legacy `reason` field (validated regex unchanged), and now also persists `reason_id` + `reason_name` on the factory return doc for richer display & audit.
+- [x] **Display update**: Factory returns table shows `reason_name` from master when present, falling back to legacy reason label.
+- [x] **Empty-state hint**: When no active reasons, dropdown shows guidance to add them in Settings → Returns.
+- [x] **Files**: `frontend/src/components/distributor/DeliveriesTab.jsx`, `backend/routes/factory_returns.py`
+
 ## Pipeline Value Logic (2026-04-09)
 - Pipeline value is now based on `target_closure_month`/`target_closure_year` matching the time filter
 - Value = sum of `opportunity_estimation.estimated_monthly_revenue` (from proposed SKU section) for active leads

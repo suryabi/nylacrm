@@ -30,6 +30,8 @@ class FactoryReturnCreate(BaseModel):
     distributor_location_id: str
     source: str = Field(pattern="^(customer_return|warehouse)$")
     reason: str = Field(pattern="^(expired|damaged|empty_reusable)$")
+    reason_id: Optional[str] = None
+    reason_name: Optional[str] = None
     customer_return_id: Optional[str] = None
     return_date: Optional[str] = None
     items: List[FactoryReturnItemCreate]
@@ -221,6 +223,8 @@ async def create_factory_return(
         "distributor_location_id": data.distributor_location_id,
         "distributor_location_name": location.get('location_name'),
         "reason": data.reason,
+        "reason_id": data.reason_id,
+        "reason_name": data.reason_name,
         "source": data.source,
         "customer_return_id": data.customer_return_id,
         "customer_return_number": customer_return_number,

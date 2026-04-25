@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -83,7 +83,37 @@ export default function DeliveriesTab({
   const [factoryItems, setFactoryItems] = useState([{ sku_id: '', quantity: 1 }]);
   const [savingFactory, setSavingFactory] = useState(false);
   const [marginSkus, setMarginSkus] = useState([]);
-  
+  const [returnReasons, setReturnReasons] = useState([]);
+
+  // Fetch master return reasons (active only)
+  const fetchReturnReasons = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/return-reasons?is_active=true`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setReturnReasons(data.reasons || []);
+      }
+    } catch (err) {
+      console.error('Error fetching return reasons:', err);
+    }
+  }, [API_URL, token]);
+
+  useEffect(() => {
+    if (factorySectionOpen) fetchReturnReasons();
+  }, [factorySectionOpen, fetchReturnReasons]);
+
+  // Filter reasons based on stock source. Backend reason field accepts only
+  // categories: expired | damaged | empty_reusable. We display master reason
+  // labels but submit the underlying category to keep backend contract intact.
+  const filteredReasons = useMemo(() => {
+    const allowed = factoryForm.source === 'customer_return'
+      ? ['empty_reusable', 'expired', 'damaged']
+      : ['expired', 'damaged'];
+    return returnReasons.filter(r => allowed.includes(r.category));
+  }, [returnReasons, factoryForm.source]);
+
   // Fetch margin matrix SKUs for this distributor (only assigned SKUs)
   const fetchMarginSkus = useCallback(async () => {
     if (!distributor?.id) return;
@@ -142,21 +172,43 @@ export default function DeliveriesTab({
   // Get distributor locations from distributor object
   const distributorLocations = distributor?.locations || [];
   
+  // Auto-select first matching reason when source changes or master loads
+  useEffect(() => {
+    if (filteredReasons.length === 0) return;
+    const current = filteredReasons.find(r => r.id === factoryForm.reason_id);
+    if (!current) {
+      const first = filteredReasons[0];
+      setFactoryForm(f => ({
+        ...f,
+        reason_id: first.id,
+        reason_name: first.reason_name,
+        reason: first.category
+      }));
+    }
+  }, [filteredReasons, factoryForm.reason_id]);
+
   const handleCreateFactoryReturn = async () => {
-    if (!factoryForm.distributor_location_id || factoryItems.some(i => !i.sku_id || !i.quantity)) return;
+    if (!factoryForm.distributor_location_id || !factoryForm.reason_id || factoryItems.some(i => !i.sku_id || !i.quantity)) return;
     setSavingFactory(true);
     try {
       const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/factory-returns`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...factoryForm,
+          distributor_location_id: factoryForm.distributor_location_id,
+          reason: factoryForm.reason,
+          reason_id: factoryForm.reason_id,
+          reason_name: factoryForm.reason_name,
+          source: factoryForm.source,
+          customer_return_id: factoryForm.customer_return_id,
+          return_date: factoryForm.return_date,
+          remarks: factoryForm.remarks,
           items: factoryItems.filter(i => i.sku_id && i.quantity > 0)
         })
       });
       if (res.ok) {
         setShowFactoryDialog(false);
-        setFactoryForm({ distributor_location_id: '', reason: 'expired', source: 'warehouse', customer_return_id: '', return_date: new Date().toISOString().split('T')[0], remarks: '' });
+        setFactoryForm({ distributor_location_id: '', reason: 'expired', reason_id: '', reason_name: '', source: 'warehouse', customer_return_id: '', return_date: new Date().toISOString().split('T')[0], remarks: '' });
         setFactoryItems([{ sku_id: '', quantity: 1 }]);
         fetchFactoryReturns();
       }
@@ -1354,7 +1406,7 @@ export default function DeliveriesTab({
                       <div className="grid grid-cols-2 gap-3">
                         <button
                           type="button"
-                          onClick={() => setFactoryForm(f => ({ ...f, source: 'warehouse', reason: 'expired', customer_return_id: '' }))}
+                          onClick={() => setFactoryForm(f => ({ ...f, source: 'warehouse', reason: 'expired', reason_id: '', reason_name: '', customer_return_id: '' }))}
                           className={`p-4 border-2 rounded-lg text-left transition-all ${factoryForm.source === 'warehouse' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 hover:border-slate-300'}`}
                           data-testid="factory-source-warehouse"
                         >
@@ -1364,7 +1416,7 @@ export default function DeliveriesTab({
                         </button>
                         <button
                           type="button"
-                          onClick={() => setFactoryForm(f => ({ ...f, source: 'customer_return', reason: 'empty_reusable', customer_return_id: '' }))}
+                          onClick={() => setFactoryForm(f => ({ ...f, source: 'customer_return', reason: 'empty_reusable', reason_id: '', reason_name: '', customer_return_id: '' }))}
                           className={`p-4 border-2 rounded-lg text-left transition-all ${factoryForm.source === 'customer_return' ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
                           data-testid="factory-source-customer"
                         >
@@ -1375,29 +1427,37 @@ export default function DeliveriesTab({
                       </div>
                     </div>
 
-                    {/* Reason — Changes based on Source */}
+                    {/* Reason — Pulled from Master Return Reasons */}
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Reason *</Label>
                         <select
-                          value={factoryForm.reason}
-                          onChange={(e) => setFactoryForm(f => ({ ...f, reason: e.target.value }))}
+                          value={factoryForm.reason_id || ''}
+                          onChange={(e) => {
+                            const reasonId = e.target.value;
+                            const reason = filteredReasons.find(r => r.id === reasonId);
+                            setFactoryForm(f => ({
+                              ...f,
+                              reason_id: reasonId,
+                              reason_name: reason?.reason_name || '',
+                              reason: reason?.category || f.reason
+                            }));
+                          }}
                           className="w-full text-sm border rounded-md px-3 py-2 bg-background"
                           data-testid="factory-reason-select"
                         >
-                          {factoryForm.source === 'customer_return' ? (
-                            <>
-                              <option value="empty_reusable">Empty / Reusable Bottles</option>
-                              <option value="expired">Expired Stock</option>
-                              <option value="damaged">Damaged Stock</option>
-                            </>
-                          ) : (
-                            <>
-                              <option value="expired">Expired Stock</option>
-                              <option value="damaged">Damaged Stock</option>
-                            </>
-                          )}
+                          <option value="">Select Reason</option>
+                          {filteredReasons.map(reason => (
+                            <option key={reason.id} value={reason.id}>
+                              {reason.reason_name}
+                            </option>
+                          ))}
                         </select>
+                        {filteredReasons.length === 0 && (
+                          <p className="text-xs text-amber-600">
+                            No active return reasons configured. Add them in Settings → Returns.
+                          </p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label>Return Date</Label>
@@ -1499,7 +1559,7 @@ export default function DeliveriesTab({
                     <Button variant="outline" onClick={() => setShowFactoryDialog(false)}>Cancel</Button>
                     <Button
                       onClick={handleCreateFactoryReturn}
-                      disabled={savingFactory || !factoryForm.distributor_location_id || factoryItems.every(i => !i.sku_id)}
+                      disabled={savingFactory || !factoryForm.distributor_location_id || !factoryForm.reason_id || factoryItems.every(i => !i.sku_id)}
                       data-testid="save-factory-return-btn"
                     >
                       {savingFactory ? 'Saving...' : 'Create Factory Return'}
@@ -1579,7 +1639,7 @@ export default function DeliveriesTab({
                     <td className="p-3 text-slate-700 text-sm">{fr.distributor_location_name}</td>
                     <td className="p-3 text-center">
                       <Badge className={reasonColors[fr.reason] || 'bg-slate-100 text-slate-700'}>
-                        {reasonLabels[fr.reason] || fr.reason}
+                        {fr.reason_name || reasonLabels[fr.reason] || fr.reason}
                       </Badge>
                     </td>
                     <td className="p-3 text-center">
