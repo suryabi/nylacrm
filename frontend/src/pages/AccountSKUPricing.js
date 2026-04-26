@@ -259,12 +259,7 @@ export default function AccountSKUPricing() {
               Account GOP Metrics
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              {filteredRows.length} rows · {summary.uniqueAccounts} accounts in GOP · {accountsCount} total accounts
-              {summary.excludedAccounts > 0 && (
-                <span className="ml-1 text-amber-600 dark:text-amber-400">
-                  · {summary.excludedAccounts} excluded from GOP
-                </span>
-              )}
+              {filteredRows.length} rows · {summary.allAccounts} accounts · {accountsCount} total
             </p>
           </div>
         </div>
@@ -282,67 +277,91 @@ export default function AccountSKUPricing() {
         </Button>
       </div>
 
-      {/* GOP Coverage tile */}
-      {summary.allAccounts > 0 && (
-        <div
-          className="relative overflow-hidden rounded-2xl border border-slate-200/70 dark:border-slate-700/60 bg-gradient-to-br from-emerald-50 via-white to-white dark:from-emerald-950/30 dark:via-slate-900 dark:to-slate-900 p-4 sm:p-5"
-          data-testid="gop-coverage-tile"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-4 min-w-0">
-              <div className="h-12 w-12 shrink-0 rounded-xl flex items-center justify-center bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                <Package className="h-6 w-6" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.12em]">
-                  GOP Coverage
-                </p>
-                <p className="text-base sm:text-lg font-semibold text-slate-800 dark:text-white tabular-nums mt-0.5">
-                  <span data-testid="gop-coverage-included">{summary.uniqueAccounts}</span>
-                  <span className="text-muted-foreground font-normal"> of </span>
-                  <span data-testid="gop-coverage-total">{summary.allAccounts}</span>
-                  <span className="text-muted-foreground font-normal"> accounts counted in GOP</span>
-                  {summary.excludedAccounts > 0 && (
-                    <span className="ml-2 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-100/70 dark:bg-amber-900/30 px-2 py-0.5 rounded">
-                      {summary.excludedAccounts} excluded
-                    </span>
-                  )}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="text-right">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.12em]">Coverage</p>
-                <p
-                  className={`text-2xl sm:text-3xl font-bold tabular-nums ${
-                    summary.coveragePct >= 80
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : summary.coveragePct >= 50
-                        ? 'text-amber-600 dark:text-amber-400'
-                        : 'text-rose-600 dark:text-rose-400'
-                  }`}
+      {/* GOP Coverage — compact, elegant */}
+      {summary.allAccounts > 0 && (() => {
+        const tone =
+          summary.coveragePct >= 80 ? 'emerald' :
+          summary.coveragePct >= 50 ? 'amber' : 'rose';
+        const ringSize = 56;
+        const stroke = 5;
+        const radius = (ringSize - stroke) / 2;
+        const circ = 2 * Math.PI * radius;
+        const dash = (summary.coveragePct / 100) * circ;
+        const ringColor = {
+          emerald: 'stroke-emerald-500',
+          amber: 'stroke-amber-500',
+          rose: 'stroke-rose-500',
+        }[tone];
+        const textColor = {
+          emerald: 'text-emerald-600 dark:text-emerald-400',
+          amber: 'text-amber-600 dark:text-amber-400',
+          rose: 'text-rose-600 dark:text-rose-400',
+        }[tone];
+        return (
+          <div
+            className="flex items-center gap-4 px-4 py-3 rounded-xl border border-slate-200/70 dark:border-slate-700/60 bg-white/60 dark:bg-slate-900/40 backdrop-blur-sm"
+            data-testid="gop-coverage-tile"
+          >
+            {/* Circular ring */}
+            <div className="relative shrink-0" style={{ width: ringSize, height: ringSize }}>
+              <svg width={ringSize} height={ringSize} className="-rotate-90">
+                <circle
+                  cx={ringSize / 2}
+                  cy={ringSize / 2}
+                  r={radius}
+                  className="stroke-slate-200/80 dark:stroke-slate-700/60"
+                  strokeWidth={stroke}
+                  fill="none"
+                />
+                <circle
+                  cx={ringSize / 2}
+                  cy={ringSize / 2}
+                  r={radius}
+                  className={`${ringColor} transition-[stroke-dashoffset] duration-700`}
+                  strokeWidth={stroke}
+                  strokeLinecap="round"
+                  strokeDasharray={circ}
+                  strokeDashoffset={circ - dash}
+                  fill="none"
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span
+                  className={`text-[11px] font-semibold tabular-nums ${textColor}`}
                   data-testid="gop-coverage-pct"
                 >
                   {summary.coveragePct}%
-                </p>
+                </span>
               </div>
             </div>
+
+            {/* Body */}
+            <div className="flex-1 min-w-0 leading-tight">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                GOP Coverage
+              </p>
+              <p className="text-sm text-slate-700 dark:text-slate-200 mt-0.5">
+                <span className="font-semibold tabular-nums text-slate-900 dark:text-white" data-testid="gop-coverage-included">
+                  {summary.uniqueAccounts}
+                </span>
+                <span className="text-muted-foreground"> of </span>
+                <span className="font-semibold tabular-nums text-slate-900 dark:text-white" data-testid="gop-coverage-total">
+                  {summary.allAccounts}
+                </span>
+                <span className="text-muted-foreground"> accounts in GOP</span>
+              </p>
+            </div>
+
+            {/* Excluded chip */}
+            {summary.excludedAccounts > 0 && (
+              <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200/70 dark:border-amber-800/40">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                {summary.excludedAccounts} excluded
+              </span>
+            )}
           </div>
-          {/* Progress bar */}
-          <div className="mt-3 h-1.5 w-full rounded-full bg-slate-200/70 dark:bg-slate-700/60 overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all ${
-                summary.coveragePct >= 80
-                  ? 'bg-emerald-500'
-                  : summary.coveragePct >= 50
-                    ? 'bg-amber-500'
-                    : 'bg-rose-500'
-              }`}
-              style={{ width: `${summary.coveragePct}%` }}
-            />
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Per-SKU average price tiles */}
       {skuAverages.length > 0 && (

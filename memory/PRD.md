@@ -420,10 +420,14 @@
 - [x] **AccountsList**: "Type" column (Tier badge) replaced with "Lead Type" column (B2B / Retail color pill). Toolbar filter renamed "Account Type" → "Lead Type" with B2B/Retail options. Unused `ACCOUNT_TYPES` + `accountTypeColors` constants removed.
 - [x] **Backend** `GET /api/accounts`: New `lead_type` query param; B2B selection treats missing/null as B2B (legacy default) using `$and`-combined `$or` clause to coexist with search.
 - [x] **Tested via curl**: B2B legacy default returns 7 accounts, Retail returns 0 (correct), PUT `lead_type=Retail` updates → Retail filter then returns 1, restore to B2B works.
-### Account GOP Metrics — GOP Coverage Tile (2026-04-25)
-- [x] **New "GOP Coverage" tile** at the top of `/accounts/sku-pricing` (Account GOP Metrics page). Shows `<included> of <total> accounts counted in GOP` with an excluded-count amber pill, a large color-tiered coverage % (≥80% emerald, ≥50% amber, else rose), and a slim progress bar.
-- [x] **Test IDs**: `gop-coverage-tile`, `gop-coverage-included`, `gop-coverage-total`, `gop-coverage-pct`.
-- [x] **Reuses** `summary.coveragePct = uniqueAccountsInGOP / totalAccounts` derived from existing filteredRows; no extra API calls.
+### Account GOP Metrics — Compact GOP Coverage Tile (2026-04-26 redesign)
+- [x] **Redesigned** the GOP Coverage tile to be elegant & subtle: collapsed from a tall block (gradient bg + giant 3xl percentage + full-width progress bar) to a single compact horizontal row (~64px tall) with:
+  - Soft `bg-white/60 backdrop-blur` card on the page background
+  - **Inline circular SVG donut ring** (56px) on the left, % rendered in the ring center, color-tiered (emerald ≥80%, amber ≥50%, rose otherwise) with a smooth dash-offset transition
+  - Single-line body: "GOP Coverage" eyebrow + "**6 of 7** accounts in GOP" with subtle muted "of"
+  - Pill-shaped excluded chip on the right (only when >0), with a tiny dot
+- [x] **Header subtitle** simplified — duplicate "excluded from GOP" mention removed (now lives only inside the tile).
+- [x] **Files**: `frontend/src/pages/AccountSKUPricing.js`
 
 ### Account GOP Metrics (renamed from Account SKU Pricing) + Include-in-GOP Toggle (2026-04-25)
 - [x] **Rename**: Page title + sidebar label renamed to **"Account GOP Metrics"** (URL `/accounts/sku-pricing` retained for backwards-compatible deep links).
