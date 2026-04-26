@@ -163,12 +163,6 @@ const contractStatusConfig = {
   'rejected': { label: 'Rejected', color: 'bg-red-100 text-red-800 border-red-200', icon: XCircle },
 };
 
-const accountTypeColors = {
-  'Tier 1': 'bg-emerald-100 text-emerald-800',
-  'Tier 2': 'bg-blue-100 text-blue-800',
-  'Tier 3': 'bg-gray-100 text-gray-800',
-};
-
 export default function AccountDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -194,7 +188,7 @@ export default function AccountDetail() {
   
   // Editable fields
   const [accountName, setAccountName] = useState('');
-  const [accountType, setAccountType] = useState('');
+  const [leadType, setLeadType] = useState('B2B');
   const [contactName, setContactName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [gstNumber, setGstNumber] = useState('');
@@ -438,7 +432,7 @@ ${googleMapsLink}`;
       const data = response.data;
       setAccount(data);
       setAccountName(data.account_name || '');
-      setAccountType(data.account_type || '');
+      setLeadType(data.lead_type || 'B2B');
       setContactName(data.contact_name || '');
       setContactNumber(data.contact_number || '');
       setGstNumber(data.gst_number || '');
@@ -714,7 +708,7 @@ ${googleMapsLink}`;
     try {
       await accountsAPI.update(id, {
         account_name: accountName,
-        account_type: accountType || null,
+        lead_type: leadType,
         contact_name: contactName || null,
         contact_number: contactNumber || null,
         gst_number: gstNumber || null,
@@ -802,11 +796,6 @@ ${googleMapsLink}`;
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-semibold">{account.account_name}</h1>
-            {account.account_type && (
-              <Badge className={accountTypeColors[account.account_type] || 'bg-gray-100'}>
-                {account.account_type}
-              </Badge>
-            )}
             {account.lead_type && (
               <Badge
                 variant="outline"
@@ -847,7 +836,7 @@ ${googleMapsLink}`;
           <Button variant="outline" onClick={() => {
             setIsEditing(false);
             setAccountName(account.account_name || '');
-            setAccountType(account.account_type || '');
+            setLeadType(account.lead_type || 'B2B');
             setContactName(account.contact_name || '');
             setContactNumber(account.contact_number || '');
             setSkuPricing(account.sku_pricing || []);
@@ -894,15 +883,14 @@ ${googleMapsLink}`;
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Account Type</Label>
-                  <Select value={accountType} onValueChange={setAccountType}>
-                    <SelectTrigger data-testid="edit-account-type">
+                  <Label>Lead Type *</Label>
+                  <Select value={leadType} onValueChange={setLeadType}>
+                    <SelectTrigger data-testid="edit-lead-type">
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Tier 1">Tier 1</SelectItem>
-                      <SelectItem value="Tier 2">Tier 2</SelectItem>
-                      <SelectItem value="Tier 3">Tier 3</SelectItem>
+                      <SelectItem value="B2B">B2B</SelectItem>
+                      <SelectItem value="Retail">Retail</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1002,10 +990,6 @@ ${googleMapsLink}`;
                 <div>
                   <p className="text-sm text-muted-foreground">Account Name</p>
                   <p className="font-medium">{account.account_name}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Account Type</p>
-                  <p className="font-medium">{account.account_type || '-'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Lead Type</p>

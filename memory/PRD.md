@@ -411,6 +411,15 @@
 - [x] **Files**: `frontend/src/pages/NeckTagDesigner.js`, `frontend/src/App.js` (route), `frontend/src/layouts/DashboardLayout.js` (nav), `frontend/public/neck-tag/{template_full,layer_waves,layer_seal,layer_tagline}.png` (assets).
 
 
+### Account — Lead Type editable + Account Type removed (2026-04-25)
+- [x] **Account Detail edit form**: "Account Type" dropdown (Tier 1/2/3) replaced with "Lead Type *" dropdown (B2B / Retail). State `accountType` removed; `leadType` initialized from `account.lead_type` (default B2B).
+- [x] **PUT payload** now sends `lead_type` instead of `account_type`.
+- [x] **View mode**: Removed "Account Type" row; "Lead Type" remains.
+- [x] **Header**: Removed Tier 1/2/3 colored badge; Lead Type pill (sky=B2B, violet=Retail) is the sole type indicator.
+- [x] **Cancel-edit reset** updated; unused `accountTypeColors` constant removed.
+- [x] **AccountsList**: "Type" column (Tier badge) replaced with "Lead Type" column (B2B / Retail color pill). Toolbar filter renamed "Account Type" → "Lead Type" with B2B/Retail options. Unused `ACCOUNT_TYPES` + `accountTypeColors` constants removed.
+- [x] **Backend** `GET /api/accounts`: New `lead_type` query param; B2B selection treats missing/null as B2B (legacy default) using `$and`-combined `$or` clause to coexist with search.
+- [x] **Tested via curl**: B2B legacy default returns 7 accounts, Retail returns 0 (correct), PUT `lead_type=Retail` updates → Retail filter then returns 1, restore to B2B works.
 ### Account GOP Metrics — GOP Coverage Tile (2026-04-25)
 - [x] **New "GOP Coverage" tile** at the top of `/accounts/sku-pricing` (Account GOP Metrics page). Shows `<included> of <total> accounts counted in GOP` with an excluded-count amber pill, a large color-tiered coverage % (≥80% emerald, ≥50% amber, else rose), and a slim progress bar.
 - [x] **Test IDs**: `gop-coverage-tile`, `gop-coverage-included`, `gop-coverage-total`, `gop-coverage-pct`.

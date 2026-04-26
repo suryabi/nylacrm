@@ -31,13 +31,6 @@ import AppBreadcrumb from '../components/AppBreadcrumb';
 import StatTile from '../components/StatTile';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-const ACCOUNT_TYPES = ['Tier 1', 'Tier 2', 'Tier 3'];
-
-const accountTypeColors = {
-  'Tier 1': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300 border-emerald-200',
-  'Tier 2': 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 border-blue-200',
-  'Tier 3': 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300 border-gray-200',
-};
 
 function formatDate(dateStr) {
   if (!dateStr) return '-';
@@ -131,7 +124,7 @@ export default function AccountsList() {
       if (territoryFilter !== 'all') params.append('territory', territoryFilter);
       if (stateFilter !== 'all') params.append('state', stateFilter);
       if (cityFilter !== 'all') params.append('city', cityFilter);
-      if (accountTypeFilter !== 'all') params.append('account_type', accountTypeFilter);
+      if (accountTypeFilter !== 'all') params.append('lead_type', accountTypeFilter);
       
       const response = await axios.get(`${API_URL}/accounts?${params}`, { headers: { Authorization: `Bearer ${token}` }, withCredentials: true });
       setAccounts(response.data.data || []); setTotalCount(response.data.total || 0); setTotalPages(response.data.total_pages || 1);
@@ -255,16 +248,15 @@ export default function AccountsList() {
               </Select>
             </FilterItem>
             
-            <FilterItem label="Account Type" icon={Layers}>
+            <FilterItem label="Lead Type" icon={Layers}>
               <Select value={accountTypeFilter} onValueChange={(v) => { setAccountTypeFilter(v); setCurrentPage(1); }}>
-                <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" data-testid="account-type-filter">
-                  <SelectValue placeholder="All Types" />
+                <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" data-testid="account-lead-type-filter">
+                  <SelectValue placeholder="All" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
-                  <SelectItem value="all" className="rounded-lg">All Types</SelectItem>
-                  {ACCOUNT_TYPES.map(t => (
-                    <SelectItem key={t} value={t} className="rounded-lg">{t}</SelectItem>
-                  ))}
+                  <SelectItem value="all" className="rounded-lg">All</SelectItem>
+                  <SelectItem value="B2B" className="rounded-lg">B2B</SelectItem>
+                  <SelectItem value="Retail" className="rounded-lg">Retail</SelectItem>
                 </SelectContent>
               </Select>
             </FilterItem>
@@ -368,7 +360,7 @@ export default function AccountsList() {
                   <thead>
                     <tr className="border-b-2 border-amber-100 dark:border-amber-900/30 bg-gradient-to-r from-amber-50/80 to-orange-50/50 dark:from-amber-900/20 dark:to-orange-900/10">
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Account</th>
-                      <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Type</th>
+                      <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Lead Type</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Contact</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Location</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Account Age</th>
@@ -403,12 +395,20 @@ export default function AccountsList() {
                           </div>
                         </td>
                         <td className="py-5 px-5">
-                          {account.account_type ? (
-                            <Badge className={`${accountTypeColors[account.account_type]} font-medium px-3 py-1`}>
-                              {account.account_type}
+                          {account.lead_type ? (
+                            <Badge
+                              variant="outline"
+                              className={`font-medium px-3 py-1 ${
+                                account.lead_type === 'Retail'
+                                  ? 'bg-violet-50 text-violet-700 border-violet-300'
+                                  : 'bg-sky-50 text-sky-700 border-sky-300'
+                              }`}
+                              data-testid={`account-row-lead-type-${account.account_id}`}
+                            >
+                              {account.lead_type}
                             </Badge>
                           ) : (
-                            <span className="text-slate-400">-</span>
+                            <Badge variant="outline" className="font-medium px-3 py-1 bg-sky-50 text-sky-700 border-sky-300">B2B</Badge>
                           )}
                         </td>
                         <td className="py-5 px-5">

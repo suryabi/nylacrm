@@ -5548,6 +5548,7 @@ async def get_accounts(
     state: Optional[str] = None,
     city: Optional[str] = None,
     account_type: Optional[str] = None,
+    lead_type: Optional[str] = None,
     category: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
@@ -5565,6 +5566,18 @@ async def get_accounts(
         query['city'] = city
     if account_type:
         query['account_type'] = account_type
+    # `lead_type` filter — applied as $and to coexist with search $or
+    lead_type_clause = None
+    if lead_type:
+        if lead_type == 'B2B':
+            # Treat missing/null lead_type as B2B (legacy default)
+            lead_type_clause = {'$or': [
+                {'lead_type': 'B2B'},
+                {'lead_type': {'$exists': False}},
+                {'lead_type': None},
+            ]}
+        else:
+            lead_type_clause = {'lead_type': lead_type}
     if category:
         query['category'] = category
     if search:
@@ -5573,6 +5586,9 @@ async def get_accounts(
             {'contact_name': {'$regex': search, '$options': 'i'}},
             {'account_id': {'$regex': search, '$options': 'i'}}
         ]
+    # Combine lead_type clause via $and to coexist with search $or
+    if lead_type_clause is not None:
+        query.setdefault('$and', []).append(lead_type_clause)
     
     total = await get_tdb().accounts.count_documents(query)
     total_pages = (total + page_size - 1) // page_size
