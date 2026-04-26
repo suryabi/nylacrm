@@ -149,9 +149,11 @@ export default function AccountSKUPricing() {
   const groupedRows = useMemo(() => {
     const out = [];
     let prevAccountId = null;
+    let accountIndex = -1;
     filteredRows.forEach((r, idx) => {
       const sameAsPrev = r.account_id === prevAccountId;
-      out.push({ ...r, _showAccount: !sameAsPrev, _idx: idx });
+      if (!sameAsPrev) accountIndex += 1;
+      out.push({ ...r, _showAccount: !sameAsPrev, _idx: idx, _accountIndex: accountIndex });
       prevAccountId = r.account_id;
     });
     return out;
@@ -575,14 +577,20 @@ export default function AccountSKUPricing() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {groupedRows.map((r, idx) => (
+                {groupedRows.map((r, idx) => {
+                  const isOdd = r._accountIndex % 2 === 1;
+                  const zebra = isOdd
+                    ? 'bg-amber-50/40 dark:bg-amber-950/10 hover:bg-amber-100/60 dark:hover:bg-amber-900/20'
+                    : 'bg-white dark:bg-slate-900/30 hover:bg-slate-50 dark:hover:bg-slate-800/40';
+                  return (
                   <TableRow
                     key={`${r.account_id}-${r.sku_id || r.sku_name || idx}`}
-                    className={`cursor-pointer hover:bg-muted/50 ${
-                      r._showAccount && idx > 0 ? 'border-t-2 border-t-muted-foreground/10' : ''
+                    className={`cursor-pointer transition-colors ${zebra} ${
+                      r._showAccount && idx > 0 ? 'border-t-2 border-t-amber-200/60 dark:border-t-amber-800/30' : ''
                     }`}
                     onClick={() => navigate(`/accounts/${r.account_id}`)}
                     data-testid={`pricing-row-${idx}`}
+                    data-account-index={r._accountIndex}
                   >
                     <TableCell className="font-medium align-top">
                       {r._showAccount ? (
@@ -632,7 +640,8 @@ export default function AccountSKUPricing() {
                       {r.return_bottle_credit != null ? `₹${Number(r.return_bottle_credit).toFixed(2)}` : '—'}
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
