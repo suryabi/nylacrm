@@ -152,6 +152,37 @@ export default function COGSCalculator() {
     [activeKeys]
   );
 
+  // Recompute derived values from raw row inputs, respecting active master config.
+  // Always render derived cells through this so disabled components are excluded immediately.
+  const computeDerived = React.useCallback((row) => {
+    if (!row) return { totalCOGS: 0, grossMarginRupees: 0, exFactory: 0, baseCost: 0, landingPrice: 0 };
+    const primary       = parseFloat(row.primary_packaging_cost) || 0;
+    const secondary     = parseFloat(row.secondary_packaging_cost) || 0;
+    const manufacturing = parseFloat(row.manufacturing_variable_cost) || 0;
+    const logistics     = parseFloat(row.outbound_logistics_cost) || 0;
+    const marginPct     = parseFloat(row.gross_margin) || 0;
+    const distPct       = parseFloat(row.distribution_cost) || 0;
+
+    const totalCOGS =
+      (isShown('primary_packaging_cost')     ? primary       : 0) +
+      (isShown('secondary_packaging_cost')   ? secondary     : 0) +
+      (isShown('manufacturing_variable_cost')? manufacturing : 0) +
+      (isShown('outbound_logistics_cost')    ? logistics     : 0);
+
+    const effMargin = isShown('gross_margin') ? marginPct : 0;
+    const grossMarginRupees = totalCOGS * (effMargin / 100);
+    const exFactory = totalCOGS + grossMarginRupees;
+    const baseCost  = totalCOGS + grossMarginRupees;
+
+    const effDist = isShown('distribution_cost') ? distPct : 0;
+    let landingPrice;
+    if (effDist >= 100) landingPrice = 0;
+    else if (effDist > 0) landingPrice = baseCost / (1 - effDist / 100);
+    else landingPrice = baseCost;
+
+    return { totalCOGS, grossMarginRupees, exFactory, baseCost, landingPrice };
+  }, [isShown]);
+
   // Set default city when cities load
   React.useEffect(() => {
     if (cities.length > 0 && !selectedCity) {
@@ -535,122 +566,136 @@ export default function COGSCalculator() {
                   {/* Cost Inputs - Only for authorized users */}
                   {canSeeCostDetails && (
                     <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Primary Pkg</Label>
-                        <Input
-                          type="text"
-                          value={row.primary_packaging_cost || ''}
-                          onChange={e => {
-                            const val = e.target.value;
-                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                              updateField(index, 'primary_packaging_cost', val);
-                            }
-                          }}
-                          className="h-9 text-right text-sm"
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Secondary Pkg</Label>
-                        <Input
-                          type="text"
-                          value={row.secondary_packaging_cost || ''}
-                          onChange={e => {
-                            const val = e.target.value;
-                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                              updateField(index, 'secondary_packaging_cost', val);
-                            }
-                          }}
-                          className="h-9 text-right text-sm"
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Mfg Cost</Label>
-                        <Input
-                          type="text"
-                          value={row.manufacturing_variable_cost || ''}
-                          onChange={e => {
-                            const val = e.target.value;
-                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                              updateField(index, 'manufacturing_variable_cost', val);
-                            }
-                          }}
-                          className="h-9 text-right text-sm"
-                          placeholder="0.00"
-                        />
-                      </div>
+                      {isShown('primary_packaging_cost') && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Primary Pkg</Label>
+                          <Input
+                            type="text"
+                            value={row.primary_packaging_cost || ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                updateField(index, 'primary_packaging_cost', val);
+                              }
+                            }}
+                            className="h-9 text-right text-sm"
+                            placeholder="0.00"
+                          />
+                        </div>
+                      )}
+                      {isShown('secondary_packaging_cost') && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Secondary Pkg</Label>
+                          <Input
+                            type="text"
+                            value={row.secondary_packaging_cost || ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                updateField(index, 'secondary_packaging_cost', val);
+                              }
+                            }}
+                            className="h-9 text-right text-sm"
+                            placeholder="0.00"
+                          />
+                        </div>
+                      )}
+                      {isShown('manufacturing_variable_cost') && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Mfg Cost</Label>
+                          <Input
+                            type="text"
+                            value={row.manufacturing_variable_cost || ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                updateField(index, 'manufacturing_variable_cost', val);
+                              }
+                            }}
+                            className="h-9 text-right text-sm"
+                            placeholder="0.00"
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {/* Margin & Logistics */}
                   <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Gross Margin %</Label>
-                      <Input
-                        type="text"
-                        value={row.gross_margin || ''}
-                        onChange={e => {
-                          const val = e.target.value;
-                          if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                            updateField(index, 'gross_margin', val);
-                          }
-                        }}
-                        className="h-9 text-right text-sm"
-                        placeholder="%"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Logistics ₹</Label>
-                      <Input
-                        type="text"
-                        value={row.outbound_logistics_cost || ''}
-                        onChange={e => {
-                          const val = e.target.value;
-                          if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                            updateField(index, 'outbound_logistics_cost', val);
-                          }
-                        }}
-                        className="h-9 text-right text-sm"
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Dist. Cost %</Label>
-                      <Input
-                        type="text"
-                        value={row.distribution_cost || ''}
-                        onChange={e => {
-                          const val = e.target.value;
-                          if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                            updateField(index, 'distribution_cost', val);
-                          }
-                        }}
-                        className="h-9 text-right text-sm bg-amber-50"
-                        placeholder="%"
-                      />
-                    </div>
+                    {isShown('gross_margin') && (
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Gross Margin %</Label>
+                        <Input
+                          type="text"
+                          value={row.gross_margin || ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                              updateField(index, 'gross_margin', val);
+                            }
+                          }}
+                          className="h-9 text-right text-sm"
+                          placeholder="%"
+                        />
+                      </div>
+                    )}
+                    {isShown('outbound_logistics_cost') && (
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Logistics ₹</Label>
+                        <Input
+                          type="text"
+                          value={row.outbound_logistics_cost || ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                              updateField(index, 'outbound_logistics_cost', val);
+                            }
+                          }}
+                          className="h-9 text-right text-sm"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    )}
+                    {isShown('distribution_cost') && (
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Dist. Cost %</Label>
+                        <Input
+                          type="text"
+                          value={row.distribution_cost || ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                              updateField(index, 'distribution_cost', val);
+                            }
+                          }}
+                          className="h-9 text-right text-sm bg-amber-50"
+                          placeholder="%"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Calculated Values */}
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t">
-                    <div className="bg-green-50 rounded-lg p-2">
-                      <div className="text-xs text-muted-foreground">Total COGS</div>
-                      <div className="font-bold text-primary">₹{row.total_cogs?.toFixed(2)}</div>
+                  {(() => { const d = computeDerived(row); return (
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t">
+                      <div className="bg-green-50 rounded-lg p-2">
+                        <div className="text-xs text-muted-foreground">Total COGS</div>
+                        <div className="font-bold text-primary">₹{d.totalCOGS.toFixed(2)}</div>
+                      </div>
+                      <div className="bg-green-50 rounded-lg p-2">
+                        <div className="text-xs text-muted-foreground">Ex-Factory</div>
+                        <div className="font-bold text-primary">₹{d.exFactory.toFixed(2)}</div>
+                      </div>
+                      <div className="bg-blue-50 rounded-lg p-2">
+                        <div className="text-xs text-muted-foreground">Base Cost</div>
+                        <div className="font-semibold text-blue-600">₹{d.baseCost.toFixed(2)}</div>
+                      </div>
+                      <div className="bg-emerald-100 rounded-lg p-2">
+                        <div className="text-xs text-muted-foreground">Min Landing</div>
+                        <div className="font-bold text-emerald-700">₹{d.landingPrice.toFixed(2)}</div>
+                      </div>
                     </div>
-                    <div className="bg-green-50 rounded-lg p-2">
-                      <div className="text-xs text-muted-foreground">Ex-Factory</div>
-                      <div className="font-bold text-primary">₹{row.ex_factory_price?.toFixed(2)}</div>
-                    </div>
-                    <div className="bg-blue-50 rounded-lg p-2">
-                      <div className="text-xs text-muted-foreground">Base Cost</div>
-                      <div className="font-semibold text-blue-600">₹{row.base_cost?.toFixed(2) || '0.00'}</div>
-                    </div>
-                    <div className="bg-emerald-100 rounded-lg p-2">
-                      <div className="text-xs text-muted-foreground">Min Landing</div>
-                      <div className="font-bold text-emerald-700">₹{row.minimum_landing_price?.toFixed(2)}</div>
-                    </div>
-                  </div>
+                  ); })()}
 
                   {/* Actual Landing Price */}
                   <div className="pt-2 border-t">
@@ -832,13 +877,15 @@ export default function COGSCalculator() {
                           />
                         </td>
                       )}
-                      <td className="p-3 text-right font-bold text-primary bg-green-50">{row.total_cogs?.toFixed(2)}</td>
-                      <td className="p-3 text-right font-bold text-primary bg-green-50">
-                        {((row.total_cogs || 0) * (row.gross_margin || 0) / 100).toFixed(2)}
-                      </td>
-                      <td className="p-3 text-right font-bold text-primary bg-green-50">{row.ex_factory_price?.toFixed(2)}</td>
-                      <td className="p-3 text-right font-semibold text-blue-600 bg-blue-50">{row.base_cost?.toFixed(2) || '0.00'}</td>
-                      <td className="p-3 text-right font-bold text-emerald-700 bg-emerald-100">{row.minimum_landing_price?.toFixed(2)}</td>
+                      {(() => { const d = computeDerived(row); return (
+                        <>
+                          <td className="p-3 text-right font-bold text-primary bg-green-50">{d.totalCOGS.toFixed(2)}</td>
+                          <td className="p-3 text-right font-bold text-primary bg-green-50">{d.grossMarginRupees.toFixed(2)}</td>
+                          <td className="p-3 text-right font-bold text-primary bg-green-50">{d.exFactory.toFixed(2)}</td>
+                          <td className="p-3 text-right font-semibold text-blue-600 bg-blue-50">{d.baseCost.toFixed(2)}</td>
+                          <td className="p-3 text-right font-bold text-emerald-700 bg-emerald-100">{d.landingPrice.toFixed(2)}</td>
+                        </>
+                      ); })()}
                       <td className="p-2 bg-purple-50/50">
                         <input
                           type="text"
@@ -875,10 +922,10 @@ export default function COGSCalculator() {
         <ul className="text-xs sm:text-sm text-muted-foreground space-y-1">
           {canSeeCostDetails && (
             <>
-              <li>• <strong>Total COGS</strong> = Primary Pkg + Secondary Pkg + Mfg Cost</li>
+              <li>• <strong>Total COGS</strong> = sum of all <em>active</em> ₹ components (configurable in <span className="font-mono text-[11px]">Master → COGS Components</span>)</li>
               <li>• <strong>Gross Margin (₹)</strong> = Total COGS × Gross Margin %</li>
               <li>• <strong>Ex-Factory Price</strong> = Total COGS + Gross Margin (₹)</li>
-              <li>• <strong>Base Cost</strong> = Total COGS + Gross Margin (₹) + Logistics</li>
+              <li>• <strong>Base Cost</strong> = Total COGS + Gross Margin (₹)</li>
             </>
           )}
           <li>• <strong>Min Landing Price</strong> = Base Cost ÷ (1 - Dist. Cost %)</li>
