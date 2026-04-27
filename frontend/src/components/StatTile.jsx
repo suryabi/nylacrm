@@ -81,9 +81,8 @@ const StatTile = ({
   testId,
 }) => {
   const idx = typeof colorIndex === 'number'
-    ? ((colorIndex % GRADIENTS.length) + GRADIENTS.length) % GRADIENTS.length
-    : hashString(String(label || '')) % GRADIENTS.length;
-  const grad = GRADIENTS[idx];
+    ? ((colorIndex % ACCENTS.length) + ACCENTS.length) % ACCENTS.length
+    : hashString(String(label || '')) % ACCENTS.length;
   const accent = ACCENTS[idx];
 
   const hasDelta = delta !== undefined && delta !== null && !Number.isNaN(Number(delta));
@@ -102,48 +101,42 @@ const StatTile = ({
 
   return (
     <div
-      className={`relative group rounded-2xl border border-slate-200/70 dark:border-slate-700/60 bg-gradient-to-br ${grad} p-4 overflow-hidden transition-all ${
-        onClick ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.99]' : 'hover:-translate-y-0.5 hover:shadow-md'
+      className={`relative rounded-xl border border-slate-200/70 dark:border-slate-700/60 bg-white/60 dark:bg-slate-900/40 backdrop-blur-sm px-3 py-2.5 transition-all ${
+        onClick ? 'cursor-pointer hover:bg-white dark:hover:bg-slate-900/70 hover:border-slate-300 dark:hover:border-slate-600 active:scale-[0.99]' : ''
       } ${className}`}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
       data-testid={testId}
     >
-      {/* Decorative blob */}
-      <div className={`absolute -top-4 -right-4 h-20 w-20 rounded-full ${accent.blob} blur-2xl opacity-40 transition-opacity group-hover:opacity-60`} />
-
-      <div className="flex items-start justify-between gap-2 relative">
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider truncate" title={label}>
-            {label}
-          </p>
-        </div>
+      <div className="flex items-center gap-3">
         {Icon && (
-          <div className={`shrink-0 h-9 w-9 rounded-xl flex items-center justify-center ${accent.text} ${accent.bg}`}>
+          <div className={`shrink-0 h-9 w-9 rounded-lg flex items-center justify-center ${accent.text} ${accent.bg}`}>
             <Icon className="h-4 w-4" />
           </div>
         )}
-      </div>
-
-      <div className="mt-3 relative">
-        <div className="flex items-baseline gap-1.5 flex-wrap">
-          <span className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums leading-none">
-            {formatValue(value, format, currency)}
-          </span>
-          {hasDelta && (
-            <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-md tabular-nums ${deltaColor}`}>
-              {deltaDisplay}
+        <div className="min-w-0 flex-1 leading-tight">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground truncate" title={label}>
+            {label}
+          </p>
+          <div className="flex items-baseline gap-1.5 flex-wrap mt-0.5">
+            <span className={`text-lg sm:text-xl font-semibold tabular-nums ${accent.text}`}>
+              {formatValue(value, format, currency)}
             </span>
+            {hasDelta && (
+              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md tabular-nums ${deltaColor}`}>
+                {deltaDisplay}
+              </span>
+            )}
+          </div>
+          {subtitle && (
+            <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{subtitle}</p>
           )}
         </div>
-        {subtitle && (
-          <p className="text-[11px] text-muted-foreground mt-1.5">{subtitle}</p>
-        )}
       </div>
 
       {footer && (
-        <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-700/50 relative">
+        <div className="mt-2.5 pt-2.5 border-t border-slate-200/60 dark:border-slate-700/50">
           {footer}
         </div>
       )}
