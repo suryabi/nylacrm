@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../components/ui/select';
 import { MultiSelect } from '../components/ui/multi-select';
-import { Building2, Search, Download, Loader2, Package } from 'lucide-react';
+import { Building2, Search, Download, Loader2, Package, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import AppBreadcrumb from '../components/AppBreadcrumb';
 import { useMasterLocations } from '../hooks/useMasterLocations';
@@ -24,6 +24,10 @@ export default function AccountSKUPricing() {
   const [accountsCount, setAccountsCount] = useState(0);
   const [cogsBySku, setCogsBySku] = useState({});
   const [exporting, setExporting] = useState(false);
+
+  // Client-side pagination — paginate by ACCOUNT (each page = N accounts with all their SKU rows)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   // Cascading filters (same pattern as Leads)
   const [territoryFilter, setTerritoryFilter] = useState('all');
@@ -158,6 +162,30 @@ export default function AccountSKUPricing() {
     });
     return out;
   }, [filteredRows]);
+
+  // Total accounts in the current filtered view (drives pagination)
+  const totalAccountsInView = useMemo(() => {
+    if (groupedRows.length === 0) return 0;
+    return (groupedRows[groupedRows.length - 1]._accountIndex || 0) + 1;
+  }, [groupedRows]);
+
+  const totalPages = Math.max(1, Math.ceil(totalAccountsInView / pageSize));
+  // Snap currentPage into range when filters or pageSize change
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
+
+  // Reset to page 1 when search / filter inputs change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, skuFilter, territoryFilter, stateFilter, cityFilter]);
+
+  // Slice grouped rows to the current page (by accountIndex window)
+  const paginatedRows = useMemo(() => {
+    const startIdx = (currentPage - 1) * pageSize;
+    const endIdx = startIdx + pageSize;
+    return groupedRows.filter((r) => r._accountIndex >= startIdx && r._accountIndex < endIdx);
+  }, [groupedRows, currentPage, pageSize]);
 
   // Rows used for top tiles & summary — EXCLUDE accounts marked as not-in-GOP
   const gopRows = useMemo(
@@ -577,7 +605,7 @@ export default function AccountSKUPricing() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {groupedRows.map((r, idx) => {
+                {paginatedRows.map((r, idx) => {
                   const isOdd = r._accountIndex % 2 === 1;
                   const zebra = isOdd
                     ? 'bg-amber-50/40 dark:bg-amber-950/10 hover:bg-amber-100/60 dark:hover:bg-amber-900/20'
@@ -644,6 +672,59 @@ export default function AccountSKUPricing() {
                 })}
               </TableBody>
             </Table>
+
+            {/* Pagination */}
+            {totalAccountsInView > 0 && (
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 border-t border-slate-200/70 dark:border-slate-700/60" data-testid="pricing-pagination">
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span>
+                    Showing accounts <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">{(currentPage - 1) * pageSize + 1}</span>
+                    {' '}–{' '}
+                    <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">{Math.min(currentPage * pageSize, totalAccountsInView)}</span>
+                    {' '}of{' '}
+                    <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">{totalAccountsInView}</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span>Per page:</span>
+                    <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
+                      <SelectTrigger className="h-7 w-[70px] text-xs" data-testid="pricing-page-size">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[5, 10, 25, 50, 100].map((n) => (
+                          <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    data-testid="pricing-prev-page"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-xs tabular-nums px-2 min-w-[80px] text-center" data-testid="pricing-page-indicator">
+                    Page <span className="font-semibold">{currentPage}</span> / {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    data-testid="pricing-next-page"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </Card>
