@@ -21,19 +21,34 @@ const stageColors = {
   final_qc: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', bar: 'bg-emerald-400', icon: ShieldCheck },
 };
 
-function SummaryCard({ label, value, icon: Icon, color, sub, onClick }) {
+// Subtle, compact tile inspired by the GOP Coverage card — soft surface, tinted icon dot,
+// eyebrow label, tabular number. Each tile accepts an accent color for the icon halo.
+function SummaryCard({ label, value, icon: Icon, accent = 'slate', sub, onClick }) {
+  const accents = {
+    slate:   { ring: 'bg-slate-500/10',   icon: 'text-slate-500',   value: 'text-slate-900 dark:text-white' },
+    amber:   { ring: 'bg-amber-500/10',   icon: 'text-amber-600',   value: 'text-amber-700 dark:text-amber-400' },
+    emerald: { ring: 'bg-emerald-500/10', icon: 'text-emerald-600', value: 'text-emerald-700 dark:text-emerald-400' },
+    indigo:  { ring: 'bg-indigo-500/10',  icon: 'text-indigo-600',  value: 'text-indigo-700 dark:text-indigo-400' },
+    rose:    { ring: 'bg-rose-500/10',    icon: 'text-rose-600',    value: 'text-rose-600 dark:text-rose-400' },
+    teal:    { ring: 'bg-teal-500/10',    icon: 'text-teal-600',    value: 'text-teal-700 dark:text-teal-400' },
+  };
+  const a = accents[accent] || accents.slate;
   return (
     <div
-      className={`rounded-xl border p-4 sm:p-5 ${color} ${onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border border-slate-200/70 dark:border-slate-700/60 bg-white/60 dark:bg-slate-900/40 backdrop-blur-sm transition-all ${onClick ? 'cursor-pointer hover:bg-white dark:hover:bg-slate-900/70 hover:border-slate-300 dark:hover:border-slate-600' : ''}`}
       onClick={onClick}
       data-testid={`summary-${label.toLowerCase().replace(/\s+/g, '-')}`}
     >
-      <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-        <span className="text-[9px] sm:text-[10px] uppercase tracking-wider font-semibold opacity-60">{label}</span>
-        <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 opacity-40" />
+      <div className={`shrink-0 h-9 w-9 rounded-lg flex items-center justify-center ${a.ring}`}>
+        <Icon className={`h-4 w-4 ${a.icon}`} />
       </div>
-      <p className="text-xl sm:text-2xl font-black tabular-nums">{typeof value === 'number' ? value.toLocaleString() : value}</p>
-      {sub && <p className="text-[10px] sm:text-xs mt-0.5 sm:mt-1 opacity-50">{sub}</p>}
+      <div className="min-w-0 leading-tight">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
+        <p className={`text-lg sm:text-xl font-semibold tabular-nums ${a.value}`}>
+          {typeof value === 'number' ? value.toLocaleString() : value}
+        </p>
+        {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
+      </div>
     </div>
   );
 }
@@ -257,22 +272,22 @@ export default function ProductionDashboard() {
         <p className="text-xs sm:text-sm text-slate-400 ml-8 sm:ml-10">Factory stock at every stage, by SKU</p>
       </div>
 
-      {/* Summary Cards — 2 cols mobile, 4 cols tablet, 7 cols desktop */}
+      {/* Summary Cards — compact, GOP-style */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
-        <SummaryCard label="SKUs" value={summary.total_skus} icon={Package} color="bg-white border-slate-200 text-slate-800" />
-        <SummaryCard label="Batches" value={summary.total_batches} icon={Boxes} color="bg-white border-slate-200 text-slate-800" sub={`${summary.active_batches} active`}
+        <SummaryCard label="SKUs" value={summary.total_skus} icon={Package} accent="slate" />
+        <SummaryCard label="Batches" value={summary.total_batches} icon={Boxes} accent="slate" sub={`${summary.active_batches} active`}
           onClick={() => navigate('/production-batches')} />
-        <SummaryCard label="Total Crates" value={summary.total_crates} icon={Boxes} color="bg-white border-slate-200 text-slate-800"
+        <SummaryCard label="Total Crates" value={summary.total_crates} icon={Boxes} accent="slate"
           onClick={() => navigate('/production-batches')} />
-        <SummaryCard label="Unallocated" value={summary.unallocated_crates} icon={Boxes} color="bg-slate-50 border-slate-200 text-slate-600"
+        <SummaryCard label="Unallocated" value={summary.unallocated_crates} icon={Boxes} accent="slate"
           onClick={() => navigate('/production-batches?stage=unallocated')} />
-        <SummaryCard label="In QC Stages" value={(summary.total_crates || 0) - (summary.unallocated_crates || 0) - (summary.ready_for_warehouse || 0)} icon={ShieldCheck} color="bg-amber-50 border-amber-200 text-amber-700"
+        <SummaryCard label="In QC Stages" value={(summary.total_crates || 0) - (summary.unallocated_crates || 0) - (summary.ready_for_warehouse || 0)} icon={ShieldCheck} accent="amber"
           onClick={() => navigate('/production-batches?stage=in_qc')} />
-        <SummaryCard label="Warehouse Ready" value={summary.ready_for_warehouse} icon={Truck} color="bg-teal-50 border-teal-200 text-teal-700" sub="bottles"
+        <SummaryCard label="Warehouse Ready" value={summary.ready_for_warehouse} icon={Truck} accent="teal" sub="bottles"
           onClick={() => navigate('/production-batches?stage=warehouse_ready')} />
-        <SummaryCard label="Transferred" value={summary.transferred_to_warehouse || 0} icon={Factory} color="bg-indigo-50 border-indigo-200 text-indigo-700" sub="bottles"
+        <SummaryCard label="Transferred" value={summary.transferred_to_warehouse || 0} icon={Factory} accent="indigo" sub="bottles"
           onClick={() => navigate('/production-batches?stage=transferred')} />
-        <SummaryCard label="Rejected" value={summary.total_rejected} icon={AlertTriangle} color="bg-red-50 border-red-200 text-red-600" sub="bottles"
+        <SummaryCard label="Rejected" value={summary.total_rejected} icon={AlertTriangle} accent="rose" sub="bottles"
           onClick={() => navigate('/production-batches?stage=rejected')} />
       </div>
 
