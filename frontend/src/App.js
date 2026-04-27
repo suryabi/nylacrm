@@ -57,6 +57,7 @@ import ResourcePerformance from './pages/ResourcePerformance';
 import AccountsList from './pages/AccountsList';
 import AccountSKUPricing from './pages/AccountSKUPricing';
 import NeckTagDesigner from './pages/NeckTagDesigner';
+import MasterCOGSComponents from './pages/MasterCOGSComponents';
 import AdminSkuMigrate from './pages/AdminSkuMigrate';
 import AccountDetail from './pages/AccountDetail';
 import AccountPerformance from './pages/AccountPerformance';
@@ -231,6 +232,7 @@ function AppRouter() {
           <Route path="/accounts" element={<ProtectedRoute moduleKey="accounts"><AccountsList /></ProtectedRoute>} />
           <Route path="/accounts/sku-pricing" element={<ProtectedRoute moduleKey="accounts"><AccountSKUPricing /></ProtectedRoute>} />
           <Route path="/sales/neck-tag-designer" element={<ProtectedRoute moduleKey="accounts"><NeckTagDesigner /></ProtectedRoute>} />
+          <Route path="/master/cogs-components" element={<ProtectedRoute moduleKey="cogs_components"><MasterCOGSComponents /></ProtectedRoute>} />
           <Route path="/admin/sku-migrate" element={<ProtectedRoute moduleKey="admin"><AdminSkuMigrate /></ProtectedRoute>} />
           <Route path="/accounts/:id" element={<ProtectedRoute moduleKey="accounts"><AccountDetail /></ProtectedRoute>} />
           <Route path="/invoices" element={<ProtectedRoute moduleKey="invoices"><InvoicesList /></ProtectedRoute>} />

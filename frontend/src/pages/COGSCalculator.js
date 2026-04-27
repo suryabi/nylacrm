@@ -126,6 +126,32 @@ export default function COGSCalculator() {
   // Store original gross margin values from database to reset when actual landing price is cleared
   const [originalGrossMargins, setOriginalGrossMargins] = React.useState({});
   
+  // Active COGS components (from master) — drives column visibility & total formula
+  const [activeKeys, setActiveKeys] = React.useState(null); // null = not loaded yet (show all)
+
+  React.useEffect(() => {
+    let mounted = true;
+    const token = localStorage.getItem('token');
+    axios.get(`${API}/master/cogs-components?is_active=true`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => {
+        if (!mounted) return;
+        const keys = new Set((res.data.components || []).map((c) => c.key));
+        setActiveKeys(keys);
+      })
+      .catch(() => {
+        // Fail-open: if master is unreachable, show all legacy columns
+        if (mounted) setActiveKeys(new Set(['primary_packaging_cost','secondary_packaging_cost','manufacturing_variable_cost','outbound_logistics_cost','distribution_cost','gross_margin']));
+      });
+    return () => { mounted = false; };
+  }, []);
+
+  const isShown = React.useCallback(
+    (key) => activeKeys === null || activeKeys.has(key),
+    [activeKeys]
+  );
+
   // Set default city when cities load
   React.useEffect(() => {
     if (cities.length > 0 && !selectedCity) {
@@ -185,30 +211,33 @@ export default function COGSCalculator() {
     const marginPercent = parseFloat(row.gross_margin) || 0;
     const logistics = parseFloat(row.outbound_logistics_cost) || 0;
     const distributionPercent = parseFloat(row.distribution_cost) || 0;
-    
-    // Calculate COGS
-    const totalCOGS = primary + secondary + manufacturing;
-    
-    // Calculate Gross Margin in rupees
-    const grossMarginRupees = totalCOGS * (marginPercent / 100);
-    
-    // Calculate Ex-Factory Price
+
+    // Total COGS = sum of all active ₹ columns (master-driven)
+    const totalCOGS =
+      (isShown('primary_packaging_cost') ? primary : 0) +
+      (isShown('secondary_packaging_cost') ? secondary : 0) +
+      (isShown('manufacturing_variable_cost') ? manufacturing : 0) +
+      (isShown('outbound_logistics_cost') ? logistics : 0);
+
+    // Gross Margin in rupees (0 if % column disabled)
+    const effMargin = isShown('gross_margin') ? marginPercent : 0;
+    const grossMarginRupees = totalCOGS * (effMargin / 100);
+
+    // Ex-Factory Price
     const exFactory = totalCOGS + grossMarginRupees;
-    
-    // Calculate Base Cost (what should remain after distribution cost is paid)
-    // Base Cost = Primary + Secondary + Mfg + Gross Margin (₹) + Logistics
-    const baseCost = primary + secondary + manufacturing + grossMarginRupees + logistics;
-    
-    // Calculate Minimum Landing Price
-    // Formula: Min Landing - (Min Landing × Distribution %) = Base Cost
-    // So: Min Landing = Base Cost / (1 - Distribution %)
+
+    // Base Cost = Total COGS + Gross Margin (₹). Logistics is already inside COGS.
+    const baseCost = totalCOGS + grossMarginRupees;
+
+    // Minimum Landing Price: Min Landing = Base Cost / (1 − Distribution %)
+    const effDistribution = isShown('distribution_cost') ? distributionPercent : 0;
     let landingPrice;
-    if (distributionPercent >= 100) {
-      landingPrice = 0; // Invalid: distribution can't be 100% or more
-    } else if (distributionPercent > 0) {
-      landingPrice = baseCost / (1 - distributionPercent / 100);
+    if (effDistribution >= 100) {
+      landingPrice = 0;
+    } else if (effDistribution > 0) {
+      landingPrice = baseCost / (1 - effDistribution / 100);
     } else {
-      landingPrice = baseCost; // No distribution cost
+      landingPrice = baseCost;
     }
     
     // Update computed fields
@@ -252,27 +281,30 @@ export default function COGSCalculator() {
     const manufacturing = parseFloat(row.manufacturing_variable_cost) || 0;
     const logistics = parseFloat(row.outbound_logistics_cost) || 0;
     const distributionPercent = parseFloat(row.distribution_cost) || 0;
-    
-    // Total COGS (unchanged)
-    const totalCOGS = primary + secondary + manufacturing;
-    
+
+    // Total COGS = sum of all active ₹ columns (master-driven)
+    const totalCOGS =
+      (isShown('primary_packaging_cost') ? primary : 0) +
+      (isShown('secondary_packaging_cost') ? secondary : 0) +
+      (isShown('manufacturing_variable_cost') ? manufacturing : 0) +
+      (isShown('outbound_logistics_cost') ? logistics : 0);
+
     // Reverse calculate: Given Actual Landing Price, find required Gross Margin %
     // Base Cost = Actual Landing × (1 - Distribution %)
-    // Base Cost = Primary + Secondary + Mfg + Gross Margin (₹) + Logistics
-    // Therefore: Gross Margin (₹) = Base Cost - Primary - Secondary - Mfg - Logistics
-    // Gross Margin % = (Gross Margin ₹ / Total COGS) × 100
-    
+    // Base Cost = Total COGS + Gross Margin (₹)
+    // → Gross Margin (₹) = Base Cost - Total COGS
+    const effDistribution = isShown('distribution_cost') ? distributionPercent : 0;
     let baseCost;
-    if (distributionPercent >= 100) {
+    if (effDistribution >= 100) {
       baseCost = 0;
-    } else if (distributionPercent > 0) {
-      baseCost = actualLanding * (1 - distributionPercent / 100);
+    } else if (effDistribution > 0) {
+      baseCost = actualLanding * (1 - effDistribution / 100);
     } else {
       baseCost = actualLanding;
     }
-    
-    const grossMarginRupees = baseCost - primary - secondary - manufacturing - logistics;
-    
+
+    const grossMarginRupees = baseCost - totalCOGS;
+
     // Calculate new gross margin percentage
     let newGrossMarginPercent = 0;
     if (totalCOGS > 0) {
@@ -658,14 +690,26 @@ export default function COGSCalculator() {
                     <th className="text-left p-3 font-semibold sticky left-0 bg-secondary">SKU</th>
                     {canSeeCostDetails && (
                       <>
-                        <th className="text-right p-3 font-semibold bg-primary/5">Primary Pkg (₹)</th>
-                        <th className="text-right p-3 font-semibold bg-primary/5">Secondary Pkg (₹)</th>
-                        <th className="text-right p-3 font-semibold bg-primary/5">Mfg Cost (₹)</th>
+                        {isShown('primary_packaging_cost') && (
+                          <th className="text-right p-3 font-semibold bg-primary/5">Primary Pkg (₹)</th>
+                        )}
+                        {isShown('secondary_packaging_cost') && (
+                          <th className="text-right p-3 font-semibold bg-primary/5">Secondary Pkg (₹)</th>
+                        )}
+                        {isShown('manufacturing_variable_cost') && (
+                          <th className="text-right p-3 font-semibold bg-primary/5">Mfg Cost (₹)</th>
+                        )}
                       </>
                     )}
-                    <th className="text-right p-3 font-semibold bg-primary/5">Gross Margin (%)</th>
-                    <th className="text-right p-3 font-semibold bg-primary/5">Logistics (₹)</th>
-                    <th className="text-right p-3 font-semibold bg-amber-50">Dist. Cost (%)</th>
+                    {isShown('gross_margin') && (
+                      <th className="text-right p-3 font-semibold bg-primary/5">Gross Margin (%)</th>
+                    )}
+                    {isShown('outbound_logistics_cost') && (
+                      <th className="text-right p-3 font-semibold bg-primary/5">Logistics (₹)</th>
+                    )}
+                    {isShown('distribution_cost') && (
+                      <th className="text-right p-3 font-semibold bg-amber-50">Dist. Cost (%)</th>
+                    )}
                     <th className="text-right p-3 font-semibold bg-green-50">Total COGS (₹)</th>
                     <th className="text-right p-3 font-semibold bg-green-50">Gross Margin (₹)</th>
                     <th className="text-right p-3 font-semibold bg-green-50">Ex-Factory (₹)</th>
@@ -690,92 +734,104 @@ export default function COGSCalculator() {
                       <td className="p-3 font-medium sticky left-0 bg-background">{row.sku_name}</td>
                       {canSeeCostDetails && (
                         <>
-                          <td className="p-2">
-                            <input
-                              type="text"
-                              value={row.primary_packaging_cost || ''}
-                              onChange={e => {
-                                const val = e.target.value;
-                                if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                                  updateField(index, 'primary_packaging_cost', val);
-                                }
-                              }}
-                              className="w-24 h-9 text-right px-2 border rounded bg-background"
-                              placeholder="0.00"
-                            />
-                          </td>
-                          <td className="p-2">
-                            <input
-                              type="text"
-                              value={row.secondary_packaging_cost || ''}
-                              onChange={e => {
-                                const val = e.target.value;
-                                if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                                  updateField(index, 'secondary_packaging_cost', val);
-                                }
-                              }}
-                              className="w-24 h-9 text-right px-2 border rounded bg-background"
-                              placeholder="0.00"
-                            />
-                          </td>
-                          <td className="p-2">
-                            <input
-                              type="text"
-                              value={row.manufacturing_variable_cost || ''}
-                              onChange={e => {
-                                const val = e.target.value;
-                                if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                                  updateField(index, 'manufacturing_variable_cost', val);
-                                }
-                              }}
-                              className="w-24 h-9 text-right px-2 border rounded bg-background"
-                              placeholder="0.00"
-                            />
-                          </td>
+                          {isShown('primary_packaging_cost') && (
+                            <td className="p-2">
+                              <input
+                                type="text"
+                                value={row.primary_packaging_cost || ''}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                    updateField(index, 'primary_packaging_cost', val);
+                                  }
+                                }}
+                                className="w-24 h-9 text-right px-2 border rounded bg-background"
+                                placeholder="0.00"
+                              />
+                            </td>
+                          )}
+                          {isShown('secondary_packaging_cost') && (
+                            <td className="p-2">
+                              <input
+                                type="text"
+                                value={row.secondary_packaging_cost || ''}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                    updateField(index, 'secondary_packaging_cost', val);
+                                  }
+                                }}
+                                className="w-24 h-9 text-right px-2 border rounded bg-background"
+                                placeholder="0.00"
+                              />
+                            </td>
+                          )}
+                          {isShown('manufacturing_variable_cost') && (
+                            <td className="p-2">
+                              <input
+                                type="text"
+                                value={row.manufacturing_variable_cost || ''}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                    updateField(index, 'manufacturing_variable_cost', val);
+                                  }
+                                }}
+                                className="w-24 h-9 text-right px-2 border rounded bg-background"
+                                placeholder="0.00"
+                              />
+                            </td>
+                          )}
                         </>
                       )}
-                      <td className="p-2">
-                        <input
-                          type="text"
-                          value={row.gross_margin || ''}
-                          onChange={e => {
-                            const val = e.target.value;
-                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                              updateField(index, 'gross_margin', val);
-                            }
-                          }}
-                          className="w-24 h-9 text-right px-2 border rounded bg-background"
-                          placeholder="%"
-                        />
-                      </td>
-                      <td className="p-2">
-                        <input
-                          type="text"
-                          value={row.outbound_logistics_cost || ''}
-                          onChange={e => {
-                            const val = e.target.value;
-                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                              updateField(index, 'outbound_logistics_cost', val);
-                            }
-                          }}
-                          className="w-24 h-9 text-right px-2 border rounded bg-background"
-                          placeholder="0.00"
-                        />
-                      </td>
-                      <td className="p-2 bg-amber-50/50">
-                        <input
-                          type="text"
-                          value={row.distribution_cost || ''}
-                          onChange={e => {
-                            const val = e.target.value;
-                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                              updateField(index, 'distribution_cost', val);
-                            }
-                          }}
-                          className="w-20 h-9 text-right px-2 border rounded bg-background"
-                          placeholder="%"
-                        />
-                      </td>
+                      {isShown('gross_margin') && (
+                        <td className="p-2">
+                          <input
+                            type="text"
+                            value={row.gross_margin || ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                updateField(index, 'gross_margin', val);
+                              }
+                            }}
+                            className="w-24 h-9 text-right px-2 border rounded bg-background"
+                            placeholder="%"
+                          />
+                        </td>
+                      )}
+                      {isShown('outbound_logistics_cost') && (
+                        <td className="p-2">
+                          <input
+                            type="text"
+                            value={row.outbound_logistics_cost || ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                updateField(index, 'outbound_logistics_cost', val);
+                              }
+                            }}
+                            className="w-24 h-9 text-right px-2 border rounded bg-background"
+                            placeholder="0.00"
+                          />
+                        </td>
+                      )}
+                      {isShown('distribution_cost') && (
+                        <td className="p-2 bg-amber-50/50">
+                          <input
+                            type="text"
+                            value={row.distribution_cost || ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                updateField(index, 'distribution_cost', val);
+                              }
+                            }}
+                            className="w-20 h-9 text-right px-2 border rounded bg-background"
+                            placeholder="%"
+                          />
+                        </td>
+                      )}
                       <td className="p-3 text-right font-bold text-primary bg-green-50">{row.total_cogs?.toFixed(2)}</td>
                       <td className="p-3 text-right font-bold text-primary bg-green-50">
                         {((row.total_cogs || 0) * (row.gross_margin || 0) / 100).toFixed(2)}

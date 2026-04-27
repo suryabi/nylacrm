@@ -47,6 +47,7 @@ from .reports import router as reports_router
 from .daily_status import router as daily_status_router
 from .analytics import router as analytics_router
 from .bottle_preview import router as bottle_preview_router
+from .cogs_components import router as cogs_components_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -132,5 +133,8 @@ routes_router.include_router(analytics_router, tags=["Analytics"])
 
 # Bottle Preview
 routes_router.include_router(bottle_preview_router, tags=["Bottle Preview"])
+
+# COGS Components Master
+routes_router.include_router(cogs_components_router, prefix="/master/cogs-components", tags=["COGS Components"])
 
 __all__ = ['routes_router']

@@ -101,6 +101,7 @@ const salesNavigationGroups = [
       { name: 'Business Categories', href: '/master-business-categories', icon: Building, moduleKey: 'business_categories', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
       { name: 'Contact Categories', href: '/master-contact-categories', icon: Users, moduleKey: 'contact_categories', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
       { name: 'Expense Categories', href: '/expense-category-master', icon: Receipt, moduleKey: 'expense_categories', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
+      { name: 'COGS Components', href: '/master/cogs-components', icon: Receipt, moduleKey: 'cogs_components', roles: ['CEO', 'Director', 'System Admin'] },
     ]
   },
   {
