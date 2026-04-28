@@ -7,7 +7,7 @@ import requests
 import os
 from datetime import datetime
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://return-reasons-mgr.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://invoice-api-dev.preview.emergentagent.com')
 
 # Test credentials
 TEST_EMAIL = "surya.yadavalli@nylaairwater.earth"
