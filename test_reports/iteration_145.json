@@ -1,0 +1,40 @@
+{
+  "summary": "Full regression of API Keys feature (backend + frontend). 13/13 backend pytest pass + 1 skipped (RBAC – no non-admin seeded user). All 7 frontend UI flows pass: page load, create+reveal-once, copy/done buttons, masked list display, active-toggle (Active <-> Inactive), edit (rename + add allowed endpoint), revoke with confirm dialog. JWT regression on POST/PUT /api/accounts/{id}/invoices preserved.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/api-keys (RBAC)", "issue": "Could not verify non-admin -> 403 because no non-admin seeded user is documented in /app/memory/test_credentials.md (only admin). Code review confirms _can_manage() only allows {System Admin, CEO, Director, admin, Admin} and is enforced on every route."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_api_keys_external.py",
+    "/app/test_reports/pytest/api_keys_results.xml"
+  ],
+  "action_items": [
+    "Optional: seed a non-admin user (e.g. AccountManager role) in test_credentials.md so RBAC negative-path can be auto-verified.",
+    "Optional: include 'list_master_skus' or 'list_accounts' in the pytest external auth happy-path (currently only POST/PUT invoice exercised end-to-end)."
+  ],
+  "critical_code_review_comments": [
+    "routes/api_keys.py authenticate_api_key correctly hashes incoming key (sha256) before lookup; raw key never logged; key_hash & raw key both excluded from list/get serialization.",
+    "deps.get_user_or_api_key uses a lazy import to break the routes/api_keys.py <-> deps.py circular import — clean.",
+    "Endpoint matching uses regex built from path_pattern with {var} -> [^/]+; safe and method-checked. Trailing slash normalized.",
+    "Tenant context is pinned via core.tenant.set_current_tenant(key_doc.tenant_id) — good multi-tenant isolation.",
+    "ApiKeysPage.js: Bearer header reads localStorage 'token' OR 'session_token' — matches existing app convention. Reveal modal correctly displays full key once and shows masked dots in list.",
+    "Minor: list-route uses GET '' (empty path under /api-keys prefix). Works but a trailing-slash redirect could surprise some HTTP clients; non-blocking."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_api_keys_external.py (new)"
+  ],
+  "success_rate": {"backend": "100% (13/13 executed, 1 skipped)", "frontend": "100% (7/7 flows)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO)",
+  "seed_data_creation": "Tests create TEST_-prefixed keys and clean them up via session-scoped fixture; verified 0 TEST_ keys remain after run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression file is /app/backend/tests/test_api_keys_external.py — re-run with `pytest backend/tests/test_api_keys_external.py -v`. The test for non-admin RBAC uses pytest.skip() if no non-admin login works; if a non-admin seed user is added to /app/memory/test_credentials.md, update the candidate list inside TestRoleProtection.",
+  "rca of the issue": "N/A – no defects found."
+}

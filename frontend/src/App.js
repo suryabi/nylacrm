@@ -90,6 +90,7 @@ import CompanyDocuments from './pages/CompanyDocuments';
 import MasterContactCategories from './pages/MasterContactCategories';
 import ContactsList from './pages/ContactsList';
 import TenantSettings from './pages/TenantSettings';
+import ApiKeysPage from './pages/ApiKeysPage';
 import PlatformAdmin from './pages/PlatformAdmin';
 import AIAssistant from './pages/AIAssistant';
 import LeadScoringModel from './pages/LeadScoringModel';
@@ -250,6 +251,7 @@ function AppRouter() {
           <Route path="/master-contact-categories" element={<ProtectedRoute moduleKey="contact_categories"><MasterContactCategories /></ProtectedRoute>} />
           <Route path="/contacts" element={<ProtectedRoute moduleKey="contacts"><ContactsList /></ProtectedRoute>} />
           <Route path="/tenant-settings" element={<ProtectedRoute><TenantSettings /></ProtectedRoute>} />
+          <Route path="/settings/api-keys" element={<ProtectedRoute><ApiKeysPage /></ProtectedRoute>} />
           <Route path="/platform-admin" element={<ProtectedRoute><PlatformAdmin /></ProtectedRoute>} />
           <Route path="/ai-assistant" element={<ProtectedRoute><AIAssistant /></ProtectedRoute>} />
           <Route path="/lead-scoring-model" element={<ProtectedRoute moduleKey="lead_scoring"><LeadScoringModel /></ProtectedRoute>} />

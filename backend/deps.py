@@ -83,6 +83,21 @@ async def get_current_user(request: Request):
     """Get user from cookie or JWT token"""
     return await get_current_user_from_cookie_or_header(request)
 
+
+async def get_user_or_api_key(request: Request):
+    """Authenticate via API key (X-API-Key or 'Authorization: Bearer ak_...') OR fall back to JWT/session.
+
+    When authenticated via API key, returns a synthetic user dict with `is_api_key=True`.
+    When the request method+path is not in the key's allowed_endpoints, raises 403.
+    """
+    # Lazy import to avoid circular import (routes/api_keys imports deps.get_current_user)
+    from routes.api_keys import authenticate_api_key
+
+    api_user = await authenticate_api_key(request)
+    if api_user:
+        return api_user
+    return await get_current_user_from_cookie_or_header(request)
+
 async def create_session(user_id: str, response: Response = None):
     """Create a new session for a user"""
     import uuid

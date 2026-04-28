@@ -1517,6 +1517,19 @@ async def get_current_user(request: Request):
     """Get user from cookie or JWT token"""
     return await get_current_user_from_cookie_or_header(request)
 
+
+async def get_user_or_api_key(request: Request):
+    """Authenticate via API key (X-API-Key or 'Authorization: Bearer ak_...') OR fall back to JWT/session.
+
+    When authenticated via API key, returns a synthetic user dict with `is_api_key=True`.
+    When the request method+path is not in the key's allowed_endpoints, raises 403.
+    """
+    from routes.api_keys import authenticate_api_key
+    api_user = await authenticate_api_key(request)
+    if api_user:
+        return api_user
+    return await get_current_user_from_cookie_or_header(request)
+
 @api_router.post("/admin/migrate-sku")
 async def admin_migrate_sku(request: Request, current_user: dict = Depends(get_current_user)):
     """
@@ -6176,7 +6189,7 @@ class AccountInvoiceCreate(BaseModel):
 async def create_account_invoice(
     account_id: str, 
     invoice_data: dict, 
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_user_or_api_key)
 ):
     """
     Create a new invoice for an account.
@@ -6322,7 +6335,7 @@ async def update_account_invoice(
     account_id: str,
     invoice_no: str,
     invoice_data: dict,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_user_or_api_key),
 ):
     """Update an existing invoice from an external system.
 
