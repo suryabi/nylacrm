@@ -18,7 +18,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../components/ui/alert-dialog';
-import { Plus, Trash2, Pencil, Calculator, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Pencil, Calculator, Loader2, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import AppBreadcrumb from '../components/AppBreadcrumb';
 import { useAuth } from '../context/AuthContext';
@@ -39,6 +39,9 @@ export default function MasterCOGSComponents() {
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [dragId, setDragId] = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
+  const [reordering, setReordering] = useState(false);
 
   const [form, setForm] = useState({ label: '', unit: 'rupee', sort_order: 99, is_active: true });
   const [keyOverride, setKeyOverride] = useState(''); // optional explicit key
@@ -126,6 +129,64 @@ export default function MasterCOGSComponents() {
     }
   };
 
+  // Drag & drop reorder — assigns sort_order = 1..N and persists changed rows.
+  const onRowDragStart = (e, id) => {
+    setDragId(id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const onRowDragOver = (e, id) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (id !== dragOverId) setDragOverId(id);
+  };
+
+  const onRowDragEnd = () => {
+    setDragId(null);
+    setDragOverId(null);
+  };
+
+  const onRowDrop = async (e, targetId) => {
+    e.preventDefault();
+    const sourceId = dragId;
+    setDragId(null);
+    setDragOverId(null);
+    if (!sourceId || sourceId === targetId) return;
+
+    const src = components.findIndex((c) => c.id === sourceId);
+    const dst = components.findIndex((c) => c.id === targetId);
+    if (src < 0 || dst < 0) return;
+
+    const next = [...components];
+    const [moved] = next.splice(src, 1);
+    next.splice(dst, 0, moved);
+
+    // Reassign sort_order 1..N + figure out which actually changed
+    const changed = [];
+    const updated = next.map((c, idx) => {
+      const newOrder = idx + 1;
+      if (c.sort_order !== newOrder) changed.push({ id: c.id, sort_order: newOrder });
+      return { ...c, sort_order: newOrder };
+    });
+    setComponents(updated); // optimistic
+
+    if (!canEdit || changed.length === 0) return;
+    setReordering(true);
+    try {
+      await Promise.all(
+        changed.map((u) =>
+          axios.put(`${API}/master/cogs-components/${u.id}`, { sort_order: u.sort_order }, { headers })
+        )
+      );
+      toast.success('Order updated');
+    } catch (err) {
+      toast.error('Reorder failed — reloading');
+      load();
+    } finally {
+      setReordering(false);
+    }
+  };
+
   const activeCount = components.filter((c) => c.is_active).length;
   const rupeeCount = components.filter((c) => c.is_active && c.unit === 'rupee').length;
 
@@ -172,6 +233,12 @@ export default function MasterCOGSComponents() {
       </div>
 
       <Card className="overflow-hidden">
+        {canEdit && components.length > 0 && (
+          <div className="px-4 py-2 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30 text-[11px] text-muted-foreground flex items-center gap-1.5">
+            <GripVertical className="h-3 w-3" />
+            <span>Drag the handle on any row to reorder. Order applies to the COGS Calculator columns.</span>
+          </div>
+        )}
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -180,6 +247,7 @@ export default function MasterCOGSComponents() {
           <Table>
             <TableHeader>
               <TableRow>
+                {canEdit && <TableHead className="w-8" />}
                 <TableHead className="w-12">#</TableHead>
                 <TableHead>Label</TableHead>
                 <TableHead>Key</TableHead>
@@ -192,13 +260,29 @@ export default function MasterCOGSComponents() {
             <TableBody>
               {components.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canEdit ? 7 : 6} className="text-center py-12 text-muted-foreground italic">
+                  <TableCell colSpan={canEdit ? 8 : 6} className="text-center py-12 text-muted-foreground italic">
                     No components yet — defaults will load on first refresh.
                   </TableCell>
                 </TableRow>
               ) : (
                 components.map((c) => (
-                  <TableRow key={c.id} data-testid={`component-row-${c.key}`} className={c.is_active ? '' : 'opacity-60'}>
+                  <TableRow
+                    key={c.id}
+                    data-testid={`component-row-${c.key}`}
+                    className={`${c.is_active ? '' : 'opacity-60'} ${
+                      dragOverId === c.id && dragId !== c.id ? 'bg-emerald-50/60 dark:bg-emerald-900/10' : ''
+                    } ${dragId === c.id ? 'opacity-40' : ''}`}
+                    draggable={canEdit && !reordering}
+                    onDragStart={(e) => canEdit && onRowDragStart(e, c.id)}
+                    onDragOver={(e) => canEdit && onRowDragOver(e, c.id)}
+                    onDragEnd={onRowDragEnd}
+                    onDrop={(e) => canEdit && onRowDrop(e, c.id)}
+                  >
+                    {canEdit && (
+                      <TableCell className="w-8 cursor-grab active:cursor-grabbing text-muted-foreground" title="Drag to reorder" data-testid={`drag-${c.key}`}>
+                        <GripVertical className="h-4 w-4" />
+                      </TableCell>
+                    )}
                     <TableCell className="text-muted-foreground tabular-nums">{c.sort_order}</TableCell>
                     <TableCell className="font-medium">
                       {c.label}
