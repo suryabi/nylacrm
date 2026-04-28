@@ -418,6 +418,22 @@
 - [x] **Files**: `backend/server.py` (SKUCreate/SKUUpdate models, GET/PUT master-skus, GET/PUT /cogs), `frontend/src/pages/SKUManagement.js` (cogsComponents fetch + COGS Costs section + cleaned save).
 - [x] **Testing**: 20/20 passed (iteration_146 + null-removal fix). Pytest regression file at `backend/tests/test_iteration_146_cogs_per_sku.py`. End-to-end verified: editing in SKU dialog → calculator shows new value across cities; editing in calculator → SKU master updated; system columns isolated per-city.
 
+### Production — Rejection Cost Module (2026-04-28)
+- [x] **New module under Production sidebar** — `/production/rejection-cost-config`. Matrix-style page where admin maps each (Stage × Rejection Reason) pair to a list of impacted COGS components via checkboxes.
+- [x] **Backend**:
+  - `GET /api/production/rejection-cost-config` returns active master ₹ components, distinct stages from active QC routes, master reasons, and existing mappings (single payload for the matrix UI).
+  - `GET/POST/DELETE /api/production/rejection-cost-mappings` — POST is upsert on `(stage_name, reason_id)`. Validates reason exists; silently filters out unknown component keys.
+  - `POST /api/production/rejection-cost-calculate` — body `{sku_id, stage_name, reason_id|reason_name, qty_rejected}` returns `{breakdown[], unit_cost, total_cost, missing_mapping?, missing_sku_values?}`.
+  - `GET /api/production/rejection-report` enriched with `cost_of_rejection` per row (computed via bulk-loaded mappings + SKU master COGS values) and `total_cost` at top level. Rows without mapping flagged with `missing_mapping=true`.
+  - **Removed** old per-stage `rejection_cost_rules` collection and endpoints — replaced by the richer per-(stage, reason) model.
+- [x] **Cost formula**: `cost_of_rejection = qty_rejected × Σ(SKU.cogs_components_values[k] for k in mapping.impacted_component_keys)`. Stage-dependent because each (stage, reason) chooses different impacted components (early stages = fewer components, later stages include labels/etc.).
+- [x] **Frontend**:
+  - `/production/rejection-cost-config` matrix page with add-new-mapping form (stage + reason dropdowns), filter by stage, per-row checkbox grid, Save / Delete buttons.
+  - `/rejection-report` now has "Cost of Rejection" column + total row footer; unmapped rows display `— not mapped` in amber.
+  - `BatchDetail.js` QC inspection form: live ₹ preview next to each rejection row when qty>0 + reason selected (uses bulk-fetched mappings + SKU's `cogs_components_values`).
+- [x] **Files**: `backend/routes/production_qc.py`, `frontend/src/pages/RejectionCostConfig.js` (new), `frontend/src/pages/RejectionReport.js`, `frontend/src/pages/BatchDetail.js`, `frontend/src/App.js`, `frontend/src/layouts/DashboardLayout.js`.
+- [x] **Testing**: 22/22 passed (iteration_147) — 16 backend + 6 frontend. Pytest regression at `backend/tests/test_iteration_147_rejection_cost.py`. PET SKU verified: primary 7.5 + mfg 12.25, qty=10 → ₹197.50.
+
 ### API Keys for External Integration Partners (2026-04-28)
 - [x] **Per-partner API keys** (one key per integration like BriefingIQ). Issued at Settings → API Keys page. Format `ak_live_<48 hex>`, stored as **sha256 hash**, raw key shown ONLY ONCE on creation.
 - [x] **Auth via either header**: `X-API-Key: ak_live_…` OR `Authorization: Bearer ak_live_…` (server detects by `ak_live_` prefix; falls back to JWT/session if not an API key).
