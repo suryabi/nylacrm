@@ -391,6 +391,18 @@
 - [x] **Files**: `backend/server.py` (cors_origin_regex extended; new `_open_cors_for_external_invoices` middleware).
 - [x] **Tested**: POST/PUT from `random-erp.io`, `app.briefingiq.com`, and no-Origin (S2S) all return 200 with correct ACAO headers; legacy CRM payload regression unaffected.
 
+### API Keys for External Integration Partners (2026-04-28)
+- [x] **Per-partner API keys** (one key per integration like BriefingIQ). Issued at Settings → API Keys page. Format `ak_live_<48 hex>`, stored as **sha256 hash**, raw key shown ONLY ONCE on creation.
+- [x] **Auth via either header**: `X-API-Key: ak_live_…` OR `Authorization: Bearer ak_live_…` (server detects by `ak_live_` prefix; falls back to JWT/session if not an API key).
+- [x] **Per-key endpoint allowlist** of `(method, path_pattern)` pairs; partners get 403 if they hit an endpoint not granted. Method+path matched via regex (`{var}` → `[^/]+`).
+- [x] **Catalog endpoint** `GET /api/api-keys/available-endpoints` returns the curated list of grantable endpoints (currently 5: create/update/list invoices, list master SKUs, list accounts).
+- [x] **CRUD**: `GET/POST/PUT/DELETE /api/api-keys` (System Admin / CEO / Director / Admin only). PUT supports renaming, allowed-endpoints update, active toggle.
+- [x] **Tenant context** is pinned to the key's tenant on every authenticated call.
+- [x] **External invoice endpoints** `POST /api/accounts/{account_id}/invoices` and `PUT /api/accounts/{account_id}/invoices/{invoice_no}` now accept API key auth (replaces strict JWT).
+- [x] **Frontend**: `/settings/api-keys` (sidebar entry under Admin → "API Keys" with KeyRound icon). List shows key prefix masked + endpoint badges colored by HTTP verb. Create dialog with checkbox grid of available endpoints. Reveal-once modal with copy button + curl/Bearer usage examples. Edit, active-toggle, revoke (with confirm).
+- [x] **Files**: `backend/routes/api_keys.py`, `backend/deps.py` (get_user_or_api_key), `backend/server.py` (local get_user_or_api_key + endpoint deps), `backend/routes/__init__.py` (router registration), `frontend/src/pages/ApiKeysPage.js`, `frontend/src/App.js`, `frontend/src/layouts/DashboardLayout.js`.
+- [x] **Testing**: 20/20 tests passed (iteration_145) — 13 backend + 7 frontend UI flows, JWT regression preserved.
+
 ## Upcoming Tasks (P1)
 - Auto-generate Provisional Invoice (on shipment -> "delivered")
 - Build Reporting Module (stock balance, deliveries, settlements, distributor performance)
