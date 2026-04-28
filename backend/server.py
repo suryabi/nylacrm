@@ -9,7 +9,7 @@ import logging
 import urllib.parse
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict
 import uuid
 from datetime import datetime, timezone, timedelta
 import jwt
@@ -1434,6 +1434,9 @@ class COGSData(BaseModel):
     outbound_logistics_cost: float = 0.0
     distribution_cost: float = 0.0  # Distribution cost percentage
     
+    # Custom components defined in master/cogs-components — keyed by component.key
+    custom_components: Dict[str, float] = Field(default_factory=dict)
+    
     # Computed (stored for reference)
     total_cogs: float = 0.0
     ex_factory_price: float = 0.0
@@ -1452,6 +1455,7 @@ class COGSDataUpdate(BaseModel):
     gross_margin: Optional[float] = None
     outbound_logistics_cost: Optional[float] = None
     distribution_cost: Optional[float] = None  # Distribution cost percentage
+    custom_components: Optional[Dict[str, float]] = None  # Custom master-defined components
 
 class Invoice(BaseModel):
     """Invoice data received from ActiveMQ"""
@@ -2181,9 +2185,16 @@ async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: d
     """Update COGS data for a SKU"""
     
     update_data = updates.model_dump(exclude_none=True)
-    
+
+    # Merge custom_components dict (don't replace whole dict — patch keys)
+    if 'custom_components' in update_data:
+        patch = update_data.pop('custom_components') or {}
+        existing_cc = (await get_tdb().cogs_data.find_one({'id': sku_id}, {'_id': 0, 'custom_components': 1}) or {}).get('custom_components') or {}
+        merged = {**existing_cc, **{k: float(v) for k, v in patch.items()}}
+        update_data['custom_components'] = merged
+
     # Calculate computed values
-    if any(k in update_data for k in ['primary_packaging_cost', 'secondary_packaging_cost', 'manufacturing_variable_cost', 'gross_margin', 'outbound_logistics_cost', 'distribution_cost']):
+    if any(k in update_data for k in ['primary_packaging_cost', 'secondary_packaging_cost', 'manufacturing_variable_cost', 'gross_margin', 'outbound_logistics_cost', 'distribution_cost', 'custom_components']):
         existing = await get_tdb().cogs_data.find_one({'id': sku_id}, {'_id': 0})
         if existing:
             # Merge with existing data
@@ -2193,24 +2204,54 @@ async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: d
             margin = update_data.get('gross_margin', existing.get('gross_margin', 0))
             logistics = update_data.get('outbound_logistics_cost', existing.get('outbound_logistics_cost', 0))
             distribution = update_data.get('distribution_cost', existing.get('distribution_cost', 0))
-            
-            # Calculate
-            total_cogs = primary + secondary + manufacturing
-            gross_margin_rupees = total_cogs * (margin / 100)  # Convert % to rupees
+            cc = update_data.get('custom_components', existing.get('custom_components', {})) or {}
+
+            # Resolve master config for active components & units
+            try:
+                active_comps = await db.cogs_components.find(
+                    {'tenant_id': get_current_tenant_id(), 'is_active': True},
+                    {'_id': 0, 'key': 1, 'unit': 1}
+                ).to_list(200)
+            except Exception:
+                active_comps = []
+            active_keys = {c['key']: c.get('unit', 'rupee') for c in active_comps}
+
+            def _on(key, unit):
+                # Fail-open if master is empty (legacy behavior)
+                if not active_keys:
+                    return True
+                return active_keys.get(key) == unit
+
+            # Total COGS = sum of all active ₹ components (legacy + custom)
+            total_cogs = 0.0
+            if _on('primary_packaging_cost', 'rupee'):
+                total_cogs += float(primary or 0)
+            if _on('secondary_packaging_cost', 'rupee'):
+                total_cogs += float(secondary or 0)
+            if _on('manufacturing_variable_cost', 'rupee'):
+                total_cogs += float(manufacturing or 0)
+            if _on('outbound_logistics_cost', 'rupee'):
+                total_cogs += float(logistics or 0)
+            for k, v in cc.items():
+                if active_keys.get(k) == 'rupee':
+                    try:
+                        total_cogs += float(v or 0)
+                    except (TypeError, ValueError):
+                        pass
+
+            eff_margin = float(margin or 0) if _on('gross_margin', 'percent') else 0.0
+            gross_margin_rupees = total_cogs * (eff_margin / 100)
             ex_factory = total_cogs + gross_margin_rupees
-            
-            # Base Cost = Primary + Secondary + Mfg + Gross Margin (₹) + Logistics
-            base_cost = primary + secondary + manufacturing + gross_margin_rupees + logistics
-            
-            # Minimum Landing = Base Cost / (1 - Distribution %)
-            # After paying distribution cost %, remaining amount = base cost
-            if distribution >= 100:
-                landing_price = 0  # Invalid: distribution can't be 100% or more
-            elif distribution > 0:
-                landing_price = base_cost / (1 - distribution / 100)
+            base_cost = total_cogs + gross_margin_rupees
+
+            eff_dist = float(distribution or 0) if _on('distribution_cost', 'percent') else 0.0
+            if eff_dist >= 100:
+                landing_price = 0
+            elif eff_dist > 0:
+                landing_price = base_cost / (1 - eff_dist / 100)
             else:
-                landing_price = base_cost  # No distribution cost
-            
+                landing_price = base_cost
+
             update_data['total_cogs'] = total_cogs
             update_data['ex_factory_price'] = ex_factory
             update_data['base_cost'] = base_cost

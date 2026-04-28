@@ -127,7 +127,8 @@ export default function COGSCalculator() {
   const [originalGrossMargins, setOriginalGrossMargins] = React.useState({});
   
   // Active COGS components (from master) — drives column visibility & total formula
-  const [activeKeys, setActiveKeys] = React.useState(null); // null = not loaded yet (show all)
+  // Stored as full list of { key, label, unit, sort_order } so we can render custom columns too.
+  const [activeComponents, setActiveComponents] = React.useState(null); // null = not loaded
 
   React.useEffect(() => {
     let mounted = true;
@@ -137,15 +138,48 @@ export default function COGSCalculator() {
     })
       .then((res) => {
         if (!mounted) return;
-        const keys = new Set((res.data.components || []).map((c) => c.key));
-        setActiveKeys(keys);
+        setActiveComponents(res.data.components || []);
       })
       .catch(() => {
-        // Fail-open: if master is unreachable, show all legacy columns
-        if (mounted) setActiveKeys(new Set(['primary_packaging_cost','secondary_packaging_cost','manufacturing_variable_cost','outbound_logistics_cost','distribution_cost','gross_margin']));
+        // Fail-open: legacy 6 columns
+        if (!mounted) return;
+        setActiveComponents([
+          { key: 'primary_packaging_cost', label: 'Primary Packaging Cost', unit: 'rupee', sort_order: 1, is_system: true },
+          { key: 'secondary_packaging_cost', label: 'Secondary Packaging Cost', unit: 'rupee', sort_order: 2, is_system: true },
+          { key: 'manufacturing_variable_cost', label: 'Manufacturing Variable Cost', unit: 'rupee', sort_order: 3, is_system: true },
+          { key: 'outbound_logistics_cost', label: 'Outbound Logistics Cost', unit: 'rupee', sort_order: 4, is_system: true },
+          { key: 'distribution_cost', label: 'Distribution Cost', unit: 'percent', sort_order: 5, is_system: true },
+          { key: 'gross_margin', label: 'Gross Margin', unit: 'percent', sort_order: 6, is_system: true },
+        ]);
       });
     return () => { mounted = false; };
   }, []);
+
+  const LEGACY_KEYS = React.useMemo(
+    () => new Set(['primary_packaging_cost','secondary_packaging_cost','manufacturing_variable_cost','outbound_logistics_cost','distribution_cost','gross_margin']),
+    []
+  );
+
+  const activeKeys = React.useMemo(() => {
+    if (!activeComponents) return null;
+    return new Set(activeComponents.map((c) => c.key));
+  }, [activeComponents]);
+
+  // Custom (non-legacy) active components — split by unit so we can render in the right place
+  const customRupeeComponents = React.useMemo(
+    () => (activeComponents || []).filter((c) => c.unit === 'rupee' && !LEGACY_KEYS.has(c.key)).sort((a, b) => (a.sort_order || 99) - (b.sort_order || 99)),
+    [activeComponents, LEGACY_KEYS]
+  );
+  const customPercentComponents = React.useMemo(
+    () => (activeComponents || []).filter((c) => c.unit === 'percent' && !LEGACY_KEYS.has(c.key)).sort((a, b) => (a.sort_order || 99) - (b.sort_order || 99)),
+    [activeComponents, LEGACY_KEYS]
+  );
+
+  // Read/write helpers for custom_components map on a row
+  const getCustomVal = (row, key) => {
+    const v = row?.custom_components?.[key];
+    return (v === undefined || v === null) ? '' : v;
+  };
 
   const isShown = React.useCallback(
     (key) => activeKeys === null || activeKeys.has(key),
@@ -153,7 +187,6 @@ export default function COGSCalculator() {
   );
 
   // Recompute derived values from raw row inputs, respecting active master config.
-  // Always render derived cells through this so disabled components are excluded immediately.
   const computeDerived = React.useCallback((row) => {
     if (!row) return { totalCOGS: 0, grossMarginRupees: 0, exFactory: 0, baseCost: 0, landingPrice: 0 };
     const primary       = parseFloat(row.primary_packaging_cost) || 0;
@@ -163,11 +196,17 @@ export default function COGSCalculator() {
     const marginPct     = parseFloat(row.gross_margin) || 0;
     const distPct       = parseFloat(row.distribution_cost) || 0;
 
-    const totalCOGS =
+    let totalCOGS =
       (isShown('primary_packaging_cost')     ? primary       : 0) +
       (isShown('secondary_packaging_cost')   ? secondary     : 0) +
       (isShown('manufacturing_variable_cost')? manufacturing : 0) +
       (isShown('outbound_logistics_cost')    ? logistics     : 0);
+
+    // Add custom (non-legacy) ₹ components from row.custom_components
+    customRupeeComponents.forEach((c) => {
+      const v = parseFloat(row.custom_components?.[c.key]);
+      if (!Number.isNaN(v)) totalCOGS += v;
+    });
 
     const effMargin = isShown('gross_margin') ? marginPct : 0;
     const grossMarginRupees = totalCOGS * (effMargin / 100);
@@ -181,7 +220,7 @@ export default function COGSCalculator() {
     else landingPrice = baseCost;
 
     return { totalCOGS, grossMarginRupees, exFactory, baseCost, landingPrice };
-  }, [isShown]);
+  }, [isShown, customRupeeComponents]);
 
   // Set default city when cities load
   React.useEffect(() => {
@@ -244,11 +283,15 @@ export default function COGSCalculator() {
     const distributionPercent = parseFloat(row.distribution_cost) || 0;
 
     // Total COGS = sum of all active ₹ columns (master-driven)
-    const totalCOGS =
+    let totalCOGS =
       (isShown('primary_packaging_cost') ? primary : 0) +
       (isShown('secondary_packaging_cost') ? secondary : 0) +
       (isShown('manufacturing_variable_cost') ? manufacturing : 0) +
       (isShown('outbound_logistics_cost') ? logistics : 0);
+    customRupeeComponents.forEach((c) => {
+      const v = parseFloat(row.custom_components?.[c.key]);
+      if (!Number.isNaN(v)) totalCOGS += v;
+    });
 
     // Gross Margin in rupees (0 if % column disabled)
     const effMargin = isShown('gross_margin') ? marginPercent : 0;
@@ -277,6 +320,24 @@ export default function COGSCalculator() {
     newData[index].minimum_landing_price = landingPrice;
     newData[index].base_cost = baseCost;
     
+    setCogsData(newData);
+    setHasChanges(true);
+  };
+
+  // Update a custom (non-legacy) component value — stored in row.custom_components map
+  const updateCustomField = (index, key, value) => {
+    const newData = [...cogsData];
+    const row = { ...newData[index] };
+    row.custom_components = { ...(row.custom_components || {}), [key]: value };
+    newData[index] = row;
+
+    // Trigger total recompute
+    const d = computeDerived(row);
+    newData[index].total_cogs = d.totalCOGS;
+    newData[index].ex_factory_price = d.exFactory;
+    newData[index].base_cost = d.baseCost;
+    newData[index].minimum_landing_price = d.landingPrice;
+
     setCogsData(newData);
     setHasChanges(true);
   };
@@ -314,11 +375,15 @@ export default function COGSCalculator() {
     const distributionPercent = parseFloat(row.distribution_cost) || 0;
 
     // Total COGS = sum of all active ₹ columns (master-driven)
-    const totalCOGS =
+    let totalCOGS =
       (isShown('primary_packaging_cost') ? primary : 0) +
       (isShown('secondary_packaging_cost') ? secondary : 0) +
       (isShown('manufacturing_variable_cost') ? manufacturing : 0) +
       (isShown('outbound_logistics_cost') ? logistics : 0);
+    customRupeeComponents.forEach((c) => {
+      const v = parseFloat(row.custom_components?.[c.key]);
+      if (!Number.isNaN(v)) totalCOGS += v;
+    });
 
     // Reverse calculate: Given Actual Landing Price, find required Gross Margin %
     // Base Cost = Actual Landing × (1 - Distribution %)
@@ -356,6 +421,12 @@ export default function COGSCalculator() {
       const token = localStorage.getItem('token');
       
       for (const row of cogsData) {
+        // Build custom_components payload (numeric values only)
+        const customNumeric = {};
+        Object.entries(row.custom_components || {}).forEach(([k, v]) => {
+          const num = parseFloat(v);
+          if (!Number.isNaN(num)) customNumeric[k] = num;
+        });
         await axios.put(
           `${API}/cogs/${row.id}`,
           {
@@ -364,7 +435,8 @@ export default function COGSCalculator() {
             manufacturing_variable_cost: parseFloat(row.manufacturing_variable_cost) || 0,
             gross_margin: parseFloat(row.gross_margin) || 0,
             outbound_logistics_cost: parseFloat(row.outbound_logistics_cost) || 0,
-            distribution_cost: parseFloat(row.distribution_cost) || 0
+            distribution_cost: parseFloat(row.distribution_cost) || 0,
+            custom_components: customNumeric,
           },
           {
             headers: { Authorization: `Bearer ${token}` },
@@ -675,6 +747,46 @@ export default function COGSCalculator() {
                     )}
                   </div>
 
+                  {/* Custom (non-legacy) components from master */}
+                  {(customRupeeComponents.length > 0 || customPercentComponents.length > 0) && (
+                    <div className="grid grid-cols-2 gap-2">
+                      {canSeeCostDetails && customRupeeComponents.map((c) => (
+                        <div key={c.key}>
+                          <Label className="text-xs text-muted-foreground">{c.label} (₹)</Label>
+                          <Input
+                            type="text"
+                            value={getCustomVal(row, c.key)}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                updateCustomField(index, c.key, val);
+                              }
+                            }}
+                            className="h-9 text-right text-sm"
+                            placeholder="0.00"
+                          />
+                        </div>
+                      ))}
+                      {customPercentComponents.map((c) => (
+                        <div key={c.key}>
+                          <Label className="text-xs text-muted-foreground">{c.label} (%)</Label>
+                          <Input
+                            type="text"
+                            value={getCustomVal(row, c.key)}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                updateCustomField(index, c.key, val);
+                              }
+                            }}
+                            className="h-9 text-right text-sm"
+                            placeholder="%"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {/* Calculated Values */}
                   {(() => { const d = computeDerived(row); return (
                     <div className="grid grid-cols-2 gap-2 pt-2 border-t">
@@ -752,6 +864,18 @@ export default function COGSCalculator() {
                     {isShown('outbound_logistics_cost') && (
                       <th className="text-right p-3 font-semibold bg-primary/5">Logistics (₹)</th>
                     )}
+                    {/* Custom (non-legacy) ₹ components from master */}
+                    {canSeeCostDetails && customRupeeComponents.map((c) => (
+                      <th key={c.key} className="text-right p-3 font-semibold bg-primary/5" title={c.label}>
+                        {c.label} (₹)
+                      </th>
+                    ))}
+                    {/* Custom (non-legacy) % components from master */}
+                    {customPercentComponents.map((c) => (
+                      <th key={c.key} className="text-right p-3 font-semibold bg-primary/5" title={c.label}>
+                        {c.label} (%)
+                      </th>
+                    ))}
                     {isShown('distribution_cost') && (
                       <th className="text-right p-3 font-semibold bg-amber-50">Dist. Cost (%)</th>
                     )}
@@ -861,6 +985,42 @@ export default function COGSCalculator() {
                           />
                         </td>
                       )}
+                      {/* Custom (non-legacy) ₹ component inputs */}
+                      {canSeeCostDetails && customRupeeComponents.map((c) => (
+                        <td key={c.key} className="p-2">
+                          <input
+                            type="text"
+                            value={getCustomVal(row, c.key)}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                updateCustomField(index, c.key, val);
+                              }
+                            }}
+                            className="w-24 h-9 text-right px-2 border rounded bg-background"
+                            placeholder="0.00"
+                            data-testid={`custom-${c.key}-${index}`}
+                          />
+                        </td>
+                      ))}
+                      {/* Custom % component inputs */}
+                      {customPercentComponents.map((c) => (
+                        <td key={c.key} className="p-2">
+                          <input
+                            type="text"
+                            value={getCustomVal(row, c.key)}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                updateCustomField(index, c.key, val);
+                              }
+                            }}
+                            className="w-24 h-9 text-right px-2 border rounded bg-background"
+                            placeholder="%"
+                            data-testid={`custom-${c.key}-${index}`}
+                          />
+                        </td>
+                      ))}
                       {isShown('distribution_cost') && (
                         <td className="p-2 bg-amber-50/50">
                           <input
