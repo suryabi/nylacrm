@@ -153,5 +153,10 @@ async def delete_component(
     existing = await db.cogs_components.find_one({"id": component_id, "tenant_id": tenant_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Component not found")
+    if existing.get("is_system"):
+        raise HTTPException(
+            status_code=400,
+            detail="System components cannot be deleted. Toggle 'Active' off instead.",
+        )
     await db.cogs_components.delete_one({"id": component_id, "tenant_id": tenant_id})
     return {"message": f"Component '{existing.get('label')}' deleted"}

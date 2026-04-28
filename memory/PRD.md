@@ -374,12 +374,23 @@
 - [x] **Regression Test**: 41/41 backend tests pass via `/app/backend/tests/test_refactor_regression.py` (iteration_143)
 - [x] **Status**: Safe to redeploy to production
 
+### External Invoice Ingestion API (2026-04-28)
+- [x] **POST `/api/accounts/{account_id}/invoices`** now dispatches by payload shape:
+  - **External payload** `{invoiceNo, invoiceDate, grossInvoiceValue, netInvoiceValue, items[{itemId, quantity, rate, discount, batchNumber, expiryDate}], outstanding, creditNoteValue, ACCOUNT_ID, tenant_id}` → resolves SKUs by `master_skus.external_sku_id`, stores invoice with `id == invoiceNo`, source='external_api'.
+  - **Legacy CRM payload** `{invoice_date, line_items[{sku_name, bottles, price_per_bottle}], notes}` → unchanged, computes COGS/logistics/margin and generates `INV-YYYYMMDD-XXXX`.
+- [x] **PUT `/api/accounts/{account_id}/invoices/{invoice_no}`** updates an existing external invoice; preserves `created_at/created_by`, refreshes `updated_at/updated_by`.
+- [x] **`account_id` in URI** accepts either the human ACCOUNT_ID code (e.g. `ORLO-HYD-A26-001`) or UUID.
+- [x] **Validations**: tenant_id mismatch → 400, ACCOUNT_ID body-vs-URI mismatch → 400, invoiceNo body-vs-URI mismatch (PUT) → 400, duplicate invoiceNo (POST) → 400, missing invoice (PUT) → 404, account not found → 404. Unmatched external SKU IDs returned in `unmatched_external_item_ids` (and logged as warning).
+- [x] **System COGS components delete protection**: `DELETE /api/master/cogs-components/{id}` now returns 400 for `is_system=true` (suggest toggle inactive instead) — fixes latent risk of permanent default loss.
+- [x] **Files**: `backend/server.py` (POST dispatch + new PUT), `backend/services/external_invoices_service.py` (new helpers), `backend/routes/accounts.py` (mirror dispatch), `backend/routes/cogs_components.py` (system-delete guard).
+- [x] **Testing**: 25/25 backend regression tests passed (iteration_144) covering this API + 10+ untested features from prior session (lead_type propagation, include_in_gop_metrics defaults, Return Reasons CRUD, distributor available-stock, Master COGS Components, custom_components merge).
+
 ## Upcoming Tasks (P1)
 - Auto-generate Provisional Invoice (on shipment -> "delivered")
-- Build Reporting Module
+- Build Reporting Module (stock balance, deliveries, settlements, distributor performance)
 - Manager Dashboard (team-wise comparison, activity vs outcome)
 - Leadership Dashboard (territory trends, pipeline health)
-- **Continue server.py refactor Phase 2**: Extract accounts/leads/invoices/production/meetings/tasks routes (current: 9,140 lines, target <2,000)
+- **Continue server.py refactor Phase 2**: Extract accounts/leads/invoices/production/meetings/tasks routes (current: 9,899 lines, target <2,000)
 - **Google Workspace OAuth fix**: Once prod is stable, debug `/api/auth/google-callback` errors (likely `redirect_uri_mismatch`)
 
 ### Factory Return — Master-Driven Reason Dropdown (2026-04-25)
