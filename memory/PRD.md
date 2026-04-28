@@ -409,6 +409,15 @@
 - [x] **Files**: `backend/routes/cogs_components.py`, `backend/server.py` (PUT recompute), `frontend/src/pages/COGSCalculator.js`.
 - [x] **Verified**: Master shows 6 true COGS components (no Logistics/Distribution/Gross Margin). Calculator shows them as fixed columns at the end. PET row Total COGS 15.00 / Gross Margin 5.25 / Ex-Factory 20.25 / Min Landing 20.25 — identical to before.
 
+### SKU-Level COGS Costs (Per-SKU Single Source) (2026-04-28)
+- [x] **Each SKU now stores `cogs_components_values: Dict[str, Optional[float]]`** holding the unit price for each active master COGS ₹ component (Primary, Cap, Manufacturing, Bird Logo, Air Water Label, etc.). City no longer matters for these — single value per SKU regardless of city.
+- [x] **SKU Management dialog** (Edit/Create) now includes a "COGS Costs" section showing all active master ₹ components as numeric inputs in a 2-col grid. System columns (Logistics, Distribution, Gross Margin) are NOT shown here — they remain calculator-owned.
+- [x] **PUT `/api/master-skus/{id}`** merges `cogs_components_values` (does not replace whole dict). Sending `null` for a key removes it. Empty/blank values are pruned client-side before save.
+- [x] **GET `/api/cogs/{city}` overlay**: each row's master ₹ component values are pulled from the SKU master and overlaid (legacy keys onto top-level fields, custom keys into `custom_components`). `master_sku_id` attached to each row. `total_cogs` and `minimum_landing_price` recomputed using overlaid values.
+- [x] **PUT `/api/cogs/{cogs_id}` dispatch**: when a master-managed key is updated via the calculator, the change is dispatched to `master_skus.cogs_components_values` so it's reflected across all cities. System columns (logistics / distribution / gross_margin) stay per-city as before.
+- [x] **Files**: `backend/server.py` (SKUCreate/SKUUpdate models, GET/PUT master-skus, GET/PUT /cogs), `frontend/src/pages/SKUManagement.js` (cogsComponents fetch + COGS Costs section + cleaned save).
+- [x] **Testing**: 20/20 passed (iteration_146 + null-removal fix). Pytest regression file at `backend/tests/test_iteration_146_cogs_per_sku.py`. End-to-end verified: editing in SKU dialog → calculator shows new value across cities; editing in calculator → SKU master updated; system columns isolated per-city.
+
 ### API Keys for External Integration Partners (2026-04-28)
 - [x] **Per-partner API keys** (one key per integration like BriefingIQ). Issued at Settings → API Keys page. Format `ak_live_<48 hex>`, stored as **sha256 hash**, raw key shown ONLY ONCE on creation.
 - [x] **Auth via either header**: `X-API-Key: ak_live_…` OR `Authorization: Bearer ak_live_…` (server detects by `ak_live_` prefix; falls back to JWT/session if not an API key).

@@ -1927,7 +1927,7 @@ class SKUCreate(BaseModel):
     is_active: bool = True
     sort_order: int = 0
     packaging_config: Optional[dict] = None  # {production: [{id,name,units,is_default}], stock_in: [...], stock_out: [...]}
-    cogs_components_values: Optional[Dict[str, float]] = None  # {component_key: price_in_rupees}
+    cogs_components_values: Optional[Dict[str, Optional[float]]] = None  # {component_key: price_in_rupees}
 
 class SKUUpdate(BaseModel):
     sku_name: Optional[str] = None
@@ -1938,7 +1938,7 @@ class SKUUpdate(BaseModel):
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
     packaging_config: Optional[dict] = None
-    cogs_components_values: Optional[Dict[str, float]] = None  # merged (not replaced) on PUT
+    cogs_components_values: Optional[Dict[str, Optional[float]]] = None  # merged (not replaced) on PUT; null removes a key
 
 # Default SKUs to seed if database is empty
 DEFAULT_SKUS = [
