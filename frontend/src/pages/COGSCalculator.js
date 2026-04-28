@@ -165,7 +165,29 @@ export default function COGSCalculator() {
     return new Set(activeComponents.map((c) => c.key));
   }, [activeComponents]);
 
-  // Custom (non-legacy) active components — split by unit so we can render in the right place
+  // ALL active components ordered by master sort_order — drives column order in the calculator.
+  // Legacy and custom components are unified into a single sorted list so drag-and-drop ordering
+  // in the master is honored exactly in the calculator.
+  const orderedComponents = React.useMemo(
+    () => (activeComponents || [])
+      .slice()
+      .sort((a, b) => (a.sort_order || 99) - (b.sort_order || 99)),
+    [activeComponents]
+  );
+
+  // Read/write helpers: legacy components live on row top-level fields;
+  // custom components live in row.custom_components[key].
+  const isLegacy = React.useCallback((key) => LEGACY_KEYS.has(key), [LEGACY_KEYS]);
+  const readField = React.useCallback(
+    (row, key) => (isLegacy(key) ? (row?.[key] ?? '') : (row?.custom_components?.[key] ?? '')),
+    [isLegacy]
+  );
+  const writeField = React.useCallback(
+    (index, key, val) => (isLegacy(key) ? updateField(index, key, val) : updateCustomField(index, key, val)),
+    [isLegacy] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  // Custom (non-legacy) active components — kept for backwards-compat with totalCOGS calc.
   const customRupeeComponents = React.useMemo(
     () => (activeComponents || []).filter((c) => c.unit === 'rupee' && !LEGACY_KEYS.has(c.key)).sort((a, b) => (a.sort_order || 99) - (b.sort_order || 99)),
     [activeComponents, LEGACY_KEYS]
@@ -635,157 +657,32 @@ export default function COGSCalculator() {
                     </div>
                   </div>
 
-                  {/* Cost Inputs - Only for authorized users */}
-                  {canSeeCostDetails && (
-                    <div className="grid grid-cols-3 gap-2">
-                      {isShown('primary_packaging_cost') && (
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Primary Pkg</Label>
+                  {/* All component inputs in master sort_order */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {orderedComponents.map((c) => {
+                      const showCol = (c.unit === 'rupee' && !canSeeCostDetails) ? false : true;
+                      if (!showCol) return null;
+                      const isDist = c.key === 'distribution_cost';
+                      return (
+                        <div key={c.key}>
+                          <Label className="text-xs text-muted-foreground">{c.label} ({c.unit === 'rupee' ? '₹' : '%'})</Label>
                           <Input
                             type="text"
-                            value={row.primary_packaging_cost || ''}
+                            value={readField(row, c.key) || ''}
                             onChange={e => {
                               const val = e.target.value;
                               if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                                updateField(index, 'primary_packaging_cost', val);
+                                writeField(index, c.key, val);
                               }
                             }}
-                            className="h-9 text-right text-sm"
-                            placeholder="0.00"
+                            className={`h-9 text-right text-sm ${isDist ? 'bg-amber-50' : ''}`}
+                            placeholder={c.unit === 'percent' ? '%' : '0.00'}
+                            data-testid={`mobile-col-${c.key}-${index}`}
                           />
                         </div>
-                      )}
-                      {isShown('secondary_packaging_cost') && (
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Secondary Pkg</Label>
-                          <Input
-                            type="text"
-                            value={row.secondary_packaging_cost || ''}
-                            onChange={e => {
-                              const val = e.target.value;
-                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                                updateField(index, 'secondary_packaging_cost', val);
-                              }
-                            }}
-                            className="h-9 text-right text-sm"
-                            placeholder="0.00"
-                          />
-                        </div>
-                      )}
-                      {isShown('manufacturing_variable_cost') && (
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Mfg Cost</Label>
-                          <Input
-                            type="text"
-                            value={row.manufacturing_variable_cost || ''}
-                            onChange={e => {
-                              const val = e.target.value;
-                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                                updateField(index, 'manufacturing_variable_cost', val);
-                              }
-                            }}
-                            className="h-9 text-right text-sm"
-                            placeholder="0.00"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Margin & Logistics */}
-                  <div className="grid grid-cols-3 gap-2">
-                    {isShown('gross_margin') && (
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Gross Margin %</Label>
-                        <Input
-                          type="text"
-                          value={row.gross_margin || ''}
-                          onChange={e => {
-                            const val = e.target.value;
-                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                              updateField(index, 'gross_margin', val);
-                            }
-                          }}
-                          className="h-9 text-right text-sm"
-                          placeholder="%"
-                        />
-                      </div>
-                    )}
-                    {isShown('outbound_logistics_cost') && (
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Logistics ₹</Label>
-                        <Input
-                          type="text"
-                          value={row.outbound_logistics_cost || ''}
-                          onChange={e => {
-                            const val = e.target.value;
-                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                              updateField(index, 'outbound_logistics_cost', val);
-                            }
-                          }}
-                          className="h-9 text-right text-sm"
-                          placeholder="0.00"
-                        />
-                      </div>
-                    )}
-                    {isShown('distribution_cost') && (
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Dist. Cost %</Label>
-                        <Input
-                          type="text"
-                          value={row.distribution_cost || ''}
-                          onChange={e => {
-                            const val = e.target.value;
-                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                              updateField(index, 'distribution_cost', val);
-                            }
-                          }}
-                          className="h-9 text-right text-sm bg-amber-50"
-                          placeholder="%"
-                        />
-                      </div>
-                    )}
+                      );
+                    })}
                   </div>
-
-                  {/* Custom (non-legacy) components from master */}
-                  {(customRupeeComponents.length > 0 || customPercentComponents.length > 0) && (
-                    <div className="grid grid-cols-2 gap-2">
-                      {canSeeCostDetails && customRupeeComponents.map((c) => (
-                        <div key={c.key}>
-                          <Label className="text-xs text-muted-foreground">{c.label} (₹)</Label>
-                          <Input
-                            type="text"
-                            value={getCustomVal(row, c.key)}
-                            onChange={e => {
-                              const val = e.target.value;
-                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                                updateCustomField(index, c.key, val);
-                              }
-                            }}
-                            className="h-9 text-right text-sm"
-                            placeholder="0.00"
-                          />
-                        </div>
-                      ))}
-                      {customPercentComponents.map((c) => (
-                        <div key={c.key}>
-                          <Label className="text-xs text-muted-foreground">{c.label} (%)</Label>
-                          <Input
-                            type="text"
-                            value={getCustomVal(row, c.key)}
-                            onChange={e => {
-                              const val = e.target.value;
-                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                                updateCustomField(index, c.key, val);
-                              }
-                            }}
-                            className="h-9 text-right text-sm"
-                            placeholder="%"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
 
                   {/* Calculated Values */}
                   {(() => { const d = computeDerived(row); return (
@@ -845,40 +742,16 @@ export default function COGSCalculator() {
                       </th>
                     )}
                     <th className="text-left p-3 font-semibold sticky left-0 bg-secondary">SKU</th>
-                    {canSeeCostDetails && (
-                      <>
-                        {isShown('primary_packaging_cost') && (
-                          <th className="text-right p-3 font-semibold bg-primary/5">Primary Pkg (₹)</th>
-                        )}
-                        {isShown('secondary_packaging_cost') && (
-                          <th className="text-right p-3 font-semibold bg-primary/5">Secondary Pkg (₹)</th>
-                        )}
-                        {isShown('manufacturing_variable_cost') && (
-                          <th className="text-right p-3 font-semibold bg-primary/5">Mfg Cost (₹)</th>
-                        )}
-                      </>
-                    )}
-                    {isShown('gross_margin') && (
-                      <th className="text-right p-3 font-semibold bg-primary/5">Gross Margin (%)</th>
-                    )}
-                    {isShown('outbound_logistics_cost') && (
-                      <th className="text-right p-3 font-semibold bg-primary/5">Logistics (₹)</th>
-                    )}
-                    {/* Custom (non-legacy) ₹ components from master */}
-                    {canSeeCostDetails && customRupeeComponents.map((c) => (
-                      <th key={c.key} className="text-right p-3 font-semibold bg-primary/5" title={c.label}>
-                        {c.label} (₹)
-                      </th>
-                    ))}
-                    {/* Custom (non-legacy) % components from master */}
-                    {customPercentComponents.map((c) => (
-                      <th key={c.key} className="text-right p-3 font-semibold bg-primary/5" title={c.label}>
-                        {c.label} (%)
-                      </th>
-                    ))}
-                    {isShown('distribution_cost') && (
-                      <th className="text-right p-3 font-semibold bg-amber-50">Dist. Cost (%)</th>
-                    )}
+                    {orderedComponents.map((c) => {
+                      const showCol = (c.unit === 'rupee' && !canSeeCostDetails) ? false : true;
+                      if (!showCol) return null;
+                      const isDist = c.key === 'distribution_cost';
+                      return (
+                        <th key={c.key} className={`text-right p-3 font-semibold ${isDist ? 'bg-amber-50' : 'bg-primary/5'}`} title={c.label}>
+                          {c.label} ({c.unit === 'rupee' ? '₹' : '%'})
+                        </th>
+                      );
+                    })}
                     <th className="text-right p-3 font-semibold bg-green-50">Total COGS (₹)</th>
                     <th className="text-right p-3 font-semibold bg-green-50">Gross Margin (₹)</th>
                     <th className="text-right p-3 font-semibold bg-green-50">Ex-Factory (₹)</th>
@@ -901,142 +774,28 @@ export default function COGSCalculator() {
                         </td>
                       )}
                       <td className="p-3 font-medium sticky left-0 bg-background">{row.sku_name}</td>
-                      {canSeeCostDetails && (
-                        <>
-                          {isShown('primary_packaging_cost') && (
-                            <td className="p-2">
-                              <input
-                                type="text"
-                                value={row.primary_packaging_cost || ''}
-                                onChange={e => {
-                                  const val = e.target.value;
-                                  if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                                    updateField(index, 'primary_packaging_cost', val);
-                                  }
-                                }}
-                                className="w-24 h-9 text-right px-2 border rounded bg-background"
-                                placeholder="0.00"
-                              />
-                            </td>
-                          )}
-                          {isShown('secondary_packaging_cost') && (
-                            <td className="p-2">
-                              <input
-                                type="text"
-                                value={row.secondary_packaging_cost || ''}
-                                onChange={e => {
-                                  const val = e.target.value;
-                                  if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                                    updateField(index, 'secondary_packaging_cost', val);
-                                  }
-                                }}
-                                className="w-24 h-9 text-right px-2 border rounded bg-background"
-                                placeholder="0.00"
-                              />
-                            </td>
-                          )}
-                          {isShown('manufacturing_variable_cost') && (
-                            <td className="p-2">
-                              <input
-                                type="text"
-                                value={row.manufacturing_variable_cost || ''}
-                                onChange={e => {
-                                  const val = e.target.value;
-                                  if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                                    updateField(index, 'manufacturing_variable_cost', val);
-                                  }
-                                }}
-                                className="w-24 h-9 text-right px-2 border rounded bg-background"
-                                placeholder="0.00"
-                              />
-                            </td>
-                          )}
-                        </>
-                      )}
-                      {isShown('gross_margin') && (
-                        <td className="p-2">
-                          <input
-                            type="text"
-                            value={row.gross_margin || ''}
-                            onChange={e => {
-                              const val = e.target.value;
-                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                                updateField(index, 'gross_margin', val);
-                              }
-                            }}
-                            className="w-24 h-9 text-right px-2 border rounded bg-background"
-                            placeholder="%"
-                          />
-                        </td>
-                      )}
-                      {isShown('outbound_logistics_cost') && (
-                        <td className="p-2">
-                          <input
-                            type="text"
-                            value={row.outbound_logistics_cost || ''}
-                            onChange={e => {
-                              const val = e.target.value;
-                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                                updateField(index, 'outbound_logistics_cost', val);
-                              }
-                            }}
-                            className="w-24 h-9 text-right px-2 border rounded bg-background"
-                            placeholder="0.00"
-                          />
-                        </td>
-                      )}
-                      {/* Custom (non-legacy) ₹ component inputs */}
-                      {canSeeCostDetails && customRupeeComponents.map((c) => (
-                        <td key={c.key} className="p-2">
-                          <input
-                            type="text"
-                            value={getCustomVal(row, c.key)}
-                            onChange={e => {
-                              const val = e.target.value;
-                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                                updateCustomField(index, c.key, val);
-                              }
-                            }}
-                            className="w-24 h-9 text-right px-2 border rounded bg-background"
-                            placeholder="0.00"
-                            data-testid={`custom-${c.key}-${index}`}
-                          />
-                        </td>
-                      ))}
-                      {/* Custom % component inputs */}
-                      {customPercentComponents.map((c) => (
-                        <td key={c.key} className="p-2">
-                          <input
-                            type="text"
-                            value={getCustomVal(row, c.key)}
-                            onChange={e => {
-                              const val = e.target.value;
-                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                                updateCustomField(index, c.key, val);
-                              }
-                            }}
-                            className="w-24 h-9 text-right px-2 border rounded bg-background"
-                            placeholder="%"
-                            data-testid={`custom-${c.key}-${index}`}
-                          />
-                        </td>
-                      ))}
-                      {isShown('distribution_cost') && (
-                        <td className="p-2 bg-amber-50/50">
-                          <input
-                            type="text"
-                            value={row.distribution_cost || ''}
-                            onChange={e => {
-                              const val = e.target.value;
-                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
-                                updateField(index, 'distribution_cost', val);
-                              }
-                            }}
-                            className="w-20 h-9 text-right px-2 border rounded bg-background"
-                            placeholder="%"
-                          />
-                        </td>
-                      )}
+                      {orderedComponents.map((c) => {
+                        const showCol = (c.unit === 'rupee' && !canSeeCostDetails) ? false : true;
+                        if (!showCol) return null;
+                        const isDist = c.key === 'distribution_cost';
+                        return (
+                          <td key={c.key} className={`p-2 ${isDist ? 'bg-amber-50/50' : ''}`}>
+                            <input
+                              type="text"
+                              value={readField(row, c.key) || ''}
+                              onChange={e => {
+                                const val = e.target.value;
+                                if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                  writeField(index, c.key, val);
+                                }
+                              }}
+                              className="w-24 h-9 text-right px-2 border rounded bg-background"
+                              placeholder={c.unit === 'percent' ? '%' : '0.00'}
+                              data-testid={`col-${c.key}-${index}`}
+                            />
+                          </td>
+                        );
+                      })}
                       {(() => { const d = computeDerived(row); return (
                         <>
                           <td className="p-3 text-right font-bold text-primary bg-green-50">{d.totalCOGS.toFixed(2)}</td>

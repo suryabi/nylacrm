@@ -391,6 +391,13 @@
 - [x] **Files**: `backend/server.py` (cors_origin_regex extended; new `_open_cors_for_external_invoices` middleware).
 - [x] **Tested**: POST/PUT from `random-erp.io`, `app.briefingiq.com`, and no-Origin (S2S) all return 200 with correct ACAO headers; legacy CRM payload regression unaffected.
 
+### COGS Calculator — Honor Master Sort Order Across All Components (2026-04-28)
+- [x] **Bug**: Drag-and-drop ordering set in `/master/cogs-components` was being ignored for the 6 legacy components (Primary, Secondary, Manufacturing, Logistics, Distribution, Gross Margin) — they were always rendered in hardcoded order with custom components appended after.
+- [x] **Fix**: Replaced hardcoded column blocks with a single `orderedComponents.map()` over ALL active components sorted by `sort_order`. Both desktop table headers/cells and mobile cards now render columns dynamically. Read/write helpers (`readField`/`writeField`) auto-route legacy keys to top-level row fields and custom keys to `row.custom_components`.
+- [x] **Result**: Reordering Distribution Cost above Manufacturing Cost in the master immediately reflects in the calculator's column sequence.
+- [x] **File**: `frontend/src/pages/COGSCalculator.js`
+- [x] **Verified**: Visual confirmation — calculator columns match master order exactly; PET row calculations preserved (Total COGS, Gross Margin ₹, Ex-Factory all correct).
+
 ### API Keys for External Integration Partners (2026-04-28)
 - [x] **Per-partner API keys** (one key per integration like BriefingIQ). Issued at Settings → API Keys page. Format `ak_live_<48 hex>`, stored as **sha256 hash**, raw key shown ONLY ONCE on creation.
 - [x] **Auth via either header**: `X-API-Key: ak_live_…` OR `Authorization: Bearer ak_live_…` (server detects by `ak_live_` prefix; falls back to JWT/session if not an API key).
