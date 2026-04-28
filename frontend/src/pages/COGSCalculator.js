@@ -141,15 +141,12 @@ export default function COGSCalculator() {
         setActiveComponents(res.data.components || []);
       })
       .catch(() => {
-        // Fail-open: legacy 6 columns
+        // Fail-open: master legacy 3 columns (system calculator columns are added separately).
         if (!mounted) return;
         setActiveComponents([
           { key: 'primary_packaging_cost', label: 'Primary Packaging Cost', unit: 'rupee', sort_order: 1, is_system: true },
           { key: 'secondary_packaging_cost', label: 'Secondary Packaging Cost', unit: 'rupee', sort_order: 2, is_system: true },
           { key: 'manufacturing_variable_cost', label: 'Manufacturing Variable Cost', unit: 'rupee', sort_order: 3, is_system: true },
-          { key: 'outbound_logistics_cost', label: 'Outbound Logistics Cost', unit: 'rupee', sort_order: 4, is_system: true },
-          { key: 'distribution_cost', label: 'Distribution Cost', unit: 'percent', sort_order: 5, is_system: true },
-          { key: 'gross_margin', label: 'Gross Margin', unit: 'percent', sort_order: 6, is_system: true },
         ]);
       });
     return () => { mounted = false; };
@@ -160,19 +157,30 @@ export default function COGSCalculator() {
     []
   );
 
+  // System columns owned by the calculator itself (NOT part of master cogs_components).
+  // Always rendered, in this fixed order, after the dynamic master columns.
+  const SYSTEM_CALC_KEYS = React.useMemo(
+    () => new Set(['outbound_logistics_cost', 'distribution_cost', 'gross_margin']),
+    []
+  );
+  const SYSTEM_CALC_COLUMNS = React.useMemo(() => ([
+    { key: 'outbound_logistics_cost', label: 'Outbound Logistics Cost', unit: 'rupee' },
+    { key: 'distribution_cost',       label: 'Distribution Cost',       unit: 'percent' },
+    { key: 'gross_margin',            label: 'Gross Margin',            unit: 'percent' },
+  ]), []);
+
   const activeKeys = React.useMemo(() => {
     if (!activeComponents) return null;
     return new Set(activeComponents.map((c) => c.key));
   }, [activeComponents]);
 
-  // ALL active components ordered by master sort_order — drives column order in the calculator.
-  // Legacy and custom components are unified into a single sorted list so drag-and-drop ordering
-  // in the master is honored exactly in the calculator.
+  // ALL active master components ordered by sort_order — does NOT include system columns.
   const orderedComponents = React.useMemo(
     () => (activeComponents || [])
+      .filter((c) => !SYSTEM_CALC_KEYS.has(c.key))
       .slice()
       .sort((a, b) => (a.sort_order || 99) - (b.sort_order || 99)),
-    [activeComponents]
+    [activeComponents, SYSTEM_CALC_KEYS]
   );
 
   // Read/write helpers: legacy components live on row top-level fields;
@@ -204,8 +212,8 @@ export default function COGSCalculator() {
   };
 
   const isShown = React.useCallback(
-    (key) => activeKeys === null || activeKeys.has(key),
-    [activeKeys]
+    (key) => SYSTEM_CALC_KEYS.has(key) || activeKeys === null || activeKeys.has(key),
+    [activeKeys, SYSTEM_CALC_KEYS]
   );
 
   // Recompute derived values from raw row inputs, respecting active master config.
@@ -682,6 +690,29 @@ export default function COGSCalculator() {
                         </div>
                       );
                     })}
+                    {SYSTEM_CALC_COLUMNS.map((c) => {
+                      const showCol = (c.unit === 'rupee' && !canSeeCostDetails) ? false : true;
+                      if (!showCol) return null;
+                      const isDist = c.key === 'distribution_cost';
+                      return (
+                        <div key={`sys-${c.key}`}>
+                          <Label className="text-xs text-muted-foreground">{c.label} ({c.unit === 'rupee' ? '₹' : '%'})</Label>
+                          <Input
+                            type="text"
+                            value={row[c.key] || ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                updateField(index, c.key, val);
+                              }
+                            }}
+                            className={`h-9 text-right text-sm ${isDist ? 'bg-amber-50' : ''}`}
+                            placeholder={c.unit === 'percent' ? '%' : '0.00'}
+                            data-testid={`mobile-sys-col-${c.key}-${index}`}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {/* Calculated Values */}
@@ -752,6 +783,17 @@ export default function COGSCalculator() {
                         </th>
                       );
                     })}
+                    {/* Fixed system columns (not part of COGS components master) */}
+                    {SYSTEM_CALC_COLUMNS.map((c) => {
+                      const showCol = (c.unit === 'rupee' && !canSeeCostDetails) ? false : true;
+                      if (!showCol) return null;
+                      const isDist = c.key === 'distribution_cost';
+                      return (
+                        <th key={`sys-${c.key}`} className={`text-right p-3 font-semibold ${isDist ? 'bg-amber-50' : 'bg-primary/5'}`} title={c.label}>
+                          {c.label} ({c.unit === 'rupee' ? '₹' : '%'})
+                        </th>
+                      );
+                    })}
                     <th className="text-right p-3 font-semibold bg-green-50">Total COGS (₹)</th>
                     <th className="text-right p-3 font-semibold bg-green-50">Gross Margin (₹)</th>
                     <th className="text-right p-3 font-semibold bg-green-50">Ex-Factory (₹)</th>
@@ -792,6 +834,29 @@ export default function COGSCalculator() {
                               className="w-24 h-9 text-right px-2 border rounded bg-background"
                               placeholder={c.unit === 'percent' ? '%' : '0.00'}
                               data-testid={`col-${c.key}-${index}`}
+                            />
+                          </td>
+                        );
+                      })}
+                      {/* Fixed system column inputs */}
+                      {SYSTEM_CALC_COLUMNS.map((c) => {
+                        const showCol = (c.unit === 'rupee' && !canSeeCostDetails) ? false : true;
+                        if (!showCol) return null;
+                        const isDist = c.key === 'distribution_cost';
+                        return (
+                          <td key={`sys-${c.key}`} className={`p-2 ${isDist ? 'bg-amber-50/50' : ''}`}>
+                            <input
+                              type="text"
+                              value={row[c.key] || ''}
+                              onChange={e => {
+                                const val = e.target.value;
+                                if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                  updateField(index, c.key, val);
+                                }
+                              }}
+                              className="w-24 h-9 text-right px-2 border rounded bg-background"
+                              placeholder={c.unit === 'percent' ? '%' : '0.00'}
+                              data-testid={`sys-col-${c.key}-${index}`}
                             />
                           </td>
                         );

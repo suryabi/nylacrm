@@ -19,15 +19,17 @@ router = APIRouter(tags=["COGS Components"])
 logger = logging.getLogger(__name__)
 
 
-# Default seed: mirrors the legacy hardcoded COGS Calculator columns
+# Default seed: master ONLY contains true COGS contributors (sum to Total COGS).
+# Outbound Logistics, Distribution, Gross Margin are NOT COGS components — they are
+# fixed system columns rendered by the COGS Calculator and are not configurable here.
 DEFAULT_COMPONENTS = [
     {"key": "primary_packaging_cost",    "label": "Primary Packaging Cost",    "unit": "rupee",   "sort_order": 1, "is_system": True},
     {"key": "secondary_packaging_cost",  "label": "Secondary Packaging Cost",  "unit": "rupee",   "sort_order": 2, "is_system": True},
     {"key": "manufacturing_variable_cost","label": "Manufacturing Variable Cost","unit": "rupee", "sort_order": 3, "is_system": True},
-    {"key": "outbound_logistics_cost",   "label": "Outbound Logistics Cost",   "unit": "rupee",   "sort_order": 4, "is_system": True},
-    {"key": "distribution_cost",         "label": "Distribution Cost",         "unit": "percent", "sort_order": 5, "is_system": True},
-    {"key": "gross_margin",              "label": "Gross Margin",              "unit": "percent", "sort_order": 6, "is_system": True},
 ]
+
+# Keys that the COGS Calculator owns directly. Master must never list or accept these.
+RESERVED_CALCULATOR_KEYS = {"outbound_logistics_cost", "distribution_cost", "gross_margin"}
 
 EDIT_ROLES = {"System Admin", "CEO", "Director"}
 
@@ -74,6 +76,19 @@ async def _seed_if_empty(tenant_id: str):
         await db.cogs_components.insert_many(docs)
 
 
+async def _purge_reserved(tenant_id: str):
+    """Remove legacy seeded rows for keys the calculator now owns directly.
+
+    Older tenants may still have outbound_logistics_cost / distribution_cost /
+    gross_margin in cogs_components. They must not appear in the master UI any
+    longer, so prune them on the first list call.
+    """
+    await db.cogs_components.delete_many({
+        "tenant_id": tenant_id,
+        "key": {"$in": list(RESERVED_CALCULATOR_KEYS)},
+    })
+
+
 @router.get("")
 async def list_components(
     is_active: Optional[bool] = None,
@@ -81,8 +96,9 @@ async def list_components(
 ):
     """List COGS components for the current tenant (auto-seeds defaults on first call)."""
     tenant_id = get_current_tenant_id()
+    await _purge_reserved(tenant_id)
     await _seed_if_empty(tenant_id)
-    q = {"tenant_id": tenant_id}
+    q = {"tenant_id": tenant_id, "key": {"$nin": list(RESERVED_CALCULATOR_KEYS)}}
     if is_active is not None:
         q["is_active"] = is_active
     rows = await db.cogs_components.find(q, {"_id": 0}).sort("sort_order", 1).to_list(200)
@@ -96,6 +112,11 @@ async def create_component(
 ):
     if not _can_edit(current_user):
         raise HTTPException(status_code=403, detail="Only System Admin / CEO / Director can edit COGS components")
+    if data.key in RESERVED_CALCULATOR_KEYS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{data.key}' is reserved for the COGS Calculator and cannot be created as a COGS component.",
+        )
     tenant_id = get_current_tenant_id()
     # Enforce unique key per tenant
     existing = await db.cogs_components.find_one({"tenant_id": tenant_id, "key": data.key})

@@ -2247,7 +2247,17 @@ async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: d
                 active_comps = []
             active_keys = {c['key']: c.get('unit', 'rupee') for c in active_comps}
 
+            # System calculator columns are always treated as active (they are not in the master).
+            SYSTEM_CALC_KEYS = {
+                'outbound_logistics_cost': 'rupee',
+                'distribution_cost': 'percent',
+                'gross_margin': 'percent',
+            }
+
             def _on(key, unit):
+                # System columns are always on
+                if SYSTEM_CALC_KEYS.get(key) == unit:
+                    return True
                 # Fail-open if master is empty (legacy behavior)
                 if not active_keys:
                     return True

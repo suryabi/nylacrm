@@ -392,11 +392,22 @@
 - [x] **Tested**: POST/PUT from `random-erp.io`, `app.briefingiq.com`, and no-Origin (S2S) all return 200 with correct ACAO headers; legacy CRM payload regression unaffected.
 
 ### COGS Calculator — Honor Master Sort Order Across All Components (2026-04-28)
-- [x] **Bug**: Drag-and-drop ordering set in `/master/cogs-components` was being ignored for the 6 legacy components (Primary, Secondary, Manufacturing, Logistics, Distribution, Gross Margin) — they were always rendered in hardcoded order with custom components appended after.
-- [x] **Fix**: Replaced hardcoded column blocks with a single `orderedComponents.map()` over ALL active components sorted by `sort_order`. Both desktop table headers/cells and mobile cards now render columns dynamically. Read/write helpers (`readField`/`writeField`) auto-route legacy keys to top-level row fields and custom keys to `row.custom_components`.
-- [x] **Result**: Reordering Distribution Cost above Manufacturing Cost in the master immediately reflects in the calculator's column sequence.
-- [x] **File**: `frontend/src/pages/COGSCalculator.js`
-- [x] **Verified**: Visual confirmation — calculator columns match master order exactly; PET row calculations preserved (Total COGS, Gross Margin ₹, Ex-Factory all correct).
+- [x] **Bug**: Drag-and-drop ordering set in `/master/cogs-components` was being ignored for the 6 legacy components — they were rendered in hardcoded order with custom components appended after.
+- [x] **Fix**: Replaced hardcoded column blocks with a single `orderedComponents.map()` driven by `sort_order` from the master.
+
+### COGS Components — Logistics / Distribution / Gross Margin Now Calculator-Owned (2026-04-28)
+- [x] **Removed** `outbound_logistics_cost`, `distribution_cost`, `gross_margin` from the COGS Components master. They are no longer "COGS components" — they're calculator-owned system columns.
+- [x] **Backend**:
+  - Auto-seed defaults reduced to 3 (Primary, Secondary, Manufacturing).
+  - `GET /api/master/cogs-components` filters out the 3 reserved keys (legacy seeded rows are auto-purged on first list call).
+  - `POST /api/master/cogs-components` rejects creation of any of the 3 reserved keys with 400.
+  - `PUT /api/cogs/{sku_id}` recompute treats these 3 as ALWAYS active so existing math (Total COGS, Gross Margin ₹, Ex-Factory, Min Landing) is unchanged.
+- [x] **Frontend Calculator**:
+  - `orderedComponents` excludes the 3 reserved keys (master is the single source for dynamic columns).
+  - 3 fixed system columns rendered after the dynamic columns at the end of the table (in fixed order: Outbound Logistics → Distribution → Gross Margin), using existing `row.outbound_logistics_cost`, `row.distribution_cost`, `row.gross_margin` fields. Distribution gets amber bg, others standard.
+  - `isShown(key)` now hardcodes the 3 reserved keys to true, so `computeDerived` always includes Logistics in Total COGS and applies Gross Margin / Distribution percentages — preserves all calculations.
+- [x] **Files**: `backend/routes/cogs_components.py`, `backend/server.py` (PUT recompute), `frontend/src/pages/COGSCalculator.js`.
+- [x] **Verified**: Master shows 6 true COGS components (no Logistics/Distribution/Gross Margin). Calculator shows them as fixed columns at the end. PET row Total COGS 15.00 / Gross Margin 5.25 / Ex-Factory 20.25 / Min Landing 20.25 — identical to before.
 
 ### API Keys for External Integration Partners (2026-04-28)
 - [x] **Per-partner API keys** (one key per integration like BriefingIQ). Issued at Settings → API Keys page. Format `ak_live_<48 hex>`, stored as **sha256 hash**, raw key shown ONLY ONCE on creation.
