@@ -77,6 +77,7 @@ import BatchDetail from './pages/BatchDetail';
 import QCRouteConfig from './pages/QCRouteConfig';
 import RejectionReasons from './pages/RejectionReasons';
 import RejectionReport from './pages/RejectionReport';
+import RejectionCostConfig from './pages/RejectionCostConfig';
 import QCTeam from './pages/QCTeam';
 import Assets from './pages/Assets';
 import Vendors from './pages/Vendors';
@@ -266,6 +267,7 @@ function AppRouter() {
           <Route path="/qc-routes" element={<ProtectedRoute><QCRouteConfig /></ProtectedRoute>} />
           <Route path="/rejection-reasons" element={<ProtectedRoute><RejectionReasons /></ProtectedRoute>} />
           <Route path="/rejection-report" element={<ProtectedRoute><RejectionReport /></ProtectedRoute>} />
+          <Route path="/production/rejection-cost-config" element={<ProtectedRoute><RejectionCostConfig /></ProtectedRoute>} />
           <Route path="/qc-team" element={<ProtectedRoute><QCTeam /></ProtectedRoute>} />
           <Route path="/assets" element={<ProtectedRoute moduleKey="assets"><Assets /></ProtectedRoute>} />
           <Route path="/vendors" element={<ProtectedRoute moduleKey="vendors"><Vendors /></ProtectedRoute>} />

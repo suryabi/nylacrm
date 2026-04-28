@@ -53,17 +53,19 @@ class BatchUpdate(BaseModel):
     notes: Optional[str] = None
     status: Optional[str] = None
 
-class RejectionCostRuleCreate(BaseModel):
+class RejectionCostMappingUpsert(BaseModel):
     stage_name: str
-    stage_type: str
-    cost_per_unit: float  # cost per bottle/crate rejected at this stage
-    cost_components: Optional[List[str]] = []  # e.g. ["bottle", "cap", "water", "production"]
-    description: Optional[str] = None
+    reason_id: str
+    impacted_component_keys: List[str] = []
+    notes: Optional[str] = None
 
-class RejectionCostRuleUpdate(BaseModel):
-    cost_per_unit: Optional[float] = None
-    cost_components: Optional[List[str]] = None
-    description: Optional[str] = None
+
+class RejectionCostCalcRequest(BaseModel):
+    sku_id: str
+    stage_name: str
+    reason_id: Optional[str] = None
+    reason_name: Optional[str] = None
+    qty_rejected: int = 0
 
 
 class WarehouseTransfer(BaseModel):
@@ -716,66 +718,236 @@ async def get_batch_history(batch_id: str, current_user: dict = Depends(get_curr
 
 
 # ──────────────────────────────────────────────
-# Rejection Cost Rules
+# Rejection Cost Mappings  (per Stage × Reason → impacted COGS components)
 # ──────────────────────────────────────────────
 
-@router.get("/rejection-cost-rules")
-async def list_rejection_cost_rules(current_user: dict = Depends(get_current_user)):
-    tenant_id = get_current_tenant_id()
-    tdb = get_tenant_db()
-    rules = await tdb.rejection_cost_rules.find({"tenant_id": tenant_id}, {"_id": 0}).sort("stage_name", 1).to_list(100)
-    return rules
+async def _resolve_master_components(tenant_id: str) -> dict:
+    """Returns active rupee COGS components (key -> {label, sort_order, unit})."""
+    try:
+        # Master cogs_components is global (not tenant-scoped in db.cogs_components)
+        from database import db as _db
+        comps = await _db.cogs_components.find(
+            {"tenant_id": tenant_id, "is_active": True},
+            {"_id": 0, "key": 1, "label": 1, "unit": 1, "sort_order": 1},
+        ).sort("sort_order", 1).to_list(200)
+    except Exception:
+        comps = []
+    return {c["key"]: c for c in comps if c.get("unit") == "rupee"}
 
-@router.post("/rejection-cost-rules")
-async def create_rejection_cost_rule(data: RejectionCostRuleCreate, current_user: dict = Depends(get_current_user)):
+
+@router.get("/rejection-cost-config")
+async def get_rejection_cost_config(current_user: dict = Depends(get_current_user)):
+    """Single endpoint returning everything the matrix-config UI needs."""
     tenant_id = get_current_tenant_id()
     tdb = get_tenant_db()
+
+    # Active master ₹ components
+    comps_map = await _resolve_master_components(tenant_id)
+    components = sorted(comps_map.values(), key=lambda c: c.get("sort_order", 99))
+
+    # Distinct stage names from all active QC routes (union)
+    routes = await tdb.qc_routes.find(
+        {"tenant_id": tenant_id, "is_active": {"$ne": False}},
+        {"_id": 0, "stages": 1},
+    ).to_list(500)
+    stage_seen = {}
+    for r in routes:
+        for s in r.get("stages", []):
+            nm = s.get("name")
+            if nm and nm not in stage_seen:
+                stage_seen[nm] = s.get("order", 99)
+    stages = [{"name": k, "order": v} for k, v in sorted(stage_seen.items(), key=lambda kv: kv[1])]
+
+    # Master rejection reasons
+    reasons = await tdb.rejection_reasons.find(
+        {"tenant_id": tenant_id},
+        {"_id": 0, "id": 1, "name": 1},
+    ).sort("name", 1).to_list(500)
+
+    # Existing mappings
+    mappings = await tdb.rejection_cost_mappings.find(
+        {"tenant_id": tenant_id},
+        {"_id": 0},
+    ).to_list(2000)
+
+    return {
+        "components": components,
+        "stages": stages,
+        "reasons": reasons,
+        "mappings": mappings,
+    }
+
+
+@router.get("/rejection-cost-mappings")
+async def list_rejection_cost_mappings(current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    return await tdb.rejection_cost_mappings.find(
+        {"tenant_id": tenant_id}, {"_id": 0}
+    ).to_list(5000)
+
+
+@router.post("/rejection-cost-mappings")
+async def upsert_rejection_cost_mapping(data: RejectionCostMappingUpsert, current_user: dict = Depends(get_current_user)):
+    """Create or update a (stage_name, reason_id) mapping atomically."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    if not data.stage_name or not data.reason_id:
+        raise HTTPException(status_code=400, detail="stage_name and reason_id are required")
+
+    # Validate reason exists & resolve name
+    reason = await tdb.rejection_reasons.find_one(
+        {"id": data.reason_id, "tenant_id": tenant_id},
+        {"_id": 0, "id": 1, "name": 1},
+    )
+    if not reason:
+        raise HTTPException(status_code=404, detail="Rejection reason not found")
+
+    # Validate components against master (ignore unknown silently to keep saves resilient)
+    comps_map = await _resolve_master_components(tenant_id)
+    impacted = [k for k in (data.impacted_component_keys or []) if k in comps_map]
 
     now = datetime.now(timezone.utc).isoformat()
-    rule = {
+    existing = await tdb.rejection_cost_mappings.find_one(
+        {"tenant_id": tenant_id, "stage_name": data.stage_name, "reason_id": data.reason_id},
+        {"_id": 0},
+    )
+    if existing:
+        await tdb.rejection_cost_mappings.update_one(
+            {"id": existing["id"]},
+            {"$set": {
+                "impacted_component_keys": impacted,
+                "notes": data.notes,
+                "reason_name": reason["name"],
+                "updated_at": now,
+                "updated_by": current_user.get("id"),
+            }},
+        )
+        existing.update({
+            "impacted_component_keys": impacted,
+            "notes": data.notes,
+            "reason_name": reason["name"],
+            "updated_at": now,
+        })
+        return existing
+
+    doc = {
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
         "stage_name": data.stage_name,
-        "stage_type": data.stage_type,
-        "cost_per_unit": data.cost_per_unit,
-        "cost_components": data.cost_components or [],
-        "description": data.description or "",
+        "reason_id": data.reason_id,
+        "reason_name": reason["name"],
+        "impacted_component_keys": impacted,
+        "notes": data.notes,
         "created_at": now,
         "updated_at": now,
+        "created_by": current_user.get("id"),
     }
-    await tdb.rejection_cost_rules.insert_one(rule)
-    rule.pop("_id", None)
-    return rule
+    await tdb.rejection_cost_mappings.insert_one(dict(doc))
+    return doc
 
-@router.put("/rejection-cost-rules/{rule_id}")
-async def update_rejection_cost_rule(rule_id: str, data: RejectionCostRuleUpdate, current_user: dict = Depends(get_current_user)):
+
+@router.delete("/rejection-cost-mappings/{mapping_id}")
+async def delete_rejection_cost_mapping(mapping_id: str, current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
     tdb = get_tenant_db()
-
-    existing = await tdb.rejection_cost_rules.find_one({"id": rule_id, "tenant_id": tenant_id})
-    if not existing:
-        raise HTTPException(status_code=404, detail="Rule not found")
-
-    updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
-    if data.cost_per_unit is not None:
-        updates["cost_per_unit"] = data.cost_per_unit
-    if data.cost_components is not None:
-        updates["cost_components"] = data.cost_components
-    if data.description is not None:
-        updates["description"] = data.description
-
-    await tdb.rejection_cost_rules.update_one({"id": rule_id}, {"$set": updates})
-    updated = await tdb.rejection_cost_rules.find_one({"id": rule_id}, {"_id": 0})
-    return updated
-
-@router.delete("/rejection-cost-rules/{rule_id}")
-async def delete_rejection_cost_rule(rule_id: str, current_user: dict = Depends(get_current_user)):
-    tenant_id = get_current_tenant_id()
-    tdb = get_tenant_db()
-    result = await tdb.rejection_cost_rules.delete_one({"id": rule_id, "tenant_id": tenant_id})
+    result = await tdb.rejection_cost_mappings.delete_one({"id": mapping_id, "tenant_id": tenant_id})
     if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Rule not found")
-    return {"message": "Rule deleted"}
+        raise HTTPException(status_code=404, detail="Mapping not found")
+    return {"message": "Mapping deleted"}
+
+
+async def _calc_rejection_cost(
+    tenant_id: str,
+    sku_id: str,
+    stage_name: str,
+    reason_id: Optional[str],
+    reason_name: Optional[str],
+    qty_rejected: int,
+) -> dict:
+    """Internal helper used by the calculate endpoint AND for enrichment in reports."""
+    tdb = get_tenant_db()
+
+    # SKU master values
+    from database import db as _db
+    sku = await _db.master_skus.find_one(
+        {"id": sku_id},
+        {"_id": 0, "id": 1, "sku_name": 1, "cogs_components_values": 1},
+    )
+    if not sku:
+        return {
+            "qty_rejected": qty_rejected,
+            "stage_name": stage_name,
+            "reason_id": reason_id,
+            "reason_name": reason_name,
+            "breakdown": [],
+            "unit_cost": 0.0,
+            "total_cost": 0.0,
+            "missing_mapping": False,
+            "missing_sku": True,
+        }
+
+    # Find mapping (by reason_id preferred, fallback to reason_name)
+    mapping_q = {"tenant_id": tenant_id, "stage_name": stage_name}
+    mapping = None
+    if reason_id:
+        mapping = await tdb.rejection_cost_mappings.find_one({**mapping_q, "reason_id": reason_id}, {"_id": 0})
+    if not mapping and reason_name:
+        mapping = await tdb.rejection_cost_mappings.find_one({**mapping_q, "reason_name": reason_name}, {"_id": 0})
+
+    impacted_keys = (mapping or {}).get("impacted_component_keys", [])
+    sku_vals = sku.get("cogs_components_values") or {}
+    comps_map = await _resolve_master_components(tenant_id)
+
+    breakdown = []
+    missing_sku_values = []
+    unit_cost = 0.0
+    for k in impacted_keys:
+        comp = comps_map.get(k)
+        if not comp:
+            continue
+        v = sku_vals.get(k)
+        if v is None:
+            missing_sku_values.append(k)
+            v = 0.0
+        v = float(v or 0)
+        breakdown.append({
+            "component_key": k,
+            "label": comp.get("label", k),
+            "unit_cost": round(v, 2),
+            "qty": qty_rejected,
+            "line_total": round(v * qty_rejected, 2),
+        })
+        unit_cost += v
+
+    return {
+        "sku_id": sku_id,
+        "sku_name": sku.get("sku_name"),
+        "qty_rejected": qty_rejected,
+        "stage_name": stage_name,
+        "reason_id": reason_id or (mapping or {}).get("reason_id"),
+        "reason_name": reason_name or (mapping or {}).get("reason_name"),
+        "breakdown": breakdown,
+        "unit_cost": round(unit_cost, 2),
+        "total_cost": round(unit_cost * qty_rejected, 2),
+        "missing_mapping": mapping is None,
+        "missing_sku_values": missing_sku_values,
+    }
+
+
+@router.post("/rejection-cost-calculate")
+async def rejection_cost_calculate(data: RejectionCostCalcRequest, current_user: dict = Depends(get_current_user)):
+    """Live calculator — used by the QC inspection form preview."""
+    tenant_id = get_current_tenant_id()
+    return await _calc_rejection_cost(
+        tenant_id,
+        data.sku_id,
+        data.stage_name,
+        data.reason_id,
+        data.reason_name,
+        max(int(data.qty_rejected or 0), 0),
+    )
 
 
 # ──────────────────────────────────────────────
@@ -1014,7 +1186,7 @@ async def get_rejection_report(
     if batch_ids:
         batches = await tdb.production_batches.find(
             {"id": {"$in": batch_ids}, "tenant_id": tenant_id},
-            {"_id": 0, "id": 1, "batch_code": 1, "sku_name": 1}
+            {"_id": 0, "id": 1, "batch_code": 1, "sku_name": 1, "sku_id": 1}
         ).to_list(len(batch_ids))
         batches_map = {b["id"]: b for b in batches}
 
@@ -1033,6 +1205,7 @@ async def get_rejection_report(
                             "inspection_id": ins["id"],
                             "batch_id": ins["batch_id"],
                             "batch_code": b.get("batch_code", ""),
+                            "sku_id": b.get("sku_id", ""),
                             "sku_name": b.get("sku_name", ""),
                             "stage_name": ins.get("stage_name", ""),
                             "stage_type": ins.get("stage_type", ""),
@@ -1055,6 +1228,7 @@ async def get_rejection_report(
                             "inspection_id": ins["id"],
                             "batch_id": ins["batch_id"],
                             "batch_code": b.get("batch_code", ""),
+                            "sku_id": b.get("sku_id", ""),
                             "sku_name": b.get("sku_name", ""),
                             "stage_name": ins.get("stage_name", ""),
                             "stage_type": ins.get("stage_type", ""),
@@ -1072,6 +1246,7 @@ async def get_rejection_report(
                     "inspection_id": ins["id"],
                     "batch_id": ins["batch_id"],
                     "batch_code": b.get("batch_code", ""),
+                    "sku_id": b.get("sku_id", ""),
                     "sku_name": b.get("sku_name", ""),
                     "stage_name": ins.get("stage_name", ""),
                     "stage_type": ins.get("stage_type", ""),
@@ -1090,6 +1265,44 @@ async def get_rejection_report(
         rows = [r for r in rows if r.get("rejection_reason", "").lower() == rejection_reason.lower()]
         total_rejected = sum(r["qty_rejected"] for r in rows)
 
+    # ── Enrich each row with cost_of_rejection ──
+    # Bulk-load mappings (stage_name + reason_name → impacted keys)
+    all_mappings = await tdb.rejection_cost_mappings.find(
+        {"tenant_id": tenant_id}, {"_id": 0}
+    ).to_list(2000)
+    mapping_lookup = {(m.get("stage_name", ""), m.get("reason_name", "")): m for m in all_mappings}
+
+    # Bulk-load SKU master values
+    sku_ids = {r.get("sku_id") for r in rows if r.get("sku_id")}
+    from database import db as _global_db
+    sku_docs = []
+    if sku_ids:
+        sku_docs = await _global_db.master_skus.find(
+            {"id": {"$in": list(sku_ids)}},
+            {"_id": 0, "id": 1, "cogs_components_values": 1},
+        ).to_list(len(sku_ids))
+    sku_vals_map = {s["id"]: (s.get("cogs_components_values") or {}) for s in sku_docs}
+
+    total_cost = 0.0
+    for r in rows:
+        m = mapping_lookup.get((r.get("stage_name", ""), r.get("rejection_reason", "")))
+        if not m:
+            r["cost_of_rejection"] = 0.0
+            r["cost_breakdown"] = []
+            r["missing_mapping"] = True
+            continue
+        sku_v = sku_vals_map.get(r.get("sku_id", ""), {})
+        unit_cost = 0.0
+        breakdown = []
+        for k in m.get("impacted_component_keys", []):
+            v = float(sku_v.get(k) or 0)
+            unit_cost += v
+            breakdown.append({"component_key": k, "unit_cost": round(v, 2)})
+        r["cost_of_rejection"] = round(unit_cost * (r.get("qty_rejected") or 0), 2)
+        r["cost_breakdown"] = breakdown
+        r["missing_mapping"] = False
+        total_cost += r["cost_of_rejection"]
+
     # Summary by resource
     by_resource = {}
     for r in rows:
@@ -1105,6 +1318,7 @@ async def get_rejection_report(
     return {
         "rows": rows,
         "total_rejected": total_rejected,
+        "total_cost": round(total_cost, 2),
         "by_resource": [{"name": k, "bottles": v} for k, v in sorted(by_resource.items())],
         "by_date": [{"date": k, "bottles": v} for k, v in sorted(by_date.items())],
     }

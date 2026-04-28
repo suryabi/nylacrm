@@ -290,7 +290,7 @@ export default function RejectionReport() {
               <table className="w-full text-sm min-w-[800px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    {['Date', 'Batch', 'SKU', 'Stage', 'Resource', 'Crates Inspected', 'Rejected Count', 'Reason', 'Remarks'].map(h => (
+                    {['Date', 'Batch', 'SKU', 'Stage', 'Resource', 'Crates Inspected', 'Rejected Count', 'Reason', 'Cost of Rejection', 'Remarks'].map(h => (
                       <th key={h} className="text-left px-4 py-2.5 text-[10px] text-slate-500 uppercase tracking-wider font-medium whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -306,6 +306,13 @@ export default function RejectionReport() {
                       <td className="px-4 py-2.5 text-slate-600 text-center">{r.qty_inspected}</td>
                       <td className="px-4 py-2.5 font-bold text-red-600 text-center">{r.qty_rejected}</td>
                       <td className="px-4 py-2.5 text-slate-600">{r.rejection_reason || '-'}</td>
+                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                        {r.missing_mapping ? (
+                          <span className="text-amber-600 text-xs italic" title="No mapping configured for this Stage × Reason. Configure under Production → Rejection Cost Config.">— not mapped</span>
+                        ) : (
+                          <span className="font-semibold text-rose-700">₹{(r.cost_of_rejection || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        )}
+                      </td>
                       <td className="px-4 py-2.5 text-slate-400">{r.remarks || '-'}</td>
                     </tr>
                   ))}
@@ -314,7 +321,9 @@ export default function RejectionReport() {
                   <tr className="bg-slate-50 border-t border-slate-200 font-semibold">
                     <td colSpan={6} className="px-4 py-2.5 text-right text-slate-600">Total</td>
                     <td className="px-4 py-2.5 text-red-600 text-center">{report.total_rejected.toLocaleString()}</td>
-                    <td colSpan={2}></td>
+                    <td className="px-4 py-2.5"></td>
+                    <td className="px-4 py-2.5 text-right text-rose-700">₹{(report.total_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td></td>
                   </tr>
                 </tfoot>
               </table>

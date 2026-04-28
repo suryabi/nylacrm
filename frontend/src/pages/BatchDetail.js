@@ -126,21 +126,36 @@ export default function BatchDetail() {
   const [showHistory, setShowHistory] = useState(false);
   const [showRejections, setShowRejections] = useState(false);
   const [rejFilter, setRejFilter] = useState({ resource: '', date: '', reason: '', stage: '' });
+  const [costMappings, setCostMappings] = useState([]);
+  const [skuCogs, setSkuCogs] = useState({});
 
   const fetchBatch = useCallback(async () => {
     try {
       const headers = getAuthHeaders();
-      const [bRes, hRes, rrRes, qtRes] = await Promise.allSettled([
+      const [bRes, hRes, rrRes, qtRes, mRes] = await Promise.allSettled([
         axios.get(`${API_URL}/production/batches/${batchId}`, { headers }),
         axios.get(`${API_URL}/production/batches/${batchId}/history`, { headers }),
         axios.get(`${API_URL}/production/rejection-reasons`, { headers }),
         axios.get(`${API_URL}/production/qc-team`, { headers }),
+        axios.get(`${API_URL}/production/rejection-cost-mappings`, { headers }),
       ]);
-      if (bRes.status === 'fulfilled') setBatch(bRes.value.data);
+      if (bRes.status === 'fulfilled') {
+        setBatch(bRes.value.data);
+        // Load SKU master cogs values for this batch's SKU
+        const skuId = bRes.value.data?.sku_id;
+        if (skuId) {
+          try {
+            const skuRes = await axios.get(`${API_URL}/master-skus`, { headers });
+            const me = (skuRes.data?.skus || []).find((s) => s.id === skuId);
+            setSkuCogs(me?.cogs_components_values || {});
+          } catch { /* ignore */ }
+        }
+      }
       else { toast.error('Batch not found'); navigate('/production-batches'); return; }
       if (hRes.status === 'fulfilled') setHistory(hRes.value.data);
       if (rrRes.status === 'fulfilled') setRejectionReasons(rrRes.value.data);
       if (qtRes.status === 'fulfilled') setQcTeam(qtRes.value.data);
+      if (mRes.status === 'fulfilled') setCostMappings(mRes.value.data || []);
     } finally {
       setLoading(false);
     }
@@ -672,7 +687,20 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
                     </button>
                   </div>
                   <div className="space-y-2">
-                    {entry.rejItems.map((rej, rIdx) => (
+                    {entry.rejItems.map((rej, rIdx) => {
+                      const qty = parseInt(rej.qty_rejected) || 0;
+                      const reason = rej.reason || '';
+                      let cost = 0;
+                      let mapped = false;
+                      if (qty > 0 && reason) {
+                        const m = costMappings.find((mm) => mm.stage_name === stage.name && mm.reason_name === reason);
+                        if (m) {
+                          mapped = true;
+                          const unit = (m.impacted_component_keys || []).reduce((s, k) => s + (parseFloat(skuCogs[k]) || 0), 0);
+                          cost = unit * qty;
+                        }
+                      }
+                      return (
                       <div key={rIdx} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3" data-testid={`rej-item-${eIdx}-${rIdx}`}>
                         <div className="w-full sm:w-28">
                           <input type="number" value={rej.qty_rejected} onChange={e => updateRejItem(eIdx, rIdx, 'qty_rejected', e.target.value)}
@@ -691,11 +719,21 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
                             </SelectContent>
                           </Select>
                         </div>
+                        {qty > 0 && reason && (
+                          <div className="text-xs whitespace-nowrap min-w-[120px] text-right" data-testid={`rej-cost-${eIdx}-${rIdx}`}>
+                            {mapped ? (
+                              <span className="font-semibold text-rose-700">₹{cost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            ) : (
+                              <span className="text-amber-600 italic" title="No mapping configured for this Stage × Reason. Configure under Production → Rejection Cost Config.">— not mapped</span>
+                            )}
+                          </div>
+                        )}
                         <button onClick={() => removeRejItem(eIdx, rIdx)} className="p-1.5 hover:bg-red-50 rounded transition-colors self-end sm:self-auto" data-testid={`rej-remove-${eIdx}-${rIdx}`}>
                           <Trash2 size={12} className="text-slate-300 hover:text-red-400" />
                         </button>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
