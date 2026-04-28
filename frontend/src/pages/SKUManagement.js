@@ -41,6 +41,7 @@ export default function SKUManagement() {
   const [skus, setSkus] = useState([]);
   const [categories, setCategories] = useState([]);
   const [packagingTypes, setPackagingTypes] = useState([]);
+  const [cogsComponents, setCogsComponents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showInactive, setShowInactive] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -61,6 +62,7 @@ export default function SKUManagement() {
     is_active: true,
     sort_order: 0,
     packaging_config: { production: [], stock_in: [], stock_out: [] },
+    cogs_components_values: {},
   });
 
   const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -70,6 +72,7 @@ export default function SKUManagement() {
     fetchSkus();
     fetchCategories();
     fetchPackagingTypes();
+    fetchCogsComponents();
   }, [showInactive]);
 
   const fetchSkus = async () => {
@@ -100,12 +103,23 @@ export default function SKUManagement() {
     } catch { /* ignore */ }
   };
 
+  const fetchCogsComponents = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/master/cogs-components?is_active=true`, { headers: getHeaders() });
+      const items = (res.data?.components || [])
+        .filter((c) => c.unit === 'rupee')
+        .sort((a, b) => (a.sort_order || 99) - (b.sort_order || 99));
+      setCogsComponents(items);
+    } catch { /* ignore */ }
+  };
+
   const handleOpenCreate = () => {
     setEditingSku(null);
     setFormData({
       sku_name: '', external_sku_id: '', category: '', unit: '', description: '',
       is_active: true, sort_order: skus.length + 1,
       packaging_config: { production: [], stock_in: [], stock_out: [] },
+      cogs_components_values: {},
     });
     setShowModal(true);
   };
@@ -121,6 +135,7 @@ export default function SKUManagement() {
       is_active: sku.is_active !== false,
       sort_order: sku.sort_order || 0,
       packaging_config: sku.packaging_config || { production: [], stock_in: [], stock_out: [] },
+      cogs_components_values: sku.cogs_components_values || {},
     });
     setShowModal(true);
   };
@@ -141,11 +156,20 @@ export default function SKUManagement() {
 
     setSaving(true);
     try {
+      // Clean empty values from cogs_components_values; pass null to remove keys
+      const cleanedCogs = {};
+      Object.entries(formData.cogs_components_values || {}).forEach(([k, v]) => {
+        if (v === '' || v === null || v === undefined) return;
+        const num = typeof v === 'number' ? v : parseFloat(v);
+        if (!isNaN(num)) cleanedCogs[k] = num;
+      });
+      const payload = { ...formData, cogs_components_values: cleanedCogs };
+
       if (editingSku) {
-        await skusAPI.update(editingSku.id, formData);
+        await skusAPI.update(editingSku.id, payload);
         toast.success('SKU updated successfully');
       } else {
-        await skusAPI.create(formData);
+        await skusAPI.create(payload);
         toast.success('SKU created successfully');
       }
       setShowModal(false);
@@ -567,6 +591,45 @@ export default function SKUManagement() {
                 );
               })}
             </div>
+
+            {/* COGS Costs — values for each active master COGS component (₹) */}
+            {cogsComponents.length > 0 && (
+              <div className="space-y-3 pt-2 border-t" data-testid="sku-cogs-costs-section">
+                <div>
+                  <Label className="text-sm font-semibold">COGS Costs</Label>
+                  <p className="text-[11px] text-muted-foreground">Set the unit price for each COGS component. These values are used by the COGS Calculator across all cities.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {cogsComponents.map((c) => {
+                    const v = formData.cogs_components_values?.[c.key] ?? '';
+                    return (
+                      <div key={c.key} className="space-y-1">
+                        <Label className="text-xs text-slate-600">{c.label} (₹)</Label>
+                        <Input
+                          type="text"
+                          value={v}
+                          placeholder="0.00"
+                          className="h-9 text-right font-mono"
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                              setFormData((prev) => ({
+                                ...prev,
+                                cogs_components_values: {
+                                  ...(prev.cogs_components_values || {}),
+                                  [c.key]: val === '' ? '' : parseFloat(val),
+                                },
+                              }));
+                            }
+                          }}
+                          data-testid={`sku-cogs-${c.key}`}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">

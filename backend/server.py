@@ -1927,6 +1927,7 @@ class SKUCreate(BaseModel):
     is_active: bool = True
     sort_order: int = 0
     packaging_config: Optional[dict] = None  # {production: [{id,name,units,is_default}], stock_in: [...], stock_out: [...]}
+    cogs_components_values: Optional[Dict[str, float]] = None  # {component_key: price_in_rupees}
 
 class SKUUpdate(BaseModel):
     sku_name: Optional[str] = None
@@ -1937,6 +1938,7 @@ class SKUUpdate(BaseModel):
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
     packaging_config: Optional[dict] = None
+    cogs_components_values: Optional[Dict[str, float]] = None  # merged (not replaced) on PUT
 
 # Default SKUs to seed if database is empty
 DEFAULT_SKUS = [
@@ -1993,7 +1995,8 @@ async def get_master_skus(
             'description': sku.get('description'),
             'is_active': sku.get('is_active', True),
             'sort_order': sku.get('sort_order', 0),
-            'packaging_config': sku.get('packaging_config')
+            'packaging_config': sku.get('packaging_config'),
+            'cogs_components_values': sku.get('cogs_components_values') or {}
         })
     
     return {'skus': formatted_skus}
@@ -2035,7 +2038,8 @@ async def create_sku(
         'description': sku.description,
         'is_active': sku.is_active,
         'sort_order': sku.sort_order,
-        'packaging_config': doc.get('packaging_config')
+        'packaging_config': doc.get('packaging_config'),
+        'cogs_components_values': doc.get('cogs_components_values') or {}
     }
 
 @api_router.put("/master-skus/{sku_id}")
@@ -2062,6 +2066,20 @@ async def update_sku(
             raise HTTPException(status_code=400, detail=f"External SKU ID '{sku_data.external_sku_id}' is already used by another SKU")
 
     update_dict = {k: v for k, v in sku_data.model_dump().items() if v is not None}
+    # Merge (not replace) cogs_components_values dict
+    if 'cogs_components_values' in update_dict:
+        new_vals = update_dict.pop('cogs_components_values') or {}
+        existing_vals = existing.get('cogs_components_values') or {}
+        merged = {**existing_vals}
+        for k, v in new_vals.items():
+            if v is None or v == '':
+                merged.pop(k, None)
+            else:
+                try:
+                    merged[k] = float(v)
+                except (TypeError, ValueError):
+                    pass
+        update_dict['cogs_components_values'] = merged
     update_dict['updated_at'] = datetime.now(timezone.utc).isoformat()
     
     await db.master_skus.update_one({'id': sku_id}, {'$set': update_dict})
@@ -2077,7 +2095,8 @@ async def update_sku(
         'description': updated.get('description'),
         'is_active': updated.get('is_active', True),
         'sort_order': updated.get('sort_order', 0),
-        'packaging_config': updated.get('packaging_config')
+        'packaging_config': updated.get('packaging_config'),
+        'cogs_components_values': updated.get('cogs_components_values') or {}
     }
 
 @api_router.delete("/master-skus/{sku_id}")
@@ -2178,13 +2197,37 @@ async def delete_packaging_type(type_id: str, current_user: dict = Depends(get_c
 
 @api_router.get("/cogs/{city}")
 async def get_cogs_data(city: str, current_user: dict = Depends(get_current_user)):
-    """Get COGS data for all SKUs in a city"""
+    """Get COGS data for all SKUs in a city.
+
+    Per-SKU master COGS values (set in SKU Management) are overlaid on each
+    city row so the calculator always reflects the SKU master. City-level
+    storage of these fields is no longer authoritative.
+    """
     
-    # Get active SKUs from master list
+    # Get active SKUs from master list (with their master COGS values)
     await seed_default_skus()
-    master_sku_docs = await db.master_skus.find({'is_active': {'$ne': False}}, {'_id': 0, 'sku_name': 1}).to_list(200)
+    master_sku_docs = await db.master_skus.find(
+        {'is_active': {'$ne': False}},
+        {'_id': 0, 'id': 1, 'sku_name': 1, 'cogs_components_values': 1}
+    ).to_list(200)
     master_skus = [s['sku_name'] for s in master_sku_docs]
-    
+    master_values_by_sku = {
+        s['sku_name']: (s.get('cogs_components_values') or {}) for s in master_sku_docs
+    }
+    master_id_by_sku = {s['sku_name']: s.get('id') for s in master_sku_docs}
+
+    # Resolve which keys are master-managed (so we know what to overlay)
+    try:
+        comps = await db.cogs_components.find(
+            {'tenant_id': get_current_tenant_id()},
+            {'_id': 0, 'key': 1, 'unit': 1}
+        ).to_list(200)
+        master_managed_keys = {c['key'] for c in comps if c.get('unit') == 'rupee'}
+    except Exception:
+        master_managed_keys = set()
+    # Always exclude calculator-owned system keys
+    master_managed_keys -= {'outbound_logistics_cost', 'distribution_cost', 'gross_margin'}
+
     cogs_data = await get_tdb().cogs_data.find({'city': city}, {'_id': 0}).to_list(100)
     
     # Create default data for SKUs that don't have data yet
@@ -2204,17 +2247,62 @@ async def get_cogs_data(city: str, current_user: dict = Depends(get_current_user
     users = await get_tdb().users.find({'id': {'$in': user_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(100)
     user_map = {u['id']: u['name'] for u in users}
     
-    # Add editor names
+    # Overlay master values + add master_sku_id for client-side dispatch
     for data in cogs_data:
         if data.get('last_edited_by'):
             data['editor_name'] = user_map.get(data['last_edited_by'], 'Unknown')
-    
+        sku_name = data.get('sku_name')
+        master_vals = master_values_by_sku.get(sku_name) or {}
+        # Overlay master-managed keys (legacy + custom contributors)
+        for k, v in master_vals.items():
+            if k in master_managed_keys or k not in {'outbound_logistics_cost', 'distribution_cost', 'gross_margin'}:
+                # Top-level legacy key (primary/secondary/manufacturing) OR custom key
+                if k in {'primary_packaging_cost', 'secondary_packaging_cost', 'manufacturing_variable_cost'}:
+                    data[k] = v
+                else:
+                    cc = data.get('custom_components') or {}
+                    cc[k] = v
+                    data['custom_components'] = cc
+        data['master_sku_id'] = master_id_by_sku.get(sku_name)
+        # Recompute total_cogs / derived fields based on overlaid values
+        try:
+            total_cogs = 0.0
+            for k in master_managed_keys:
+                if k in {'primary_packaging_cost', 'secondary_packaging_cost', 'manufacturing_variable_cost'}:
+                    total_cogs += float(data.get(k) or 0)
+                else:
+                    total_cogs += float((data.get('custom_components') or {}).get(k) or 0)
+            # System columns always-on
+            total_cogs += float(data.get('outbound_logistics_cost') or 0)
+            margin_pct = float(data.get('gross_margin') or 0)
+            dist_pct = float(data.get('distribution_cost') or 0)
+            gross_margin_rupees = total_cogs * (margin_pct / 100)
+            base_cost = total_cogs + gross_margin_rupees
+            if dist_pct >= 100:
+                landing = 0
+            elif dist_pct > 0:
+                landing = base_cost / (1 - dist_pct / 100)
+            else:
+                landing = base_cost
+            data['total_cogs'] = round(total_cogs, 2)
+            data['ex_factory_price'] = round(base_cost, 2)
+            data['base_cost'] = round(base_cost, 2)
+            data['minimum_landing_price'] = round(landing, 2)
+        except Exception:
+            pass
+
     return {'cogs_data': cogs_data}
 
 @api_router.put("/cogs/{sku_id}")
 async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: dict = Depends(get_current_user)):
-    """Update COGS data for a SKU"""
-    
+    """Update COGS data for a SKU.
+
+    Master-managed COGS components (e.g., primary/secondary/manufacturing + any
+    custom rupee components in cogs_components master) are stored on the SKU
+    master so they apply across all cities. Calculator-owned system columns
+    (outbound_logistics_cost, distribution_cost, gross_margin) and editor
+    metadata stay on the per-city cogs_data row.
+    """
     update_data = updates.model_dump(exclude_none=True)
 
     # Merge custom_components dict (don't replace whole dict — patch keys)
@@ -2223,6 +2311,45 @@ async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: d
         existing_cc = (await get_tdb().cogs_data.find_one({'id': sku_id}, {'_id': 0, 'custom_components': 1}) or {}).get('custom_components') or {}
         merged = {**existing_cc, **{k: float(v) for k, v in patch.items()}}
         update_data['custom_components'] = merged
+
+    # Look up the cogs_data row's sku_name so we can dispatch master keys to SKU master
+    row = await get_tdb().cogs_data.find_one({'id': sku_id}, {'_id': 0, 'sku_name': 1})
+    sku_name = (row or {}).get('sku_name')
+
+    # Resolve master-managed rupee component keys (excluding calculator-owned system keys)
+    try:
+        comps = await db.cogs_components.find(
+            {'tenant_id': get_current_tenant_id()},
+            {'_id': 0, 'key': 1, 'unit': 1}
+        ).to_list(200)
+        master_managed_keys = {c['key'] for c in comps if c.get('unit') == 'rupee'}
+    except Exception:
+        master_managed_keys = set()
+    master_managed_keys -= {'outbound_logistics_cost', 'distribution_cost', 'gross_margin'}
+    LEGACY_TOP = {'primary_packaging_cost', 'secondary_packaging_cost', 'manufacturing_variable_cost'}
+
+    # Dispatch master-managed values to SKU master (cogs_components_values)
+    if sku_name:
+        master_patch = {}
+        for k in list(update_data.keys()):
+            if k in master_managed_keys and k in LEGACY_TOP:
+                master_patch[k] = float(update_data[k] or 0)
+        # Custom components patches that are master-managed:
+        for k, v in (update_data.get('custom_components') or {}).items():
+            if k in master_managed_keys:
+                master_patch[k] = float(v or 0)
+        if master_patch:
+            sku_doc = await db.master_skus.find_one({'sku_name': sku_name}, {'_id': 0, 'id': 1, 'cogs_components_values': 1})
+            if sku_doc:
+                existing_master = sku_doc.get('cogs_components_values') or {}
+                merged_master = {**existing_master, **master_patch}
+                await db.master_skus.update_one(
+                    {'id': sku_doc['id']},
+                    {'$set': {
+                        'cogs_components_values': merged_master,
+                        'updated_at': datetime.now(timezone.utc).isoformat(),
+                    }}
+                )
 
     # Calculate computed values
     if any(k in update_data for k in ['primary_packaging_cost', 'secondary_packaging_cost', 'manufacturing_variable_cost', 'gross_margin', 'outbound_logistics_cost', 'distribution_cost', 'custom_components']):
