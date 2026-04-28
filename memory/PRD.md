@@ -385,6 +385,12 @@
 - [x] **Files**: `backend/server.py` (POST dispatch + new PUT), `backend/services/external_invoices_service.py` (new helpers), `backend/routes/accounts.py` (mirror dispatch), `backend/routes/cogs_components.py` (system-delete guard).
 - [x] **Testing**: 25/25 backend regression tests passed (iteration_144) covering this API + 10+ untested features from prior session (lead_type propagation, include_in_gop_metrics defaults, Return Reasons CRUD, distributor available-stock, Master COGS Components, custom_components merge).
 
+### CORS — External Integrations (2026-04-28)
+- [x] **Whitelisted `briefingiq.com` (incl. subdomains)** in CORS regex for browser-based partner integrations.
+- [x] **Public CORS override middleware** for `/api/accounts/{*}/invoices` and `/api/accounts/{*}/invoices/{*}` — accepts ANY origin, handles OPTIONS preflight, returns `Access-Control-Allow-Origin: <origin>`, drops `Allow-Credentials` (Bearer-token-only auth on these routes). Server-to-server callers (curl/Postman/backend) unaffected since CORS is browser-only.
+- [x] **Files**: `backend/server.py` (cors_origin_regex extended; new `_open_cors_for_external_invoices` middleware).
+- [x] **Tested**: POST/PUT from `random-erp.io`, `app.briefingiq.com`, and no-Origin (S2S) all return 200 with correct ACAO headers; legacy CRM payload regression unaffected.
+
 ## Upcoming Tasks (P1)
 - Auto-generate Provisional Invoice (on shipment -> "delivered")
 - Build Reporting Module (stock balance, deliveries, settlements, distributor performance)

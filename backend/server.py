@@ -9867,9 +9867,10 @@ else:
 #   - https://*.emergent.host (Emergent native deployment URLs)
 #   - https://*.emergentagent.com and https://invoice-api-dev.preview.emergentagent.com (preview URLs)
 #   - https://*.nylaairwater.earth (custom tenant domains)
+#   - https://*.briefingiq.com (external integration partner)
 cors_origin_regex = (
     r"https://([a-zA-Z0-9\-]+\.)*"
-    r"(emergent\.host|emergentagent\.com|nylaairwater\.earth)$"
+    r"(emergent\.host|emergentagent\.com|nylaairwater\.earth|briefingiq\.com)$"
 )
 
 app.add_middleware(
@@ -9880,6 +9881,51 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ============= PUBLIC INTEGRATION CORS OVERRIDE =============
+# External Invoice ingestion endpoints are intentionally open to ANY origin so
+# third-party ERPs / browser-based integrations can POST / PUT invoices without
+# being whitelisted. These endpoints do NOT use cookies — auth is via Bearer
+# token — so allow_credentials is intentionally False here.
+import re as _re
+_PUBLIC_INVOICE_PATH = _re.compile(r"^/api/accounts/[^/]+/invoices(/[^/]+)?/?$")
+
+
+@app.middleware("http")
+async def _open_cors_for_external_invoices(request, call_next):
+    path = request.url.path
+    is_public = bool(_PUBLIC_INVOICE_PATH.match(path))
+
+    if is_public and request.method == "OPTIONS":
+        # Handle preflight ourselves so unknown origins are not blocked.
+        from starlette.responses import Response
+        req_headers = request.headers.get("access-control-request-headers", "*")
+        return Response(
+            status_code=204,
+            headers={
+                "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": req_headers,
+                "Access-Control-Max-Age": "86400",
+                "Vary": "Origin",
+            },
+        )
+
+    response = await call_next(request)
+    if is_public:
+        # Override any CORS headers set by the global CORSMiddleware so the
+        # response is accepted by the browser regardless of origin.
+        origin = request.headers.get("origin", "*")
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Expose-Headers"] = "*"
+        response.headers["Vary"] = "Origin"
+        # Browsers ignore credentials when '*' is used; never expose them here.
+        if "access-control-allow-credentials" in response.headers:
+            del response.headers["access-control-allow-credentials"]
+    return response
 
 logging.basicConfig(
     level=logging.INFO,
