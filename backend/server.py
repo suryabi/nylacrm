@@ -1895,6 +1895,7 @@ class SKUModel(BaseModel):
     model_config = ConfigDict(extra="allow")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     sku_name: str  # e.g., "20L Premium", "Nyla – 600 ml / Silver"
+    external_sku_id: Optional[str] = None  # Identifier used by external systems / integrations
     category: str  # e.g., "Jar", "Bottle", "Premium", "Sparkling", "White Label"
     unit: str  # e.g., "20L", "600ml", "1L x 12"
     description: Optional[str] = None
@@ -1906,6 +1907,7 @@ class SKUModel(BaseModel):
 
 class SKUCreate(BaseModel):
     sku_name: str
+    external_sku_id: Optional[str] = None
     category: str
     unit: str
     description: Optional[str] = None
@@ -1915,6 +1917,7 @@ class SKUCreate(BaseModel):
 
 class SKUUpdate(BaseModel):
     sku_name: Optional[str] = None
+    external_sku_id: Optional[str] = None
     category: Optional[str] = None
     unit: Optional[str] = None
     description: Optional[str] = None
@@ -1971,6 +1974,7 @@ async def get_master_skus(
             'id': sku.get('id'),
             'sku': sku.get('sku_name'),
             'sku_name': sku.get('sku_name'),
+            'external_sku_id': sku.get('external_sku_id'),
             'category': sku.get('category'),
             'unit': sku.get('unit'),
             'description': sku.get('description'),
@@ -1991,7 +1995,13 @@ async def create_sku(
     existing = await db.master_skus.find_one({'sku_name': sku_data.sku_name})
     if existing:
         raise HTTPException(status_code=400, detail=f"SKU '{sku_data.sku_name}' already exists")
-    
+
+    # Enforce uniqueness on external_sku_id (when provided)
+    if sku_data.external_sku_id:
+        ext_dup = await db.master_skus.find_one({'external_sku_id': sku_data.external_sku_id})
+        if ext_dup:
+            raise HTTPException(status_code=400, detail=f"External SKU ID '{sku_data.external_sku_id}' is already used by another SKU")
+
     sku = SKUModel(**sku_data.model_dump(), created_by=current_user.get('id'))
     doc = sku.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
@@ -2006,6 +2016,7 @@ async def create_sku(
         'id': sku.id,
         'sku': sku.sku_name,
         'sku_name': sku.sku_name,
+        'external_sku_id': sku.external_sku_id,
         'category': sku.category,
         'unit': sku.unit,
         'description': sku.description,
@@ -2030,7 +2041,13 @@ async def update_sku(
         duplicate = await db.master_skus.find_one({'sku_name': sku_data.sku_name, 'id': {'$ne': sku_id}})
         if duplicate:
             raise HTTPException(status_code=400, detail=f"SKU '{sku_data.sku_name}' already exists")
-    
+
+    # Enforce uniqueness on external_sku_id (when changing or set)
+    if sku_data.external_sku_id and sku_data.external_sku_id != existing.get('external_sku_id'):
+        ext_dup = await db.master_skus.find_one({'external_sku_id': sku_data.external_sku_id, 'id': {'$ne': sku_id}})
+        if ext_dup:
+            raise HTTPException(status_code=400, detail=f"External SKU ID '{sku_data.external_sku_id}' is already used by another SKU")
+
     update_dict = {k: v for k, v in sku_data.model_dump().items() if v is not None}
     update_dict['updated_at'] = datetime.now(timezone.utc).isoformat()
     
@@ -2041,6 +2058,7 @@ async def update_sku(
         'id': updated.get('id'),
         'sku': updated.get('sku_name'),
         'sku_name': updated.get('sku_name'),
+        'external_sku_id': updated.get('external_sku_id'),
         'category': updated.get('category'),
         'unit': updated.get('unit'),
         'description': updated.get('description'),

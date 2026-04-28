@@ -54,6 +54,7 @@ export default function SKUManagement() {
   // Form state
   const [formData, setFormData] = useState({
     sku_name: '',
+    external_sku_id: '',
     category: '',
     unit: '',
     description: '',
@@ -102,7 +103,7 @@ export default function SKUManagement() {
   const handleOpenCreate = () => {
     setEditingSku(null);
     setFormData({
-      sku_name: '', category: '', unit: '', description: '',
+      sku_name: '', external_sku_id: '', category: '', unit: '', description: '',
       is_active: true, sort_order: skus.length + 1,
       packaging_config: { production: [], stock_in: [], stock_out: [] },
     });
@@ -113,6 +114,7 @@ export default function SKUManagement() {
     setEditingSku(sku);
     setFormData({
       sku_name: sku.sku_name || sku.sku,
+      external_sku_id: sku.external_sku_id || '',
       category: sku.category || '',
       unit: sku.unit || '',
       description: sku.description || '',
@@ -334,6 +336,15 @@ export default function SKUManagement() {
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{sku.sku_name || sku.sku}</span>
+                        {sku.external_sku_id && (
+                          <span
+                            className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200/70 dark:bg-indigo-900/20 dark:text-indigo-400"
+                            title="External SKU ID — used by integrations"
+                            data-testid={`sku-external-id-${sku.id}`}
+                          >
+                            ext: {sku.external_sku_id}
+                          </span>
+                        )}
                         {sku.is_active === false && (
                           <Badge variant="outline" className="text-red-600 border-red-300">
                             Inactive
@@ -407,15 +418,29 @@ export default function SKUManagement() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="sku_name">SKU Name *</Label>
-              <Input
-                id="sku_name"
-                value={formData.sku_name}
-                onChange={(e) => setFormData({ ...formData, sku_name: e.target.value })}
-                placeholder="e.g., 20L Premium"
-                data-testid="sku-name-input"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="sku_name">SKU Name *</Label>
+                <Input
+                  id="sku_name"
+                  value={formData.sku_name}
+                  onChange={(e) => setFormData({ ...formData, sku_name: e.target.value })}
+                  placeholder="e.g., 20L Premium"
+                  data-testid="sku-name-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="external_sku_id">External SKU ID</Label>
+                <Input
+                  id="external_sku_id"
+                  value={formData.external_sku_id}
+                  onChange={(e) => setFormData({ ...formData, external_sku_id: e.target.value })}
+                  placeholder="e.g. ERP-2032 / vendor code"
+                  className="font-mono text-sm"
+                  data-testid="sku-external-id-input"
+                />
+                <p className="text-[10px] text-muted-foreground">Used by external systems / integrations to identify this SKU.</p>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
