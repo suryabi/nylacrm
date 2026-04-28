@@ -13,6 +13,11 @@ import base64
 from database import get_tenant_db
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
+from services.external_invoices_service import (
+    is_external_payload,
+    create_external_invoice,
+    update_external_invoice,
+)
 
 router = APIRouter()
 
@@ -429,7 +434,15 @@ async def get_account_invoices(account_id: str, current_user: dict = Depends(get
 
 @router.post("/{account_id}/invoices")
 async def create_account_invoice(account_id: str, invoice_data: dict, current_user: dict = Depends(get_current_user)):
-    """Create an invoice for an account"""
+    """Create an invoice for an account.
+
+    Supports two payload shapes:
+    1. Internal CRM (legacy): `{line_items, invoice_date, notes}` — uses internal UUID account id, computes COGS/margin.
+    2. External system: `{invoiceNo, invoiceDate, grossInvoiceValue, items[{itemId,...}], ...}` — itemId maps to master_skus.external_sku_id.
+    """
+    if is_external_payload(invoice_data):
+        return await create_external_invoice(account_id, invoice_data, current_user.get('id'))
+
     tdb = get_tdb()
     account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
     if not account:
@@ -517,6 +530,27 @@ async def create_account_invoice(account_id: str, invoice_data: dict, current_us
             'gross_margin_percent': round(gross_margin_percent, 2)
         }
     }
+
+
+@router.put("/{account_id}/invoices/{invoice_no}")
+async def update_account_invoice(
+    account_id: str,
+    invoice_no: str,
+    invoice_data: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    """Update an existing invoice from an external system.
+
+    Expects external-system payload (`invoiceNo`, `invoiceDate`, `grossInvoiceValue`, `items[]`).
+    `account_id` may be the human ACCOUNT_ID code (e.g. ORLO-HYD-A26-001) or the UUID.
+    `invoice_no` is the stored `id` (== external invoiceNo).
+    """
+    if not is_external_payload(invoice_data):
+        raise HTTPException(
+            status_code=400,
+            detail="PUT /accounts/{account_id}/invoices/{invoice_no} expects external-system payload (invoiceNo, invoiceDate, items[]).",
+        )
+    return await update_external_invoice(account_id, invoice_no, invoice_data, current_user.get('id'))
 
 
 # ============= LOGO ROUTES =============

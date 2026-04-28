@@ -6175,13 +6175,27 @@ class AccountInvoiceCreate(BaseModel):
 @api_router.post("/accounts/{account_id}/invoices")
 async def create_account_invoice(
     account_id: str, 
-    invoice_data: AccountInvoiceCreate, 
+    invoice_data: dict, 
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Create a new invoice for an account with automatic COGS, logistics, and margin calculation.
-    COGS and logistics are fetched from the cogs_data collection based on SKU and account city.
+    Create a new invoice for an account.
+
+    Supports two payload shapes:
+    1. Internal CRM (legacy): `{invoice_date, line_items[{sku_name, bottles, price_per_bottle}], notes}` — auto-fetches COGS/logistics for the account's city, computes margins.
+    2. External system: `{invoiceNo, invoiceDate, grossInvoiceValue, items[{itemId, quantity, rate, ...}], ...}` — `itemId` maps to `master_skus.external_sku_id`; `account_id` may be the human ACCOUNT_ID code.
     """
+    # Dispatch to external-invoice handler when payload matches external shape
+    from services.external_invoices_service import is_external_payload, create_external_invoice as _create_ext_invoice
+    if is_external_payload(invoice_data):
+        return await _create_ext_invoice(account_id, invoice_data, current_user.get('id'))
+
+    # Validate internal CRM payload shape
+    try:
+        parsed = AccountInvoiceCreate(**invoice_data)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
     # Get account details
     account = await get_tdb().accounts.find_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
@@ -6205,7 +6219,7 @@ async def create_account_invoice(
     total_logistics = 0
     total_bottles = 0
     
-    for item in invoice_data.line_items:
+    for item in parsed.line_items:
         sku_name = item.sku_name
         bottles = item.bottles
         price_per_bottle = item.price_per_bottle
@@ -6265,8 +6279,8 @@ async def create_account_invoice(
         'account_id': account_uuid,
         'account_name': account_name,
         'account_city': account_city,
-        'invoice_date': invoice_data.invoice_date,
-        'due_date': (datetime.strptime(invoice_data.invoice_date, '%Y-%m-%d') + timedelta(days=30)).strftime('%Y-%m-%d'),
+        'invoice_date': parsed.invoice_date,
+        'due_date': (datetime.strptime(parsed.invoice_date, '%Y-%m-%d') + timedelta(days=30)).strftime('%Y-%m-%d'),
         'line_items': processed_items,
         'total_bottles': total_bottles,
         'grand_total': round(total_revenue, 2),
@@ -6274,7 +6288,7 @@ async def create_account_invoice(
         'total_logistics': round(total_logistics, 2),
         'gross_margin': gross_margin,
         'gross_margin_percent': gross_margin_percent,
-        'notes': invoice_data.notes,
+        'notes': parsed.notes,
         'status': 'pending',
         'created_by': current_user['id'],
         'created_by_name': current_user.get('name'),
@@ -6290,7 +6304,7 @@ async def create_account_invoice(
             'id': invoice['id'],
             'invoice_number': invoice_number,
             'account_name': account_name,
-            'invoice_date': invoice_data.invoice_date,
+            'invoice_date': parsed.invoice_date,
             'total_bottles': total_bottles,
             'line_items_count': len(processed_items)
         },
@@ -6302,6 +6316,28 @@ async def create_account_invoice(
             'gross_margin_percent': gross_margin_percent
         }
     }
+
+@api_router.put("/accounts/{account_id}/invoices/{invoice_no}")
+async def update_account_invoice(
+    account_id: str,
+    invoice_no: str,
+    invoice_data: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    """Update an existing invoice from an external system.
+
+    Expects external-system payload (`invoiceNo`, `invoiceDate`, `grossInvoiceValue`, `items[]`).
+    `account_id` may be the human ACCOUNT_ID code (e.g. ORLO-HYD-A26-001) or the UUID.
+    `invoice_no` is the stored invoice id (== external invoiceNo).
+    """
+    from services.external_invoices_service import is_external_payload, update_external_invoice as _update_ext_invoice
+    if not is_external_payload(invoice_data):
+        raise HTTPException(
+            status_code=400,
+            detail="PUT /accounts/{account_id}/invoices/{invoice_no} expects external-system payload (invoiceNo, invoiceDate, items[]).",
+        )
+    return await _update_ext_invoice(account_id, invoice_no, invoice_data, current_user.get('id'))
+
 
 @api_router.delete("/accounts/{account_id}")
 async def delete_account(account_id: str, current_user: dict = Depends(get_current_user)):
