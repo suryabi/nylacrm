@@ -4,6 +4,7 @@ import { skusAPI } from '../utils/api';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
+import { DecimalInput } from '../components/ui/decimal-input';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
@@ -602,28 +603,22 @@ export default function SKUManagement() {
                 <div className="grid grid-cols-2 gap-3">
                   {cogsComponents.map((c) => {
                     const v = formData.cogs_components_values?.[c.key];
-                    const display = v === '' || v === null || v === undefined ? '' : String(v);
                     return (
                       <div key={c.key} className="space-y-1">
                         <Label className="text-xs text-slate-600">{c.label} (₹)</Label>
-                        <Input
-                          type="text"
-                          inputMode="decimal"
-                          value={display}
+                        <DecimalInput
+                          value={v}
                           placeholder="0.00"
                           className="h-9 text-right font-mono"
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                              setFormData((prev) => ({
-                                ...prev,
-                                cogs_components_values: {
-                                  ...(prev.cogs_components_values || {}),
-                                  [c.key]: val,
-                                },
-                              }));
-                            }
-                          }}
+                          onChange={(val) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              cogs_components_values: {
+                                ...(prev.cogs_components_values || {}),
+                                [c.key]: val,
+                              },
+                            }))
+                          }
                           data-testid={`sku-cogs-${c.key}`}
                         />
                       </div>

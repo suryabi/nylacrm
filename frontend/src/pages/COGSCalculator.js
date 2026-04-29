@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { DecimalInput } from '../components/ui/decimal-input';
 import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
 import { Download, Save, Copy, Trash2 } from 'lucide-react';
@@ -678,16 +679,9 @@ export default function COGSCalculator() {
                       return (
                         <div key={c.key}>
                           <Label className="text-xs text-muted-foreground">{c.label} ({c.unit === 'rupee' ? '₹' : '%'})</Label>
-                          <Input
-                            type="text"
-                            inputMode="decimal"
-                            value={(() => { const v = readField(row, c.key); return v === '' || v === null || v === undefined ? '' : String(v); })()}
-                            onChange={e => {
-                              const val = e.target.value;
-                              if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                writeField(index, c.key, val);
-                              }
-                            }}
+                          <DecimalInput
+                            value={readField(row, c.key)}
+                            onChange={(val) => writeField(index, c.key, val)}
                             className={`h-9 text-right text-sm ${isDist ? 'bg-amber-50' : ''}`}
                             placeholder={c.unit === 'percent' ? '%' : '0.00'}
                             data-testid={`mobile-col-${c.key}-${index}`}
@@ -702,16 +696,9 @@ export default function COGSCalculator() {
                       return (
                         <div key={`sys-${c.key}`}>
                           <Label className="text-xs text-muted-foreground">{c.label} ({c.unit === 'rupee' ? '₹' : '%'})</Label>
-                          <Input
-                            type="text"
-                            inputMode="decimal"
-                            value={row[c.key] === '' || row[c.key] === null || row[c.key] === undefined ? '' : String(row[c.key])}
-                            onChange={e => {
-                              const val = e.target.value;
-                              if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                updateField(index, c.key, val);
-                              }
-                            }}
+                          <DecimalInput
+                            value={row[c.key]}
+                            onChange={(val) => updateField(index, c.key, val)}
                             className={`h-9 text-right text-sm ${isDist ? 'bg-amber-50' : ''}`}
                             placeholder={c.unit === 'percent' ? '%' : '0.00'}
                             data-testid={`mobile-sys-col-${c.key}-${index}`}
@@ -746,16 +733,9 @@ export default function COGSCalculator() {
                   {/* Actual Landing Price */}
                   <div className="pt-2 border-t">
                     <Label className="text-xs text-muted-foreground">Actual Landing Price (What-If)</Label>
-                    <Input
-                      type="text"
-                      inputMode="decimal"
-                      value={actualLandingPrices[row.id] === '' || actualLandingPrices[row.id] === null || actualLandingPrices[row.id] === undefined ? '' : String(actualLandingPrices[row.id])}
-                      onChange={e => {
-                        const val = e.target.value;
-                        if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                          updateActualLandingPrice(index, val);
-                        }
-                      }}
+                    <DecimalInput
+                      value={actualLandingPrices[row.id]}
+                      onChange={(val) => updateActualLandingPrice(index, val)}
                       className="h-10 text-right bg-purple-50"
                       placeholder="Enter price to calculate margin"
                       data-testid={`actual-landing-price-mobile-${index}`}
@@ -829,17 +809,10 @@ export default function COGSCalculator() {
                         const isDist = c.key === 'distribution_cost';
                         return (
                           <td key={c.key} className={`p-2 ${isDist ? 'bg-amber-50/50' : ''}`}>
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              value={(() => { const v = readField(row, c.key); return v === '' || v === null || v === undefined ? '' : String(v); })()}
-                              onChange={e => {
-                                const val = e.target.value;
-                                if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                  writeField(index, c.key, val);
-                                }
-                              }}
-                              className="w-24 h-9 text-right px-2 border rounded bg-background"
+                            <DecimalInput
+                              value={readField(row, c.key)}
+                              onChange={(val) => writeField(index, c.key, val)}
+                              className="w-24 h-9 text-right px-2"
                               placeholder={c.unit === 'percent' ? '%' : '0.00'}
                               data-testid={`col-${c.key}-${index}`}
                             />
@@ -880,17 +853,10 @@ export default function COGSCalculator() {
                         </>
                       ); })()}
                       <td className="p-2 bg-purple-50/50">
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={actualLandingPrices[row.id] === '' || actualLandingPrices[row.id] === null || actualLandingPrices[row.id] === undefined ? '' : String(actualLandingPrices[row.id])}
-                          onChange={e => {
-                            const val = e.target.value;
-                            if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                              updateActualLandingPrice(index, val);
-                            }
-                          }}
-                          className="w-24 h-9 text-right px-2 border rounded bg-background"
+                        <DecimalInput
+                          value={actualLandingPrices[row.id]}
+                          onChange={(val) => updateActualLandingPrice(index, val)}
+                          className="w-24 h-9 text-right px-2"
                           placeholder="Enter price"
                           data-testid={`actual-landing-price-${index}`}
                         />
