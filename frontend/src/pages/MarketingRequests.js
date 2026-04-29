@@ -292,18 +292,12 @@ function RequestDetailDrawer({ requestId, onClose, onChanged, types, departments
         )}
 
         {/* ── Lead linkage ── */}
-        {data.leads_summary && data.leads_summary.length > 0 && (
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Linked Leads</p>
-            <div className="flex flex-wrap gap-2">
-              {data.leads_summary.map((l) => (
-                <Link key={l.id} to={`/leads/${l.id}`} className="px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 text-xs text-indigo-700 hover:bg-indigo-100">
-                  {l.name} {l.company_name && <span className="text-indigo-400">· {l.company_name}</span>}
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
+        <LeadLinker
+          requestId={requestId}
+          currentLeads={data.leads_summary || []}
+          currentLeadIds={data.lead_ids || []}
+          onChanged={async () => { await refresh(); onChanged?.(); }}
+        />
 
         {/* ── Files ── */}
         <div>
@@ -452,12 +446,21 @@ export default function MarketingRequests() {
         const [t, d, l] = await Promise.all([
           axios.get(`${API}/master-request-types`),
           axios.get(`${API}/marketing-requests/lookups/departments`),
-          axios.get(`${API}/leads`).catch(() => ({ data: [] })),
+          axios.get(`${API}/leads`, { params: { limit: 500 } }).catch(() => ({ data: [] })),
         ]);
         setTypes(t.data || []);
         setDepartments(d.data || []);
-        const leads = Array.isArray(l.data) ? l.data : (l.data?.leads || []);
-        setLeadOptions(leads.map((x) => ({ id: x.id, label: `${x.name || ''} ${x.company_name ? '· ' + x.company_name : ''}`.trim() })));
+        // Leads endpoint returns either {data:[...]} (paginated) or a raw array.
+        const raw = l.data;
+        const leads = Array.isArray(raw) ? raw : (raw?.data || raw?.leads || raw?.items || []);
+        setLeadOptions(leads.map((x) => {
+          const label = x.company || x.company_name || x.business_name || x.name || x.contact_name || x.hotel_name || 'Untitled Lead';
+          const sub = x.contact_name || x.name || x.city || x.status || '';
+          return {
+            id: x.id,
+            label: sub && sub !== label ? `${label} · ${sub}` : label,
+          };
+        }));
       } catch { /* ignore */ }
     })();
   }, []);
@@ -619,6 +622,116 @@ export default function MarketingRequests() {
   );
 }
 
+// ─── Lead linker (drawer sub-component) ───
+function LeadLinker({ requestId, currentLeads, currentLeadIds, onChanged }) {
+  const [editing, setEditing] = useState(false);
+  const [allLeads, setAllLeads] = useState([]);
+  const [leadSearch, setLeadSearch] = useState('');
+  const [selected, setSelected] = useState(new Set(currentLeadIds));
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setSelected(new Set(currentLeadIds)); }, [currentLeadIds.join('|')]); // eslint-disable-line
+
+  const startEdit = async () => {
+    setEditing(true);
+    if (allLeads.length === 0) {
+      try {
+        const { data } = await axios.get(`${API}/leads`, { params: { limit: 500 } });
+        const raw = data;
+        const leads = Array.isArray(raw) ? raw : (raw?.data || raw?.leads || raw?.items || []);
+        setAllLeads(leads.map((x) => {
+          const label = x.company || x.company_name || x.business_name || x.name || x.contact_name || x.hotel_name || 'Untitled Lead';
+          const sub = x.contact_name || x.name || x.city || x.status || '';
+          return { id: x.id, label: sub && sub !== label ? `${label} · ${sub}` : label };
+        }));
+      } catch { toast.error('Failed to load leads'); }
+    }
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await axios.put(`${API}/marketing-requests/${requestId}`, { lead_ids: Array.from(selected) });
+      toast.success('Leads updated');
+      setEditing(false);
+      onChanged?.();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to update leads');
+    } finally { setSaving(false); }
+  };
+
+  const filteredLeads = (() => {
+    const q = leadSearch.trim().toLowerCase();
+    return q ? allLeads.filter((l) => l.label.toLowerCase().includes(q)) : allLeads;
+  })();
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Linked Leads ({currentLeads.length})</p>
+        <Button size="sm" variant="outline" onClick={editing ? () => setEditing(false) : startEdit} data-testid="edit-leads-btn">
+          {editing ? 'Cancel' : currentLeads.length > 0 ? 'Edit' : 'Link leads'}
+        </Button>
+      </div>
+
+      {!editing && (
+        currentLeads.length === 0 ? (
+          <p className="text-xs text-slate-400 italic">No leads linked yet</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {currentLeads.map((l) => (
+              <Link key={l.id} to={`/leads/${l.id}`} className="px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 text-xs text-indigo-700 hover:bg-indigo-100" data-testid={`drawer-lead-${l.id}`}>
+                {l.name} {l.company_name && <span className="text-indigo-400">· {l.company_name}</span>}
+              </Link>
+            ))}
+          </div>
+        )
+      )}
+
+      {editing && (
+        <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/40 space-y-2">
+          <Input
+            value={leadSearch}
+            onChange={(e) => setLeadSearch(e.target.value)}
+            placeholder="Search leads by company or contact…"
+            className="h-8"
+            data-testid="drawer-lead-search"
+          />
+          <div className="border border-slate-200 rounded-md p-2 max-h-52 overflow-y-auto space-y-1 bg-white">
+            {filteredLeads.slice(0, 100).map((l) => (
+              <label key={l.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 rounded px-1 py-0.5">
+                <input
+                  type="checkbox"
+                  checked={selected.has(l.id)}
+                  onChange={(e) => {
+                    setSelected((prev) => {
+                      const next = new Set(prev);
+                      if (e.target.checked) next.add(l.id); else next.delete(l.id);
+                      return next;
+                    });
+                  }}
+                  data-testid={`drawer-lead-check-${l.id}`}
+                />
+                <span className="truncate">{l.label}</span>
+              </label>
+            ))}
+            {filteredLeads.length === 0 && <p className="text-xs text-slate-400 italic">No leads match</p>}
+            {filteredLeads.length > 100 && (
+              <p className="text-[10px] text-slate-400 italic pt-1">Showing first 100 of {filteredLeads.length}. Refine your search to see more.</p>
+            )}
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-indigo-600">{selected.size} lead{selected.size === 1 ? '' : 's'} selected</span>
+            <Button size="sm" onClick={save} disabled={saving} data-testid="save-leads-btn">
+              {saving ? 'Saving…' : 'Save Links'}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Create modal ───
 function CreateRequestModal({ types, leadOptions, departments, onClose, onCreated }) {
   const [form, setForm] = useState({
@@ -629,6 +742,7 @@ function CreateRequestModal({ types, leadOptions, departments, onClose, onCreate
   });
   const [linkLabel, setLinkLabel] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
+  const [leadSearch, setLeadSearch] = useState('');
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
@@ -706,28 +820,52 @@ function CreateRequestModal({ types, leadOptions, departments, onClose, onCreate
           </div>
           <div>
             <Label>Linked Leads (optional)</Label>
-            <div className="text-[11px] text-slate-400 mb-1">Pick one or many — type-ahead search</div>
+            <div className="text-[11px] text-slate-400 mb-1">{leadOptions.length} leads · search then tick to link</div>
+            <Input
+              value={leadSearch}
+              onChange={(e) => setLeadSearch(e.target.value)}
+              placeholder="Search leads by company or contact…"
+              className="h-8 mb-1.5"
+              data-testid="form-lead-search"
+            />
             <div className="border border-slate-200 rounded-md p-2 max-h-40 overflow-y-auto space-y-1">
-              {leadOptions.slice(0, 30).map((l) => (
-                <label key={l.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 rounded px-1">
-                  <input
-                    type="checkbox"
-                    checked={form.lead_ids.includes(l.id)}
-                    onChange={(e) => {
-                      setForm((p) => ({
-                        ...p,
-                        lead_ids: e.target.checked
-                          ? [...p.lead_ids, l.id]
-                          : p.lead_ids.filter((x) => x !== l.id),
-                      }));
-                    }}
-                    data-testid={`form-lead-${l.id}`}
-                  />
-                  <span className="truncate">{l.label}</span>
-                </label>
-              ))}
-              {leadOptions.length === 0 && <p className="text-xs text-slate-400 italic">No leads available</p>}
+              {(() => {
+                const q = leadSearch.trim().toLowerCase();
+                const base = q ? leadOptions.filter((l) => l.label.toLowerCase().includes(q)) : leadOptions;
+                const shown = base.slice(0, 100);
+                if (shown.length === 0) {
+                  return <p className="text-xs text-slate-400 italic">{leadOptions.length === 0 ? 'No leads available' : 'No leads match your search'}</p>;
+                }
+                return (
+                  <>
+                    {shown.map((l) => (
+                      <label key={l.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 rounded px-1 py-0.5">
+                        <input
+                          type="checkbox"
+                          checked={form.lead_ids.includes(l.id)}
+                          onChange={(e) => {
+                            setForm((p) => ({
+                              ...p,
+                              lead_ids: e.target.checked
+                                ? [...p.lead_ids, l.id]
+                                : p.lead_ids.filter((x) => x !== l.id),
+                            }));
+                          }}
+                          data-testid={`form-lead-${l.id}`}
+                        />
+                        <span className="truncate">{l.label}</span>
+                      </label>
+                    ))}
+                    {base.length > shown.length && (
+                      <p className="text-[10px] text-slate-400 italic pt-1">Showing first 100 of {base.length}. Refine your search to see more.</p>
+                    )}
+                  </>
+                );
+              })()}
             </div>
+            {form.lead_ids.length > 0 && (
+              <p className="text-[11px] text-indigo-600 mt-1">{form.lead_ids.length} lead{form.lead_ids.length === 1 ? '' : 's'} selected</p>
+            )}
           </div>
           <div>
             <Label>Reference Links (Google Drive, etc.)</Label>

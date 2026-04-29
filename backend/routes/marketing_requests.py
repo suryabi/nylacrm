@@ -136,8 +136,19 @@ async def _enrich_request(tdb, doc: dict) -> dict:
             doc["request_type_icon"] = rt.get("icon")
     lead_ids = doc.get("lead_ids") or []
     if lead_ids:
-        leads = await tdb.leads.find({"id": {"$in": lead_ids}}, {"_id": 0, "id": 1, "name": 1, "company_name": 1}).to_list(50)
-        doc["leads_summary"] = leads
+        leads = await tdb.leads.find(
+            {"id": {"$in": lead_ids}},
+            {"_id": 0, "id": 1, "name": 1, "company": 1, "contact_name": 1}
+        ).to_list(50)
+        # Normalise to {id, name (company), company_name (contact)} for a predictable UI shape
+        doc["leads_summary"] = [
+            {
+                "id": ld.get("id"),
+                "name": ld.get("company") or ld.get("name") or ld.get("contact_name") or "Untitled Lead",
+                "company_name": ld.get("contact_name") or ld.get("name") or "",
+            }
+            for ld in leads
+        ]
     return doc
 
 
