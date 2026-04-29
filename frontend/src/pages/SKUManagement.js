@@ -601,23 +601,25 @@ export default function SKUManagement() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   {cogsComponents.map((c) => {
-                    const v = formData.cogs_components_values?.[c.key] ?? '';
+                    const v = formData.cogs_components_values?.[c.key];
+                    const display = v === '' || v === null || v === undefined ? '' : String(v);
                     return (
                       <div key={c.key} className="space-y-1">
                         <Label className="text-xs text-slate-600">{c.label} (₹)</Label>
                         <Input
                           type="text"
-                          value={v}
+                          inputMode="decimal"
+                          value={display}
                           placeholder="0.00"
                           className="h-9 text-right font-mono"
                           onChange={(e) => {
                             const val = e.target.value;
-                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                            if (val === '' || /^\d*\.?\d*$/.test(val)) {
                               setFormData((prev) => ({
                                 ...prev,
                                 cogs_components_values: {
                                   ...(prev.cogs_components_values || {}),
-                                  [c.key]: val === '' ? '' : parseFloat(val),
+                                  [c.key]: val,
                                 },
                               }));
                             }
