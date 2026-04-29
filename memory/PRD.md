@@ -479,6 +479,39 @@
 - [x] **Files**: `backend/routes/api_keys.py`, `backend/deps.py` (get_user_or_api_key), `backend/server.py` (local get_user_or_api_key + endpoint deps), `backend/routes/__init__.py` (router registration), `frontend/src/pages/ApiKeysPage.js`, `frontend/src/App.js`, `frontend/src/layouts/DashboardLayout.js`.
 - [x] **Testing**: 20/20 tests passed (iteration_145) — 13 backend + 7 frontend UI flows, JWT regression preserved.
 
+### Production Dashboard — Time Filter + Rejection Insights (2026-04-29)
+- [x] **Backend**: `GET /api/production/dashboard` accepts `time_filter` query param (this_week / last_week / this_month / last_month / this_quarter / last_quarter / last_3_months / last_6_months / this_year / last_year / lifetime). Filters batches by `created_at` and aggregates rejection events from inspections within scope. Returns `summary.total_rejection_cost`, `summary.rejection_events`, `summary.rejection_unmapped`, and `rejection_breakdown.{by_reason,by_stage,top_skus}`.
+- [x] **Frontend (`ProductionDashboard.js`)**: Shadcn `Select` time-filter dropdown (data-testid='time-filter') with 11 options, value persisted in localStorage. New "Rejection Insights" section (data-testid='rejection-metrics-section') shown when `rejection_events > 0` — displays Total Rejected, Total Cost (₹), Events, Unmapped (with deep-link to /production/rejection-cost-config) plus three breakdown lists: by_reason, by_stage, top_costly_skus.
+- [x] **Bug fix during test**: Added missing `timedelta` import to `production_qc.py` — 7 time_filter branches were raising 500s.
+- [x] **Files**: `backend/routes/production_qc.py`, `frontend/src/pages/ProductionDashboard.js`
+- [x] **Testing**: iteration_150 — backend 19/19 PASS, frontend Playwright 95% PASS
+
+### Personal Calendar with Google Calendar Sync (2026-04-29)
+- [x] **New page `/personal-calendar`** (sidebar nav "My Calendar" under Lead & Sales Operations, `CalendarDays` icon). Per-user view aggregating events from three sources:
+  - **CRM Meetings** (sky badge) — from `meetings` collection where user is `organizer_id` or in `attendees` (email match)
+  - **Meeting Minutes** (violet badge) — from `meeting_minutes` collection where user is `created_by` or in `participants[].id` (all-day events)
+  - **Google Calendar** (rose badge) — from user's primary Google Calendar via OAuth (when connected)
+- [x] **Google OAuth Flow**:
+  - Reuses existing `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET` from `.env` (falls back to `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`).
+  - `GET /api/personal-calendar/google/connect` → returns `authorization_url` with `redirect_uri=/api/personal-calendar/google/callback`, scope=`calendar+userinfo.email+openid`, `access_type=offline`, `prompt=consent`, `state=user_id:tenant_id`.
+  - `GET /api/personal-calendar/google/callback` (public, no auth) → exchanges code via direct POST to `oauth2.googleapis.com/token`, fetches `userinfo` for email, persists tokens in `user_google_tokens` collection (per-user), redirects to `/personal-calendar?google=connected&email=...` or `?google=error&reason=...`.
+  - `GET /api/personal-calendar/google/status` → `{connected, configured, google_email?}`.
+  - `POST /api/personal-calendar/google/disconnect` → removes token doc.
+  - Auto-refresh: `_refresh_if_needed` uses stored `refresh_token` to refresh access tokens within 60s of expiry.
+- [x] **Aggregated Events Endpoint**: `GET /api/personal-calendar/events?start_date&end_date` — single payload with all three sources merged + `google` connection status. Google events tagged with `extendedProperties.private.crm_meeting_id` are filtered out to avoid duplicates with CRM meetings already pushed to Google.
+- [x] **Push CRM → Google**: `POST /api/personal-calendar/google/push-meeting/{meeting_id}` inserts/updates a Google Calendar event for a CRM meeting (uses Asia/Kolkata timezone, attendees array, `extendedProperties` for round-trip dedup). Stores `google_event_id` and `google_event_link` on the meeting doc.
+- [x] **Frontend (`PersonalCalendar.js`)**:
+  - Month-grid view with prev/next/today navigation, day-of-week header, color-coded event pills (max 3 per day + "+N more")
+  - Connect Google Calendar button; shows connected email + Disconnect when active; "Google not configured" amber pill when env vars missing
+  - Day-cell click → slide-out Sheet with full day's event list
+  - Event click → detail Sheet with title, time, location, join-link, description
+  - OAuth callback parsing on mount (via URL params) — toasts success/failure and refreshes events
+  - data-testids: `personal-calendar`, `time-filter`, `google-connect-btn`/`google-status-connected`, `prev-month-btn`, `next-month-btn`, `today-btn`, `refresh-btn`, `day-cell-YYYY-MM-DD`, `event-card-{id}`
+- [x] **Schema**: `user_google_tokens` collection in global db `{user_id, google_email, access_token, refresh_token, expires_at, scope, token_type, created_at, updated_at}`. `meetings` collection has new optional fields `google_event_id`, `google_event_link`.
+- [x] **Setup required from user (Google Cloud Console)**: Enable Google Calendar API in same project as existing OAuth client, add scope `https://www.googleapis.com/auth/calendar` to consent screen, whitelist redirect URI `https://prod-qc-sync.preview.emergentagent.com/api/personal-calendar/google/callback`.
+- [x] **Files**: `backend/routes/personal_calendar.py` (NEW), `backend/routes/__init__.py`, `frontend/src/pages/PersonalCalendar.js` (NEW), `frontend/src/App.js`, `frontend/src/layouts/DashboardLayout.js`, `backend/.env` (`BACKEND_PUBLIC_URL`, `FRONTEND_URL` added)
+- [x] **Testing**: iteration_150 — backend 19/19 PASS (status, connect, disconnect, events aggregation), frontend Playwright validated (calendar grid, OAuth button states, event rendering). End-to-end Google consent click-through left for user verification once Calendar API is enabled in their Google Cloud project.
+
 ## Upcoming Tasks (P1)
 - Auto-generate Provisional Invoice (on shipment -> "delivered")
 - Build Reporting Module (stock balance, deliveries, settlements, distributor performance)
