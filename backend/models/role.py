@@ -16,38 +16,48 @@ DEFAULT_MODULE_PERMISSIONS = {
     "leads": {"view": True, "create": True, "edit": True, "delete": False},
     "pipeline": {"view": True, "create": False, "edit": True, "delete": False},
     "accounts": {"view": True, "create": True, "edit": True, "delete": False},
+    "account_gop_metrics": {"view": True, "create": False, "edit": False, "delete": False},
+    "neck_tag_designer": {"view": True, "create": True, "edit": True, "delete": False},
     "contacts": {"view": True, "create": True, "edit": True, "delete": False},
+    "invoices": {"view": True, "create": True, "edit": True, "delete": False},
     "sales_portal": {"view": True, "create": False, "edit": False, "delete": False},
-    
+
     # Reports
     "report_sales_overview": {"view": True, "create": False, "edit": False, "delete": False},
     "report_revenue": {"view": True, "create": False, "edit": False, "delete": False},
     "report_sku_performance": {"view": True, "create": False, "edit": False, "delete": False},
     "report_resource_performance": {"view": True, "create": False, "edit": False, "delete": False},
     "report_account_performance": {"view": True, "create": False, "edit": False, "delete": False},
-    
+
     # Operations
     "lead_discovery": {"view": True, "create": True, "edit": False, "delete": False},
     "target_planning": {"view": True, "create": True, "edit": True, "delete": False},
+    "performance_tracker": {"view": True, "create": False, "edit": False, "delete": False},
+    "investor_dashboard": {"view": False, "create": False, "edit": False, "delete": False},
     "daily_status": {"view": True, "create": True, "edit": True, "delete": False},
+    "meeting_minutes": {"view": True, "create": True, "edit": True, "delete": False},
     "status_summary": {"view": True, "create": False, "edit": False, "delete": False},
-    
+
     # Tools
     "cogs_calculator": {"view": True, "create": False, "edit": False, "delete": False},
     "transport_calculator": {"view": True, "create": False, "edit": False, "delete": False},
     "sku_management": {"view": False, "create": False, "edit": False, "delete": False},
     "bottle_preview": {"view": True, "create": False, "edit": False, "delete": False},
     "lead_scoring_model": {"view": False, "create": False, "edit": False, "delete": False},
-    
+
     # Documents
     "company_documents": {"view": True, "create": True, "edit": True, "delete": False},
     "files_documents": {"view": True, "create": True, "edit": True, "delete": False},
-    
+
     # Requests
     "leaves": {"view": True, "create": True, "edit": True, "delete": False},
     "travel_requests": {"view": True, "create": True, "edit": True, "delete": False},
     "budget_requests": {"view": True, "create": True, "edit": True, "delete": False},
-    
+
+    # Marketing
+    "marketing_calendar": {"view": False, "create": False, "edit": False, "delete": False},
+    "marketing_masters": {"view": False, "create": False, "edit": False, "delete": False},
+
     # Organization
     "company_profile": {"view": True, "create": False, "edit": False, "delete": False},
     "team": {"view": False, "create": False, "edit": False, "delete": False},
@@ -56,19 +66,32 @@ DEFAULT_MODULE_PERMISSIONS = {
     "business_categories": {"view": False, "create": False, "edit": False, "delete": False},
     "contact_categories": {"view": False, "create": False, "edit": False, "delete": False},
     "expense_categories": {"view": False, "create": False, "edit": False, "delete": False},
-    
+    "cogs_components": {"view": False, "create": False, "edit": False, "delete": False},
+
     # Admin
     "tenant_settings": {"view": False, "create": False, "edit": False, "delete": False},
-    
+    "api_keys": {"view": False, "create": False, "edit": False, "delete": False},
+    "sku_replace": {"view": False, "create": False, "edit": False, "delete": False},
+
     # Production Modules
+    "production_dashboard": {"view": False, "create": False, "edit": False, "delete": False},
+    "production_batches": {"view": False, "create": False, "edit": False, "delete": False},
+    "qc_routes": {"view": False, "create": False, "edit": False, "delete": False},
+    "qc_team": {"view": False, "create": False, "edit": False, "delete": False},
+    "rejection_reasons": {"view": False, "create": False, "edit": False, "delete": False},
+    "rejection_report": {"view": False, "create": False, "edit": False, "delete": False},
+    "rejection_cost_config": {"view": False, "create": False, "edit": False, "delete": False},
+    "packaging_types": {"view": False, "create": False, "edit": False, "delete": False},
     "maintenance": {"view": False, "create": False, "edit": False, "delete": False},
     "inventory": {"view": False, "create": False, "edit": False, "delete": False},
     "quality_control": {"view": False, "create": False, "edit": False, "delete": False},
     "assets": {"view": False, "create": False, "edit": False, "delete": False},
     "vendors": {"view": False, "create": False, "edit": False, "delete": False},
-    
+
     # Distribution Modules
     "distributors": {"view": False, "create": False, "edit": False, "delete": False},
+    "stock_dashboard": {"view": False, "create": False, "edit": False, "delete": False},
+    "cost_cards": {"view": False, "create": False, "edit": False, "delete": False},
     "distributor_coverage": {"view": False, "create": False, "edit": False, "delete": False},
     "distributor_locations": {"view": False, "create": False, "edit": False, "delete": False},
     "distributor_margins": {"view": False, "create": False, "edit": False, "delete": False},
@@ -76,7 +99,7 @@ DEFAULT_MODULE_PERMISSIONS = {
     "distributor_shipments": {"view": False, "create": False, "edit": False, "delete": False},
     "distributor_deliveries": {"view": False, "create": False, "edit": False, "delete": False},
     "distributor_stock": {"view": False, "create": False, "edit": False, "delete": False},
-    
+
     # Task Management
     "task_management": {"view": True, "create": True, "edit": True, "delete": False},
     "task_milestones": {"view": True, "create": False, "edit": False, "delete": False},
@@ -216,17 +239,17 @@ def get_default_roles(tenant_id: str) -> List[dict]:
 
 # Module categories for UI grouping
 MODULE_CATEGORIES = {
-    "Core": ["home", "dashboard", "leads", "pipeline", "accounts", "contacts", "sales_portal"],
+    "Core": ["home", "dashboard", "leads", "pipeline", "accounts", "account_gop_metrics", "neck_tag_designer", "contacts", "invoices", "sales_portal"],
     "Reports": ["report_sales_overview", "report_revenue", "report_sku_performance", "report_resource_performance", "report_account_performance"],
-    "Operations": ["lead_discovery", "target_planning", "daily_status", "status_summary", "meeting_minutes"],
+    "Operations": ["lead_discovery", "target_planning", "performance_tracker", "investor_dashboard", "daily_status", "meeting_minutes", "status_summary"],
     "Tools": ["cogs_calculator", "transport_calculator", "sku_management", "bottle_preview", "lead_scoring_model"],
     "Documents": ["company_documents", "files_documents"],
     "Requests": ["leaves", "travel_requests", "budget_requests"],
     "Marketing": ["marketing_calendar", "marketing_masters"],
-    "Organization": ["company_profile", "team", "master_locations", "lead_statuses", "business_categories", "contact_categories", "expense_categories"],
-    "Admin": ["tenant_settings"],
-    "Distribution": ["distributors", "distributor_coverage", "distributor_locations", "distributor_margins", "distributor_assignments", "distributor_shipments", "distributor_deliveries", "distributor_stock"],
-    "Production": ["maintenance", "inventory", "quality_control", "assets", "vendors"],
+    "Organization": ["company_profile", "team", "master_locations", "lead_statuses", "business_categories", "contact_categories", "expense_categories", "cogs_components"],
+    "Admin": ["tenant_settings", "api_keys", "sku_replace"],
+    "Distribution": ["distributors", "stock_dashboard", "cost_cards", "distributor_coverage", "distributor_locations", "distributor_margins", "distributor_assignments", "distributor_shipments", "distributor_deliveries", "distributor_stock"],
+    "Production": ["production_dashboard", "production_batches", "qc_routes", "qc_team", "rejection_reasons", "rejection_report", "rejection_cost_config", "packaging_types", "maintenance", "inventory", "quality_control", "assets", "vendors"],
     "Task Management": ["task_management", "task_milestones", "task_labels"],
 }
 
@@ -236,7 +259,10 @@ MODULE_LABELS = {
     "leads": "Leads",
     "pipeline": "Pipeline",
     "accounts": "Accounts",
+    "account_gop_metrics": "Account GOP Metrics",
+    "neck_tag_designer": "Neck Tag Designer",
     "contacts": "Contacts",
+    "invoices": "Invoices",
     "sales_portal": "Sales Portal",
     "report_sales_overview": "Sales Overview",
     "report_revenue": "Revenue Report",
@@ -245,7 +271,10 @@ MODULE_LABELS = {
     "report_account_performance": "Account Performance",
     "lead_discovery": "Lead Discovery",
     "target_planning": "Target Planning",
+    "performance_tracker": "Performance Tracker",
+    "investor_dashboard": "Investor Dashboard",
     "daily_status": "Daily Status",
+    "meeting_minutes": "Meeting Minutes",
     "status_summary": "Status Summary",
     "cogs_calculator": "COGS Calculator",
     "transport_calculator": "Transport Calculator",
@@ -257,6 +286,8 @@ MODULE_LABELS = {
     "leaves": "Leaves",
     "travel_requests": "Travel Requests",
     "budget_requests": "Budget Requests",
+    "marketing_calendar": "Content Calendar",
+    "marketing_masters": "Marketing Masters",
     "company_profile": "Company Profile",
     "team": "Team Management",
     "master_locations": "Master Locations",
@@ -264,8 +295,13 @@ MODULE_LABELS = {
     "business_categories": "Business Categories",
     "contact_categories": "Contact Categories",
     "expense_categories": "Expense Categories",
+    "cogs_components": "COGS Components",
     "tenant_settings": "Tenant Settings",
+    "api_keys": "API Keys",
+    "sku_replace": "Replace SKU",
     "distributors": "Distributors",
+    "stock_dashboard": "Stock Dashboard",
+    "cost_cards": "Cost Cards",
     "distributor_coverage": "Operating Coverage",
     "distributor_locations": "Warehouse Locations",
     "distributor_margins": "Margin Matrix",
@@ -273,6 +309,14 @@ MODULE_LABELS = {
     "distributor_shipments": "Primary Shipments",
     "distributor_deliveries": "Account Deliveries",
     "distributor_stock": "Stock Management",
+    "production_dashboard": "Production Dashboard",
+    "production_batches": "Production Batches",
+    "qc_routes": "QC Routes",
+    "qc_team": "QC Team",
+    "rejection_reasons": "Rejection Reasons",
+    "rejection_report": "Rejection Report",
+    "rejection_cost_config": "Rejection Cost Config",
+    "packaging_types": "Packaging Types",
     "maintenance": "Maintenance",
     "inventory": "Inventory",
     "quality_control": "Quality Control",
@@ -281,7 +325,4 @@ MODULE_LABELS = {
     "task_management": "Tasks",
     "task_milestones": "Milestones",
     "task_labels": "Labels",
-    "marketing_calendar": "Content Calendar",
-    "marketing_masters": "Marketing Masters",
-    "meeting_minutes": "Meeting Minutes",
 }

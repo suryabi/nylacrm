@@ -45,6 +45,27 @@ async def list_roles(current_user: dict = Depends(get_current_user)):
             {"_id": 0}
         ).sort("name", 1).to_list(100)
     
+    # Backfill: ensure every role has all currently-known module keys.
+    # New keys default to view=False (admin-style roles get full access via name match).
+    admin_role_names = {"Admin", "System Admin"}
+    for role in roles:
+        perms = role.get("permissions") or {}
+        is_admin_like = role.get("name") in admin_role_names
+        added = False
+        for key, default in DEFAULT_MODULE_PERMISSIONS.items():
+            if key not in perms:
+                perms[key] = (
+                    {"view": True, "create": True, "edit": True, "delete": True}
+                    if is_admin_like else dict(default)
+                )
+                added = True
+        if added:
+            role["permissions"] = perms
+            await db.roles.update_one(
+                {"id": role["id"], "tenant_id": tenant_id},
+                {"$set": {"permissions": perms, "updated_at": datetime.now(timezone.utc).isoformat()}}
+            )
+    
     return {
         "roles": roles,
         "module_categories": MODULE_CATEGORIES,
