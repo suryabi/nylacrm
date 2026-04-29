@@ -479,6 +479,13 @@
 - [x] **Files**: `backend/routes/production_qc.py` (production_dashboard rewritten), `frontend/src/pages/ProductionDashboard.js` (dropdown + RejectionBreakdown + cards).
 - [x] **Testing**: iteration_150 — 22/22 PASS (backend pytest at `backend/tests/test_iteration_150_production_dashboard_time_filter.py` + frontend Playwright). Verified `lifetime` returns 28 batches/₹2,548; `last_year` returns 0; switching dropdown re-fetches and updates header label.
 
+### Rejection Cost Config — Auto-populated Matrix + Stage Grouping (2026-04-29)
+- [x] **Auto-populate**: `/production/rejection-cost-config` now renders every `(Stage × Rejection Reason)` combination as a row by default — no more "Add new mapping" form. Rows for unmapped pairs render with empty checkboxes; user ticks components and clicks Save to upsert.
+- [x] **Stage grouping**: Rows ordered by stage then reason, with a divider (`border-t-2 border-t-slate-300`) between groups. Each stage gets a rotating tint (sky → amber → violet → emerald → rose → indigo → teal) applied to the row background, sticky-left stage cell, and stage badge pill — making it instantly clear which stage each row belongs to.
+- [x] **Cleaner UX**: "Saved" badge + delete trash only on rows with persisted mappings; unmapped rows show only Save button (disabled until dirty). Cost/unit recomputes live as components are ticked.
+- [x] **Files**: `frontend/src/pages/RejectionCostConfig.js` (rewritten with cross-product `rows`, `STAGE_TINTS` palette, stage divider logic).
+- [x] **Testing**: iteration_151 — 13/13 frontend Playwright PASS. Matrix renders 8 rows for 2 stages × 4 reasons; live save flow verified (checkbox tick → Cost/unit ₹51.00 → POST 200 → row morphs into Saved + Delete); cleanup left tenant data unchanged.
+
 ### API Keys for External Integration Partners (2026-04-28)
 - [x] **Per-partner API keys** (one key per integration like BriefingIQ). Issued at Settings → API Keys page. Format `ak_live_<48 hex>`, stored as **sha256 hash**, raw key shown ONLY ONCE on creation.
 - [x] **Auth via either header**: `X-API-Key: ak_live_…` OR `Authorization: Bearer ak_live_…` (server detects by `ak_live_` prefix; falls back to JWT/session if not an API key).
