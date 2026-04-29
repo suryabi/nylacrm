@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button';
 import { Checkbox } from '../components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
-import { AlertCircle, Save, Plus, Trash2, IndianRupee } from 'lucide-react';
+import { AlertCircle, Save, Plus, Trash2, IndianRupee, Package } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -14,44 +14,75 @@ const headers = () => ({
 });
 
 export default function RejectionCostConfig() {
-  const [config, setConfig] = useState({ components: [], stages: [], reasons: [], mappings: [] });
-  const [loading, setLoading] = useState(true);
+  const [bootstrap, setBootstrap] = useState({ skus: [], components: [], reasons: [] });
+  const [selectedSkuId, setSelectedSkuId] = useState('');
+  const [skuConfig, setSkuConfig] = useState({ sku: null, stages: [], mappings: [] });
+  const [loadingBootstrap, setLoadingBootstrap] = useState(true);
+  const [loadingSku, setLoadingSku] = useState(false);
   const [saving, setSaving] = useState({});
   const [filterStage, setFilterStage] = useState('');
   const [newRow, setNewRow] = useState({ stage_name: '', reason_id: '' });
-  // Local edit buffer keyed by `${stage_name}|${reason_id}` → Set(component_key)
   const [draft, setDraft] = useState({});
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // Initial load: SKUs + components + reasons
+  useEffect(() => {
+    (async () => {
+      setLoadingBootstrap(true);
+      try {
+        const res = await axios.get(`${API_URL}/api/production/rejection-cost-config`, { headers: headers() });
+        setBootstrap({
+          skus: res.data.skus || [],
+          components: res.data.components || [],
+          reasons: res.data.reasons || [],
+        });
+      } catch (e) {
+        toast.error(e.response?.data?.detail || 'Failed to load');
+      } finally {
+        setLoadingBootstrap(false);
+      }
+    })();
+  }, []);
+
+  // Load SKU-scoped data when SKU changes
+  const loadSku = useCallback(async (skuId) => {
+    if (!skuId) {
+      setSkuConfig({ sku: null, stages: [], mappings: [] });
+      setDraft({});
+      return;
+    }
+    setLoadingSku(true);
     try {
-      const res = await axios.get(`${API_URL}/api/production/rejection-cost-config`, { headers: headers() });
-      setConfig(res.data);
-      // Seed draft from existing mappings
+      const res = await axios.get(
+        `${API_URL}/api/production/rejection-cost-config?sku_id=${encodeURIComponent(skuId)}`,
+        { headers: headers() }
+      );
+      setSkuConfig({
+        sku: res.data.sku || null,
+        stages: res.data.stages || [],
+        mappings: res.data.mappings || [],
+      });
       const seeded = {};
       (res.data.mappings || []).forEach((m) => {
         seeded[`${m.stage_name}|${m.reason_id}`] = new Set(m.impacted_component_keys || []);
       });
       setDraft(seeded);
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to load configuration');
+      toast.error(e.response?.data?.detail || 'Failed to load SKU mappings');
     } finally {
-      setLoading(false);
+      setLoadingSku(false);
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadSku(selectedSkuId); }, [selectedSkuId, loadSku]);
 
-  // Index existing mappings: stage|reason → mapping object
   const mappingByKey = useMemo(() => {
     const m = {};
-    (config.mappings || []).forEach((x) => { m[`${x.stage_name}|${x.reason_id}`] = x; });
+    (skuConfig.mappings || []).forEach((x) => { m[`${x.stage_name}|${x.reason_id}`] = x; });
     return m;
-  }, [config.mappings]);
+  }, [skuConfig.mappings]);
 
-  // Visible rows: existing mappings + any new draft rows
   const rows = useMemo(() => {
-    const existing = (config.mappings || []).map((m) => ({
+    const existing = (skuConfig.mappings || []).map((m) => ({
       key: `${m.stage_name}|${m.reason_id}`,
       stage_name: m.stage_name,
       reason_id: m.reason_id,
@@ -59,7 +90,7 @@ export default function RejectionCostConfig() {
       mapping: m,
     }));
     return filterStage ? existing.filter((r) => r.stage_name === filterStage) : existing;
-  }, [config.mappings, filterStage]);
+  }, [skuConfig.mappings, filterStage]);
 
   const toggleComponent = (rowKey, ckey) => {
     setDraft((prev) => {
@@ -85,12 +116,13 @@ export default function RejectionCostConfig() {
     setSaving((s) => ({ ...s, [rowKey]: true }));
     try {
       await axios.post(`${API_URL}/api/production/rejection-cost-mappings`, {
+        sku_id: selectedSkuId,
         stage_name,
         reason_id,
         impacted_component_keys: Array.from(draft[rowKey] || []),
       }, { headers: headers() });
       toast.success('Saved');
-      load();
+      loadSku(selectedSkuId);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Save failed');
     } finally {
@@ -103,35 +135,38 @@ export default function RejectionCostConfig() {
     try {
       await axios.delete(`${API_URL}/api/production/rejection-cost-mappings/${mapping_id}`, { headers: headers() });
       toast.success('Removed');
-      load();
+      loadSku(selectedSkuId);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Delete failed');
     }
   };
 
   const addNewRow = async () => {
+    if (!selectedSkuId) {
+      toast.error('Select a SKU first'); return;
+    }
     if (!newRow.stage_name || !newRow.reason_id) {
-      toast.error('Pick a stage and a reason');
-      return;
+      toast.error('Pick a stage and a reason'); return;
     }
     const rowKey = `${newRow.stage_name}|${newRow.reason_id}`;
     if (mappingByKey[rowKey]) {
-      toast.error('A mapping already exists for this Stage × Reason');
-      return;
+      toast.error('A mapping already exists for this Stage × Reason'); return;
     }
-    // Create empty mapping; user then ticks components and saves
     try {
       await axios.post(`${API_URL}/api/production/rejection-cost-mappings`, {
+        sku_id: selectedSkuId,
         stage_name: newRow.stage_name,
         reason_id: newRow.reason_id,
         impacted_component_keys: [],
       }, { headers: headers() });
       setNewRow({ stage_name: '', reason_id: '' });
-      load();
+      loadSku(selectedSkuId);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
     }
   };
+
+  const skuValueLabel = bootstrap.skus.find((s) => s.id === selectedSkuId)?.sku_name;
 
   return (
     <div className="p-6 max-w-[1400px] mx-auto" data-testid="rejection-cost-config-page">
@@ -141,137 +176,181 @@ export default function RejectionCostConfig() {
           Rejection Cost Configuration
         </h1>
         <p className="text-sm text-slate-500 mt-1 max-w-3xl">
-          For each <strong>(Stage × Rejection Reason)</strong>, select which COGS components are impacted. The system computes
-          rejection cost as <span className="font-mono text-xs">qty × Σ(SKU's component price)</span> for the impacted components.
+          Configure per SKU. For each <strong>(Stage × Rejection Reason)</strong>, select which COGS components are impacted.
+          Cost = <span className="font-mono text-xs">qty × Σ(SKU's component price)</span> for the impacted components.
         </p>
       </div>
 
-      {/* Add a new mapping */}
-      <Card className="mb-6 border-dashed">
+      {/* SKU Picker */}
+      <Card className="mb-6">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Add new mapping</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Package className="h-4 w-4 text-slate-500" />
+            Select SKU
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-center gap-3">
-            <Select value={newRow.stage_name} onValueChange={(v) => setNewRow({ ...newRow, stage_name: v })}>
-              <SelectTrigger className="w-56" data-testid="new-mapping-stage-select">
-                <SelectValue placeholder="Select stage" />
+            <Select value={selectedSkuId} onValueChange={setSelectedSkuId} disabled={loadingBootstrap}>
+              <SelectTrigger className="w-80" data-testid="sku-picker">
+                <SelectValue placeholder={loadingBootstrap ? 'Loading SKUs…' : 'Select a SKU to configure'} />
               </SelectTrigger>
               <SelectContent>
-                {(config.stages || []).map((s) => (
-                  <SelectItem key={s.name} value={s.name}>{s.name}</SelectItem>
+                {bootstrap.skus.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.sku_name}
+                    {s.category ? <span className="text-slate-400 text-xs"> · {s.category}</span> : null}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Select value={newRow.reason_id} onValueChange={(v) => setNewRow({ ...newRow, reason_id: v })}>
-              <SelectTrigger className="w-64" data-testid="new-mapping-reason-select">
-                <SelectValue placeholder="Select rejection reason" />
-              </SelectTrigger>
-              <SelectContent>
-                {(config.reasons || []).map((r) => (
-                  <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button onClick={addNewRow} data-testid="add-mapping-btn">
-              <Plus className="h-4 w-4 mr-1.5" /> Add
-            </Button>
-
-            <div className="ml-auto flex items-center gap-2">
-              <span className="text-xs text-slate-500">Filter:</span>
-              <Select value={filterStage || '__all__'} onValueChange={(v) => setFilterStage(v === '__all__' ? '' : v)}>
-                <SelectTrigger className="w-44 h-9" data-testid="filter-stage-select">
-                  <SelectValue placeholder="All stages" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">All stages</SelectItem>
-                  {(config.stages || []).map((s) => (
-                    <SelectItem key={s.name} value={s.name}>{s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {selectedSkuId && skuConfig.stages.length === 0 && !loadingSku && (
+              <span className="text-xs text-amber-600 flex items-center gap-1">
+                <AlertCircle className="h-3.5 w-3.5" />
+                No QC route configured for this SKU yet — add a route in QC Routes first.
+              </span>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Matrix */}
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle className="text-base">Stage × Reason → Impacted Components</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="p-10 text-center text-sm text-slate-500">Loading...</div>
-          ) : rows.length === 0 ? (
-            <div className="p-12 text-center">
-              <AlertCircle className="h-10 w-10 text-slate-300 mx-auto mb-3" />
-              <div className="text-sm text-slate-500">
-                No mappings yet. Use the form above to create one for each (stage, reason) you want to track.
-              </div>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm" data-testid="rejection-cost-matrix">
-                <thead className="bg-slate-50 border-b">
-                  <tr>
-                    <th className="text-left px-4 py-3 font-semibold text-slate-700 sticky left-0 bg-slate-50 min-w-[160px]">Stage</th>
-                    <th className="text-left px-4 py-3 font-semibold text-slate-700 min-w-[180px]">Rejection Reason</th>
-                    {(config.components || []).map((c) => (
-                      <th key={c.key} className="text-center px-3 py-3 font-medium text-slate-600 text-xs whitespace-nowrap">{c.label}</th>
+      {!selectedSkuId ? (
+        <Card>
+          <CardContent className="p-12 text-center">
+            <Package className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+            <div className="text-sm text-slate-500">Select a SKU above to configure rejection cost mappings.</div>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* Add a new mapping (SKU-scoped) */}
+          <Card className="mb-6 border-dashed">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Add new mapping for <span className="text-rose-600">{skuValueLabel}</span></CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap items-center gap-3">
+                <Select value={newRow.stage_name} onValueChange={(v) => setNewRow({ ...newRow, stage_name: v })} disabled={skuConfig.stages.length === 0}>
+                  <SelectTrigger className="w-56" data-testid="new-mapping-stage-select">
+                    <SelectValue placeholder={skuConfig.stages.length === 0 ? 'No stages — add QC route' : 'Select stage'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {skuConfig.stages.map((s) => (
+                      <SelectItem key={s.name} value={s.name}>{s.name}</SelectItem>
                     ))}
-                    <th className="px-3 py-3"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {rows.map((r) => {
-                    const dirty = isDirty(r.key);
-                    const isSaving = saving[r.key];
-                    const draftSet = draft[r.key] || new Set();
-                    return (
-                      <tr key={r.key} className="hover:bg-slate-50/60" data-testid={`mapping-row-${r.mapping.id}`}>
-                        <td className="px-4 py-3 sticky left-0 bg-white">
-                          <Badge variant="outline" className="font-mono text-[10px] bg-slate-50">{r.stage_name}</Badge>
-                        </td>
-                        <td className="px-4 py-3 font-medium text-slate-800">{r.reason_name}</td>
-                        {(config.components || []).map((c) => (
-                          <td key={c.key} className="text-center px-3 py-3">
-                            <Checkbox
-                              checked={draftSet.has(c.key)}
-                              onCheckedChange={() => toggleComponent(r.key, c.key)}
-                              data-testid={`cell-${r.mapping.id}-${c.key}`}
-                            />
-                          </td>
+                  </SelectContent>
+                </Select>
+                <Select value={newRow.reason_id} onValueChange={(v) => setNewRow({ ...newRow, reason_id: v })}>
+                  <SelectTrigger className="w-64" data-testid="new-mapping-reason-select">
+                    <SelectValue placeholder="Select rejection reason" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(bootstrap.reasons || []).map((r) => (
+                      <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button onClick={addNewRow} data-testid="add-mapping-btn">
+                  <Plus className="h-4 w-4 mr-1.5" /> Add
+                </Button>
+
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="text-xs text-slate-500">Filter:</span>
+                  <Select value={filterStage || '__all__'} onValueChange={(v) => setFilterStage(v === '__all__' ? '' : v)}>
+                    <SelectTrigger className="w-44 h-9" data-testid="filter-stage-select">
+                      <SelectValue placeholder="All stages" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All stages</SelectItem>
+                      {skuConfig.stages.map((s) => (
+                        <SelectItem key={s.name} value={s.name}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Matrix */}
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle className="text-base">Stage × Reason → Impacted Components</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loadingSku ? (
+                <div className="p-10 text-center text-sm text-slate-500">Loading…</div>
+              ) : rows.length === 0 ? (
+                <div className="p-12 text-center">
+                  <AlertCircle className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+                  <div className="text-sm text-slate-500">
+                    No mappings yet for this SKU. Use the form above to add one.
+                  </div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm" data-testid="rejection-cost-matrix">
+                    <thead className="bg-slate-50 border-b">
+                      <tr>
+                        <th className="text-left px-4 py-3 font-semibold text-slate-700 sticky left-0 bg-slate-50 min-w-[160px]">Stage</th>
+                        <th className="text-left px-4 py-3 font-semibold text-slate-700 min-w-[180px]">Rejection Reason</th>
+                        {(bootstrap.components || []).map((c) => (
+                          <th key={c.key} className="text-center px-3 py-3 font-medium text-slate-600 text-xs whitespace-nowrap">{c.label}</th>
                         ))}
-                        <td className="px-3 py-3 text-right whitespace-nowrap">
-                          <Button
-                            size="sm"
-                            disabled={!dirty || isSaving}
-                            onClick={() => saveRow(r.stage_name, r.reason_id)}
-                            className="mr-1.5"
-                            data-testid={`save-${r.mapping.id}`}
-                          >
-                            <Save className="h-3.5 w-3.5 mr-1" /> {isSaving ? 'Saving' : dirty ? 'Save' : 'Saved'}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-rose-600 border-rose-200"
-                            onClick={() => deleteRow(r.mapping.id)}
-                            data-testid={`delete-${r.mapping.id}`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </td>
+                        <th className="px-3 py-3"></th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    </thead>
+                    <tbody className="divide-y">
+                      {rows.map((r) => {
+                        const dirty = isDirty(r.key);
+                        const isSaving = saving[r.key];
+                        const draftSet = draft[r.key] || new Set();
+                        return (
+                          <tr key={r.key} className="hover:bg-slate-50/60" data-testid={`mapping-row-${r.mapping.id}`}>
+                            <td className="px-4 py-3 sticky left-0 bg-white">
+                              <Badge variant="outline" className="font-mono text-[10px] bg-slate-50">{r.stage_name}</Badge>
+                            </td>
+                            <td className="px-4 py-3 font-medium text-slate-800">{r.reason_name}</td>
+                            {(bootstrap.components || []).map((c) => (
+                              <td key={c.key} className="text-center px-3 py-3">
+                                <Checkbox
+                                  checked={draftSet.has(c.key)}
+                                  onCheckedChange={() => toggleComponent(r.key, c.key)}
+                                  data-testid={`cell-${r.mapping.id}-${c.key}`}
+                                />
+                              </td>
+                            ))}
+                            <td className="px-3 py-3 text-right whitespace-nowrap">
+                              <Button
+                                size="sm"
+                                disabled={!dirty || isSaving}
+                                onClick={() => saveRow(r.stage_name, r.reason_id)}
+                                className="mr-1.5"
+                                data-testid={`save-${r.mapping.id}`}
+                              >
+                                <Save className="h-3.5 w-3.5 mr-1" /> {isSaving ? 'Saving' : dirty ? 'Save' : 'Saved'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-rose-600 border-rose-200"
+                                onClick={() => deleteRow(r.mapping.id)}
+                                data-testid={`delete-${r.mapping.id}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   );
 }

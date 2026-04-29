@@ -132,22 +132,26 @@ export default function BatchDetail() {
   const fetchBatch = useCallback(async () => {
     try {
       const headers = getAuthHeaders();
-      const [bRes, hRes, rrRes, qtRes, mRes] = await Promise.allSettled([
+      const [bRes, hRes, rrRes, qtRes] = await Promise.allSettled([
         axios.get(`${API_URL}/production/batches/${batchId}`, { headers }),
         axios.get(`${API_URL}/production/batches/${batchId}/history`, { headers }),
         axios.get(`${API_URL}/production/rejection-reasons`, { headers }),
         axios.get(`${API_URL}/production/qc-team`, { headers }),
-        axios.get(`${API_URL}/production/rejection-cost-mappings`, { headers }),
       ]);
       if (bRes.status === 'fulfilled') {
         setBatch(bRes.value.data);
-        // Load SKU master cogs values for this batch's SKU
         const skuId = bRes.value.data?.sku_id;
         if (skuId) {
           try {
-            const skuRes = await axios.get(`${API_URL}/master-skus`, { headers });
-            const me = (skuRes.data?.skus || []).find((s) => s.id === skuId);
-            setSkuCogs(me?.cogs_components_values || {});
+            const [skuRes, mapRes] = await Promise.allSettled([
+              axios.get(`${API_URL}/master-skus`, { headers }),
+              axios.get(`${API_URL}/production/rejection-cost-mappings?sku_id=${encodeURIComponent(skuId)}`, { headers }),
+            ]);
+            if (skuRes.status === 'fulfilled') {
+              const me = (skuRes.value.data?.skus || []).find((s) => s.id === skuId);
+              setSkuCogs(me?.cogs_components_values || {});
+            }
+            if (mapRes.status === 'fulfilled') setCostMappings(mapRes.value.data || []);
           } catch { /* ignore */ }
         }
       }
@@ -155,7 +159,6 @@ export default function BatchDetail() {
       if (hRes.status === 'fulfilled') setHistory(hRes.value.data);
       if (rrRes.status === 'fulfilled') setRejectionReasons(rrRes.value.data);
       if (qtRes.status === 'fulfilled') setQcTeam(qtRes.value.data);
-      if (mRes.status === 'fulfilled') setCostMappings(mRes.value.data || []);
     } finally {
       setLoading(false);
     }
@@ -693,7 +696,7 @@ function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sou
                       let cost = 0;
                       let mapped = false;
                       if (qty > 0 && reason) {
-                        const m = costMappings.find((mm) => mm.stage_name === stage.name && mm.reason_name === reason);
+                        const m = costMappings.find((mm) => mm.sku_id === batch?.sku_id && mm.stage_name === stage.name && mm.reason_name === reason);
                         if (m) {
                           mapped = true;
                           const unit = (m.impacted_component_keys || []).reduce((s, k) => s + (parseFloat(skuCogs[k]) || 0), 0);
