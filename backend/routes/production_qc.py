@@ -1516,24 +1516,47 @@ async def get_rejection_report(
         r["missing_mapping"] = False
         total_cost += r["cost_of_rejection"]
 
-    # Summary by resource
-    by_resource = {}
-    for r in rows:
-        key = r["resource_name"]
-        by_resource[key] = by_resource.get(key, 0) + r["qty_rejected"]
+    # Summary aggregations (qty + cost) by resource / date / reason / stage / sku
+    by_resource = {}  # name -> {bottles, cost}
+    by_date = {}      # date -> {bottles, cost}
+    by_reason = {}    # reason -> {bottles, cost}
+    by_stage = {}     # stage -> {bottles, cost}
+    by_sku = {}       # sku_id -> {sku_name, bottles, cost}
+    unmapped_count = 0
 
-    # Summary by date
-    by_date = {}
+    def _bump(d, key, qty, cost, extra=None):
+        slot = d.setdefault(key, {"bottles": 0, "cost": 0.0, **(extra or {})})
+        slot["bottles"] += qty
+        slot["cost"] += cost
+
     for r in rows:
-        key = r["date"]
-        by_date[key] = by_date.get(key, 0) + r["qty_rejected"]
+        qty = r.get("qty_rejected", 0) or 0
+        cost = r.get("cost_of_rejection", 0.0) or 0.0
+        if r.get("missing_mapping"):
+            unmapped_count += 1
+        _bump(by_resource, r.get("resource_name") or "—", qty, cost)
+        _bump(by_date, r.get("date") or "—", qty, cost)
+        _bump(by_reason, r.get("rejection_reason") or "—", qty, cost)
+        _bump(by_stage, r.get("stage_name") or "—", qty, cost)
+        _bump(by_sku, r.get("sku_id") or "", qty, cost, {"sku_name": r.get("sku_name") or "—"})
+
+    def _round(d):
+        d["cost"] = round(d.get("cost", 0.0), 2)
+        return d
 
     return {
         "rows": rows,
         "total_rejected": total_rejected,
         "total_cost": round(total_cost, 2),
-        "by_resource": [{"name": k, "bottles": v} for k, v in sorted(by_resource.items())],
-        "by_date": [{"date": k, "bottles": v} for k, v in sorted(by_date.items())],
+        "unmapped_count": unmapped_count,
+        "by_resource": [{"name": k, "bottles": v["bottles"], "cost": round(v["cost"], 2)} for k, v in sorted(by_resource.items(), key=lambda x: x[1]["cost"], reverse=True)],
+        "by_date":     [{"date": k, "bottles": v["bottles"], "cost": round(v["cost"], 2)} for k, v in sorted(by_date.items())],
+        "by_reason":   [{"reason": k, "bottles": v["bottles"], "cost": round(v["cost"], 2)} for k, v in sorted(by_reason.items(), key=lambda x: x[1]["cost"], reverse=True)],
+        "by_stage":    [{"stage": k, "bottles": v["bottles"], "cost": round(v["cost"], 2)} for k, v in sorted(by_stage.items(), key=lambda x: x[1]["cost"], reverse=True)],
+        "top_skus":    sorted(
+            [{"sku_id": k, "sku_name": v["sku_name"], "bottles": v["bottles"], "cost": round(v["cost"], 2)} for k, v in by_sku.items() if v["cost"] > 0],
+            key=lambda x: x["cost"], reverse=True
+        )[:5],
     }
 
 
