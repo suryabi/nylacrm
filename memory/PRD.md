@@ -527,6 +527,28 @@
 - [x] **Files**: `backend/routes/personal_calendar.py` NEW, `backend/routes/__init__.py` MERGED, `backend/requirements.txt` MERGED, `backend/models/role.py` MERGED, `backend/tests/test_personal_calendar.py` NEW (renamed from `test_iteration_150_personal_calendar.py` to avoid collision), `frontend/src/pages/PersonalCalendar.js` NEW, `frontend/src/App.js` MERGED, `frontend/src/layouts/DashboardLayout.js` MERGED, `frontend/src/components/widgets/UpcomingMeetingsWidget.js` REPLACED.
 - [x] **Testing**: iteration_154 — 19/19 backend pytest + 47/47 regression suite (iteration_150/152/153) + comprehensive Playwright PASS. No regressions to rejection-cost / RBAC / GOP-style work. Verified API returns 10 violet meeting_minutes events for April 2026, OAuth status endpoint works, calendar renders cleanly with all data-testids.
 
+### Marketing Request Lifecycle Module (2026-04-29)
+- [x] **Independent module under Sales** (also accessible from Marketing sidebar) — separate collection from Tasks & Requests.
+- [x] **Backend** (`backend/routes/marketing_requests.py` ~430 lines + `master_request_types.py` ~95 lines):
+  - **Master Request Types**: admin-only CRUD (CEO/Admin/System Admin) — name, description, default priority, default due offset, color/icon, sort order, soft-delete via is_active. List/Create/Update/Delete endpoints.
+  - **Marketing Requests**: full CRUD with auto-routing to Marketing dept, lifecycle (created → assigned → in_progress → review → completed | rejected), per-status auto-transitions, completed_at timestamp, rejection_reason capture.
+  - **Comments**: append-only with author + timestamp + activity log entry.
+  - **Files & Links**: input/output/reference kinds; per-kind list separation; activity-log tracking on attach/detach.
+  - **Department reassignment**: changing assigned_to_department clears assignee if user not in new dept; activity log records dept change. Setting assignee from `created` auto-bumps to `assigned`.
+  - **Lookups**: distinct departments (users + designations + Marketing fallback); users-by-department (case-insensitive, active only).
+  - **Dashboard summary**: totals + per-status counts + overdue count.
+  - **Slack notifications**: best-effort outgoing webhook to `tenant_settings.slack_webhook_url` on create + status change. Silent skip if not configured (never blocks user actions).
+- [x] **RBAC**: `marketing_requests` (Marketing category, default `view+create+edit`) and `master_request_types` (Organization, admin-default false). Module total 72 → 74; Marketing 2 → 3; Organization 8 → 9. Admin/System Admin auto-backfilled with full perms.
+- [x] **Frontend** (`pages/MarketingRequests.js` + `pages/MarketingRequestTypes.js`):
+  - **Main page**: GOP-style header, 5 hero tiles (Total/In Progress/Review/Completed/Overdue), filter bar (search/status/type/department), table view with status pills, priority pills, type badges, assignee + dept; click-row opens detail drawer.
+  - **Create modal**: Title + Description + Type (required) + Priority + Due Date + Department + Lead checkboxes + Reference Links accumulator (label + URL + kind). Submit → POST → opens drawer.
+  - **Detail drawer**: 6 lifecycle status buttons with active-state highlight, prompt-based rejection reason capture, department + assignee selects (assignee filtered to dept users live), description, linked leads, files panel (kind-tagged + delete), external links accumulator + delete, comments thread with post field, expandable activity log.
+  - **Admin types page** (`/admin/marketing-request-types`): list with color-tagged badges, add/edit/soft-delete, type editor modal with default priority/due/sort order/color.
+- [x] **Sidebar**: 'Marketing Requests' under both Sales (Lead & Sales Operations) and Marketing module sidebars.
+- [x] **Tenant Settings → Marketing**: new 'Marketing Request Types' card with deep link to `/admin/marketing-request-types`.
+- [x] **Files**: NEW backend `routes/marketing_requests.py`, `routes/master_request_types.py`. NEW frontend `pages/MarketingRequests.js`, `pages/MarketingRequestTypes.js`. UPDATED `routes/__init__.py`, `models/role.py`, `App.js`, `layouts/DashboardLayout.js`, `pages/TenantSettings.js`.
+- [x] **Testing**: iteration_155 — 22/22 backend pytest PASS + comprehensive frontend Playwright PASS (12 data-testids on main page, 6 lifecycle buttons, comment + link flows, type editor CRUD, soft-delete badge, sidebar entry visible). Zero regressions.
+
 ### API Keys for External Integration Partners (2026-04-28)
 - [x] **Per-partner API keys** (one key per integration like BriefingIQ). Issued at Settings → API Keys page. Format `ak_live_<48 hex>`, stored as **sha256 hash**, raw key shown ONLY ONCE on creation.
 - [x] **Auth via either header**: `X-API-Key: ak_live_…` OR `Authorization: Bearer ak_live_…` (server detects by `ak_live_` prefix; falls back to JWT/session if not an API key).
