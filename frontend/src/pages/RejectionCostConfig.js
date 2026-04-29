@@ -30,11 +30,14 @@ export default function RejectionCostConfig() {
       setLoadingBootstrap(true);
       try {
         const res = await axios.get(`${API_URL}/api/production/rejection-cost-config`, { headers: headers() });
+        const skus = res.data.skus || [];
         setBootstrap({
-          skus: res.data.skus || [],
+          skus,
           components: res.data.components || [],
           reasons: res.data.reasons || [],
         });
+        // Auto-select the first SKU (ordered by master sort_order)
+        if (skus.length > 0) setSelectedSkuId(skus[0].id);
       } catch (e) {
         toast.error(e.response?.data?.detail || 'Failed to load');
       } finally {

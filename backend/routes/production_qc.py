@@ -755,12 +755,12 @@ async def get_rejection_cost_config(
     comps_map = await _resolve_master_components(tenant_id)
     components = sorted(comps_map.values(), key=lambda c: c.get("sort_order", 99))
 
-    # Active SKUs from master (global db.master_skus)
+    # Active SKUs from master (global db.master_skus), ordered by master sort_order
     from database import db as _db
     sku_docs = await _db.master_skus.find(
         {"is_active": {"$ne": False}},
-        {"_id": 0, "id": 1, "sku_name": 1, "external_sku_id": 1, "category": 1},
-    ).sort("sku_name", 1).to_list(500)
+        {"_id": 0, "id": 1, "sku_name": 1, "external_sku_id": 1, "category": 1, "sort_order": 1},
+    ).sort([("sort_order", 1), ("sku_name", 1)]).to_list(500)
 
     # Master rejection reasons
     reasons = await tdb.rejection_reasons.find(
