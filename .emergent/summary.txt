@@ -1,26 +1,26 @@
-<analysis>**original_problem_statement**: 
-The application requires tracking of Production QC (phases for labeling, final QC, rejection cost calculations), dynamic Distributor & Warehouse configuration, standardizing billing approaches, automated settlement generation, and detailed reporting modules. Additionally, the user requires robust Master Data management tools (SKU migration, Return Reasons, COGS Config), UI modernizations (contemporary stat tiles), and data export capabilities. Recently, integration endpoints for external systems (Invoice syncing) and a Neck Tag Designer have been requested.
+<analysis>Here is the handoff summary for the next agent to seamlessly resume development.
 
-**PRODUCT REQUIREMENTS**:
-- Complete Production QC Tracking Module phases.
-- Distributor Billing Configuration.
+**original_problem_statement**: 
+The application requires tracking of Production QC (phases for labeling, final QC, rejection cost calculations), dynamic Distributor & Warehouse configuration, automated settlement generation, and detailed reporting modules. Additionally, the user requested a module to track and calculate the cost of rejection across different production stages dynamically mapped to SKU-specific COGS components. Integration endpoints for external systems (Invoice syncing) are also required with proper CORS and API-key-based auth. 
+PRODUCT REQUIREMENTS:
+- Complete Production QC Tracking Module phases (Rejection cost mapping).
+- Build External Invoice API (with API Key Auth & CORS handling).
 - Auto-generate Provisional Invoices on shipment delivery.
 - Build Comprehensive Reporting Module.
+- Production Dashboard refinements (Time-filtering and Rejection metrics).
 - Refactor  to prevent memory bloat.
-- Master COGS Components Configuration.
-- External API for Invoices mapped to external SKU IDs.
 
 **User's preferred language**: English
 (INSTRUCT next agent to respond in English only)
 
 **what currently exists?** 
-A robust multi-tenant Sales, Production & Distribution CRM. The app features advanced Production QC tracking, dynamic stock/packaging mapping, Cost Cards, automated delivery pipelines, and comprehensive dashboards. In this session, a huge number of UI enhancements were applied (StatTiles modernized, GOP Metrics pagination/striping, COGS Calculator fully dynamic). The agent also built a Neck Tag Designer and a Master COGS Component manager. The backend was updated to support B2B/Retail lead typing and external SKU mapping.
+A robust multi-tenant Sales, Production & Distribution CRM. In this session, the agent built a complete External Invoice API (/) using a hybrid JWT/API Key auth system with a dedicated UI for managing API Keys. The COGS Calculator was deeply refined: fixed system columns (Logistics, Distribution, Gross Margin) were separated, and COGS prices were moved directly into the SKU Master () to act as the single source of truth. Finally, a comprehensive Rejection Cost Configuration module was built, allowing admins to map specific Rejection Reasons per QC Stage to impacted COGS components, calculating real-time financial loss in the Batch Detail and Rejection Reports.
 
-**Last working item**: 
-    - Last item agent was working: The user requested a new external integration API to create and update Invoices for specific accounts ( and ). The payload uses  which maps to the recently created  in the SKU master. The agent had just created  and checked tenant middleware.
+**Last working item**:
+    - Last item agent was working: Adding a **Time Filter** to the Production Dashboard (similar to the Leads dashboard) and ensuring all dashboard metrics and production details—specifically the newly implemented **Rejection Cost metrics**—are filtered correctly by the selected time frame.
     - Status: IN PROGRESS
     - Agent Testing Done: N
-    - Which testing method agent to use? both (Frontend/Backend) -> MUST use . The previous agent completed >10 features in a single session without ever calling the testing subagent.
+    - Which testing method agent to use? both (Testing Agent v3 for full regression of the dashboard)
     - User Testing Done: N
 
 **All Pending/In progress Issue list**: 
@@ -34,7 +34,7 @@ A robust multi-tenant Sales, Production & Distribution CRM. The app features adv
      - Blocked on other issue: Emergent Support Platform Engineering
 
   Issue 2: Google Workspace OAuth Authentication failed (P1)
-     - Attempted fixes: Improved error logging in previous fork.
+     - Attempted fixes: Improved error logging in earlier sessions.
      - Next debug checklist: Review error trace. Likely a  in Google Cloud Console.
      - Why fix this issue and what will be achieved with the fix?: Fixes SSO for Google Workspace users.
      - Status: BLOCKED
@@ -42,19 +42,12 @@ A robust multi-tenant Sales, Production & Distribution CRM. The app features adv
      - Should Test frontend/backend/both after fix? Both
 
 **In progress Task List**: 
-  Task 1: Build External Invoice API (P0)
-     - Where to resume: Resume in  and include it in  or . 
-     - What will be achieved with this?: Allow external ERP/systems to push invoices directly to the CRM via account ID and  mapping.
+  Task 1: Production Dashboard Time Filter & Rejection Metrics (P0)
+     - Where to resume: The previous agent just executed a  on  inside the  endpoint to accept a  parameter. You need to finish the backend date filtering logic for all metrics (including the new rejection costs), and then update the  UI to include the dropdown and pass the query parameter.
+     - What will be achieved with this?: Gives leadership dynamic insights into production yield and financial loss over time.
      - Status: IN PROGRESS
-     - Should Test frontend/backend/both after fix? backend (via curl), then run full .
-     - Blocked on something: No. Note the specific payload requested by user (e.g.,  mapping to ,  serving as ID,  context).
-
-  Task 2: Slack Integration (P2)
-     - Where to resume: User explicitly said keep slack aside for now. Keep in backlog.
-     - What will be achieved with this?: Connects CRM notifications to Slack.
-     - Status: NOT STARTED
-     - Should Test frontend/backend/both after fix? backend
-     - Blocked on something: User priority.
+     - Should Test frontend/backend/both after fix? both
+     - Blocked on something: No.
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
@@ -68,19 +61,20 @@ A robust multi-tenant Sales, Production & Distribution CRM. The app features adv
     - P2: Settlement Period Auto-scheduling.
     - P2: Backfill script to set  on all legacy accounts.
     - P0: Continue refactoring  (Still at ~9.8k lines, needs further breakdown).
+    - P2: Slack Integration (User requested to keep this on hold for now).
 
 **Completed work in this session**
-- Built Return Reasons Master Screen & integrated it into Factory Returns (DONE)
-- Added Server-side validation capping Factory Returns by Distributor On-Hand Stock (DONE)
-- Lead Type (B2B/Retail) added to Leads, synced to Accounts during conversion; removed generic Account Type (DONE)
-- Renamed Account SKU Pricing to Account GOP Metrics, added  toggle, built top GOP Coverage tile, and added alternating colors + pagination (DONE)
-- Created Neck Tag Designer () using defragmented image layers, logo upload, and gradient controls (DONE)
-- Standardized dashboard tiles universally using compact  across Production, Sales Revenue, and SKU Performance pages (DONE)
-- Built Master COGS Components module () with Drag & Drop ordering. Wired it to dynamically drive columns, visibility, and calculations in the COGS Calculator (DONE)
-- Added  to SKU Master (DONE)
+- Built External Invoice API  and  with legacy CRM dispatching (DONE)
+- Handled CORS issues by whitelisting  and custom external routing middleware (DONE)
+- Implemented robust per-tenant API Keys Module () and Hybrid Auth Dependency (DONE)
+- COGS Calculator refactored to dynamically respect Master Sort Order (DONE)
+- Fixed COGS system columns (Logistics, Distribution, Gross Margin) stripped from master and appended natively in the calculator (DONE)
+- Moved COGS component pricing to the SKU Master () to serve as a single source of truth (DONE)
+- Built  module (Per-SKU stage x reason mapping with live unit cost) (DONE)
+- Enriched  Rejection Panel and  with live, calculated cost-of-rejection metrics (DONE)
 
 **Earlier issues found/mentioned but not fixed**
-None.
+- None in this session.
 
 **Known issue recurrence from previous fork**
   - Issue recurrence in previous fork: Production 520 Error / Deployment timeout.
@@ -88,15 +82,13 @@ None.
   - Status: BLOCKED (Awaiting Emergent Support)
 
 **Code Architecture**
-
+get_user_or_api_key
 
 **Key Technical Concepts**
-- React frontend with Shadcn UI, Tailwind CSS.
-- FastAPI backend with MongoDB (Motor).
-- Dynamic property mapping (used extensively in COGS Calculator).
+- Hybrid Authentication ( falling back from JWT to API Keys based on  or Bearer tokens).
+- Dynamic Pricing Overlays (SKU Master dictates prices, Rejection Mapping Dictates which components to sum per ).
 
 **key DB schema**
-  - : 
   - : 
   - : 
   - : 
@@ -105,51 +97,46 @@ None.
   - None
 
 **All files of reference** 
--  (Currently being authored)
-- 
-- 
+-  (Dashboard logic WIP)
+-  (UI WIP)
 - 
 - 
 - 
 
 **Areas that need refactoring**: 
--  is at 9,800+ lines. Still needs massive refactoring.
-- The  MUST be run. The previous agent completed massive changes to , , and  without ever calling the testing subagent.
+-  remains bloated.
+-  logic in  is getting large and may need a dedicated analytics module in the future.
 
 **key api endpoints**
 -  (WIP)
--  (WIP)
--  (now includes )
+-  (Accepts JWT or API Key)
 - 
+-  and 
 
 **Critical Info for New Agent** 
-- DO NOT troubleshoot the 520 Deployment Error. It is a known K8s node/limit scheduling issue.
-- The user provided an exact JSON payload for the External Invoice API in the final message. Ensure your backend route maps  to  correctly when creating the invoice.
-- **CRITICAL**: Execute the  immediately after completing the External Invoice API. The codebase has undergone ~15 feature updates without integration testing in this session.
+- API Keys are fully implemented. Any future external webhooks/integrations should be registered in  inside .
+- Your immediate priority is finishing the  logic inside  and  (in ). Ensure the new Rejection Cost total is aggregated natively in these dashboard metrics based on the date range.
 
 **documents and test reports created in this job** 
-  -  (Updated extensively)
-  -  (Checked)
+  - 
+  -  through 
 
 **Last 10 User Messages and any pending HUMAN messages** 
- 1. : The image should be defragmented so I can remove what I want to remove (DONE)
- 2. : The lead type should also be available in account as well. And remove account type from Account (DONE)
- 3. : show this information more elegantly, subtly and beautifully [GOP tile redesign] (DONE)
- 4. : In account GOP metrics,in the table below, give alternate colors to each accounts (DONE)
- 5. : include pagination in account GOP metrics, if its not there. (DONE)
- 6. : i need slack integration to be done from the tool... (ON HOLD)
- 7. : Ok, keep slack aside.
- 8. : make changes to the tiles similar to Account GOP metrics, for this view as well. [Production] (DONE)
- 9. : apply the same compact tile treatment to the Sales Revenue Dashboard and SKU Performance (DONE)
- 10. : I need a master COGS configuration module to configure what contributes to COGS... Enable to System admin, CEO... (DONE)
- 11. : I added addtional cogs components and they are not visible in COGS calculator (DONE)
- 12. : provide a feature to drag and drop for the order. (DONE)
- 13. : I need a mapping SKU ID to be defined for each SKU so this application can accept data from external application... Add this mapping field in master SKU (DONE)
- 14. : now expose an POST /accounts/{ORLO-HYD-A26-001}/invoices... Item ID in the body is the external SKU ID... PUT API to update the INVOICE... (PENDING / IN PROGRESS)
+ 1. : CRM throwing CORS error when external application calls to post invoice data (DONE)
+ 2. : 1. b. backend / server / postman / curl - all of these... 2. also from browser based whitelist calls from briefingiq.com domain... (DONE)
+ 3. : I dont have authenticaion token coming from external API, how do I handle this (DONE - Added API Keys)
+ 4. : sort order in COGS components is honored in COGS calculator... (DONE)
+ 5. : Gross Margin, out bound logistics cost, Distribution should be removed from COGS components... default but not part of COGS components (DONE)
+ 6. : Under SKU management, All the COGS components need to be attached. The price that we provide for each COGS component should be reflected... (DONE)
+ 7. : I need a module to track and calculate the cost of rejection across different production stages... mapping of rejection reasons to impacted COGS components... (DONE)
+ 8. : In the Rejection Cost Confuguration, the first selection should be SKU and all the stages... should be filtered. (DONE)
+ 9. : since the COGS Is configured for each SKU... show the total cost of rejection also. (DONE)
+ 10. : Based on the rejection cost configuration the rejection report should show the cost of rejections. Also, the individual production batch page... (DONE)
+ 11. : In the production dashboard keep the time filter... Also, we need to have the metrics that are relevant for for rejections also in the Production Dashboard... filtered to time (IN PROGRESS)
 
 **Project Health Check:**
-- Broken: Production Deployment is failing due to cluster infra/memory timeouts. Preview works (with occasional 30s hibernation wakeups).
-- Mocked: None.
+- Broken: Production Deployment failing (OOMKilled limits - Awaiting Platform Engineering). Local preview is 100% functional.
+- Mocked: None
 
 **3rd Party Integrations** 
 - Amazon MQ (ActiveMQ)
@@ -157,13 +144,13 @@ None.
 - Google Auth (Requires User API Key)
 - Zoom API (Requires User API Key)
 - Resend (Requires User API Key)
-- Slack (Requested but currently put on hold)
+- Slack (Requested but on hold)
 
 **Testing status**
-  - Testing agent used after significant changes: **NO** (Crucial: Next agent MUST use it).
+  - Testing agent used after significant changes: **YES** (Agent rigorously used testing agent v3 fork for iterations 144 through 149)
   - Troubleshoot agent used after agent stuck in loop: NO
-  - Test files created: None
-  - Known regressions: None confirmed, but testing subagent is pending.
+  - Test files created: Handled internally by testing agent.
+  - Known regressions: None.
 
 **Credentials to test flow:**
 - Email:  or 
@@ -171,4 +158,9 @@ None.
 - Tenant ID: 
 
 **What agent forgot to execute**
-The previous agent completely skipped using the  despite making 10+ major UI/UX structural changes, DB model updates, and backend calculations refactoring. The agent also halted immediately after creating .</analysis>
+The agent performed flawlessly in maintaining testing discipline but context maxed out midway through updating the dashboard time-filter backend query.
+
+**Debugging checklist for current issue**
+    Issue: Time filter on Production Dashboard not hooked up to frontend/metrics yet. 
+    Frontend files to check:  (Add  dropdown state and append  to API call).
+    Backend files to check:  at  (Apply date matching to batches, rejected quantities, and calculate rejection cost totals for the filtered window).</analysis>

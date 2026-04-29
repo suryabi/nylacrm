@@ -25,6 +25,6 @@
   "retest_needed": false,
   "should_main_agent_self_test": true,
   "main_agent_can_self_test": true,
-  "context_for_next_testing_agent": "Re-run via: REACT_APP_BACKEND_URL=https://invoice-api-dev.preview.emergentagent.com pytest backend/tests/test_iteration_149_batch_detail_rejection_cost.py -v. Tests are read-only (no mutations). Best demo batch for this feature: /production-batches/f0e618dc-c086-48e5-a2e5-7fab0fe6f5c6. Note the FE route is /production-batches/:batchId (NOT /production/batches/:id).",
+  "context_for_next_testing_agent": "Re-run via: REACT_APP_BACKEND_URL=https://rejection-cost-dash.preview.emergentagent.com pytest backend/tests/test_iteration_149_batch_detail_rejection_cost.py -v. Tests are read-only (no mutations). Best demo batch for this feature: /production-batches/f0e618dc-c086-48e5-a2e5-7fab0fe6f5c6. Note the FE route is /production-batches/:batchId (NOT /production/batches/:id).",
   "rca of the issue": "No issues. Iteration 149 spec fully implemented and verified."
 }
