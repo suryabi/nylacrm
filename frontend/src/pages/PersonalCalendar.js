@@ -35,6 +35,17 @@ function fmtTime(iso) {
   try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }); }
   catch { return null; }
 }
+function calcDuration(startIso, endIso) {
+  if (!startIso || !endIso || startIso.length === 10) return null;
+  try {
+    const min = Math.round((new Date(endIso) - new Date(startIso)) / 60000);
+    if (min <= 0) return null;
+    if (min < 60) return `${min} min`;
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return m === 0 ? `${h}h` : `${h}h ${m}m`;
+  } catch { return null; }
+}
 function dayKeyFromEvent(ev) { const s = ev.start || ''; return s.length >= 10 ? s.slice(0, 10) : s; }
 
 function ZoomIcon({ className = 'w-3.5 h-3.5' }) {
@@ -736,7 +747,7 @@ function DayView({ cursor, events, todayKey, onSlotClick, onEventClick }) {
               </div>
               <div
                 onClick={() => onSlotClick(k, `${pad(h)}:00`)}
-                className="px-3 py-2 min-h-[64px] cursor-pointer relative group"
+                className="px-3 py-2 min-h-[80px] cursor-pointer relative group"
                 data-testid={`day-hour-${h}`}
               >
                 {hourEvs.length === 0 ? (
@@ -771,18 +782,33 @@ function DayHourEventCard({ ev, onClick }) {
   const s = SOURCE_STYLES[ev.source] || SOURCE_STYLES.google;
   const time = fmtTime(ev.start);
   const endTime = fmtTime(ev.end);
+  const duration = calcDuration(ev.start, ev.end);
   const platform = detectPlatform(ev);
+  const PlatformIconBig = platform === 'zoom'
+    ? <ZoomIcon className="w-9 h-9 text-[#2D8CFF] shrink-0" />
+    : platform === 'meet'
+      ? <MeetIcon className="w-9 h-9 text-[#00897B] shrink-0" />
+      : platform === 'teams'
+        ? <Video className="w-9 h-9 text-[#5059C9] shrink-0" />
+        : null;
   return (
-    <button onClick={(e) => { e.stopPropagation(); onClick(); }} className={`w-full text-left rounded-lg border-l-[3px] ${s.border} ${s.bg} hover:brightness-95 px-3 py-2 flex items-center gap-3`} data-testid={`day-event-${ev.id}`}>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5 mb-0.5">
-          {time && <span className={`text-xs font-bold tabular-nums ${s.text}`}>{time}{endTime && time !== endTime ? `–${endTime}` : ''}</span>}
-          {platform && <PlatformBadge platform={platform} />}
-          <span className={`text-[10px] uppercase tracking-wide font-bold ${s.text} opacity-70`}>{s.label}</span>
+    <button
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      className={`w-full text-left rounded-xl ${s.bg} hover:brightness-95 hover:shadow-sm transition-all px-4 py-4 min-h-[160px] flex items-center gap-4`}
+      data-testid={`day-event-${ev.id}`}
+    >
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className={`flex items-center gap-2 flex-wrap text-sm font-bold tabular-nums ${s.text}`}>
+          {time && <span>{time}{endTime && time !== endTime ? ` – ${endTime}` : ''}</span>}
+          {duration && <span className="text-xs font-semibold opacity-70">· {duration}</span>}
         </div>
-        <div className={`text-sm font-semibold ${s.text} truncate`}>{ev.title}</div>
-        {ev.location && <div className={`text-xs ${s.text} opacity-70 truncate`}>{ev.location}</div>}
+        <div className={`text-lg font-bold ${s.text} truncate`} title={ev.title}>{ev.title}</div>
       </div>
+      {PlatformIconBig && (
+        <div className="self-center" title={platform === 'zoom' ? 'Zoom' : platform === 'meet' ? 'Google Meet' : 'Teams'}>
+          {PlatformIconBig}
+        </div>
+      )}
     </button>
   );
 }
