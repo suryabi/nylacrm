@@ -6,7 +6,7 @@ import {
   ArrowLeft, Package, Calendar, Boxes, Tag,
   Loader2, FlaskConical, Paintbrush, ShieldCheck,
   Trash2, ArrowRight, MoveRight, ClipboardCheck,
-  Clock, User, AlertTriangle, ChevronDown, ChevronUp, Plus, Warehouse, Send, Pencil,
+  Clock, User, AlertTriangle, AlertCircle, ChevronDown, ChevronUp, Plus, Warehouse, Send, Pencil,
 } from 'lucide-react';
 import Breadcrumbs from '../components/Breadcrumbs';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
@@ -330,7 +330,7 @@ export default function BatchDetail() {
 
           {/* RIGHT: Rejection Summary + Activity */}
           <div className="lg:col-span-5 xl:col-span-4 space-y-3">
-            <RejectionPanel history={history} batch={batch} showRejections={showRejections} setShowRejections={setShowRejections} rejFilter={rejFilter} setRejFilter={setRejFilter} />
+            <RejectionPanel history={history} batch={batch} showRejections={showRejections} setShowRejections={setShowRejections} rejFilter={rejFilter} setRejFilter={setRejFilter} costMappings={costMappings} skuCogs={skuCogs} />
             {/* Activity Log */}
             {history.timeline?.length > 0 && (
               <ActivityLog history={history} showHistory={showHistory} setShowHistory={setShowHistory} />
@@ -967,7 +967,7 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
 
 /* ─── Rejection Panel (Right Sidebar) ─── */
 
-function RejectionPanel({ history, batch, showRejections, setShowRejections, rejFilter, setRejFilter }) {
+function RejectionPanel({ history, batch, showRejections, setShowRejections, rejFilter, setRejFilter, costMappings = [], skuCogs = {} }) {
   const rejEntries = [];
   (history.inspections || []).filter(i => i.qty_rejected > 0).forEach(i => {
     const entries = i.entries || [];
@@ -989,18 +989,36 @@ function RejectionPanel({ history, batch, showRejections, setShowRejections, rej
     }
   });
 
-  if (rejEntries.length === 0) return (
+  // Enrich each entry with cost using sku-scoped mappings + SKU master COGS prices
+  const fmt = (n) => `₹${(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const skuId = batch?.sku_id;
+  const enriched = rejEntries.map((e) => {
+    let unit = 0; let mapped = false;
+    if (e.qty_rejected > 0 && e.reason && skuId) {
+      const m = costMappings.find((mm) => mm.sku_id === skuId && mm.stage_name === e.stage_name && mm.reason_name === e.reason);
+      if (m) {
+        mapped = true;
+        unit = (m.impacted_component_keys || []).reduce((s, k) => s + (parseFloat(skuCogs[k]) || 0), 0);
+      }
+    }
+    return { ...e, unit_cost: unit, cost: unit * (e.qty_rejected || 0), mapped };
+  });
+
+  if (enriched.length === 0) return (
     <div className="bg-white border border-slate-200 rounded-lg p-4 text-center">
       <p className="text-sm text-slate-400">No rejections recorded yet</p>
     </div>
   );
 
-  const totalRej = rejEntries.reduce((s, e) => s + (e.qty_rejected || 0), 0);
-  const byResource = {}, byReason = {}, byStage = {};
+  const totalRej = enriched.reduce((s, e) => s + (e.qty_rejected || 0), 0);
+  const totalCost = enriched.reduce((s, e) => s + (e.cost || 0), 0);
+  const anyMissing = enriched.some((e) => !e.mapped);
+  const byResource = {}, byReason = {}, byStage = {}, costByReason = {};
   const uniqueDates = new Set(), uniqueResources = new Set(), uniqueReasons = new Set(), uniqueStages = new Set();
-  rejEntries.forEach(e => {
+  enriched.forEach(e => {
     byResource[e.resource_name] = (byResource[e.resource_name] || 0) + e.qty_rejected;
     byReason[e.reason] = (byReason[e.reason] || 0) + e.qty_rejected;
+    costByReason[e.reason] = (costByReason[e.reason] || 0) + (e.cost || 0);
     byStage[e.stage_name] = (byStage[e.stage_name] || 0) + e.qty_rejected;
     if (e.date) uniqueDates.add(e.date);
     if (e.resource_name) uniqueResources.add(e.resource_name);
@@ -1010,7 +1028,7 @@ function RejectionPanel({ history, batch, showRejections, setShowRejections, rej
   const topResource = Object.entries(byResource).sort((a, b) => b[1] - a[1]);
   const topReason = Object.entries(byReason).sort((a, b) => b[1] - a[1]);
 
-  const filtered = rejEntries.filter(e => {
+  const filtered = enriched.filter(e => {
     if (rejFilter.resource && e.resource_name !== rejFilter.resource) return false;
     if (rejFilter.date && e.date !== rejFilter.date) return false;
     if (rejFilter.reason && e.reason !== rejFilter.reason) return false;
@@ -1018,7 +1036,7 @@ function RejectionPanel({ history, batch, showRejections, setShowRejections, rej
     return true;
   });
   const filteredTotal = filtered.reduce((s, e) => s + (e.qty_rejected || 0), 0);
-  const bpc = batch?.bottles_per_crate || 1;
+  const filteredCost = filtered.reduce((s, e) => s + (e.cost || 0), 0);
 
   return (
     <div className="bg-white border border-slate-200 rounded-lg" data-testid="rejection-summary-section">
@@ -1027,10 +1045,19 @@ function RejectionPanel({ history, batch, showRejections, setShowRejections, rej
           <div className="flex items-center gap-2">
             <AlertTriangle size={14} className="text-red-500" />
             <span className="text-sm font-semibold text-slate-800">Rejections</span>
-            <span className="text-xs text-slate-400">{rejEntries.length} records</span>
+            <span className="text-xs text-slate-400">{enriched.length} records</span>
           </div>
-          <span className="text-xl font-bold text-red-700" data-testid="rej-metric-total">{totalRej}</span>
+          <div className="text-right">
+            <span className="text-xl font-bold text-red-700" data-testid="rej-metric-total">{totalRej}</span>
+            <div className="text-[11px] font-semibold text-rose-700 leading-tight" data-testid="rej-total-cost">{fmt(totalCost)}</div>
+          </div>
         </div>
+        {anyMissing && (
+          <div className="mt-2 text-[10px] text-amber-700 flex items-center gap-1">
+            <AlertCircle size={11} className="text-amber-500 shrink-0" />
+            <span>Some rejections have no cost mapping configured. <a href="/production/rejection-cost-config" className="underline">Configure</a>.</span>
+          </div>
+        )}
       </div>
 
       <div className="px-4 py-3 space-y-3 border-b border-slate-100">
@@ -1055,10 +1082,10 @@ function RejectionPanel({ history, batch, showRejections, setShowRejections, rej
             <p className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-1.5">By Reason</p>
             <div className="space-y-1.5">
               {topReason.slice(0, 4).map(([name, count], i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <span className="text-xs text-slate-600 truncate mr-2">{name}</span>
+                <div key={i} className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-slate-600 truncate mr-2 flex-1">{name}</span>
                   <div className="flex items-center gap-2">
-                    <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-amber-400 rounded-full" style={{ width: `${(count / totalRej) * 100}%` }} /></div>
+                    <span className="text-[10px] text-rose-600 tabular-nums whitespace-nowrap" title="Cost">{fmt(costByReason[name] || 0)}</span>
                     <span className="text-xs font-bold text-amber-600 tabular-nums w-8 text-right">{count}</span>
                   </div>
                 </div>
@@ -1103,6 +1130,7 @@ function RejectionPanel({ history, batch, showRejections, setShowRejections, rej
                   <th className="text-left px-3 py-2 font-medium">Stage</th>
                   <th className="text-center px-3 py-2 font-medium">Rej</th>
                   <th className="text-left px-3 py-2 font-medium">Reason</th>
+                  <th className="text-right px-3 py-2 font-medium">Cost</th>
                 </tr>
               </thead>
               <tbody>
@@ -1112,10 +1140,17 @@ function RejectionPanel({ history, batch, showRejections, setShowRejections, rej
                     <td className="px-3 py-2 text-slate-500">{e.stage_name}</td>
                     <td className="px-3 py-2 text-center"><span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 text-[10px] font-bold text-white bg-red-600 rounded">{e.qty_rejected}</span></td>
                     <td className="px-3 py-2 text-amber-700">{e.reason || '-'}</td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      {e.mapped ? (
+                        <span className="font-semibold text-rose-700">{fmt(e.cost)}</span>
+                      ) : (
+                        <span className="text-amber-500 italic text-[10px]" title="No mapping configured">—</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
-              <tfoot><tr className="bg-slate-700 text-white font-medium text-[10px]"><td colSpan={2} className="px-3 py-2 text-right">{filtered.length} records</td><td className="px-3 py-2 text-center font-bold">{filteredTotal}</td><td></td></tr></tfoot>
+              <tfoot><tr className="bg-slate-700 text-white font-medium text-[10px]"><td colSpan={2} className="px-3 py-2 text-right">{filtered.length} records</td><td className="px-3 py-2 text-center font-bold">{filteredTotal}</td><td></td><td className="px-3 py-2 text-right font-bold">{fmt(filteredCost)}</td></tr></tfoot>
             </table>
           </div>
         </div>

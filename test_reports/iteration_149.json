@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 149 — BatchDetail Rejection Cost Display verified end-to-end. Backend pytest 4/4 PASS (test_iteration_149_batch_detail_rejection_cost.py): GET /api/master-skus exposes cogs_components_values per SKU; GET /api/production/rejection-cost-mappings?sku_id=X returns SKU-scoped mappings with stage_name+reason_name+impacted_component_keys; GET /api/production/rejection-report still returns cost_of_rejection per row + total_cost; batch detail+history endpoints work and SKU lookup is wired. Frontend Playwright test on a real batch (id f0e618dc... — 'Test 123', Nyla 600ml/Silver, 14 rejections, 2 mappings configured for sku) validated all required UI features: (1) Right-side Rejections panel header shows total qty '14' AND total cost '₹864.00' (data-testid=rej-metric-total + rej-total-cost). (2) Amber info banner 'Some rejections have no cost mapping configured. Configure.' is rendered with link to /production/rejection-cost-config when at least one row is unmapped. (3) By Reason section shows ₹864.00 next to 'Bottle scratches' (12 qty) and ₹0.00 next to 'Cap Issues' (2 qty) — costs match qty×Σ(skuCogs[k]). (4) Detail View table headers = ['Resource','Stage','Rej','Reason','Cost'] — new 'Cost' column verified. (5) Per-row costs render correctly: 11×72=₹792.00, 1×72=₹72.00, unmapped row shows '—' (amber). (6) Footer row shows '3 records | 14 | ₹864.00' — matches header total. Inline ₹X preview in QC inspect form (regression) was not directly UI-tested but the same costMappings/skuCogs state flows through to rej-cost-{eIdx}-{rIdx} via identical lookup logic as the panel. Math sanity-check passes (Bottle-scratches mapping has 5 component keys for the Nyla 600ml SKU summing to ₹72/unit).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_149_batch_detail_rejection_cost.py",
+    "/app/test_reports/pytest/iteration_149_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "BatchDetail.js:144-155 fetches /master-skus + /rejection-cost-mappings?sku_id=batch.sku_id only after batch is loaded — correct sequencing; uses Promise.allSettled so partial failures don't crash render.",
+    "BatchDetail.js:998 RejectionPanel match key is (sku_id, stage_name, reason_name) — matches backend mapping_lookup tuple in production_qc.py:1319 — consistent with iteration 148 contract.",
+    "BatchDetail.js:1001-1002 unit cost = Σ(parseFloat(skuCogs[k])||0) — falsy/missing keys safely default to 0; cost = unit × qty_rejected.",
+    "BatchDetail.js:1015 anyMissing flag drives the amber banner — verified live: banner appears when only one of N rows is unmapped (Cap Issues).",
+    "BatchDetail.js:1014 totalCost sums only rows where mapping resolved — unmapped rows contribute 0, not undefined, preventing NaN in header.",
+    "Minor (no action): the inline preview at BatchDetail.js:699 refetches the SAME costMappings via closure — DRY OK but worth abstracting into a useMemo(unitCostFor) hook later.",
+    "Detail-table footer at BatchDetail.js:1141+ correctly mirrors the filtered cost (filteredCost) so applying filters updates both qty and ₹ totals — confirmed visually with no filters applied (3 records / 14 / ₹864.00)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_149_batch_detail_rejection_cost.py (new — 4 tests, 4 classes)"
+  ],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "100% (all 6 spec items verified)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, Nyla Air Water tenant)",
+  "seed_data_creation": "No new seed data created. Used existing batch 'Test 123' (id f0e618dc-c086-48e5-a2e5-7fab0fe6f5c6) which already had 2 rejection-cost-mappings (qc1+Bottle scratches with 5 component keys, final qc+Black Particles with 4 keys) and 14 recorded rejections across 2 reasons. PET SKU has cogs values but no batch with PET+rejections currently exists in the tenant.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-run via: REACT_APP_BACKEND_URL=https://invoice-api-dev.preview.emergentagent.com pytest backend/tests/test_iteration_149_batch_detail_rejection_cost.py -v. Tests are read-only (no mutations). Best demo batch for this feature: /production-batches/f0e618dc-c086-48e5-a2e5-7fab0fe6f5c6. Note the FE route is /production-batches/:batchId (NOT /production/batches/:id).",
+  "rca of the issue": "No issues. Iteration 149 spec fully implemented and verified."
+}
