@@ -434,6 +434,23 @@
 - [x] **Files**: `backend/routes/production_qc.py`, `frontend/src/pages/RejectionCostConfig.js` (new), `frontend/src/pages/RejectionReport.js`, `frontend/src/pages/BatchDetail.js`, `frontend/src/App.js`, `frontend/src/layouts/DashboardLayout.js`.
 - [x] **Testing**: 22/22 passed (iteration_147) — 16 backend + 6 frontend. Pytest regression at `backend/tests/test_iteration_147_rejection_cost.py`. PET SKU verified: primary 7.5 + mfg 12.25, qty=10 → ₹197.50.
 
+### Production — Rejection Cost: Per-SKU Scoping (2026-04-29)
+- [x] **Refactored to per-SKU model.** Mapping uniqueness key changed from `(tenant_id, stage_name, reason_id)` to `(tenant_id, sku_id, stage_name, reason_id)`. Each SKU now has its own (Stage × Reason) → impacted-components matrix.
+- [x] **Backend**:
+  - `RejectionCostMappingUpsert` requires `sku_id` (422 if missing; 404 if SKU not found).
+  - `GET /api/production/rejection-cost-config` is now SKU-aware:
+    - Without `sku_id` → `{skus, components, reasons}` (lightweight bootstrap for picker).
+    - With `?sku_id=X` → `{sku, components, stages: <from this SKU's QC route>, reasons, mappings: <SKU-scoped>}`.
+  - `_calc_rejection_cost` matches by sku_id → returns `missing_mapping=true` when querying for a SKU with no mapping at that (stage, reason).
+  - `/rejection-report` enrichment uses `(sku_id, stage_name, reason_name)` tuple → rows of one SKU never use another SKU's mapping.
+  - Legacy mappings without `sku_id` purged from DB.
+- [x] **Frontend**:
+  - `/production/rejection-cost-config` redesigned: SKU picker as the FIRST dropdown. Empty state until SKU is picked. Stages dropdown filtered to selected SKU's QC route. Header shows "Add new mapping for {SKU name}". Switching SKU isolates mappings.
+  - SKUs without QC routes show an amber warning + disabled stage dropdown (with placeholder "No stages — add QC route").
+  - `BatchDetail.js` inline preview now fetches `/rejection-cost-mappings?sku_id=<batch.sku_id>` and matches by sku_id.
+- [x] **Files**: `backend/routes/production_qc.py`, `frontend/src/pages/RejectionCostConfig.js` (rewritten), `frontend/src/pages/BatchDetail.js`.
+- [x] **Testing**: 12/12 backend (iteration_148, pytest at `backend/tests/test_iteration_148_rejection_cost_per_sku.py`) + frontend Playwright validated. SKU isolation verified end-to-end.
+
 ### API Keys for External Integration Partners (2026-04-28)
 - [x] **Per-partner API keys** (one key per integration like BriefingIQ). Issued at Settings → API Keys page. Format `ak_live_<48 hex>`, stored as **sha256 hash**, raw key shown ONLY ONCE on creation.
 - [x] **Auth via either header**: `X-API-Key: ak_live_…` OR `Authorization: Bearer ak_live_…` (server detects by `ak_live_` prefix; falls back to JWT/session if not an API key).
