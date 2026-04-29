@@ -1,9 +1,10 @@
 import React from 'react';
 import { format, parseISO, isToday, isTomorrow, isValid } from 'date-fns';
+import { Link } from 'react-router-dom';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { Calendar, Clock, Plus, Video, ExternalLink, MoreVertical, Eye, Edit, Trash2, Users } from 'lucide-react';
+import { Calendar, Clock, Plus, Video, ExternalLink, MoreVertical, Eye, Edit, Trash2, Users, CalendarDays, ArrowRight } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,9 +43,18 @@ export function UpcomingMeetingsWidget({ upcomingMeetings, onNewMeeting, onViewM
           </div>
           <span className="hidden sm:inline">Upcoming</span> Meetings
         </h2>
-        <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-xs">
-          {upcomingMeetings?.length || 0}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/personal-calendar"
+            className="text-xs font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1 hover:underline"
+            data-testid="open-personal-calendar"
+          >
+            <CalendarDays className="h-3.5 w-3.5" /> View Calendar <ArrowRight className="h-3 w-3" />
+          </Link>
+          <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 text-xs">
+            {upcomingMeetings?.length || 0}
+          </Badge>
+        </div>
       </div>
       
       {/* Meetings List */}
@@ -134,14 +144,24 @@ export function UpcomingMeetingsWidget({ upcomingMeetings, onNewMeeting, onViewM
       </div>
       
       {/* Footer */}
-      <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+      <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 grid grid-cols-2 gap-2">
         <Button
           variant="outline"
           size="default"
-          className="w-full h-10 text-sm font-medium border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-800 dark:hover:text-blue-300 bg-white dark:bg-slate-900"
+          className="h-10 text-sm font-medium border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800"
+          asChild
+        >
+          <Link to="/personal-calendar" data-testid="footer-open-calendar">
+            <CalendarDays className="h-4 w-4 mr-2" /> Open Calendar
+          </Link>
+        </Button>
+        <Button
+          variant="outline"
+          size="default"
+          className="h-10 text-sm font-medium border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-800 dark:hover:text-blue-300 bg-white dark:bg-slate-900"
           onClick={onNewMeeting}
         >
-          <Plus className="h-4 w-4 mr-2" /> Schedule New Meeting
+          <Plus className="h-4 w-4 mr-2" /> Schedule
         </Button>
       </div>
     </Card>
