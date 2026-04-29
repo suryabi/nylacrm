@@ -1,0 +1,48 @@
+{
+  "summary": "Marketing Request Lifecycle module + Master Request Types admin catalog verified end-to-end. Backend: 22/22 pytest pass (master_request_types CRUD incl. soft-delete; marketing_requests create/list/get/update/status-transitions/comments/files/links; lookups departments+users-by-dept; dashboard summary; RBAC module_categories=74 with marketing_requests under Marketing(3) and master_request_types under Organization(9), Admin role auto-backfilled with full perms). Frontend: /marketing-requests page renders all 12 expected data-testids (page, 5 hero tiles, 4 filters, mr-table, open-create-btn) and shows 1 existing row 'Need a new neck tag for Hyatt Regency'. Create modal opens with Title/Description/Type/Priority/Due/Department/Leads/Reference Links. Detail drawer (mr-detail-drawer) shows 6 lifecycle status buttons (btn-status-created/assigned/in_progress/review/completed/rejected highlighting In Progress), select-department + select-assignee (Marketing/Unassigned), comment-input + add-comment-btn (1 existing comment 'Working on it now'), link-label-input + link-url-input + add-link-btn, activity log details/summary (3 entries). /admin/marketing-request-types page renders mr-types-page, add-type-btn, mr-types-table with 3 type rows; type-editor modal opens with type-form-name + type-form-submit. Soft-deleted rows correctly show 'Inactive' badge. Sidebar 'Marketing Requests' visible under Sales group. No backend regressions.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/marketing-requests/lookups/departments", "issue": "Cosmetic: tdb.tenant_settings.find_one({}, {...}) without any filter returns the first document; multi-tenant isolation works because get_tenant_db scopes the database, but the empty filter `{}` (line 105) is brittle if multiple settings docs exist."},
+      {"endpoint": "POST /api/master-request-types", "issue": "_admin_only allows roles in {'Admin','System Admin','CEO'} by string match against current_user['role']. Other admin-equivalent custom roles (e.g., 'Owner', 'Tenant Admin') would receive 403 even if their RBAC permissions for master_request_types include create=true. Consider gating via role permissions rather than role name."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Marketing Requests detail drawer + Create modal + Type editor", "issues": ["Radix DialogContent emits accessibility warnings: 'requires a DialogTitle' and 'Missing Description or aria-describedby'. Wrap header text in <DialogTitle> (or VisuallyHidden) and add <DialogDescription> / aria-describedby to satisfy a11y."]},
+      {"screen": "Create Marketing Request modal — Due Date", "issues": ["Native browser date picker (input type='date') used instead of shadcn Calendar component. Other modules in the app use shadcn Popover+Calendar; consider standardising for consistency."]},
+      {"screen": "Detail drawer rejection flow", "issues": ["Per problem statement, rejection reason is captured via window.prompt() (acceptable v1, flagged in problem statement). Should be upgraded to a proper modal/textarea for parity with other modules later."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_marketing_requests.py",
+    "/app/test_reports/pytest/marketing_requests_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Add DialogTitle + DialogDescription (or VisuallyHidden wrappers) to MarketingRequests Create modal, Detail drawer, and MarketingRequestTypes editor to silence Radix a11y console warnings.",
+    "(Optional) Replace native <input type='date'> in Create Marketing Request modal with shadcn Popover+Calendar to match other modules.",
+    "(Optional) Upgrade window.prompt() rejection-reason flow in detail drawer to a proper modal with multiline textarea.",
+    "(Optional) Gate /api/master-request-types write endpoints by RBAC permission key 'master_request_types.create/edit/delete' instead of hardcoded role-name set; current set excludes custom admin-equivalent roles.",
+    "(Optional) Tighten tenant_settings lookup in _send_slack_notification to avoid the empty filter `{}`."
+  ],
+  "critical_code_review_comments": [
+    "marketing_requests.py:105 — `await tdb.tenant_settings.find_one({\"_id\": 0} if False else {}, ...)` is a confusing dead branch (`if False` always picks `{}`). Simplify to `find_one({}, projection)` or query a known settings document key for deterministic behaviour.",
+    "marketing_requests.py — Status update endpoint never validates lifecycle transitions (e.g., allows completed→created or rejected→in_progress). Acceptable v1 if intentionally permissive, but consider a small guard or at least docstring the policy.",
+    "marketing_requests.py — Department reassignment branch (line 290–302) only resets assignee when `payload.assigned_to is None`. If frontend sends both new dept AND a stale old assignee from a different dept, the assignee is kept silently inconsistent. Consider always validating assignee.department against new dept and clearing if mismatch.",
+    "master_request_types.py — `_admin_only` couples admin gating to a hardcoded role-name set; the RBAC system already exposes per-permission keys for `master_request_types`. Use the permission lookup instead of string match for consistency with the rest of the platform.",
+    "MarketingRequests.js (drawer) — uses `window.prompt()` for rejection reason; switch to a controlled modal so it survives mobile, supports multiline, and is keyboard/a11y-friendly.",
+    "Multiple Radix Dialogs are missing DialogTitle / DialogDescription causing accessibility console errors on every open."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_marketing_requests.py (NEW — 22 tests covering full module)"
+  ],
+  "success_rate": {"backend": "100% (22/22 marketing_requests pytest)", "frontend": "100% (all data-testids present, lifecycle/comments/links flows render correctly)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water)",
+  "seed_data_creation": "Created (and cleaned up) one TEST_NeckTagDesign_155 master request type and one TEST_MR_NeckTag_NoAssignee marketing request as part of pytest fixtures (request DELETEd, type soft-DELETEd to is_active=false). Pre-existing 'Need a new neck tag for Hyatt Regency' / 'Neck Tag Design' (manual data) remain untouched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Marketing Requests module (Iteration 155) is fully functional both backend and frontend. Test file: /app/backend/tests/test_marketing_requests.py (22 tests, all passing). RBAC count is now 74 keys total (Marketing=3 with marketing_requests, Organization=9 with master_request_types). Note: test_iteration_153_rbac_modules.py still expects 72/Operations=8 from the prior personal_calendar iteration — if that regression test is re-run it will need TOTAL_EXPECTED_KEYS bumped to 74, Marketing 2→3, Organization 8→9. Action items are all enhancement/cosmetic; no blocking bugs.",
+  "rca of the issue": "N/A — feature verification, not a bug fix. All 22 backend tests pass on first integrated run; UI testids are stable and complete; lifecycle/comments/file/link/activity flows all observed working in the live preview environment."
+}

@@ -50,6 +50,8 @@ from .bottle_preview import router as bottle_preview_router
 from .cogs_components import router as cogs_components_router
 from .api_keys import router as api_keys_router
 from .personal_calendar import router as personal_calendar_router
+from .marketing_requests import router as marketing_requests_router
+from .master_request_types import router as master_request_types_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -144,5 +146,10 @@ routes_router.include_router(api_keys_router, prefix="/api-keys", tags=["API Key
 
 # Personal Calendar (CRM meetings + Google Calendar sync)
 routes_router.include_router(personal_calendar_router, tags=["Personal Calendar"])
+
+# Marketing Requests — independent lifecycle module raised by Sales,
+# fulfilled by Marketing (with department-based reassignment).
+routes_router.include_router(marketing_requests_router, prefix="/marketing-requests", tags=["Marketing Requests"])
+routes_router.include_router(master_request_types_router, prefix="/master-request-types", tags=["Master Request Types"])
 
 __all__ = ['routes_router']

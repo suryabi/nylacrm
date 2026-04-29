@@ -113,6 +113,9 @@ import InvestorDashboard from './pages/InvestorDashboard';
 import MarketingCalendar from './pages/MarketingCalendar';
 import MarketingMasters from './pages/MarketingMasters';
 import MarketingPostDetail from './pages/MarketingPostDetail';
+// Marketing Requests (independent lifecycle module raised by Sales)
+import MarketingRequests from './pages/MarketingRequests';
+import MarketingRequestTypes from './pages/MarketingRequestTypes';
 // Personal Calendar (per-user, with Google Calendar sync)
 import PersonalCalendar from './pages/PersonalCalendar';
 import '@/App.css';
@@ -296,6 +299,9 @@ function AppRouter() {
           <Route path="/marketing-calendar" element={<ProtectedRoute moduleKey="marketing_calendar"><MarketingCalendar /></ProtectedRoute>} />
           <Route path="/marketing-post/:postId" element={<ProtectedRoute moduleKey="marketing_calendar"><MarketingPostDetail /></ProtectedRoute>} />
           <Route path="/marketing-masters" element={<ProtectedRoute moduleKey="marketing_masters"><MarketingMasters /></ProtectedRoute>} />
+          {/* Marketing Requests — independent module visible from Sales + Marketing sidebars */}
+          <Route path="/marketing-requests" element={<ProtectedRoute moduleKey="marketing_requests"><MarketingRequests /></ProtectedRoute>} />
+          <Route path="/admin/marketing-request-types" element={<ProtectedRoute moduleKey="master_request_types"><MarketingRequestTypes /></ProtectedRoute>} />
           {/* Personal Calendar */}
           <Route path="/personal-calendar" element={<ProtectedRoute><PersonalCalendar /></ProtectedRoute>} />
         </Routes>
