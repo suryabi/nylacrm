@@ -467,6 +467,18 @@
 - [x] **Files**: `frontend/src/pages/BatchDetail.js` (RejectionPanel rewritten with `costMappings` + `skuCogs` props).
 - [x] **Testing**: iteration_149 — 10/10 verified (4 backend pytest + 6 frontend Playwright). Real batch "Test 123" (Nyla 600ml/Silver, 14 rejections) shows total cost ₹864.00 with the unmapped reason properly flagged.
 
+### Production Dashboard — Time Filter + Rejection Cost Metrics (2026-04-29)
+- [x] **Backend** `GET /api/production/dashboard?time_filter=<value>` — accepts 11 windows: `this_week, last_week, this_month, last_month, last_3_months, last_6_months, this_quarter, last_quarter, this_year, last_year, lifetime`. Default `this_month`.
+- [x] **Date filter** prefers `production_date` (YYYY-MM-DD), falls back to `created_at` for batches missing production_date — `$or` clause covers both. All metrics (batch counts, crates, rejected, in-stage balances, rejection cost aggregation, top SKUs) honor the same window.
+- [x] **Rejection cost aggregation** within window: `total_rejection_cost`, `rejection_events`, `rejection_unmapped`, `rejection_breakdown.{by_reason, by_stage, top_skus}` (top 5 by ₹). Per-SKU `rejection_cost` rounded to 2 dp on every `skus[]` row.
+- [x] **Bug fix**: dashboard was querying non-existent `tdb.qc_inspections` collection — corrected to `tdb.inspections` so rejection cost rolls up.
+- [x] **Frontend** `/production-dashboard` — Time Period dropdown in header (data-testid `production-dashboard-time-filter`), choice persisted in `localStorage('production_dashboard_tf')`. Header subtitle echoes "Window: <Label>".
+- [x] **4 new rejection cost summary cards**: Rejection Cost (₹), Unmapped Events (deep links to `/production/rejection-cost-config`), Rejection Rate (rejected / produced bottles), Top Costly SKU.
+- [x] **3 RejectionBreakdown panels** (Cost by Reason / Cost by Stage / Top SKUs) — only render when `total_rejection_cost > 0`. Each shows top-5 horizontal-bar list with ₹ value.
+- [x] **SKU pipelines** show ₹ loss in subtitle and footer when `rejection_cost > 0`. Empty state copy updated to reflect window.
+- [x] **Files**: `backend/routes/production_qc.py` (production_dashboard rewritten), `frontend/src/pages/ProductionDashboard.js` (dropdown + RejectionBreakdown + cards).
+- [x] **Testing**: iteration_150 — 22/22 PASS (backend pytest at `backend/tests/test_iteration_150_production_dashboard_time_filter.py` + frontend Playwright). Verified `lifetime` returns 28 batches/₹2,548; `last_year` returns 0; switching dropdown re-fetches and updates header label.
+
 ### API Keys for External Integration Partners (2026-04-28)
 - [x] **Per-partner API keys** (one key per integration like BriefingIQ). Issued at Settings → API Keys page. Format `ak_live_<48 hex>`, stored as **sha256 hash**, raw key shown ONLY ONCE on creation.
 - [x] **Auth via either header**: `X-API-Key: ak_live_…` OR `Authorization: Bearer ak_live_…` (server detects by `ak_live_` prefix; falls back to JWT/session if not an API key).
@@ -484,7 +496,7 @@
 - Build Reporting Module (stock balance, deliveries, settlements, distributor performance)
 - Manager Dashboard (team-wise comparison, activity vs outcome)
 - Leadership Dashboard (territory trends, pipeline health)
-- **Continue server.py refactor Phase 2**: Extract accounts/leads/invoices/production/meetings/tasks routes (current: 9,899 lines, target <2,000)
+- **Continue server.py refactor Phase 2**: Extract accounts/leads/invoices/production/meetings/tasks routes (current: ~9,800 lines, target <2,000)
 - **Google Workspace OAuth fix**: Once prod is stable, debug `/api/auth/google-callback` errors (likely `redirect_uri_mismatch`)
 
 ### Factory Return — Master-Driven Reason Dropdown (2026-04-25)
