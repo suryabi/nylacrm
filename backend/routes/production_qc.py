@@ -80,16 +80,76 @@ class WarehouseTransfer(BaseModel):
 # ──────────────────────────────────────────────
 
 @router.get("/dashboard")
-async def production_dashboard(current_user: dict = Depends(get_current_user)):
-    """Aggregate stock across all batches, grouped by SKU and stage."""
+async def production_dashboard(
+    time_filter: Optional[str] = "this_month",
+    current_user: dict = Depends(get_current_user),
+):
+    """Aggregate stock + rejections, grouped by SKU and stage. Filterable by time range."""
     tenant_id = get_current_tenant_id()
     tdb = get_tenant_db()
 
+    # ── Resolve date range from time_filter (mirrors Sales Revenue dashboard logic) ──
+    start_date_iso = None
+    end_date_iso = None
+    if time_filter and time_filter not in ("all", "lifetime"):
+        now = datetime.now(timezone.utc)
+        start_date = None
+        end_date = None
+        if time_filter == "this_week":
+            start_date = now - timedelta(days=now.weekday())
+            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == "last_week":
+            start_date = now - timedelta(days=now.weekday() + 7)
+            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_date = start_date + timedelta(days=6, hours=23, minutes=59, seconds=59)
+        elif time_filter == "this_month":
+            start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == "last_month":
+            first_of_this_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            last_month_last_day = first_of_this_month - timedelta(seconds=1)
+            start_date = last_month_last_day.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_date = first_of_this_month - timedelta(seconds=1)
+        elif time_filter == "last_3_months":
+            start_date = (now - timedelta(days=90)).replace(hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == "last_6_months":
+            start_date = (now - timedelta(days=180)).replace(hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == "this_quarter":
+            q = (now.month - 1) // 3
+            start_date = now.replace(month=q * 3 + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == "last_quarter":
+            q = (now.month - 1) // 3 - 1
+            year = now.year - 1 if q < 0 else now.year
+            if q < 0:
+                q = 3
+            start_date = datetime(year, q * 3 + 1, 1, tzinfo=timezone.utc)
+            em = (q + 1) * 3
+            if em > 12:
+                end_date = datetime(year + 1, 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
+            else:
+                end_date = datetime(year, em + 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
+        elif time_filter == "this_year":
+            start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == "last_year":
+            start_date = datetime(now.year - 1, 1, 1, tzinfo=timezone.utc)
+            end_date = datetime(now.year, 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
+        if start_date:
+            start_date_iso = start_date.isoformat()
+        if end_date:
+            end_date_iso = end_date.isoformat()
+
+    batch_query = {"tenant_id": tenant_id}
+    if start_date_iso:
+        cond = {"$gte": start_date_iso}
+        if end_date_iso:
+            cond["$lte"] = end_date_iso
+        batch_query["created_at"] = cond
+
     batches = await tdb.production_batches.find(
-        {"tenant_id": tenant_id},
-        {"_id": 0, "sku_id": 1, "sku_name": 1, "total_crates": 1, "bottles_per_crate": 1,
+        batch_query,
+        {"_id": 0, "id": 1, "sku_id": 1, "sku_name": 1, "total_crates": 1, "bottles_per_crate": 1,
          "total_bottles": 1, "unallocated_crates": 1, "stage_balances": 1,
-         "total_passed_final": 1, "transferred_to_warehouse": 1, "total_rejected": 1, "status": 1, "qc_stages": 1, "ph_value": 1}
+         "total_passed_final": 1, "transferred_to_warehouse": 1, "total_rejected": 1,
+         "status": 1, "qc_stages": 1, "ph_value": 1, "created_at": 1}
     ).to_list(5000)
 
     # Aggregate per SKU
@@ -100,8 +160,10 @@ async def production_dashboard(current_user: dict = Depends(get_current_user)):
     total_transferred_all = 0
     total_rejected_all = 0
     active_batches = 0
+    batch_id_set = set()
 
     for b in batches:
+        batch_id_set.add(b.get("id"))
         sid = b.get("sku_id", "unknown")
         if sid not in sku_map:
             sku_map[sid] = {
@@ -113,11 +175,11 @@ async def production_dashboard(current_user: dict = Depends(get_current_user)):
                 "total_passed_final": 0,
                 "transferred_to_warehouse": 0,
                 "total_rejected": 0,
+                "rejection_cost": 0.0,
                 "batch_count": 0,
-                "stages": {},  # stage_name -> {pending, passed, rejected, received}
-                "stage_order": [],  # ordered list of stage names
+                "stages": {},
+                "stage_order": [],
             }
-
         sku = sku_map[sid]
         sku["total_crates"] += b.get("total_crates", 0)
         sku["total_bottles"] += b.get("total_bottles", 0)
@@ -135,21 +197,99 @@ async def production_dashboard(current_user: dict = Depends(get_current_user)):
         if b.get("status") not in ("completed",):
             active_batches += 1
 
-        # Build stage order from qc_stages (first batch sets the order)
         if not sku["stage_order"] and b.get("qc_stages"):
             sorted_stages = sorted(b["qc_stages"], key=lambda s: s.get("order", 0))
             sku["stage_order"] = [
                 {"id": s["id"], "name": s["name"], "type": s.get("stage_type", "qc"), "order": s.get("order", 0)}
                 for s in sorted_stages
             ]
-
-        # Accumulate stage balances
         for stage_id, bal in (b.get("stage_balances") or {}).items():
             sname = bal.get("stage_name", stage_id)
             if sname not in sku["stages"]:
                 sku["stages"][sname] = {"pending": 0, "passed": 0, "rejected": 0, "received": 0}
             for k in ("pending", "passed", "rejected", "received"):
                 sku["stages"][sname][k] += bal.get(k, 0)
+
+    # ── Rejection cost metrics from inspections within the in-range batches ──
+    total_rejection_cost = 0.0
+    rejection_events = 0
+    rejection_unmapped = 0
+    by_reason_cost = {}
+    by_stage_cost = {}
+    top_costly_skus = []
+
+    if batch_id_set:
+        # Bulk-load mappings + master COGS values
+        all_mappings = await tdb.rejection_cost_mappings.find(
+            {"tenant_id": tenant_id}, {"_id": 0}
+        ).to_list(5000)
+        mapping_lookup = {(m.get("sku_id", ""), m.get("stage_name", ""), m.get("reason_name", "")): m for m in all_mappings}
+
+        from database import db as _global_db
+        sku_cogs_docs = await _global_db.master_skus.find(
+            {"id": {"$in": list({s["sku_id"] for s in sku_map.values()})}},
+            {"_id": 0, "id": 1, "cogs_components_values": 1},
+        ).to_list(500)
+        sku_cogs_map = {s["id"]: (s.get("cogs_components_values") or {}) for s in sku_cogs_docs}
+
+        # Pull inspections for batches in scope
+        ins_docs = await tdb.qc_inspections.find(
+            {"tenant_id": tenant_id, "batch_id": {"$in": list(batch_id_set)}},
+            {"_id": 0, "batch_id": 1, "stage_name": 1, "rejections": 1, "entries": 1,
+             "qty_rejected": 1, "rejection_reason": 1}
+        ).to_list(50000)
+
+        # Build a map batch_id -> sku_id (so we can locate the SKU per inspection)
+        batch_sku_map = {b.get("id"): b.get("sku_id") for b in batches}
+
+        def add(sku_id_l, stage_l, reason_l, qty_l):
+            nonlocal total_rejection_cost, rejection_events, rejection_unmapped
+            qty_l = int(qty_l or 0)
+            if qty_l <= 0:
+                return
+            rejection_events += 1
+            m = mapping_lookup.get((sku_id_l, stage_l, reason_l))
+            if not m:
+                rejection_unmapped += 1
+                return
+            sku_v = sku_cogs_map.get(sku_id_l, {})
+            unit = 0.0
+            for k in m.get("impacted_component_keys", []):
+                unit += float(sku_v.get(k) or 0)
+            cost = unit * qty_l
+            total_rejection_cost += cost
+            by_reason_cost[reason_l] = by_reason_cost.get(reason_l, 0.0) + cost
+            by_stage_cost[stage_l] = by_stage_cost.get(stage_l, 0.0) + cost
+            if sku_id_l in sku_map:
+                sku_map[sku_id_l]["rejection_cost"] += cost
+
+        for ins in ins_docs:
+            sku_id_for = batch_sku_map.get(ins.get("batch_id"), "")
+            stage = ins.get("stage_name", "")
+            entries = ins.get("entries") or []
+            if entries:
+                for ent in entries:
+                    for r in ent.get("rejections") or []:
+                        add(sku_id_for, stage, r.get("reason", ""), r.get("qty_rejected", 0))
+            else:
+                rej_list = ins.get("rejections") or []
+                if rej_list:
+                    for r in rej_list:
+                        add(sku_id_for, stage, r.get("reason", ""), r.get("qty_rejected", 0))
+                elif ins.get("qty_rejected"):
+                    add(sku_id_for, stage, ins.get("rejection_reason", ""), ins.get("qty_rejected", 0))
+
+        # Top 5 costly SKUs
+        top_costly_skus = sorted(
+            [{"sku_id": s["sku_id"], "sku_name": s["sku_name"], "rejection_cost": round(s["rejection_cost"], 2),
+              "total_rejected": s["total_rejected"]}
+             for s in sku_map.values() if s["rejection_cost"] > 0],
+            key=lambda x: x["rejection_cost"], reverse=True
+        )[:5]
+
+    # Round per-SKU rejection cost
+    for s in sku_map.values():
+        s["rejection_cost"] = round(s["rejection_cost"], 2)
 
     skus = sorted(sku_map.values(), key=lambda s: s["total_crates"], reverse=True)
 
@@ -163,8 +303,17 @@ async def production_dashboard(current_user: dict = Depends(get_current_user)):
             "ready_for_warehouse": total_ready_all - total_transferred_all,
             "transferred_to_warehouse": total_transferred_all,
             "total_rejected": total_rejected_all,
+            "total_rejection_cost": round(total_rejection_cost, 2),
+            "rejection_events": rejection_events,
+            "rejection_unmapped": rejection_unmapped,
+            "time_filter": time_filter or "this_month",
         },
         "skus": skus,
+        "rejection_breakdown": {
+            "by_reason": [{"reason": k, "cost": round(v, 2)} for k, v in sorted(by_reason_cost.items(), key=lambda x: x[1], reverse=True)],
+            "by_stage": [{"stage": k, "cost": round(v, 2)} for k, v in sorted(by_stage_cost.items(), key=lambda x: x[1], reverse=True)],
+            "top_skus": top_costly_skus,
+        },
     }
 
 
