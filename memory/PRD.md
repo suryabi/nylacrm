@@ -457,6 +457,16 @@
 - [x] **Files**: `backend/routes/production_qc.py`, `frontend/src/pages/RejectionCostConfig.js`.
 - [x] **Verified**: For Nyla 660ml/Gold (Primary 7.50, Cap 2.00, Mfg 12.25) → QC Stage 1 / Black Particles with [Primary, Cap] checked shows **Cost / unit: ₹9.50** instantly. Total rejection cost on event = qty × Cost/unit.
 
+### Production — BatchDetail Rejection Cost Display (2026-04-29)
+- [x] **BatchDetail right-side Rejection Panel** now shows cost-of-rejection per recorded rejection event:
+  - **Header**: total qty + total ₹ cost stacked.
+  - **By Reason**: each reason shows ₹ cost next to the count.
+  - **Detail View table**: new "Cost" column on each row + filtered ₹ total in footer.
+  - **Amber banner** when any rejection in the batch lacks a mapping, with deep link to `/production/rejection-cost-config`.
+- [x] **Lookup**: same `(sku_id, stage_name, reason_name)` tuple as `/rejection-report` enrichment — math consistent everywhere.
+- [x] **Files**: `frontend/src/pages/BatchDetail.js` (RejectionPanel rewritten with `costMappings` + `skuCogs` props).
+- [x] **Testing**: iteration_149 — 10/10 verified (4 backend pytest + 6 frontend Playwright). Real batch "Test 123" (Nyla 600ml/Silver, 14 rejections) shows total cost ₹864.00 with the unmapped reason properly flagged.
+
 ### API Keys for External Integration Partners (2026-04-28)
 - [x] **Per-partner API keys** (one key per integration like BriefingIQ). Issued at Settings → API Keys page. Format `ak_live_<48 hex>`, stored as **sha256 hash**, raw key shown ONLY ONCE on creation.
 - [x] **Auth via either header**: `X-API-Key: ak_live_…` OR `Authorization: Bearer ak_live_…` (server detects by `ak_live_` prefix; falls back to JWT/session if not an API key).
