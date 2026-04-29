@@ -36,6 +36,7 @@ DEFAULT_MODULE_PERMISSIONS = {
     "investor_dashboard": {"view": False, "create": False, "edit": False, "delete": False},
     "daily_status": {"view": True, "create": True, "edit": True, "delete": False},
     "meeting_minutes": {"view": True, "create": True, "edit": True, "delete": False},
+    "personal_calendar": {"view": True, "create": True, "edit": True, "delete": True},
     "status_summary": {"view": True, "create": False, "edit": False, "delete": False},
 
     # Tools
@@ -241,7 +242,7 @@ def get_default_roles(tenant_id: str) -> List[dict]:
 MODULE_CATEGORIES = {
     "Core": ["home", "dashboard", "leads", "pipeline", "accounts", "account_gop_metrics", "neck_tag_designer", "contacts", "invoices", "sales_portal"],
     "Reports": ["report_sales_overview", "report_revenue", "report_sku_performance", "report_resource_performance", "report_account_performance"],
-    "Operations": ["lead_discovery", "target_planning", "performance_tracker", "investor_dashboard", "daily_status", "meeting_minutes", "status_summary"],
+    "Operations": ["lead_discovery", "target_planning", "performance_tracker", "investor_dashboard", "daily_status", "meeting_minutes", "personal_calendar", "status_summary"],
     "Tools": ["cogs_calculator", "transport_calculator", "sku_management", "bottle_preview", "lead_scoring_model"],
     "Documents": ["company_documents", "files_documents"],
     "Requests": ["leaves", "travel_requests", "budget_requests"],
@@ -275,6 +276,7 @@ MODULE_LABELS = {
     "investor_dashboard": "Investor Dashboard",
     "daily_status": "Daily Status",
     "meeting_minutes": "Meeting Minutes",
+    "personal_calendar": "My Calendar",
     "status_summary": "Status Summary",
     "cogs_calculator": "COGS Calculator",
     "transport_calculator": "Transport Calculator",

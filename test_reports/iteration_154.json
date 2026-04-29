@@ -1,0 +1,45 @@
+{
+  "summary": "Personal Calendar cherry-pick from prod_qc_sync verified end-to-end with no regressions to rejection-cost / RBAC / GOP-style work. Backend: 19/19 pytest pass on /app/backend/tests/test_personal_calendar.py — google/status returns {connected,configured,google_email}, google/connect returns authorization_url with calendar scope + state + correct redirect_uri, google/disconnect clears tokens (verified via follow-up status=connected:false), /events endpoint returns {events,google,range} with 10 April 2026 violet meeting_minutes events for surya, and 11 production-dashboard time_filter values still echo in summary.time_filter with rejection_breakdown intact. Regression suite: 47/47 pass across test_iteration_150 (production dashboard time-filter + rejection cost), test_iteration_152 (rejection report pagination + cost shape), test_iteration_153 (RBAC matrix — updated to expect 72 keys / Operations=8 after personal_calendar addition). Frontend: /personal-calendar renders cleanly, sidebar 'My Calendar' under 'Lead & Sales Operations' navigates correctly, all required data-testids present (personal-calendar, new-meeting-btn, google-connect-btn, refresh-btn, prev/today/next-btn, view-day/week/month, view-tabs, day-cell-YYYY-MM-DD, day-create-YYYY-MM-DD, event-pill-minutes:<id>), color legend (CRM Meeting=sky, Minutes=violet, Google=red) visible, 'Today 0 / In view 10' badge matches API, 22 violet-classed elements rendered for meeting_minutes events. Day/Week/Month toggles work, New Meeting modal opens. April 2026 month grid shows pills like Q1 Sales Review, Sprint Planning, Weekly meeting with KB and V…, TEST_AutoTask_Meeting, Test Auto Task Meeting, TEST_TaskLink_Meeting on correct dates. No console errors on /personal-calendar itself (0 failed requests).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/personal-calendar/google/connect", "issue": "Spec/doc says 302 redirect but implementation returns 200 JSON with {authorization_url}. Frontend handles via fetch + window.location.assign, so no functional bug — only a spec/doc mismatch. Either acceptable to leave (current pattern matches typical SPA OAuth handshake) or change endpoint to RedirectResponse(url) to match the doc."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "/home → bootstrap", "issue": "Two 401s on GET /api/auth/me observed immediately after login on /home (pre-existing — not introduced by this cherry-pick, /personal-calendar itself has 0 failed requests). Likely bearer token race with first render. Worth a follow-up investigation but does not affect Personal Calendar.", "affected_selectors": []}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_personal_calendar.py",
+    "/app/test_reports/pytest/personal_calendar_results.xml",
+    "/app/test_reports/pytest/personal_calendar_regression.xml",
+    "/app/backend/tests/test_iteration_153_rbac_modules.py"
+  ],
+  "action_items": [
+    "(Optional) Decide whether /api/personal-calendar/google/connect should switch to a 302 RedirectResponse to match the original spec wording, or update the spec doc to reflect the JSON {authorization_url} pattern in use.",
+    "(Optional, pre-existing) Investigate the two 401s on /api/auth/me firing on /home right after login — looks like a token-bootstrap race; not caused by this cherry-pick."
+  ],
+  "critical_code_review_comments": [
+    "routes/personal_calendar.py uses synchronous `requests` library inside async FastAPI handlers (token exchange, userinfo, calendar fetch, push-meeting). This blocks the event loop. Recommend swapping to httpx.AsyncClient (already used elsewhere in codebase) — particularly for the /events endpoint which is called frequently and currently does sync HTTP-call to googleapis.com when connected.",
+    "_redirect_uri() falls back to REACT_APP_BACKEND_URL if BACKEND_PUBLIC_URL is unset. Since REACT_APP_BACKEND_URL points to the FRONTEND in this codebase (https://rejection-cost-dash.preview.emergentagent.com), this fortuitously also routes to backend through the /api ingress prefix — but the variable name semantics are misleading. Consider always requiring BACKEND_PUBLIC_URL and failing fast.",
+    "google_callback exchanges the auth code via raw requests.post and never validates state.tenant_id matches an active session for user_id, opening a small CSRF surface (an attacker who knows a victim's user_id could feed a code minted with their own consent). Mitigated by the fact that state is unguessable in practice for non-admin user_ids, but consider signing state with a short-lived HMAC.",
+    "_save_tokens uses `db.user_google_tokens` (global db) instead of tenant-scoped db, which is correct (tokens are per user across tenants), but ensure there is a unique index on user_id to prevent duplicate docs after concurrent OAuth flows.",
+    "models/role.py — VIEWER_PERMISSIONS comprehension auto-grants view=true on every new module key. With personal_calendar added, Viewer role now sees 'My Calendar'. That's likely intended for this feature, but the existing observation from iteration_153 about admin-style keys (api_keys, sku_replace, rejection_cost_config) silently inheriting view=true still applies; consider adding a Viewer denylist constant.",
+    "test_personal_calendar.py file docstring still says 'Iteration 150' even though it has been renamed/repurposed for this cherry-pick — minor cosmetic update."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_personal_calendar.py (BASE_URL fallback updated to current preview URL)",
+    "/app/backend/tests/test_iteration_153_rbac_modules.py (TOTAL_EXPECTED_KEYS 71→72, Operations count 7→8 to reflect personal_calendar addition)"
+  ],
+  "success_rate": {"backend": "100% (66/66 across personal_calendar + regression suites)", "frontend": "100% (page render, sidebar nav, view toggles, modal open, event color coding all verified)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water)",
+  "seed_data_creation": "None — used existing meeting_minutes data for April 2026 (10 entries returned by /events endpoint)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Personal Calendar cherry-pick is fully functional. Backend test file at /app/backend/tests/test_personal_calendar.py covers OAuth scaffolding + events aggregation + production-dashboard regression. RBAC iteration_153 test now expects 72 keys / Operations=8 (was 71/7). UI testids on /personal-calendar are stable: personal-calendar, new-meeting-btn, google-connect-btn, refresh-btn, view-tabs, view-day/week/month, prev/today/next-btn, day-cell-YYYY-MM-DD, day-create-YYYY-MM-DD, event-pill-<source>:<id>. Google OAuth is configured (configured:true) but not connected for surya, so live Google event fetch is not exercised — needs a real OAuth round-trip to validate Google color-red events. Two minor items worth main agent attention: (a) /google/connect returns 200 JSON not 302 (decide which is canonical), (b) sync requests inside async handlers in personal_calendar.py.",
+  "rca of the issue": "N/A — feature integration / cherry-pick verification, not a bug fix. All backend endpoints respond as specified, frontend page renders without errors, sidebar gating via moduleKey 'personal_calendar' works through admin role full-access backfill (verified via test_admin_role_full_access_on_new_keys), and prior rejection-cost / RBAC / GOP regressions remain green."
+}
