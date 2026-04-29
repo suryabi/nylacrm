@@ -147,22 +147,52 @@ export default function ProductionBatches() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         {[
-          { label: 'Total Batches', value: stats.total_batches || 0, icon: Package, color: 'text-slate-600' },
-          { label: 'Active', value: stats.active_batches || 0, icon: FlaskConical, color: 'text-blue-600' },
-          { label: 'Completed', value: stats.completed_batches || 0, icon: ShieldCheck, color: 'text-emerald-600' },
-          { label: 'Total Crates', value: (stats.total_crates_produced || 0).toLocaleString(), icon: Boxes, color: 'text-purple-600' },
-          { label: 'QC Routes', value: stats.qc_routes_configured || 0, icon: ArrowRight, color: 'text-amber-600' },
-        ].map((s, i) => (
-          <div key={i} className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
-            <s.icon className={`w-4 h-4 sm:w-5 sm:h-5 ${s.color} flex-shrink-0`} />
-            <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-slate-400 uppercase tracking-wider truncate">{s.label}</p>
-              <p className="text-base sm:text-lg font-bold text-slate-800">{s.value}</p>
+          { label: 'Total Batches', value: stats.total_batches || 0, icon: Package,      accent: 'sky' },
+          { label: 'Active',        value: stats.active_batches || 0, icon: FlaskConical, accent: 'amber' },
+          { label: 'Completed',     value: stats.completed_batches || 0, icon: ShieldCheck, accent: 'emerald' },
+          { label: 'Total Crates',  value: (stats.total_crates_produced || 0).toLocaleString(), icon: Boxes, accent: 'violet' },
+          { label: 'QC Routes',     value: stats.qc_routes_configured || 0, icon: ArrowRight, accent: 'indigo' },
+        ].map((s, i) => {
+          const grads = {
+            sky:     'from-sky-50 via-sky-50/50 to-white',
+            amber:   'from-amber-50 via-amber-50/50 to-white',
+            emerald: 'from-emerald-50 via-emerald-50/50 to-white',
+            violet:  'from-violet-50 via-violet-50/50 to-white',
+            indigo:  'from-indigo-50 via-indigo-50/50 to-white',
+          };
+          const icons = {
+            sky:     'text-sky-600 bg-sky-500/10',
+            amber:   'text-amber-600 bg-amber-500/10',
+            emerald: 'text-emerald-600 bg-emerald-500/10',
+            violet:  'text-violet-600 bg-violet-500/10',
+            indigo:  'text-indigo-600 bg-indigo-500/10',
+          };
+          const halos = {
+            sky:     'bg-sky-500/10',
+            amber:   'bg-amber-500/10',
+            emerald: 'bg-emerald-500/10',
+            violet:  'bg-violet-500/10',
+            indigo:  'bg-indigo-500/10',
+          };
+          return (
+            <div
+              key={i}
+              className={`relative group rounded-2xl border border-slate-200/70 bg-gradient-to-br ${grads[s.accent]} p-4 overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-lg`}
+              data-testid={`stat-${s.label.toLowerCase().replace(/\s+/g, '-')}`}
+            >
+              <div className={`absolute -top-6 -right-6 h-20 w-20 rounded-full ${halos[s.accent]} blur-2xl opacity-40 transition-opacity group-hover:opacity-60`} />
+              <div className="flex items-start justify-between gap-2 relative">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{s.label}</p>
+                <div className={`shrink-0 h-8 w-8 rounded-xl flex items-center justify-center ${icons[s.accent]}`}>
+                  <s.icon className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 tabular-nums relative">{s.value}</p>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Filters */}

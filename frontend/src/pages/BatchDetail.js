@@ -222,23 +222,49 @@ export default function BatchDetail() {
         )}
       </div>
 
-      {/* Info Tiles — Tasks-style with icon + label top, large value */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+      {/* Info Tiles — GOP-style gradient cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
-          { label: 'Production Date', value: batch.production_date, icon: Calendar },
-          { label: 'Total Crates', value: batch.total_crates?.toLocaleString(), icon: Boxes },
-          { label: 'Bottles/Crate', value: batch.bottles_per_crate, icon: Package },
-          { label: 'Total Bottles', value: batch.total_bottles?.toLocaleString(), icon: Package },
-          { label: 'Unallocated', value: batch.unallocated_crates?.toLocaleString(), icon: Boxes },
-        ].map((item, i) => (
-          <div key={i} className="bg-white border border-slate-200 rounded-lg p-3.5 hover:shadow-sm transition-shadow">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <item.icon className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">{item.label}</span>
+          { label: 'Production Date', value: batch.production_date, icon: Calendar, accent: 'sky' },
+          { label: 'Total Crates',    value: batch.total_crates?.toLocaleString(), icon: Boxes, accent: 'indigo' },
+          { label: 'Bottles/Crate',   value: batch.bottles_per_crate, icon: Package, accent: 'violet' },
+          { label: 'Total Bottles',   value: batch.total_bottles?.toLocaleString(), icon: Package, accent: 'emerald' },
+          { label: 'Unallocated',     value: batch.unallocated_crates?.toLocaleString(), icon: Boxes, accent: 'slate' },
+        ].map((item, i) => {
+          const grads = {
+            sky:     'from-sky-50 via-sky-50/50 to-white',
+            indigo:  'from-indigo-50 via-indigo-50/50 to-white',
+            violet:  'from-violet-50 via-violet-50/50 to-white',
+            emerald: 'from-emerald-50 via-emerald-50/50 to-white',
+            slate:   'from-slate-50 via-slate-50/50 to-white',
+          };
+          const icons = {
+            sky:     'text-sky-600 bg-sky-500/10',
+            indigo:  'text-indigo-600 bg-indigo-500/10',
+            violet:  'text-violet-600 bg-violet-500/10',
+            emerald: 'text-emerald-600 bg-emerald-500/10',
+            slate:   'text-slate-600 bg-slate-500/10',
+          };
+          const halos = {
+            sky:     'bg-sky-500/10',
+            indigo:  'bg-indigo-500/10',
+            violet:  'bg-violet-500/10',
+            emerald: 'bg-emerald-500/10',
+            slate:   'bg-slate-500/10',
+          };
+          return (
+            <div key={i} className={`relative group rounded-2xl border border-slate-200/70 bg-gradient-to-br ${grads[item.accent]} p-4 overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-lg`}>
+              <div className={`absolute -top-6 -right-6 h-20 w-20 rounded-full ${halos[item.accent]} blur-2xl opacity-40 transition-opacity group-hover:opacity-60`} />
+              <div className="flex items-start justify-between gap-2 relative">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{item.label}</p>
+                <div className={`shrink-0 h-8 w-8 rounded-xl flex items-center justify-center ${icons[item.accent]}`}>
+                  <item.icon className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="mt-3 text-2xl font-bold tracking-tight text-slate-900 tabular-nums relative">{item.value}</p>
             </div>
-            <p className="text-xl font-bold text-slate-900">{item.value}</p>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* ── Two-Column: Pipeline left, Rejections right ── */}
@@ -246,58 +272,77 @@ export default function BatchDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           {/* LEFT: Pipeline */}
           <div className="lg:col-span-7 xl:col-span-8 space-y-3">
-            {/* Summary Tiles — matching info tile style */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div className="bg-white border border-slate-200 rounded-lg p-3.5 hover:shadow-sm transition-shadow">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <Boxes className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">Unallocated</span>
+            {/* Summary Tiles — GOP-style gradient cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="relative group rounded-2xl border border-slate-200/70 bg-gradient-to-br from-slate-50 via-slate-50/50 to-white p-4 overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-lg">
+                <div className="absolute -top-6 -right-6 h-20 w-20 rounded-full bg-slate-500/10 blur-2xl opacity-40 transition-opacity group-hover:opacity-60" />
+                <div className="flex items-start justify-between gap-2 relative">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Unallocated</p>
+                  <div className="shrink-0 h-8 w-8 rounded-xl flex items-center justify-center text-slate-600 bg-slate-500/10">
+                    <Boxes className="h-4 w-4" />
+                  </div>
                 </div>
-                <p className="text-xl font-bold text-slate-900">{batch.unallocated_crates || 0}</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">crates</p>
+                <p className="mt-3 text-2xl font-bold tracking-tight text-slate-900 tabular-nums relative">{batch.unallocated_crates || 0}</p>
+                <p className="text-[10px] text-muted-foreground mt-1 relative">crates</p>
               </div>
-              <div className="bg-white border border-slate-200 rounded-lg p-3.5 hover:shadow-sm transition-shadow">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
-                  <span className="text-[10px] text-red-500 uppercase tracking-wider font-medium">Total Rejected</span>
+
+              <div className="relative group rounded-2xl border border-slate-200/70 bg-gradient-to-br from-rose-50 via-rose-50/50 to-white p-4 overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-lg">
+                <div className="absolute -top-6 -right-6 h-20 w-20 rounded-full bg-rose-500/10 blur-2xl opacity-40 transition-opacity group-hover:opacity-60" />
+                <div className="flex items-start justify-between gap-2 relative">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Total Rejected</p>
+                  <div className="shrink-0 h-8 w-8 rounded-xl flex items-center justify-center text-rose-600 bg-rose-500/10">
+                    <AlertTriangle className="h-4 w-4" />
+                  </div>
                 </div>
-                <p className="text-xl font-bold text-red-700">{totalRej}</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">bottles {totalBottles > 0 && <span className="text-red-500">({overallRejPct}%)</span>}</p>
+                <p className="mt-3 text-2xl font-bold tracking-tight text-rose-700 tabular-nums relative">{totalRej}</p>
+                <p className="text-[10px] text-muted-foreground mt-1 relative">
+                  bottles {totalBottles > 0 && <span className="text-rose-500 font-semibold">({overallRejPct}%)</span>}
+                </p>
               </div>
-              <div className="bg-white border border-slate-200 rounded-lg p-3.5 hover:shadow-sm transition-shadow">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <Package className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-[10px] text-emerald-600 uppercase tracking-wider font-medium">Warehouse Ready</span>
+
+              <div className="relative group rounded-2xl border border-slate-200/70 bg-gradient-to-br from-emerald-50 via-emerald-50/50 to-white p-4 overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-lg">
+                <div className="absolute -top-6 -right-6 h-20 w-20 rounded-full bg-emerald-500/10 blur-2xl opacity-40 transition-opacity group-hover:opacity-60" />
+                <div className="flex items-start justify-between gap-2 relative">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Warehouse Ready</p>
+                  <div className="shrink-0 h-8 w-8 rounded-xl flex items-center justify-center text-emerald-600 bg-emerald-500/10">
+                    <Package className="h-4 w-4" />
+                  </div>
                 </div>
-                <p className="text-xl font-bold text-emerald-700">{batch.total_passed_final || 0}</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">bottles</p>
-                {(batch.transferred_to_warehouse || 0) > 0 && (
-                  <p className="text-[10px] text-teal-500 mt-0.5">{batch.transferred_to_warehouse} transferred</p>
-                )}
+                <p className="mt-3 text-2xl font-bold tracking-tight text-emerald-700 tabular-nums relative">{batch.total_passed_final || 0}</p>
+                <p className="text-[10px] text-muted-foreground mt-1 relative">
+                  bottles
+                  {(batch.transferred_to_warehouse || 0) > 0 && (
+                    <span className="ml-1.5 text-teal-600 font-semibold">· {batch.transferred_to_warehouse} transferred</span>
+                  )}
+                </p>
               </div>
+
               {/* Quality tile */}
-              <div className="bg-white border border-slate-200 rounded-lg p-3.5 hover:shadow-sm transition-shadow" data-testid="overall-pass-reject-bar">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
-                  <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">Quality</span>
+              <div className="relative group rounded-2xl border border-slate-200/70 bg-gradient-to-br from-sky-50 via-sky-50/50 to-white p-4 overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-lg" data-testid="overall-pass-reject-bar">
+                <div className="absolute -top-6 -right-6 h-20 w-20 rounded-full bg-sky-500/10 blur-2xl opacity-40 transition-opacity group-hover:opacity-60" />
+                <div className="flex items-start justify-between gap-2 relative">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Quality</p>
+                  <div className="shrink-0 h-8 w-8 rounded-xl flex items-center justify-center text-sky-600 bg-sky-500/10">
+                    <ShieldCheck className="h-4 w-4" />
+                  </div>
                 </div>
                 {totalBottles > 0 ? (
-                  <>
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-xl font-bold text-emerald-700">{overallPassPct}%</span>
-                      <span className="text-sm font-bold text-red-600">{overallRejPct}%</span>
+                  <div className="mt-3 relative">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-bold tracking-tight text-emerald-700 tabular-nums">{overallPassPct}%</span>
+                      <span className="text-sm font-semibold text-rose-600 tabular-nums">{overallRejPct}%</span>
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] text-emerald-600">pass</span>
-                      <span className="text-[10px] text-red-500">rej</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] text-emerald-600 font-medium">pass</span>
+                      <span className="text-[10px] text-rose-500 font-medium">rej</span>
                     </div>
-                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex mt-1.5">
-                      <div className="bg-emerald-600 h-full" style={{ width: `${overallPassPct}%` }} />
-                      <div className="bg-red-600 h-full" style={{ width: `${overallRejPct}%` }} />
+                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex mt-2">
+                      <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${overallPassPct}%` }} />
+                      <div className="bg-rose-500 h-full transition-all duration-500" style={{ width: `${overallRejPct}%` }} />
                     </div>
-                  </>
+                  </div>
                 ) : (
-                  <p className="text-lg text-slate-300">—</p>
+                  <p className="mt-3 text-2xl font-bold text-slate-300 tabular-nums">—</p>
                 )}
               </div>
             </div>
