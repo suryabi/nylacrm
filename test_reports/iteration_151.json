@@ -1,0 +1,29 @@
+{
+  "summary": "Iteration 151 — Frontend-only verification of /production/rejection-cost-config refactor (auto-populate Stage × Reason matrix). All 13 acceptance criteria from the review request PASS via Playwright on the live preview URL with the Nyla Air Water tenant. Matrix renders 8 rows = 2 stages (qc1, final qc) × 4 reasons (Black Particles, Bottle scratches, Cap Issues, White Particles), exactly matching stages.length × reasons.length. Rows are grouped by stage (all qc1 rows first, then all final qc rows) with consistent stage tints (qc1 → bg-sky-100/70 stripe + sky pill; final qc → bg-amber-100/70 stripe + amber pill). The first row of the second stage carries the border-t-2 border-t-slate-300 divider as specified. Default state for unmapped rows: all checkboxes unchecked, Cost/unit shows '—', Save button disabled (verified via 6/8 cost-cell '—' on first load — only the 2 pre-existing mappings show ₹). 'Add new mapping' UI is fully removed. Stage filter dropdown works (selecting 'qc1' narrows rows from 8 → 4). Save flow on a previously-unmapped row works end-to-end: ticking a checkbox enabled Save and live-recomputed Cost/unit to ₹51.00 (= primary_packaging_cost on Nyla – 600 ml / Silver); POST /api/production/rejection-cost-mappings returned success, refetch ran, the row morphed into 'Saved' button + Delete (trash) icon (Saved-button count went 2 → 3, Delete-button count 2 → 3). Cleanup completed: the test-created qc1/Black Particles mapping was removed via DELETE /api/production/rejection-cost-mappings/<id> (200) so tenant data is unchanged.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "RejectionCostConfig.js:104-121 — useMemo cross-product (stages × reasons) is correct; preserves stage order via stages.forEach (stages array is already returned in route order by backend) and per-stage reason order via reasons array order. Filter applied at the end so divider/tint logic still works inside the filtered subset.",
+    "RejectionCostConfig.js:98-102 — stageTintByName mapping uses index % STAGE_TINTS.length so >7 stages would loop palette; acceptable.",
+    "RejectionCostConfig.js:325-326 — isFirstOfStage detection correctly gates border-t-2 on idx>0, so the very first row never gets a redundant top border. Verified visually.",
+    "RejectionCostConfig.js:328 — testId fallback `${stage_name}-${reason_id}` works for unmapped rows; after save, refetch swaps it to mapping.id (uuid). Components downstream that key off mapping-row-<id> will see a stable id post-save. Not a bug, but worth noting that the data-testid for the same row mutates from 'qc1-<reasonUuid>' to '<mappingUuid>' across save — fine for fresh queries, brittle if a test caches a node reference.",
+    "RejectionCostConfig.js:78-80 — draft seed uses `${m.stage_name}|${m.reason_id}` matching the row.key build in the rows useMemo, so isDirty/computeRowUnitCost stay in sync after refetch.",
+    "RejectionCostConfig.js:160-176 — deleteRow optimistically clears draft[rowKey] then refetches; this means after delete the row goes back to checkboxes-empty + Cost/unit '—' + Save (disabled) state, which matches the spec.",
+    "RejectionCostConfig.js:9 — `toast` from sonner used; no console errors observed during save/load."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only request)", "frontend": "100% (13/13 acceptance criteria)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (Nyla Air Water)",
+  "seed_data_creation": "Created 1 temp mapping (sku=Nyla 600ml Silver, stage=qc1, reason=Black Particles, components=[primary_packaging_cost]) during save-flow test, then DELETED it during cleanup. Tenant state restored.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All RejectionCostConfig behaviors verified on the live preview URL. Selectors observed: rejection-cost-config-page, sku-picker, filter-stage-select, rejection-cost-matrix, mapping-row-<id>, cell-<id>-<componentKey>, save-<id>, delete-<id>, row-cost-<id>. Note: testId for unmapped rows is `${stage_name}-${reason_id}` and flips to mapping.id after save. Tenant baseline mappings observed: qc1/Bottle scratches (5 components → ₹72.80) and final-qc/Black Particles (4 components → ₹21.80). Regression for BatchDetail / RejectionReport was NOT re-run in this iteration (the spec listed it under 'Regression' and was tested at iteration 148/150 — backend untouched in this refactor, so no regression risk to those flows from this change).",
+  "rca of the issue": "No issue. UI refactor delivers exactly the contract specified."
+}
