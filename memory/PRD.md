@@ -486,6 +486,29 @@
 - [x] **Files**: `frontend/src/pages/RejectionCostConfig.js` (rewritten with cross-product `rows`, `STAGE_TINTS` palette, stage divider logic).
 - [x] **Testing**: iteration_151 — 13/13 frontend Playwright PASS. Matrix renders 8 rows for 2 stages × 4 reasons; live save flow verified (checkbox tick → Cost/unit ₹51.00 → POST 200 → row morphs into Saved + Delete); cleanup left tenant data unchanged.
 
+### Production Dashboard, Production Batches, Batch Detail — GOP-style Tile Theme (2026-04-29)
+- [x] All summary tiles across Production module redesigned to match the **Account GOP Metrics** aesthetic: gradient `bg-gradient-to-br from-{accent}-50 via-{accent}-50/50 to-white`, blurred halo decoration (`absolute -top-6 -right-6 h-20-24 w-20-24 rounded-full bg-{accent}-500/10 blur-2xl opacity-40`), `h-8/9 w-8/9 rounded-xl bg-{accent}-500/10 text-{accent}-600` icon chip, large `tabular-nums` numbers, and `hover:-translate-y-0.5 hover:shadow-lg` micro-interaction.
+- [x] **ProductionDashboard.js**: Reorganized into 5 sections (Stock Flow, Quality & Cost Impact, At a Glance, Rejection Cost Breakdown, SKU Pipelines) with eyebrow section headings and per-section accents.
+- [x] **ProductionBatches.js**: 5 stat tiles converted (Total Batches/Active/Completed/Total Crates/QC Routes — sky/amber/emerald/violet/indigo).
+- [x] **BatchDetail.js**: Top 5 info tiles + sub-row of 4 summary tiles (Unallocated/Total Rejected/Warehouse Ready/Quality) all use the same gradient frame; Quality tile preserves dual pass/reject % and progress bar.
+- [x] **Files**: `frontend/src/pages/ProductionDashboard.js` (new HeroTile/MiniStat/SectionHeading/RejectionBreakdown components), `frontend/src/pages/ProductionBatches.js`, `frontend/src/pages/BatchDetail.js`.
+
+### Rejection Report — Pagination + Cost Metrics Surface (2026-04-29)
+- [x] **Backend** `GET /api/production/rejection-report` response extended with cost in every aggregation:
+  - `by_resource`: `[{name, bottles, cost}]` sorted desc by cost
+  - `by_date`: `[{date, bottles, cost}]` sorted by date
+  - `by_reason`: NEW — `[{reason, bottles, cost}]` sorted desc by cost
+  - `by_stage`: NEW — `[{stage, bottles, cost}]` sorted desc by cost
+  - `top_skus`: NEW — top 5 by cost `[{sku_id, sku_name, bottles, cost}]`
+  - `unmapped_count`: NEW — number of rows with `missing_mapping=true`
+  - `total_cost`: existing — sum of all `cost_of_rejection`
+- [x] **Frontend** `/rejection-report` redesigned:
+  - **4 GOP-style hero tiles**: Total Rejected (rose), Total Rejection Cost + avg ₹/bottle (rose), Top Costly SKU (indigo), Unmapped Rows (amber)
+  - **4 BreakdownPanels** with horizontal bars: By Reason / By Stage / By Resource / By Date — each row shows both bottles and ₹ cost
+  - **Client-side pagination**: configurable rows-per-page (25/50/100/200), first/prev/next/last buttons, page indicator (`Page X / Y`), "Showing A–B of N" info; total footer still aggregates ALL rows
+- [x] **Files**: `backend/routes/production_qc.py` (rejection-report aggregation block rewritten), `frontend/src/pages/RejectionReport.js` (full rewrite with HeroTile + BreakdownPanel + pagination state).
+- [x] **Testing**: iteration_152 — 17/17 PASS (backend pytest + Playwright). Lifetime view: 75 rows / total_cost ₹5,361.50 / 58 unmapped; pagination math verified (3 pages of 25, next/last/first/page-size all working); regression on rejection-cost-mappings + production dashboard endpoints intact.
+
 ### API Keys for External Integration Partners (2026-04-28)
 - [x] **Per-partner API keys** (one key per integration like BriefingIQ). Issued at Settings → API Keys page. Format `ak_live_<48 hex>`, stored as **sha256 hash**, raw key shown ONLY ONCE on creation.
 - [x] **Auth via either header**: `X-API-Key: ak_live_…` OR `Authorization: Bearer ak_live_…` (server detects by `ak_live_` prefix; falls back to JWT/session if not an API key).
