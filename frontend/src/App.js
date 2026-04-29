@@ -18,13 +18,19 @@ import HomeDashboard from './pages/HomeDashboard';
 // CRITICAL: Configure axios to always send credentials (cookies) with all requests
 axios.defaults.withCredentials = true;
 
-// CRITICAL: Always include X-Tenant-ID header on all API requests
-// This interceptor runs BEFORE the one in AuthContext, ensuring tenant is always set
+// CRITICAL: Always include X-Tenant-ID + Authorization header on all API requests.
+// This interceptor runs BEFORE the one in AuthContext, ensuring tenant + token are
+// always set even on calls made before AuthProvider mounts.
 axios.interceptors.request.use((config) => {
-  // Only add tenant header if not already set
+  // Tenant header
   if (!config.headers['X-Tenant-ID']) {
     const tenantId = localStorage.getItem('selectedTenant') || 'nyla-air-water';
     config.headers['X-Tenant-ID'] = tenantId;
+  }
+  // Auth header — auto-attach from localStorage if not already set by caller
+  if (!config.headers['Authorization'] && !config.headers['authorization']) {
+    const token = localStorage.getItem('token');
+    if (token) config.headers['Authorization'] = `Bearer ${token}`;
   }
   return config;
 });
