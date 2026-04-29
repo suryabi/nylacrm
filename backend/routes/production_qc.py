@@ -5,7 +5,7 @@ Production QC Tracking Module
 - Rejection Cost Rules (per-stage cost config)
 """
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException, Depends
@@ -139,17 +139,28 @@ async def production_dashboard(
 
     batch_query = {"tenant_id": tenant_id}
     if start_date_iso:
-        cond = {"$gte": start_date_iso}
+        # Filter batches by production_date (YYYY-MM-DD string), inclusive.
+        # Falls back to created_at for batches missing production_date.
+        sd_date = start_date_iso[:10]
+        ed_date = end_date_iso[:10] if end_date_iso else None
+        prod_cond = {"$gte": sd_date}
+        if ed_date:
+            prod_cond["$lte"] = ed_date
+        created_cond = {"$gte": start_date_iso}
         if end_date_iso:
-            cond["$lte"] = end_date_iso
-        batch_query["created_at"] = cond
+            created_cond["$lte"] = end_date_iso
+        batch_query["$or"] = [
+            {"production_date": prod_cond},
+            {"production_date": {"$in": [None, ""]}, "created_at": created_cond},
+            {"production_date": {"$exists": False}, "created_at": created_cond},
+        ]
 
     batches = await tdb.production_batches.find(
         batch_query,
         {"_id": 0, "id": 1, "sku_id": 1, "sku_name": 1, "total_crates": 1, "bottles_per_crate": 1,
          "total_bottles": 1, "unallocated_crates": 1, "stage_balances": 1,
          "total_passed_final": 1, "transferred_to_warehouse": 1, "total_rejected": 1,
-         "status": 1, "qc_stages": 1, "ph_value": 1, "created_at": 1}
+         "status": 1, "qc_stages": 1, "ph_value": 1, "created_at": 1, "production_date": 1}
     ).to_list(5000)
 
     # Aggregate per SKU
@@ -233,7 +244,7 @@ async def production_dashboard(
         sku_cogs_map = {s["id"]: (s.get("cogs_components_values") or {}) for s in sku_cogs_docs}
 
         # Pull inspections for batches in scope
-        ins_docs = await tdb.qc_inspections.find(
+        ins_docs = await tdb.inspections.find(
             {"tenant_id": tenant_id, "batch_id": {"$in": list(batch_id_set)}},
             {"_id": 0, "batch_id": 1, "stage_name": 1, "rejections": 1, "entries": 1,
              "qty_rejected": 1, "rejection_reason": 1}

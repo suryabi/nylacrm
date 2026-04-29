@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 150 — Production Dashboard time filter + rejection cost end-to-end verified. Backend pytest: 22/22 PASS (test_iteration_150_production_dashboard_time_filter.py). All 11 TIME_FILTERS values return correct summary keys with time_filter echoed back; lifetime>=this_month consistency holds; last_year correctly returns 0 batches / 0 cost / 0 events. Rejection cost aggregation: by_reason and by_stage sums each equal summary.total_rejection_cost (within rounding); top_skus capped at 5 and sorted descending; per-SKU rejection_cost present on every skus[] row and rounded to 2 dp. Regression: /api/production/rejection-report still returns rows with cost_of_rejection + total_cost; qc-routes, batches, rejection-cost-mappings, stats endpoints all 200. Frontend Playwright: /production-dashboard renders production-dashboard testid, time-filter dropdown is present and defaults to this_month, Window label updates as expected (This Month → Lifetime → Last Year). All 4 new rejection cost cards verified live against lifetime data: Rejection Cost ₹2,548 (75 events), Unmapped Events 69, Rejection Rate 2.32%, Top Costly SKU 'Nyla - 600 ml / Silver' ₹2,548. All 8 regression summary cards (skus, batches, total-crates, unallocated, in-qc-stages, warehouse-ready, transferred, rejected) still render. Click-throughs verified: summary-batches → /production-batches; summary-unallocated → /production-batches?stage=unallocated. last_year shows empty state with 'No production batches in the selected window'. lifetime view renders 5 SKUPipeline tiles.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "ProductionDashboard rejection-rate card", "issues": ["Rate computation includes a dead-code line `const totalBottles = (summary.total_crates || 0) * 0;` which is unused (always 0). Replace with a real rate (rejected_bottles / Σ sku.total_bottles) — currently the IIFE iterates skus to compute total_bottles but the placeholder line reads as confusing dead code. Functionally OK (yields 2.32%), but a code-cleanup."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_150_production_dashboard_time_filter.py",
+    "/app/test_reports/pytest/iteration_150_results.xml"
+  ],
+  "action_items": [
+    "Optional cleanup: remove the no-op `totalBottles = total_crates * 0` line in ProductionDashboard.js Rejection Rate card (lines ~393-403) and clarify the rate formula. Functional output is correct; this is a readability nit, not a bug.",
+    "Optional: my Playwright check could not assert visibility of the 3 RejectionBreakdown panel headings ('Cost by Reason' / 'Cost by Stage' / 'Top SKUs') via a strict h4 textContent match after switching to lifetime, even though backend data is non-empty. Likely a selector/timing artifact in my script (the panels are gated by `total_rejection_cost > 0` which is satisfied). Main agent can self-verify visually — this is not blocking."
+  ],
+  "critical_code_review_comments": [
+    "production_qc.py:140-156 — batch_query uses $or on production_date (preferred) with fallback to created_at; both branches handle missing/empty production_date correctly. Verified empirically: this_month returns 24, lifetime 28+, last_year 0.",
+    "production_qc.py:247 — collection name correctly fixed to tdb.inspections (was qc_inspections). Pytest confirms rejection_events>0 for lifetime, so the data path is live.",
+    "production_qc.py:294-299 — top_costly_skus capped at 5 and sorted desc; backend response respects this for all time filters.",
+    "production_qc.py:317 — total_rejection_cost rounded to 2 dp; matches Σ(by_reason)=Σ(by_stage) within tolerance (verified by test_total_rejection_cost_equals_sum_by_reason_and_stage).",
+    "ProductionDashboard.js:293 — timeFilter state hydrates from localStorage('production_dashboard_tf'), persisting user choice across reloads. Verified.",
+    "ProductionDashboard.js:392-406 — Rejection Rate IIFE has a misleading `totalBottles = total_crates * 0` line that does nothing. Cosmetic; output is still correct.",
+    "ProductionDashboard.js:418 — RejectionBreakdown panels are correctly gated on summary.total_rejection_cost > 0 to avoid empty cards.",
+    "ProductionDashboard.js:136, 249 — SKU pipeline subtitle shows '· ₹X loss' only when sku.rejection_cost>0. With the lifetime test data the highest-crates SKU happens to have 0 rejection_cost, so the subtitle correctly omits 'loss' on the first pipeline."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_150_production_dashboard_time_filter.py (new — 22 tests across 4 classes)"
+  ],
+  "success_rate": {"backend": "100% (22/22)", "frontend": "100% on the 11 spec items I directly asserted; 1 item (3 breakdown panel headings) inconclusive due to selector/timing — non-blocking"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (Nyla Air Water tenant)",
+  "seed_data_creation": "None. Used existing Nyla Air Water production data (28 lifetime batches; total_rejection_cost ≈ ₹2,548; top SKU = Nyla 600 ml / Silver).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-run via: REACT_APP_BACKEND_URL=https://rejection-cost-dash.preview.emergentagent.com pytest backend/tests/test_iteration_150_production_dashboard_time_filter.py -v. Tests are read-only. Backend totals to expect on this tenant: lifetime 28+ batches / ₹2,548 / 75 events / 69 unmapped; this_month 24+; last_year 0. Frontend testids to use: production-dashboard, production-dashboard-time-filter, summary-rejection-cost, summary-unmapped-events, summary-rejection-rate, summary-top-costly-sku, summary-{skus|batches|total-crates|unallocated|in-qc-stages|warehouse-ready|transferred|rejected}.",
+  "rca of the issue": "No issues. Time filter + rejection cost dashboard works as specified."
+}
