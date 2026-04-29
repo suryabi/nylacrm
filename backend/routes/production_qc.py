@@ -800,6 +800,13 @@ async def get_rejection_cost_config(
                 {"id": sku_id},
                 {"_id": 0, "id": 1, "sku_name": 1, "external_sku_id": 1, "category": 1},
             )
+        # Always include cogs_components_values so the UI can show live cost per row
+        sku_full = await _db.master_skus.find_one(
+            {"id": sku_id},
+            {"_id": 0, "id": 1, "sku_name": 1, "cogs_components_values": 1},
+        )
+        if sku_doc and sku_full:
+            sku_doc = {**sku_doc, "cogs_components_values": sku_full.get("cogs_components_values") or {}}
         payload["sku"] = sku_doc
         payload["stages"] = stages
         payload["mappings"] = mappings

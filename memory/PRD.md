@@ -451,6 +451,12 @@
 - [x] **Files**: `backend/routes/production_qc.py`, `frontend/src/pages/RejectionCostConfig.js` (rewritten), `frontend/src/pages/BatchDetail.js`.
 - [x] **Testing**: 12/12 backend (iteration_148, pytest at `backend/tests/test_iteration_148_rejection_cost_per_sku.py`) + frontend Playwright validated. SKU isolation verified end-to-end.
 
+### Production — Rejection Cost: Live Cost / Unit Display (2026-04-29)
+- [x] **Backend**: SKU-scoped config endpoint now also returns `sku.cogs_components_values`, enabling pure-frontend cost computation.
+- [x] **Frontend**: Each component header in the matrix shows the SKU's price (₹X / "— not set" if unset). New right-most "Cost / unit" column shows live `Σ(SKU's price for ticked components)` — updates instantly as user toggles checkboxes. Amber banner appears when SKU has no COGS prices (with deep link to SKU Management → COGS Costs).
+- [x] **Files**: `backend/routes/production_qc.py`, `frontend/src/pages/RejectionCostConfig.js`.
+- [x] **Verified**: For Nyla 660ml/Gold (Primary 7.50, Cap 2.00, Mfg 12.25) → QC Stage 1 / Black Particles with [Primary, Cap] checked shows **Cost / unit: ₹9.50** instantly. Total rejection cost on event = qty × Cost/unit.
+
 ### API Keys for External Integration Partners (2026-04-28)
 - [x] **Per-partner API keys** (one key per integration like BriefingIQ). Issued at Settings → API Keys page. Format `ak_live_<48 hex>`, stored as **sha256 hash**, raw key shown ONLY ONCE on creation.
 - [x] **Auth via either header**: `X-API-Key: ak_live_…` OR `Authorization: Bearer ak_live_…` (server detects by `ak_live_` prefix; falls back to JWT/session if not an API key).
