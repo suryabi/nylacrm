@@ -49,6 +49,7 @@ from .analytics import router as analytics_router
 from .bottle_preview import router as bottle_preview_router
 from .cogs_components import router as cogs_components_router
 from .api_keys import router as api_keys_router
+from .personal_calendar import router as personal_calendar_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -140,5 +141,8 @@ routes_router.include_router(cogs_components_router, prefix="/master/cogs-compon
 
 # API Keys for external integrations
 routes_router.include_router(api_keys_router, prefix="/api-keys", tags=["API Keys"])
+
+# Personal Calendar (CRM meetings + Google Calendar sync)
+routes_router.include_router(personal_calendar_router, tags=["Personal Calendar"])
 
 __all__ = ['routes_router']

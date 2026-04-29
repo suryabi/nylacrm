@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 150 — Personal Calendar + Production Dashboard time_filter end-to-end. Backend pytest 19/19 PASS after fixing one missing import (timedelta) in production_qc.py which was causing 500s for last_week/last_month/last_quarter/last_3_months/last_6_months/last_year/this_week. After the one-line fix, all 11 time_filter values return 200 with summary.time_filter echoed and rejection_breakdown {by_reason,by_stage,top_skus} present. Personal Calendar APIs verified: /google/status returns configured:true (Google OAuth client+secret in .env), /google/connect returns a valid Google authorization_url with redirect_uri %2Fapi%2Fpersonal-calendar%2Fgoogle%2Fcallback, state=user_id:tenant_id, scope including calendar+userinfo.email+openid; /google/disconnect clears tokens and returns disconnected:true; /events?start_date=2026-04-01&end_date=2026-04-30 returns 10 meeting_minutes events (Q1 Sales Review on 4/6, Sprint Planning x3 on 4/6, Weekly meeting with KB and Vamsi on 4/7, TEST_AutoTask on 4/15, etc.) with required fields {id,source,title,start,color}. Frontend Playwright validation on real session: Production Dashboard has data-testid=production-dashboard, time-filter dropdown (11 options), value persists in localStorage as 'this_week' after change. Personal Calendar at /personal-calendar renders 30 day cells for April 2026, day-of-week header, legend (CRM Meeting/Minutes/Google), refresh-btn, prev-month-btn, next-month-btn, today-btn, google-connect-btn all present. Events rendered correctly on day-cell-2026-04-06, 04-07, 04-15, 04-23 with violet/sky color coding. 'My Calendar' nav item exists in sidebar under Lead & Sales Operations.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PersonalCalendar Day Sheet", "issue": "Clicking a day-cell does open a dialog (data-state=open in DOM) but the Sheet content text was empty when queried right after click — possible animation/rendering delay or the Sheet is not visibly populating the events list in the drawer. Could not verify the day-events sub-list or the event-detail sheet flow programmatically. Visual screenshot does not show an open drawer overlay.", "selector": "[data-testid='day-cell-YYYY-MM-DD']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_150_personal_calendar.py",
+    "/app/test_reports/pytest/iteration_150_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Verify PersonalCalendar day-cell click opens a Sheet with the day's events list and that clicking an event opens an event-detail Sheet with title/time/location/link/description — could not programmatically confirm content; please self-test in browser.",
+    "(Optional) Production Dashboard 'Rejection Insights' section was correctly hidden because /api/production/dashboard?time_filter=lifetime returned rejection_events=0 and empty rejection_breakdown — even though batch-level total_rejected aggregates to 2,660 bottles in tenant. The dashboard's 'rejection_events' counter only counts recorded rejection event documents (not batch totals). Worth confirming with main agent that this is intentional, otherwise insights panel will never show for current data."
+  ],
+  "critical_code_review_comments": [
+    "BUG FIXED — /app/backend/routes/production_qc.py imported only `from datetime import datetime, timezone` but used `timedelta(...)` in 7 branches of time_filter handling (this_week,last_week,last_month,last_3_months,last_6_months,last_quarter,last_year). Caused NameError 500s. Added `timedelta` to import. This is the same import that production_qc already needed pre-fork, so likely a regression introduced when wiring time_filter to dashboard.",
+    "personal_calendar.py:32 _redirect_uri() falls back to REACT_APP_BACKEND_URL when BACKEND_PUBLIC_URL is missing — both are set, so OK.",
+    "personal_calendar.py:212 meeting_query uses `meeting_date` field with $or on organizer_id/attendees email — looks consistent with meetings collection model. Returns 200 with correct events.",
+    "personal_calendar.py:244 meeting_minutes uses global `db` (not tenant_db). Confirm meeting_minutes is intentionally a cross-tenant collection — production data shows it works for surya@nyla, but check collection scoping when multi-tenant scaling.",
+    "personal_calendar.py:79 datetime.fromisoformat with .replace('Z','+00:00') — Python 3.11+ handles 'Z' natively, redundant replace is safe.",
+    "personal_calendar.py:307 bare `except Exception as e:` swallows error details into generic 'fetch_failed' label — consider logging e for debugging Google API failures.",
+    "PersonalCalendar.js — day-cell Sheet content rendering needs visual self-verification (see ui_bugs)."
+  ],
+  "updated_files": [
+    "/app/backend/routes/production_qc.py (added `timedelta` to datetime import — 1 line fix)",
+    "/app/backend/tests/test_iteration_150_personal_calendar.py (new — 19 pytest tests across 3 classes)"
+  ],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "95% (all key testids + flow except day-Sheet content visual verification)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, Nyla Air Water tenant). Login response key is `session_token` (not `access_token`).",
+  "seed_data_creation": "None. Used existing meeting_minutes records from April 2026 (Q1 Sales Review, Sprint Planning, Weekly meeting with KB and Vamsi, TEST_AutoTask, TEST_TaskLink_Meeting, etc.).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-run via: pytest backend/tests/test_iteration_150_personal_calendar.py -v. Tests are read-only except for /google/disconnect (idempotent). For UI: navigate to /personal-calendar, change calendar to April 2026 via prev-month-btn, click day-cell-2026-04-06 — should open a Sheet listing 4 events; click an event to open detail Sheet. Production Dashboard at /production-dashboard, change time-filter Select to verify rejection-metrics-section appears IF a tenant has recorded rejection events (current Nyla tenant has rejection_events=0 across lifetime — section correctly hidden).",
+  "rca of the issue": "ROOT CAUSE: `production_qc.py` line 8 imported `from datetime import datetime, timezone` only. The new time_filter logic (lines 99-134) added on this iteration uses `timedelta(days=...)` in 7 branches (this_week, last_week, last_month, last_3_months, last_6_months, last_quarter end-date calc, last_year end-date calc). All 7 branches raised NameError → FastAPI returned 500. REPRODUCTION: GET /api/production/dashboard?time_filter=last_week → 500 Internal Server Error. MITIGATION: Added `timedelta` to the import. Verified: all 11 time_filter values now return 200; pytest 19/19 PASS."
+}

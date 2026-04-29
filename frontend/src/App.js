@@ -107,6 +107,8 @@ import InvestorDashboard from './pages/InvestorDashboard';
 import MarketingCalendar from './pages/MarketingCalendar';
 import MarketingMasters from './pages/MarketingMasters';
 import MarketingPostDetail from './pages/MarketingPostDetail';
+// Personal Calendar (per-user, with Google Calendar sync)
+import PersonalCalendar from './pages/PersonalCalendar';
 import '@/App.css';
 import { useActivityTracker } from './hooks/useActivityTracker';
 import { NavigationProvider } from './context/NavigationContext';
@@ -288,6 +290,8 @@ function AppRouter() {
           <Route path="/marketing-calendar" element={<ProtectedRoute moduleKey="marketing_calendar"><MarketingCalendar /></ProtectedRoute>} />
           <Route path="/marketing-post/:postId" element={<ProtectedRoute moduleKey="marketing_calendar"><MarketingPostDetail /></ProtectedRoute>} />
           <Route path="/marketing-masters" element={<ProtectedRoute moduleKey="marketing_masters"><MarketingMasters /></ProtectedRoute>} />
+          {/* Personal Calendar */}
+          <Route path="/personal-calendar" element={<ProtectedRoute><PersonalCalendar /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </>

@@ -5,7 +5,7 @@ Production QC Tracking Module
 - Rejection Cost Rules (per-stage cost config)
 """
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException, Depends

@@ -4,10 +4,30 @@ import { toast } from 'sonner';
 import axios from 'axios';
 import {
   Factory, Package, Boxes, Truck, AlertTriangle, ShieldCheck,
-  Loader2, ArrowRight, ArrowDown, ChevronRight, Droplets,
+  Loader2, ArrowRight, ArrowDown, ChevronRight, Droplets, Calendar, IndianRupee,
 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
+
+const TIME_FILTERS = [
+  { value: 'this_week', label: 'This Week' },
+  { value: 'last_week', label: 'Last Week' },
+  { value: 'this_month', label: 'This Month' },
+  { value: 'last_month', label: 'Last Month' },
+  { value: 'this_quarter', label: 'This Quarter' },
+  { value: 'last_quarter', label: 'Last Quarter' },
+  { value: 'last_3_months', label: 'Last 3 Months' },
+  { value: 'last_6_months', label: 'Last 6 Months' },
+  { value: 'this_year', label: 'This Year' },
+  { value: 'last_year', label: 'Last Year' },
+  { value: 'lifetime', label: 'Lifetime' },
+];
+
+const fmtINR = (n) => {
+  const num = Number(n) || 0;
+  return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
 function getAuthHeaders() {
   return {
@@ -235,20 +255,27 @@ export default function ProductionDashboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
+  const [timeFilter, setTimeFilter] = useState(() => localStorage.getItem('production_dashboard_time_filter') || 'this_month');
 
   const fetchDashboard = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API_URL}/production/dashboard`, { headers: getAuthHeaders() });
+      const res = await axios.get(`${API_URL}/production/dashboard`, {
+        headers: getAuthHeaders(),
+        params: { time_filter: timeFilter },
+      });
       setData(res.data);
     } catch (err) {
       toast.error('Failed to load production dashboard');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [timeFilter]);
 
-  useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+  useEffect(() => {
+    localStorage.setItem('production_dashboard_time_filter', timeFilter);
+    fetchDashboard();
+  }, [fetchDashboard, timeFilter]);
 
   if (loading) {
     return (
@@ -260,16 +287,33 @@ export default function ProductionDashboard() {
 
   const summary = data?.summary || {};
   const skus = data?.skus || [];
+  const breakdown = data?.rejection_breakdown || { by_reason: [], by_stage: [], top_skus: [] };
+  const hasRejectionCost = (summary.rejection_events || 0) > 0;
 
   return (
     <div className="space-y-4 sm:space-y-6" data-testid="production-dashboard">
-      {/* Header */}
-      <div>
-        <div className="flex items-center gap-2 sm:gap-3 mb-1">
-          <Factory className="w-6 h-6 sm:w-7 sm:h-7 text-slate-700" />
-          <h1 className="text-xl sm:text-2xl font-black text-slate-800">Production Overview</h1>
+      {/* Header + Time Filter */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 sm:gap-3 mb-1">
+            <Factory className="w-6 h-6 sm:w-7 sm:h-7 text-slate-700" />
+            <h1 className="text-xl sm:text-2xl font-black text-slate-800">Production Overview</h1>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-400 ml-8 sm:ml-10">Factory stock at every stage, by SKU</p>
         </div>
-        <p className="text-xs sm:text-sm text-slate-400 ml-8 sm:ml-10">Factory stock at every stage, by SKU</p>
+        <div className="flex items-center gap-2 self-start sm:self-end">
+          <Calendar className="w-4 h-4 text-slate-500" />
+          <Select value={timeFilter} onValueChange={setTimeFilter}>
+            <SelectTrigger className="h-9 w-[170px] rounded-xl bg-white border-slate-200" data-testid="time-filter">
+              <SelectValue placeholder="This Month" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl max-h-72">
+              {TIME_FILTERS.map(tf => (
+                <SelectItem key={tf.value} value={tf.value} className="rounded-lg" data-testid={`time-filter-option-${tf.value}`}>{tf.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Summary Cards — compact, GOP-style */}
@@ -291,12 +335,43 @@ export default function ProductionDashboard() {
           onClick={() => navigate('/production-batches?stage=rejected')} />
       </div>
 
+      {/* Rejection Cost Metrics — only when there are rejection events in range */}
+      {hasRejectionCost && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5" data-testid="rejection-metrics-section">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-500" />
+              <h2 className="text-sm sm:text-base font-bold text-slate-800">Rejection Insights</h2>
+              <span className="text-[10px] sm:text-xs text-slate-400">{TIME_FILTERS.find(t => t.value === timeFilter)?.label}</span>
+            </div>
+            <button onClick={() => navigate('/rejection-report')}
+              className="text-[10px] sm:text-xs text-primary hover:underline flex items-center gap-0.5"
+              data-testid="rejection-report-link">
+              Full Report <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-4">
+            <SummaryCard label="Total Rejected" value={summary.total_rejected} icon={AlertTriangle} accent="rose" sub="bottles" />
+            <SummaryCard label="Total Cost" value={fmtINR(summary.total_rejection_cost)} icon={IndianRupee} accent="rose" />
+            <SummaryCard label="Events" value={summary.rejection_events} icon={Boxes} accent="slate" />
+            <SummaryCard label="Unmapped" value={summary.rejection_unmapped} icon={AlertTriangle} accent="amber"
+              sub={summary.rejection_unmapped > 0 ? 'configure cost mapping' : 'all mapped'}
+              onClick={summary.rejection_unmapped > 0 ? () => navigate('/production/rejection-cost-config') : undefined} />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+            <BreakdownList title="By Reason" items={breakdown.by_reason} keyName="reason" testId="rejection-by-reason" />
+            <BreakdownList title="By Stage" items={breakdown.by_stage} keyName="stage" testId="rejection-by-stage" />
+            <TopSKUList items={breakdown.top_skus} testId="rejection-top-skus" />
+          </div>
+        </div>
+      )}
+
       {/* SKU Pipelines */}
       {skus.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-2xl p-8 sm:p-12 text-center">
           <Factory className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-500 font-medium">No production batches yet</p>
-          <p className="text-xs text-slate-400 mt-1">Create your first batch to see the stock flow here</p>
+          <p className="text-slate-500 font-medium">No production batches in this period</p>
+          <p className="text-xs text-slate-400 mt-1">Try a wider time filter or create a new batch</p>
           <button onClick={() => navigate('/production-batches')}
             className="mt-4 px-4 py-2 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-700 transition-colors"
             data-testid="go-to-batches-btn">
@@ -309,6 +384,55 @@ export default function ProductionDashboard() {
             <SKUPipeline key={sku.sku_id} sku={sku} onNavigate={() => navigate('/production-batches')} />
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+function BreakdownList({ title, items, keyName, testId }) {
+  const max = Math.max(...(items.map(i => i.cost) || [0]), 1);
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3" data-testid={testId}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-2">{title}</p>
+      {items.length === 0 ? (
+        <p className="text-xs text-slate-400">No data</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {items.slice(0, 5).map((it, idx) => (
+            <li key={idx} className="space-y-0.5">
+              <div className="flex justify-between items-baseline gap-2">
+                <span className="text-xs text-slate-700 truncate">{it[keyName] || '—'}</span>
+                <span className="text-xs font-semibold tabular-nums text-rose-600 shrink-0">{fmtINR(it.cost)}</span>
+              </div>
+              <div className="h-1 bg-white rounded-full overflow-hidden">
+                <div className="h-full bg-rose-400" style={{ width: `${Math.round((it.cost / max) * 100)}%` }} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function TopSKUList({ items, testId }) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3" data-testid={testId}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-2">Top Costly SKUs</p>
+      {items.length === 0 ? (
+        <p className="text-xs text-slate-400">No data</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {items.slice(0, 5).map((it, idx) => (
+            <li key={idx} className="flex justify-between items-baseline gap-2">
+              <div className="min-w-0">
+                <p className="text-xs text-slate-700 truncate">{it.sku_name}</p>
+                <p className="text-[10px] text-slate-400">{it.total_rejected} bottles</p>
+              </div>
+              <span className="text-xs font-semibold tabular-nums text-rose-600 shrink-0">{fmtINR(it.rejection_cost)}</span>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
