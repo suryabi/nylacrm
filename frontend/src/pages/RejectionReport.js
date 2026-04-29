@@ -338,8 +338,8 @@ export default function RejectionReport() {
             />
             <HeroTile
               label="Top Costly SKU"
-              value={topSku ? topSku.sku_name : '—'}
-              sub={topSku ? `${num(topSku.bottles)} bottles · ${inr(topSku.cost)}` : 'No cost recorded'}
+              value={topSku ? inr(topSku.cost) : '—'}
+              sub={topSku ? `${topSku.sku_name} · ${num(topSku.bottles)} bottles` : 'No cost recorded'}
               icon={Tags}
               accent="indigo"
               dataTestId="hero-top-sku"

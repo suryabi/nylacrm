@@ -486,13 +486,13 @@ export default function ProductionDashboard() {
                 dataTestId="summary-unmapped-events"
               />
               <HeroTile
-                label="Top Costly SKU"
-                value={topSku ? topSku.sku_name : '—'}
-                sub={topSku ? inr(topSku.rejection_cost) : 'No rejection cost recorded'}
-                icon={Tags}
-                accent="indigo"
-                dataTestId="summary-top-costly-sku"
-              />
+              label="Top Costly SKU"
+              value={topSku ? inr(topSku.rejection_cost) : '—'}
+              sub={topSku ? `${topSku.sku_name} · ${num(topSku.total_rejected)} bottles` : 'No rejection cost recorded'}
+              icon={Tags}
+              accent="indigo"
+              dataTestId="summary-top-costly-sku"
+            />
             </div>
           </section>
 
