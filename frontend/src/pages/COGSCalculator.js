@@ -451,6 +451,7 @@ export default function COGSCalculator() {
       const token = localStorage.getItem('token');
       
       for (const row of cogsData) {
+        if (!row.id) continue; // Skip rows without an id (shouldn't happen but be defensive)
         // Build custom_components payload (numeric values only)
         const customNumeric = {};
         Object.entries(row.custom_components || {}).forEach(([k, v]) => {
@@ -470,7 +471,6 @@ export default function COGSCalculator() {
           },
           {
             headers: { Authorization: `Bearer ${token}` },
-            withCredentials: true
           }
         );
       }
@@ -491,7 +491,11 @@ export default function COGSCalculator() {
       setHasChanges(false);
       loadCOGSData(); // Reload to get updated calculations
     } catch (error) {
-      toast.error('Failed to save');
+      const detail = error?.response?.data?.detail
+        || error?.response?.data?.message
+        || error?.message
+        || 'Unknown error';
+      toast.error(`Failed to save: ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`);
     } finally {
       setSaving(false);
     }
@@ -676,10 +680,11 @@ export default function COGSCalculator() {
                           <Label className="text-xs text-muted-foreground">{c.label} ({c.unit === 'rupee' ? '₹' : '%'})</Label>
                           <Input
                             type="text"
-                            value={readField(row, c.key) || ''}
+                            inputMode="decimal"
+                            value={(() => { const v = readField(row, c.key); return v === '' || v === null || v === undefined ? '' : String(v); })()}
                             onChange={e => {
                               const val = e.target.value;
-                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                              if (val === '' || /^\d*\.?\d*$/.test(val)) {
                                 writeField(index, c.key, val);
                               }
                             }}
@@ -699,10 +704,11 @@ export default function COGSCalculator() {
                           <Label className="text-xs text-muted-foreground">{c.label} ({c.unit === 'rupee' ? '₹' : '%'})</Label>
                           <Input
                             type="text"
-                            value={row[c.key] || ''}
+                            inputMode="decimal"
+                            value={row[c.key] === '' || row[c.key] === null || row[c.key] === undefined ? '' : String(row[c.key])}
                             onChange={e => {
                               const val = e.target.value;
-                              if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                              if (val === '' || /^\d*\.?\d*$/.test(val)) {
                                 updateField(index, c.key, val);
                               }
                             }}
@@ -742,10 +748,11 @@ export default function COGSCalculator() {
                     <Label className="text-xs text-muted-foreground">Actual Landing Price (What-If)</Label>
                     <Input
                       type="text"
-                      value={actualLandingPrices[row.id] || ''}
+                      inputMode="decimal"
+                      value={actualLandingPrices[row.id] === '' || actualLandingPrices[row.id] === null || actualLandingPrices[row.id] === undefined ? '' : String(actualLandingPrices[row.id])}
                       onChange={e => {
                         const val = e.target.value;
-                        if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                        if (val === '' || /^\d*\.?\d*$/.test(val)) {
                           updateActualLandingPrice(index, val);
                         }
                       }}
@@ -824,10 +831,11 @@ export default function COGSCalculator() {
                           <td key={c.key} className={`p-2 ${isDist ? 'bg-amber-50/50' : ''}`}>
                             <input
                               type="text"
-                              value={readField(row, c.key) || ''}
+                              inputMode="decimal"
+                              value={(() => { const v = readField(row, c.key); return v === '' || v === null || v === undefined ? '' : String(v); })()}
                               onChange={e => {
                                 const val = e.target.value;
-                                if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                if (val === '' || /^\d*\.?\d*$/.test(val)) {
                                   writeField(index, c.key, val);
                                 }
                               }}
@@ -847,10 +855,11 @@ export default function COGSCalculator() {
                           <td key={`sys-${c.key}`} className={`p-2 ${isDist ? 'bg-amber-50/50' : ''}`}>
                             <input
                               type="text"
-                              value={row[c.key] || ''}
+                              inputMode="decimal"
+                              value={row[c.key] === '' || row[c.key] === null || row[c.key] === undefined ? '' : String(row[c.key])}
                               onChange={e => {
                                 const val = e.target.value;
-                                if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                                if (val === '' || /^\d*\.?\d*$/.test(val)) {
                                   updateField(index, c.key, val);
                                 }
                               }}
@@ -873,10 +882,11 @@ export default function COGSCalculator() {
                       <td className="p-2 bg-purple-50/50">
                         <input
                           type="text"
-                          value={actualLandingPrices[row.id] || ''}
+                          inputMode="decimal"
+                          value={actualLandingPrices[row.id] === '' || actualLandingPrices[row.id] === null || actualLandingPrices[row.id] === undefined ? '' : String(actualLandingPrices[row.id])}
                           onChange={e => {
                             const val = e.target.value;
-                            if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+                            if (val === '' || /^\d*\.?\d*$/.test(val)) {
                               updateActualLandingPrice(index, val);
                             }
                           }}
