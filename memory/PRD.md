@@ -5,6 +5,10 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+## Recent Fixes (2026-04-29)
+- [x] **Target Plan Creation 500 Bug**: Removed duplicate `targets_router` (routes/targets.py) that was registered at `/target-planning` prefix in `routes/__init__.py`. The older router's POST handler returned the insert_one dict without popping `_id`, causing `ObjectId` not iterable serialization failure. Ported unique `/achievement` endpoint (used by TargetPlanDashboard.js) into `routes/target_planning.py`. All target-planning CRUD + achievement endpoints now fully handled by the V2 router.
+
+
 ## Completed Features
 
 ### Distribution Module

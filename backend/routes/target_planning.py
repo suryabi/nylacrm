@@ -208,8 +208,58 @@ async def create_target_planning(
     }
 
     await db.target_plans_v2.insert_one(plan_data)
-    plan_data.pop('_id', None)
-    return plan_data
+    created = await db.target_plans_v2.find_one({'id': plan_data['id']}, {'_id': 0})
+    return created
+
+
+@router.get("/target-planning/achievement")
+async def get_achievement_by_resource_or_sku(
+    start_date: str,
+    end_date: str,
+    resource_id: Optional[str] = None,
+    sku_id: Optional[str] = None,
+    city: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get achieved revenue filtered by resource (sales person) or SKU within a date range"""
+    tdb = get_tdb()
+
+    if resource_id:
+        pipeline = [
+            {
+                '$lookup': {
+                    'from': 'leads',
+                    'localField': 'ca_lead_id',
+                    'foreignField': 'lead_id',
+                    'as': 'lead'
+                }
+            },
+            {'$unwind': {'path': '$lead', 'preserveNullAndEmptyArrays': False}},
+            {
+                '$match': {
+                    'lead.assigned_to': resource_id,
+                    'invoice_date': {'$gte': start_date, '$lte': end_date},
+                    **(({'lead.city': city} if city else {}))
+                }
+            },
+            {'$group': {'_id': None, 'achieved': {'$sum': '$net_invoice_value'}}}
+        ]
+        result = await tdb.invoices.aggregate(pipeline).to_list(1)
+        return {'achieved': result[0]['achieved'] if result else 0}
+
+    if sku_id:
+        pipeline = [
+            {'$match': {'invoice_date': {'$gte': start_date, '$lte': end_date}}},
+            {'$unwind': {'path': '$items', 'preserveNullAndEmptyArrays': True}},
+            {'$match': {'$or': [{'items.sku_id': sku_id}, {'items.sku': sku_id}]}},
+            {'$group': {'_id': None, 'achieved': {'$sum': {'$ifNull': ['$items.amount', 0]}}}}
+        ]
+        result = await tdb.invoices.aggregate(pipeline).to_list(1)
+        if not result:
+            return {'achieved': 0, 'note': 'SKU-level tracking not available'}
+        return {'achieved': result[0]['achieved']}
+
+    return {'achieved': 0, 'error': 'Either resource_id or sku_id is required'}
 
 
 @router.get("/target-planning/city-achievement")

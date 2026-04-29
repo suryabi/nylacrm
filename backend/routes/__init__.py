@@ -13,7 +13,6 @@ routes_router = APIRouter()
 from .auth import router as auth_router
 from .leads import router as leads_router
 from .accounts import router as accounts_router
-from .targets import router as targets_router
 from .tasks import router as tasks_router
 from .meetings import router as meetings_router
 from .users import router as users_router
@@ -58,7 +57,6 @@ from .master_request_types import router as master_request_types_router
 routes_router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 routes_router.include_router(leads_router, prefix="/leads", tags=["Leads"])
 routes_router.include_router(accounts_router, prefix="/accounts", tags=["Accounts"])
-routes_router.include_router(targets_router, prefix="/target-planning", tags=["Target Planning"])
 routes_router.include_router(tasks_router, prefix="/tasks", tags=["Tasks"])
 routes_router.include_router(meetings_router, prefix="/meetings", tags=["Meetings"])
 routes_router.include_router(users_router, prefix="/users", tags=["Users"])
