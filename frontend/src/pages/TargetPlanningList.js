@@ -83,6 +83,7 @@ export default function TargetPlanningList() {
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     start_date: '',
@@ -121,8 +122,12 @@ export default function TargetPlanningList() {
 
     setCreating(true);
     try {
-      const response = await fetch(`${API_URL}/target-planning`, {
-        method: 'POST',
+      const isEdit = !!editingPlanId;
+      const url = isEdit
+        ? `${API_URL}/target-planning/${editingPlanId}`
+        : `${API_URL}/target-planning`;
+      const response = await fetch(url, {
+        method: isEdit ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...getAuthHeaders()
@@ -135,20 +140,45 @@ export default function TargetPlanningList() {
       });
 
       if (response.ok) {
-        const newPlan = await response.json();
-        toast.success('Target plan created');
+        const savedPlan = await response.json();
+        toast.success(isEdit ? 'Target plan updated' : 'Target plan created');
         setShowCreateDialog(false);
+        setEditingPlanId(null);
         setFormData({ name: '', start_date: '', end_date: '', goal_type: 'run_rate', total_amount: '', milestones: '4', description: '' });
-        navigate(`/target-planning/${newPlan.id}`);
+        if (isEdit) {
+          fetchPlans();
+        } else {
+          navigate(`/target-planning/${savedPlan.id}`);
+        }
       } else {
         const error = await response.json();
-        toast.error(error.detail || 'Failed to create plan');
+        toast.error(error.detail || `Failed to ${isEdit ? 'update' : 'create'} plan`);
       }
     } catch (error) {
-      toast.error('Failed to create plan');
+      toast.error(`Failed to ${editingPlanId ? 'update' : 'create'} plan`);
     } finally {
       setCreating(false);
     }
+  };
+
+  const handleOpenEditDialog = (plan) => {
+    setEditingPlanId(plan.id);
+    setFormData({
+      name: plan.name || '',
+      start_date: plan.start_date || '',
+      end_date: plan.end_date || '',
+      goal_type: plan.goal_type || 'run_rate',
+      total_amount: plan.total_amount != null ? String(plan.total_amount) : '',
+      milestones: plan.milestones != null ? String(plan.milestones) : '4',
+      description: plan.description || ''
+    });
+    setShowCreateDialog(true);
+  };
+
+  const handleOpenCreateDialog = () => {
+    setEditingPlanId(null);
+    setFormData({ name: '', start_date: '', end_date: '', goal_type: 'run_rate', total_amount: '', milestones: '4', description: '' });
+    setShowCreateDialog(true);
   };
 
   const handleDeletePlan = async (planId) => {
@@ -231,7 +261,7 @@ export default function TargetPlanningList() {
           </h1>
           <p className="text-muted-foreground mt-1">Create and manage revenue targets across territories, cities, and resources</p>
         </div>
-        <Button onClick={() => setShowCreateDialog(true)} data-testid="create-plan-btn">
+        <Button onClick={handleOpenCreateDialog} data-testid="create-plan-btn">
           <Plus className="h-4 w-4 mr-2" /> New Target Plan
         </Button>
       </div>
@@ -242,7 +272,7 @@ export default function TargetPlanningList() {
           <Target className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <h3 className="text-lg font-semibold mb-2">No Target Plans Yet</h3>
           <p className="text-muted-foreground mb-4">Create your first target plan to start tracking revenue goals</p>
-          <Button onClick={() => setShowCreateDialog(true)}>
+          <Button onClick={handleOpenCreateDialog}>
             <Plus className="h-4 w-4 mr-2" /> Create Target Plan
           </Button>
         </Card>
@@ -280,7 +310,7 @@ export default function TargetPlanningList() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/target-planning/${plan.id}/edit`); }}>
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleOpenEditDialog(plan); }}>
                         <Pencil className="h-4 w-4 mr-2" /> Edit Plan
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDuplicatePlan(plan); }}>
@@ -362,13 +392,13 @@ export default function TargetPlanningList() {
         </div>
       )}
 
-      {/* Create Plan Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+      {/* Create/Edit Plan Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={(open) => { setShowCreateDialog(open); if (!open) setEditingPlanId(null); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Target className="h-5 w-5 text-primary" />
-              Create Target Plan
+              {editingPlanId ? 'Edit Target Plan' : 'Create Target Plan'}
             </DialogTitle>
           </DialogHeader>
 
@@ -482,9 +512,11 @@ export default function TargetPlanningList() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setShowCreateDialog(false); setEditingPlanId(null); }}>Cancel</Button>
             <Button onClick={handleCreatePlan} disabled={creating} data-testid="submit-plan-btn">
-              {creating ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creating...</> : 'Create Plan'}
+              {creating ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {editingPlanId ? 'Saving...' : 'Creating...'}</>
+              ) : (editingPlanId ? 'Save Changes' : 'Create Plan')}
             </Button>
           </DialogFooter>
         </DialogContent>
