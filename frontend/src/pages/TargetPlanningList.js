@@ -38,6 +38,7 @@ import {
   CheckCircle2,
   Receipt,
   Banknote,
+  Send,
   ChevronRight
 } from 'lucide-react';
 import {
@@ -199,6 +200,25 @@ export default function TargetPlanningList() {
     setShowCreateDialog(true);
   };
 
+  const handleUpdateStatus = async (planId, newStatus) => {
+    try {
+      const response = await fetch(`${API_URL}/target-planning/${planId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (response.ok) {
+        toast.success(`Target plan ${newStatus === 'active' ? 'published' : 'updated'}`);
+        fetchPlans();
+      } else {
+        const error = await response.json().catch(() => ({}));
+        toast.error(error.detail || 'Failed to update status');
+      }
+    } catch (error) {
+      toast.error('Failed to update status');
+    }
+  };
+
   const handleDeletePlan = async (planId) => {
     if (!window.confirm('Are you sure you want to delete this target plan?')) return;
 
@@ -331,6 +351,29 @@ export default function TargetPlanningList() {
                       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleOpenEditDialog(plan); }}>
                         <Pencil className="h-4 w-4 mr-2" /> Edit Plan
                       </DropdownMenuItem>
+                      {plan.status === 'draft' && (
+                        <DropdownMenuItem
+                          className="text-green-700"
+                          onClick={(e) => { e.stopPropagation(); handleUpdateStatus(plan.id, 'active'); }}
+                          data-testid={`publish-plan-${plan.id}`}
+                        >
+                          <Send className="h-4 w-4 mr-2" /> Publish Plan
+                        </DropdownMenuItem>
+                      )}
+                      {plan.status === 'active' && (
+                        <DropdownMenuItem
+                          onClick={(e) => { e.stopPropagation(); handleUpdateStatus(plan.id, 'completed'); }}
+                        >
+                          <CheckCircle2 className="h-4 w-4 mr-2" /> Mark Completed
+                        </DropdownMenuItem>
+                      )}
+                      {(plan.status === 'active' || plan.status === 'completed') && (
+                        <DropdownMenuItem
+                          onClick={(e) => { e.stopPropagation(); handleUpdateStatus(plan.id, 'draft'); }}
+                        >
+                          <Pencil className="h-4 w-4 mr-2" /> Revert to Draft
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDuplicatePlan(plan); }}>
                         <Copy className="h-4 w-4 mr-2" /> Duplicate
                       </DropdownMenuItem>

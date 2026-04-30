@@ -51,6 +51,7 @@ import {
   Package,
   Users,
   ChevronRight,
+  Send,
   X
 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -1833,6 +1834,31 @@ export default function TargetPlanDashboard() {
     }
   };
 
+  const handlePlanStatusChange = async (newStatus) => {
+    const confirmMsg = newStatus === 'active'
+      ? 'Publish this target plan? It will move from Draft to Active.'
+      : newStatus === 'completed'
+      ? 'Mark this plan as completed?'
+      : 'Revert this plan back to Draft?';
+    if (!window.confirm(confirmMsg)) return;
+    try {
+      const response = await fetch(`${API_URL}/target-planning/${planId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (response.ok) {
+        toast.success(newStatus === 'active' ? 'Target plan published' : 'Status updated');
+        fetchDashboard();
+      } else {
+        const error = await response.json().catch(() => ({}));
+        toast.error(error.detail || 'Failed to update status');
+      }
+    } catch (error) {
+      toast.error('Failed to update status');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -1881,6 +1907,33 @@ export default function TargetPlanDashboard() {
               {plan.milestones || 4} Milestones
             </p>
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {plan.status === 'draft' && (
+            <Button
+              onClick={() => handlePlanStatusChange('active')}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              data-testid="publish-plan-detail-btn"
+            >
+              <Send className="h-4 w-4 mr-2" /> Publish Plan
+            </Button>
+          )}
+          {plan.status === 'active' && (
+            <Button
+              variant="outline"
+              onClick={() => handlePlanStatusChange('completed')}
+            >
+              <CheckCircle className="h-4 w-4 mr-2" /> Mark Completed
+            </Button>
+          )}
+          {(plan.status === 'active' || plan.status === 'completed') && (
+            <Button
+              variant="outline"
+              onClick={() => handlePlanStatusChange('draft')}
+            >
+              Revert to Draft
+            </Button>
+          )}
         </div>
       </div>
 
