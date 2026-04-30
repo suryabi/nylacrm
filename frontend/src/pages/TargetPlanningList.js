@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -79,6 +79,7 @@ const getStatusBadge = (status) => {
 
 export default function TargetPlanningList() {
   const navigate = useNavigate();
+  const { planId: editParamId } = useParams();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -97,6 +98,19 @@ export default function TargetPlanningList() {
   useEffect(() => {
     fetchPlans();
   }, []);
+
+  useEffect(() => {
+    if (editParamId && plans.length > 0) {
+      const plan = plans.find((p) => p.id === editParamId);
+      if (plan) {
+        handleOpenEditDialog(plan);
+      } else {
+        toast.error('Target plan not found');
+        navigate('/target-planning', { replace: true });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editParamId, plans]);
 
   const fetchPlans = async () => {
     try {
@@ -146,7 +160,11 @@ export default function TargetPlanningList() {
         setEditingPlanId(null);
         setFormData({ name: '', start_date: '', end_date: '', goal_type: 'run_rate', total_amount: '', milestones: '4', description: '' });
         if (isEdit) {
-          fetchPlans();
+          if (editParamId) {
+            navigate('/target-planning', { replace: true });
+          } else {
+            fetchPlans();
+          }
         } else {
           navigate(`/target-planning/${savedPlan.id}`);
         }
@@ -393,7 +411,13 @@ export default function TargetPlanningList() {
       )}
 
       {/* Create/Edit Plan Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={(open) => { setShowCreateDialog(open); if (!open) setEditingPlanId(null); }}>
+      <Dialog open={showCreateDialog} onOpenChange={(open) => {
+        setShowCreateDialog(open);
+        if (!open) {
+          setEditingPlanId(null);
+          if (editParamId) navigate('/target-planning', { replace: true });
+        }
+      }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -512,7 +536,7 @@ export default function TargetPlanningList() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowCreateDialog(false); setEditingPlanId(null); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setShowCreateDialog(false); setEditingPlanId(null); if (editParamId) navigate('/target-planning', { replace: true }); }}>Cancel</Button>
             <Button onClick={handleCreatePlan} disabled={creating} data-testid="submit-plan-btn">
               {creating ? (
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {editingPlanId ? 'Saving...' : 'Creating...'}</>

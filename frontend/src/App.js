@@ -234,6 +234,7 @@ function AppRouter() {
           <Route path="/travel-requests" element={<ProtectedRoute moduleKey="travel_requests"><TravelRequest /></ProtectedRoute>} />
           <Route path="/budget-requests" element={<ProtectedRoute moduleKey="budget_requests"><BudgetRequest /></ProtectedRoute>} />
           <Route path="/target-planning" element={<ProtectedRoute moduleKey="target_planning"><TargetPlanningList /></ProtectedRoute>} />
+          <Route path="/target-planning/:planId/edit" element={<ProtectedRoute moduleKey="target_planning"><TargetPlanningList /></ProtectedRoute>} />
           <Route path="/target-planning/:planId" element={<ProtectedRoute moduleKey="target_planning"><TargetPlanDashboard /></ProtectedRoute>} />
           <Route path="/reports-new" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
           <Route path="/sales-portal" element={<ProtectedRoute moduleKey="sales_portal"><SalesPortal /></ProtectedRoute>} />
