@@ -376,3 +376,32 @@ async def push_meeting_to_google(meeting_id: str, current_user: dict = Depends(g
         {"$set": {"google_event_id": event["id"], "google_event_link": event.get("htmlLink")}},
     )
     return {"google_event_id": event["id"], "google_event_link": event.get("htmlLink")}
+
+
+@router.delete("/google/delete-meeting/{meeting_id}")
+async def delete_meeting_from_google(meeting_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete the Google Calendar event previously created for this CRM meeting."""
+    if not _is_configured():
+        raise HTTPException(status_code=503, detail="Google Calendar not configured")
+    token_doc = await _refresh_if_needed(current_user["id"])
+    if not token_doc:
+        raise HTTPException(status_code=400, detail="Not connected to Google Calendar")
+
+    tdb = get_tenant_db()
+    m = await tdb.meetings.find_one({"id": meeting_id}, {"_id": 0})
+    if not m or not m.get("google_event_id"):
+        return {"deleted": False, "reason": "no_google_event"}
+
+    resp = requests.delete(
+        f"https://www.googleapis.com/calendar/v3/calendars/primary/events/{m['google_event_id']}",
+        headers={"Authorization": f"Bearer {token_doc['access_token']}"},
+        timeout=15,
+    )
+    # Google returns 204 on success, 410 if already deleted
+    if resp.status_code in (204, 404, 410):
+        await tdb.meetings.update_one(
+            {"id": meeting_id},
+            {"$unset": {"google_event_id": "", "google_event_link": ""}},
+        )
+        return {"deleted": True}
+    raise HTTPException(status_code=502, detail=f"Google Calendar API error: {resp.text[:200]}")

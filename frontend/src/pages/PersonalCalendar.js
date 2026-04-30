@@ -289,10 +289,25 @@ export default function PersonalCalendar() {
       if (editMode && selectedMeeting?.id) {
         await axios.put(`${API_URL}/meetings/${selectedMeeting.id}`, payload, { headers: getAuthHeaders() });
         toast.success('Meeting rescheduled');
+        if (google.connected) {
+          try {
+            await axios.post(`${API_URL}/personal-calendar/google/push-meeting/${selectedMeeting.id}`, {}, { headers: getAuthHeaders() });
+          } catch (e) {
+            toast.error('Saved in CRM, but Google Calendar sync failed');
+          }
+        }
       } else {
         const res = await axios.post(`${API_URL}/meetings`, payload, { headers: getAuthHeaders() });
         if (newMeeting.create_zoom_meeting && res.data?.meeting_link) toast.success('Meeting scheduled with Zoom link!');
         else toast.success('Meeting scheduled');
+        if (google.connected && res.data?.id) {
+          try {
+            await axios.post(`${API_URL}/personal-calendar/google/push-meeting/${res.data.id}`, {}, { headers: getAuthHeaders() });
+            toast.success('Synced to Google Calendar');
+          } catch (e) {
+            toast.error('Saved in CRM, but Google Calendar sync failed');
+          }
+        }
       }
       setShowNewMeetingDialog(false);
       setNewMeeting(getDefaultMeetingState());
@@ -331,6 +346,13 @@ export default function PersonalCalendar() {
     try {
       await axios.put(`${API_URL}/meetings/${selectedMeeting.id}`, { status: 'cancelled' }, { headers: getAuthHeaders() });
       toast.success('Meeting cancelled');
+      if (google.connected && selectedMeeting.google_event_id) {
+        try {
+          await axios.delete(`${API_URL}/personal-calendar/google/delete-meeting/${selectedMeeting.id}`, { headers: getAuthHeaders() });
+        } catch (e) {
+          // Non-fatal — CRM side is already cancelled
+        }
+      }
       setShowCancelDialog(false); setShowMeetingDetailDialog(false); setSelectedMeeting(null);
       fetchEvents();
     } catch { toast.error('Failed to cancel meeting'); }
