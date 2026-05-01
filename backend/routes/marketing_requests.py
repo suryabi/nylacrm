@@ -53,9 +53,10 @@ class ExternalLink(BaseModel):
 
 
 class MarketingRequestCreate(BaseModel):
-    title: str
+    title: Optional[str] = None
     description: Optional[str] = None
-    request_type_id: str
+    request_type_id: Optional[str] = None
+    custom_request_type: Optional[str] = None  # used when user picks "Other"
     priority: str = "medium"
     due_date: Optional[str] = None
     assigned_to_department: Optional[str] = "Marketing"
@@ -70,6 +71,7 @@ class MarketingRequestUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     request_type_id: Optional[str] = None
+    custom_request_type: Optional[str] = None
     priority: Optional[str] = None
     due_date: Optional[str] = None
     status: Optional[str] = None
@@ -134,6 +136,9 @@ async def _enrich_request(tdb, doc: dict) -> dict:
             doc["request_type_name"] = rt.get("name")
             doc["request_type_color"] = rt.get("color")
             doc["request_type_icon"] = rt.get("icon")
+    elif doc.get("custom_request_type"):
+        # Custom "Other" type — surface it under the same key the UI reads
+        doc["request_type_name"] = doc["custom_request_type"]
     lead_ids = doc.get("lead_ids") or []
     if lead_ids:
         leads = await tdb.leads.find(
@@ -149,6 +154,9 @@ async def _enrich_request(tdb, doc: dict) -> dict:
             }
             for ld in leads
         ]
+        # Convenience: surface the first lead's customer name for the list view
+        if doc["leads_summary"]:
+            doc["customer_name"] = doc["leads_summary"][0]["name"]
     return doc
 
 
@@ -158,10 +166,30 @@ async def _enrich_request(tdb, doc: dict) -> dict:
 async def create_marketing_request(payload: MarketingRequestCreate, current_user: dict = Depends(get_current_user)):
     tdb = get_tenant_db()
 
-    # Validate type
-    rt = await tdb.master_request_types.find_one({"id": payload.request_type_id, "is_active": True}, {"_id": 0})
-    if not rt:
-        raise HTTPException(400, "Invalid or inactive request type")
+    # Either a master request type OR a custom "Other" type must be supplied
+    rt = None
+    if payload.request_type_id:
+        rt = await tdb.master_request_types.find_one({"id": payload.request_type_id, "is_active": True}, {"_id": 0})
+        if not rt:
+            raise HTTPException(400, "Invalid or inactive request type")
+    elif not (payload.custom_request_type and payload.custom_request_type.strip()):
+        raise HTTPException(400, "Request type is required")
+
+    type_label = (rt.get("name") if rt else (payload.custom_request_type or "").strip()) or "Other"
+
+    # Derive a sensible title when one isn't provided
+    derived_title = (payload.title or "").strip()
+    if not derived_title:
+        # Try to enrich with first linked lead's company/name
+        lead_label = ""
+        if payload.lead_ids:
+            ld = await tdb.leads.find_one(
+                {"id": payload.lead_ids[0]},
+                {"_id": 0, "name": 1, "company": 1, "contact_name": 1},
+            )
+            if ld:
+                lead_label = ld.get("company") or ld.get("name") or ld.get("contact_name") or ""
+        derived_title = f"{type_label}{(' — ' + lead_label) if lead_label else ''}"
 
     # Auto-route to Marketing department if no assignee specified
     assignee_name = None
@@ -174,9 +202,10 @@ async def create_marketing_request(payload: MarketingRequestCreate, current_user
 
     doc = {
         "id": str(uuid.uuid4()),
-        "title": payload.title,
+        "title": derived_title,
         "description": payload.description,
         "request_type_id": payload.request_type_id,
+        "custom_request_type": (payload.custom_request_type or "").strip() or None,
         "priority": payload.priority,
         "status": initial_status,
         "due_date": payload.due_date,
@@ -204,11 +233,11 @@ async def create_marketing_request(payload: MarketingRequestCreate, current_user
 
     # Async-ish Slack notification (best-effort)
     await _send_slack_notification(tdb, {
-        "text": f":bell: *Marketing request created* — {payload.title}",
+        "text": f":bell: *Marketing request created* — {derived_title}",
         "attachments": [{
             "color": "#6366f1",
             "fields": [
-                {"title": "Type", "value": rt.get("name"), "short": True},
+                {"title": "Type", "value": type_label, "short": True},
                 {"title": "Priority", "value": payload.priority, "short": True},
                 {"title": "Requester", "value": current_user.get("name", "—"), "short": True},
                 {"title": "Department", "value": doc["assigned_to_department"], "short": True},

@@ -480,6 +480,8 @@ export default function MarketingRequests() {
       (r.title || '').toLowerCase().includes(q) ||
       (r.description || '').toLowerCase().includes(q) ||
       (r.request_type_name || '').toLowerCase().includes(q) ||
+      (r.custom_request_type || '').toLowerCase().includes(q) ||
+      (r.customer_name || '').toLowerCase().includes(q) ||
       (r.assigned_to_name || '').toLowerCase().includes(q)
     );
   }, [rows, filter.q]);
@@ -522,7 +524,7 @@ export default function MarketingRequests() {
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2">
           <div className="relative">
             <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <Input value={filter.q} onChange={(e) => setFilter((p) => ({ ...p, q: e.target.value }))} placeholder="Search title, type, assignee…" className="h-9 pl-8" data-testid="filter-search" />
+            <Input value={filter.q} onChange={(e) => setFilter((p) => ({ ...p, q: e.target.value }))} placeholder="Search type, customer, assignee…" className="h-9 pl-8" data-testid="filter-search" />
           </div>
           <Select value={filter.status || '__all__'} onValueChange={(v) => setFilter((p) => ({ ...p, status: v === '__all__' ? '' : v }))}>
             <SelectTrigger className="h-9" data-testid="filter-status"><SelectValue placeholder="All statuses" /></SelectTrigger>
@@ -565,33 +567,39 @@ export default function MarketingRequests() {
             <table className="w-full text-sm" data-testid="mr-table">
               <thead className="bg-slate-50 border-b">
                 <tr>
-                  {['Title', 'Type', 'Status', 'Priority', 'Assignee', 'Due', 'Updated'].map((h) => (
+                  {['Request', 'Status', 'Assignee', 'Due', 'Updated'].map((h) => (
                     <th key={h} className="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-slate-500">{h}</th>
                   ))}
                   <th className="px-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => setOpenId(r.id)} data-testid={`mr-row-${r.id}`}>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-slate-800 truncate max-w-[280px]">{r.title}</div>
-                      {r.description && <div className="text-[11px] text-slate-400 truncate max-w-[280px]">{r.description}</div>}
-                    </td>
-                    <td className="px-4 py-3">
-                      {r.request_type_name && <Badge variant="outline" className="bg-slate-50">{r.request_type_name}</Badge>}
-                    </td>
-                    <td className="px-4 py-3"><StatusPill status={r.status} /></td>
-                    <td className="px-4 py-3"><PriorityPill priority={r.priority} /></td>
-                    <td className="px-4 py-3 text-slate-700">
-                      <div>{r.assigned_to_name || <span className="text-slate-400 italic">Unassigned</span>}</div>
-                      <div className="text-[10px] text-slate-400">{r.assigned_to_department}</div>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{r.due_date || '—'}</td>
-                    <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{new Date(r.updated_at).toLocaleDateString()}</td>
-                    <td className="px-3 py-3 text-slate-300"><ChevronRight className="h-4 w-4" /></td>
-                  </tr>
-                ))}
+                {filtered.map((r) => {
+                  const customer = r.customer_name || (r.leads_summary && r.leads_summary[0] && r.leads_summary[0].name) || '—';
+                  const typeLabel = r.request_type_name || r.custom_request_type || 'Untyped';
+                  return (
+                    <tr key={r.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => setOpenId(r.id)} data-testid={`mr-row-${r.id}`}>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline" className="bg-slate-50 font-medium">{typeLabel}</Badge>
+                          <span className="text-slate-300">:</span>
+                          <PriorityPill priority={r.priority} />
+                          <span className="text-slate-300">:</span>
+                          <span className="font-medium text-slate-800 truncate max-w-[260px]">{customer}</span>
+                        </div>
+                        {r.description && <div className="text-[11px] text-slate-400 truncate max-w-[480px] mt-1">{r.description}</div>}
+                      </td>
+                      <td className="px-4 py-3"><StatusPill status={r.status} /></td>
+                      <td className="px-4 py-3 text-slate-700">
+                        <div>{r.assigned_to_name || <span className="text-slate-400 italic">Unassigned</span>}</div>
+                        <div className="text-[10px] text-slate-400">{r.assigned_to_department}</div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{r.due_date || '—'}</td>
+                      <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{new Date(r.updated_at).toLocaleDateString()}</td>
+                      <td className="px-3 py-3 text-slate-300"><ChevronRight className="h-4 w-4" /></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -733,11 +741,14 @@ function LeadLinker({ requestId, currentLeads, currentLeadIds, onChanged }) {
 }
 
 // ─── Create modal ───
+const OTHER_TYPE_VALUE = '__other__';
+
 function CreateRequestModal({ types, leadOptions, departments, onClose, onCreated }) {
   const [form, setForm] = useState({
-    title: '', description: '', request_type_id: '',
+    description: '', request_type_id: '',
+    custom_request_type: '',
     priority: 'medium', due_date: '',
-    assigned_to_department: 'Marketing', lead_ids: [],
+    assigned_to_department: 'Marketing', lead_id: '',
     reference_links: [],
   });
   const [linkLabel, setLinkLabel] = useState('');
@@ -745,14 +756,31 @@ function CreateRequestModal({ types, leadOptions, departments, onClose, onCreate
   const [leadSearch, setLeadSearch] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const isOther = form.request_type_id === OTHER_TYPE_VALUE;
+  const selectedLead = leadOptions.find((l) => l.id === form.lead_id);
+
   const submit = async () => {
-    if (!form.title.trim() || !form.request_type_id) {
-      toast.error('Title and Request Type are required');
+    if (!form.request_type_id) { toast.error('Please choose a request type'); return; }
+    if (isOther && !form.custom_request_type.trim()) {
+      toast.error('Please specify the request type');
       return;
     }
     setSaving(true);
     try {
-      const { data } = await axios.post(`${API}/marketing-requests`, form);
+      const payload = {
+        description: form.description,
+        priority: form.priority,
+        due_date: form.due_date || null,
+        assigned_to_department: form.assigned_to_department,
+        lead_ids: form.lead_id ? [form.lead_id] : [],
+        reference_links: form.reference_links,
+      };
+      if (isOther) {
+        payload.custom_request_type = form.custom_request_type.trim();
+      } else {
+        payload.request_type_id = form.request_type_id;
+      }
+      const { data } = await axios.post(`${API}/marketing-requests`, payload);
       toast.success('Marketing request created');
       onCreated?.(data.id);
     } catch (e) {
@@ -768,30 +796,58 @@ function CreateRequestModal({ types, leadOptions, departments, onClose, onCreate
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="mr-create-modal">
+      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto" data-testid="mr-create-modal">
         <DialogHeader>
           <DialogTitle>New Marketing Request</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
-          <div>
-            <Label>Title *</Label>
-            <Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} placeholder="e.g. Need a new neck tag for Hyatt order" data-testid="form-title" />
-          </div>
-          <div>
-            <Label>Description</Label>
-            <Textarea value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} rows={3} placeholder="Add context, dimensions, brand guidelines…" data-testid="form-description" />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <Label>Request Type *</Label>
-              <Select value={form.request_type_id} onValueChange={(v) => setForm((p) => ({ ...p, request_type_id: v }))}>
-                <SelectTrigger data-testid="form-type"><SelectValue placeholder="Pick a type" /></SelectTrigger>
-                <SelectContent>
-                  {types.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                  {types.length === 0 && <div className="px-3 py-2 text-xs text-slate-400">No types yet — ask admin to add some under Tenant Settings → Masters</div>}
-                </SelectContent>
-              </Select>
+        <div className="space-y-4">
+          {/* ── Primary action — pick a Request Type ── */}
+          <div className="rounded-2xl border-2 border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-violet-50 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Tag className="h-4 w-4 text-indigo-600" />
+              <Label className="text-sm font-semibold text-indigo-900">Request Type *</Label>
             </div>
+            <p className="text-xs text-slate-500 mb-3">Start by telling us what you need.</p>
+            <Select
+              value={form.request_type_id}
+              onValueChange={(v) => setForm((p) => ({ ...p, request_type_id: v, custom_request_type: v === OTHER_TYPE_VALUE ? p.custom_request_type : '' }))}
+            >
+              <SelectTrigger className="h-11 text-base bg-white" data-testid="form-type">
+                <SelectValue placeholder="Pick a request type to begin" />
+              </SelectTrigger>
+              <SelectContent>
+                {types.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                <SelectItem value={OTHER_TYPE_VALUE}>Other (specify)</SelectItem>
+              </SelectContent>
+            </Select>
+            {isOther && (
+              <div className="mt-3">
+                <Label className="text-xs font-medium text-indigo-900">Specify the type</Label>
+                <Input
+                  value={form.custom_request_type}
+                  onChange={(e) => setForm((p) => ({ ...p, custom_request_type: e.target.value }))}
+                  placeholder="e.g. Trade-show booth visuals"
+                  className="mt-1 bg-white"
+                  data-testid="form-custom-type"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* ── Description with bigger area for image refs / drive links / notes ── */}
+          <div>
+            <Label>Description / Notes</Label>
+            <Textarea
+              value={form.description}
+              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+              rows={8}
+              className="min-h-[180px]"
+              placeholder="Describe the request, paste reference image URLs, Google Drive links, brand guidelines, dimensions, deadlines…"
+              data-testid="form-description"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <Label>Priority</Label>
               <Select value={form.priority} onValueChange={(v) => setForm((p) => ({ ...p, priority: v }))}>
@@ -805,30 +861,32 @@ function CreateRequestModal({ types, leadOptions, departments, onClose, onCreate
               </Select>
             </div>
             <div>
-              <Label>Due Date</Label>
+              <Label>Due Date <span className="text-slate-400 font-normal">(optional)</span></Label>
               <Input type="date" value={form.due_date} onChange={(e) => setForm((p) => ({ ...p, due_date: e.target.value }))} data-testid="form-due-date" />
             </div>
+            <div>
+              <Label>Department</Label>
+              <Select value={form.assigned_to_department} onValueChange={(v) => setForm((p) => ({ ...p, assigned_to_department: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+
+          {/* ── Single Lead picker ── */}
           <div>
-            <Label>Department</Label>
-            <Select value={form.assigned_to_department} onValueChange={(v) => setForm((p) => ({ ...p, assigned_to_department: v }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Linked Leads (optional)</Label>
-            <div className="text-[11px] text-slate-400 mb-1">{leadOptions.length} leads · search then tick to link</div>
+            <Label>Linked Lead <span className="text-slate-400 font-normal">(optional)</span></Label>
+            <div className="text-[11px] text-slate-400 mb-1">{leadOptions.length} leads · search and select one</div>
             <Input
               value={leadSearch}
               onChange={(e) => setLeadSearch(e.target.value)}
               placeholder="Search leads by company or contact…"
-              className="h-8 mb-1.5"
+              className="h-9 mb-2"
               data-testid="form-lead-search"
             />
-            <div className="border border-slate-200 rounded-md p-2 max-h-40 overflow-y-auto space-y-1">
+            <div className="border border-slate-200 rounded-md p-2 max-h-44 overflow-y-auto space-y-1">
               {(() => {
                 const q = leadSearch.trim().toLowerCase();
                 const base = q ? leadOptions.filter((l) => l.label.toLowerCase().includes(q)) : leadOptions;
@@ -839,18 +897,15 @@ function CreateRequestModal({ types, leadOptions, departments, onClose, onCreate
                 return (
                   <>
                     {shown.map((l) => (
-                      <label key={l.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 rounded px-1 py-0.5">
+                      <label
+                        key={l.id}
+                        className={`flex items-center gap-2 text-sm cursor-pointer rounded px-2 py-1 transition-colors ${form.lead_id === l.id ? 'bg-indigo-50 ring-1 ring-indigo-300' : 'hover:bg-slate-50'}`}
+                      >
                         <input
-                          type="checkbox"
-                          checked={form.lead_ids.includes(l.id)}
-                          onChange={(e) => {
-                            setForm((p) => ({
-                              ...p,
-                              lead_ids: e.target.checked
-                                ? [...p.lead_ids, l.id]
-                                : p.lead_ids.filter((x) => x !== l.id),
-                            }));
-                          }}
+                          type="radio"
+                          name="mr-create-lead"
+                          checked={form.lead_id === l.id}
+                          onChange={() => setForm((p) => ({ ...p, lead_id: l.id }))}
                           data-testid={`form-lead-${l.id}`}
                         />
                         <span className="truncate">{l.label}</span>
@@ -863,10 +918,26 @@ function CreateRequestModal({ types, leadOptions, departments, onClose, onCreate
                 );
               })()}
             </div>
-            {form.lead_ids.length > 0 && (
-              <p className="text-[11px] text-indigo-600 mt-1">{form.lead_ids.length} lead{form.lead_ids.length === 1 ? '' : 's'} selected</p>
+            {selectedLead && (
+              <div className="mt-2 flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200">
+                <div className="min-w-0">
+                  <div className="text-xs uppercase tracking-wider text-indigo-500 font-semibold">Lead ID</div>
+                  <div className="font-mono text-sm font-bold text-indigo-900 truncate" data-testid="selected-lead-id">{selectedLead.id}</div>
+                  <div className="text-xs text-indigo-700 truncate">{selectedLead.label}</div>
+                </div>
+                <button
+                  type="button"
+                  className="text-rose-500 hover:bg-rose-50 rounded p-1"
+                  onClick={() => setForm((p) => ({ ...p, lead_id: '' }))}
+                  data-testid="clear-selected-lead"
+                  title="Remove lead"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
             )}
           </div>
+
           <div>
             <Label>Reference Links (Google Drive, etc.)</Label>
             <div className="space-y-1.5 mb-2">
