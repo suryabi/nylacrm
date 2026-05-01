@@ -345,14 +345,14 @@ export default function PersonalCalendar() {
     if (!selectedMeeting) return;
     try {
       await axios.put(`${API_URL}/meetings/${selectedMeeting.id}`, { status: 'cancelled' }, { headers: getAuthHeaders() });
-      toast.success('Meeting cancelled');
-      if (google.connected && selectedMeeting.google_event_id) {
+      if (google.connected) {
         try {
           await axios.delete(`${API_URL}/personal-calendar/google/delete-meeting/${selectedMeeting.id}`, { headers: getAuthHeaders() });
         } catch (e) {
           // Non-fatal — CRM side is already cancelled
         }
       }
+      toast.success('Meeting cancelled and removed from calendar');
       setShowCancelDialog(false); setShowMeetingDetailDialog(false); setSelectedMeeting(null);
       fetchEvents();
     } catch { toast.error('Failed to cancel meeting'); }

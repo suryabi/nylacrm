@@ -206,10 +206,11 @@ async def list_events(
 
     events = []
 
-    # 1) CRM meetings (Zoom-enabled, with time)
+    # 1) CRM meetings (Zoom-enabled, with time) — exclude cancelled
     meeting_query = {
         "tenant_id": tenant_id,
         "meeting_date": {"$gte": start_date, "$lte": end_date},
+        "status": {"$ne": "cancelled"},
         "$or": [
             {"organizer_id": user_id},
             {"attendees": user_email},
