@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   Sparkles, Plus, Filter, Search, Loader2, Calendar, User, Tag,
   AlertTriangle, CheckCircle2, Clock, Eye, X, Link as LinkIcon, Paperclip,
-  ArrowRight, ChevronRight, MessageSquare, Trash2, ExternalLink,
+  ArrowRight, ChevronRight, MessageSquare, Trash2, ExternalLink, ArrowUp, ArrowDown,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -416,6 +416,7 @@ export default function MarketingRequests() {
   const [types, setTypes] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [filter, setFilter] = useState({ status: '', request_type_id: '', department: '', q: '' });
+  const [sort, setSort] = useState({ key: 'updated_at', dir: 'desc' });
   const [openCreate, setOpenCreate] = useState(false);
   const [openId, setOpenId] = useState(searchParams.get('id') || '');
   const [leadOptions, setLeadOptions] = useState([]);
@@ -474,17 +475,47 @@ export default function MarketingRequests() {
   }, [openId]); // eslint-disable-line
 
   const filtered = useMemo(() => {
-    if (!filter.q) return rows;
-    const q = filter.q.toLowerCase();
-    return rows.filter((r) =>
-      (r.title || '').toLowerCase().includes(q) ||
-      (r.description || '').toLowerCase().includes(q) ||
-      (r.request_type_name || '').toLowerCase().includes(q) ||
-      (r.custom_request_type || '').toLowerCase().includes(q) ||
-      (r.customer_name || '').toLowerCase().includes(q) ||
-      (r.assigned_to_name || '').toLowerCase().includes(q)
-    );
-  }, [rows, filter.q]);
+    const base = !filter.q
+      ? rows
+      : rows.filter((r) => {
+          const q = filter.q.toLowerCase();
+          return (
+            (r.title || '').toLowerCase().includes(q) ||
+            (r.description || '').toLowerCase().includes(q) ||
+            (r.request_type_name || '').toLowerCase().includes(q) ||
+            (r.custom_request_type || '').toLowerCase().includes(q) ||
+            (r.customer_name || '').toLowerCase().includes(q) ||
+            (r.assigned_to_name || '').toLowerCase().includes(q)
+          );
+        });
+
+    // Stable sort
+    const PRIORITY_RANK = { urgent: 0, high: 1, medium: 2, low: 3 };
+    const STATUS_RANK = { created: 0, assigned: 1, in_progress: 2, review: 3, completed: 4, rejected: 5 };
+    const getKey = (r) => {
+      switch (sort.key) {
+        case 'request': return (r.request_type_name || r.custom_request_type || '').toLowerCase();
+        case 'priority': return PRIORITY_RANK[r.priority] ?? 99;
+        case 'customer': return (r.customer_name || '').toLowerCase();
+        case 'status': return STATUS_RANK[r.status] ?? 99;
+        case 'assignee': return (r.assigned_to_name || '').toLowerCase();
+        case 'due_date': return r.due_date ? new Date(r.due_date).getTime() : Number.POSITIVE_INFINITY;
+        case 'updated_at': return r.updated_at ? new Date(r.updated_at).getTime() : 0;
+        default: return 0;
+      }
+    };
+    const sorted = [...base].sort((a, b) => {
+      const av = getKey(a), bv = getKey(b);
+      if (av < bv) return sort.dir === 'asc' ? -1 : 1;
+      if (av > bv) return sort.dir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return sorted;
+  }, [rows, filter.q, sort]);
+
+  const toggleSort = (key) => {
+    setSort((p) => p.key === key ? { key, dir: p.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' });
+  };
 
   const onChanged = () => { fetchRows(); fetchSummary(); };
 
@@ -567,9 +598,36 @@ export default function MarketingRequests() {
             <table className="w-full text-sm" data-testid="mr-table">
               <thead className="bg-slate-50 border-b">
                 <tr>
-                  {['Request', 'Status', 'Assignee', 'Due', 'Updated'].map((h) => (
-                    <th key={h} className="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-slate-500">{h}</th>
-                  ))}
+                  {[
+                    { label: 'Request Type', key: 'request' },
+                    { label: 'Priority',     key: 'priority' },
+                    { label: 'Customer',     key: 'customer' },
+                    { label: 'Status',       key: 'status' },
+                    { label: 'Assignee',     key: 'assignee' },
+                    { label: 'Due',          key: 'due_date' },
+                    { label: 'Updated',      key: 'updated_at' },
+                  ].map((h) => {
+                    const active = sort.key === h.key;
+                    return (
+                      <th
+                        key={h.key}
+                        onClick={() => toggleSort(h.key)}
+                        className="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold text-slate-500 cursor-pointer select-none hover:text-slate-700"
+                        data-testid={`mr-sort-${h.key}`}
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          {h.label}
+                          {active ? (
+                            sort.dir === 'asc'
+                              ? <ArrowUp className="h-3 w-3" />
+                              : <ArrowDown className="h-3 w-3" />
+                          ) : (
+                            <ArrowUp className="h-3 w-3 opacity-25" />
+                          )}
+                        </span>
+                      </th>
+                    );
+                  })}
                   <th className="px-3"></th>
                 </tr>
               </thead>
@@ -580,15 +638,11 @@ export default function MarketingRequests() {
                   return (
                     <tr key={r.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => setOpenId(r.id)} data-testid={`mr-row-${r.id}`}>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Badge variant="outline" className="bg-slate-50 font-medium">{typeLabel}</Badge>
-                          <span className="text-slate-300">:</span>
-                          <PriorityPill priority={r.priority} />
-                          <span className="text-slate-300">:</span>
-                          <span className="font-medium text-slate-800 truncate max-w-[260px]">{customer}</span>
-                        </div>
-                        {r.description && <div className="text-[11px] text-slate-400 truncate max-w-[480px] mt-1">{r.description}</div>}
+                        <Badge variant="outline" className="bg-slate-50 font-medium">{typeLabel}</Badge>
+                        {r.description && <div className="text-[11px] text-slate-400 truncate max-w-[280px] mt-1">{r.description}</div>}
                       </td>
+                      <td className="px-4 py-3"><PriorityPill priority={r.priority} /></td>
+                      <td className="px-4 py-3 font-medium text-slate-800 max-w-[260px] truncate">{customer}</td>
                       <td className="px-4 py-3"><StatusPill status={r.status} /></td>
                       <td className="px-4 py-3 text-slate-700">
                         <div>{r.assigned_to_name || <span className="text-slate-400 italic">Unassigned</span>}</div>
