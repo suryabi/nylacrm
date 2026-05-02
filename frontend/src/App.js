@@ -10,6 +10,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 import SplashScreen from './pages/SplashScreen';
 import Login from './pages/Login';
 import RegisterTenant from './pages/RegisterTenant';
+import PublicMarketingRequest from './pages/PublicMarketingRequest';
 import AuthCallback from './components/AuthCallback';
 import GoogleAuthCallback from './pages/GoogleAuthCallback';
 import Dashboard from './pages/Dashboard';
@@ -210,6 +211,7 @@ function AppRouter() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<RegisterTenant />} />
           <Route path="/auth/callback" element={<GoogleAuthCallback />} />
+          <Route path="/public/marketing-requests/:token" element={<PublicMarketingRequest />} />
           
           <Route path="/home" element={<ProtectedRoute moduleKey="home"><HomeDashboard /></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute moduleKey="dashboard"><Dashboard /></ProtectedRoute>} />

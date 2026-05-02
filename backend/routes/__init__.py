@@ -49,7 +49,7 @@ from .bottle_preview import router as bottle_preview_router
 from .cogs_components import router as cogs_components_router
 from .api_keys import router as api_keys_router
 from .personal_calendar import router as personal_calendar_router
-from .marketing_requests import router as marketing_requests_router
+from .marketing_requests import router as marketing_requests_router, public_router as marketing_requests_public_router
 from .master_request_types import router as master_request_types_router
 
 # Include routers with their prefixes
@@ -148,6 +148,8 @@ routes_router.include_router(personal_calendar_router, tags=["Personal Calendar"
 # Marketing Requests — independent lifecycle module raised by Sales,
 # fulfilled by Marketing (with department-based reassignment).
 routes_router.include_router(marketing_requests_router, prefix="/marketing-requests", tags=["Marketing Requests"])
+# Public (unauthenticated) endpoints for client-side approval of marketing requests
+routes_router.include_router(marketing_requests_public_router, tags=["Marketing Requests (Public)"])
 routes_router.include_router(master_request_types_router, prefix="/master-request-types", tags=["Master Request Types"])
 
 __all__ = ['routes_router']

@@ -19,12 +19,38 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 const API = process.env.REACT_APP_BACKEND_URL + '/api';
 
 const STATUS_META = {
-  created:     { label: 'Created',     icon: Clock,         tone: 'bg-slate-100 text-slate-700 border-slate-200' },
-  assigned:    { label: 'Assigned',    icon: User,          tone: 'bg-sky-100 text-sky-700 border-sky-200' },
-  in_progress: { label: 'In Progress', icon: ArrowRight,    tone: 'bg-amber-100 text-amber-700 border-amber-200' },
-  review:      { label: 'Review',      icon: Eye,           tone: 'bg-violet-100 text-violet-700 border-violet-200' },
-  completed:   { label: 'Completed',   icon: CheckCircle2,  tone: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-  rejected:    { label: 'Rejected',    icon: X,             tone: 'bg-rose-100 text-rose-700 border-rose-200' },
+  submitted:              { label: 'Submitted',              icon: Clock,         tone: 'bg-slate-100 text-slate-700 border-slate-200' },
+  in_progress_marketing:  { label: 'In Progress',            icon: ArrowRight,    tone: 'bg-amber-100 text-amber-700 border-amber-200' },
+  internal_review:        { label: 'Internal Review',        icon: Eye,           tone: 'bg-violet-100 text-violet-700 border-violet-200' },
+  sent_to_sales:          { label: 'Sent to Sales',          icon: ArrowRight,    tone: 'bg-sky-100 text-sky-700 border-sky-200' },
+  client_review:          { label: 'Client Review',          icon: User,          tone: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
+  approved:               { label: 'Approved',               icon: CheckCircle2,  tone: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+  quantity_confirmation:  { label: 'Qty Confirmation',       icon: Clock,         tone: 'bg-teal-100 text-teal-700 border-teal-200' },
+  production_ready:       { label: 'Production Ready',       icon: CheckCircle2,  tone: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
+  sent_for_printing:      { label: 'Sent for Printing',      icon: ArrowRight,    tone: 'bg-purple-100 text-purple-700 border-purple-200' },
+  completed:              { label: 'Completed',              icon: CheckCircle2,  tone: 'bg-emerald-200 text-emerald-900 border-emerald-300' },
+  rejected:               { label: 'Rejected',               icon: X,             tone: 'bg-rose-100 text-rose-700 border-rose-200' },
+  // Legacy (still surfaced so old rows render gracefully)
+  created:                { label: 'Submitted',              icon: Clock,         tone: 'bg-slate-100 text-slate-700 border-slate-200' },
+  assigned:               { label: 'Submitted',              icon: User,          tone: 'bg-slate-100 text-slate-700 border-slate-200' },
+  in_progress:            { label: 'In Progress',            icon: ArrowRight,    tone: 'bg-amber-100 text-amber-700 border-amber-200' },
+  review:                 { label: 'Internal Review',        icon: Eye,           tone: 'bg-violet-100 text-violet-700 border-violet-200' },
+};
+
+const WORKFLOW_STEPS = [
+  'submitted', 'in_progress_marketing', 'internal_review', 'sent_to_sales',
+  'client_review', 'approved', 'quantity_confirmation', 'production_ready',
+  'sent_for_printing', 'completed',
+];
+
+const NEXT_ACTION_COLORS = {
+  Marketing:           'bg-amber-100 text-amber-900 ring-amber-300',
+  'Marketing Manager': 'bg-violet-100 text-violet-900 ring-violet-300',
+  Sales:               'bg-sky-100 text-sky-900 ring-sky-300',
+  Client:              'bg-indigo-100 text-indigo-900 ring-indigo-300',
+  Production:          'bg-cyan-100 text-cyan-900 ring-cyan-300',
+  Requester:           'bg-rose-100 text-rose-900 ring-rose-300',
+  '—':                 'bg-slate-100 text-slate-700 ring-slate-300',
 };
 const STATUSES = Object.keys(STATUS_META);
 
@@ -36,13 +62,124 @@ const PRIORITY_META = {
 };
 
 function StatusPill({ status }) {
-  const m = STATUS_META[status] || STATUS_META.created;
+  const m = STATUS_META[status] || STATUS_META.submitted;
   const Icon = m.icon;
   return (
     <Badge variant="outline" className={`gap-1 font-medium ${m.tone}`} data-testid={`pill-status-${status}`}>
       <Icon className="h-3 w-3" />
       {m.label}
     </Badge>
+  );
+}
+
+// ─── Pipeline Tracker ─── visually shows where the request is in the flow
+function StatusTracker({ currentStatus, approvalType }) {
+  const steps = WORKFLOW_STEPS.filter((s) => {
+    if (s === 'client_review' && approvalType !== 'client') return false;
+    return true;
+  });
+  const normalized = (STATUS_META[currentStatus] || {}).label ? currentStatus : 'submitted';
+  let activeIdx = steps.indexOf(normalized);
+  if (activeIdx === -1 && normalized === 'rejected') activeIdx = -2; // rejected = sidelined
+  return (
+    <div className="overflow-x-auto" data-testid="mr-status-tracker">
+      <div className="flex items-center gap-0 min-w-max pb-1 pt-2">
+        {steps.map((s, i) => {
+          const done = activeIdx >= 0 && i < activeIdx;
+          const active = i === activeIdx;
+          const m = STATUS_META[s];
+          return (
+            <div key={s} className="flex items-center">
+              <div className="flex flex-col items-center px-2">
+                <div
+                  className={
+                    `w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold border-2 transition-all ` +
+                    (done ? 'bg-emerald-500 border-emerald-500 text-white' :
+                     active ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg ring-4 ring-indigo-200' :
+                     'bg-white border-slate-300 text-slate-400')
+                  }
+                >
+                  {done ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
+                </div>
+                <div className={`text-[10px] font-medium mt-1 whitespace-nowrap ${active ? 'text-indigo-700' : done ? 'text-emerald-700' : 'text-slate-400'}`}>
+                  {m.label}
+                </div>
+              </div>
+              {i < steps.length - 1 && (
+                <div className={`h-0.5 w-5 ${done ? 'bg-emerald-500' : 'bg-slate-200'}`} />
+              )}
+            </div>
+          );
+        })}
+        {currentStatus === 'rejected' && (
+          <div className="ml-4 px-2 py-1 rounded bg-rose-100 text-rose-700 text-[11px] font-semibold">Rejected</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function NextActionChip({ owner, priority }) {
+  const tone = NEXT_ACTION_COLORS[owner] || NEXT_ACTION_COLORS['—'];
+  return (
+    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ring-2 text-sm font-semibold ${tone}`} data-testid="mr-next-owner">
+      <ArrowRight className="h-3.5 w-3.5" />
+      <span>Next: {owner}</span>
+      {priority && <span className="text-[10px] uppercase tracking-wider opacity-70">· {priority}</span>}
+    </div>
+  );
+}
+
+// ─── Workflow transition buttons ───
+const ALLOWED = {
+  submitted:             ['in_progress_marketing', 'rejected'],
+  in_progress_marketing: ['internal_review', 'rejected'],
+  internal_review:       ['sent_to_sales', 'in_progress_marketing', 'rejected'],
+  sent_to_sales:         ['client_review', 'approved', 'in_progress_marketing', 'rejected'],
+  client_review:         ['approved', 'in_progress_marketing', 'rejected'],
+  approved:              ['quantity_confirmation', 'rejected'],
+  quantity_confirmation: ['production_ready', 'rejected'],
+  production_ready:      ['sent_for_printing', 'rejected'],
+  sent_for_printing:     ['completed', 'rejected'],
+  completed:             [],
+  rejected:              ['submitted'],
+};
+
+function AdvanceActions({ request, onAdvance, saving }) {
+  const allowed = (ALLOWED[request.status] || []).filter((s) => {
+    if (s === 'client_review' && request.approval_type !== 'client') return false;
+    return true;
+  });
+  if (!allowed.length) return <p className="text-xs text-emerald-700 font-medium">Workflow complete — no further actions.</p>;
+  return (
+    <div className="flex flex-wrap gap-2" data-testid="mr-advance-actions">
+      {allowed.map((s) => {
+        const m = STATUS_META[s];
+        const Icon = m.icon;
+        const isReject = s === 'rejected';
+        return (
+          <Button
+            key={s}
+            size="sm"
+            variant={isReject ? 'outline' : 'default'}
+            onClick={() => {
+              if (isReject) {
+                const reason = window.prompt('Rejection reason:');
+                if (reason) onAdvance(s, { rejection_reason: reason });
+              } else {
+                onAdvance(s);
+              }
+            }}
+            disabled={saving}
+            className={isReject ? 'border-rose-200 text-rose-600 hover:bg-rose-50' : 'bg-indigo-600 hover:bg-indigo-700'}
+            data-testid={`advance-to-${s}`}
+          >
+            <Icon className="h-3.5 w-3.5 mr-1.5" />
+            {isReject ? 'Reject' : `Move to ${m.label}`}
+          </Button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -81,6 +218,222 @@ function HeroTile({ label, value, sub, icon: Icon, accent = 'indigo', onClick, d
       </div>
       <p className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 tabular-nums relative">{value}</p>
       {sub && <p className="text-[11px] text-muted-foreground mt-1 relative">{sub}</p>}
+    </div>
+  );
+}
+
+// ─── Design Options: versioned option cards w/ select + per-option comments ───
+function DesignOptionsSection({ requestId, request, onChanged }) {
+  const [label, setLabel] = useState('');
+  const [notes, setNotes] = useState('');
+  const [imgInput, setImgInput] = useState('');
+  const [imgList, setImgList] = useState([]);
+  const [adding, setAdding] = useState(false);
+  const [commentTexts, setCommentTexts] = useState({}); // {optionId: text}
+
+  const options = (request.design_options || []).slice().sort((a, b) => (a.version || 0) - (b.version || 0));
+
+  const addOption = async () => {
+    setAdding(true);
+    try {
+      await axios.post(`${API}/marketing-requests/${requestId}/options`, {
+        label: label.trim() || undefined,
+        notes: notes.trim() || undefined,
+        image_urls: imgList,
+      });
+      setLabel(''); setNotes(''); setImgInput(''); setImgList([]);
+      onChanged?.();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to add option');
+    } finally { setAdding(false); }
+  };
+
+  const selectOption = async (optionId) => {
+    try {
+      await axios.post(`${API}/marketing-requests/${requestId}/options/${optionId}/select`);
+      onChanged?.();
+    } catch (e) { toast.error('Failed to select option'); }
+  };
+
+  const commentOnOption = async (optionId) => {
+    const text = (commentTexts[optionId] || '').trim();
+    if (!text) return;
+    try {
+      await axios.post(`${API}/marketing-requests/${requestId}/options/${optionId}/comments`, { text });
+      setCommentTexts((p) => ({ ...p, [optionId]: '' }));
+      onChanged?.();
+    } catch (e) { toast.error('Failed to post comment'); }
+  };
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4" data-testid="mr-design-options">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-indigo-500" />
+            Design Options <span className="text-slate-400 font-normal">({options.length})</span>
+          </h3>
+          <p className="text-[11px] text-slate-500">Submit multiple design versions. Sales or the client picks one.</p>
+        </div>
+      </div>
+
+      {options.length === 0 && <p className="text-xs text-slate-400 italic py-4 text-center border border-dashed border-slate-200 rounded-lg">No options submitted yet. Add the first version below.</p>}
+
+      <div className="space-y-3">
+        {options.map((o) => (
+          <div key={o.id} className={`rounded-xl border-2 p-4 transition-all ${o.selected ? 'border-emerald-400 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/50'}`} data-testid={`mr-option-${o.id}`}>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 font-mono text-xs">v{o.version}</Badge>
+                  <div className="font-semibold text-sm text-slate-800 truncate">{o.label}</div>
+                  {o.selected && <Badge className="bg-emerald-600 text-white text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />Selected</Badge>}
+                </div>
+                {o.notes && <p className="text-xs text-slate-600 mt-1 whitespace-pre-wrap">{o.notes}</p>}
+              </div>
+              {!o.selected && (
+                <Button size="sm" variant="outline" onClick={() => selectOption(o.id)} className="shrink-0 border-emerald-200 text-emerald-700 hover:bg-emerald-50" data-testid={`option-select-${o.id}`}>
+                  <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />Select
+                </Button>
+              )}
+            </div>
+
+            {(o.image_urls || []).length > 0 && (
+              <div className="flex gap-2 flex-wrap mb-2">
+                {o.image_urls.map((url, i) => (
+                  <a key={i} href={url} target="_blank" rel="noreferrer" className="block h-20 w-20 rounded-lg overflow-hidden border border-slate-200 hover:ring-2 hover:ring-indigo-300">
+                    <img src={url} alt={`v${o.version}-${i}`} className="h-full w-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                  </a>
+                ))}
+              </div>
+            )}
+            {(o.files || []).length > 0 && (
+              <div className="flex gap-2 flex-wrap mb-2">
+                {o.files.map((f) => (
+                  <a key={f.id} href={f.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white border border-slate-200 text-xs hover:bg-slate-50">
+                    <Paperclip className="h-3 w-3" />{f.name}
+                  </a>
+                ))}
+              </div>
+            )}
+
+            {/* inline comments */}
+            <div className="mt-2 pt-2 border-t border-slate-200/70">
+              <div className="space-y-1 mb-2">
+                {(o.comments || []).map((c) => (
+                  <div key={c.id} className="flex gap-2 items-start text-xs">
+                    <span className="font-medium text-slate-700">{c.by_name || 'User'}:</span>
+                    <span className="text-slate-600 flex-1">{c.text}</span>
+                    <span className="text-slate-400 text-[10px]">{new Date(c.at).toLocaleDateString()}</span>
+                  </div>
+                ))}
+                {(o.comments || []).length === 0 && <p className="text-[11px] text-slate-400 italic">No comments yet.</p>}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  className="h-8 text-xs"
+                  placeholder="Add a comment on this option…"
+                  value={commentTexts[o.id] || ''}
+                  onChange={(e) => setCommentTexts((p) => ({ ...p, [o.id]: e.target.value }))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commentOnOption(o.id); } }}
+                  data-testid={`option-comment-input-${o.id}`}
+                />
+                <Button size="sm" variant="outline" onClick={() => commentOnOption(o.id)} disabled={!(commentTexts[o.id] || '').trim()}>Post</Button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Add new option */}
+      <div className="mt-4 border-t border-slate-200 pt-4">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">Add new version</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <Input placeholder="Label (e.g. Modern Blue)" value={label} onChange={(e) => setLabel(e.target.value)} className="h-9" data-testid="option-label-input" />
+          <div className="flex gap-2">
+            <Input placeholder="Paste an image URL, then press +" value={imgInput} onChange={(e) => setImgInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && imgInput.trim()) { setImgList((p) => [...p, imgInput.trim()]); setImgInput(''); } }} className="h-9 flex-1" />
+            <Button type="button" size="sm" variant="outline" onClick={() => { if (imgInput.trim()) { setImgList((p) => [...p, imgInput.trim()]); setImgInput(''); } }} disabled={!imgInput.trim()}>Add img</Button>
+          </div>
+        </div>
+        {imgList.length > 0 && (
+          <div className="flex gap-1 flex-wrap mt-2">
+            {imgList.map((u, i) => (
+              <div key={i} className="flex items-center gap-1 text-[11px] px-2 py-0.5 bg-slate-100 rounded">
+                <span className="truncate max-w-[140px]">{u}</span>
+                <button onClick={() => setImgList((p) => p.filter((_, idx) => idx !== i))}><X className="h-3 w-3" /></button>
+              </div>
+            ))}
+          </div>
+        )}
+        <Textarea rows={2} placeholder="Notes on this version…" value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-2" data-testid="option-notes-input" />
+        <div className="flex justify-end mt-2">
+          <Button size="sm" onClick={addOption} disabled={adding} className="bg-indigo-600 hover:bg-indigo-700" data-testid="option-add-btn">
+            {adding ? 'Adding…' : (<><Plus className="h-3.5 w-3.5 mr-1" />Add option</>)}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Client Share Link ───
+function ClientShareSection({ requestId, request }) {
+  const [token, setToken] = useState(request.client_share_token || '');
+  const [generating, setGenerating] = useState(false);
+
+  const publicUrl = token ? `${window.location.origin}/public/marketing-requests/${token}` : '';
+
+  const generate = async () => {
+    setGenerating(true);
+    try {
+      const { data } = await axios.post(`${API}/marketing-requests/${requestId}/share-link`);
+      setToken(data.token);
+    } catch { toast.error('Failed to generate link'); }
+    finally { setGenerating(false); }
+  };
+
+  const copy = async () => {
+    if (!publicUrl) return;
+    try { await navigator.clipboard.writeText(publicUrl); toast.success('Link copied'); }
+    catch { /* no-op */ }
+  };
+
+  const fb = request.client_feedback;
+
+  return (
+    <div className="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-white p-4" data-testid="mr-client-share">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-indigo-900 flex items-center gap-2">
+          <LinkIcon className="h-4 w-4" />Client Share Link
+        </h3>
+        <Badge variant="outline" className="bg-white">{request.approval_type === 'client' ? 'Client approval required' : 'Internal approval'}</Badge>
+      </div>
+
+      {!token ? (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-slate-600 flex-1">Generate a public URL to share with the client. No login required.</p>
+          <Button size="sm" onClick={generate} disabled={generating} className="bg-indigo-600 hover:bg-indigo-700" data-testid="mr-generate-link">
+            {generating ? 'Generating…' : 'Generate Link'}
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Input readOnly value={publicUrl} className="h-9 text-xs font-mono bg-white" data-testid="mr-share-url" />
+            <Button size="sm" variant="outline" onClick={copy}>Copy</Button>
+            <a href={publicUrl} target="_blank" rel="noreferrer">
+              <Button size="sm" variant="outline"><ExternalLink className="h-3.5 w-3.5" /></Button>
+            </a>
+          </div>
+          {fb && (
+            <div className={`px-3 py-2 rounded-lg text-xs ${fb.decision === 'approve' ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : fb.decision === 'request_changes' ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-indigo-50 border border-indigo-200 text-indigo-800'}`}>
+              <div className="font-semibold mb-0.5">Client decision: {fb.decision.replace('_', ' ')}</div>
+              {fb.comment && <div className="whitespace-pre-wrap">{fb.comment}</div>}
+              <div className="text-[10px] text-slate-500 mt-1">{new Date(fb.at).toLocaleString()}</div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -133,6 +486,17 @@ function RequestDetailDrawer({ requestId, onClose, onChanged, types, departments
       onChanged?.();
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Update failed');
+    } finally { setSaving(false); }
+  };
+
+  const advanceTo = async (toStatus, extra = {}) => {
+    setSaving(true);
+    try {
+      await axios.post(`${API}/marketing-requests/${requestId}/advance`, { to_status: toStatus, ...extra });
+      await refresh();
+      onChanged?.();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Transition failed');
     } finally { setSaving(false); }
   };
 
@@ -216,36 +580,25 @@ function RequestDetailDrawer({ requestId, onClose, onChanged, types, departments
           </div>
         </DialogHeader>
 
-        {/* ── Lifecycle controls ── */}
-        <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Lifecycle</p>
-          <div className="flex flex-wrap gap-2">
-            {STATUSES.map((s) => {
-              const m = STATUS_META[s];
-              const Icon = m.icon;
-              const active = data.status === s;
-              return (
-                <Button
-                  key={s}
-                  size="sm"
-                  variant={active ? 'default' : 'outline'}
-                  onClick={() => {
-                    if (s === 'rejected') {
-                      const reason = prompt('Rejection reason:');
-                      if (reason) updateField({ status: 'rejected', rejection_reason: reason });
-                    } else {
-                      updateField({ status: s });
-                    }
-                  }}
-                  className={active ? '' : 'bg-white'}
-                  disabled={saving}
-                  data-testid={`btn-status-${s}`}
-                >
-                  <Icon className="h-3.5 w-3.5 mr-1.5" />
-                  {m.label}
-                </Button>
-              );
-            })}
+        {/* ── Status Tracker + Next Action Owner ── */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Workflow</p>
+            <div className="flex items-center gap-2">
+              <NextActionChip owner={data.next_action_owner || '—'} />
+              <Select value={data.approval_type || 'internal'} onValueChange={(v) => updateField({ approval_type: v })}>
+                <SelectTrigger className="h-8 text-xs w-40" data-testid="select-approval-type"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="internal">Internal approval</SelectItem>
+                  <SelectItem value="client">Client required</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <StatusTracker currentStatus={data.status} approvalType={data.approval_type} />
+          <div className="mt-4 pt-3 border-t border-slate-100">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Advance to…</p>
+            <AdvanceActions request={data} onAdvance={advanceTo} saving={saving} />
           </div>
           {data.rejection_reason && (
             <div className="mt-3 px-3 py-2 bg-rose-50 border border-rose-200 rounded-md text-xs text-rose-700">
@@ -253,6 +606,12 @@ function RequestDetailDrawer({ requestId, onClose, onChanged, types, departments
             </div>
           )}
         </div>
+
+        {/* ── Design Options ── */}
+        <DesignOptionsSection requestId={requestId} request={data} onChanged={async () => { await refresh(); onChanged?.(); }} />
+
+        {/* ── Client Share Link ── */}
+        <ClientShareSection requestId={requestId} request={data} />
 
         {/* ── Assignment ── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -804,6 +1163,7 @@ function CreateRequestModal({ types, leadOptions, departments, onClose, onCreate
     priority: 'medium', due_date: '',
     assigned_to_department: 'Marketing', lead_id: '',
     reference_links: [],
+    approval_type: 'internal',
   });
   const [linkLabel, setLinkLabel] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
@@ -828,6 +1188,7 @@ function CreateRequestModal({ types, leadOptions, departments, onClose, onCreate
         assigned_to_department: form.assigned_to_department,
         lead_ids: form.lead_id ? [form.lead_id] : [],
         reference_links: form.reference_links,
+        approval_type: form.approval_type,
       };
       if (isOther) {
         payload.custom_request_type = form.custom_request_type.trim();
@@ -926,6 +1287,29 @@ function CreateRequestModal({ types, leadOptions, departments, onClose, onCreate
                   {departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          {/* Approval Type */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <Label className="text-xs font-semibold text-slate-700">Approval Type</Label>
+            <p className="text-[11px] text-slate-500 mb-2">Does the client need to sign off, or is internal approval enough?</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { v: 'internal', label: 'Internal only',   hint: 'Marketing Manager approves' },
+                { v: 'client',   label: 'Client required', hint: 'Share link, client picks option' },
+              ].map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => setForm((p) => ({ ...p, approval_type: opt.v }))}
+                  className={`text-left rounded-lg border-2 p-2.5 transition-all ${form.approval_type === opt.v ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-200' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                  data-testid={`approval-type-${opt.v}`}
+                >
+                  <div className="text-xs font-semibold text-slate-800">{opt.label}</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">{opt.hint}</div>
+                </button>
+              ))}
             </div>
           </div>
 

@@ -2,7 +2,12 @@
 Marketing Requests — independent lifecycle module raised by Sales,
 fulfilled by Marketing (with the ability to reassign across departments).
 
-Lifecycle: created → assigned → in_progress → review → completed | rejected
+Lifecycle (extended):
+  submitted → in_progress_marketing → internal_review → sent_to_sales
+  → client_review (if approval_type == 'client') → approved
+  → quantity_confirmation → production_ready → sent_for_printing → completed
+  (rejected is a side-exit state reachable from any stage)
+
 Multi-tenant. Mirrors Tasks structure but stays in its own collection so
 both modules can evolve independently.
 """
@@ -12,20 +17,76 @@ from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel, Field
 import uuid
 import logging
+import secrets
 
 from database import get_tenant_db
 from deps import get_current_user
 
 router = APIRouter()
+public_router = APIRouter()  # registered without auth for client-facing endpoints
 logger = logging.getLogger(__name__)
 
-LIFECYCLE_STATUSES = ["created", "assigned", "in_progress", "review", "completed", "rejected"]
+# Extended lifecycle statuses
+LIFECYCLE_STATUSES = [
+    "submitted",
+    "in_progress_marketing",
+    "internal_review",
+    "sent_to_sales",
+    "client_review",
+    "approved",
+    "quantity_confirmation",
+    "production_ready",
+    "sent_for_printing",
+    "completed",
+    "rejected",
+]
+
+# Valid forward-transition map (rejected reachable from everywhere)
+ALLOWED_TRANSITIONS: Dict[str, List[str]] = {
+    "submitted":             ["in_progress_marketing", "rejected"],
+    "in_progress_marketing": ["internal_review", "rejected"],
+    "internal_review":       ["sent_to_sales", "in_progress_marketing", "rejected"],
+    "sent_to_sales":         ["client_review", "approved", "in_progress_marketing", "rejected"],
+    "client_review":         ["approved", "in_progress_marketing", "rejected"],
+    "approved":              ["quantity_confirmation", "rejected"],
+    "quantity_confirmation": ["production_ready", "rejected"],
+    "production_ready":      ["sent_for_printing", "rejected"],
+    "sent_for_printing":     ["completed", "rejected"],
+    "completed":             [],
+    "rejected":              ["submitted"],  # reopen
+}
+
+# Ownership — who's the next actor on each status
+NEXT_ACTION_OWNER = {
+    "submitted":             "Marketing",
+    "in_progress_marketing": "Marketing",
+    "internal_review":       "Marketing Manager",
+    "sent_to_sales":         "Sales",
+    "client_review":         "Client",
+    "approved":              "Sales",
+    "quantity_confirmation": "Sales",
+    "production_ready":      "Production",
+    "sent_for_printing":     "Production",
+    "completed":             "—",
+    "rejected":              "Requester",
+}
+
+# Legacy statuses we might see in existing rows
+LEGACY_STATUS_MAP = {
+    "created":     "submitted",
+    "assigned":    "submitted",
+    "in_progress": "in_progress_marketing",
+    "review":      "internal_review",
+}
+
 ACTIVITY_KIND_STATUS = "status_change"
 ACTIVITY_KIND_ASSIGN = "assignment"
 ACTIVITY_KIND_COMMENT = "comment"
 ACTIVITY_KIND_FILE = "file"
 ACTIVITY_KIND_LINK = "link"
 ACTIVITY_KIND_LEAD = "lead_link"
+ACTIVITY_KIND_OPTION = "design_option"
+ACTIVITY_KIND_CLIENT = "client_action"
 
 
 # ───────────────────────── Models ─────────────────────────
@@ -65,6 +126,7 @@ class MarketingRequestCreate(BaseModel):
     account_id: Optional[str] = None
     input_files: List[FileRef] = []
     reference_links: List[ExternalLink] = []
+    approval_type: str = "internal"  # "internal" | "client"
 
 
 class MarketingRequestUpdate(BaseModel):
@@ -79,6 +141,43 @@ class MarketingRequestUpdate(BaseModel):
     assigned_to: Optional[str] = None
     lead_ids: Optional[List[str]] = None
     rejection_reason: Optional[str] = None
+    approval_type: Optional[str] = None
+
+
+class AdvanceStatus(BaseModel):
+    to_status: str
+    comment: Optional[str] = None
+    rejection_reason: Optional[str] = None
+
+
+class DesignOptionCreate(BaseModel):
+    label: Optional[str] = None
+    notes: Optional[str] = None
+    files: List[FileRef] = []
+    image_urls: List[str] = []
+
+
+class DesignOptionUpdate(BaseModel):
+    label: Optional[str] = None
+    notes: Optional[str] = None
+    image_urls: Optional[List[str]] = None
+
+
+class OptionComment(BaseModel):
+    text: str
+
+
+class ClientApprove(BaseModel):
+    comment: Optional[str] = None
+
+
+class ClientRequestChanges(BaseModel):
+    comment: str
+
+
+class ClientSelectOption(BaseModel):
+    option_id: str
+    comment: Optional[str] = None
 
 
 class CommentCreate(BaseModel):
@@ -130,6 +229,17 @@ async def _enrich_request(tdb, doc: dict) -> dict:
     """Attach derived names — request_type label, lead snippets — for UI ease."""
     if not doc:
         return doc
+
+    # Normalise legacy statuses so the new UI always gets the new values
+    cur_status = doc.get("status")
+    if cur_status in LEGACY_STATUS_MAP:
+        doc["status"] = LEGACY_STATUS_MAP[cur_status]
+    doc.setdefault("approval_type", "internal")
+    doc.setdefault("design_options", [])
+
+    # Next action owner — for the UI to display prominently
+    doc["next_action_owner"] = NEXT_ACTION_OWNER.get(doc.get("status"), "—")
+
     if doc.get("request_type_id"):
         rt = await tdb.master_request_types.find_one({"id": doc["request_type_id"]}, {"_id": 0, "name": 1, "color": 1, "icon": 1})
         if rt:
@@ -198,7 +308,7 @@ async def create_marketing_request(payload: MarketingRequestCreate, current_user
         assignee_name = u.get("name") if u else None
 
     now_iso = datetime.now(timezone.utc).isoformat()
-    initial_status = "assigned" if payload.assigned_to else "created"
+    initial_status = "submitted"
 
     doc = {
         "id": str(uuid.uuid4()),
@@ -208,6 +318,7 @@ async def create_marketing_request(payload: MarketingRequestCreate, current_user
         "custom_request_type": (payload.custom_request_type or "").strip() or None,
         "priority": payload.priority,
         "status": initial_status,
+        "approval_type": payload.approval_type if payload.approval_type in ("internal", "client") else "internal",
         "due_date": payload.due_date,
         "assigned_to_department": payload.assigned_to_department or "Marketing",
         "assigned_to": payload.assigned_to,
@@ -218,6 +329,9 @@ async def create_marketing_request(payload: MarketingRequestCreate, current_user
         "output_files": [],
         "reference_links": [lk.model_dump() if hasattr(lk, "model_dump") else lk for lk in (payload.reference_links or [])],
         "output_links": [],
+        "design_options": [],
+        "client_share_token": None,
+        "client_feedback": None,
         "rejection_reason": None,
         "created_by": current_user["id"],
         "created_by_name": current_user.get("name"),
@@ -315,10 +429,6 @@ async def update_marketing_request(req_id: str, payload: MarketingRequestUpdate,
         u = await tdb.users.find_one({"id": payload.assigned_to}, {"_id": 0, "name": 1, "department": 1})
         updates["assigned_to"] = payload.assigned_to
         updates["assigned_to_name"] = u.get("name") if u else None
-        # If reassigning auto-bump status if still in 'created'
-        if doc.get("status") == "created":
-            updates["status"] = "assigned"
-            activity_entries.append(_activity(ACTIVITY_KIND_STATUS, current_user, from_status="created", to_status="assigned"))
         activity_entries.append(_activity(
             ACTIVITY_KIND_ASSIGN, current_user,
             from_user_id=doc.get("assigned_to"),
@@ -341,7 +451,7 @@ async def update_marketing_request(req_id: str, payload: MarketingRequestUpdate,
                 updates["assigned_to"] = None
                 updates["assigned_to_name"] = None
 
-    for field in ("title", "description", "request_type_id", "priority", "due_date", "lead_ids", "rejection_reason"):
+    for field in ("title", "description", "request_type_id", "priority", "due_date", "lead_ids", "rejection_reason", "approval_type"):
         val = getattr(payload, field, None)
         if val is not None:
             updates[field] = val
@@ -538,9 +648,326 @@ async def request_dashboard(current_user: dict = Depends(get_current_user)):
     counts = {}
     for s in LIFECYCLE_STATUSES:
         counts[s] = await tdb.marketing_requests.count_documents({"status": s})
+    # Merge legacy status rows into the new buckets for accurate totals
+    for legacy, new in LEGACY_STATUS_MAP.items():
+        legacy_count = await tdb.marketing_requests.count_documents({"status": legacy})
+        counts[new] = counts.get(new, 0) + legacy_count
     total = await tdb.marketing_requests.count_documents({})
     overdue = await tdb.marketing_requests.count_documents({
         "due_date": {"$lt": datetime.now(timezone.utc).date().isoformat()},
         "status": {"$nin": ["completed", "rejected"]},
     })
     return {"total": total, "by_status": counts, "overdue": overdue}
+
+
+
+# ───────────────────────── Workflow: advance status ─────────────────────────
+
+@router.post("/{req_id}/advance")
+async def advance_status(req_id: str, payload: AdvanceStatus, current_user: dict = Depends(get_current_user)):
+    """Validate-and-advance the request through the workflow pipeline."""
+    tdb = get_tenant_db()
+    doc = await tdb.marketing_requests.find_one({"id": req_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Marketing request not found")
+
+    current = doc.get("status")
+    # Map legacy status so transitions work on old rows
+    current = LEGACY_STATUS_MAP.get(current, current)
+
+    target = payload.to_status
+    if target not in LIFECYCLE_STATUSES:
+        raise HTTPException(400, f"Invalid target status. Must be one of {LIFECYCLE_STATUSES}")
+
+    allowed = ALLOWED_TRANSITIONS.get(current, [])
+    # Special-case: if approval_type == 'internal' and current is sent_to_sales, client_review is skipped;
+    # still allow jumping to 'approved' (already in the map).
+    if doc.get("approval_type") == "internal" and current == "sent_to_sales" and target == "client_review":
+        raise HTTPException(400, "Approval type is 'internal' — client_review is disabled for this request")
+
+    if target not in allowed and target != current:
+        raise HTTPException(400, f"Cannot transition from '{current}' to '{target}'. Allowed: {allowed}")
+
+    updates: Dict[str, Any] = {"status": target, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if target == "completed":
+        updates["completed_at"] = updates["updated_at"]
+    if target == "rejected":
+        updates["rejection_reason"] = (payload.rejection_reason or payload.comment or "No reason provided")
+
+    push: Dict[str, Any] = {"activity": _activity(ACTIVITY_KIND_STATUS, current_user, from_status=current, to_status=target, comment=payload.comment)}
+    if payload.comment:
+        push = {"activity": {"$each": [
+            _activity(ACTIVITY_KIND_STATUS, current_user, from_status=current, to_status=target, comment=payload.comment),
+        ]}}
+
+    await tdb.marketing_requests.update_one({"id": req_id}, {"$set": updates, "$push": push})
+    refreshed = await tdb.marketing_requests.find_one({"id": req_id}, {"_id": 0})
+    return await _enrich_request(tdb, refreshed)
+
+
+# ───────────────────────── Design options (versioned) ─────────────────────────
+
+@router.post("/{req_id}/options")
+async def add_design_option(req_id: str, payload: DesignOptionCreate, current_user: dict = Depends(get_current_user)):
+    tdb = get_tenant_db()
+    doc = await tdb.marketing_requests.find_one({"id": req_id}, {"_id": 0, "design_options": 1})
+    if not doc:
+        raise HTTPException(404, "Marketing request not found")
+
+    existing = doc.get("design_options") or []
+    next_version = (max([o.get("version", 0) for o in existing]) + 1) if existing else 1
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    option = {
+        "id": str(uuid.uuid4()),
+        "version": next_version,
+        "label": payload.label or f"Option v{next_version}",
+        "notes": payload.notes,
+        "files": [f.model_dump() if hasattr(f, "model_dump") else f for f in (payload.files or [])],
+        "image_urls": payload.image_urls or [],
+        "selected": False,
+        "comments": [],
+        "created_by": current_user["id"],
+        "created_by_name": current_user.get("name"),
+        "created_at": now_iso,
+    }
+
+    await tdb.marketing_requests.update_one(
+        {"id": req_id},
+        {
+            "$push": {
+                "design_options": option,
+                "activity": _activity(ACTIVITY_KIND_OPTION, current_user, action="added", option_id=option["id"], version=next_version),
+            },
+            "$set": {"updated_at": now_iso},
+        },
+    )
+    return option
+
+
+@router.put("/{req_id}/options/{option_id}")
+async def update_design_option(req_id: str, option_id: str, payload: DesignOptionUpdate, current_user: dict = Depends(get_current_user)):
+    tdb = get_tenant_db()
+    set_ops = {}
+    if payload.label is not None:
+        set_ops["design_options.$.label"] = payload.label
+    if payload.notes is not None:
+        set_ops["design_options.$.notes"] = payload.notes
+    if payload.image_urls is not None:
+        set_ops["design_options.$.image_urls"] = payload.image_urls
+    if not set_ops:
+        return {"ok": True}
+    set_ops["updated_at"] = datetime.now(timezone.utc).isoformat()
+    res = await tdb.marketing_requests.update_one(
+        {"id": req_id, "design_options.id": option_id},
+        {"$set": set_ops},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Option not found")
+    return {"ok": True}
+
+
+@router.post("/{req_id}/options/{option_id}/select")
+async def select_design_option(req_id: str, option_id: str, current_user: dict = Depends(get_current_user)):
+    """Mark one option as 'selected' and clear others."""
+    tdb = get_tenant_db()
+    doc = await tdb.marketing_requests.find_one({"id": req_id}, {"_id": 0, "design_options": 1})
+    if not doc:
+        raise HTTPException(404, "Marketing request not found")
+    options = doc.get("design_options") or []
+    found = any(o.get("id") == option_id for o in options)
+    if not found:
+        raise HTTPException(404, "Option not found")
+    new_options = [{**o, "selected": o.get("id") == option_id} for o in options]
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await tdb.marketing_requests.update_one(
+        {"id": req_id},
+        {
+            "$set": {"design_options": new_options, "updated_at": now_iso},
+            "$push": {"activity": _activity(ACTIVITY_KIND_OPTION, current_user, action="selected", option_id=option_id)},
+        },
+    )
+    return {"ok": True}
+
+
+@router.post("/{req_id}/options/{option_id}/comments")
+async def add_option_comment(req_id: str, option_id: str, payload: OptionComment, current_user: dict = Depends(get_current_user)):
+    tdb = get_tenant_db()
+    comment = {
+        "id": str(uuid.uuid4()),
+        "text": payload.text,
+        "by_id": current_user["id"],
+        "by_name": current_user.get("name"),
+        "at": datetime.now(timezone.utc).isoformat(),
+    }
+    res = await tdb.marketing_requests.update_one(
+        {"id": req_id, "design_options.id": option_id},
+        {
+            "$push": {"design_options.$.comments": comment, "activity": _activity(ACTIVITY_KIND_COMMENT, current_user, option_id=option_id)},
+            "$set": {"updated_at": datetime.now(timezone.utc).isoformat()},
+        },
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Option not found")
+    return comment
+
+
+# ───────────────────────── Client share link ─────────────────────────
+
+@router.post("/{req_id}/share-link")
+async def generate_share_link(req_id: str, current_user: dict = Depends(get_current_user)):
+    """Generate (or return existing) public share token so the client can view & approve."""
+    tdb = get_tenant_db()
+    doc = await tdb.marketing_requests.find_one({"id": req_id}, {"_id": 0, "client_share_token": 1})
+    if not doc:
+        raise HTTPException(404, "Marketing request not found")
+    token = doc.get("client_share_token") or secrets.token_urlsafe(24)
+    if not doc.get("client_share_token"):
+        await tdb.marketing_requests.update_one(
+            {"id": req_id},
+            {
+                "$set": {"client_share_token": token, "updated_at": datetime.now(timezone.utc).isoformat()},
+                "$push": {"activity": _activity(ACTIVITY_KIND_CLIENT, current_user, action="share_link_created")},
+            },
+        )
+    return {"token": token, "public_path": f"/public/marketing-requests/{token}"}
+
+
+# ───────────────────────── Public (client-facing, unauthenticated) ─────────────────────────
+
+def _public_safe(doc: dict) -> dict:
+    """Return a trimmed, client-facing projection."""
+    return {
+        "id": doc.get("id"),
+        "title": doc.get("title"),
+        "description": doc.get("description"),
+        "request_type_name": doc.get("request_type_name") or doc.get("custom_request_type"),
+        "status": LEGACY_STATUS_MAP.get(doc.get("status"), doc.get("status")),
+        "approval_type": doc.get("approval_type", "internal"),
+        "priority": doc.get("priority"),
+        "due_date": doc.get("due_date"),
+        "design_options": [
+            {
+                "id": o.get("id"),
+                "version": o.get("version"),
+                "label": o.get("label"),
+                "notes": o.get("notes"),
+                "files": o.get("files") or [],
+                "image_urls": o.get("image_urls") or [],
+                "selected": bool(o.get("selected")),
+            }
+            for o in (doc.get("design_options") or [])
+        ],
+        "client_feedback": doc.get("client_feedback"),
+        "customer_name": doc.get("customer_name"),
+    }
+
+
+@public_router.get("/public/marketing-requests/{token}")
+async def public_view_request(token: str):
+    """Unauthenticated: client opens the share link to review designs."""
+    tdb = get_tenant_db()
+    doc = await tdb.marketing_requests.find_one({"client_share_token": token}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Link not found or expired")
+    await _enrich_request(tdb, doc)
+    return _public_safe(doc)
+
+
+@public_router.post("/public/marketing-requests/{token}/approve")
+async def public_approve(token: str, payload: ClientApprove):
+    tdb = get_tenant_db()
+    doc = await tdb.marketing_requests.find_one({"client_share_token": token}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Link not found or expired")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    feedback = {"decision": "approve", "comment": payload.comment, "at": now_iso}
+    await tdb.marketing_requests.update_one(
+        {"id": doc["id"]},
+        {
+            "$set": {
+                "client_feedback": feedback,
+                "status": "approved",
+                "updated_at": now_iso,
+            },
+            "$push": {"activity": {
+                "id": str(uuid.uuid4()),
+                "kind": ACTIVITY_KIND_CLIENT,
+                "action": "approved",
+                "comment": payload.comment,
+                "by_name": "Client",
+                "at": now_iso,
+            }},
+        },
+    )
+    return {"ok": True, "status": "approved"}
+
+
+@public_router.post("/public/marketing-requests/{token}/request-changes")
+async def public_request_changes(token: str, payload: ClientRequestChanges):
+    tdb = get_tenant_db()
+    doc = await tdb.marketing_requests.find_one({"client_share_token": token}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Link not found or expired")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    feedback = {"decision": "request_changes", "comment": payload.comment, "at": now_iso}
+    await tdb.marketing_requests.update_one(
+        {"id": doc["id"]},
+        {
+            "$set": {
+                "client_feedback": feedback,
+                "status": "in_progress_marketing",
+                "updated_at": now_iso,
+            },
+            "$push": {"activity": {
+                "id": str(uuid.uuid4()),
+                "kind": ACTIVITY_KIND_CLIENT,
+                "action": "request_changes",
+                "comment": payload.comment,
+                "by_name": "Client",
+                "at": now_iso,
+            }},
+        },
+    )
+    return {"ok": True, "status": "in_progress_marketing"}
+
+
+@public_router.post("/public/marketing-requests/{token}/select-option")
+async def public_select_option(token: str, payload: ClientSelectOption):
+    tdb = get_tenant_db()
+    doc = await tdb.marketing_requests.find_one({"client_share_token": token}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Link not found or expired")
+    options = doc.get("design_options") or []
+    if not any(o.get("id") == payload.option_id for o in options):
+        raise HTTPException(404, "Option not found")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    new_options = [{**o, "selected": o.get("id") == payload.option_id} for o in options]
+    feedback = {
+        "decision": "select_option",
+        "option_id": payload.option_id,
+        "comment": payload.comment,
+        "at": now_iso,
+    }
+    await tdb.marketing_requests.update_one(
+        {"id": doc["id"]},
+        {
+            "$set": {
+                "design_options": new_options,
+                "client_feedback": feedback,
+                "status": "approved",
+                "updated_at": now_iso,
+            },
+            "$push": {"activity": {
+                "id": str(uuid.uuid4()),
+                "kind": ACTIVITY_KIND_CLIENT,
+                "action": "selected_option",
+                "option_id": payload.option_id,
+                "comment": payload.comment,
+                "by_name": "Client",
+                "at": now_iso,
+            }},
+        },
+    )
+    return {"ok": True, "status": "approved", "selected_option_id": payload.option_id}
